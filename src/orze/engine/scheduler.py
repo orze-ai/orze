@@ -153,9 +153,18 @@ def cleanup_orphans(results_dir: Path, hours: float,
 # Status counting
 # ---------------------------------------------------------------------------
 
-def _count_statuses(ideas: Dict[str, dict], results_dir: Path) -> dict:
-    """Count idea statuses without full report generation."""
+def _count_statuses(ideas: Dict[str, dict], results_dir: Path,
+                    lake=None) -> dict:
+    """Count idea statuses without full report generation.
+
+    When a lake (IdeaLake) is provided, completed/failed counts are sourced
+    from the database so they survive commander restarts.  The ``ideas`` dict
+    typically contains only queued/in-progress items, which would make the
+    completed count appear as zero after a restart.
+    """
     counts = {}
+
+    # Count ideas from the current queue (queued / in-progress)
     for idea_id in ideas:
         idea_dir = results_dir / idea_id
         if not idea_dir.exists():
@@ -169,6 +178,24 @@ def _count_statuses(ideas: Dict[str, dict], results_dir: Path) -> dict:
             counts[st] = counts.get(st, 0) + 1
         else:
             counts["IN_PROGRESS"] = counts.get("IN_PROGRESS", 0) + 1
+
+    # Merge authoritative counts from the lake (includes archived ideas
+    # that are no longer in the hot ideas dict).
+    if lake is not None:
+        try:
+            rows = lake.conn.execute(
+                "SELECT status, COUNT(*) FROM ideas GROUP BY status"
+            ).fetchall()
+            for status, cnt in rows:
+                key = status.upper()
+                if key in ("COMPLETED", "FAILED"):
+                    # Lake is authoritative for completed/failed — override
+                    counts[key] = cnt
+                elif key == "QUEUED" and "QUEUED" not in counts:
+                    counts["QUEUED"] = cnt
+        except Exception:
+            pass
+
     return counts
 
 

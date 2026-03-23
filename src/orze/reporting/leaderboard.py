@@ -392,6 +392,21 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     ]
 
     completed = [r for r in rows if r["status"] == "COMPLETED"]
+
+    # Exclude experiments that completed trivially without producing
+    # meaningful results (e.g. all eval datasets missing, script exited
+    # immediately). Without this filter, a 0-valued primary metric from
+    # a vacuous run can top an ascending-sorted leaderboard.
+    def _has_real_result(r):
+        m = r.get("metrics", {})
+        pv = _safe_float(r.get("primary_val"))
+        t = m.get("training_time", 999)
+        # Skip if primary metric is exactly 0 and run finished in < 30s
+        if pv == 0.0 and t < 30:
+            return False
+        return True
+
+    completed = [r for r in completed if _has_real_result(r)]
     completed.sort(key=_get_tiebreaker_sort_key, reverse=reverse)
 
     # --- Sweep grouping: split into standalone + sweep groups ---

@@ -423,7 +423,7 @@ class Orze(OrzePhaseMixin):
         # Initialize milestone from current state (avoid spurious on restart)
         try:
             init_ideas = parse_ideas(cfg["ideas_file"])
-            init_counts = _count_statuses(init_ideas, self.results_dir)
+            init_counts = _count_statuses(init_ideas, self.results_dir, lake=self.lake)
             milestone_every = (cfg.get("notifications") or {}).get(
                 "milestone_every", 100)
             if milestone_every > 0:
@@ -572,7 +572,7 @@ class Orze(OrzePhaseMixin):
 
             # 9-10. Report, notify, heartbeat, status.json, save state
             write_host_heartbeat(self.results_dir, socket.gethostname(), self.active, free)
-            counts = _count_statuses(ideas, self.results_dir)
+            counts = _count_statuses(ideas, self.results_dir, lake=self.lake)
             self._report_and_notify(
                 completed_rows, ideas, counts, eval_finished,
                 free, unclaimed, skipped, disk_ok, backlog)
@@ -616,7 +616,7 @@ class Orze(OrzePhaseMixin):
                 if all_once_finished:
                     ideas = parse_ideas(cfg["ideas_file"])
                     once_rows = update_report(self.results_dir, ideas, cfg)
-                    once_counts = _count_statuses(ideas, self.results_dir)
+                    once_counts = _count_statuses(ideas, self.results_dir, lake=self.lake)
                     self._process_notifications(
                         all_once_finished, once_rows or [], ideas,
                         once_counts)
