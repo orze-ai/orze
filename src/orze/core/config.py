@@ -211,6 +211,9 @@ def load_project_config(path: Optional[str] = None) -> dict:
         if discovered:
             logger.info("Auto-discovered research backends: %s",
                         ", ".join(discovered))
+        else:
+            logger.info("No API keys found in environment — research agent will not run. "
+                        "Add GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY to .env")
 
     return cfg
 
@@ -269,7 +272,9 @@ def _validate_config(cfg: dict) -> tuple:
         warnings.append(f"eval_script not found: {es}")
 
     if not roles:
-        warnings.append("No roles configured — idea generation disabled")
+        warnings.append("No research agent configured — idea generation disabled. "
+                        "Add an API key to .env (GEMINI_API_KEY, OPENAI_API_KEY, or "
+                        "ANTHROPIC_API_KEY) for auto-discovery, or configure roles: in orze.yaml")
 
     # Check for API keys if research roles exist
     has_research = roles and any(

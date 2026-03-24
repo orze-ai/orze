@@ -1126,16 +1126,24 @@ noise: 0.1
             print(f"    {no} No GPUs detected")
 
         # --- Roles ---
+        print()
+        print("  \033[1mResearch Agent:\033[0m")
         roles = cfg.get("roles") or {}
         if roles:
-            print()
-            print("  \033[1mRoles:\033[0m")
             for rname, rcfg in roles.items():
                 if isinstance(rcfg, dict):
                     mode = rcfg.get("mode", "script")
                     backend = rcfg.get("backend", "")
                     detail = f"mode={mode}" + (f", backend={backend}" if backend else "")
                     print(f"    {ok} {rname}: {detail}")
+        else:
+            print(f"    {no} No research agent configured — ideas will not be generated automatically")
+            if not any_key:
+                print(f"      hint: add an API key to .env (GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)")
+                print(f"            orze will auto-discover it and start generating ideas")
+            else:
+                print(f"      hint: auto-discovery found API key(s) but roles section in orze.yaml")
+                print(f"            may be overriding it. Remove 'roles: {{}}' or configure a research role")
 
         # --- Validation ---
         errors, warnings = _validate_config(cfg)
