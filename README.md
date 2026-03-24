@@ -168,6 +168,19 @@ python train.py --idea-id idea-001 --results-dir results --ideas-md ideas.md --c
 
 See [**RULES.md**](src/orze/RULES.md) for the full technical specification.
 
+## Citation
+
+If you use Orze in your research, please cite our paper:
+
+```bibtex
+@article{li2026autoresearching,
+  title={Auto Researching, not hyperparameter tuning: Convergence Analysis of 10,000 Experiments},
+  author={Li, Xiaoyi},
+  journal={arXiv preprint arXiv:2603.15916},
+  year={2026}
+}
+```
+
 ## License
 
 Apache 2.0
