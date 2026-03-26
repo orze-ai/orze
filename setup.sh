@@ -72,4 +72,11 @@ fi
 # --- Done ------------------------------------------------------------------
 echo ""
 info "Setup complete!"
-echo -e "  ${BOLD}Next:${RESET} cd ${PROJECT_PATH} && orze --check"
+echo -e "  ${BOLD}Project:${RESET} ${PROJECT_PATH}"
+echo ""
+echo -e "  ${BOLD}Next steps:${RESET}"
+echo -e "    cd ${PROJECT_PATH}"
+echo -e "    ${CYAN}# In Claude Code / Gemini / Codex CLI:${RESET}"
+echo -e "    do @ORZE-AGENT.md"
+echo -e "    ${CYAN}# Or run directly:${RESET}"
+echo -e "    orze --check"

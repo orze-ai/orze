@@ -576,14 +576,19 @@ def _find_shared_mounts() -> list:
 def _resolve_init_path(explicit_path: str) -> str:
     """Resolve the project directory for --init.
 
-    Explicit path → use it. No path → detect shared mount, prompt once.
+    Explicit path → use it. No path (__ask__ sentinel) → detect shared mount,
+    prompt once (interactive) or auto-pick (non-interactive / piped).
     """
-    if explicit_path != ".":
+    if explicit_path != "__ask__":
         return str(Path(explicit_path).resolve())
 
     # Auto-detect best shared mount as default
     shared = _find_shared_mounts()
     default = shared[0][0] if shared else str(Path.cwd())
+
+    # Non-interactive (e.g. curl | bash) — use detected path directly
+    if not sys.stdin.isatty():
+        return str(Path(default).resolve())
 
     print()
     print("\033[1mOrze needs a shared storage path for the project.\033[0m")
@@ -647,7 +652,7 @@ Examples:
                         help="Directory for results")
     parser.add_argument("--train-script", type=str, default=None,
                         help="Training script to run per idea")
-    parser.add_argument("--init", nargs="?", const=".", default=None, metavar="PATH",
+    parser.add_argument("--init", nargs="?", const="__ask__", default=None, metavar="PATH",
                         help="Initialize a new orze project (default: current directory)")
     parser.add_argument("--admin", action="store_true",
                         help="Launch admin panel instead of farm loop")
@@ -829,6 +834,8 @@ Examples:
             src = pkg_dir / src_name
             if src.exists():
                 _create(dst_name, src.read_text(encoding="utf-8"))
+            else:
+                print(f"  \033[33mwarning\033[0m  {dst_name} — source {src_name} not found in package")
 
         # 1. Train script stub
         train_script = "train.py"
