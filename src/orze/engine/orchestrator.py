@@ -80,7 +80,11 @@ class Orze(OrzePhaseMixin):
         from orze.engine.gpu_slots import GpuSlotManager
         sched_cfg = cfg.get("gpu_scheduling", {})
         slots = sched_cfg.get("slots_per_gpu", 1)
-        self.slot_mgr = GpuSlotManager(gpu_ids, slots_per_gpu=slots)
+        max_vram = sched_cfg.get("max_vram_pct", 90)
+        min_free = sched_cfg.get("min_free_vram_mib", 1000)
+        self.slot_mgr = GpuSlotManager(gpu_ids, slots_per_gpu=slots,
+                                        max_vram_pct=max_vram,
+                                        min_free_vram_mib=min_free)
         self.active = self.slot_mgr  # dict-compatible drop-in
         self.active_evals: Dict[int, EvalProcess] = {}
         self.active_roles: Dict[str, RoleProcess] = {}
