@@ -249,6 +249,44 @@ roles:
     model: sonnet
     cooldown: 300
     timeout: 600
+  code_evolution:               # triggered by retrospection on plateau
+    mode: claude
+    model: opus
+    timeout: 900
+    triggered_by: retrospection
+    allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
+  meta_research:                # triggered by retrospection on family imbalance
+    mode: script
+    script: src/orze/agents/meta_research.py
+    timeout: 300
+    triggered_by: retrospection
+
+# Sealed evaluation (metric integrity)
+sealed_files: []                # e.g. ["eval.py", "data/test_set.json"]
+metric_validation:
+  reject_nan: true
+  reject_inf: true
+  min_value: {}                 # e.g. {accuracy: 0.0}
+  max_value: {}                 # e.g. {accuracy: 1.0}
+
+# Auto-evolution
+evolution:
+  enabled: false                # opt-in
+  max_attempts_per_plateau: 2   # evolution attempts before pause
+
+# Retrospection (periodic analysis + dispatch)
+retrospection:
+  enabled: false
+  script: ""                    # optional custom analysis script
+  interval: 50                  # trigger every N completions
+  timeout: 120
+  max_consecutive_family: 5     # family concentration threshold
+  evolution_attempts_before_pause: 2
+  dispatch:                     # signal → role mapping
+    plateau: code_evolution
+    family_imbalance: meta_research
+    high_failure_rate: meta_research
+    persistent_failure: pause
 
 # GC
 gc:
@@ -264,3 +302,33 @@ report:
   columns:
     - {key: "accuracy", label: "Acc", fmt: ".4f"}
 ```
+
+### Approach Family Taxonomy
+
+Ideas are tagged with an `approach_family` field for diversity tracking:
+`architecture`, `training_config`, `data`, `infrastructure`, `optimization`, `regularization`, `ensemble`, `other`.
+
+In `ideas.md`: `- **Approach Family**: training_config`
+
+The research agent auto-assigns families. Retrospection detects when one family dominates and dispatches to `meta_research` to rebalance.
+
+### Auto-Evolution Flow
+
+```
+Retrospection detects signal (plateau / failure rate / family concentration)
+  → dispatch to evolution role (code_evolution or meta_research)
+  → role makes changes (code patches or strategy adjustment)
+  → generates new ideas exercising the changes
+  → if evolution exhausted → escalate to pause
+  → on metric improvement → reset attempt counters
+```
+
+### Structured Failure Analysis
+
+Every failed experiment gets `results/{id}/failure_analysis.json`:
+```json
+{"category": "oom", "what": "CUDA out of memory", "why": "...", "lesson": "..."}
+```
+Categories: `oom`, `timeout`, `stall`, `crash`, `pre_script_error`, `eval_failure`, `config_error`, `sealed_violation`.
+
+The research agent reads these to avoid repeating failure patterns.
