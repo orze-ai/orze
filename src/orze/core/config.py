@@ -264,6 +264,20 @@ def _validate_config(cfg: dict) -> tuple:
     if ts and not Path(ts).exists():
         errors.append(f"train_script not found: {ts}")
 
+    # Contract check: verify train_script reads idea_config.yaml or idea_lake.db
+    if ts and Path(ts).exists():
+        try:
+            script_text = Path(ts).read_text()
+            reads_config = ("idea_config" in script_text
+                            or "idea_lake" in script_text
+                            or "sweep_config" in script_text)
+            if not reads_config:
+                warnings.append(
+                    f"train_script '{ts}' does not reference idea_config.yaml "
+                    f"or idea_lake.db — idea-specific config overrides may be ignored")
+        except OSError:
+            pass
+
     # --- Warnings: things that might be unintentional ---
 
     bc = cfg.get("base_config")

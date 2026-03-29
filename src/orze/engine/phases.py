@@ -378,11 +378,18 @@ class OrzePhaseMixin:
                     if not claim(idea_id, self.results_dir, gpu,
                                  lake=self.lake):
                         continue
-                    # Write sweep config for sub-runs
+                    # Write idea config so train scripts can read it
+                    idea_cfg = ideas.get(idea_id, {}).get("config", {})
+                    if idea_cfg:
+                        atomic_write(
+                            self.results_dir / idea_id / "idea_config.yaml",
+                            yaml.dump(idea_cfg,
+                                      default_flow_style=False))
+                    # Write sweep config for sub-runs (legacy compat)
                     if ideas.get(idea_id, {}).get("_sweep_parent"):
                         atomic_write(
                             self.results_dir / idea_id / "sweep_config.yaml",
-                            yaml.dump(ideas[idea_id]["config"],
+                            yaml.dump(idea_cfg,
                                       default_flow_style=False))
                     if not run_pre_script(idea_id, gpu, cfg):
                         logger.warning(
