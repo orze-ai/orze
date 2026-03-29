@@ -179,6 +179,19 @@ def run_role_step(role_name: str, role_cfg: dict, ctx: RoleContext) -> None:
     if role_name in ctx.active_roles:
         return
 
+    # Triggered roles only run when a trigger file exists
+    if role_cfg.get("triggered_by"):
+        trigger_file = ctx.results_dir / f"_trigger_{role_name}"
+        if not trigger_file.exists():
+            return
+        # Consume the trigger (role will be launched below)
+        try:
+            trigger_file.unlink(missing_ok=True)
+            logger.info("Role '%s' triggered by %s", role_name,
+                        role_cfg["triggered_by"])
+        except OSError:
+            pass
+
     mode = role_cfg.get("mode", "script")
     if mode == "script" and not role_cfg.get("script"):
         return

@@ -84,6 +84,7 @@ class OrzePhaseMixin:
                         category=_raw_f("Category"),
                         parent=_raw_f("Parent"),
                         hypothesis=_raw_f("Hypothesis"),
+                        approach_family=idea.get("approach_family", _raw_f("Approach Family") or "other"),
                     )
                     ingested_ids.append(idea_id)
 

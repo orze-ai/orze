@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS ideas (
     status TEXT DEFAULT 'archived',
     training_time REAL,
     archived_at TEXT,
-    created_at TEXT
+    created_at TEXT,
+    approach_family TEXT DEFAULT 'other'
 );
 
 CREATE INDEX IF NOT EXISTS idx_status ON ideas(status);
@@ -72,6 +73,7 @@ _KNOWN_META_COLS = {
     "idea_id", "id_num", "title", "priority", "category", "parent",
     "hypothesis", "config", "raw_markdown", "config_summary",
     "eval_metrics", "status", "training_time", "archived_at", "created_at",
+    "approach_family",
 }
 
 
@@ -170,6 +172,14 @@ class IdeaLake:
             # Fresh DB, columns already correct from _SCHEMA_SQL
             pass
 
+        # Add approach_family column if missing
+        if "approach_family" not in cols:
+            logger.info("Migrating idea_lake schema: adding approach_family column")
+            self.conn.execute(
+                "ALTER TABLE ideas ADD COLUMN approach_family TEXT DEFAULT 'other'"
+            )
+            self.conn.commit()
+
     def insert(
         self,
         idea_id: str,
@@ -185,6 +195,7 @@ class IdeaLake:
         hypothesis: Optional[str] = None,
         training_time: Optional[float] = None,
         created_at: Optional[str] = None,
+        approach_family: str = "other",
     ):
         """Insert or update an idea in the lake."""
         # Extract numeric ID for indexed sorting (supports both numeric and hex IDs)
@@ -211,12 +222,14 @@ class IdeaLake:
                     idea_id, id_num, title, priority, category, parent, hypothesis,
                     config, raw_markdown,
                     config_summary, eval_metrics,
-                    status, training_time, archived_at, created_at
+                    status, training_time, archived_at, created_at,
+                    approach_family
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?,
                     ?, ?,
                     ?, ?,
-                    ?, ?, ?, ?
+                    ?, ?, ?, ?,
+                    ?
                 )""",
                 (
                     idea_id,
@@ -234,6 +247,7 @@ class IdeaLake:
                     training_time,
                     datetime.datetime.now().isoformat(),
                     created_at or datetime.datetime.now().isoformat(),
+                    approach_family,
                 ),
             )
             self.conn.commit()
@@ -503,12 +517,14 @@ class IdeaLake:
                     idea_id, id_num, title, priority, category, parent, hypothesis,
                     config, raw_markdown,
                     config_summary, eval_metrics,
-                    status, training_time, archived_at, created_at
+                    status, training_time, archived_at, created_at,
+                    approach_family
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?,
                     ?, ?,
                     ?, ?,
-                    ?, ?, ?, ?
+                    ?, ?, ?, ?,
+                    ?
                 )""",
                 (
                     idea["idea_id"],
@@ -526,6 +542,7 @@ class IdeaLake:
                     (eval_metrics or {}).get("training_time"),
                     datetime.datetime.now().isoformat(),
                     (eval_metrics or {}).get("created_at"),
+                    idea.get("approach_family", "other"),
                 ),
             )
         _retry_on_busy(self.conn.commit)

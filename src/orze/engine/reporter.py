@@ -258,7 +258,8 @@ class NotificationProcessor:
                 priority=idea_data.get("priority", "medium"),
                 category=_raw_field("Category"),
                 parent=_raw_field("Parent"),
-                hypothesis=_raw_field("Hypothesis"))
+                hypothesis=_raw_field("Hypothesis"),
+                approach_family=idea_data.get("approach_family", _raw_field("Approach Family") or "other"))
         except Exception as exc:
             logger.warning("Failed to archive %s to lake: %s", idea_id, exc)
 

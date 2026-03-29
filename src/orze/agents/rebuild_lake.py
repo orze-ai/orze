@@ -10,6 +10,8 @@ import json
 import logging
 from pathlib import Path
 
+import yaml
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("rebuild_lake")
 
@@ -57,6 +59,17 @@ def rebuild(results_dir: Path, db_path: Path):
                 for k, v in metrics["test_metrics"].items():
                     eval_metrics[f"test_{k}"] = v
 
+            # Infer approach family from config
+            approach_family = "other"
+            if config_yaml:
+                try:
+                    from orze.engine.family_guard import infer_approach_family
+                    cfg_obj = yaml.safe_load(config_yaml)
+                    if isinstance(cfg_obj, dict):
+                        approach_family = infer_approach_family(cfg_obj, "")
+                except Exception:
+                    pass
+
             lake.insert(
                 idea_id=idea_id,
                 title=title,
@@ -65,6 +78,7 @@ def rebuild(results_dir: Path, db_path: Path):
                 eval_metrics=eval_metrics,
                 status=status,
                 created_at=metrics.get("timestamp"),
+                approach_family=approach_family,
             )
             count += 1
             if count % 1000 == 0:

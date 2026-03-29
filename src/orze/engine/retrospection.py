@@ -1,19 +1,23 @@
-"""Periodic retrospection with auto-pause for research roles.
+"""Periodic retrospection with signal dispatch for auto-evolution.
 
 CALLING SPEC:
-    run_retrospection(results_dir, cfg, completed_count, last_count) -> int
+    run_retrospection(results_dir, cfg, completed_count, last_count,
+                      retro_state=None) -> int
         results_dir:      Path to results directory
         cfg:              orze.yaml config dict (needs 'retrospection' key)
         completed_count:  current number of completed experiments
         last_count:       last completed count when retrospection ran
+        retro_state:      mutable dict for tracking evolution attempts
+                          (None = legacy pause-only mode)
         returns:          updated last_count (same as input if not triggered)
 
     Triggers when completed_count >= last_count + interval.
-    Runs cfg['retrospection']['script'] as a subprocess (if configured).
-    Runs built-in plateau and failure-rate detection.
-    Writes output to results_dir / '_retrospection.txt'.
-    Writes results_dir / '.pause_research' sentinel to auto-pause research
-    roles when a plateau or high failure rate is detected.
+    Detects: plateau, high failure rate, family concentration.
+    Dispatches signals to evolution roles via trigger files:
+        plateau → code_evolution role
+        family_imbalance → meta_research role
+        high_failure_rate → meta_research role
+    Falls back to pause after evolution attempts are exhausted.
 
     is_research_paused(results_dir) -> bool
         Returns True if .pause_research sentinel exists.
@@ -143,18 +147,131 @@ def _run_builtin_checks(results_dir: Path, cfg: dict,
         reasons.append(f"HIGH FAILURE RATE: {fail_msg}")
         logger.warning("Retrospection: %s", reasons[-1])
 
+    # Family concentration check
+    max_consec = retro_cfg.get("max_consecutive_family", 5)
+    if max_consec > 0:
+        try:
+            from orze.engine.family_guard import (
+                get_recent_winning_families, check_family_concentration,
+            )
+            report_cfg = cfg.get("report", {})
+            primary = report_cfg.get("primary_metric", "")
+            sort_dir = report_cfg.get("sort", "descending")
+            if primary:
+                recent = get_recent_winning_families(
+                    results_dir, primary, n=max_consec, sort=sort_dir)
+                conc_msg = check_family_concentration(recent, max_consec)
+                if conc_msg:
+                    reasons.append(f"FAMILY CONCENTRATION: {conc_msg}")
+                    logger.warning("Retrospection: %s", reasons[-1])
+        except Exception as e:
+            logger.debug("Family concentration check skipped: %s", e)
+
     if reasons:
         return "; ".join(reasons)
     return None
 
 
+_DEFAULT_DISPATCH = {
+    "plateau": "code_evolution",
+    "family_imbalance": "meta_research",
+    "high_failure_rate": "meta_research",
+    "persistent_failure": "pause",
+}
+
+
+def _classify_signals(pause_reason: str) -> list:
+    """Extract individual signal types from a combined pause reason string."""
+    signals = []
+    if "PLATEAU" in pause_reason:
+        signals.append("plateau")
+    if "HIGH FAILURE RATE" in pause_reason:
+        signals.append("high_failure_rate")
+    if "FAMILY CONCENTRATION" in pause_reason:
+        signals.append("family_imbalance")
+    return signals or ["persistent_failure"]
+
+
+def _dispatch_signal(signal: str, results_dir: Path, cfg: dict,
+                     retro_state: dict) -> str:
+    """Dispatch a signal to the appropriate role or pause.
+
+    Writes a trigger file for evolution/meta-research roles, or
+    falls back to pause after evolution attempts are exhausted.
+
+    Returns the action taken: role name or "pause".
+    """
+    retro_cfg = cfg.get("retrospection", {})
+    dispatch = retro_cfg.get("dispatch", _DEFAULT_DISPATCH)
+    evolution_enabled = cfg.get("evolution", {}).get("enabled", False)
+    max_attempts = retro_cfg.get("evolution_attempts_before_pause",
+                                 cfg.get("evolution", {}).get(
+                                     "max_attempts_per_plateau", 2))
+
+    action = dispatch.get(signal, "pause")
+
+    # If evolution is disabled or action is pause, go straight to pause
+    if not evolution_enabled or action == "pause":
+        _write_pause(results_dir, signal)
+        return "pause"
+
+    # Track evolution attempts per signal type
+    attempts_key = f"{signal}_evolution_attempts"
+    attempts = retro_state.get(attempts_key, 0)
+
+    if attempts >= max_attempts:
+        logger.warning("Signal '%s': exhausted %d evolution attempts — escalating to pause",
+                       signal, attempts)
+        _write_pause(results_dir, f"{signal} (after {attempts} evolution attempts)")
+        return "pause"
+
+    # Write trigger file for the role
+    trigger_file = results_dir / f"_trigger_{action}"
+    try:
+        trigger_file.write_text(
+            json.dumps({
+                "signal": signal,
+                "attempt": attempts + 1,
+                "time": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            }, indent=2),
+            encoding="utf-8",
+        )
+        retro_state[attempts_key] = attempts + 1
+        logger.info("Dispatched signal '%s' → role '%s' (attempt %d/%d)",
+                    signal, action, attempts + 1, max_attempts)
+    except OSError as e:
+        logger.error("Could not write trigger for %s: %s", action, e)
+        _write_pause(results_dir, signal)
+        return "pause"
+
+    return action
+
+
+def _write_pause(results_dir: Path, reason: str) -> None:
+    """Write the pause sentinel."""
+    sentinel = results_dir / PAUSE_SENTINEL
+    sentinel.write_text(
+        json.dumps({
+            "paused_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "reason": reason,
+        }, indent=2),
+        encoding="utf-8",
+    )
+    logger.warning("Research PAUSED by retrospection: %s", reason)
+
+
 def run_retrospection(results_dir: Path, cfg: dict,
-                      completed_count: int, last_count: int) -> int:
+                      completed_count: int, last_count: int,
+                      retro_state: Optional[dict] = None) -> int:
     """Run retrospection if interval threshold crossed.
 
     Runs the user's custom script (if configured) AND built-in checks.
-    If a plateau or high failure rate is detected, writes a .pause_research
-    sentinel that research roles should check before generating ideas.
+    When signals are detected, dispatches to evolution roles before
+    falling back to pause as a last resort.
+
+    Args:
+        retro_state: mutable dict for tracking evolution attempts across
+            retrospection cycles. If None, falls back to pause-only behavior.
 
     Returns updated last_count (unchanged if not triggered).
     """
@@ -195,26 +312,30 @@ def run_retrospection(results_dir: Path, cfg: dict,
         except Exception as e:
             logger.warning("Retrospection script error: %s", e)
 
-    # 2. Built-in plateau and failure-rate detection
+    # 2. Built-in detection + dispatch
     auto_pause = retro_cfg.get("auto_pause", True)
     if auto_pause:
         pause_reason = _run_builtin_checks(results_dir, cfg, completed_count)
         sentinel = results_dir / PAUSE_SENTINEL
 
         if pause_reason:
-            sentinel.write_text(
-                json.dumps({
-                    "paused_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                    "completed_count": completed_count,
-                    "reason": pause_reason,
-                }, indent=2),
-                encoding="utf-8",
-            )
-            logger.warning("Research PAUSED by retrospection: %s", pause_reason)
+            if retro_state is not None:
+                # Dispatch mode: route signals to evolution roles
+                signals = _classify_signals(pause_reason)
+                for signal in signals:
+                    _dispatch_signal(signal, results_dir, cfg, retro_state)
+            else:
+                # Legacy mode: direct pause
+                _write_pause(results_dir, pause_reason)
         else:
-            # Clear sentinel if conditions improved (e.g., manual ideas added)
+            # Clear sentinel if conditions improved
             if sentinel.exists():
                 sentinel.unlink()
                 logger.info("Research RESUMED — plateau/failure conditions cleared")
+            # Reset evolution attempt counters on improvement
+            if retro_state is not None:
+                for key in list(retro_state.keys()):
+                    if key.endswith("_evolution_attempts"):
+                        retro_state[key] = 0
 
     return completed_count

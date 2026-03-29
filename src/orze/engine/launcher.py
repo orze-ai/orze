@@ -146,6 +146,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
     """
     from orze.engine.health import check_stalled, detect_fatal_in_log, _adaptive_stall_minutes
     from orze.engine.failure import _record_failure, _try_executor_fix, _reset_idea_for_retry
+    from orze.engine.failure_analysis import classify_failure, write_failure_analysis
 
     finished = []
     stall_minutes = _adaptive_stall_minutes(
@@ -181,6 +182,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
                 _write_failure(results_dir / tp.idea_id, error_msg)
+                write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, -1, "training"), error_msg)
                 _record_failure(failure_counts, tp.idea_id)
                 del active[gpu]
                 finished.append((tp.idea_id, gpu))
@@ -207,6 +209,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
                 _write_failure(results_dir / tp.idea_id, error_msg)
+                write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, -1, "training"), error_msg)
                 _record_failure(failure_counts, tp.idea_id)
                 del active[gpu]
                 finished.append((tp.idea_id, gpu))
@@ -235,6 +238,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
                 _write_failure(results_dir / tp.idea_id, error_msg)
+                write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, -1, "training"), error_msg)
                 _record_failure(failure_counts, tp.idea_id)
                 del active[gpu]
                 finished.append((tp.idea_id, gpu))
@@ -247,6 +251,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 tp.close_log()
                 kill_file.unlink(missing_ok=True)
                 _write_failure(results_dir / tp.idea_id, "Killed by admin")
+                write_failure_analysis(results_dir / tp.idea_id, "crash", "Killed by admin")
                 del active[gpu]
                 finished.append((tp.idea_id, gpu))
 
@@ -283,6 +288,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     except Exception as e:
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
+                write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, ret or -1, "training"), error_msg)
                 _record_failure(failure_counts, tp.idea_id)
         else:
             reason = f"exit code {ret}"
@@ -309,6 +315,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
             if not metrics_path.exists():
                 _write_failure(results_dir / tp.idea_id,
                                f"Process exited with code {ret}")
+            write_failure_analysis(results_dir / tp.idea_id, classify_failure(reason, ret or -1, "training"), reason)
             _record_failure(failure_counts, tp.idea_id)
 
         del active[gpu]

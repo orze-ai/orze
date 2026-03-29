@@ -56,6 +56,9 @@ def parse_ideas(path: str) -> Dict[str, dict]:
         pri_match = re.search(r"\*\*Priority\*\*:\s*(\w+)", raw)
         priority = pri_match.group(1).lower() if pri_match else "medium"
 
+        fam_match = re.search(r"\*\*Approach Family\*\*:\s*(\w+)", raw)
+        approach_family = fam_match.group(1).lower() if fam_match else "other"
+
         yaml_match = re.search(r"```ya?ml\s*\n(.*?)```", raw, re.DOTALL)
         config = {}
         if yaml_match:
@@ -70,6 +73,7 @@ def parse_ideas(path: str) -> Dict[str, dict]:
         ideas[idea_id] = {
             "title": title,
             "priority": priority,
+            "approach_family": approach_family,
             "config": config,
             "raw": raw.strip(),
         }

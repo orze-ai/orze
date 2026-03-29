@@ -185,6 +185,37 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
         if ret == 0:
             logger.info("[EVAL OK] %s on GPU %d in %.1fm",
                         ep.idea_id, gpu, elapsed / 60)
+            # Verify sealed files and validate metrics
+            sealed_files = cfg.get("sealed_files", [])
+            if sealed_files:
+                from orze.engine.sealed import load_sealed_manifest, verify_sealed_files
+                manifest = load_sealed_manifest(results_dir)
+                changed = verify_sealed_files(sealed_files, manifest)
+                if changed:
+                    logger.error("[SEALED VIOLATION] %s modified sealed files: %s",
+                                 ep.idea_id, changed)
+                    from orze.engine.failure_analysis import write_failure_analysis
+                    write_failure_analysis(
+                        results_dir / ep.idea_id, "sealed_violation",
+                        f"Sealed files modified: {', '.join(changed)}")
+                    _write_eval_failure_marker(
+                        results_dir, ep.idea_id, eval_output,
+                        f"Sealed file violation: {', '.join(changed)}")
+            # Validate metric values (NaN, inf, range)
+            metrics_path = results_dir / ep.idea_id / "metrics.json"
+            if metrics_path.exists():
+                try:
+                    import json as _json
+                    metrics = _json.loads(metrics_path.read_text(encoding="utf-8"))
+                    from orze.engine.sealed import validate_metrics
+                    valid, reason = validate_metrics(metrics, cfg)
+                    if not valid:
+                        logger.warning("[METRIC INVALID] %s: %s", ep.idea_id, reason)
+                        from orze.engine.failure_analysis import write_failure_analysis
+                        write_failure_analysis(
+                            results_dir / ep.idea_id, "eval_failure", reason)
+                except Exception:
+                    pass
         else:
             # Log tail of eval output for diagnosis
             eval_tail = tail_file(ep.log_path, 2048).strip()

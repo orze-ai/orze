@@ -210,6 +210,17 @@ so the experiment can succeed on retry.
                          idea_id, response[:200])
             return False
 
+        # Verify sealed files weren't touched by the fix
+        sealed_files = cfg.get("sealed_files", [])
+        if sealed_files:
+            from orze.engine.sealed import load_sealed_manifest, verify_sealed_files
+            manifest = load_sealed_manifest(results_dir)
+            changed = verify_sealed_files(sealed_files, manifest)
+            if changed:
+                logger.error("[FIX] %s — LLM modified sealed files: %s — rejecting fix",
+                             idea_id, changed)
+                return False
+
         logger.info("[FIX] %s — LLM applied fix (attempt %d), will retry",
                      idea_id, attempt_num)
         return True

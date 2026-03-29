@@ -120,6 +120,7 @@ class Orze(OrzePhaseMixin):
 
         # Retrospection state
         self._retro_last_count = state.get("retro_last_count", 0)
+        self._retro_state: dict = state.get("retro_state", {})
 
         # Initialize Idea Lake for archival
         try:
@@ -193,6 +194,7 @@ class Orze(OrzePhaseMixin):
             "fix_counts": self.fix_counts,
             "roles": self.role_states,
             "retro_last_count": self._retro_last_count,
+            "retro_state": self._retro_state,
             **reporter_state,
         }
 
@@ -295,9 +297,10 @@ class Orze(OrzePhaseMixin):
         )
 
     def _run_retrospection(self, completed_count):
-        """Run user-provided retrospection script periodically."""
+        """Run retrospection with dispatch to evolution roles."""
         self._retro_last_count = run_retrospection(
-            self.results_dir, self.cfg, completed_count, self._retro_last_count)
+            self.results_dir, self.cfg, completed_count, self._retro_last_count,
+            retro_state=self._retro_state)
 
     def _kill_orphans(self):
         """Kill orphaned train/eval processes from a previous Orze instance."""
@@ -457,6 +460,14 @@ class Orze(OrzePhaseMixin):
             self._rebuild_config_hashes()
         except Exception as e:
             logger.warning("Config hash cache rebuild failed: %s", e)
+
+        # Compute sealed file manifest for metric integrity
+        sealed_files = cfg.get("sealed_files", [])
+        if sealed_files:
+            from orze.engine.sealed import compute_sealed_hashes, write_sealed_manifest
+            hashes = compute_sealed_hashes(sealed_files)
+            if hashes:
+                write_sealed_manifest(self.results_dir, hashes)
 
         while self.running:
             self.iteration += 1
