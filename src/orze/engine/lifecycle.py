@@ -215,12 +215,12 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
         # Kill ALL child processes: training, eval, and roles
         all_procs = []
         for gpu, tp in active.items():
-            logger.info("Killing training %s on GPU %d (PID %d)",
+            logger.info("Killing training %s on GPU %s (PID %d)",
                         tp.idea_id, gpu, tp.process.pid)
             _kill_pg(tp.process, signal.SIGTERM)
             all_procs.append(("training", tp))
         for gpu, ep in active_evals.items():
-            logger.info("Killing eval %s on GPU %d (PID %d)",
+            logger.info("Killing eval %s on GPU %s (PID %d)",
                         ep.idea_id, gpu, ep.process.pid)
             _kill_pg(ep.process, signal.SIGTERM)
             all_procs.append(("eval", ep))
@@ -250,12 +250,12 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     else:
         # Default: detach training/eval, kill only roles
         for gpu, tp in active.items():
-            logger.info("Detaching training %s on GPU %d (PID %d) "
+            logger.info("Detaching training %s on GPU %s (PID %d) "
                         "-- will finish in background",
                         tp.idea_id, gpu, tp.process.pid)
             tp.close_log()
         for gpu, ep in active_evals.items():
-            logger.info("Detaching eval %s on GPU %d (PID %d) "
+            logger.info("Detaching eval %s on GPU %s (PID %d) "
                         "-- will finish in background",
                         ep.idea_id, gpu, ep.process.pid)
             ep.close_log()

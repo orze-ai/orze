@@ -175,7 +175,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     try:
                         new_tp = launch(tp.idea_id, gpu, results_dir, cfg)
                         active[gpu] = new_tp
-                        logger.info("[FIX-RETRY] %s relaunched on GPU %d",
+                        logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
                         continue
                     except Exception as e:
@@ -202,7 +202,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     try:
                         new_tp = launch(tp.idea_id, gpu, results_dir, cfg)
                         active[gpu] = new_tp
-                        logger.info("[FIX-RETRY] %s relaunched on GPU %d",
+                        logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
                         continue
                     except Exception as e:
@@ -231,7 +231,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     try:
                         new_tp = launch(tp.idea_id, gpu, results_dir, cfg)
                         active[gpu] = new_tp
-                        logger.info("[FIX-RETRY] %s relaunched on GPU %d",
+                        logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
                         continue
                     except Exception as e:
@@ -272,7 +272,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
             except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 metrics = {"status": "UNKNOWN"}
             status = metrics.get("status", "COMPLETED")
-            logger.info("[%s] %s on GPU %d in %.1fm",
+            logger.info("[%s] %s on GPU %s in %.1fm",
                         status, tp.idea_id, gpu, elapsed / 60)
             if status == "FAILED":
                 error_msg = metrics.get("error", "Training script reported FAILED")
@@ -282,7 +282,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     try:
                         new_tp = launch(tp.idea_id, gpu, results_dir, cfg)
                         active[gpu] = new_tp
-                        logger.info("[FIX-RETRY] %s relaunched on GPU %d",
+                        logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
                         continue
                     except Exception as e:
@@ -299,14 +299,14 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 reason += f"\n{tail}"
             except Exception:
                 pass
-            logger.warning("[FAILED] %s on GPU %d — %s", tp.idea_id, gpu, reason)
+            logger.warning("[FAILED] %s on GPU %s — %s", tp.idea_id, gpu, reason)
             if _try_executor_fix(tp.idea_id, reason,
                                  results_dir, cfg, fix_counts):
                 _reset_idea_for_retry(results_dir / tp.idea_id)
                 try:
                     new_tp = launch(tp.idea_id, gpu, results_dir, cfg)
                     active[gpu] = new_tp
-                    logger.info("[FIX-RETRY] %s relaunched on GPU %d",
+                    logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                  tp.idea_id, gpu)
                     continue
                 except Exception as e:

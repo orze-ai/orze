@@ -169,7 +169,7 @@ def run_pre_script(idea_id: str, gpu: int, cfg: dict) -> bool:
         env[k] = str(v)
     env["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
-    logger.info("Running pre-script for %s on GPU %d", idea_id, gpu)
+    logger.info("Running pre-script for %s on GPU %s", idea_id, gpu)
     try:
         result = subprocess.run(
             cmd, env=env, capture_output=True, text=True,

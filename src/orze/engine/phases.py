@@ -417,13 +417,13 @@ class OrzePhaseMixin:
                             _record_failure(
                                 self.failure_counts, idea_id)
                             continue
-                    logger.info("Launching %s on GPU %d: %s",
+                    logger.info("Launching %s on GPU %s: %s",
                                 idea_id, gpu,
                                 ideas[idea_id]["title"][:50])
                     try:
                         tp = launch(idea_id, gpu, self.results_dir, cfg)
                     except Exception as e:
-                        logger.error("Failed to launch %s on GPU %d: %s",
+                        logger.error("Failed to launch %s on GPU %s: %s",
                                      idea_id, gpu, e)
                         error_msg = f"Launch error: {e}"
                         if _try_executor_fix(idea_id, error_msg,

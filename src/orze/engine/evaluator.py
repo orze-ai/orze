@@ -80,7 +80,7 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     cmd.extend(_format_args(eval_args, {"idea_id": idea_id, "gpu": gpu}))
 
     log_path = results_dir / idea_id / "eval_output.log"
-    logger.info("Launching eval for %s on GPU %d", idea_id, gpu)
+    logger.info("Launching eval for %s on GPU %s", idea_id, gpu)
 
     try:
         env = os.environ.copy()
@@ -183,7 +183,7 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
         # Process exited
         ep.close_log()
         if ret == 0:
-            logger.info("[EVAL OK] %s on GPU %d in %.1fm",
+            logger.info("[EVAL OK] %s on GPU %s in %.1fm",
                         ep.idea_id, gpu, elapsed / 60)
             # Verify sealed files and validate metrics
             sealed_files = cfg.get("sealed_files", [])
@@ -219,7 +219,7 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
         else:
             # Log tail of eval output for diagnosis
             eval_tail = tail_file(ep.log_path, 2048).strip()
-            logger.warning("[EVAL FAILED] %s on GPU %d — exit %d\n%s",
+            logger.warning("[EVAL FAILED] %s on GPU %s — exit %d\n%s",
                            ep.idea_id, gpu, ret,
                            eval_tail[-500:] if eval_tail else "(no output)")
             _write_eval_failure_marker(
