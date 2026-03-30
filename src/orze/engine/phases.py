@@ -223,8 +223,12 @@ class OrzePhaseMixin:
             if len(self.active_evals) >= max_evals:
                 still_pending.append((p_idea, p_gpu))
                 continue
-            eval_busy = (set(self.active.keys())
-                         | set(self.active_evals.keys()))
+            if hasattr(self, 'slot_mgr'):
+                eval_busy = (self.slot_mgr.gpu_ids_in_use()
+                             | set(self.active_evals.keys()))
+            else:
+                eval_busy = (set(self.active.keys())
+                             | set(self.active_evals.keys()))
             free_for_eval = [g for g in self.gpu_ids
                              if g not in eval_busy]
             if free_for_eval:
@@ -280,8 +284,12 @@ class OrzePhaseMixin:
                         pass
             if backlog:
                 backlog.sort(reverse=True)
-                eval_busy = (set(self.active.keys())
-                             | set(self.active_evals.keys()))
+                if hasattr(self, 'slot_mgr'):
+                    eval_busy = (self.slot_mgr.gpu_ids_in_use()
+                                 | set(self.active_evals.keys()))
+                else:
+                    eval_busy = (set(self.active.keys())
+                                 | set(self.active_evals.keys()))
                 mem_thresh = cfg.get("gpu_mem_threshold", 2000)
                 free_for_eval = [
                     g for g in self.gpu_ids

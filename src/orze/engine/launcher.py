@@ -156,6 +156,8 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
 
     for gpu in list(active.keys()):
         tp = active[gpu]
+        # With multi-slot, gpu is a slot key like "0:42". Use tp.gpu for actual GPU ID.
+        actual_gpu = tp.gpu if hasattr(tp, 'gpu') else gpu
         ret = tp.process.poll()
         elapsed = time.time() - tp.start_time
 
@@ -173,7 +175,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                                      results_dir, cfg, fix_counts):
                     _reset_idea_for_retry(results_dir / tp.idea_id)
                     try:
-                        new_tp = launch(tp.idea_id, gpu, results_dir, cfg)
+                        new_tp = launch(tp.idea_id, actual_gpu, results_dir, cfg)
                         active[gpu] = new_tp
                         logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
@@ -200,7 +202,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                                      results_dir, cfg, fix_counts):
                     _reset_idea_for_retry(results_dir / tp.idea_id)
                     try:
-                        new_tp = launch(tp.idea_id, gpu, results_dir, cfg)
+                        new_tp = launch(tp.idea_id, actual_gpu, results_dir, cfg)
                         active[gpu] = new_tp
                         logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
@@ -229,7 +231,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                                      results_dir, cfg, fix_counts):
                     _reset_idea_for_retry(results_dir / tp.idea_id)
                     try:
-                        new_tp = launch(tp.idea_id, gpu, results_dir, cfg)
+                        new_tp = launch(tp.idea_id, actual_gpu, results_dir, cfg)
                         active[gpu] = new_tp
                         logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
@@ -280,7 +282,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                                      results_dir, cfg, fix_counts):
                     _reset_idea_for_retry(results_dir / tp.idea_id)
                     try:
-                        new_tp = launch(tp.idea_id, gpu, results_dir, cfg)
+                        new_tp = launch(tp.idea_id, actual_gpu, results_dir, cfg)
                         active[gpu] = new_tp
                         logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
@@ -304,7 +306,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                                  results_dir, cfg, fix_counts):
                 _reset_idea_for_retry(results_dir / tp.idea_id)
                 try:
-                    new_tp = launch(tp.idea_id, gpu, results_dir, cfg)
+                    new_tp = launch(tp.idea_id, actual_gpu, results_dir, cfg)
                     active[gpu] = new_tp
                     logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                  tp.idea_id, gpu)
