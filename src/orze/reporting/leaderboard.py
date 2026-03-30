@@ -371,6 +371,21 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         except OSError:
             pass
 
+    # Filter out experiments with too few per-dataset metrics
+    min_ds = report_cfg.get("min_datasets", 0)
+    if min_ds > 0:
+        filtered = []
+        for r in rows:
+            if r["status"] != "COMPLETED":
+                filtered.append(r)
+                continue
+            ds_count = sum(1 for k, v in (r.get("metrics") or {}).items()
+                          if k.startswith("wer_") and v is not None
+                          and isinstance(v, (int, float)))
+            if ds_count >= min_ds:
+                filtered.append(r)
+        rows = filtered
+
     counts = {}
     for r in rows:
         counts[r["status"]] = counts.get(r["status"], 0) + 1

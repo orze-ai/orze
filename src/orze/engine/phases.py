@@ -42,6 +42,23 @@ from orze.reporting.state import (
     save_state, write_host_heartbeat, write_status_json,
 )
 
+
+def _load_verified(results_dir: Path, report_cfg: dict):
+    """Load verified full-scale results from file if configured."""
+    vpath = report_cfg.get("verified_results")
+    if not vpath:
+        return None
+    p = results_dir / vpath if not Path(vpath).is_absolute() else Path(vpath)
+    # Also try relative to cwd
+    if not p.exists():
+        p = Path(vpath)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
 logger = logging.getLogger("orze")
 
 
@@ -590,6 +607,9 @@ class OrzePhaseMixin:
                     "best_details": hb_best_details or None,
                     "gpu_info": hb_gpu_info or None,
                     "model_name": hb_model or None,
+                    "target": report_cfg.get("target"),
+                    "estimate_warning": report_cfg.get("estimate_warning"),
+                    "verified": _load_verified(self.results_dir, report_cfg),
                 }, cfg)
                 self._last_heartbeat = now_hb
                 self._hb_completed_count = counts.get("COMPLETED", 0)

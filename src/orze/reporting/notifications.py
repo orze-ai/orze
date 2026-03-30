@@ -281,16 +281,49 @@ def _format_telegram(event: str, data: dict, channel_cfg: dict) -> tuple:
             (f"\u2705 {completed} completed | \u274c {failed} failed | "
              f"\u23f3 {queued} queued | \U0001f504 {running} running"),
         ]
+        # Verified results (full-scale, ground truth)
+        verified = data.get("verified")
+        if verified:
+            v_avg = verified.get("avg_wer")
+            v_target = verified.get("target")
+            v_model = esc(str(verified.get("model", "?")))
+            if v_avg is not None:
+                gap = v_avg - v_target if v_target else None
+                gap_str = f" | Gap: {gap:+.2f}%" if gap is not None else ""
+                target_str = f" | Target: {v_target:.2f}%" if v_target else ""
+                lines.append(
+                    f"\U0001f3af <b>Verified:</b> {v_avg:.2f}% avg WER{target_str}{gap_str}")
+                v_ds = verified.get("per_dataset", {})
+                if v_ds:
+                    parts = [f"{k}={v:.1f}" for k, v in v_ds.items()]
+                    lines.append(f"  {' | '.join(parts)}")
+                lines.append(f"  Model: <code>{v_model}</code>")
+
+        # Orze best estimate (500-sample, may be biased)
         best_val = data.get("best_val")
         if best_val is not None:
             metric = esc(str(data.get("best_metric", "score")))
             best_id = esc(str(data.get("best_id", "?")))
             if isinstance(best_val, float):
-                val_str = f"{best_val:.4f}"
+                val_str = f"{best_val:.2f}"
             else:
                 val_str = str(best_val)
-            lines.append(
-                f"\U0001f3c6 Best: {esc(val_str)} {metric} (<code>{best_id}</code>)")
+            target = data.get("target")
+            if target is not None:
+                gap = best_val - target
+                lines.append(
+                    f"\U0001f50d Orze best: {esc(val_str)}% {metric} "
+                    f"(<code>{best_id}</code>) "
+                    f"| Target: {target}% | Gap: {gap:+.2f}%")
+            else:
+                lines.append(
+                    f"\U0001f50d Orze best: {esc(val_str)}% {metric} "
+                    f"(<code>{best_id}</code>)")
+
+        # Estimate warning
+        estimate_warning = data.get("estimate_warning")
+        if estimate_warning:
+            lines.append(esc(estimate_warning))
 
         # Per-dataset breakdown (if available in best result)
         best_details = data.get("best_details")
@@ -325,11 +358,6 @@ def _format_telegram(event: str, data: dict, channel_cfg: dict) -> tuple:
         model_name = data.get("model_name")
         if model_name:
             lines.append(f"\U0001f916 Model: <code>{esc(model_name)}</code>")
-
-        # Leaderboard position (if provided)
-        lb_position = data.get("leaderboard_position")
-        if lb_position:
-            lines.append(f"\U0001f947 Leaderboard: {esc(str(lb_position))}")
 
         if data.get("rate"):
             lines.append(f"\U0001f4c8 {esc(str(data['rate']))}")
