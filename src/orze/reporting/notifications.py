@@ -341,8 +341,8 @@ def _format_telegram(event: str, data: dict, channel_cfg: dict) -> tuple:
             gpu_parts = []
             for g in gpu_info:
                 idx = g.get("index", "?")
-                used = g.get("memory_used_mb", 0)
-                total = g.get("memory_total_mb", 0)
+                used = g.get("memory_used_mib", g.get("memory_used_mb", 0))
+                total = g.get("memory_total_mib", g.get("memory_total_mb", 0))
                 util = g.get("utilization_pct", 0)
                 if used > 100:  # GPU in use
                     gpu_parts.append(f"GPU{idx}:{used//1024}G/{total//1024}G({util}%)")

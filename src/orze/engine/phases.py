@@ -574,8 +574,8 @@ class OrzePhaseMixin:
 
                 # GPU info from nvidia-smi
                 try:
-                    from orze.hardware.gpu import query_gpu_stats
-                    hb_gpu_info = query_gpu_stats()
+                    from orze.hardware.gpu import _query_gpu_details
+                    hb_gpu_info = _query_gpu_details()
                 except Exception:
                     hb_gpu_info = []
 
