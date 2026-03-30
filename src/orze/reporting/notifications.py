@@ -291,11 +291,52 @@ def _format_telegram(event: str, data: dict, channel_cfg: dict) -> tuple:
                 val_str = str(best_val)
             lines.append(
                 f"\U0001f3c6 Best: {esc(val_str)} {metric} (<code>{best_id}</code>)")
-        lines.append(
-            f"\U0001f4bb GPUs: {active_gpus}/{total_gpus} active | "
-            f"Up {esc(str(data.get('uptime', '?')))}")
+
+        # Per-dataset breakdown (if available in best result)
+        best_details = data.get("best_details")
+        if best_details:
+            detail_parts = []
+            for k, v in sorted(best_details.items()):
+                if isinstance(v, float):
+                    detail_parts.append(f"{esc(k)}={v:.2f}")
+            if detail_parts:
+                lines.append(f"  {' | '.join(detail_parts)}")
+
+        # GPU utilization details
+        gpu_info = data.get("gpu_info", [])
+        if gpu_info:
+            gpu_parts = []
+            for g in gpu_info:
+                idx = g.get("index", "?")
+                used = g.get("memory_used_mb", 0)
+                total = g.get("memory_total_mb", 0)
+                util = g.get("utilization_pct", 0)
+                if used > 100:  # GPU in use
+                    gpu_parts.append(f"GPU{idx}:{used//1024}G/{total//1024}G({util}%)")
+                else:
+                    gpu_parts.append(f"GPU{idx}:idle")
+            lines.append(f"\U0001f5a5 {' '.join(gpu_parts)}")
+        else:
+            lines.append(
+                f"\U0001f4bb GPUs: {active_gpus}/{total_gpus} active | "
+                f"Up {esc(str(data.get('uptime', '?')))}")
+
+        # Model info (from config)
+        model_name = data.get("model_name")
+        if model_name:
+            lines.append(f"\U0001f916 Model: <code>{esc(model_name)}</code>")
+
+        # Leaderboard position (if provided)
+        lb_position = data.get("leaderboard_position")
+        if lb_position:
+            lines.append(f"\U0001f947 Leaderboard: {esc(str(lb_position))}")
+
         if data.get("rate"):
             lines.append(f"\U0001f4c8 {esc(str(data['rate']))}")
+
+        lines.append(
+            f"\u23f1 Up {esc(str(data.get('uptime', '?')))}")
+
         return url, {"chat_id": chat_id, "text": "\n".join(lines),
                      "parse_mode": "HTML"}
 

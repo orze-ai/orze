@@ -544,6 +544,30 @@ class OrzePhaseMixin:
                         "primary_metric", "score")
 
                 n_running = len(self.active) + len(self.active_evals)
+
+                # Collect per-dataset breakdown from best result
+                hb_best_details = {}
+                if completed_rows:
+                    top = completed_rows[0]
+                    for col in (cfg.get("report", {}).get("columns") or []):
+                        k = col.get("key", "")
+                        if k != primary and k in top and isinstance(top[k], (int, float)):
+                            label = col.get("label", k)
+                            hb_best_details[label] = top[k]
+
+                # GPU info from nvidia-smi
+                try:
+                    from orze.hardware.gpu import query_gpu_stats
+                    hb_gpu_info = query_gpu_stats()
+                except Exception:
+                    hb_gpu_info = []
+
+                # Model name from base config
+                hb_model = (cfg.get("base_config_data") or {}).get(
+                    "model_path", cfg.get("model_name", ""))
+                if hb_model and "/" in hb_model:
+                    hb_model = hb_model.rstrip("/").rsplit("/", 1)[-1]
+
                 notify("heartbeat", {
                     "host": socket.gethostname(),
                     "iteration": self.iteration,
@@ -563,6 +587,9 @@ class OrzePhaseMixin:
                     "best_val": hb_best_val,
                     "best_title": hb_best_title,
                     "best_metric": hb_best_metric if completed_rows else None,
+                    "best_details": hb_best_details or None,
+                    "gpu_info": hb_gpu_info or None,
+                    "model_name": hb_model or None,
                 }, cfg)
                 self._last_heartbeat = now_hb
                 self._hb_completed_count = counts.get("COMPLETED", 0)

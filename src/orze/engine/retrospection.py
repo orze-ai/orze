@@ -312,6 +312,27 @@ def run_retrospection(results_dir: Path, cfg: dict,
         except Exception as e:
             logger.warning("Retrospection script error: %s", e)
 
+    # 1b. Cross-experiment analysis (writes insights for research agent)
+    try:
+        from orze.engine.experiment_analysis import (
+            analyze_experiments, format_insights,
+        )
+        analysis = analyze_experiments(results_dir, cfg)
+        if analysis:
+            insights = format_insights(analysis)
+            insights_file = results_dir / "_experiment_insights.txt"
+            insights_file.write_text(insights, encoding="utf-8")
+            logger.info("Experiment analysis: %d regressions, %d improvements, "
+                        "%d patterns, %d actions",
+                        len(analysis.get("regressions", [])),
+                        len(analysis.get("improvements", [])),
+                        len(analysis.get("patterns", [])),
+                        len(analysis.get("suggested_actions", [])))
+            for action in analysis.get("suggested_actions", []):
+                logger.info("  → %s", action[:120])
+    except Exception as e:
+        logger.debug("Experiment analysis skipped: %s", e)
+
     # 2. Built-in detection + dispatch
     auto_pause = retro_cfg.get("auto_pause", True)
     if auto_pause:
