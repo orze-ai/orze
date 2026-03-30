@@ -607,9 +607,9 @@ class OrzePhaseMixin:
                     "best_details": hb_best_details or None,
                     "gpu_info": hb_gpu_info or None,
                     "model_name": hb_model or None,
-                    "target": report_cfg.get("target"),
-                    "estimate_warning": report_cfg.get("estimate_warning"),
-                    "verified": _load_verified(self.results_dir, report_cfg),
+                    "target": cfg.get("report", {}).get("target"),
+                    "estimate_warning": cfg.get("report", {}).get("estimate_warning"),
+                    "verified": _load_verified(self.results_dir, cfg.get("report", {})),
                 }, cfg)
                 self._last_heartbeat = now_hb
                 self._hb_completed_count = counts.get("COMPLETED", 0)
