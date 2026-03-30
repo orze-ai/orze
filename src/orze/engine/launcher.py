@@ -272,7 +272,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
             except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 metrics = {"status": "UNKNOWN"}
             status = metrics.get("status", "COMPLETED")
-            logger.info("[%s] %s on GPU %d in %.1fm",
+            logger.info("[%s] %s on GPU %s in %.1fm",
                         status, tp.idea_id, gpu, elapsed / 60)
             if status == "FAILED":
                 error_msg = metrics.get("error", "Training script reported FAILED")
