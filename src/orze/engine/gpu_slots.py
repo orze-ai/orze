@@ -1,220 +1,203 @@
-"""GPU slot manager for multi-job-per-GPU and multi-GPU-per-job scheduling.
+"""VRAM-based GPU scheduler for multi-job-per-GPU and multi-GPU-per-job.
 
-VRAM-aware: checks actual GPU memory before assigning new jobs.
-Supports both slot-based limits and memory-based limits.
+Schedules by actual GPU memory — no fixed slot counts needed. Queries
+nvidia-smi (batched, cached) to check free VRAM before each assignment.
 
 Config (orze.yaml):
     gpu_scheduling:
-      slots_per_gpu: 20          # max concurrent jobs per GPU
-      max_vram_pct: 85           # don't assign if GPU VRAM exceeds this %
-      min_free_vram_mib: 2000    # don't assign if free VRAM below this
+      max_vram_pct: 85           # stop assigning when GPU VRAM hits 85%
+      min_free_vram_mib: 2000    # stop if less than 2GB free
+      max_jobs_per_gpu: 200      # safety cap
 
-Backward compatible: slots_per_gpu=1 + no VRAM config behaves identically
-to the old Dict[int, TrainingProcess].
+Backward compatible: without gpu_scheduling config, max_jobs_per_gpu=1
+gives identical behavior to old Dict[int, TrainingProcess].
 """
 
 import logging
+import subprocess
 import time
 from typing import Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger("orze")
 
+# ---------------------------------------------------------------------------
+# GPU memory queries (batched + cached)
+# ---------------------------------------------------------------------------
 
-def _query_gpu_usage(gpu_id: int) -> Optional[Tuple[int, int]]:
-    """Query (used_mib, total_mib) for a GPU. Returns None on failure."""
+_vram_cache: Dict[int, Tuple[float, int, int]] = {}
+_CACHE_TTL = 5.0  # seconds
+
+
+def _query_all_gpu_usage() -> Dict[int, Tuple[int, int]]:
+    """Query (used_mib, total_mib) for ALL GPUs in one nvidia-smi call."""
     try:
-        import subprocess
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=memory.used,memory.total",
-             "--format=csv,noheader,nounits", f"--id={gpu_id}"],
+            ["nvidia-smi", "--query-gpu=index,memory.used,memory.total",
+             "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=5,
         )
-        parts = result.stdout.strip().split(",")
-        return int(parts[0].strip()), int(parts[1].strip())
+        out = {}
+        for line in result.stdout.strip().splitlines():
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) >= 3:
+                out[int(parts[0])] = (int(parts[1]), int(parts[2]))
+        return out
     except Exception:
-        return None
+        return {}
 
+
+def _get_gpu_usage(gpu_id: int) -> Optional[Tuple[int, int]]:
+    """Get (used_mib, total_mib) with batch cache (5s TTL)."""
+    now = time.time()
+    cached = _vram_cache.get(gpu_id)
+    if cached and (now - cached[0]) < _CACHE_TTL:
+        return cached[1], cached[2]
+    # Refresh all GPUs in one call
+    for gid, (used, total) in _query_all_gpu_usage().items():
+        _vram_cache[gid] = (now, used, total)
+    entry = _vram_cache.get(gpu_id)
+    return (entry[1], entry[2]) if entry else None
+
+
+def _invalidate_cache(gpu_id: Optional[int] = None):
+    """Invalidate cache after job launch/finish."""
+    if gpu_id is not None:
+        _vram_cache.pop(gpu_id, None)
+    else:
+        _vram_cache.clear()
+
+
+# ---------------------------------------------------------------------------
+# GpuSlotManager
+# ---------------------------------------------------------------------------
 
 class GpuSlotManager:
-    """Manages GPU slot allocation for training processes.
+    """VRAM-based GPU job scheduler with dict-compatible interface.
 
-    VRAM-aware scheduling: before assigning a slot, checks that the GPU
-    has enough free memory. This prevents OOM when many jobs share a GPU.
-
-    Implements dict-like interface for backward compatibility with code
-    that did ``self.active: Dict[int, TrainingProcess]``.
+    Replaces the old ``self.active: Dict[int, TrainingProcess]``.
+    Schedules by actual VRAM usage — no guessing slot counts.
     """
 
-    def __init__(self, gpu_ids: List[int], slots_per_gpu: int = 1,
-                 max_vram_pct: float = 90, min_free_vram_mib: int = 1000):
+    def __init__(self, gpu_ids: List[int],
+                 max_vram_pct: float = 90,
+                 min_free_vram_mib: int = 1000,
+                 max_jobs_per_gpu: int = 200,
+                 slots_per_gpu: int = 1):  # legacy compat, maps to max_jobs
         self.gpu_ids = list(gpu_ids)
-        self.slots_per_gpu = max(1, slots_per_gpu)
         self.max_vram_pct = max_vram_pct
         self.min_free_vram_mib = min_free_vram_mib
-        self._slots: Dict[int, List] = {
-            g: [None] * self.slots_per_gpu for g in self.gpu_ids
-        }
+        self.max_jobs_per_gpu = max(max_jobs_per_gpu, slots_per_gpu)
         self._active: Dict[str, object] = {}
-        self._vram_cache: Dict[int, Tuple[float, bool]] = {}
-        self._vram_cache_ttl = 10.0  # seconds
+        self._gpu_jobs: Dict[int, List[str]] = {g: [] for g in self.gpu_ids}
+        self._next_id: int = 0
 
-    # ------------------------------------------------------------------
-    # VRAM checks
-    # ------------------------------------------------------------------
+        # Legacy compat
+        self.slots_per_gpu = self.max_jobs_per_gpu
 
     def _gpu_has_capacity(self, gpu_id: int) -> bool:
-        """Check if GPU has enough free VRAM (cached, 10s TTL)."""
-        now = time.time()
-        cached = self._vram_cache.get(gpu_id)
-        if cached and (now - cached[0]) < self._vram_cache_ttl:
-            return cached[1]
-
-        usage = _query_gpu_usage(gpu_id)
+        """Check VRAM headroom AND job count cap."""
+        if len(self._gpu_jobs.get(gpu_id, [])) >= self.max_jobs_per_gpu:
+            return False
+        usage = _get_gpu_usage(gpu_id)
         if usage is None:
-            result = True  # can't query — allow (fail later if OOM)
-        else:
-            used, total = usage
-            pct = used / total * 100 if total > 0 else 0
-            free = total - used
-            result = pct < self.max_vram_pct and free >= self.min_free_vram_mib
-
-        self._vram_cache[gpu_id] = (now, result)
-        return result
-
-    def _invalidate_cache(self, gpu_id: int):
-        """Invalidate VRAM cache for a GPU after job launch/finish."""
-        self._vram_cache.pop(gpu_id, None)
+            return True
+        used, total = usage
+        if total <= 0:
+            return True
+        return (used / total * 100 < self.max_vram_pct and
+                total - used >= self.min_free_vram_mib)
 
     # ------------------------------------------------------------------
     # Core API
     # ------------------------------------------------------------------
 
     def assign(self, tp, gpus: List[int]) -> str:
-        """Assign a process to slot(s) on the given GPU(s).
-
-        Returns the slot key (e.g. "0:3" or "0:1+1:2" for multi-GPU).
-        Raises RuntimeError if no free slot on a requested GPU.
-        """
+        """Assign process to GPU(s). Returns slot key (e.g. "0:42" or "0:42+1:43").
+        Raises RuntimeError if GPU has no capacity."""
         parts = []
         for g in gpus:
-            if g not in self._slots:
-                raise RuntimeError(f"GPU {g} not in managed list {self.gpu_ids}")
-            slots = self._slots[g]
-            assigned = False
-            for i, s in enumerate(slots):
-                if s is None:
-                    slots[i] = tp
-                    parts.append(f"{g}:{i}")
-                    assigned = True
-                    break
-            if not assigned:
-                # Rollback any already-assigned slots
-                for p in parts:
-                    gs, si = p.split(":")
-                    self._slots[int(gs)][int(si)] = None
-                raise RuntimeError(f"No free slot on GPU {g}")
+            if g not in self._gpu_jobs:
+                raise RuntimeError(f"GPU {g} not managed ({self.gpu_ids})")
+            if not self._gpu_has_capacity(g):
+                raise RuntimeError(f"GPU {g} at capacity ({self.job_count(g)} jobs, "
+                                   f"max {self.max_jobs_per_gpu})")
+            sid = self._next_id
+            self._next_id += 1
+            part = f"{g}:{sid}"
+            parts.append(part)
+            self._gpu_jobs[g].append(part)
 
         slot_key = "+".join(parts)
         self._active[slot_key] = tp
-
         if hasattr(tp, 'slot_key'):
             tp.slot_key = slot_key
-
-        # Invalidate VRAM cache for affected GPUs
         for g in gpus:
-            self._invalidate_cache(g)
-
+            _invalidate_cache(g)
         return slot_key
 
     def release(self, slot_key: str):
-        """Release slot(s) and return the process."""
+        """Release job. Returns the process."""
         tp = self._active.pop(slot_key, None)
         if tp is None:
             return None
-
         for part in slot_key.split("+"):
             try:
-                gpu_str, slot_str = part.split(":")
-                g, i = int(gpu_str), int(slot_str)
-                if g in self._slots and i < len(self._slots[g]):
-                    self._slots[g][i] = None
-                    self._invalidate_cache(g)
+                g = int(part.split(":")[0])
+                if part in self._gpu_jobs.get(g, []):
+                    self._gpu_jobs[g].remove(part)
+                _invalidate_cache(g)
             except (ValueError, IndexError):
-                logger.warning("Invalid slot key part: %s", part)
-
+                pass
         return tp
 
     def free_gpu_ids(self, exclude: Optional[Set[int]] = None) -> List[int]:
-        """GPUs with free slot(s) AND VRAM capacity, sorted least-loaded first."""
+        """GPUs with VRAM capacity, sorted most-free-memory first."""
         exc = exclude or set()
         candidates = []
         for g in self.gpu_ids:
-            if g in exc:
+            if g in exc or not self._gpu_has_capacity(g):
                 continue
-            free_count = sum(1 for s in self._slots[g] if s is None)
-            if free_count == 0:
-                continue
-            if not self._gpu_has_capacity(g):
-                continue
-            candidates.append((free_count, g))
-        candidates.sort(key=lambda x: -x[0])  # most free slots first
+            usage = _get_gpu_usage(g)
+            free_mib = (usage[1] - usage[0]) if usage else 99999
+            candidates.append((free_mib, g))
+        candidates.sort(key=lambda x: -x[0])
         return [g for _, g in candidates]
 
     def gpu_ids_in_use(self) -> Set[int]:
-        """GPUs with ANY slot occupied."""
-        return {g for g in self.gpu_ids
-                if any(s is not None for s in self._slots[g])}
+        return {g for g in self.gpu_ids if self._gpu_jobs.get(g)}
 
-    def fully_busy_gpu_ids(self) -> Set[int]:
-        """GPUs with ALL slots occupied."""
-        return {g for g in self.gpu_ids
-                if all(s is not None for s in self._slots[g])}
-
-    def slot_usage(self, gpu_id: int) -> Tuple[int, int]:
-        """Return (used, total) slots for a GPU."""
-        slots = self._slots.get(gpu_id, [])
-        used = sum(1 for s in slots if s is not None)
-        return used, len(slots)
+    def job_count(self, gpu_id: int) -> int:
+        return len(self._gpu_jobs.get(gpu_id, []))
 
     @property
     def total_free_slots(self) -> int:
-        return sum(1 for slots in self._slots.values() for s in slots if s is None)
+        return sum(1 for g in self.gpu_ids if self._gpu_has_capacity(g))
 
     @property
     def total_used_slots(self) -> int:
         return len(self._active)
 
     # ------------------------------------------------------------------
-    # Dict-compatible interface (backward compat)
+    # Dict-compatible interface
     # ------------------------------------------------------------------
-    # The main loop does: active[gpu] = tp, del active[gpu], for k in active, etc.
-    # With multi-slot, int keys auto-map to slot assignment/release.
-    # String slot keys (e.g. "0:3") work directly.
 
-    def keys(self):
-        return self._active.keys()
-
-    def values(self):
-        return self._active.values()
-
-    def items(self):
-        return self._active.items()
-
-    def __len__(self):
-        return len(self._active)
+    def keys(self):    return self._active.keys()
+    def values(self):  return self._active.values()
+    def items(self):   return self._active.items()
+    def __len__(self): return len(self._active)
+    def __bool__(self): return bool(self._active)
+    def __iter__(self): return iter(self._active)
 
     def __contains__(self, key):
         if isinstance(key, int):
-            # Check if any slot on this GPU is occupied
-            return any(s is not None for s in self._slots.get(key, []))
+            return bool(self._gpu_jobs.get(key))
         return key in self._active
 
     def __getitem__(self, key):
         if isinstance(key, int):
-            # Return first active process on this GPU
-            for sk, tp in self._active.items():
-                if sk.startswith(f"{key}:"):
-                    return tp
+            jobs = self._gpu_jobs.get(key, [])
+            if jobs:
+                return self._active[jobs[0]]
             raise KeyError(key)
         return self._active[key]
 
@@ -222,33 +205,23 @@ class GpuSlotManager:
         if isinstance(key, int):
             self.assign(tp, [key])
         else:
-            # Direct slot key assignment — update both _active and _slots
             self._active[key] = tp
-            for part in key.split("+"):
+            for part in str(key).split("+"):
                 try:
-                    gs, si = part.split(":")
-                    g, i = int(gs), int(si)
-                    if g in self._slots and i < len(self._slots[g]):
-                        self._slots[g][i] = tp
+                    g = int(part.split(":")[0])
+                    if g in self._gpu_jobs and part not in self._gpu_jobs[g]:
+                        self._gpu_jobs[g].append(part)
                 except (ValueError, IndexError):
                     pass
 
     def __delitem__(self, key):
         if isinstance(key, int):
-            # Delete first matching slot on this GPU (backward compat)
-            for sk in list(self._active.keys()):
-                if sk.startswith(f"{key}:"):
-                    self.release(sk)
-                    return
+            jobs = self._gpu_jobs.get(key, [])
+            if jobs:
+                self.release(jobs[0])
+                return
             raise KeyError(key)
-        else:
-            self.release(key)
-
-    def __iter__(self):
-        return iter(self._active)
-
-    def __bool__(self):
-        return bool(self._active)
+        self.release(key)
 
     def get(self, key, default=None):
         try:

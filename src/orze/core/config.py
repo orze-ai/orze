@@ -103,7 +103,9 @@ DEFAULT_CONFIG = {
     "poll": 30,
     "gpu_mem_threshold": 2000,
     "gpu_scheduling": {
-        "slots_per_gpu": 1,  # multiple jobs per GPU (default: 1 for backward compat)
+        "max_vram_pct": 90,        # stop filling GPU at this VRAM %
+        "min_free_vram_mib": 1000, # require this much free VRAM
+        "max_jobs_per_gpu": 1,     # safety cap (1 = backward compat)
     },
     "pre_script": None,
     "pre_args": [],

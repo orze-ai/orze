@@ -76,15 +76,16 @@ class Orze(OrzePhaseMixin):
         self.cfg = cfg
         self.once = once
         self.results_dir = Path(cfg["results_dir"])
-        # GPU slot manager: supports multiple jobs per GPU and multi-GPU jobs
+        # VRAM-based GPU scheduler: auto-fills GPUs by memory, not fixed slots
         from orze.engine.gpu_slots import GpuSlotManager
         sched_cfg = cfg.get("gpu_scheduling", {})
-        slots = sched_cfg.get("slots_per_gpu", 1)
-        max_vram = sched_cfg.get("max_vram_pct", 90)
-        min_free = sched_cfg.get("min_free_vram_mib", 1000)
-        self.slot_mgr = GpuSlotManager(gpu_ids, slots_per_gpu=slots,
-                                        max_vram_pct=max_vram,
-                                        min_free_vram_mib=min_free)
+        self.slot_mgr = GpuSlotManager(
+            gpu_ids,
+            max_vram_pct=sched_cfg.get("max_vram_pct", 90),
+            min_free_vram_mib=sched_cfg.get("min_free_vram_mib", 1000),
+            max_jobs_per_gpu=sched_cfg.get("max_jobs_per_gpu", 200),
+            slots_per_gpu=sched_cfg.get("slots_per_gpu", 1),  # legacy compat
+        )
         self.active = self.slot_mgr  # dict-compatible drop-in
         self.active_evals: Dict[int, EvalProcess] = {}
         self.active_roles: Dict[str, RoleProcess] = {}

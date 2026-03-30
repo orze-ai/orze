@@ -181,8 +181,12 @@ class OrzePhaseMixin:
                         metrics_path.read_text(encoding="utf-8"))
                     if metrics.get("status") == "COMPLETED":
                         if len(self.active_evals) < max_evals:
-                            eval_busy = (set(self.active.keys())
-                                         | set(self.active_evals.keys()))
+                            if hasattr(self, 'slot_mgr'):
+                                eval_busy = (self.slot_mgr.gpu_ids_in_use()
+                                             | set(self.active_evals.keys()))
+                            else:
+                                eval_busy = (set(self.active.keys())
+                                             | set(self.active_evals.keys()))
                             free_for_eval = [g for g in self.gpu_ids
                                              if g not in eval_busy]
                             if free_for_eval:
