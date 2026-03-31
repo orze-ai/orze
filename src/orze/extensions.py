@@ -48,25 +48,28 @@ _BUILTIN_FALLBACK = {}
 
 
 def get_extension(name: str) -> Optional[object]:
-    """Load a pro extension module. Returns None if not available or unlicensed."""
+    """Load a pro extension module. Returns None if not available."""
     if name in _cache:
         return _cache[name]
 
-    # Try orze-pro first (requires valid license)
+    # Try orze-pro first
     pro_path = _PRO_MODULES.get(name)
     if pro_path:
         try:
-            # Check license before loading pro modules
-            orze_pro = importlib.import_module("orze_pro")
-            if hasattr(orze_pro, "is_licensed") and not orze_pro.is_licensed():
-                if not _cache.get("_license_warned"):
-                    _cache["_license_warned"] = True
-                    from orze_pro.license import license_info
-                    logger.warning("orze-pro installed but not activated: %s",
-                                   license_info())
-                _cache[name] = None
-                return None
             mod = importlib.import_module(pro_path)
+            _cache[name] = mod
+            return mod
+        except ImportError as exc:
+            err_msg = str(exc)
+            if "not activated" in err_msg or "ORZE_PRO_KEY" in err_msg:
+                logger.error("orze-pro license check failed: %s. Roles will not run.", err_msg)
+            pass
+
+    # Fallback to built-in (transition period)
+    fallback_path = _BUILTIN_FALLBACK.get(name)
+    if fallback_path:
+        try:
+            mod = importlib.import_module(fallback_path)
             _cache[name] = mod
             return mod
         except ImportError:
@@ -75,17 +78,19 @@ def get_extension(name: str) -> Optional[object]:
     _cache[name] = None
     return None
 
-    _cache[name] = None
-    return None
-
 
 def has_pro() -> bool:
-    """Check if orze-pro is installed."""
+    """Check if orze-pro is installed and licensed."""
     try:
-        importlib.import_module("orze_pro")
-        return True
+        mod = importlib.import_module("orze_pro")
     except ImportError:
         return False
+    # orze_pro is importable, but check license status too
+    is_licensed_fn = getattr(mod, "is_licensed", None)
+    if is_licensed_fn is not None and not is_licensed_fn():
+        logger.warning("orze-pro installed but not licensed — pro features disabled")
+        return False
+    return True
 
 
 def pro_version() -> Optional[str]:

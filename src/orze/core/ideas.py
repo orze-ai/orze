@@ -40,7 +40,15 @@ def parse_ideas(path: str) -> Dict[str, dict]:
                 and _parse_ideas_cache["result"]):
             return _parse_ideas_cache["result"]
         text = p.read_text(encoding="utf-8")
-    except OSError:
+    except FileNotFoundError:
+        return {}
+    except OSError as e:
+        logger.error("Failed to read ideas file %s: %s", path, e)
+        # Return cached result if available, else empty
+        if _parse_ideas_cache["path"] == path and _parse_ideas_cache["result"]:
+            logger.warning("Returning cached ideas (%d entries) due to read error",
+                           len(_parse_ideas_cache["result"]))
+            return _parse_ideas_cache["result"]
         return {}
     ideas = {}
     pattern = re.compile(r"^## (idea-[a-z0-9]+):\s*(.+?)$", re.MULTILINE)
@@ -64,8 +72,10 @@ def parse_ideas(path: str) -> Dict[str, dict]:
         if yaml_match:
             try:
                 config = yaml.safe_load(yaml_match.group(1)) or {}
-            except yaml.YAMLError:
-                pass
+            except yaml.YAMLError as e:
+                logger.warning("Skipping %s: YAML parse error in config block: %s",
+                               idea_id, e)
+                continue
 
         # Sanitize config: replace non-numeric values in numeric fields
         config = _sanitize_config(config)

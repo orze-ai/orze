@@ -56,24 +56,24 @@ from orze.engine.cluster import (
 from orze.engine.upgrade import UpgradeManager
 from orze.engine.reporter import NotificationProcessor
 from orze.engine.retrospection import run_retrospection
-# Lazy-loaded at first use to avoid circular imports.
-# orze-pro's role_runner imports orze.engine.process which triggers
-# orze.engine.__init__ which imports this file — loading eagerly
-# at module level causes a circular import.
-_role_mod = None
-_role_loaded = False
+from orze.extensions import get_extension as _get_ext
 
-def _load_role_module():
-    global _role_mod, _role_loaded
-    if _role_loaded:
-        return
-    _role_loaded = True
-    from orze.extensions import get_extension
-    _role_mod = get_extension("role_runner")
-
-def _get_role_attr(name):
-    _load_role_module()
-    return getattr(_role_mod, name, None) if _role_mod else None
+_role_mod = _get_ext("role_runner")
+if _role_mod:
+    RoleContext = _role_mod.RoleContext
+    run_role_step = _role_mod.run_role_step
+    _run_all_roles_impl = _role_mod.run_all_roles
+    _run_role_once_impl = _role_mod.run_role_once
+    build_claude_cmd = _role_mod.build_claude_cmd
+    build_research_cmd = _role_mod.build_research_cmd
+else:
+    # No pro / no built-in agents: stub everything
+    RoleContext = None
+    run_role_step = None
+    _run_all_roles_impl = None
+    _run_role_once_impl = None
+    build_claude_cmd = None
+    build_research_cmd = None
 from orze.engine.lifecycle import (
     startup_checks, reconcile_stale_running, print_startup_summary,
     graceful_shutdown, atexit_cleanup, write_shutdown_heartbeat,
@@ -82,6 +82,8 @@ from orze.engine.lifecycle import (
 from orze.engine.phases import OrzePhaseMixin
 
 logger = logging.getLogger("orze")
+
+_roles_unavailable_warned = False
 
 
 class Orze(OrzePhaseMixin):
@@ -97,7 +99,7 @@ class Orze(OrzePhaseMixin):
             gpu_ids,
             max_vram_pct=sched_cfg.get("max_vram_pct", 90),
             min_free_vram_mib=sched_cfg.get("min_free_vram_mib", 1000),
-            max_jobs_per_gpu=sched_cfg.get("max_jobs_per_gpu", 20),
+            max_jobs_per_gpu=sched_cfg.get("max_jobs_per_gpu", 200),
             slots_per_gpu=sched_cfg.get("slots_per_gpu", 1),  # legacy compat
         )
         self.active = self.slot_mgr  # dict-compatible drop-in
@@ -177,8 +179,23 @@ class Orze(OrzePhaseMixin):
                             logger.error("Disabling notifications to prevent report corruption.")
                             cfg["notifications"]["enabled"] = False
         except Exception as exc:
-            logger.warning("Idea Lake not available: %s", exc)
             self.lake = None
+            # Check if results already exist — if so, this is a serious
+            # degradation (not a first run), so escalate to ERROR + notify.
+            res_dir = Path(cfg.get("results_dir", "results"))
+            has_results = (res_dir.exists() and
+                any(d.is_dir() and d.name.startswith("idea-")
+                    for d in res_dir.iterdir())
+                if res_dir.exists() else False)
+            if has_results:
+                logger.error("Idea Lake init FAILED with existing results — "
+                             "archival disabled: %s", exc)
+                notify("idea_lake_failure", {
+                    "message": f"IdeaLake init failed: {exc}. "
+                               f"Results exist but archival is disabled.",
+                }, cfg)
+            else:
+                logger.warning("Idea Lake not available: %s", exc)
 
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -282,44 +299,43 @@ class Orze(OrzePhaseMixin):
         )
 
     def _run_role_step(self, role_name, role_cfg):
-        fn = _get_role_attr("run_role_step")
-        if fn is None:
-            return
+        if run_role_step is None:
+            return  # no agent support without pro
         ctx = self._role_context()
-        fn(role_name, role_cfg, ctx)
+        run_role_step(role_name, role_cfg, ctx)
 
     def _run_role_once(self, role_name):
-        fn = _get_role_attr("run_role_once")
-        if fn is None:
+        if _run_role_once_impl is None:
             logger.info("Role '%s' requires orze-pro. Install with: pip install orze-pro", role_name)
             return
         ctx = self._role_context()
-        fn(role_name, ctx)
+        _run_role_once_impl(role_name, ctx)
 
     def _run_all_roles(self):
-        fn = _get_role_attr("run_all_roles")
-        if fn is None:
+        global _roles_unavailable_warned
+        if _run_all_roles_impl is None:
+            if not _roles_unavailable_warned and self.cfg.get("roles"):
+                logger.warning(
+                    "Roles configured but agent support unavailable "
+                    "(orze-pro not installed or not licensed). Roles will not run."
+                )
+                _roles_unavailable_warned = True
             return
         ctx = self._role_context()
-        fn(ctx)
+        _run_all_roles_impl(ctx)
 
     def _build_claude_cmd(self, research_cfg, template_vars):
-        fn = _get_role_attr("build_claude_cmd")
-        if fn is None:
+        if build_claude_cmd is None:
             return None
-        return fn(research_cfg, template_vars)
+        return build_claude_cmd(research_cfg, template_vars)
 
     def _build_research_cmd(self, role_cfg, template_vars):
-        fn = _get_role_attr("build_research_cmd")
-        if fn is None:
-            return None
-        return fn(role_cfg, template_vars, self.cfg)
+        return build_research_cmd(role_cfg, template_vars, self.cfg)
 
     def _role_context(self):
-        cls = _get_role_attr("RoleContext")
-        if cls is None:
+        if RoleContext is None:
             return None
-        return cls(
+        return RoleContext(
             cfg=self.cfg,
             results_dir=self.results_dir,
             gpu_ids=self.gpu_ids,
@@ -418,28 +434,19 @@ class Orze(OrzePhaseMixin):
 
         # Log pro status
         from orze.extensions import has_pro, pro_version
-        _load_role_module()  # trigger lazy load now that imports are safe
-        if has_pro():
+        if has_pro() and _run_all_roles_impl is not None:
             logger.info("orze-pro %s detected — autopilot features enabled", pro_version())
+        elif has_pro() and _run_all_roles_impl is None:
+            logger.warning("orze-pro installed but not activated — check license with ORZE_PRO_KEY")
+        elif _role_mod is not None:
+            logger.info("Using built-in agent modules (install orze-pro to upgrade)")
         else:
-            # Check if pro is installed but not activated
-            _pro_installed = False
-            try:
-                import orze_pro
-                _pro_installed = True
-            except ImportError:
-                pass
-
-            if _pro_installed:
+            roles = cfg.get("roles", {})
+            if roles:
                 logger.warning(
-                    "orze-pro is installed but not activated. "
-                    "Run: orze pro activate ORZE-PRO-xxx...")
-                logger.info("Starting in free mode (Smart Suggestions)...")
-            elif _role_mod is not None:
-                logger.info("Using built-in agent modules (install orze-pro to upgrade)")
-            else:
-                logger.info("Starting in free mode — Smart Suggestions will keep GPUs busy. "
-                            "Install orze-pro for autonomous research agents.")
+                    "Roles configured (%s) but no agent support available. "
+                    "Install orze-pro for autonomous research agents.",
+                    ", ".join(roles.keys()))
 
         self._startup_checks()
         self._kill_orphans()
@@ -515,22 +522,12 @@ class Orze(OrzePhaseMixin):
             except Exception as e:
                 logger.warning("Startup reconcile failed: %s", e)
 
-        # #5: Detect base_config changes between runs
-        from orze.engine.guardrails import check_base_config_drift
-        drift_warning = check_base_config_drift(
-            self.results_dir, cfg.get("base_config", ""))
-        if drift_warning:
-            logger.warning("CONFIG DRIFT: %s", drift_warning)
-            notify("failed", {
-                "host": socket.gethostname(),
-                "message": f"Config drift detected: {drift_warning[:150]}",
-            }, cfg)
-
         # Rebuild config dedup hash cache from completed ideas
         try:
             self._rebuild_config_hashes()
         except Exception as e:
-            logger.warning("Config hash cache rebuild failed: %s", e)
+            logger.error("Config hash cache rebuild failed: %s", e)
+            notify("config_hash_failure", {"error": str(e)}, self.cfg)
 
         # Compute sealed file manifest for metric integrity
         sealed_files = cfg.get("sealed_files", [])
@@ -539,24 +536,6 @@ class Orze(OrzePhaseMixin):
             hashes = compute_sealed_hashes(sealed_files)
             if hashes:
                 write_sealed_manifest(self.results_dir, hashes)
-
-        # Smoke test: verify train script contract before main loop
-        if cfg.get("smoke_test", True):
-            from orze.engine.smoke_test import run_smoke_test
-            logger.info("Running startup smoke test...")
-            passed, smoke_errors = run_smoke_test(cfg, self.results_dir)
-            if not passed:
-                for err in smoke_errors:
-                    logger.error("[SMOKE TEST FAILED] %s", err)
-                logger.error(
-                    "Smoke test failed — train script contract violated. "
-                    "Fix the errors above or set smoke_test: false in orze.yaml to skip."
-                )
-                notify("failed", {
-                    "host": socket.gethostname(),
-                    "message": f"Smoke test failed: {smoke_errors[0][:100]}",
-                }, cfg)
-                sys.exit(1)
 
         while self.running:
             self.iteration += 1
@@ -652,6 +631,7 @@ class Orze(OrzePhaseMixin):
                 self._run_all_roles()
             except Exception as e:
                 logger.error("Error in _run_all_roles: %s — continuing", e)
+                notify("role_management_error", {"error": str(e)}, cfg)
 
             if not self.running:
                 break

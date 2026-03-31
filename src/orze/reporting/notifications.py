@@ -41,7 +41,8 @@ def _notify_send(url: str, payload: dict,
                                      headers=req_headers)
         urllib.request.urlopen(req, timeout=timeout)
     except Exception as e:
-        logger.warning("Notification failed (%s): %s", url[:60], e)
+        logger.error("Notification delivery failed (%s): %s: %s",
+                     url[:60], type(e).__name__, e)
 
 
 def _format_leaderboard(data: dict, bold_fn=str, escape_fn=str) -> str:
@@ -484,4 +485,4 @@ def notify(event: str, data: dict, cfg: dict):
             else:
                 logger.warning("Unknown notification channel: %s", ch_type)
     except Exception as e:
-        logger.warning("Notification dispatch error: %s", e)
+        logger.error("Notification dispatch error: %s: %s", type(e).__name__, e)
