@@ -494,7 +494,18 @@ class OrzePhaseMixin:
                     break
         elif not unclaimed:
             if not self.active and not self.active_evals:
-                logger.info("All ideas completed or skipped!")
+                # Queue empty — try auto-generating variations
+                from orze.extensions import has_pro
+                if not has_pro():
+                    try:
+                        from orze.engine.auto_ideas import generate_variations
+                        n = generate_variations(
+                            self.results_dir, cfg, lake=self.lake, max_ideas=5)
+                        if n > 0:
+                            logger.info("Auto-generated %d parameter variations "
+                                        "(install orze-pro for intelligent research)", n)
+                    except Exception as e:
+                        logger.debug("Auto-idea generation skipped: %s", e)
                 if not self.once:
                     logger.info("Waiting for new ideas...")
             else:
