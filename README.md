@@ -26,10 +26,22 @@ When you're ready for autonomous research agents:
 
 ```bash
 pip install orze-pro
-orze pro activate ORZE-PRO-xxx... # paste your license key
+orze pro activate ORZE-PRO-xxx...
+# ✓ Licensed to Acme Corp (pro), expires 2027-12-31
+
+orze pro status                    # verify it worked
 ```
 
 No config changes — pro features activate automatically. [What's in pro?](#orze-vs-orze-pro)
+
+**Alternative activation methods** (for shared clusters or CI):
+```bash
+# In your project .env file:
+ORZE_PRO_KEY=ORZE-PRO-xxx...
+
+# Or as environment variable:
+export ORZE_PRO_KEY=ORZE-PRO-xxx...
+```
 
 ## orze vs orze-pro
 

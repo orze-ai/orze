@@ -636,11 +636,17 @@ def _pro_activate(key=None):
             return
 
     # Verify before saving
-    from orze_pro.license import verify_key
+    from orze_pro.license import verify_key, verify_key_reason
     payload = verify_key(key)
     if payload is None:
-        print("\033[31mInvalid or expired license key.\033[0m")
-        print("Check your key and try again, or contact support@orze.ai")
+        reason = verify_key_reason(key)
+        print(f"\033[31m{reason}\033[0m")
+        print()
+        print("Troubleshooting:")
+        print("  - Make sure you copied the entire key from your email")
+        print("  - The key should start with ORZE-PRO- and contain a dot (.)")
+        print("  - Run 'orze pro activate' without a key to enter it interactively")
+        print("  - Contact support@orze.ai if the problem persists")
         return
 
     # Save
