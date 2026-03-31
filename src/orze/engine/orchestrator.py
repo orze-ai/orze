@@ -529,6 +529,24 @@ class Orze(OrzePhaseMixin):
             if hashes:
                 write_sealed_manifest(self.results_dir, hashes)
 
+        # Smoke test: verify train script contract before main loop
+        if cfg.get("smoke_test", True):
+            from orze.engine.smoke_test import run_smoke_test
+            logger.info("Running startup smoke test...")
+            passed, smoke_errors = run_smoke_test(cfg, self.results_dir)
+            if not passed:
+                for err in smoke_errors:
+                    logger.error("[SMOKE TEST FAILED] %s", err)
+                logger.error(
+                    "Smoke test failed — train script contract violated. "
+                    "Fix the errors above or set smoke_test: false in orze.yaml to skip."
+                )
+                notify("failed", {
+                    "host": socket.gethostname(),
+                    "message": f"Smoke test failed: {smoke_errors[0][:100]}",
+                }, cfg)
+                sys.exit(1)
+
         while self.running:
             self.iteration += 1
             ts = datetime.datetime.now().strftime("%H:%M:%S")
