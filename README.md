@@ -37,6 +37,16 @@ orze is a **complete, production-ready tool**. orze-pro adds **autopilot** — s
 | **Meta-research (strategy adjustment)** | | ✓ |
 | **Interactive Telegram/Slack bot** | | ✓ |
 
+### Research Loop Comparison
+
+| | orze free | + orze-pro |
+|---|---|---|
+| **How ideas are generated** | **Smart Suggestions** — rule-based: detects regressions, generates scale sweeps, perturbations | **Research Agents** — LLM-driven: reads all results, forms hypotheses, designs novel experiments |
+| **How failures are handled** | You read the failure log | Auto-fix: LLM diagnoses and patches the error |
+| **How plateaus are handled** | Smart Suggestions tries parameter variations | Code Evolution: LLM modifies your train script |
+| **Does research stop?** | **Never** — Smart Suggestions keeps GPUs busy | **Never** — agents run indefinitely |
+| **Requires API key?** | No | Yes (Gemini/OpenAI/Anthropic) |
+
 ### Compatibility
 
 | orze | orze-pro | Notes |
@@ -46,19 +56,24 @@ orze is a **complete, production-ready tool**. orze-pro adds **autopilot** — s
 
 ## User Journeys
 
-### Free user — "I drive, orze manages"
+### Free user — "Smart Suggestions keep my GPUs busy"
 
 ```bash
 orze init                          # creates orze.yaml, ideas.md, train.py
-vim ideas.md                       # add your experiment ideas
-orze -c orze.yaml                  # orze schedules them on GPUs
-# → check leaderboard in report.md
-# → get Telegram alerts on new bests
-# → see regression analysis in _experiment_insights.txt
-# → add more ideas to ideas.md based on what you learn
+vim ideas.md                       # add your first experiment ideas
+orze -c orze.yaml                  # orze runs them on GPUs
+
+# After your ideas complete, orze doesn't stop:
+# → analyzes results, detects regressions and tradeoffs
+# → Smart Suggestions auto-generates new ideas:
+#   "Fix SPG regression: scale 1.0->0.9"
+#   "Tradeoff sweep: scale=0.95"
+#   "Push further: scale 1.05 (no regressions)"
+# → runs them, analyzes again, generates more
+# → you check in when you want, add your own ideas anytime
 ```
 
-You analyze results. You decide what to try next. Orze handles the infrastructure.
+You seed the initial ideas. Orze keeps the loop going with Smart Suggestions. You steer when you want.
 
 ### Pro user — "I sleep, orze researches"
 
@@ -75,21 +90,26 @@ Same `orze.yaml`. Same workflow. Pro just adds autonomy.
 
 ### The upgrade moment
 
-You're using orze free. You see this in `_experiment_insights.txt`:
+Smart Suggestions is finding ±5% scale variations. It's keeping GPUs busy. But you see this in the logs:
 
 ```
-REGRESSIONS vs baseline:
-  SPG: 2.91% → 3.57% (+0.66%)
-  [pattern: All LoRA variants regress. Likely domain mismatch in training data.]
-
-SUGGESTED ACTIONS:
-  → PRIORITY: Fix SPG regression (+0.66%). Consider: adding SPG training data.
-  → TRADEOFF detected — try per-dataset inference strategies.
+[Orze Smart Suggestions] Generated 3 ideas from experiment analysis
+  → Fix SPG regression: scale 1.0->0.9
+  → Tradeoff sweep: scale=0.95
+  → Push further: scale 1.05 (no regressions)
 ```
 
-You think: *"I wish orze would just propose the fix and run it."*
+It's systematic — but it's not *thinking*. It can't reason about *why* SPG regressed (domain mismatch in training data), or propose *adding SPG training data* as a fix, or decide *the scale sweep is exhausted and a new LoRA training run is needed*.
 
-That's when you `pip install orze-pro`.
+That's when you `pip install orze-pro`. The research agent reads the same insights and generates:
+
+```
+## idea-r8a2f1: Train LoRA v8 with SPG data to fix domain mismatch
+- **Hypothesis**: SPG regression (+0.66%) is caused by training data lacking
+  financial transcript style. Adding 3K SPG samples should reduce insertions.
+```
+
+Smart Suggestions explores. Research Agents discover.
 
 ## Quick Start
 

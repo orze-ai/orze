@@ -330,6 +330,29 @@ def run_retrospection(results_dir: Path, cfg: dict,
                         len(analysis.get("suggested_actions", [])))
             for action in analysis.get("suggested_actions", []):
                 logger.info("  → %s", action[:120])
+
+            # Smart Suggestions: convert insights into ideas (no LLM needed)
+            from orze.extensions import has_pro
+            if not has_pro():
+                try:
+                    from orze.engine.smart_suggestions import (
+                        suggest_ideas, write_suggestions,
+                    )
+                    best_cfg = analysis.get("best", {}).get("config_summary", {})
+                    # Load full best config from idea_config.yaml
+                    best_id = analysis["best"].get("id", "")
+                    best_cfg_path = results_dir / best_id / "idea_config.yaml"
+                    if best_cfg_path.exists():
+                        import yaml as _yaml
+                        best_cfg = _yaml.safe_load(
+                            best_cfg_path.read_text()) or {}
+                    if best_cfg:
+                        suggestions = suggest_ideas(analysis, best_cfg, cfg)
+                        if suggestions:
+                            ideas_path = Path(cfg.get("ideas_file", "ideas.md"))
+                            write_suggestions(ideas_path, suggestions)
+                except Exception as e:
+                    logger.debug("Smart Suggestions skipped: %s", e)
     except Exception as e:
         logger.debug("Experiment analysis skipped: %s", e)
 
