@@ -1,106 +1,174 @@
 # orze
 
-A decentralized, agentic experiment orchestrator for ML training. 
+A GPU experiment orchestrator for ML research.
 
-Orze runs the full research loop: **generate ideas → train → evaluate → learn → repeat**. It coordinates GPUs via filesystem locks (`mkdir`), works across machines, and supports any LLM as the research agent — Claude, GPT, Gemini, local models, or your own script.
+Orze runs experiments on GPUs: **schedule ideas → train → evaluate → report → repeat**. It coordinates GPUs via filesystem locks, works across machines, and gives you a complete leaderboard, notifications, and analysis — out of the box.
 
 **Website:** [orze.ai](https://orze.ai)
 
 ## Install
 
 ```bash
-# One-line install (installs uv if needed, then orze):
-curl -sL https://orze.ai/setup.sh | bash
-
-# Or with a specific project path:
-curl -sL https://orze.ai/setup.sh | bash -s /path/to/shared/storage/project
-
-# Manual install with uv (recommended):
-uv tool install orze
-
-# Or with pip:
-pip install orze
+pip install orze                   # complete experiment tool (free, open source)
+pip install orze-pro               # + autopilot: autonomous research agents
 ```
 
+## orze vs orze-pro
+
+orze is a **complete, production-ready tool**. orze-pro adds **autopilot** — so experiments run while you sleep.
+
+| Feature | orze (free) | + orze-pro |
+|---------|:-----------:|:----------:|
+| GPU scheduling & multi-node | ✓ | ✓ |
+| Idea queue (ideas.md + SQLite) | ✓ | ✓ |
+| Hyperparameter sweep (Cartesian product) | ✓ | ✓ |
+| Leaderboard report | ✓ | ✓ |
+| Telegram/Slack notifications (rich) | ✓ | ✓ |
+| Admin dashboard & MCP server | ✓ | ✓ |
+| Retrospection (plateau detection) | ✓ | ✓ |
+| Cross-experiment regression analysis | ✓ | ✓ |
+| Failure analysis & categorization | ✓ | ✓ |
+| Checkpoint GC | ✓ | ✓ |
+| Sealed eval protection | ✓ | ✓ |
+| Service watchdog (auto-restart) | ✓ | ✓ |
+| **Autonomous research agents** (Gemini/GPT/Claude) | | ✓ |
+| **Auto-fix failed experiments** | | ✓ |
+| **Code evolution on plateau** | | ✓ |
+| **Meta-research (strategy adjustment)** | | ✓ |
+| **Interactive Telegram/Slack bot** | | ✓ |
+
+### Compatibility
+
+| orze | orze-pro | Notes |
+|------|----------|-------|
+| 3.0.x | 0.1.x | Current release |
+| 2.x | — | All features built-in (no pro needed) |
+
+## User Journeys
+
+### Free user — "I drive, orze manages"
+
+```bash
+orze init                          # creates orze.yaml, ideas.md, train.py
+vim ideas.md                       # add your experiment ideas
+orze -c orze.yaml                  # orze schedules them on GPUs
+# → check leaderboard in report.md
+# → get Telegram alerts on new bests
+# → see regression analysis in _experiment_insights.txt
+# → add more ideas to ideas.md based on what you learn
+```
+
+You analyze results. You decide what to try next. Orze handles the infrastructure.
+
+### Pro user — "I sleep, orze researches"
+
+```bash
+pip install orze-pro               # one command, zero config change
+orze -c orze.yaml                  # same command — pro features activate automatically
+# → research agent reads results and proposes new ideas
+# → failed experiments get auto-fixed and retried
+# → when stuck on a plateau, code evolution kicks in
+# → you wake up to a better model
+```
+
+Same `orze.yaml`. Same workflow. Pro just adds autonomy.
+
+### The upgrade moment
+
+You're using orze free. You see this in `_experiment_insights.txt`:
+
+```
+REGRESSIONS vs baseline:
+  SPG: 2.91% → 3.57% (+0.66%)
+  [pattern: All LoRA variants regress. Likely domain mismatch in training data.]
+
+SUGGESTED ACTIONS:
+  → PRIORITY: Fix SPG regression (+0.66%). Consider: adding SPG training data.
+  → TRADEOFF detected — try per-dataset inference strategies.
+```
+
+You think: *"I wish orze would just propose the fix and run it."*
+
+That's when you `pip install orze-pro`.
+
 ## Quick Start
-**If you are in Claude/Gemini/Codex Cli**
+
+**If you are in Claude/Gemini/Codex CLI:**
 ```bash
 do @ORZE-AGENT.md
 ```
-**If not**
+
+**If not:**
 ```bash
 orze
 ```
 
-That's it. Orze will auto-detect your GPUs and start running experiments from `ideas.md`. 
+That's it. Orze auto-detects GPUs and starts running experiments from `ideas.md`.
 
 ## Multi-node
-As long as you start the orze in the same shared folder (e.g. /nfs/project-52h/) on any machine, the node will automatically join the research pool. **Orze can auto-update. If one machine is updated, everyone else will auto update in 15mins**
+
+Start orze in the same shared folder (e.g. `/nfs/project-52h/`) on any machine — the node automatically joins the research pool. **Orze can auto-update across nodes.**
 
 ## Key Features
 
-- **Scales to 1M+ Experiments** — SQLite-backed job queue and indexed reporting with O(log N) scheduling.
-- **Multi-LLM Research Army** — Run Claude, Gemini, GPT, and local models as parallel research agents. Auto-discovers API keys from your environment.
-- **Config Inheritance** — Child ideas inherit parent configs; research agents specify only what changes.
-- **Circuit Breaker** — Stops the node if failure rates spike. Schema validation catches hallucinations before they hit GPUs.
-- **Self-Healing Watchdog** — Companion `bug_fixer` agent auto-restarts crashed processes, kills stuck jobs, and diagnoses errors using an LLM.
-- **Multi-Machine** — Orchestrate thousands of GPUs across nodes via shared filesystems (NFS/EFS/FSx).
-- **HP Sweep** — List-valued hyperparameters (e.g. `lr: [1e-4, 3e-4]`) auto-expand into Cartesian product sub-runs.
-- **Admin Panel** — Real-time web dashboard auto-starts at `http://localhost:8787` when orze launches.
-- **Clean Uninstall** — `orze --uninstall` removes all runtime files and the package itself, preserving only your research results.
+- **Scales to 1M+ Experiments** — SQLite-backed job queue with O(log N) scheduling
+- **Config Inheritance** — Child ideas inherit parent configs; specify only what changes
+- **HP Sweep** — `lr: [1e-4, 3e-4]` auto-expands into Cartesian product sub-runs
+- **Circuit Breaker** — Stops on failure spikes. Schema validation catches errors before they hit GPUs
+- **Cross-Experiment Analysis** — Detects regressions, tradeoffs, and suggests actions
+- **Rich Notifications** — GPU VRAM, per-dataset breakdown, verified results, target/gap tracking
+- **Admin Panel** — Real-time web dashboard at `http://localhost:8787`
+- **Clean Uninstall** — `orze --uninstall` removes runtime files, preserves results
 
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                       orze                          │
-│                                                     │
-│   ┌───────────┐     ┌─────────┐     ┌──────────┐    │
-│   │ Research  │────>│  Train  │────>│ Evaluate │    │
-│   │ (any LLM) │     │ (GPUs)  │     │          │    │
-│   └─────▲─────┘     └─────────┘     └──────────┘    │
-│         │                                │          │
-│         └────────── results/ ◄───────────┘          │
-│                                                     │
-│   ideas.md ◄── research ── report.md                │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                           orze                               │
+│                                                              │
+│   ┌───────────┐     ┌─────────┐     ┌──────────┐            │
+│   │  ideas.md │────>│  Train  │────>│ Evaluate │            │
+│   │  (manual) │     │ (GPUs)  │     │          │            │
+│   └─────▲─────┘     └─────────┘     └────┬─────┘            │
+│         │                                │                  │
+│         │        report.md ◄─────────────┘                  │
+│         │        _experiment_insights.txt                    │
+│         │        Telegram notification                      │
+│         │                                                   │
+│         └──────── YOU read insights, add new ideas ──────   │
+│                                                              │
+│   ┌──────────────────────────────────────────────────────┐   │
+│   │  + orze-pro (autopilot)                              │   │
+│   │   Research agent reads results → proposes ideas      │   │
+│   │   Bug fixer auto-retries failures                    │   │
+│   │   Code evolution on plateau                          │   │
+│   └──────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ## Admin Panel
 
-When orze starts, it automatically launches a real-time admin dashboard on **http://localhost:8787**. No extra install or setup needed.
+Auto-launches at **http://localhost:8787**. No extra install needed.
 
 <img width="900" height="674" alt="admin-panel" src="https://github.com/user-attachments/assets/b23879e3-d064-4e02-8251-6e8dbfad21f9" />
 <img width="900" height="674" alt="admin-queue" src="https://github.com/user-attachments/assets/39747da2-7b7f-4a9f-ad4a-7cfaca41407b" />
 <img width="900" height="551" alt="admin-leaderboard" src="https://github.com/user-attachments/assets/70e77941-efbf-4018-9200-93ea77998c5e" />
 
-The panel provides:
-- **Overview** — GPU utilization, VRAM, temperature, queue depth, top results at a glance
-- **Nodes** — Per-host heartbeat status, free GPUs, active runs across your cluster
-- **Runs** — All active, completed, and failed experiments with logs and metrics
-- **Queue** — Pending ideas waiting to be scheduled
-- **Leaderboard** — Ranked results sorted by your primary metric
-- **Alerts** — Failure spikes, stale nodes, disk warnings
-- **Settings** — Live view of your `orze.yaml` configuration
-
-To change the port, set the `ORZE_ADMIN_PORT` environment variable:
-```bash
-ORZE_ADMIN_PORT=9000 orze
-```
-
 ## Telegram Notifications
 
-Get real-time alerts on your phone when experiments complete, fail, or hit a new best score.
+Rich notifications with GPU VRAM, per-dataset breakdown, and target tracking:
 
-**1. Create a bot** — message [@BotFather](https://t.me/BotFather) on Telegram:
 ```
-/newbot
+📊 Orze Status — a100-41
+✅ 20 completed | ❌ 0 failed | ⏳ 6 queued | 🔄 4 running
+🎯 Verified: 5.43% avg WER | Target: 5.40% | Gap: +0.03%
+  AMI=9.8 | E22=9.0 | GS=8.5 | LS-C=1.3 | SPG=3.6 | TED=2.7 | VP=6.1
+🖥 GPU0:idle GPU1:18G/80G(51%) GPU3:17G/80G(48%)
+🤖 Model: higgs-audio-v3-8b
+⏱ Up 2h15m
 ```
-Follow the prompts. You'll receive a bot token like `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`.
 
-**2. Get your chat ID** — message [@userinfobot](https://t.me/userinfobot) on Telegram. It will reply with your numeric chat ID.
-
-**3. Add to `orze.yaml`:**
+Setup:
 ```yaml
 notifications:
   enabled: true
@@ -110,67 +178,34 @@ notifications:
       bot_token: "YOUR_BOT_TOKEN"
       chat_id: "YOUR_CHAT_ID"
 ```
-<img width="521" height="341" alt="tg" src="https://github.com/user-attachments/assets/f931221d-b428-4b85-9a8e-af6d516cb5ad" />
 
-Notification events:
-- `completed` — an experiment finished successfully
-- `failed` — an experiment errored out
-- `new_best` — a new top score on your primary metric
+<img width="521" height="341" alt="tg" src="https://github.com/user-attachments/assets/f931221d-b428-4b85-9a8e-af6d516cb5ad" />
 
 ## Service Management (Watchdog)
 
-Built-in process supervision that auto-restarts orze if it crashes or stalls. Works across multi-node clusters — each node manages itself independently.
-
 ```bash
-orze service install -c orze.yaml    # Install watchdog (crontab or systemd)
-orze service status                  # Check watchdog & process health
-orze service logs                    # View watchdog log
-orze service uninstall               # Remove watchdog
-```
-
-**How it works:**
-- Checks every minute (crontab) or uses systemd `Restart=on-failure`
-- Detects stale processes via heartbeat age (default: 30min threshold)
-- Respects `--stop` and `--disable` flags — won't restart if you intentionally stopped orze
-- Sends notifications on restart (Telegram/Slack/Discord) if configured
-- Per-node config stored in `~/.orze_service.json` — safe for shared filesystems
-
-**Install methods** (auto-detected):
-- `systemd` — preferred; uses `systemctl --user` (no root needed)
-- `crontab` — fallback; adds a 1-minute check
-
-```bash
-# Force a specific method
-orze service install -c orze.yaml --method crontab
-
-# Custom stall threshold (seconds)
-orze service install -c orze.yaml --stall-threshold 3600
-```
-
-Add `watchdog_restart` to your notification events to get alerts:
-```yaml
-notifications:
-  enabled: true
-  on: [completed, failed, new_best, watchdog_restart]
+orze service install -c orze.yaml    # auto-restart on crash
+orze service status                  # check health
+orze service uninstall               # remove
 ```
 
 ## The Contract
 
-Your training script receives these standard arguments:
+Your training script receives:
 ```bash
 python train.py --idea-id idea-001 --results-dir results --ideas-md ideas.md --config base.yaml
 ```
 
-**Required Output:** Write `results/{idea_id}/metrics.json`:
+**Required output:** `results/{idea_id}/metrics.json`:
 ```json
 {"status": "COMPLETED", "test_accuracy": 0.92, "training_time": 142.5}
 ```
 
-See [**RULES.md**](src/orze/RULES.md) for the full technical specification.
+Orze writes `idea_config.yaml` to the results directory before launching, containing the merged base + idea config.
+
+See [**SKILL.md**](SKILL.md) for the full technical specification.
 
 ## Citation
-
-If you use Orze in your research, please cite our paper:
 
 ```bibtex
 @article{li2026autoresearching,
@@ -183,4 +218,6 @@ If you use Orze in your research, please cite our paper:
 
 ## License
 
-Apache 2.0
+Apache 2.0 — orze is and will always be free and open source.
+
+[orze-pro](https://github.com/warlockee/orze-pro) (autopilot features) is commercially licensed by Boson AI.
