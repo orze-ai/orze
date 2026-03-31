@@ -149,19 +149,26 @@ report:
 
 ```
 engine/
-├── orchestrator.py  (657) — Orze class, __init__, run() recipe
-├── phases.py        (542) — main loop phases (OrzePhaseMixin)
-├── role_runner.py   (499) — agent role lifecycle (RoleContext)
-├── lifecycle.py     (390) — startup, shutdown, PID management
-├── reporter.py      (329) — notifications + plateau detection
-├── launcher.py      (280) — training subprocess launch
-├── evaluator.py     (233) — eval script launch & monitoring
-├── health.py        (234) — disk, stall, FS health monitoring
-├── upgrade.py       (223) — auto-upgrade pipeline
-├── scheduler.py     (208) — idea claiming, GPU scheduling
-├── failure.py       (208) — failure tracking, auto-fix
-├── process.py       (154) — process tracking dataclasses
-├── cluster.py       (140) — multi-machine coordination
+├── orchestrator.py       (679) — Orze class, __init__, run() recipe
+├── phases.py             (600) — main loop phases (OrzePhaseMixin)
+├── lifecycle.py          (390) — startup, shutdown, PID management
+├── retrospection.py      (362) — signal detection + dispatch
+├── experiment_analysis.py(375) — cross-experiment regression analysis
+├── reporter.py           (338) — notifications + plateau detection
+├── launcher.py           (324) — training subprocess launch
+├── evaluator.py          (298) — eval script launch & monitoring
+├── health.py             (263) — disk, stall, FS health monitoring
+├── gpu_slots.py          (230) — VRAM-aware GPU scheduling
+├── smart_suggestions.py  (200) — rule-based idea generation (Smart Suggestions)
+├── auto_ideas.py         (180) — parameter variation generator
+├── upgrade.py            (223) — auto-upgrade pipeline
+├── scheduler.py          (273) — idea claiming, GPU scheduling
+├── failure.py            (240) — failure tracking
+├── failure_analysis.py   (210) — structured failure classification
+├── family_guard.py       (180) — approach family taxonomy
+├── sealed.py             (143) — sealed file integrity
+├── process.py            (197) — process tracking dataclasses
+├── cluster.py            (140) — multi-machine coordination
 ├── roles.py         (115) — role process health checks
 ├── config_dedup.py   (85) — config hash deduplication
 └── retrospection.py  (67) — periodic analysis runner
@@ -249,7 +256,7 @@ roles:
     model: sonnet
     cooldown: 300
     timeout: 600
-  code_evolution:               # triggered by retrospection on plateau
+  code_evolution:               # requires orze-pro (triggered by retrospection on plateau)
     mode: claude
     model: opus
     timeout: 900
