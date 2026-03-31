@@ -36,6 +36,26 @@ _SENTINEL_VAL = "orze_contract_check_42"
 _TIMEOUT = 300
 
 
+def _find_free_gpu(cfg: dict):
+    """Find a GPU with enough free memory, or return None."""
+    try:
+        import subprocess as _sp
+        result = _sp.run(
+            ["nvidia-smi", "--query-gpu=index,memory.free",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5)
+        threshold = cfg.get("gpu_mem_threshold", 40000)
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split(",")
+            if len(parts) == 2:
+                gpu_id, free_mb = int(parts[0].strip()), int(parts[1].strip())
+                if free_mb > threshold:
+                    return gpu_id
+    except Exception:
+        pass
+    return None
+
+
 def run_smoke_test(cfg: dict, results_dir: Path) -> tuple:
     """Run end-to-end smoke test. Returns (passed, errors)."""
     errors = []
@@ -70,9 +90,14 @@ def run_smoke_test(cfg: dict, results_dir: Path) -> tuple:
             "--config", base_path,
         ]
         env = dict(os.environ)
-        env["CUDA_VISIBLE_DEVICES"] = ""
-
-        logger.info("[SMOKE] Running 1-sample test...")
+        # Try to find a free GPU; fall back to CPU
+        free_gpu = _find_free_gpu(cfg)
+        if free_gpu is not None:
+            env["CUDA_VISIBLE_DEVICES"] = str(free_gpu)
+            logger.info("[SMOKE] Running 1-sample test on GPU %d...", free_gpu)
+        else:
+            env["CUDA_VISIBLE_DEVICES"] = ""
+            logger.info("[SMOKE] Running 1-sample test on CPU (no free GPU)...")
         t0 = time.time()
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=_TIMEOUT, env=env)
