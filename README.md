@@ -220,4 +220,4 @@ See [**SKILL.md**](SKILL.md) for the full technical specification.
 
 Apache 2.0 — orze is and will always be free and open source.
 
-[orze-pro](https://github.com/warlockee/orze-pro) (autopilot features) is commercially licensed by Boson AI.
+[orze-pro](https://github.com/warlockee/orze-pro) (autopilot features) is commercially licensed.
