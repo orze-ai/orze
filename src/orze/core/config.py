@@ -334,6 +334,37 @@ def _validate_config(cfg: dict) -> tuple:
                 if not ch.get("url"):
                     warnings.append(f"Notification channel '{ch_type}': missing url")
 
+    # --- Issue A: Warn about unknown/misspelled config keys ---
+    _KNOWN_EXTRAS = {
+        "_config_path", "research", "gc", "metric_validation", "sealed_files",
+        "min_expected_results", "goal_file", "gpu_scheduling", "roles",
+        "notifications", "evolution", "retrospection", "cleanup",
+        "train_extra_args", "train_extra_env", "pre_script", "pre_args",
+        "pre_timeout", "eval_script", "eval_args", "eval_timeout",
+        "eval_output", "post_scripts", "report",
+    }
+    known_keys = set(DEFAULT_CONFIG.keys()) | _KNOWN_EXTRAS
+    for key in cfg:
+        if key not in known_keys:
+            known_list = ", ".join(sorted(known_keys))
+            warnings.append(
+                f"Unknown config key '{key}' in orze.yaml — possible typo? "
+                f"(known keys: {known_list})"
+            )
+
+    # --- Issue B: Warn if ideas_file does not exist yet ---
+    ideas_path = cfg.get("ideas_file")
+    if ideas_path and not Path(ideas_path).exists():
+        warnings.append(
+            f"ideas_file '{ideas_path}' does not exist yet — the system will "
+            f"have no ideas to run until it is created"
+        )
+
+    # --- Issue C: Error if python interpreter path does not exist ---
+    python_path = cfg.get("python")
+    if python_path and not Path(python_path).exists():
+        errors.append(f"python interpreter not found: {python_path}")
+
     return errors, warnings
 
 def _sanitize_config(config: dict) -> dict:

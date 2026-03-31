@@ -41,6 +41,7 @@ from orze.reporting.notifications import notify
 from orze.reporting.state import (
     save_state, write_host_heartbeat, write_status_json,
 )
+from orze.engine.sealed import load_sealed_manifest, verify_sealed_files
 
 
 def _load_verified(results_dir: Path, report_cfg: dict):
@@ -74,26 +75,7 @@ class OrzePhaseMixin:
             ingested_ids = []
             config_hashes = self._load_config_hashes()
             for idea_id, idea in raw_ideas.items():
-                # Re-queue failed ideas when re-submitted via ideas.md
-                if idea_id in db_ids:
-                    existing = self.lake.get(idea_id)
-                    if existing and existing.get("status") == "failed":
-                        import shutil
-                        idea_dir = self.results_dir / idea_id
-                        if idea_dir.exists():
-                            shutil.rmtree(idea_dir, ignore_errors=True)
-                        self.lake.set_status(idea_id, "queued")
-                        # Update config in case it changed
-                        new_cfg = yaml.dump(idea.get("config", {}))
-                        if new_cfg.strip():
-                            self.lake.conn.execute(
-                                "UPDATE ideas SET config=? WHERE idea_id=?",
-                                (new_cfg, idea_id))
-                            self.lake.conn.commit()
-                        ingested_ids.append(idea_id)
-                        logger.info("Re-queued failed idea %s", idea_id)
-                    continue
-                if True:
+                if idea_id not in db_ids:
                     # Config dedup: skip if overrides match a completed idea
                     override_hash = self._config_override_hash(
                         idea.get("config", {}))
@@ -357,6 +339,23 @@ class OrzePhaseMixin:
     def _launch_training(self, unclaimed, disk_ok, ideas):
         """Phase: launch training on free GPUs, enforce sweep limits, circuit breaker."""
         cfg = self.cfg
+
+        # Verify sealed file integrity before launching any training
+        sealed_files = cfg.get("sealed_files", [])
+        if sealed_files:
+            manifest = load_sealed_manifest(self.results_dir)
+            if manifest:
+                changed = verify_sealed_files(sealed_files, manifest)
+                if changed:
+                    logger.error(
+                        "Sealed file integrity check FAILED: %d file(s) changed: %s",
+                        len(changed), ", ".join(changed))
+                    notify("sealed_file_changed", {
+                        "changed_files": changed,
+                        "message": (f"{len(changed)} sealed file(s) changed since startup. "
+                                    "Training will proceed but results may be inconsistent."),
+                    }, cfg)
+
         eval_gpus = set(self.active_evals.keys())
         if hasattr(self, 'slot_mgr'):
             free = self.slot_mgr.free_gpu_ids(exclude=eval_gpus)
@@ -387,7 +386,15 @@ class OrzePhaseMixin:
                     report_cfg = cfg.get("report") or {}
                     ideas_path = Path(cfg.get("ideas_file", "ideas.md"))
                     lake_path = ideas_path.parent / "idea_lake.db"
-                    logger.warning("Emergency GC: disk low, running checkpoint cleanup")
+                    # Collect idea IDs from all currently running training
+                    # and eval processes so GC never deletes their checkpoints.
+                    running_ids = set()
+                    for tp in self.active.values():
+                        running_ids.add(tp.idea_id)
+                    for ep in self.active_evals.values():
+                        running_ids.add(ep.idea_id)
+                    logger.warning("Emergency GC: disk low, running checkpoint cleanup "
+                                   "(protecting %d running experiments)", len(running_ids))
                     run_gc(
                         results_dir=self.results_dir,
                         checkpoints_dir=Path(gc_cfg["checkpoints_dir"]) if gc_cfg.get("checkpoints_dir") else None,
@@ -396,6 +403,7 @@ class OrzePhaseMixin:
                         keep_top=gc_cfg.get("keep_top", 50),
                         keep_recent=gc_cfg.get("keep_recent", 20),
                         min_free_gb=0,  # force run, disk is already low
+                        extra_keep_ids=running_ids,
                     )
                 except Exception as e:
                     logger.warning("Emergency GC failed: %s", e)
@@ -513,18 +521,7 @@ class OrzePhaseMixin:
                     break
         elif not unclaimed:
             if not self.active and not self.active_evals:
-                # Queue empty — try auto-generating variations
-                from orze.extensions import has_pro
-                if not has_pro():
-                    try:
-                        from orze.engine.auto_ideas import generate_variations
-                        n = generate_variations(
-                            self.results_dir, cfg, lake=self.lake, max_ideas=5)
-                        if n > 0:
-                            logger.info("Auto-generated %d parameter variations "
-                                        "(install orze-pro for intelligent research)", n)
-                    except Exception as e:
-                        logger.debug("Auto-idea generation skipped: %s", e)
+                logger.info("All ideas completed or skipped!")
                 if not self.once:
                     logger.info("Waiting for new ideas...")
             else:

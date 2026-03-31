@@ -19,6 +19,10 @@ from orze.core.fs import _fs_unlock
 
 logger = logging.getLogger("orze")
 
+# Track consecutive soft failures per role (exit 0 but no ideas.md modification)
+_consecutive_soft_failures: Dict[str, int] = {}
+_SOFT_FAILURE_ERROR_THRESHOLD = 5
+
 
 def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                        ideas_file: str = "ideas.md") -> list:
@@ -45,7 +49,22 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
         rp.close_log()
         _fs_unlock(rp.lock_dir)
         if ret == 0:
-            logger.info("%s cycle %d completed", role_name, rp.cycle_num)
+            # Check if ideas.md was actually modified (detect zero-output success)
+            ideas_modified = _ideas_were_modified(ideas_file, rp)
+            if ideas_modified:
+                logger.info("%s cycle %d completed", role_name, rp.cycle_num)
+                _consecutive_soft_failures.pop(role_name, None)
+            else:
+                count = _consecutive_soft_failures.get(role_name, 0) + 1
+                _consecutive_soft_failures[role_name] = count
+                logger.warning("%s cycle %d exited 0 but ideas.md was not modified "
+                               "(soft failure %d/%d)",
+                               role_name, rp.cycle_num, count,
+                               _SOFT_FAILURE_ERROR_THRESHOLD)
+                if count >= _SOFT_FAILURE_ERROR_THRESHOLD:
+                    logger.error("%s has %d consecutive soft failures "
+                                 "(exit 0, no output) — role may be misconfigured",
+                                 role_name, count)
         else:
             logger.warning("%s cycle %d failed (exit %d), see %s",
                            role_name, rp.cycle_num, ret, rp.log_path)
@@ -57,6 +76,27 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
         finished.append((role_name, ret == 0))
 
     return finished
+
+
+def _ideas_were_modified(ideas_file: str, rp: "RoleProcess") -> bool:
+    """Check if ideas.md was modified by the role (size or idea count changed)."""
+    ideas_path = Path(ideas_file)
+    if not ideas_path.exists():
+        return False
+    if rp.ideas_pre_size == 0:
+        # No pre-snapshot; can't tell — assume modified to avoid false positives
+        return True
+    try:
+        current_size = ideas_path.stat().st_size
+        if current_size != rp.ideas_pre_size:
+            return True
+        # Size same — check idea count
+        current_text = ideas_path.read_text(encoding="utf-8")
+        current_count = len(re.findall(r"^## idea-[a-z0-9]+:", current_text,
+                                       re.MULTILINE))
+        return current_count != rp.ideas_pre_count
+    except OSError:
+        return False
 
 
 def _check_ideas_integrity(ideas_file: str, rp: "RoleProcess"):

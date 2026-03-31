@@ -342,6 +342,7 @@ def run_gc(
     dry_run: bool = False,
     gc_results_enabled: bool = False,
     archive_dir: Optional[Path] = None,
+    extra_keep_ids: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
     """Run garbage collection. Returns stats dict."""
     logger.info("=" * 50)
@@ -373,6 +374,14 @@ def run_gc(
     keep_ids |= active_ids
     if active_ids:
         logger.info("+ Currently active: %d ideas", len(active_ids))
+
+    # Merge externally-known running idea IDs (e.g. from the orchestrator's
+    # active training set).  This guards against races where claim.json has
+    # not been written yet or metrics.json was partially flushed.
+    if extra_keep_ids:
+        keep_ids |= extra_keep_ids
+        logger.info("+ Orchestrator active (extra_keep_ids): %d ideas",
+                     len(extra_keep_ids))
 
     logger.info("Total protected: %d ideas", len(keep_ids))
 

@@ -122,10 +122,15 @@ def _kill_stale(pid):
 
 
 def _is_orze_running():
-    """Secondary check: pgrep for orze processes (any launch method)."""
+    """Secondary check: pgrep for orze processes (any launch method).
+
+    Uses ``orze\\.cli`` which matches ``python -m orze.cli`` regardless of
+    config file name.  The PID file is the primary liveness check; this
+    pgrep is only a fallback.
+    """
     try:
         result = subprocess.run(
-            ["pgrep", "-f", r"orze.*orze\.yaml"],
+            ["pgrep", "-f", r"orze\.cli"],
             capture_output=True, timeout=5,
         )
         # Filter out our own watchdog process

@@ -57,12 +57,22 @@ PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
                   skipped: Optional[set] = None) -> List[str]:
     """Return idea IDs with no results dir, sorted by priority then ID.
-    Excludes ideas in the skipped set."""
+    Excludes ideas in the skipped set and ideas with missing strategy files."""
     unclaimed = []
     for idea_id in ideas:
         if skipped and idea_id in skipped:
             continue
         if not (results_dir / idea_id).exists():
+            # Validate strategy file exists before counting as queued
+            idea_config = ideas[idea_id].get("config", {})
+            strategy_name = idea_config.get("strategy")
+            if strategy_name:
+                strategy_path = Path("strategies") / f"{strategy_name}.py"
+                if not strategy_path.exists():
+                    logger.warning(
+                        "Skipping %s: strategy file %s does not exist",
+                        idea_id, strategy_path)
+                    continue
             unclaimed.append(idea_id)
 
     def sort_key(idea_id):
