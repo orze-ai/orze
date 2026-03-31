@@ -280,20 +280,18 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
             logger.info("[%s] %s on GPU %s in %.1fm",
                         status, tp.idea_id, gpu, elapsed / 60)
 
-            # #12: Validate metric consistency
-            from orze.engine.guardrails import validate_avg_metric
-            primary = (cfg.get("report") or {}).get("primary_metric", "avg_wer")
-            metric_warning = validate_avg_metric(metrics, primary)
-            if metric_warning:
-                logger.warning("[METRIC] %s: %s", tp.idea_id, metric_warning)
-
-            # #10: Track for anomaly detection
-            _recent_completions.append({"idea_id": tp.idea_id, "metrics": metrics})
-            if len(_recent_completions) > 20:
-                _recent_completions.pop(0)
-            from orze.engine.guardrails import check_identical_results
-            anomaly = check_identical_results(_recent_completions, primary)
-            if anomaly:
+            # Validate metric consistency + anomaly detection
+            primary = (cfg.get("report") or {}).get("primary_metric", "")
+            if primary:
+                from orze.engine.guardrails import validate_avg_metric, check_identical_results
+                metric_warning = validate_avg_metric(metrics, primary)
+                if metric_warning:
+                    logger.warning("[METRIC] %s: %s", tp.idea_id, metric_warning)
+                _recent_completions.append({"idea_id": tp.idea_id, "metrics": metrics})
+                if len(_recent_completions) > 20:
+                    _recent_completions.pop(0)
+                anomaly = check_identical_results(_recent_completions, primary)
+                if anomaly:
                 logger.warning("[ANOMALY] %s", anomaly)
             if status == "FAILED":
                 error_msg = metrics.get("error", "Training script reported FAILED")

@@ -103,19 +103,6 @@ class OrzePhaseMixin:
                             "Skipping %s: config duplicate of %s",
                             idea_id, existing_id)
                         continue
-                    # #11: Warn about unknown config keys
-                    from orze.engine.guardrails import warn_unknown_config_keys
-                    base_cfg_path = cfg.get("base_config", "")
-                    if base_cfg_path and Path(base_cfg_path).exists():
-                        try:
-                            base_cfg = yaml.safe_load(
-                                Path(base_cfg_path).read_text()) or {}
-                            for w in warn_unknown_config_keys(
-                                    idea.get("config", {}), base_cfg, idea_id):
-                                logger.warning(w)
-                        except Exception:
-                            pass
-
                     # Clamp priority: "critical" is reserved for
                     # human/API-submitted ideas, not auto-ingested ones.
                     raw_pri = idea.get("priority", "medium")
