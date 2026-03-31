@@ -515,6 +515,17 @@ class Orze(OrzePhaseMixin):
             except Exception as e:
                 logger.warning("Startup reconcile failed: %s", e)
 
+        # #5: Detect base_config changes between runs
+        from orze.engine.guardrails import check_base_config_drift
+        drift_warning = check_base_config_drift(
+            self.results_dir, cfg.get("base_config", ""))
+        if drift_warning:
+            logger.warning("CONFIG DRIFT: %s", drift_warning)
+            notify("failed", {
+                "host": socket.gethostname(),
+                "message": f"Config drift detected: {drift_warning[:150]}",
+            }, cfg)
+
         # Rebuild config dedup hash cache from completed ideas
         try:
             self._rebuild_config_hashes()
