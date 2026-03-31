@@ -653,7 +653,7 @@ def _pro_activate(key=None):
         print("Troubleshooting:")
         print("  - Make sure you copied the entire key from your email")
         print("  - The key should start with ORZE-PRO- and contain a dot (.)")
-        print("  - Run 'orze pro activate' without a key to enter it interactively")
+        print("  - Run 'orze pro activate' and paste the key when prompted")
         print("  - Contact support@orze.ai if the problem persists")
         return
 
@@ -705,18 +705,19 @@ def _pro_status():
         print("Activate with: orze pro activate")
 
 
-def _pro_deactivate():
+def _pro_deactivate(force=False):
     """Remove saved license key."""
     from pathlib import Path
     key_path = Path.home() / ".orze-pro.key"
     if key_path.exists():
-        try:
-            resp = input("Remove license key? Pro features will be disabled. [y/N] ").strip().lower()
-        except EOFError:
-            resp = "n"
-        if resp != "y":
-            print("Cancelled.")
-            return
+        if not force:
+            try:
+                resp = input("Remove license key? Pro features will be disabled. [y/N] ").strip().lower()
+            except EOFError:
+                resp = "n"
+            if resp != "y":
+                print("Cancelled. (Use -y to skip confirmation)")
+                return
         key_path.unlink()
         print(f"License key removed from {key_path}")
         print("Pro features deactivated.")
@@ -848,7 +849,8 @@ Examples:
     pro_activate = pro_sub.add_parser("activate", help="Activate orze-pro with a license key")
     pro_activate.add_argument("key", nargs="?", default=None, help="License key (or enter interactively)")
     pro_sub.add_parser("status", help="Show orze-pro license status")
-    pro_sub.add_parser("deactivate", help="Remove saved license key")
+    pro_deactivate = pro_sub.add_parser("deactivate", help="Remove saved license key")
+    pro_deactivate.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
 
     args = parser.parse_args()
 
@@ -886,7 +888,7 @@ Examples:
         elif action == "status":
             _pro_status()
         elif action == "deactivate":
-            _pro_deactivate()
+            _pro_deactivate(force=getattr(args, "yes", False))
         else:
             parser.parse_args(["pro", "--help"])
         return
