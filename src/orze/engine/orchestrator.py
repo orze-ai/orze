@@ -421,16 +421,25 @@ class Orze(OrzePhaseMixin):
         _load_role_module()  # trigger lazy load now that imports are safe
         if has_pro():
             logger.info("orze-pro %s detected — autopilot features enabled", pro_version())
-        elif _role_mod is not None:
-            logger.info("Using built-in agent modules (install orze-pro to upgrade)")
         else:
-            roles = cfg.get("roles", {})
-            if roles:
+            # Check if pro is installed but not activated
+            _pro_installed = False
+            try:
+                import orze_pro
+                _pro_installed = True
+            except ImportError:
+                pass
+
+            if _pro_installed:
                 logger.warning(
-                    "Roles configured (%s) but no agent support available. "
-                    "Install orze-pro for autonomous research agents. "
-                    "Smart Suggestions will keep GPUs busy with parameter variations.",
-                    ", ".join(roles.keys()))
+                    "orze-pro is installed but not activated. "
+                    "Run: orze pro activate ORZE-PRO-xxx...")
+                logger.info("Starting in free mode (Smart Suggestions)...")
+            elif _role_mod is not None:
+                logger.info("Using built-in agent modules (install orze-pro to upgrade)")
+            else:
+                logger.info("Starting in free mode — Smart Suggestions will keep GPUs busy. "
+                            "Install orze-pro for autonomous research agents.")
 
         self._startup_checks()
         self._kill_orphans()
