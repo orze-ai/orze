@@ -259,6 +259,14 @@ Examples:
 
         conn.commit()
         conn.close()
+
+        # Also clear pause sentinel — stale failures shouldn't block research
+        results_dir = Path(cfg.get("results_dir", "results"))
+        pause_file = results_dir / ".pause_research"
+        if pause_file.exists():
+            pause_file.unlink()
+            print("Cleared .pause_research sentinel.")
+
         return
 
     if command == "pro":
