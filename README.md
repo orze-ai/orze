@@ -13,6 +13,10 @@ Orze runs experiments on GPUs: **schedule ideas → train → evaluate → repor
 ## Install
 
 ```bash
+# One-line install (installs uv if needed, then orze + project scaffold):
+curl -sL https://orze.ai/setup.sh | bash
+
+# Or with pip:
 pip install orze                   # complete experiment tool (free, open source)
 pip install orze-pro               # + autopilot: autonomous research agents
 ```
