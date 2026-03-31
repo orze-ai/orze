@@ -1172,7 +1172,12 @@ noise: 0.1
                 print(f"  hint: run \033[36morze --init\033[0m to create a new project")
             sys.exit(1)
         else:
-            print(f"\033[32m✔ Ready to run.\033[0m")
+            from orze.extensions import has_pro, check_pro_status
+            if has_pro():
+                print(f"\033[32m✔ Ready to run.\033[0m (pro: \033[36m{check_pro_status()}\033[0m)")
+            else:
+                print(f"\033[32m✔ Ready to run.\033[0m")
+                print(f"  \033[33mℹ\033[0m {check_pro_status()}")
         return
 
     # Apply CLI overrides
