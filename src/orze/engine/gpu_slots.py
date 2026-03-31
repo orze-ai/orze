@@ -7,7 +7,7 @@ Config (orze.yaml):
     gpu_scheduling:
       max_vram_pct: 85           # stop assigning when GPU VRAM hits 85%
       min_free_vram_mib: 2000    # stop if less than 2GB free
-      max_jobs_per_gpu: 200      # safety cap
+      max_jobs_per_gpu: 20       # safety cap (raise for many tiny jobs)
 
 Backward compatible: without gpu_scheduling config, max_jobs_per_gpu=1
 gives identical behavior to old Dict[int, TrainingProcess].
@@ -81,7 +81,7 @@ class GpuSlotManager:
     def __init__(self, gpu_ids: List[int],
                  max_vram_pct: float = 90,
                  min_free_vram_mib: int = 1000,
-                 max_jobs_per_gpu: int = 200,
+                 max_jobs_per_gpu: int = 20,
                  slots_per_gpu: int = 1):  # legacy compat, maps to max_jobs
         self.gpu_ids = list(gpu_ids)
         self.max_vram_pct = max_vram_pct
@@ -96,10 +96,17 @@ class GpuSlotManager:
 
     def _gpu_has_capacity(self, gpu_id: int) -> bool:
         """Check VRAM headroom AND job count cap."""
-        if len(self._gpu_jobs.get(gpu_id, [])) >= self.max_jobs_per_gpu:
+        n_jobs = len(self._gpu_jobs.get(gpu_id, []))
+        if n_jobs >= self.max_jobs_per_gpu:
             return False
         usage = _get_gpu_usage(gpu_id)
         if usage is None:
+            # nvidia-smi failed — only allow new jobs if GPU is completely idle.
+            # This prevents unbounded spawning when the driver is degraded.
+            if n_jobs > 0:
+                logger.warning("GPU %d: VRAM query failed with %d active jobs — "
+                               "refusing new work until nvidia-smi recovers", gpu_id, n_jobs)
+                return False
             return True
         used, total = usage
         if total <= 0:
