@@ -56,10 +56,24 @@ from orze.engine.cluster import (
 from orze.engine.upgrade import UpgradeManager
 from orze.engine.reporter import NotificationProcessor
 from orze.engine.retrospection import run_retrospection
-from orze.engine.role_runner import (
-    RoleContext, run_role_step, run_all_roles as _run_all_roles_impl,
-    run_role_once as _run_role_once_impl, build_claude_cmd, build_research_cmd,
-)
+from orze.extensions import get_extension as _get_ext
+
+_role_mod = _get_ext("role_runner")
+if _role_mod:
+    RoleContext = _role_mod.RoleContext
+    run_role_step = _role_mod.run_role_step
+    _run_all_roles_impl = _role_mod.run_all_roles
+    _run_role_once_impl = _role_mod.run_role_once
+    build_claude_cmd = _role_mod.build_claude_cmd
+    build_research_cmd = _role_mod.build_research_cmd
+else:
+    # No pro / no built-in agents: stub everything
+    RoleContext = None
+    run_role_step = None
+    _run_all_roles_impl = None
+    _run_role_once_impl = None
+    build_claude_cmd = None
+    build_research_cmd = None
 from orze.engine.lifecycle import (
     startup_checks, reconcile_stale_running, print_startup_summary,
     graceful_shutdown, atexit_cleanup, write_shutdown_heartbeat,
@@ -268,24 +282,35 @@ class Orze(OrzePhaseMixin):
         )
 
     def _run_role_step(self, role_name, role_cfg):
+        if run_role_step is None:
+            return  # no agent support without pro
         ctx = self._role_context()
         run_role_step(role_name, role_cfg, ctx)
 
     def _run_role_once(self, role_name):
+        if _run_role_once_impl is None:
+            logger.info("Role '%s' requires orze-pro. Install with: pip install orze-pro", role_name)
+            return
         ctx = self._role_context()
         _run_role_once_impl(role_name, ctx)
 
     def _run_all_roles(self):
+        if _run_all_roles_impl is None:
+            return  # no agent support without pro
         ctx = self._role_context()
         _run_all_roles_impl(ctx)
 
     def _build_claude_cmd(self, research_cfg, template_vars):
+        if build_claude_cmd is None:
+            return None
         return build_claude_cmd(research_cfg, template_vars)
 
     def _build_research_cmd(self, role_cfg, template_vars):
         return build_research_cmd(role_cfg, template_vars, self.cfg)
 
     def _role_context(self):
+        if RoleContext is None:
+            return None
         return RoleContext(
             cfg=self.cfg,
             results_dir=self.results_dir,
@@ -382,6 +407,21 @@ class Orze(OrzePhaseMixin):
     def run(self):
         cfg = self.cfg
         self._write_pid_file()
+
+        # Log pro status
+        from orze.extensions import has_pro, pro_version
+        if has_pro():
+            logger.info("orze-pro %s detected — autopilot features enabled", pro_version())
+        elif _role_mod is not None:
+            logger.info("Using built-in agent modules (install orze-pro to upgrade)")
+        else:
+            roles = cfg.get("roles", {})
+            if roles:
+                logger.warning(
+                    "Roles configured (%s) but no agent support available. "
+                    "Install orze-pro for autonomous research agents.",
+                    ", ".join(roles.keys()))
+
         self._startup_checks()
         self._kill_orphans()
         # Check persistent disable flag (never auto-deleted)
