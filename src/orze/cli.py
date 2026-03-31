@@ -710,6 +710,13 @@ def _pro_deactivate():
     from pathlib import Path
     key_path = Path.home() / ".orze-pro.key"
     if key_path.exists():
+        try:
+            resp = input("Remove license key? Pro features will be disabled. [y/N] ").strip().lower()
+        except EOFError:
+            resp = "n"
+        if resp != "y":
+            print("Cancelled.")
+            return
         key_path.unlink()
         print(f"License key removed from {key_path}")
         print("Pro features deactivated.")

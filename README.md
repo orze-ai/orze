@@ -34,6 +34,12 @@ orze pro status                    # verify it worked
 
 No config changes — pro features activate automatically. [What's in pro?](#orze-vs-orze-pro)
 
+**License management:**
+```bash
+orze pro status                    # check license info
+orze pro deactivate                # remove license key
+```
+
 **Alternative activation methods** (for shared clusters or CI):
 ```bash
 # In your project .env file:
@@ -51,7 +57,7 @@ orze is a **complete, production-ready tool**. orze-pro adds **autopilot** — s
 |---------|:-----------:|:----------:|
 | GPU scheduling & multi-node | ✓ | ✓ |
 | Idea queue (ideas.md + SQLite) | ✓ | ✓ |
-| Hyperparameter sweep (Cartesian product) | ✓ | ✓ |
+| Hyperparameter sweep (auto-expand grid) | ✓ | ✓ |
 | Leaderboard report | ✓ | ✓ |
 | Telegram/Slack notifications (rich) | ✓ | ✓ |
 | Admin dashboard & MCP server | ✓ | ✓ |
@@ -162,8 +168,8 @@ Start orze in the same shared folder (e.g. `/nfs/project-52h/`) on any machine �
 
 - **Scales to 1M+ Experiments** — SQLite-backed job queue with O(log N) scheduling
 - **Config Inheritance** — Child ideas inherit parent configs; specify only what changes
-- **HP Sweep** — `lr: [1e-4, 3e-4]` auto-expands into Cartesian product sub-runs
-- **Circuit Breaker** — Stops on failure spikes. Schema validation catches errors before they hit GPUs
+- **HP Sweep** — `lr: [1e-4, 3e-4]` auto-expands into all combinations
+- **Failure Protection** — Stops automatically when failure rates spike
 - **Cross-Experiment Analysis** — Detects regressions, tradeoffs, and suggests actions
 - **Rich Notifications** — GPU VRAM, per-dataset breakdown, verified results, target/gap tracking
 - **Admin Panel** — Real-time web dashboard at `http://localhost:8787`
