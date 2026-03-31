@@ -625,12 +625,20 @@ def _pro_activate(key=None):
             existing = check_license()
             if existing:
                 print(f"Already activated: {license_info()}")
-                resp = input("Replace with a new key? [y/N] ").strip().lower()
+                try:
+                    resp = input("Replace with a new key? [y/N] ").strip().lower()
+                except EOFError:
+                    print("To replace: orze pro activate NEW-KEY")
+                    return
                 if resp != "y":
                     return
 
         print("Enter your license key (get one at orze.ai/pro):")
-        key = input("> ").strip()
+        try:
+            key = input("> ").strip()
+        except EOFError:
+            print("Usage: orze pro activate ORZE-PRO-xxx...")
+            return
         if not key:
             print("No key entered.")
             return
@@ -658,6 +666,8 @@ def _pro_activate(key=None):
     expires = payload.get("expires", "never")
 
     print(f"\033[32m\u2713 Licensed to {customer} ({tier}), expires {expires}\033[0m")
+    print(f"  Key saved to {key_path}")
+    print(f"  Pro features activate automatically — no config changes needed.")
 
 
 def _pro_status():
@@ -675,10 +685,21 @@ def _pro_status():
     print(f"orze-pro {pro_version()}")
     print(f"Status: {license_info()}")
     if is_licensed():
+        _descriptions = {
+            "role_runner": "Multi-agent orchestration",
+            "agents.research": "Autonomous research agents",
+            "agents.research_context": "Context builder for research LLM",
+            "agents.research_llm": "LLM backends (Gemini/OpenAI/Anthropic)",
+            "agents.code_evolution": "Auto-evolve code on plateau",
+            "agents.meta_research": "Meta-level strategy adjustment",
+            "agents.bug_fixer": "Auto-fix failed experiments",
+            "agents.bot": "Interactive Telegram/Slack bot",
+        }
         features = pro_features()
         print(f"Features: {len(features)} available")
         for f in features:
-            print(f"  \033[32m\u2713\033[0m {f}")
+            desc = _descriptions.get(f, "")
+            print(f"  \033[32m\u2713\033[0m {f:30s} {desc}")
     else:
         print()
         print("Activate with: orze pro activate")
