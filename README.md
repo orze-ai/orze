@@ -17,9 +17,19 @@ Orze runs experiments on GPUs: **schedule ideas → train → evaluate → repor
 curl -sL https://orze.ai/setup.sh | bash
 
 # Or with pip:
-pip install orze                   # complete experiment tool (free, open source)
-pip install orze-pro               # + autopilot: autonomous research agents
+pip install orze
 ```
+
+### Upgrade to Pro
+
+When you're ready for autonomous research agents:
+
+```bash
+pip install orze-pro
+export ORZE_PRO_KEY=...            # get a key at orze.ai/pro
+```
+
+No config changes — pro features activate automatically. [What's in pro?](#orze-vs-orze-pro)
 
 ## orze vs orze-pro
 
