@@ -604,8 +604,8 @@ def _resolve_init_path(explicit_path: str) -> str:
 # Pro license management
 # ---------------------------------------------------------------------------
 
-def _pro_activate():
-    """Interactive license activation."""
+def _pro_activate(key=None):
+    """Activate license. Accepts key as argument or prompts interactively."""
     from pathlib import Path
 
     # Check if orze-pro is installed
@@ -618,51 +618,40 @@ def _pro_activate():
 
     key_path = Path.home() / ".orze-pro.key"
 
-    # Check existing
-    if key_path.exists():
-        from orze_pro.license import check_license, license_info
-        existing = check_license()
-        if existing:
-            print(f"Already activated: {license_info()}")
-            resp = input("Replace with a new key? [y/N] ").strip().lower()
-            if resp != "y":
-                return
-
-    # Prompt for key
-    print()
-    print("Enter your orze-pro license key")
-    print("(get one at orze.ai/pro)")
-    print()
-    key = input("License key: ").strip()
-
+    # If no key provided, check existing or prompt
     if not key:
-        print("No key entered.")
-        return
+        if key_path.exists():
+            from orze_pro.license import check_license, license_info
+            existing = check_license()
+            if existing:
+                print(f"Already activated: {license_info()}")
+                resp = input("Replace with a new key? [y/N] ").strip().lower()
+                if resp != "y":
+                    return
+
+        print("Enter your license key (get one at orze.ai/pro):")
+        key = input("> ").strip()
+        if not key:
+            print("No key entered.")
+            return
 
     # Verify before saving
     from orze_pro.license import verify_key
     payload = verify_key(key)
     if payload is None:
-        print("\n\033[31mInvalid or expired license key.\033[0m")
+        print("\033[31mInvalid or expired license key.\033[0m")
         print("Check your key and try again, or contact support@orze.ai")
         return
 
     # Save
     key_path.write_text(key)
-    key_path.chmod(0o600)  # owner-only read/write
+    key_path.chmod(0o600)
 
     customer = payload.get("customer", "?")
     tier = payload.get("tier", "pro")
     expires = payload.get("expires", "never")
 
-    print()
-    print(f"\033[32m\u2713 License activated!\033[0m")
-    print(f"  Customer: {customer}")
-    print(f"  Tier:     {tier}")
-    print(f"  Expires:  {expires}")
-    print(f"  Saved to: {key_path}")
-    print()
-    print("Pro features are now enabled. Run \033[36morze -c orze.yaml\033[0m to start.")
+    print(f"\033[32m\u2713 Licensed to {customer} ({tier}), expires {expires}\033[0m")
 
 
 def _pro_status():
@@ -822,7 +811,8 @@ Examples:
     # pro
     pro_parser = subparsers.add_parser("pro", help="Manage orze-pro license")
     pro_sub = pro_parser.add_subparsers(dest="pro_action")
-    pro_sub.add_parser("activate", help="Activate orze-pro with a license key")
+    pro_activate = pro_sub.add_parser("activate", help="Activate orze-pro with a license key")
+    pro_activate.add_argument("key", nargs="?", default=None, help="License key (or enter interactively)")
     pro_sub.add_parser("status", help="Show orze-pro license status")
     pro_sub.add_parser("deactivate", help="Remove saved license key")
 
@@ -858,7 +848,7 @@ Examples:
     if command == "pro":
         action = getattr(args, "pro_action", None)
         if action == "activate":
-            _pro_activate()
+            _pro_activate(getattr(args, "key", None))
         elif action == "status":
             _pro_status()
         elif action == "deactivate":
