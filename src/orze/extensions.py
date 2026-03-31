@@ -43,18 +43,8 @@ _PRO_MODULES = {
     "agents.bot": "orze_pro.agents.bot",
 }
 
-# Fallback: if modules still exist in orze (transition period),
-# use them so existing users aren't broken.
-_BUILTIN_FALLBACK = {
-    "role_runner": "orze.engine.role_runner",
-    "agents.research": "orze.agents.research",
-    "agents.research_context": "orze.agents.research_context",
-    "agents.research_llm": "orze.agents.research_llm",
-    "agents.code_evolution": "orze.agents.code_evolution",
-    "agents.meta_research": "orze.agents.meta_research",
-    "agents.bug_fixer": "orze.agents.bug_fixer",
-    "agents.bot": "orze.agents.bot",
-}
+# No built-in fallbacks — these modules live in orze-pro only.
+_BUILTIN_FALLBACK = {}
 
 
 def get_extension(name: str) -> Optional[object]:

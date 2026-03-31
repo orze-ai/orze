@@ -32,7 +32,18 @@ from orze.core.ideas import parse_ideas
 
 
 
-from orze.agents.research import append_ideas_to_md, format_idea_markdown
+try:
+    from orze.extensions import get_extension
+    _research = get_extension("agents.research")
+    if _research:
+        append_ideas_to_md = _research.append_ideas_to_md
+        format_idea_markdown = _research.format_idea_markdown
+    else:
+        append_ideas_to_md = None
+        format_idea_markdown = None
+except ImportError:
+    append_ideas_to_md = None
+    format_idea_markdown = None
 
 logger = logging.getLogger("orze.admin")
 
@@ -522,8 +533,17 @@ async def post_idea(request: Request):
             lake.close()
         except Exception:
             pass
-    from orze.agents.research import generate_idea_id
-    idea_id = generate_idea_id(config, _results_dir())
+    _research_mod = get_extension("agents.research") if 'get_extension' not in dir() else None
+    try:
+        from orze.extensions import get_extension as _ge
+        _research_mod = _ge("agents.research")
+    except ImportError:
+        pass
+    if _research_mod and hasattr(_research_mod, 'generate_idea_id'):
+        idea_id = _research_mod.generate_idea_id(config, _results_dir())
+    else:
+        import hashlib
+        idea_id = f"idea-{hashlib.md5(str(config).encode()).hexdigest()[:6]}"
 
     md = format_idea_markdown(
         idea_id=idea_id,
