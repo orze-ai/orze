@@ -1,5 +1,9 @@
 # orze
 
+[![PyPI](https://img.shields.io/pypi/v/orze)](https://pypi.org/project/orze/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![PyPI - orze-pro](https://img.shields.io/pypi/v/orze-pro?label=orze-pro)](https://pypi.org/project/orze-pro/)
+
 A GPU experiment orchestrator for ML research.
 
 Orze runs experiments on GPUs: **schedule ideas → train → evaluate → report → repeat**. It coordinates GPUs via filesystem locks, works across machines, and gives you a complete leaderboard, notifications, and analysis — out of the box.
