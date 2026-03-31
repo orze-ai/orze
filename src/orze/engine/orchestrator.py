@@ -56,24 +56,24 @@ from orze.engine.cluster import (
 from orze.engine.upgrade import UpgradeManager
 from orze.engine.reporter import NotificationProcessor
 from orze.engine.retrospection import run_retrospection
-from orze.extensions import get_extension as _get_ext
+# Lazy-loaded at first use to avoid circular imports.
+# orze-pro's role_runner imports orze.engine.process which triggers
+# orze.engine.__init__ which imports this file — loading eagerly
+# at module level causes a circular import.
+_role_mod = None
+_role_loaded = False
 
-_role_mod = _get_ext("role_runner")
-if _role_mod:
-    RoleContext = _role_mod.RoleContext
-    run_role_step = _role_mod.run_role_step
-    _run_all_roles_impl = _role_mod.run_all_roles
-    _run_role_once_impl = _role_mod.run_role_once
-    build_claude_cmd = _role_mod.build_claude_cmd
-    build_research_cmd = _role_mod.build_research_cmd
-else:
-    # No pro / no built-in agents: stub everything
-    RoleContext = None
-    run_role_step = None
-    _run_all_roles_impl = None
-    _run_role_once_impl = None
-    build_claude_cmd = None
-    build_research_cmd = None
+def _load_role_module():
+    global _role_mod, _role_loaded
+    if _role_loaded:
+        return
+    _role_loaded = True
+    from orze.extensions import get_extension
+    _role_mod = get_extension("role_runner")
+
+def _get_role_attr(name):
+    _load_role_module()
+    return getattr(_role_mod, name, None) if _role_mod else None
 from orze.engine.lifecycle import (
     startup_checks, reconcile_stale_running, print_startup_summary,
     graceful_shutdown, atexit_cleanup, write_shutdown_heartbeat,
@@ -282,36 +282,44 @@ class Orze(OrzePhaseMixin):
         )
 
     def _run_role_step(self, role_name, role_cfg):
-        if run_role_step is None:
-            return  # no agent support without pro
+        fn = _get_role_attr("run_role_step")
+        if fn is None:
+            return
         ctx = self._role_context()
-        run_role_step(role_name, role_cfg, ctx)
+        fn(role_name, role_cfg, ctx)
 
     def _run_role_once(self, role_name):
-        if _run_role_once_impl is None:
+        fn = _get_role_attr("run_role_once")
+        if fn is None:
             logger.info("Role '%s' requires orze-pro. Install with: pip install orze-pro", role_name)
             return
         ctx = self._role_context()
-        _run_role_once_impl(role_name, ctx)
+        fn(role_name, ctx)
 
     def _run_all_roles(self):
-        if _run_all_roles_impl is None:
-            return  # no agent support without pro
+        fn = _get_role_attr("run_all_roles")
+        if fn is None:
+            return
         ctx = self._role_context()
-        _run_all_roles_impl(ctx)
+        fn(ctx)
 
     def _build_claude_cmd(self, research_cfg, template_vars):
-        if build_claude_cmd is None:
+        fn = _get_role_attr("build_claude_cmd")
+        if fn is None:
             return None
-        return build_claude_cmd(research_cfg, template_vars)
+        return fn(research_cfg, template_vars)
 
     def _build_research_cmd(self, role_cfg, template_vars):
-        return build_research_cmd(role_cfg, template_vars, self.cfg)
+        fn = _get_role_attr("build_research_cmd")
+        if fn is None:
+            return None
+        return fn(role_cfg, template_vars, self.cfg)
 
     def _role_context(self):
-        if RoleContext is None:
+        cls = _get_role_attr("RoleContext")
+        if cls is None:
             return None
-        return RoleContext(
+        return cls(
             cfg=self.cfg,
             results_dir=self.results_dir,
             gpu_ids=self.gpu_ids,
@@ -410,6 +418,7 @@ class Orze(OrzePhaseMixin):
 
         # Log pro status
         from orze.extensions import has_pro, pro_version
+        _load_role_module()  # trigger lazy load now that imports are safe
         if has_pro():
             logger.info("orze-pro %s detected — autopilot features enabled", pro_version())
         elif _role_mod is not None:
@@ -419,7 +428,8 @@ class Orze(OrzePhaseMixin):
             if roles:
                 logger.warning(
                     "Roles configured (%s) but no agent support available. "
-                    "Install orze-pro for autonomous research agents.",
+                    "Install orze-pro for autonomous research agents. "
+                    "Smart Suggestions will keep GPUs busy with parameter variations.",
                     ", ".join(roles.keys()))
 
         self._startup_checks()
