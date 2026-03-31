@@ -135,7 +135,11 @@ class IdeaLake:
                     try:
                         num = int(match.group(1))
                     except ValueError:
-                        num = int(match.group(1), 16) % (2**31)
+                        hex_part = re.sub(r"^[^0-9a-f]+", "", match.group(1))
+                        try:
+                            num = int(hex_part, 16) % (2**31) if hex_part else hash(r["idea_id"]) % (2**31)
+                        except ValueError:
+                            num = hash(r["idea_id"]) % (2**31)
                     self.conn.execute(
                         "UPDATE ideas SET id_num = ? WHERE idea_id = ?",
                         (num, r["idea_id"])
@@ -205,7 +209,12 @@ class IdeaLake:
             try:
                 id_num = int(match.group(1))
             except ValueError:
-                id_num = int(match.group(1), 16) % (2**31)
+                # Strip non-hex prefix (e.g., "v", "ss") then parse as hex
+                hex_part = re.sub(r"^[^0-9a-f]+", "", match.group(1))
+                try:
+                    id_num = int(hex_part, 16) % (2**31) if hex_part else hash(idea_id) % (2**31)
+                except ValueError:
+                    id_num = hash(idea_id) % (2**31)
 
         # Auto-compute summary if missing
         if not config_summary and config_yaml:
@@ -508,7 +517,11 @@ class IdeaLake:
                     try:
                         id_num = int(match.group(1))
                     except ValueError:
-                        id_num = int(match.group(1), 16) % (2**31)
+                        hex_part = re.sub(r"^[^0-9a-f]+", "", match.group(1))
+                        try:
+                            id_num = int(hex_part, 16) % (2**31) if hex_part else hash(idea["idea_id"]) % (2**31)
+                        except ValueError:
+                            id_num = hash(idea["idea_id"]) % (2**31)
             except (AttributeError, ValueError):
                 pass
 
