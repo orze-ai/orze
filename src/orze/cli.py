@@ -601,6 +601,107 @@ def _resolve_init_path(explicit_path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Pro license management
+# ---------------------------------------------------------------------------
+
+def _pro_activate():
+    """Interactive license activation."""
+    from pathlib import Path
+
+    # Check if orze-pro is installed
+    try:
+        import orze_pro
+    except ImportError:
+        print("orze-pro is not installed.")
+        print("Install it with: pip install orze-pro")
+        return
+
+    key_path = Path.home() / ".orze-pro.key"
+
+    # Check existing
+    if key_path.exists():
+        from orze_pro.license import check_license, license_info
+        existing = check_license()
+        if existing:
+            print(f"Already activated: {license_info()}")
+            resp = input("Replace with a new key? [y/N] ").strip().lower()
+            if resp != "y":
+                return
+
+    # Prompt for key
+    print()
+    print("Enter your orze-pro license key")
+    print("(get one at orze.ai/pro)")
+    print()
+    key = input("License key: ").strip()
+
+    if not key:
+        print("No key entered.")
+        return
+
+    # Verify before saving
+    from orze_pro.license import verify_key
+    payload = verify_key(key)
+    if payload is None:
+        print("\n\033[31mInvalid or expired license key.\033[0m")
+        print("Check your key and try again, or contact support@orze.ai")
+        return
+
+    # Save
+    key_path.write_text(key)
+    key_path.chmod(0o600)  # owner-only read/write
+
+    customer = payload.get("customer", "?")
+    tier = payload.get("tier", "pro")
+    expires = payload.get("expires", "never")
+
+    print()
+    print(f"\033[32m\u2713 License activated!\033[0m")
+    print(f"  Customer: {customer}")
+    print(f"  Tier:     {tier}")
+    print(f"  Expires:  {expires}")
+    print(f"  Saved to: {key_path}")
+    print()
+    print("Pro features are now enabled. Run \033[36morze -c orze.yaml\033[0m to start.")
+
+
+def _pro_status():
+    """Show license status."""
+    try:
+        import orze_pro
+    except ImportError:
+        print("orze-pro is not installed.")
+        print("Install it with: pip install orze-pro")
+        return
+
+    from orze.extensions import has_pro, pro_version, pro_features
+    from orze_pro.license import license_info, is_licensed
+
+    print(f"orze-pro {pro_version()}")
+    print(f"Status: {license_info()}")
+    if is_licensed():
+        features = pro_features()
+        print(f"Features: {len(features)} available")
+        for f in features:
+            print(f"  \033[32m\u2713\033[0m {f}")
+    else:
+        print()
+        print("Activate with: orze pro activate")
+
+
+def _pro_deactivate():
+    """Remove saved license key."""
+    from pathlib import Path
+    key_path = Path.home() / ".orze-pro.key"
+    if key_path.exists():
+        key_path.unlink()
+        print(f"License key removed from {key_path}")
+        print("Pro features deactivated.")
+    else:
+        print("No saved license key found.")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -718,6 +819,13 @@ Examples:
     svc_logs.add_argument("-n", type=int, default=50,
                           help="Number of log lines (default: 50)")
 
+    # pro
+    pro_parser = subparsers.add_parser("pro", help="Manage orze-pro license")
+    pro_sub = pro_parser.add_subparsers(dest="pro_action")
+    pro_sub.add_parser("activate", help="Activate orze-pro with a license key")
+    pro_sub.add_parser("status", help="Show orze-pro license status")
+    pro_sub.add_parser("deactivate", help="Remove saved license key")
+
     args = parser.parse_args()
 
     setup_logging(args.verbose)
@@ -745,6 +853,18 @@ Examples:
         config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
         do_restart(cfg, timeout=args.timeout, foreground=args.foreground,
                    config_path=config_path)
+        return
+
+    if command == "pro":
+        action = getattr(args, "pro_action", None)
+        if action == "activate":
+            _pro_activate()
+        elif action == "status":
+            _pro_status()
+        elif action == "deactivate":
+            _pro_deactivate()
+        else:
+            parser.parse_args(["pro", "--help"])
         return
 
     if command == "service":

@@ -26,7 +26,7 @@ When you're ready for autonomous research agents:
 
 ```bash
 pip install orze-pro
-export ORZE_PRO_KEY=...            # get a key at orze.ai/pro
+orze pro activate                 # enter your license key
 ```
 
 No config changes — pro features activate automatically. [What's in pro?](#orze-vs-orze-pro)
