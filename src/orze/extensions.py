@@ -105,11 +105,19 @@ def pro_version() -> Optional[str]:
 
 
 def pro_features() -> List[str]:
-    """List available pro features."""
+    """List available pro features (checks importability without full load)."""
+    if not has_pro():
+        return []
     available = []
-    for name in _PRO_MODULES:
-        if get_extension(name) is not None:
-            available.append(name)
+    for name, path in _PRO_MODULES.items():
+        try:
+            # Use find_module to check availability without triggering full import
+            import importlib.util
+            spec = importlib.util.find_spec(path)
+            if spec is not None:
+                available.append(name)
+        except (ImportError, ModuleNotFoundError, ValueError):
+            pass
     return available
 
 
