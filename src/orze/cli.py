@@ -844,6 +844,19 @@ Examples:
                           help="Number of log lines (default: 50)")
 
     # pro
+    # reset
+    reset_parser = subparsers.add_parser(
+        "reset", help="Reset idea lake: purge failed/stale ideas for a fresh start")
+    reset_parser.add_argument("-c", "--config-file", type=str, default=None)
+    reset_parser.add_argument("--failed", action="store_true",
+                              help="Purge all failed ideas")
+    reset_parser.add_argument("--all", action="store_true",
+                              help="Purge ALL non-completed ideas (queued + failed + partial)")
+    reset_parser.add_argument("--full", action="store_true",
+                              help="Wipe entire idea lake (backup created)")
+    reset_parser.add_argument("-y", "--yes", action="store_true",
+                              help="Skip confirmation prompt")
+
     pro_parser = subparsers.add_parser("pro", help="Manage orze-pro license")
     pro_sub = pro_parser.add_subparsers(dest="pro_action")
     pro_activate = pro_sub.add_parser("activate", help="Activate orze-pro with a license key")
@@ -879,6 +892,46 @@ Examples:
         config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
         do_restart(cfg, timeout=args.timeout, foreground=args.foreground,
                    config_path=config_path)
+        return
+
+    if command == "reset":
+        import sqlite3, shutil
+        cfg = load_project_config(args.config_file)
+        db_path = Path(cfg.get("results_dir", "results")).parent / "idea_lake.db"
+        if not db_path.exists():
+            print("No idea_lake.db found.")
+            return
+
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+
+        if args.full:
+            if not args.yes:
+                c.execute("SELECT COUNT(*) FROM ideas")
+                total = c.fetchone()[0]
+                resp = input(f"Wipe entire idea lake ({total} ideas)? Backup will be created. [y/N] ")
+                if resp.lower() != "y":
+                    print("Aborted.")
+                    return
+            backup = db_path.with_suffix(".db.bak")
+            shutil.copy2(db_path, backup)
+            c.execute("DELETE FROM ideas")
+            print(f"Wiped {c.rowcount} ideas. Backup: {backup}")
+        elif args.all:
+            c.execute("DELETE FROM ideas WHERE status IN ('queued', 'failed', 'partial', 'running')")
+            print(f"Purged {c.rowcount} non-completed ideas.")
+        elif args.failed:
+            c.execute("DELETE FROM ideas WHERE status = 'failed'")
+            print(f"Purged {c.rowcount} failed ideas.")
+        else:
+            # Default: show status summary
+            c.execute("SELECT status, COUNT(*) FROM ideas GROUP BY status")
+            for row in c.fetchall():
+                print(f"  {row[0]}: {row[1]}")
+            print("\nUse --failed, --all, or --full to purge.")
+
+        conn.commit()
+        conn.close()
         return
 
     if command == "pro":
