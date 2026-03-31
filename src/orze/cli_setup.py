@@ -1,0 +1,738 @@
+"""Install, uninstall, upgrade, init, and check helpers for the CLI.
+
+Calling spec:
+    from orze.cli_setup import (
+        do_uninstall, stop_running_instance, do_upgrade,
+        find_shared_mounts, resolve_init_path,
+        do_init, do_check,
+        IDEA_KEEP, RESULTS_KEEP,
+    )
+
+    do_uninstall(cfg)          # full uninstall, preserves research results
+    stop_running_instance(p)   # SIGTERM a running orze via PID file
+    do_upgrade(cfg)            # pip/uv upgrade + optional restart
+    find_shared_mounts()       # detect network FS mounts
+    resolve_init_path(path)    # resolve --init target directory
+    do_init(init_arg)          # scaffold a new orze project
+    do_check(cfg)              # validate config and environment
+
+Pure functions: find_shared_mounts, resolve_init_path.
+Side-effectful: do_uninstall, stop_running_instance, do_upgrade, do_init, do_check.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from orze import __version__
+
+# Files inside each idea dir to keep (research results)
+IDEA_KEEP = {
+    "metrics.json",
+    "eval_report.json",
+    "eval_output.log",
+    "best_model.pt",
+    "best_model.pth",
+    "model.pt",
+    "model.pth",
+    "checkpoint.pt",
+    "checkpoint.pth",
+}
+
+# Top-level results_dir files to keep
+RESULTS_KEEP = {"report.md", "status.json"}
+
+
+def do_uninstall(cfg: dict):
+    """Full uninstall: stop orze, strip runtime files, pip uninstall.
+
+    Preserves research results:
+        - results/{idea-*}/metrics.json  (core experiment data)
+        - results/{idea-*}/eval_report.json, eval_output.log
+        - results/report.md, status.json
+        - ideas.md, idea_lake.db
+    """
+    import time
+
+    results_dir = Path(cfg["results_dir"])
+    print("\n\033[1mOrze — Uninstall\033[0m")
+    print("-----------------")
+    print(f"Results dir : {results_dir.resolve()}")
+    print(f"Config      : {cfg.get('_config_path', 'orze.yaml')}")
+    print()
+
+    # --- 1. Stop running instances -----------------------------------
+    print("[1/5] Stopping running orze instances...")
+    stop_path = results_dir / ".orze_stop_all"
+    if results_dir.exists():
+        stop_path.write_text("uninstall", encoding="utf-8")
+        # Also send SIGTERM to any PID files we find
+        for pid_file in results_dir.glob(".orze.pid*"):
+            try:
+                pid = int(pid_file.read_text(encoding="utf-8").strip())
+                os.kill(pid, 15)  # SIGTERM
+                print(f"  Sent SIGTERM to PID {pid}")
+            except (ValueError, ProcessLookupError, PermissionError, OSError):
+                pass
+    time.sleep(2)  # give processes a moment to exit
+
+    # --- 2. Clean results directory ----------------------------------
+    print("[2/5] Cleaning runtime files from results/...")
+    if results_dir.exists():
+        # Fast path: rename the whole dir, create a fresh one, move only
+        # keeper files back (O(1) renames), then bulk-delete the old tree.
+        stale = results_dir.with_name(results_dir.name + "._orze_uninstall_tmp")
+        if stale.exists():
+            shutil.rmtree(stale, ignore_errors=True)
+        results_dir.rename(stale)
+        results_dir.mkdir()
+
+        # Restore top-level keeper files (report.md, status.json)
+        for name in RESULTS_KEEP:
+            src = stale / name
+            if src.exists():
+                src.rename(results_dir / name)
+
+        # Restore keeper files and subdirs from idea directories
+        for p in stale.iterdir():
+            if not p.is_dir() or p.name.startswith((".", "_")):
+                continue
+            keep_files = [c for c in p.iterdir()
+                          if c.is_file() and c.name in IDEA_KEEP]
+            keep_dirs = [c for c in p.iterdir() if c.is_dir()]
+            if keep_files or keep_dirs:
+                dest = results_dir / p.name
+                dest.mkdir()
+                for f in keep_files:
+                    f.rename(dest / f.name)
+                for d in keep_dirs:
+                    d.rename(dest / d.name)
+
+        # Bulk-delete the old tree (fast, handled in C)
+        shutil.rmtree(stale, ignore_errors=True)
+
+    print("  Cleaned runtime files")
+
+    # --- 3. Remove venv directory ------------------------------------
+    print("[3/5] Removing venv...")
+    venv_dir = Path("venv")
+    if venv_dir.is_dir():
+        shutil.rmtree(venv_dir, ignore_errors=True)
+        print("  Removed venv/")
+    else:
+        print("  No venv/ found")
+
+    # --- 4. Remove orze config file ----------------------------------
+    print("[4/5] Removing orze config...")
+    config_path = Path(cfg.get("_config_path", "orze.yaml"))
+    if config_path.exists():
+        config_path.unlink()
+        print(f"  Removed {config_path}")
+    else:
+        print("  No config file found")
+
+    # --- 5. Uninstall orze package (try uv first, fall back to pip) --
+    print("[5/5] Uninstalling orze package...")
+    uninstalled = False
+    if shutil.which("uv"):
+        try:
+            subprocess.run(
+                ["uv", "tool", "uninstall", "orze"],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            print("  orze package removed (uv)")
+            uninstalled = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+    if not uninstalled:
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "uninstall", "orze", "-y"],
+                check=True,
+            )
+            print("  orze package removed (pip)")
+        except subprocess.CalledProcessError:
+            print("  WARNING: uninstall failed — you may need to run manually:")
+            print("    uv tool uninstall orze  OR  pip uninstall orze")
+
+    # --- Summary -----------------------------------------------------
+    print()
+    print("\033[1mUninstall complete.\033[0m")
+    print("Preserved research results:")
+    if results_dir.exists():
+        kept = list(results_dir.rglob("metrics.json"))
+        print(f"  {len(kept)} experiment result(s) in {results_dir}/")
+    ideas_file = Path(cfg.get("ideas_file", "ideas.md"))
+    if ideas_file.exists():
+        print(f"  {ideas_file} (experiment definitions)")
+    lake_path = ideas_file.parent / "idea_lake.db"
+    if lake_path.exists():
+        print(f"  {lake_path} (idea archive database)")
+    project_dir = Path.cwd()
+    print()
+    print(f"  To remove everything: rm -rf {project_dir}")
+
+
+def stop_running_instance(results_dir: Path) -> bool:
+    """Stop a running orze instance via PID file. Returns True if one was stopped."""
+    import time as _time
+    pid_file = results_dir / ".orze.pid"
+    if not pid_file.exists():
+        return False
+    try:
+        old_pid = int(pid_file.read_text(encoding="utf-8").strip())
+    except (ValueError, OSError):
+        return False
+    print(f"Stopping orze (PID {old_pid})...")
+    try:
+        os.kill(old_pid, 15)  # SIGTERM
+    except ProcessLookupError:
+        print("  Process already exited.")
+        return False
+    for _ in range(30):  # 15s
+        try:
+            os.kill(old_pid, 0)
+            _time.sleep(0.5)
+        except ProcessLookupError:
+            break
+    else:
+        print("  Still running after 15s, sending SIGKILL...")
+        try:
+            os.kill(old_pid, 9)
+            _time.sleep(1)
+        except ProcessLookupError:
+            pass
+    print("  Stopped.")
+    return True
+
+
+def do_upgrade(cfg: dict):
+    """Upgrade orze to the latest version from PyPI, then restart if running."""
+    print(f"\n\033[1mOrze — Upgrade\033[0m")
+    print("---------------")
+    print(f"Current version: {__version__}")
+
+    # 1. Stop running instance first (so new code loads on restart)
+    results_dir = Path(cfg["results_dir"])
+    was_running = stop_running_instance(results_dir)
+
+    # 2. Upgrade (try uv first, fall back to pip)
+    upgraded = False
+    if shutil.which("uv"):
+        print("Upgrading via uv...\n")
+        try:
+            subprocess.run(
+                ["uv", "tool", "upgrade", "orze"],
+                check=True,
+            )
+            upgraded = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("  uv upgrade failed, falling back to pip...")
+
+    if not upgraded:
+        print("Upgrading via pip...\n")
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--upgrade", "orze"],
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            print("\n\033[31mUpgrade failed.\033[0m Try manually:")
+            print("  uv tool upgrade orze  OR  pip install --upgrade orze")
+            return
+
+    # Report the new version
+    result = subprocess.run(
+        [sys.executable, "-c", "from orze import __version__; print(__version__)"],
+        capture_output=True, text=True,
+    )
+    new_ver = result.stdout.strip() if result.returncode == 0 else "unknown"
+    if new_ver == __version__:
+        print(f"\nAlready up-to-date (v{__version__}).")
+    else:
+        print(f"\n\033[32mUpgraded: v{__version__} -> v{new_ver}\033[0m")
+
+    # 3. Restart if it was running
+    if was_running:
+        print("\nRestarting orze with new version...")
+        os.execv(sys.executable, [sys.executable, "-m", "orze.cli",
+                                  "-c", str(cfg.get("_config_path", "orze.yaml"))])
+
+
+# ---------------------------------------------------------------------------
+# Shared storage auto-detection
+# ---------------------------------------------------------------------------
+
+def find_shared_mounts() -> list:
+    """Find shared/network filesystem mounts. Returns [(path, fs_type), ...]."""
+    _NETWORK_FS = {"lustre", "nfs", "nfs4", "efs", "fuse.s3fs", "fuse.goofys",
+                   "ceph", "gpfs", "beegfs", "pvfs2", "glusterfs"}
+    _FAST_FS = {"lustre", "gpfs", "beegfs", "pvfs2"}
+
+    results = []
+    seen_devs = set()
+    try:
+        for line in Path("/proc/mounts").read_text().splitlines():
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+            device, mount_point, fs_type = parts[0], parts[1], parts[2]
+            if fs_type not in _NETWORK_FS and "@tcp:" not in device:
+                continue
+            if not os.access(mount_point, os.W_OK):
+                continue
+            try:
+                dev = os.stat(mount_point).st_dev
+                if dev in seen_devs:
+                    continue
+                seen_devs.add(dev)
+            except OSError:
+                continue
+            try:
+                free_gb = shutil.disk_usage(mount_point).free / (1024**3)
+                if free_gb < 20:
+                    continue
+            except (PermissionError, OSError):
+                continue
+            results.append((mount_point, fs_type))
+    except Exception:
+        pass
+
+    results.sort(key=lambda x: x[1] in _FAST_FS, reverse=True)
+    return results
+
+
+def resolve_init_path(explicit_path: str) -> str:
+    """Resolve the project directory for --init.
+
+    Explicit path -> use it. No path (__ask__ sentinel) -> detect shared mount,
+    prompt once (interactive) or auto-pick (non-interactive / piped).
+    """
+    if explicit_path != "__ask__":
+        return str(Path(explicit_path).resolve())
+
+    # Auto-detect best shared mount as default
+    shared = find_shared_mounts()
+    default = shared[0][0] if shared else str(Path.cwd())
+
+    # Non-interactive (e.g. curl | bash) — use detected path directly
+    if not sys.stdin.isatty():
+        return str(Path(default).resolve())
+
+    print()
+    print("\033[1mOrze needs a shared storage path for the project.\033[0m")
+    print("  All cluster nodes must be able to read/write this path.")
+    if shared:
+        print(f"  Detected: \033[36m{default}\033[0m ({shared[0][1]})")
+    path = input(f"  Project path [{default}]: ").strip()
+    return str(Path(path or default).resolve())
+
+
+# ---------------------------------------------------------------------------
+# --init: scaffold a new orze project
+# ---------------------------------------------------------------------------
+
+def do_init(init_arg: str):
+    """Scaffold a new orze project at the resolved path.
+
+    *init_arg* is the raw value from ``args.init`` (a path or ``"__ask__"``).
+    """
+    from orze.cli_demo import BASELINE_TRAIN_PY, RESEARCH_RULES_TEMPLATE
+
+    init_path = resolve_init_path(init_arg)
+    project_dir = Path(init_path).resolve()
+    project_dir.mkdir(parents=True, exist_ok=True)
+    os.chdir(project_dir)
+
+    print(f"\n\033[1mOrze — Initialization\033[0m")
+    print(f"  Project : {project_dir}")
+    print("---------------------")
+    created = []
+
+    def _create(path, content, label=None):
+        p = Path(path)
+        if p.exists():
+            print(f"  exists   {p}")
+            return False
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        created.append(label or str(p))
+        print(f"  \033[32mcreated\033[0m  {p}")
+        return True
+
+    print()
+
+    # .env template (project-local — each project has its own API keys)
+    env_content = """\
+# Orze auto-loads this file on startup. No need to export.
+# Uncomment and fill in the key for your preferred LLM backend:
+
+# ANTHROPIC_API_KEY=sk-ant-...
+# GEMINI_API_KEY=AI...
+# OPENAI_API_KEY=sk-...
+
+# Telegram notifications (optional):
+# TELEGRAM_BOT_TOKEN=123456:ABC...
+# TELEGRAM_CHAT_ID=-100...
+"""
+    _create(".env", env_content)
+
+    # ORZE-AGENT.md and ORZE-RULES.md (project-local copies)
+    pkg_dir = Path(__file__).resolve().parent
+    for src_name, dst_name in {"AGENT.md": "ORZE-AGENT.md", "RULES.md": "ORZE-RULES.md"}.items():
+        src = pkg_dir / src_name
+        if src.exists():
+            _create(dst_name, src.read_text(encoding="utf-8"))
+        else:
+            print(f"  \033[33mwarning\033[0m  {dst_name} — source {src_name} not found in package")
+
+    # 1. Train script stub
+    train_script = "train.py"
+    _create(train_script, BASELINE_TRAIN_PY.strip() + "\n", "train.py (stub)")
+
+    # 2. Create venv and install pyyaml (if no venv exists)
+    venv_dir = project_dir / "venv"
+    venv_python = venv_dir / "bin" / "python3"
+    venv_ok = False
+    if venv_dir.is_dir() and venv_python.exists():
+        # Health check: can the venv import yaml?
+        try:
+            subprocess.run(
+                [str(venv_python), "-c", "import yaml"],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            venv_ok = True
+            print(f"  exists   venv/ (healthy)")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+                FileNotFoundError, OSError):
+            print(f"  \033[33mbroken\033[0m   venv/ — recreating...")
+            shutil.rmtree(venv_dir, ignore_errors=True)
+
+    if not venv_ok:
+        print(f"  \033[32mcreating\033[0m venv/...")
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "venv", str(venv_dir)],
+                check=True, timeout=60,
+            )
+            subprocess.run(
+                [str(venv_python), "-m", "pip", "install", "--quiet", "pyyaml"],
+                check=True, timeout=120,
+            )
+            created.append("venv/ (with pyyaml)")
+            print(f"  \033[32mcreated\033[0m  venv/ (with pyyaml)")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+                FileNotFoundError) as exc:
+            print(f"  \033[33mwarning\033[0m  venv creation failed: {exc}")
+            print(f"           You can create one manually: python3 -m venv venv && venv/bin/pip install pyyaml")
+
+    # Determine python path for orze.yaml
+    if (venv_dir / "bin" / "python3").exists():
+        python_for_yaml = str(venv_dir / "bin" / "python3")
+    else:
+        python_for_yaml = sys.executable
+
+    # 3. orze.yaml
+    backend = ("anthropic" if os.environ.get("ANTHROPIC_API_KEY") else
+               "gemini" if os.environ.get("GEMINI_API_KEY") else
+               "openai" if os.environ.get("OPENAI_API_KEY") else "ollama")
+
+    yaml_content = f"""\
+# orze.yaml — Project configuration
+# Docs: https://github.com/erikhenriksson/orze
+
+# --- REQUIRED ---
+train_script: {train_script}
+ideas_file: ideas.md
+results_dir: results
+python: {python_for_yaml}
+
+# --- EVALUATION (optional) ---
+# eval_script: evaluate_dataset.py
+# eval_args: [--split, test]
+# eval_timeout: 3600
+# eval_output: eval_report.json
+
+# --- RESEARCH AGENT (optional) ---
+# Auto-generates ideas. Requires API key in .env or environment.
+# If you have an API key set, orze auto-discovers it — no config needed.
+# Uncomment below only to customize settings:
+#
+# roles:
+#   research:
+#     mode: research
+#     backend: {backend}              # anthropic | gemini | openai | ollama
+#     cooldown: 600
+#     timeout: 300
+
+# --- NOTIFICATIONS (optional) ---
+# notifications:
+#   enabled: true
+#   on: [completed, failed, new_best]
+#   channels:
+#     - type: telegram
+#       bot_token: "${{TELEGRAM_BOT_TOKEN}}"
+#       chat_id: "${{TELEGRAM_CHAT_ID}}"
+
+# --- ADVANCED ---
+# timeout: 3600
+# poll: 30
+# stall_minutes: 0
+# max_idea_failures: 0
+# max_fix_attempts: 0
+"""
+    _create("orze.yaml", yaml_content)
+
+    # 4. ideas.md with task-agnostic seed experiments
+    ideas_content = """\
+# Ideas
+<!-- Orze reads ideas from this file. Format:
+     ## idea-XXXX: Title
+     - **Priority**: high|medium|low
+     ```yaml
+     key: value        <- passed to your train script
+     ```
+     Orze consumes ideas on startup (moves them to idea_lake.db).
+-->
+
+## idea-0001: Baseline — default hyperparameters
+- **Priority**: high
+
+```yaml
+learning_rate: 0.001
+epochs: 10
+```
+
+## idea-0002: Higher learning rate
+- **Priority**: medium
+
+```yaml
+learning_rate: 0.01
+epochs: 10
+```
+
+## idea-0003: Longer training
+- **Priority**: medium
+
+```yaml
+learning_rate: 0.001
+epochs: 100
+```
+"""
+    _create("ideas.md", ideas_content)
+
+    # 5. configs/base.yaml (task-agnostic defaults)
+    base_content = """\
+# Base config — shared defaults for all experiments.
+# Your train script receives this via --config <path>.
+# Add any project-wide settings here (model architecture, data paths, etc).
+
+# Example defaults (used by the demo train.py):
+seed: 42
+noise: 0.1
+"""
+    _create("configs/base.yaml", base_content)
+
+    # 6. RESEARCH_RULES.md (if it doesn't exist)
+    _create("RESEARCH_RULES.md", RESEARCH_RULES_TEMPLATE, "RESEARCH_RULES.md")
+
+    # 7. results directory
+    Path("results").mkdir(exist_ok=True)
+
+    # =================================================================
+    # Summary
+    # =================================================================
+    print()
+    if created:
+        print(f"\033[32m Created {len(created)} file(s). Project ready.\033[0m")
+    else:
+        print("\033[32m All files already exist.\033[0m")
+
+    # API key status
+    _detected = []
+    if os.environ.get("ANTHROPIC_API_KEY"): _detected.append("Anthropic")
+    if os.environ.get("GEMINI_API_KEY"): _detected.append("Gemini")
+    if os.environ.get("OPENAI_API_KEY"): _detected.append("OpenAI")
+
+    print()
+    if _detected:
+        print(f"  API keys: \033[32m{', '.join(_detected)}\033[0m (auto-discovered)")
+    else:
+        print(f"  API keys: \033[33mnone found\033[0m — add to {project_dir}/.env")
+
+    cfg_path = project_dir / "orze.yaml"
+    print()
+    print("\033[1mNext steps:\033[0m")
+    print(f"  1. Edit \033[36m{project_dir}/train.py\033[0m with your training logic")
+    print(f"  2. Add API key to \033[36m{project_dir}/.env\033[0m (optional, for auto-research)")
+    print(f"  3. Run: \033[36morze --check -c {cfg_path}\033[0m to validate")
+    print(f"  4. Run: \033[36morze -c {cfg_path}\033[0m to start")
+
+
+# ---------------------------------------------------------------------------
+# --check: validate config and environment
+# ---------------------------------------------------------------------------
+
+def do_check(cfg: dict):
+    """Validate config, files, API keys, GPUs, .env — then exit."""
+    from orze.core.config import _validate_config, find_dotenv
+    from orze.hardware.gpu import detect_all_gpus
+
+    print(f"\n\033[1mOrze v{__version__} — Config Check\033[0m")
+    print("=" * 50)
+
+    ok = "\033[32m[x]\033[0m"
+    no = "\033[31m[ ]\033[0m"
+    warn_mark = "\033[33m[-]\033[0m"
+
+    # --- Files ---
+    print("  \033[1mFiles:\033[0m")
+    cp = Path(cfg.get("_config_path", "orze.yaml"))
+    cp_ok = cp.exists()
+    print(f"    {ok if cp_ok else no} orze.yaml: {cp}")
+    if not cp_ok:
+        print(f"      hint: run \033[36morze --init\033[0m to create a project")
+
+    env_path = find_dotenv(str(cp) if cp_ok else None)
+    if env_path:
+        print(f"    {ok} .env: {env_path}")
+    else:
+        print(f"    {warn_mark} .env: not found (optional — needed for API keys)")
+
+    ts = cfg.get("train_script", "train.py")
+    ts_ok = Path(ts).exists()
+    print(f"    {ok if ts_ok else no} train_script: {ts}")
+    if not ts_ok and not cp_ok:
+        print(f"      hint: run \033[36morze --init\033[0m to scaffold a project")
+
+    ideas_path = cfg.get("ideas_file", "ideas.md")
+    ideas_exists = Path(ideas_path).exists()
+    print(f"    {ok if ideas_exists else no} ideas_file: {ideas_path}")
+
+    # Validate ideas format
+    ideas_valid = False
+    ideas_count = 0
+    if ideas_exists:
+        from orze.core.ideas import parse_ideas
+        try:
+            parsed = parse_ideas(ideas_path)
+            ideas_count = len(parsed)
+            ideas_valid = ideas_count > 0
+        except Exception:
+            pass
+    if ideas_exists:
+        if ideas_valid:
+            print(f"      {ok} {ideas_count} idea(s) parsed OK")
+        else:
+            print(f"      {warn_mark} no valid ideas found (may be empty if using idea_lake)")
+
+    rdir = cfg.get("results_dir", "results")
+    print(f"    {ok if Path(rdir).is_dir() else warn_mark} results_dir: {rdir}")
+
+    bc = cfg.get("base_config")
+    if bc:
+        print(f"    {ok if Path(bc).exists() else warn_mark} base_config: {bc}")
+
+    es = cfg.get("eval_script")
+    if es:
+        print(f"    {ok if Path(es).exists() else no} eval_script: {es}")
+
+    lake_path = Path(ideas_path).parent / "idea_lake.db"
+    print(f"    {ok if lake_path.exists() else warn_mark} idea_lake.db: {lake_path}")
+
+    # --- Filesystem writability ---
+    print()
+    print("  \033[1mFilesystem:\033[0m")
+    rdir_p = Path(rdir)
+    fs_ok = False
+    if rdir_p.is_dir():
+        probe = rdir_p / ".orze_probe"
+        try:
+            probe.write_text("1")
+            probe.unlink()
+            fs_ok = True
+        except Exception:
+            pass
+    print(f"    {ok if fs_ok else no} results_dir writable" +
+          ("" if fs_ok else " (create it or check mount)"))
+
+    disk = shutil.disk_usage(rdir_p if rdir_p.is_dir() else Path.cwd())
+    free_gb = disk.free / (1024**3)
+    print(f"    {ok if free_gb > 5 else warn_mark} disk: {free_gb:.1f} GB free")
+
+    # --- API keys ---
+    print()
+    print("  \033[1mAPI Keys:\033[0m")
+    any_key = False
+    for env_var, label in [("ANTHROPIC_API_KEY", "Anthropic"),
+                            ("GEMINI_API_KEY", "Gemini"),
+                            ("OPENAI_API_KEY", "OpenAI")]:
+        present = bool(os.environ.get(env_var))
+        if present:
+            any_key = True
+        print(f"    {ok if present else warn_mark} {label} ({env_var})")
+    if not any_key:
+        print(f"      hint: add a key to .env for auto-research")
+
+    # --- GPUs ---
+    print()
+    print("  \033[1mGPUs:\033[0m")
+    gpus = detect_all_gpus()
+    if gpus:
+        print(f"    {ok} {len(gpus)} GPU(s) detected: {gpus}")
+    else:
+        print(f"    {no} No GPUs detected")
+
+    # --- Roles ---
+    print()
+    print("  \033[1mResearch Agent:\033[0m")
+    roles = cfg.get("roles") or {}
+    if roles:
+        for rname, rcfg in roles.items():
+            if isinstance(rcfg, dict):
+                mode = rcfg.get("mode", "script")
+                backend = rcfg.get("backend", "")
+                detail = f"mode={mode}" + (f", backend={backend}" if backend else "")
+                print(f"    {ok} {rname}: {detail}")
+    else:
+        print(f"    {no} No research agent configured — ideas will not be generated automatically")
+        if not any_key:
+            print(f"      hint: add an API key to .env (GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)")
+            print(f"            orze will auto-discover it and start generating ideas")
+        else:
+            print(f"      hint: auto-discovery found API key(s) but roles section in orze.yaml")
+            print(f"            may be overriding it. Remove 'roles: {{}}' or configure a research role")
+
+    # --- Validation ---
+    errors, warnings = _validate_config(cfg)
+    if errors or warnings:
+        print()
+    if errors:
+        print("  \033[31mErrors:\033[0m")
+        for e in errors:
+            print(f"    \033[31m\u2717\033[0m {e}")
+    if warnings:
+        print("  \033[33mWarnings:\033[0m")
+        for w in warnings:
+            print(f"    \033[33m!\033[0m {w}")
+
+    print()
+    if errors:
+        print(f"\033[31m\u2717 {len(errors)} error(s) — fix before running.\033[0m")
+        if not cp_ok:
+            print(f"  hint: run \033[36morze --init\033[0m to create a new project")
+        sys.exit(1)
+    else:
+        from orze.extensions import has_pro, check_pro_status
+        if has_pro():
+            print(f"\033[32m\u2714 Ready to run.\033[0m (pro: \033[36m{check_pro_status()}\033[0m)")
+        else:
+            print(f"\033[32m\u2714 Ready to run.\033[0m")
+            print(f"  \033[33m\u2139\033[0m {check_pro_status()}")

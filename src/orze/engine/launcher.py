@@ -292,7 +292,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     _recent_completions.pop(0)
                 anomaly = check_identical_results(_recent_completions, primary)
                 if anomaly:
-                logger.warning("[ANOMALY] %s", anomaly)
+                    logger.warning("[ANOMALY] %s", anomaly)
             if status == "FAILED":
                 error_msg = metrics.get("error", "Training script reported FAILED")
                 if _try_executor_fix(tp.idea_id, error_msg,
