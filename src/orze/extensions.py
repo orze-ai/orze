@@ -48,29 +48,32 @@ _BUILTIN_FALLBACK = {}
 
 
 def get_extension(name: str) -> Optional[object]:
-    """Load a pro extension module. Returns None if not available."""
+    """Load a pro extension module. Returns None if not available or unlicensed."""
     if name in _cache:
         return _cache[name]
 
-    # Try orze-pro first
+    # Try orze-pro first (requires valid license)
     pro_path = _PRO_MODULES.get(name)
     if pro_path:
         try:
+            # Check license before loading pro modules
+            orze_pro = importlib.import_module("orze_pro")
+            if hasattr(orze_pro, "is_licensed") and not orze_pro.is_licensed():
+                if not _cache.get("_license_warned"):
+                    _cache["_license_warned"] = True
+                    from orze_pro.license import license_info
+                    logger.warning("orze-pro installed but not activated: %s",
+                                   license_info())
+                _cache[name] = None
+                return None
             mod = importlib.import_module(pro_path)
             _cache[name] = mod
             return mod
         except ImportError:
             pass
 
-    # Fallback to built-in (transition period)
-    fallback_path = _BUILTIN_FALLBACK.get(name)
-    if fallback_path:
-        try:
-            mod = importlib.import_module(fallback_path)
-            _cache[name] = mod
-            return mod
-        except ImportError:
-            pass
+    _cache[name] = None
+    return None
 
     _cache[name] = None
     return None
