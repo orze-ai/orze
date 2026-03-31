@@ -74,7 +74,26 @@ class OrzePhaseMixin:
             ingested_ids = []
             config_hashes = self._load_config_hashes()
             for idea_id, idea in raw_ideas.items():
-                if idea_id not in db_ids:
+                # Re-queue failed ideas when re-submitted via ideas.md
+                if idea_id in db_ids:
+                    existing = self.lake.get(idea_id)
+                    if existing and existing.get("status") == "failed":
+                        import shutil
+                        idea_dir = self.results_dir / idea_id
+                        if idea_dir.exists():
+                            shutil.rmtree(idea_dir, ignore_errors=True)
+                        self.lake.set_status(idea_id, "queued")
+                        # Update config in case it changed
+                        new_cfg = yaml.dump(idea.get("config", {}))
+                        if new_cfg.strip():
+                            self.lake.conn.execute(
+                                "UPDATE ideas SET config=? WHERE idea_id=?",
+                                (new_cfg, idea_id))
+                            self.lake.conn.commit()
+                        ingested_ids.append(idea_id)
+                        logger.info("Re-queued failed idea %s", idea_id)
+                    continue
+                if True:
                     # Config dedup: skip if overrides match a completed idea
                     override_hash = self._config_override_hash(
                         idea.get("config", {}))
