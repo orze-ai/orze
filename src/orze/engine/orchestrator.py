@@ -100,6 +100,8 @@ class Orze(OrzePhaseMixin):
             max_vram_pct=sched_cfg.get("max_vram_pct", 90),
             min_free_vram_mib=sched_cfg.get("min_free_vram_mib", 1000),
             max_jobs_per_gpu=sched_cfg.get("max_jobs_per_gpu", 200),
+            max_load_per_cpu=sched_cfg.get("max_load_per_cpu", 2.0),
+            min_free_ram_gb=sched_cfg.get("min_free_ram_gb", 16.0),
             slots_per_gpu=sched_cfg.get("slots_per_gpu", 1),  # legacy compat
         )
         self.active = self.slot_mgr  # dict-compatible drop-in
