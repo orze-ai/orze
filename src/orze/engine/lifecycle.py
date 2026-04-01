@@ -153,6 +153,11 @@ def print_startup_summary(cfg: dict) -> None:
     cleanup_on = bool(cleanup_cfg.get("script"))
     cleanup_interval = cleanup_cfg.get("interval", 100)
 
+    # API key check for auto-research
+    has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    has_gemini = bool(os.environ.get("GEMINI_API_KEY"))
+    has_any_llm_key = has_anthropic or has_gemini
+
     lines = [
         "",
         line,
@@ -172,6 +177,31 @@ def print_startup_summary(cfg: dict) -> None:
         line,
         "",
     ]
+
+    from orze.extensions import has_pro
+    if has_pro():
+        if research_names and not has_any_llm_key:
+            lines.append(
+                "  \033[33m⚠ WARNING: No ANTHROPIC_API_KEY or GEMINI_API_KEY found.\033[0m"
+            )
+            lines.append(
+                "  \033[33m  Auto-research is configured but will not work without an API key.\033[0m"
+            )
+            lines.append(
+                "  \033[33m  Add ANTHROPIC_API_KEY or GEMINI_API_KEY to your .env file.\033[0m"
+            )
+            lines.append("")
+            logger.warning(
+                "Auto-research is configured but no ANTHROPIC_API_KEY or "
+                "GEMINI_API_KEY found — research agent will not be able to "
+                "generate ideas. Add a key to .env to enable auto-research."
+            )
+    else:
+        lines.append(
+            "  \033[2m💡 Upgrade to orze-pro for AI-powered idea generation,"
+            " auto-fix, and code evolution → orze.ai/pro\033[0m"
+        )
+        lines.append("")
 
     for l in lines:
         print(l)

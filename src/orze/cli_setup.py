@@ -667,19 +667,21 @@ def do_check(cfg: dict):
     free_gb = disk.free / (1024**3)
     print(f"    {ok if free_gb > 5 else warn_mark} disk: {free_gb:.1f} GB free")
 
-    # --- API keys ---
-    print()
-    print("  \033[1mAPI Keys:\033[0m")
-    any_key = False
-    for env_var, label in [("ANTHROPIC_API_KEY", "Anthropic"),
-                            ("GEMINI_API_KEY", "Gemini"),
-                            ("OPENAI_API_KEY", "OpenAI")]:
-        present = bool(os.environ.get(env_var))
-        if present:
-            any_key = True
-        print(f"    {ok if present else warn_mark} {label} ({env_var})")
-    if not any_key:
-        print(f"      hint: add a key to .env for auto-research")
+    # --- API keys (only relevant for pro users) ---
+    from orze.extensions import has_pro
+    has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    has_gemini = bool(os.environ.get("GEMINI_API_KEY"))
+    has_any_llm_key = has_anthropic or has_gemini
+    any_key = has_any_llm_key or bool(os.environ.get("OPENAI_API_KEY"))
+    if has_pro():
+        print()
+        print("  \033[1mAPI Keys:\033[0m")
+        for env_var, label in [("ANTHROPIC_API_KEY", "Anthropic"),
+                                ("GEMINI_API_KEY", "Gemini")]:
+            present = bool(os.environ.get(env_var))
+            print(f"    {ok if present else warn_mark} {label} ({env_var})")
+        if not has_any_llm_key:
+            print(f"      hint: add ANTHROPIC_API_KEY or GEMINI_API_KEY to .env for auto-research")
 
     # --- GPUs ---
     print()
@@ -694,6 +696,10 @@ def do_check(cfg: dict):
     print()
     print("  \033[1mResearch Agent:\033[0m")
     roles = cfg.get("roles") or {}
+    research_names = [
+        rname for rname, rcfg in roles.items()
+        if isinstance(rcfg, dict) and rcfg.get("mode") in ("research", "claude")
+    ]
     if roles:
         for rname, rcfg in roles.items():
             if isinstance(rcfg, dict):
@@ -701,14 +707,21 @@ def do_check(cfg: dict):
                 backend = rcfg.get("backend", "")
                 detail = f"mode={mode}" + (f", backend={backend}" if backend else "")
                 print(f"    {ok} {rname}: {detail}")
+        if research_names and not has_any_llm_key and has_pro():
+            print(f"    {warn_mark} \033[33mAuto-research will not work: no ANTHROPIC_API_KEY or GEMINI_API_KEY found\033[0m")
+            print(f"      Add ANTHROPIC_API_KEY or GEMINI_API_KEY to .env to enable auto-research")
     else:
-        print(f"    {no} No research agent configured — ideas will not be generated automatically")
-        if not any_key:
-            print(f"      hint: add an API key to .env (GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)")
-            print(f"            orze will auto-discover it and start generating ideas")
+        if has_pro():
+            print(f"    {no} No research agent configured — ideas will not be generated automatically")
+            if not any_key:
+                print(f"      hint: add an API key to .env (GEMINI_API_KEY or ANTHROPIC_API_KEY)")
+                print(f"            and configure a research role in orze.yaml")
+            else:
+                print(f"      hint: auto-discovery found API key(s) but roles section in orze.yaml")
+                print(f"            may be overriding it. Remove 'roles: {{}}' or configure a research role")
         else:
-            print(f"      hint: auto-discovery found API key(s) but roles section in orze.yaml")
-            print(f"            may be overriding it. Remove 'roles: {{}}' or configure a research role")
+            print(f"    \033[2mAI-powered idea generation, auto-fix, and code evolution\033[0m")
+            print(f"    \033[2mAvailable with orze-pro → orze.ai/pro\033[0m")
 
     # --- Validation ---
     errors, warnings = _validate_config(cfg)
