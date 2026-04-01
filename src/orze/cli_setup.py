@@ -169,7 +169,7 @@ def do_uninstall(cfg: dict):
     ideas_file = Path(cfg.get("ideas_file", "ideas.md"))
     if ideas_file.exists():
         print(f"  {ideas_file} (experiment definitions)")
-    lake_path = ideas_file.parent / "idea_lake.db"
+    lake_path = Path(cfg.get("idea_lake_db") or ideas_file.parent / "idea_lake.db")
     if lake_path.exists():
         print(f"  {lake_path} (idea archive database)")
     project_dir = Path.cwd()
@@ -644,7 +644,7 @@ def do_check(cfg: dict):
     if es:
         print(f"    {ok if Path(es).exists() else no} eval_script: {es}")
 
-    lake_path = Path(ideas_path).parent / "idea_lake.db"
+    lake_path = Path(cfg.get("idea_lake_db") or Path(ideas_path).parent / "idea_lake.db")
     print(f"    {ok if lake_path.exists() else warn_mark} idea_lake.db: {lake_path}")
 
     # --- Filesystem writability ---

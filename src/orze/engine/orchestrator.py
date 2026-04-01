@@ -142,7 +142,14 @@ class Orze(OrzePhaseMixin):
         # Initialize Idea Lake for archival
         try:
             from orze.idea_lake import IdeaLake
-            lake_path = Path(cfg.get("ideas_file", "ideas.md")).parent / "idea_lake.db"
+            lake_path = Path(cfg["idea_lake_db"])
+
+            # Migrate old location (next to ideas.md) to new location (results_dir)
+            old_lake = Path(cfg.get("ideas_file", "ideas.md")).parent / "idea_lake.db"
+            if old_lake != lake_path and old_lake.exists() and not lake_path.exists():
+                lake_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(old_lake), str(lake_path))
+                logger.info("Migrated idea_lake.db: %s -> %s", old_lake, lake_path)
 
             # MOUNT INTEGRITY CHECK: Prevents split-brain leaderboard corruption.
             # Only warn about unmounted drive if results dir already has experiments

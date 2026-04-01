@@ -93,9 +93,25 @@ def rebuild(results_dir: Path, db_path: Path):
 def main():
     parser = argparse.ArgumentParser(description="Rebuild idea_lake.db from results")
     parser.add_argument("--results-dir", default="results", help="Path to results dir")
-    parser.add_argument("--db", default="idea_lake.db", help="SQLite database path")
+    parser.add_argument("--db", default=None, help="SQLite database path (default: from config or results_dir/idea_lake.db)")
+    parser.add_argument("-c", "--config", default=None, help="Path to orze.yaml")
     args = parser.parse_args()
-    rebuild(Path(args.results_dir), Path(args.db))
+
+    # Resolve db path: CLI flag > config > results_dir/idea_lake.db
+    results_dir = Path(args.results_dir)
+    if args.db:
+        db_path = Path(args.db)
+    elif args.config and Path(args.config).exists():
+        try:
+            cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8")) or {}
+            db_path = Path(cfg.get("idea_lake_db") or (results_dir / "idea_lake.db"))
+            results_dir = Path(cfg.get("results_dir", "results"))
+        except Exception:
+            db_path = results_dir / "idea_lake.db"
+    else:
+        db_path = results_dir / "idea_lake.db"
+
+    rebuild(results_dir, db_path)
 
 
 if __name__ == "__main__":

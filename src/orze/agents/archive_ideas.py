@@ -128,7 +128,7 @@ def main():
     parser = argparse.ArgumentParser(description="Archive ideas to SQLite")
     parser.add_argument("--ideas-md", default="ideas.md", help="Path to ideas.md")
     parser.add_argument("--results-dir", default="results", help="Path to results dir")
-    parser.add_argument("--db", default="idea_lake.db", help="SQLite database path")
+    parser.add_argument("--db", default=None, help="SQLite database path (default: from config or results_dir/idea_lake.db)")
     parser.add_argument("--config", default=None, help="Path to orze.yaml for report column config")
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
     parser.add_argument("--keep-top", type=int, default=0,
@@ -141,9 +141,10 @@ def main():
     # Load config for eval report names and column definitions
     eval_reports = []
     report_columns = []
+    cfg = {}
     if args.config and Path(args.config).exists():
         try:
-            cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
+            cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8")) or {}
             eval_output = cfg.get("eval_output", "eval_report.json")
             eval_reports.append(eval_output)
             report_columns = cfg.get("report", {}).get("columns", [])
@@ -151,6 +152,14 @@ def main():
             pass
     if not eval_reports:
         eval_reports = ["eval_report.json"]
+
+    # Resolve db path: CLI flag > config > results_dir/idea_lake.db
+    if args.db:
+        db_path = args.db
+    elif cfg.get("idea_lake_db"):
+        db_path = cfg["idea_lake_db"]
+    else:
+        db_path = str(results_dir / "idea_lake.db")
 
     logger.info("Reading %s...", ideas_path)
     text = ideas_path.read_text(encoding="utf-8")
@@ -203,8 +212,8 @@ def main():
         return
 
     # Insert into SQLite
-    logger.info("Inserting %d ideas into %s...", len(to_archive), args.db)
-    lake = IdeaLake(args.db)
+    logger.info("Inserting %d ideas into %s...", len(to_archive), db_path)
+    lake = IdeaLake(db_path)
 
     # Bulk insert
     bulk_data = []

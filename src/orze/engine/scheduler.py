@@ -223,8 +223,7 @@ def run_cleanup(results_dir: Path, cfg: dict):
         try:
             from orze.agents.orze_gc import run_gc
             report_cfg = cfg.get("report") or {}
-            ideas_path = Path(cfg.get("ideas_file", "ideas.md"))
-            lake_path = ideas_path.parent / "idea_lake.db"
+            lake_path = Path(cfg.get("idea_lake_db") or Path(cfg.get("results_dir", "results")) / "idea_lake.db")
             stats = run_gc(
                 results_dir=results_dir,
                 checkpoints_dir=Path(gc_cfg["checkpoints_dir"]),

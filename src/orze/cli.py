@@ -224,7 +224,7 @@ Examples:
     if command == "reset":
         import sqlite3, shutil
         cfg = load_project_config(args.config_file)
-        db_path = Path(cfg.get("results_dir", "results")).parent / "idea_lake.db"
+        db_path = Path(cfg.get("idea_lake_db") or Path(cfg.get("results_dir", "results")) / "idea_lake.db")
         if not db_path.exists():
             print("No idea_lake.db found.")
             return
@@ -389,7 +389,7 @@ Examples:
         ideas = parse_ideas(cfg["ideas_file"])
         results_dir = Path(cfg["results_dir"])
         lake = None
-        lake_path = Path(cfg["ideas_file"]).parent / "idea_lake.db"
+        lake_path = Path(cfg["idea_lake_db"])
         if lake_path.exists():
             from orze.idea_lake import IdeaLake
             lake = IdeaLake(str(lake_path))
@@ -416,50 +416,22 @@ Examples:
         try:
             import threading
             from orze.admin.server import run_admin as _run_admin_server
-            admin_port = int(os.environ.get("ORZE_ADMIN_PORT", "8787"))
-
-            def _kill_port_holder(port):
-                """Kill a previous orze process holding the port."""
-                try:
-                    out = subprocess.check_output(
-                        ["fuser", f"{port}/tcp"], stderr=subprocess.DEVNULL,
-                    ).decode().strip()
-                    for pid_str in out.split():
-                        pid = int(pid_str)
-                        if pid == os.getpid():
-                            continue
-                        # Only kill if it's an orze process
-                        try:
-                            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().decode(
-                                "utf-8", errors="replace")
-                            if "orze" not in cmdline:
-                                logger.warning(
-                                    "Port %d held by non-orze process %d, skipping", port, pid)
-                                continue
-                        except OSError:
-                            continue
-                        logger.info("Killing stale orze process %d on port %d", pid, port)
-                        os.kill(pid, 15)
-                except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
-                    pass
+            admin_port = int(cfg.get("admin_port") or os.environ.get("ORZE_ADMIN_PORT", "8787"))
 
             def _admin_thread():
-                import time as _time
-                for attempt in range(3):
-                    try:
-                        _run_admin_server(cfg, port=admin_port)
-                        return
-                    except OSError as e:
-                        if "address already in use" in str(e).lower() and attempt < 2:
-                            logger.warning("Admin port %d in use, killing holder and retrying...", admin_port)
-                            _kill_port_holder(admin_port)
-                            _time.sleep(2)
-                        else:
-                            logger.warning("Admin panel failed to start: %s", e)
-                            return
-                    except Exception as e:
+                try:
+                    _run_admin_server(cfg, port=admin_port)
+                except OSError as e:
+                    if "address already in use" in str(e).lower():
+                        logger.warning(
+                            "Admin port %d already in use by another process. "
+                            "Skipping admin panel to avoid killing another instance. "
+                            "Set admin_port in orze.yaml to use a different port.",
+                            admin_port)
+                    else:
                         logger.warning("Admin panel failed to start: %s", e)
-                        return
+                except Exception as e:
+                    logger.warning("Admin panel failed to start: %s", e)
 
             t = threading.Thread(target=_admin_thread, daemon=True)
             t.start()

@@ -202,7 +202,7 @@ def install(config_file, method="auto", stall_threshold=1800):
     results_dir = cfg["results_dir"]
     workdir = str(Path(config_file).resolve().parent)
     python = sys.executable
-    log_file = f"/tmp/orze_{os.environ.get('USER', 'user')}.log"
+    log_file = str(Path(results_dir).resolve() / "orze.log")
 
     if method == "auto":
         method = _detect_method()

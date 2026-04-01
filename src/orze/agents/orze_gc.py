@@ -505,7 +505,7 @@ Examples:
         archive_dir = None
 
     lake_db_path = Path(args.lake_db) if args.lake_db else \
-        ideas_path.parent / "idea_lake.db"
+        Path(cfg.get("idea_lake_db") or (results_dir / "idea_lake.db"))
 
     stats = run_gc(
         results_dir=results_dir,

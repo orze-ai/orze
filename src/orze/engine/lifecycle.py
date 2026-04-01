@@ -94,8 +94,7 @@ def reconcile_stale_running(cfg: dict) -> None:
     On startup, no ideas should be running yet. Any 'running' entries
     in idea_lake.db are leftovers from a crash -- reset them to 'queued'.
     """
-    ideas_path = Path(cfg.get("ideas_file", "ideas.md"))
-    lake_path = ideas_path.parent / "idea_lake.db"
+    lake_path = Path(cfg.get("idea_lake_db") or Path(cfg.get("results_dir", "results")) / "idea_lake.db")
     if not lake_path.exists():
         return
     try:

@@ -145,7 +145,7 @@ def _launch_orze(svc_cfg):
     python = svc_cfg["python"]
     config_file = svc_cfg["config_file"]
     workdir = svc_cfg.get("workdir", ".")
-    log_file = svc_cfg.get("log_file", "/tmp/orze.log")
+    log_file = svc_cfg.get("log_file", str(Path(svc_cfg.get("results_dir", "/tmp")) / "orze.log"))
 
     with open(log_file, "a") as lf:
         proc = subprocess.Popen(
@@ -177,7 +177,7 @@ def check_and_restart(svc_cfg):
     hostname = socket.gethostname()
     results_dir = svc_cfg["results_dir"]
     threshold = svc_cfg.get("stall_threshold", 1800)
-    log_file = svc_cfg.get("log_file", "/tmp/orze_watchdog.log")
+    log_file = svc_cfg.get("log_file", str(Path(results_dir) / "orze_watchdog.log"))
 
     def _log(msg):
         line = f"{time.strftime('%Y-%m-%d %H:%M:%S')} [watchdog] {msg}"

@@ -174,7 +174,7 @@ def _tool_queue(args: dict, cfg: dict) -> str:
     # Fallback: try idea_lake
     try:
         from orze.idea_lake import IdeaLake
-        lake_path = Path(cfg.get("ideas_file", "ideas.md")).parent / "idea_lake.db"
+        lake_path = Path(cfg.get("idea_lake_db") or Path(cfg.get("ideas_file", "ideas.md")).parent / "idea_lake.db")
         if lake_path.exists():
             lake = IdeaLake(str(lake_path))
             rows = lake.get_queue(limit=limit)

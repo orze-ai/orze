@@ -191,6 +191,10 @@ def load_project_config(path: Optional[str] = None) -> dict:
         elif "research" not in cfg["roles"]:
             cfg["roles"]["research"] = cfg["research"]
 
+    # Default idea_lake_db to results_dir/idea_lake.db if not set
+    if not cfg.get("idea_lake_db"):
+        cfg["idea_lake_db"] = str(Path(cfg["results_dir"]) / "idea_lake.db")
+
     # Auto-discover research backends from environment API keys.
     # Only activates if NO roles are explicitly configured at all.
     # If the user defined any roles (even mode: script), respect that
@@ -342,6 +346,7 @@ def _validate_config(cfg: dict) -> tuple:
         "train_extra_args", "train_extra_env", "pre_script", "pre_args",
         "pre_timeout", "eval_script", "eval_args", "eval_timeout",
         "eval_output", "post_scripts", "report",
+        "admin_port", "idea_lake_db",
     }
     known_keys = set(DEFAULT_CONFIG.keys()) | _KNOWN_EXTRAS
     for key in cfg:
@@ -351,6 +356,14 @@ def _validate_config(cfg: dict) -> tuple:
                 f"Unknown config key '{key}' in orze.yaml — possible typo? "
                 f"(known keys: {known_list})"
             )
+
+    # --- Multi-tenant hint ---
+    ideas_val = cfg.get("ideas_file", "ideas.md")
+    if ideas_val == "ideas.md" or (not Path(ideas_val).is_absolute()
+                                    and not ideas_val.startswith(cfg.get("results_dir", "results"))):
+        logger.debug("ideas_file is '%s' (relative, not under results_dir). "
+                      "Multi-instance setups should use distinct ideas_file paths.",
+                      ideas_val)
 
     # --- Issue B: Warn if ideas_file does not exist yet ---
     ideas_path = cfg.get("ideas_file")

@@ -146,6 +146,69 @@ def _cleanup_gpu_orphans(workdir: str):
             pass
 
 
+def _kill_children_of(parent_pid: int, timeout: int = 60):
+    """Kill child processes of a specific PID (scoped, not global pkill)."""
+    import re
+    try:
+        result = subprocess.run(
+            ["ps", "--ppid", str(parent_pid), "-o", "pid=", "--no-headers"],
+            capture_output=True, text=True, timeout=5,
+        )
+        child_pids = [
+            int(p) for p in result.stdout.strip().split() if p.strip()
+        ]
+    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+        child_pids = []
+
+    if not child_pids:
+        _log("stop", "No child processes")
+        return
+
+    # Filter to only known child script patterns
+    filtered = []
+    child_re = re.compile(_CHILD_PAT)
+    for cpid in child_pids:
+        try:
+            cmdline = Path(f"/proc/{cpid}/cmdline").read_bytes().decode(
+                "utf-8", errors="replace")
+            if child_re.search(cmdline):
+                filtered.append(cpid)
+        except OSError:
+            pass
+
+    if not filtered:
+        _log("stop", "No matching child processes")
+        return
+
+    _log("stop", f"SIGTERM {len(filtered)} child process(es) of PID {parent_pid}")
+    for cpid in filtered:
+        try:
+            os.kill(cpid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    elapsed = 0
+    while elapsed < timeout:
+        still_alive = [p for p in filtered if _is_alive(p)]
+        if not still_alive:
+            _log("stop", f"All child processes exited after {elapsed}s")
+            return
+        _log("stop",
+             f"Waiting for {len(still_alive)} child process(es)... "
+             f"({elapsed}/{timeout}s)")
+        time.sleep(5)
+        elapsed += 5
+
+    still_alive = [p for p in filtered if _is_alive(p)]
+    if still_alive:
+        _log("stop", f"Timeout — SIGKILL {len(still_alive)} remaining children")
+        for cpid in still_alive:
+            try:
+                os.kill(cpid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+
+
 # ── stop ─────────────────────────────────────────────────────────────
 
 def do_stop(cfg: dict, timeout: int = 60):
@@ -193,36 +256,28 @@ def do_stop(cfg: dict, timeout: int = 60):
     else:
         _log("stop", "No orchestrator PID file found")
 
-    # Also catch any orze process not tracked by PID file
+    # Also catch any orze process for OUR config not tracked by PID file.
+    # Scope the pgrep to processes whose command line contains our results_dir
+    # or config path so we don't kill other tenants' instances.
+    our_results = str(results_dir.resolve())
+    config_path = cfg.get("_config_path") or ""
     for extra_pid in _pgrep(_ORZE_PAT):
+        try:
+            cmdline = Path(f"/proc/{extra_pid}/cmdline").read_bytes().decode(
+                "utf-8", errors="replace")
+            if our_results not in cmdline and config_path not in cmdline:
+                _log("stop", f"Skipping orze PID {extra_pid} (belongs to another instance)")
+                continue
+        except OSError:
+            continue
         _log("stop", f"Killing additional orze process (PID {extra_pid})")
         _kill_pid(extra_pid, timeout=10)
 
-    # 4. Kill child processes
-    count = _count_children()
-    if count > 0:
-        _log("stop", f"SIGTERM {count} child process(es)")
-        _pkill(_CHILD_PAT)
-
-        elapsed = 0
-        while elapsed < timeout:
-            remaining = _count_children()
-            if remaining == 0:
-                _log("stop", f"All child processes exited after {elapsed}s")
-                break
-            _log("stop",
-                 f"Waiting for {remaining} child process(es)... "
-                 f"({elapsed}/{timeout}s)")
-            time.sleep(5)
-            elapsed += 5
-        else:
-            remaining = _count_children()
-            if remaining > 0:
-                _log("stop",
-                     f"Timeout — SIGKILL {remaining} remaining children")
-                _pkill(_CHILD_PAT, signal.SIGKILL)
+    # 4. Kill child processes — only children of our orchestrator PID, not globally.
+    if pid:
+        _kill_children_of(pid, timeout)
     else:
-        _log("stop", "No child processes")
+        _log("stop", "No orchestrator PID — skipping child cleanup")
 
     # 5. GPU orphan cleanup
     _cleanup_gpu_orphans(workdir)
@@ -246,7 +301,8 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None):
     hostname = socket.gethostname()
     config_path = config_path or cfg.get("_config_path", "orze.yaml")
     python = sys.executable
-    log_file = "/tmp/orze.log"
+    log_file = str(Path(cfg.get("results_dir", "results")) / "orze.log")
+    Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 
     # 1. Check not already running
     pid = _read_pid(results_dir, hostname)

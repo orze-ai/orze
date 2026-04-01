@@ -26,7 +26,7 @@ def main():
 
     results_dir = Path(cfg["results_dir"])
     ideas_file = cfg.get("ideas_file", "ideas.md")
-    lake_path = Path(ideas_file).parent / "idea_lake.db"
+    lake_path = Path(cfg.get("idea_lake_db") or (Path(cfg.get("results_dir", "results")) / "idea_lake.db"))
     lake = IdeaLake(str(lake_path)) if lake_path.exists() else None
     ideas = parse_ideas(ideas_file)
 

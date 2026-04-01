@@ -358,7 +358,7 @@ async def get_idea_detail(idea_id: str):
             result["origin"] = "ideas.md"
 
         # 2. Try idea_lake.db (archived ideas)
-        lake_path = Path(_ideas_file()).parent / "idea_lake.db"
+        lake_path = Path(_cfg.get("idea_lake_db") or Path(_ideas_file()).parent / "idea_lake.db")
         if lake_path.exists() and not result["found"]:
             try:
                 from orze.idea_lake import IdeaLake
@@ -524,8 +524,7 @@ async def post_idea(request: Request):
         raise HTTPException(400, "config must be a dict")
 
     # Determine next idea ID — use IdeaLake sequence if available
-    ideas_path = Path(_ideas_file())
-    lake_path = ideas_path.parent / "idea_lake.db"
+    lake_path = Path(_cfg.get("idea_lake_db") or Path(_ideas_file()).parent / "idea_lake.db")
     if lake_path.exists():
         try:
             from orze.idea_lake import IdeaLake
