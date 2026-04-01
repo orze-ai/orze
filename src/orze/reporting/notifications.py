@@ -276,95 +276,165 @@ def _format_telegram(event: str, data: dict, channel_cfg: dict) -> tuple:
         queued = data.get("queued", 0)
         running = data.get("running", data.get("training", 0) + data.get("eval", 0))
         total_gpus = data.get("total_gpus", running + data.get("free", 0))
-        active_gpus = total_gpus - data.get("free", 0)
-        lines = [
-            f"\U0001f4ca <b>Orze Status</b> — <code>{host}</code>",
-            (f"\u2705 {completed} completed | \u274c {failed} failed | "
-             f"\u23f3 {queued} queued | \U0001f504 {running} running"),
-        ]
-        # Verified results (full-scale, ground truth)
-        verified = data.get("verified")
-        if verified:
-            v_avg = verified.get("avg_wer")
-            v_target = verified.get("target")
-            v_model = esc(str(verified.get("model", "?")))
-            if v_avg is not None:
-                gap = v_avg - v_target if v_target else None
-                gap_str = f" | Gap: {gap:+.2f}%" if gap is not None else ""
-                target_str = f" | Target: {v_target:.2f}%" if v_target else ""
-                lines.append(
-                    f"\U0001f3af <b>Verified:</b> {v_avg:.2f}% avg WER{target_str}{gap_str}")
-                v_ds = verified.get("per_dataset", {})
-                if v_ds:
-                    parts = [f"{k}={v:.1f}" for k, v in v_ds.items()]
-                    lines.append(f"  {' | '.join(parts)}")
-                lines.append(f"  Model: <code>{v_model}</code>")
+        uptime = esc(str(data.get("uptime", "?")))
+        active_runs = data.get("active_runs") or []
 
-        # Orze best estimate (500-sample, may be biased)
+        # Stall detection: 0 completions + experiments running longer than timeout
+        # Use configured timeout (default 6h) — stall means oldest experiment
+        # exceeded the timeout, not just "hasn't finished yet".
+        rate_str = str(data.get("rate", ""))
+        rate_num = 0
+        try:
+            rate_num = int(rate_str.split()[0])
+        except (ValueError, IndexError):
+            pass
+        max_elapsed = max((r.get("elapsed_min", 0) for r in active_runs),
+                         default=0)
+        stall_threshold = data.get("timeout", 21600) / 60  # seconds -> minutes
+        is_stalled = (rate_num == 0 and active_runs
+                      and max_elapsed >= stall_threshold)
+
+        # Header with health status
+        if is_stalled:
+            lines = [
+                f"\u26a0\ufe0f <b>Orze</b> \u2014 <code>{host}</code> \u2014 {uptime}"
+                f" \u2014 <b>STALLED</b>",
+            ]
+        else:
+            lines = [
+                f"\U0001f4ca <b>Orze</b> \u2014 <code>{host}</code> \u2014 {uptime}",
+            ]
+
+        # Best result with target comparison
         best_val = data.get("best_val")
+        est_label = data.get("estimate_label")
+        metric_name = esc(str(data.get("best_metric", "score")))
+        lower_is_better = data.get("sort", "descending") == "ascending"
         if best_val is not None:
-            metric = esc(str(data.get("best_metric", "score")))
             best_id = esc(str(data.get("best_id", "?")))
             if isinstance(best_val, float):
                 val_str = f"{best_val:.2f}"
             else:
                 val_str = str(best_val)
+            tag = f" [{esc(est_label)}]" if est_label else ""
             target = data.get("target")
             if target is not None:
-                gap = best_val - target
+                beats_target = (best_val <= target if lower_is_better
+                                else best_val >= target)
+                if isinstance(best_val, (int, float)) and beats_target:
+                    status = "\u2705"
+                else:
+                    gap = best_val - target if isinstance(best_val, (int, float)) else 0
+                    status = f"\u274c {gap:+.2f}"
                 lines.append(
-                    f"\U0001f50d Orze best: {esc(val_str)}% {metric} "
+                    f"\U0001f3c6 <b>{esc(val_str)}</b>{tag} {metric_name} "
                     f"(<code>{best_id}</code>) "
-                    f"| Target: {target}% | Gap: {gap:+.2f}%")
+                    f"| target {target} {status}")
             else:
                 lines.append(
-                    f"\U0001f50d Orze best: {esc(val_str)}% {metric} "
+                    f"\U0001f3c6 <b>{esc(val_str)}</b>{tag} {metric_name} "
                     f"(<code>{best_id}</code>)")
 
-        # Estimate warning
-        estimate_warning = data.get("estimate_warning")
-        if estimate_warning:
-            lines.append(esc(estimate_warning))
+        # Verified results (full-scale) with per-dataset breakdown
+        verified = data.get("verified")
+        if verified:
+            v_primary = verified.get("primary") or verified.get("avg_wer")
+            if v_primary is not None:
+                v_label = " [full]" if est_label else ""
+                v_target = verified.get("target")
+                gap_str = ""
+                if v_target and isinstance(v_primary, (int, float)):
+                    gap = v_primary - v_target
+                    gap_str = f" | gap {gap:+.2f}"
+                lines.append(
+                    f"\U0001f3af Verified: <b>{v_primary:.2f}</b>"
+                    f"{v_label}{gap_str}")
+                per_ds = verified.get("per_dataset")
+                if per_ds:
+                    parts = [f"{esc(k)}={v:.1f}" for k, v
+                             in sorted(per_ds.items())]
+                    lines.append(f"  {' | '.join(parts)}")
 
-        # Per-dataset breakdown (if available in best result)
-        best_details = data.get("best_details")
-        if best_details:
-            detail_parts = []
-            for k, v in sorted(best_details.items()):
-                if isinstance(v, float):
-                    detail_parts.append(f"{esc(k)}={v:.2f}")
-            if detail_parts:
-                lines.append(f"  {' | '.join(detail_parts)}")
-
-        # GPU utilization details
-        gpu_info = data.get("gpu_info", [])
-        if gpu_info:
-            gpu_parts = []
-            for g in gpu_info:
-                idx = g.get("index", "?")
-                used = g.get("memory_used_mib", g.get("memory_used_mb", 0))
-                total = g.get("memory_total_mib", g.get("memory_total_mb", 0))
-                util = g.get("utilization_pct", 0)
-                if used > 100:  # GPU in use
-                    gpu_parts.append(f"GPU{idx}:{used//1024}G/{total//1024}G({util}%)")
-                else:
-                    gpu_parts.append(f"GPU{idx}:idle")
-            lines.append(f"\U0001f5a5 {' '.join(gpu_parts)}")
-        else:
-            lines.append(
-                f"\U0001f4bb GPUs: {active_gpus}/{total_gpus} active | "
-                f"Up {esc(str(data.get('uptime', '?')))}")
-
-        # Model info (from config)
-        model_name = data.get("model_name")
-        if model_name:
-            lines.append(f"\U0001f916 Model: <code>{esc(model_name)}</code>")
-
-        if data.get("rate"):
-            lines.append(f"\U0001f4c8 {esc(str(data['rate']))}")
-
+        # Progress line with normalized rate and completion %
+        rate = data.get("rate", "")
+        hb_interval = data.get("heartbeat_interval", 3600)
+        rate_display = esc(str(rate))
+        if rate_num > 0 and hb_interval > 0:
+            per_hr = rate_num / (hb_interval / 3600)
+            rate_display += f" ({per_hr:.1f}/hr)"
+        total_work = completed + failed + queued + running
+        pct_str = ""
+        if total_work > 0:
+            pct = completed / total_work * 100
+            pct_str = f" | {pct:.0f}% done"
         lines.append(
-            f"\u23f1 Up {esc(str(data.get('uptime', '?')))}")
+            f"\U0001f4c8 {completed} done | {failed} fail | "
+            f"{queued} queued | {rate_display}{pct_str}")
+
+        # GPU status — labeled clearly
+        n_free = data.get("free", 0)
+        n_training = data.get("training", 0)
+        n_eval = data.get("eval", 0)
+        eval_backlog = data.get("eval_backlog", 0)
+        n_active = running
+        if n_training and n_eval:
+            gpu_line = (f"\U0001f5a5 {n_active} active "
+                        f"({n_training} train, {n_eval} eval), "
+                        f"{n_free} idle / {total_gpus} GPUs")
+        elif n_active:
+            gpu_line = (f"\U0001f5a5 {n_active} active, "
+                        f"{n_free} idle / {total_gpus} GPUs")
+        else:
+            gpu_line = f"\U0001f5a5 {total_gpus} GPUs, all idle"
+        if eval_backlog:
+            gpu_line += f" | {eval_backlog} eval pending"
+        lines.append(gpu_line)
+
+        # Active experiments — compact (truncated IDs, count if many)
+        if active_runs:
+            if len(active_runs) > 4:
+                oldest = max(r.get("elapsed_min", 0) for r in active_runs)
+                newest = min(r.get("elapsed_min", 0) for r in active_runs)
+                if oldest >= 60:
+                    oldest_str = f"{oldest / 60:.1f}h"
+                else:
+                    oldest_str = f"{oldest:.0f}m"
+                if newest >= 60:
+                    newest_str = f"{newest / 60:.1f}h"
+                else:
+                    newest_str = f"{newest:.0f}m"
+                lines.append(
+                    f"\u23f3 {len(active_runs)} running "
+                    f"({newest_str}\u2013{oldest_str})")
+            else:
+                run_parts = []
+                for r in active_runs:
+                    rid = esc(str(r.get("idea_id", "?")))
+                    elapsed = r.get("elapsed_min", 0)
+                    phase = r.get("phase", "")
+                    if elapsed >= 60:
+                        t = f"{elapsed / 60:.1f}h"
+                    else:
+                        t = f"{elapsed:.0f}m"
+                    suffix = "/eval" if phase == "eval" else ""
+                    run_parts.append(f"{rid}({t}{suffix})")
+                lines.append(f"\u23f3 {' '.join(run_parts)}")
+
+        # Stall warning detail
+        if is_stalled:
+            lines.append(
+                f"\u26a0\ufe0f <b>0 completions with "
+                f"{len(active_runs)} running ({max_elapsed:.0f}m oldest)</b>")
+
+        # Next up in queue
+        next_queue = data.get("next_queue") or []
+        if next_queue:
+            q_parts = []
+            for q in next_queue:
+                qid = esc(str(q.get("id", "?")))
+                qtitle = esc(str(q.get("title", ""))[:30])
+                q_parts.append(f"<code>{qid}</code> {qtitle}")
+            lines.append(f"\U0001f4cb Next up:\n  " + "\n  ".join(q_parts))
 
         return url, {"chat_id": chat_id, "text": "\n".join(lines),
                      "parse_mode": "HTML"}
@@ -419,31 +489,53 @@ def _format_telegram(event: str, data: dict, channel_cfg: dict) -> tuple:
     title = esc(str(data.get("title", "")))
 
     if event == "new_best":
-        prev = esc(str(data.get("prev_best_id", "none")))
+        prev_id = esc(str(data.get("prev_best_id", "none")))
         metric = esc(str(data.get("metric_name", "")))
-        val = esc(str(data.get("metric_value", "")))
-        text = (f"<b>NEW BEST</b> <code>{idea_id}</code>: {title}\n"
-                f"{metric}: <b>{val}</b>"
-                f" (was <code>{prev}</code>)")
+        val = data.get("metric_value", "")
+        val_str = esc(str(val))
+        # Show improvement delta
+        prev_val = data.get("prev_best_val")
+        delta_str = ""
+        try:
+            if prev_val is not None:
+                curr_f = float(val)
+                prev_f = float(prev_val)
+                delta = curr_f - prev_f
+                delta_str = f" | \u0394 {delta:+.2f}%"
+        except (ValueError, TypeError):
+            pass
+        text = (f"\U0001f3c6\U0001f3c6\U0001f3c6 <b>NEW BEST</b>\n"
+                f"<code>{idea_id}</code>: {title}\n"
+                f"{metric}: <b>{val_str}</b>"
+                f" (was {esc(str(prev_val or '?'))}% <code>{prev_id}</code>)"
+                f"{delta_str}")
     elif event == "failed":
         err = esc(str(data.get("error") or "unknown")[:200])
-        text = (f"<b>FAILED</b> <code>{idea_id}</code>: {title}\n"
-                f"Error: {err}")
+        text = (f"\u274c <code>{idea_id}</code>: {title}\n"
+                f"{err}")
     else:
         t_str = ""
         try:
             t = data.get("training_time")
             if t is not None:
-                t_str = f" in {float(t):.0f}s"
+                secs = float(t)
+                if secs >= 3600:
+                    t_str = f" | {secs / 3600:.1f}h"
+                else:
+                    t_str = f" | {secs / 60:.0f}m"
         except (ValueError, TypeError):
             pass
         metric = esc(str(data.get("metric_name", "")))
         val = esc(str(data.get("metric_value", "")))
-        rank = esc(str(data.get("rank", "?")))
-        text = (f"<b>Completed</b> <code>{idea_id}</code>: {title}\n"
-                f"{metric}: {val}"
-                f" (rank #{rank})"
-                f"{t_str}")
+        rank = data.get("rank", "?")
+        rank_str = esc(str(rank))
+        # Rank emoji
+        if isinstance(rank, int) and rank <= 3:
+            medal = ["\U0001f947", "\U0001f948", "\U0001f949"][rank - 1]
+        else:
+            medal = "\u2705"
+        text = (f"{medal} <code>{idea_id}</code>: {title}\n"
+                f"{metric}: <b>{val}</b> (#{rank_str}){t_str}")
     if not data.get("summary_only"):
         text += _format_leaderboard(data, lambda s: f"<b>{s}</b>", escape_fn=esc)
 
@@ -458,6 +550,12 @@ def notify(event: str, data: dict, cfg: dict):
             return
 
         logger.info("Sending notification for event: %s", event)
+
+        # Suppress role_summary if configured
+        if event == "role_summary" and ncfg.get("suppress_role_summary", False):
+            logger.debug("Suppressing role_summary notification (configured)")
+            return
+
         global_on = ncfg.get("on") or ["completed", "failed", "new_best"]
         # Lifecycle/system events always delivered (not filtered)
         lifecycle = {"started", "shutdown", "heartbeat", "milestone",

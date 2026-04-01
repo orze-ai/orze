@@ -274,11 +274,20 @@ class NotificationProcessor:
             best_val = completed_rows[0].get("primary_val")
             fmt = (f"{best_val:.4f}"
                    if isinstance(best_val, (int, float)) else best_val)
+            # Find previous best value for delta display
+            prev_val = None
+            for r in completed_rows[1:]:
+                if r["id"] == self._best_idea_id:
+                    prev_val = r.get("primary_val")
+                    break
+            prev_fmt = (f"{prev_val:.4f}"
+                        if isinstance(prev_val, (int, float)) else prev_val)
             notify("new_best", {
                 "idea_id": current_best,
                 "title": completed_rows[0]["title"],
                 "metric_name": primary, "metric_value": fmt,
                 "prev_best_id": self._best_idea_id,
+                "prev_best_val": prev_fmt,
                 "leaderboard": leaderboard,
                 "view_leaderboards": view_lbs,
             }, cfg)

@@ -566,13 +566,14 @@ class OrzePhaseMixin:
             "heartbeat_interval", 1800)
         if heartbeat_interval > 0:
             now_hb = time.time()
-            if now_hb - self._last_heartbeat >= heartbeat_interval:
+            first_hb = (self._last_heartbeat == self._start_time)
+            if first_hb or now_hb - self._last_heartbeat >= heartbeat_interval:
                 uptime_s = int(now_hb - self._start_time)
                 h, rem = divmod(uptime_s, 3600)
                 m = rem // 60
                 uptime_str = f"{h}h{m:02d}m" if h else f"{m}m"
-                busy_set = set(self.active.keys()) | set(self.active_evals.keys())
-                n_free = len([g for g in self.gpu_ids if g not in busy_set])
+                busy_gpus = self.slot_mgr.gpu_ids_in_use() | set(self.active_evals.keys())
+                n_free = len([g for g in self.gpu_ids if g not in busy_gpus])
                 # Best result for heartbeat
                 hb_best_id = None
                 hb_best_val = None
@@ -612,6 +613,25 @@ class OrzePhaseMixin:
                 if hb_model and "/" in hb_model:
                     hb_model = hb_model.rstrip("/").rsplit("/", 1)[-1]
 
+                # Active runs info for heartbeat
+                hb_active_runs = []
+                now_ts = time.time()
+                for gpu_id, tp in sorted(self.active.items()):
+                    elapsed = (now_ts - tp.start_time) / 60.0
+                    hb_active_runs.append({
+                        "idea_id": tp.idea_id,
+                        "gpu": gpu_id,
+                        "elapsed_min": round(elapsed, 1),
+                    })
+                for gpu_id, tp in sorted(self.active_evals.items()):
+                    elapsed = (now_ts - tp.start_time) / 60.0
+                    hb_active_runs.append({
+                        "idea_id": tp.idea_id,
+                        "gpu": gpu_id,
+                        "elapsed_min": round(elapsed, 1),
+                        "phase": "eval",
+                    })
+
                 notify("heartbeat", {
                     "host": socket.gethostname(),
                     "iteration": self.iteration,
@@ -625,8 +645,10 @@ class OrzePhaseMixin:
                     "queued": counts.get("QUEUED", 0),
                     "failed": counts.get("FAILED", 0),
                     "eval_backlog": len(backlog),
-                    "rate": (f"{counts.get('COMPLETED', 0) - self._hb_completed_count}"
+                    "rate": ("just started" if first_hb else
+                             f"{counts.get('COMPLETED', 0) - self._hb_completed_count}"
                              f" since last heartbeat"),
+                    "heartbeat_interval": heartbeat_interval,
                     "best_id": hb_best_id,
                     "best_val": hb_best_val,
                     "best_title": hb_best_title,
@@ -635,8 +657,17 @@ class OrzePhaseMixin:
                     "gpu_info": hb_gpu_info or None,
                     "model_name": hb_model or None,
                     "target": cfg.get("report", {}).get("target"),
+                    "sort": cfg.get("report", {}).get("sort", "descending"),
+                    "estimate_label": cfg.get("report", {}).get("estimate_label"),
                     "estimate_warning": cfg.get("report", {}).get("estimate_warning"),
+                    "timeout": cfg.get("timeout", 21600),
                     "verified": _load_verified(self.results_dir, cfg.get("report", {})),
+                    "active_runs": hb_active_runs or None,
+                    "next_queue": [
+                        {"id": uid,
+                         "title": (ideas.get(uid, {}).get("title", "") or "")[:40]}
+                        for uid in unclaimed[:5]
+                    ] or None,
                 }, cfg)
                 self._last_heartbeat = now_hb
                 self._hb_completed_count = counts.get("COMPLETED", 0)

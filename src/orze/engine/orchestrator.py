@@ -128,7 +128,7 @@ class Orze(OrzePhaseMixin):
         # Per-role agent state: {role_name: {"cycles": int, "last_run_time": float}}
         self.role_states: Dict[str, dict] = state.get("roles", {})
         self._start_time: float = time.time()
-        self._last_heartbeat: float = 0.0
+        self._last_heartbeat: float = self._start_time
         self._hb_completed_count: int = 0  # for heartbeat rate calc
         self._last_milestone: int = 0      # last milestone boundary hit
         self._last_disk_warning: float = 0.0
@@ -545,7 +545,7 @@ class Orze(OrzePhaseMixin):
             # 0a. Early heartbeat — keeps nodes UI alive even when
             #     iterations are slow (large results_dir scans).
             try:
-                busy = set(self.active.keys()) | set(self.active_evals.keys())
+                busy = self.slot_mgr.gpu_ids_in_use() | set(self.active_evals.keys())
                 free_early = [g for g in self.gpu_ids if g not in busy]
                 write_host_heartbeat(self.results_dir,
                                      socket.gethostname(),
@@ -638,7 +638,7 @@ class Orze(OrzePhaseMixin):
 
             # 4b. Mid-iteration heartbeat — keeps nodes alive during long iterations
             try:
-                busy = set(self.active.keys()) | set(self.active_evals.keys())
+                busy = self.slot_mgr.gpu_ids_in_use() | set(self.active_evals.keys())
                 free_mid = [g for g in self.gpu_ids if g not in busy]
                 write_host_heartbeat(self.results_dir,
                                      socket.gethostname(),
@@ -721,7 +721,7 @@ class Orze(OrzePhaseMixin):
                 poll_remaining -= tick
                 if not self._stop_event.is_set():
                     try:
-                        busy = set(self.active.keys()) | set(self.active_evals.keys())
+                        busy = self.slot_mgr.gpu_ids_in_use() | set(self.active_evals.keys())
                         free = [g for g in self.gpu_ids if g not in busy]
                         write_host_heartbeat(self.results_dir,
                                              socket.gethostname(),
