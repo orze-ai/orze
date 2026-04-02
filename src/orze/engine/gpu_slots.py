@@ -97,6 +97,34 @@ def _get_load_per_cpu() -> float:
     return val
 
 
+def _count_user_processes() -> int:
+    """Count running processes owned by current user (via /proc, no subprocess).
+
+    This is a system-wide count — it sees jobs from ALL orze instances,
+    not just the current one. Used to prevent multi-instance burst overload.
+    """
+    cached = _system_cache.get("nprocs")
+    now = time.time()
+    if cached and (now - cached[0]) < _SYSTEM_CACHE_TTL:
+        return int(cached[1])
+    uid = os.getuid()
+    count = 0
+    try:
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                stat = os.stat(f"/proc/{entry}")
+                if stat.st_uid == uid:
+                    count += 1
+            except (FileNotFoundError, PermissionError, OSError):
+                continue
+    except OSError:
+        count = 0
+    _system_cache["nprocs"] = (now, float(count))
+    return count
+
+
 def _get_free_ram_gb() -> float:
     """Return free RAM in GB (Linux only, falls back to large value)."""
     cached = _system_cache.get("ram")
@@ -155,28 +183,33 @@ class GpuSlotManager:
         self.slots_per_gpu = self.max_jobs_per_gpu
 
     def _system_has_capacity(self) -> bool:
-        """Check CPU load and RAM before scheduling more work.
+        """Check CPU load, process count, and RAM before scheduling.
 
-        Uses both OS-reported load and our own active job count to prevent
-        burst-launching more jobs than the system can handle. Load average
-        lags behind reality, so we also check our tracked job count against
-        CPU count as a proactive guard.
+        Three independent guards:
+        1. System-wide process count (instant, sees ALL orze instances)
+        2. OS load average (catches pressure from other users too)
+        3. Free RAM
+
+        The process count guard is the primary burst preventer — it counts
+        all processes owned by our user across the entire system, so two
+        orze instances can't independently burst past the limit.
         """
-        # Proactive check: our own tracked jobs vs available CPUs
-        n_active = len(self._active)
         n_cpus = os.cpu_count() or 1
         max_concurrent = int(n_cpus * self.max_load_per_cpu)
-        if n_active >= max_concurrent:
+
+        # Guard 1: system-wide process count (sees all instances)
+        n_procs = _count_user_processes()
+        if n_procs >= max_concurrent:
             now = time.time()
             if now - self._system_throttle_logged > 60:
-                logger.info("Throttling: %d active jobs >= %d max "
-                            "(%.1f × %d CPUs) — waiting for jobs to finish",
-                            n_active, max_concurrent,
+                logger.info("Throttling: %d user processes >= %d max "
+                            "(%.1f × %d CPUs) — waiting for processes to finish",
+                            n_procs, max_concurrent,
                             self.max_load_per_cpu, n_cpus)
                 self._system_throttle_logged = now
             return False
 
-        # OS-reported load (catches pressure from other users/processes)
+        # Guard 2: OS load average (catches pressure from other users)
         load = _get_load_per_cpu()
         if load > self.max_load_per_cpu:
             now = time.time()
@@ -187,7 +220,7 @@ class GpuSlotManager:
                 self._system_throttle_logged = now
             return False
 
-        # RAM check
+        # Guard 3: RAM
         ram_gb = _get_free_ram_gb()
         if ram_gb < self.min_free_ram_gb:
             now = time.time()
