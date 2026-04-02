@@ -79,6 +79,118 @@ def _get_embedded_docs() -> dict:
     # The caller handles missing keys gracefully.
     return {}
 
+# ---------------------------------------------------------------------------
+# Pro feature self-check helpers
+# ---------------------------------------------------------------------------
+
+def _check_pro_license() -> tuple:
+    """Check if orze-pro license is activated."""
+    try:
+        from orze_pro.license import is_licensed, load_key_payload
+        if is_licensed():
+            payload = load_key_payload()
+            return True, f"licensed to {payload.get('customer', '?')} (expires {payload.get('expires', '?')})"
+        return False, "not activated — run: orze pro activate <key>"
+    except Exception:
+        return False, "not activated — run: orze pro activate <key>"
+
+
+def _check_pro_role(role_name: str, prompts_dir: str, project_dir: Path) -> tuple:
+    """Check if a pro role's prompt file exists."""
+    # Map role names to their prompt files
+    prompt_map = {
+        "research": "RESEARCH_RULES.md",
+        "professor": "PROFESSOR_RULES.md",
+        "code_evolution": "CODE_EVOLUTION_RULES.md",
+        "meta_research": "RESEARCH_RULES.md",
+        "bug_fixer": "BUG_FIXER_RULES.md",
+    }
+    filename = prompt_map.get(role_name, "")
+    if not filename:
+        return True, "configured"
+
+    # Check project-level first, then pro package
+    if (project_dir / filename).exists():
+        return True, f"ready ({filename})"
+    prompt_path = Path(prompts_dir) / filename
+    if prompt_path.exists():
+        return True, f"ready ({prompt_path.name})"
+    if role_name == "research":
+        # Research uses RESEARCH_RULES.md which is always generated
+        return True, "ready (RESEARCH_RULES.md)"
+    return False, f"missing: {filename}"
+
+
+def _check_fsm(project_dir: Path) -> tuple:
+    """Check if FSM runner is set up."""
+    runner = project_dir / "fsm" / "runner.py"
+    if runner.exists():
+        return True, "ready (fsm/runner.py)"
+    # Check if importable from orze package
+    try:
+        from orze.fsm.runner import main
+        return True, "ready (from orze package)"
+    except ImportError:
+        return False, "missing fsm/runner.py"
+
+
+def _check_pro_procedures() -> tuple:
+    """Check if pro procedures are discoverable."""
+    try:
+        import orze_pro
+        proc_dir = Path(orze_pro.__file__).parent / "procedures"
+        yamls = list(proc_dir.glob("*.yaml"))
+        if yamls:
+            return True, f"{len(yamls)} procedures available"
+        return False, "no procedures found in orze-pro package"
+    except ImportError:
+        return False, "orze-pro not installed"
+
+
+def _check_pro_plugin(plugin_name: str) -> tuple:
+    """Check if a pro plugin is importable."""
+    try:
+        import orze_pro
+        plugin_dir = Path(orze_pro.__file__).parent / "fsm" / "plugins"
+        if (plugin_dir / f"{plugin_name}.py").exists():
+            return True, "ready"
+        return False, f"{plugin_name}.py not found"
+    except ImportError:
+        return False, "orze-pro not installed"
+
+
+def _check_api_keys() -> tuple:
+    """Check if any LLM API keys are available."""
+    keys = []
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        keys.append("Anthropic")
+    if os.environ.get("GEMINI_API_KEY"):
+        keys.append("Gemini")
+    if os.environ.get("OPENAI_API_KEY"):
+        keys.append("OpenAI")
+    if keys:
+        return True, ", ".join(keys)
+    # Check .env file (only uncommented, non-empty values)
+    env_path = Path(".env")
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("#") or "=" not in line:
+                continue
+            var, val = line.split("=", 1)
+            val = val.strip().strip("'\"")
+            if not val or val.startswith("sk-...") or val.startswith("AI..."):
+                continue  # placeholder
+            for env_var, name in [("ANTHROPIC_API_KEY", "Anthropic"),
+                                  ("GEMINI_API_KEY", "Gemini"),
+                                  ("OPENAI_API_KEY", "OpenAI")]:
+                if var.strip() == env_var:
+                    keys.append(name)
+    if keys:
+        return True, f"{', '.join(keys)} (in .env)"
+    return False, "none — add to .env"
+
+
 # Files inside each idea dir to keep (research results)
 IDEA_KEEP = {
     "metrics.json",
@@ -733,12 +845,60 @@ noise: 0.1
         print(f"  API keys: \033[33mnone found\033[0m — add to {project_dir}/.env")
 
     cfg_path = project_dir / "orze.yaml"
+
+    # =================================================================
+    # Pro feature self-check (only for pro users)
+    # =================================================================
+    if _has_pro:
+        print()
+        print("\033[1mPro Feature Check:\033[0m")
+
+        _checks = [
+            ("license", lambda: _check_pro_license()),
+            ("research agent", lambda: _check_pro_role("research", _pro_prompts, project_dir)),
+            ("professor", lambda: _check_pro_role("professor", _pro_prompts, project_dir)),
+            ("code evolution", lambda: _check_pro_role("code_evolution", _pro_prompts, project_dir)),
+            ("meta research", lambda: _check_pro_role("meta_research", _pro_prompts, project_dir)),
+            ("bug fixer", lambda: _check_pro_role("bug_fixer", _pro_prompts, project_dir)),
+            ("FSM engine", lambda: _check_fsm(project_dir)),
+            ("FSM procedures", lambda: _check_pro_procedures()),
+            ("idea verifier", lambda: _check_pro_plugin("idea_verifier")),
+            ("activity log", lambda: _check_pro_plugin("role_logger")),
+            ("API keys", lambda: _check_api_keys()),
+        ]
+
+        all_pass = True
+        for name, check_fn in _checks:
+            try:
+                ok, detail = check_fn()
+                icon = "\033[32m✓\033[0m" if ok else "\033[33m○\033[0m"
+                if not ok:
+                    all_pass = False
+                print(f"  {icon} {name:20s} {detail}")
+            except Exception as e:
+                all_pass = False
+                print(f"  \033[31m✗\033[0m {name:20s} error: {e}")
+
+        if all_pass:
+            print()
+            print("  \033[32mAll pro features ready.\033[0m")
+        else:
+            print()
+            print("  \033[33mSome features need setup — see details above.\033[0m")
+
     print()
     print("\033[1mNext steps:\033[0m")
-    print(f"  1. Edit \033[36m{project_dir}/train.py\033[0m with your training logic")
-    print(f"  2. Add API key to \033[36m{project_dir}/.env\033[0m (optional, for auto-research)")
-    print(f"  3. Run: \033[36morze --check -c {cfg_path}\033[0m to validate")
-    print(f"  4. Run: \033[36morze -c {cfg_path}\033[0m to start")
+    if _has_pro:
+        print(f"  1. Edit \033[36m{project_dir}/train.py\033[0m with your training logic")
+        print(f"  2. Add API key to \033[36m{project_dir}/.env\033[0m")
+        print(f"  3. Run: \033[36morze pro activate <key>\033[0m")
+        print(f"  4. Run: \033[36morze --check -c {cfg_path}\033[0m to validate")
+        print(f"  5. Run: \033[36morze start -c {cfg_path}\033[0m")
+    else:
+        print(f"  1. Edit \033[36m{project_dir}/train.py\033[0m with your training logic")
+        print(f"  2. Add API key to \033[36m{project_dir}/.env\033[0m (optional, for auto-research)")
+        print(f"  3. Run: \033[36morze --check -c {cfg_path}\033[0m to validate")
+        print(f"  4. Run: \033[36morze -c {cfg_path}\033[0m to start")
 
 
 # ---------------------------------------------------------------------------
