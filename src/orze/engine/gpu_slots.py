@@ -169,7 +169,10 @@ class GpuSlotManager:
                  min_free_ram_gb: float = 16.0,
                  slots_per_gpu: int = 1):  # legacy compat, maps to max_jobs
         self.gpu_ids = list(gpu_ids)
-        self.mode = mode  # "exclusive" or "vram"
+        if mode not in ("exclusive", "vram"):
+            logger.warning("Unknown gpu_scheduling.mode '%s' — defaulting to 'exclusive'", mode)
+            mode = "exclusive"
+        self.mode = mode
         self.max_vram_pct = max_vram_pct
         self.min_free_vram_mib = min_free_vram_mib
         if mode == "exclusive":
@@ -256,10 +259,12 @@ class GpuSlotManager:
 
     def _gpu_has_capacity(self, gpu_id: int) -> bool:
         """Check if GPU can accept another job.
-        Exclusive mode: only checks job count (1 per GPU).
-        VRAM mode: checks VRAM + job count + system resources."""
+        Exclusive mode: job count + system resources (no VRAM check).
+        VRAM mode: VRAM + job count + system resources."""
         if self.mode == "exclusive":
-            return len(self._gpu_jobs.get(gpu_id, [])) < 1
+            if len(self._gpu_jobs.get(gpu_id, [])) >= 1:
+                return False
+            return self._system_has_capacity()
         if not self._gpu_has_vram(gpu_id):
             return False
         if not self._system_has_capacity():
@@ -272,12 +277,12 @@ class GpuSlotManager:
 
     def assign(self, tp, gpus: List[int]) -> str:
         """Assign process to GPU(s). Returns slot key (e.g. "0:42" or "0:42+1:43").
-        Raises RuntimeError if GPU has no VRAM capacity."""
+        Raises RuntimeError if GPU has no capacity."""
         parts = []
         for g in gpus:
             if g not in self._gpu_jobs:
                 raise RuntimeError(f"GPU {g} not managed ({self.gpu_ids})")
-            if not self._gpu_has_vram(g):
+            if not self._gpu_has_capacity(g):
                 raise RuntimeError(f"GPU {g} at capacity ({self.job_count(g)} jobs, "
                                    f"max {self.max_jobs_per_gpu})")
             sid = self._next_id
