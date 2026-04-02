@@ -92,30 +92,6 @@ def _pgrep(pattern: str) -> list:
         return []
 
 
-def _pkill(pattern: str, sig: int = signal.SIGTERM):
-    """Send a signal to all processes matching a pgrep -f pattern."""
-    flag = "-9" if sig == signal.SIGKILL else ""
-    cmd = ["pkill", "-f", pattern]
-    if flag:
-        cmd.insert(1, flag)
-    try:
-        subprocess.run(cmd, capture_output=True, timeout=5)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-
-
-def _count_children() -> int:
-    """Count child processes matching _CHILD_PAT."""
-    try:
-        result = subprocess.run(
-            ["pgrep", "-cf", _CHILD_PAT],
-            capture_output=True, text=True, timeout=5,
-        )
-        return int(result.stdout.strip()) if result.returncode == 0 else 0
-    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
-        return 0
-
-
 def _cleanup_gpu_orphans(workdir: str):
     """Kill orphaned processes from our workdir still holding GPUs."""
     try:
@@ -288,7 +264,7 @@ def do_stop(cfg: dict, timeout: int = 60):
 # ── start ────────────────────────────────────────────────────────────
 
 def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
-             gpus: str = None):
+             gpus: str = None, timeout: int = None):
     """Start orze on the local node.
 
     1. Check not already running
@@ -297,6 +273,7 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
 
     Args:
         gpus: Comma-separated GPU IDs (e.g. "0,1,3"). None = auto-detect.
+        timeout: Max training time per job in seconds. None = use config.
 
     Returns PID in daemon mode. In foreground mode, replaces the process
     via os.execv (never returns).
@@ -334,6 +311,8 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
     cmd = [python, "-m", "orze.cli", "-c", config_path]
     if gpus:
         cmd.extend(["--gpus", gpus])
+    if timeout is not None:
+        cmd.extend(["--timeout", str(timeout)])
 
     # 4. Launch
     if foreground:

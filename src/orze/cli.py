@@ -129,7 +129,6 @@ Examples:
                              help="Path to orze.yaml")
     stop_parser.add_argument("--timeout", type=int, default=60,
                              help="Timeout for child processes (default: 60)")
-    stop_parser.add_argument("-v", "--verbose", action="store_true")
 
     # start
     start_parser = subparsers.add_parser(
@@ -138,9 +137,10 @@ Examples:
                               help="Path to orze.yaml")
     start_parser.add_argument("--gpus", type=str, default=None,
                               help="Comma-separated GPU IDs (default: auto-detect)")
+    start_parser.add_argument("--timeout", type=int, default=None,
+                              help="Max training time per job in seconds")
     start_parser.add_argument("--foreground", action="store_true",
                               help="Run in foreground instead of daemonizing")
-    start_parser.add_argument("-v", "--verbose", action="store_true")
 
     # restart
     restart_parser = subparsers.add_parser(
@@ -153,7 +153,6 @@ Examples:
                                 help="Timeout for child processes (default: 60)")
     restart_parser.add_argument("--foreground", action="store_true",
                                 help="Run in foreground after restart")
-    restart_parser.add_argument("-v", "--verbose", action="store_true")
 
     # service
     svc_parser = subparsers.add_parser("service", help="Manage orze watchdog service")
@@ -212,9 +211,11 @@ Examples:
     if command == "start":
         from orze.lifecycle import do_start
         cfg = load_project_config(args.config_file)
+        if args.timeout is not None:
+            cfg["timeout"] = args.timeout
         config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
         do_start(cfg, foreground=args.foreground, config_path=config_path,
-                 gpus=args.gpus)
+                 gpus=args.gpus, timeout=args.timeout)
         return
 
     if command == "restart":
