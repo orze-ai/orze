@@ -136,6 +136,8 @@ Examples:
         "start", help="Start orze as a background daemon")
     start_parser.add_argument("-c", "--config-file", type=str, default=None,
                               help="Path to orze.yaml")
+    start_parser.add_argument("--gpus", type=str, default=None,
+                              help="Comma-separated GPU IDs (default: auto-detect)")
     start_parser.add_argument("--foreground", action="store_true",
                               help="Run in foreground instead of daemonizing")
     start_parser.add_argument("-v", "--verbose", action="store_true")
@@ -145,6 +147,8 @@ Examples:
         "restart", help="Stop then start orze")
     restart_parser.add_argument("-c", "--config-file", type=str, default=None,
                                 help="Path to orze.yaml")
+    restart_parser.add_argument("--gpus", type=str, default=None,
+                                help="Comma-separated GPU IDs (default: auto-detect)")
     restart_parser.add_argument("--timeout", type=int, default=60,
                                 help="Timeout for child processes (default: 60)")
     restart_parser.add_argument("--foreground", action="store_true",
@@ -209,8 +213,8 @@ Examples:
         from orze.lifecycle import do_start
         cfg = load_project_config(args.config_file)
         config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
-        # do_start with foreground=True replaces the process via os.execv
-        do_start(cfg, foreground=args.foreground, config_path=config_path)
+        do_start(cfg, foreground=args.foreground, config_path=config_path,
+                 gpus=args.gpus)
         return
 
     if command == "restart":
@@ -218,7 +222,7 @@ Examples:
         cfg = load_project_config(args.config_file)
         config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
         do_restart(cfg, timeout=args.timeout, foreground=args.foreground,
-                   config_path=config_path)
+                   config_path=config_path, gpus=args.gpus)
         return
 
     if command == "reset":

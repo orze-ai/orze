@@ -287,12 +287,16 @@ def do_stop(cfg: dict, timeout: int = 60):
 
 # ── start ────────────────────────────────────────────────────────────
 
-def do_start(cfg: dict, foreground: bool = False, config_path: str = None):
+def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
+             gpus: str = None):
     """Start orze on the local node.
 
     1. Check not already running
     2. Clear sentinels (.orze_disabled, .orze_stop_all, .orze_shutdown)
     3. Launch orze (detached daemon or foreground via os.execv)
+
+    Args:
+        gpus: Comma-separated GPU IDs (e.g. "0,1,3"). None = auto-detect.
 
     Returns PID in daemon mode. In foreground mode, replaces the process
     via os.execv (never returns).
@@ -326,15 +330,21 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None):
             sentinel.unlink(missing_ok=True)
             _log("start", f"Removed {name}")
 
-    # 3. Launch
+    # 3. Build command
+    cmd = [python, "-m", "orze.cli", "-c", config_path]
+    if gpus:
+        cmd.extend(["--gpus", gpus])
+
+    # 4. Launch
     if foreground:
-        _log("start", "Starting orze in foreground...")
-        os.execv(python, [python, "-m", "orze.cli", "-c", config_path])
+        gpu_msg = f" on GPUs {gpus}" if gpus else ""
+        _log("start", f"Starting orze in foreground{gpu_msg}...")
+        os.execv(python, cmd)
         # Never returns
 
     with open(log_file, "a") as lf:
         proc = subprocess.Popen(
-            [python, "-m", "orze.cli", "-c", config_path],
+            cmd,
             stdout=lf, stderr=lf,
             stdin=subprocess.DEVNULL,
             start_new_session=True,
@@ -346,7 +356,8 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None):
              f"Check {log_file}")
         sys.exit(1)
 
-    _log("start", f"Orze started (PID {proc.pid})")
+    gpu_msg = f" on GPUs {gpus}" if gpus else ""
+    _log("start", f"Orze started{gpu_msg} (PID {proc.pid})")
     _log("start", f"Log: {log_file}")
     return proc.pid
 
@@ -354,10 +365,11 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None):
 # ── restart ──────────────────────────────────────────────────────────
 
 def do_restart(cfg: dict, timeout: int = 60, foreground: bool = False,
-               config_path: str = None):
+               config_path: str = None, gpus: str = None):
     """Restart orze: stop then start."""
     _log("restart", f"{time.strftime('%c')} — Restarting orze")
     do_stop(cfg, timeout=timeout)
-    result = do_start(cfg, foreground=foreground, config_path=config_path)
+    result = do_start(cfg, foreground=foreground, config_path=config_path,
+                      gpus=gpus)
     _log("restart", f"{time.strftime('%c')} — Restart complete")
     return result
