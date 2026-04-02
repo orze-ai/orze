@@ -227,7 +227,7 @@ def do_uninstall(cfg: dict):
     print()
 
     # --- 1. Stop running instances -----------------------------------
-    print("[1/5] Stopping running orze instances...")
+    print("[1/6] Stopping running orze instances...")
     stop_path = results_dir / ".orze_stop_all"
     if results_dir.exists():
         stop_path.write_text("uninstall", encoding="utf-8")
@@ -242,7 +242,7 @@ def do_uninstall(cfg: dict):
     time.sleep(2)  # give processes a moment to exit
 
     # --- 2. Clean results directory ----------------------------------
-    print("[2/5] Cleaning runtime files from results/...")
+    print("[2/6] Cleaning runtime files from results/...")
     if results_dir.exists():
         # Fast path: rename the whole dir, create a fresh one, move only
         # keeper files back (O(1) renames), then bulk-delete the old tree.
@@ -278,8 +278,46 @@ def do_uninstall(cfg: dict):
 
     print("  Cleaned runtime files")
 
+    # --- 2b. Remove orze-generated scaffolding files -------------------
+    print("[2b/6] Cleaning orze scaffolding...")
+    # Files orze --init creates (safe to remove — not user content)
+    _ORZE_GENERATED = [
+        "ORZE-AGENT.md",
+        "ORZE-RULES.md",
+        "RESEARCH_RULES.md",
+        ".env",
+        "orze.yaml",
+    ]
+    # Patterns for orze runtime artifacts
+    _ORZE_PATTERNS = [
+        "ideas.md.safe*",      # backup files from role_runner
+        "idea_lake.db",
+    ]
+    # Directories orze --init creates
+    _ORZE_DIRS = [
+        "fsm",                 # FSM engine
+        "procedures",          # user procedure overrides
+    ]
+
+    for name in _ORZE_GENERATED:
+        p = Path(name)
+        if p.exists():
+            p.unlink()
+            print(f"  Removed {name}")
+
+    for pattern in _ORZE_PATTERNS:
+        for p in Path(".").glob(pattern):
+            p.unlink()
+            print(f"  Removed {p}")
+
+    for dirname in _ORZE_DIRS:
+        d = Path(dirname)
+        if d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
+            print(f"  Removed {dirname}/")
+
     # --- 3. Remove venv directory ------------------------------------
-    print("[3/5] Removing venv...")
+    print("[3/6] Removing venv...")
     venv_dir = Path("venv")
     if venv_dir.is_dir():
         shutil.rmtree(venv_dir, ignore_errors=True)
@@ -288,7 +326,7 @@ def do_uninstall(cfg: dict):
         print("  No venv/ found")
 
     # --- 4. Remove orze config file ----------------------------------
-    print("[4/5] Removing orze config...")
+    print("[4/6] Removing orze config...")
     config_path = Path(cfg.get("_config_path", "orze.yaml"))
     if config_path.exists():
         config_path.unlink()
@@ -297,7 +335,7 @@ def do_uninstall(cfg: dict):
         print("  No config file found")
 
     # --- 5. Uninstall orze package (try uv first, fall back to pip) --
-    print("[5/5] Uninstalling orze package...")
+    print("[5/6] Uninstalling orze package...")
     uninstalled = False
     if shutil.which("uv"):
         try:
@@ -322,19 +360,45 @@ def do_uninstall(cfg: dict):
             print("  WARNING: uninstall failed — you may need to run manually:")
             print("    uv tool uninstall orze  OR  pip uninstall orze")
 
+    # --- 6. Also uninstall orze-pro if present -------------------------
+    print("[6/6] Checking for orze-pro...")
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "uninstall", "orze-pro", "-y"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        print("  orze-pro removed")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("  orze-pro not installed (skipped)")
+
     # --- Summary -----------------------------------------------------
     print()
     print("\033[1mUninstall complete.\033[0m")
-    print("Preserved research results:")
+    print()
+
+    # Show what's preserved (user's work)
+    preserved = []
     if results_dir.exists():
         kept = list(results_dir.rglob("metrics.json"))
-        print(f"  {len(kept)} experiment result(s) in {results_dir}/")
+        if kept:
+            preserved.append(f"  {results_dir}/ ({len(kept)} experiment results)")
     ideas_file = Path(cfg.get("ideas_file", "ideas.md"))
     if ideas_file.exists():
-        print(f"  {ideas_file} (experiment definitions)")
-    lake_path = Path(cfg.get("idea_lake_db") or ideas_file.parent / "idea_lake.db")
-    if lake_path.exists():
-        print(f"  {lake_path} (idea archive database)")
+        preserved.append(f"  {ideas_file}")
+    for name in ["GOAL.md", "train.py", "configs"]:
+        p = Path(name)
+        if p.exists():
+            preserved.append(f"  {name}")
+
+    if preserved:
+        print("Preserved (your work):")
+        for p in preserved:
+            print(p)
+    else:
+        print("No user files remaining.")
+
     project_dir = Path.cwd()
     print()
     print(f"  To remove everything: rm -rf {project_dir}")
