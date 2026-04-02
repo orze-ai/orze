@@ -444,7 +444,108 @@ def do_init(init_arg: str):
                "gemini" if os.environ.get("GEMINI_API_KEY") else
                "openai" if os.environ.get("OPENAI_API_KEY") else "ollama")
 
-    yaml_content = f"""\
+    # Detect orze-pro for full config generation
+    _has_pro = False
+    _pro_prompts = ""
+    try:
+        import orze_pro
+        _has_pro = True
+        _pro_prompts = str(Path(orze_pro.__file__).parent / "prompts")
+    except ImportError:
+        pass
+
+    if _has_pro:
+        yaml_content = f"""\
+# orze.yaml — Project configuration (orze-pro enabled)
+# Docs: https://github.com/erikhenriksson/orze
+
+# --- REQUIRED ---
+train_script: {train_script}
+ideas_file: ideas.md
+results_dir: results
+python: {python_for_yaml}
+
+# --- ENV ---
+train_extra_env:
+  PYTHONUNBUFFERED: "1"
+
+# --- TIMEOUTS ---
+timeout: 3600
+poll: 30
+stall_minutes: 60
+max_idea_failures: 2
+max_fix_attempts: 2
+
+# --- REPORT ---
+report:
+  primary_metric: test_accuracy
+  sort: descending
+  columns:
+    - {{key: "test_accuracy", label: "Accuracy", fmt: ".4f"}}
+    - {{key: "test_loss", label: "Loss", fmt: ".4f"}}
+    - {{key: "training_time", label: "Time(s)", fmt: ".0f"}}
+
+# --- RETROSPECTION ---
+# Detection only — FSM owns all pause/trigger decisions
+retrospection:
+  enabled: true
+  interval: 6
+  auto_pause: false
+  plateau_window: 20
+  fail_window: 10
+  fail_threshold: 0.5
+
+# --- CODE EVOLUTION ---
+evolution:
+  enabled: false              # FSM dispatches triggers, not orze
+
+# --- ROLES (orze-pro autopilot) ---
+roles:
+  research:
+    mode: research
+    backend: {backend}
+    rules_file: RESEARCH_RULES.md
+    cooldown: 120
+    timeout: 600
+  code_evolution:
+    mode: claude
+    triggered_by: fsm
+    rules_file: {_pro_prompts}/CODE_EVOLUTION_RULES.md
+    timeout: 900
+    model: opus
+    allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
+  meta_research:
+    mode: research
+    backend: {backend}
+    triggered_by: fsm
+    rules_file: RESEARCH_RULES.md
+    cooldown: 3600
+    timeout: 600
+  professor:
+    mode: claude
+    rules_file: {_pro_prompts}/PROFESSOR_RULES.md
+    cooldown: 600
+    timeout: 600
+    model: opus
+    pausable: false
+    allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
+  bug_fixer:
+    mode: claude
+    triggered_by: fsm
+    rules_file: {_pro_prompts}/BUG_FIXER_RULES.md
+    timeout: 600
+    model: opus
+    pausable: false
+    allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
+  fsm:
+    mode: script
+    script: fsm/runner.py
+    args: ["--results-dir", "{{results_dir}}"]
+    cooldown: 120
+    timeout: 30
+"""
+    else:
+        yaml_content = f"""\
 # orze.yaml — Project configuration
 # Docs: https://github.com/erikhenriksson/orze
 
@@ -462,24 +563,14 @@ python: {python_for_yaml}
 
 # --- RESEARCH AGENT (optional) ---
 # Auto-generates ideas. Requires API key in .env or environment.
-# If you have an API key set, orze auto-discovers it — no config needed.
 # Uncomment below only to customize settings:
 #
 # roles:
 #   research:
 #     mode: research
-#     backend: {backend}              # anthropic | gemini | openai | ollama
+#     backend: {backend}
 #     cooldown: 600
 #     timeout: 300
-
-# --- NOTIFICATIONS (optional) ---
-# notifications:
-#   enabled: true
-#   on: [completed, failed, new_best]
-#   channels:
-#     - type: telegram
-#       bot_token: "${{TELEGRAM_BOT_TOKEN}}"
-#       chat_id: "${{TELEGRAM_CHAT_ID}}"
 
 # --- ADVANCED ---
 # timeout: 3600
@@ -487,8 +578,30 @@ python: {python_for_yaml}
 # stall_minutes: 0
 # max_idea_failures: 0
 # max_fix_attempts: 0
+
+# --- UPGRADE TO PRO ---
+# pip install orze-pro
+# Adds: autonomous research agents, code evolution, The Professor,
+# bug fixer, 7 FSM procedures, idea filtering, and more.
+# Re-run orze --init to regenerate this config with pro features.
 """
     _create("orze.yaml", yaml_content)
+
+    # For pro users, create the FSM runner wrapper
+    if _has_pro:
+        fsm_runner = """\
+#!/usr/bin/env python3
+\"\"\"FSM runner — delegates to installed orze package.\"\"\"
+from orze.fsm.runner import main
+if __name__ == "__main__":
+    main()
+"""
+        Path("fsm").mkdir(exist_ok=True)
+        Path("fsm/plugins").mkdir(exist_ok=True)
+        Path("procedures").mkdir(exist_ok=True)
+        _create("fsm/__init__.py", "")
+        _create("fsm/plugins/__init__.py", "")
+        _create("fsm/runner.py", fsm_runner, "fsm/runner.py (FSM engine)")
 
     # 4. ideas.md with task-agnostic seed experiments
     ideas_content = """\
