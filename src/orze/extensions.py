@@ -41,6 +41,7 @@ _PRO_MODULES = {
     "agents.meta_research": "orze_pro.agents.meta_research",
     "agents.bug_fixer": "orze_pro.agents.bug_fixer",
     "agents.bot": "orze_pro.agents.bot",
+    "idea_filter": "orze_pro.engine.idea_filter",
 }
 
 # No built-in fallbacks — these modules live in orze-pro only.
