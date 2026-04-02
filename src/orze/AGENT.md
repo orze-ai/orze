@@ -19,7 +19,44 @@ Silently read the codebase and environment. Do not ask the user anything yet.
 
 This is the single most important file. It drives everything else.
 
-**If the codebase has existing code**, infer the goal and write GOAL.md yourself:
+**If the codebase has existing code**, read README.md and all documentation thoroughly. Identify ALL tasks/objectives mentioned.
+
+**If multiple tasks are found**, list them and ask the user:
+> "I found N tasks in your README:
+> 1. [task 1]
+> 2. [task 2]
+> 3. [task 3]
+> 4. [task 4]
+> Which should I set up? (enter number, or 'all' for multi-task)"
+
+**If the user picks one**, write GOAL.md for that task.
+
+**If the user says 'all'**, write GOAL.md with all tasks as sub-goals:
+
+```markdown
+# Research Goal
+
+## Tasks
+
+### Task 1: [name]
+- **Dataset**: [where, format, size]
+- **Metric**: [primary metric]
+- **Current State**: [baselines, known results]
+- **Directions**: [approaches to try]
+
+### Task 2: [name]
+- **Dataset**: [where, format, size]
+- **Metric**: [primary metric]
+- **Current State**: [baselines, known results]
+- **Directions**: [approaches to try]
+
+(repeat for each task)
+
+## Priority
+[Which task to focus on first and why]
+```
+
+**If only one task is found**, write GOAL.md for it:
 
 ```markdown
 # Research Goal
