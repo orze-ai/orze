@@ -49,6 +49,27 @@ orze service status                # check health
 orze service uninstall
 ```
 
+### GPU Scheduling
+```yaml
+# orze.yaml
+gpu_scheduling:
+  mode: exclusive            # (default) 1 job per GPU — safe, predictable
+  # mode: vram              # pack multiple jobs per GPU by VRAM usage
+
+  # vram mode settings (ignored in exclusive mode):
+  max_vram_pct: 85           # stop assigning when GPU VRAM hits 85%
+  min_free_vram_mib: 2000    # stop if less than 2GB free
+  max_jobs_per_gpu: 20       # safety cap
+
+  # system throttling (both modes):
+  max_load_per_cpu: 2.0      # pause scheduling when load/cpu exceeds this
+  min_free_ram_gb: 16        # pause scheduling when free RAM drops below
+```
+
+**Exclusive mode** (default): one job per GPU. Use when jobs are large (LLM training/eval), when sharing a machine, or when you need to reserve GPUs for other work. `--gpu 0,1,2` means exactly 3 jobs max.
+
+**VRAM mode**: packs jobs until VRAM is full. Use for many small jobs (hyperparameter sweeps, tiny models). Can cause contention on large models.
+
 ### Sentinel Files (multi-machine control)
 ```bash
 touch results/.orze_stop_all       # stop all nodes
@@ -158,7 +179,7 @@ engine/
 ├── launcher.py           (324) — training subprocess launch
 ├── evaluator.py          (298) — eval script launch & monitoring
 ├── health.py             (263) — disk, stall, FS health monitoring
-├── gpu_slots.py          (230) — VRAM-aware GPU scheduling
+├── gpu_slots.py          (230) — GPU scheduling (exclusive/VRAM modes)
 ├── smart_suggestions.py  (200) — rule-based idea generation (Smart Suggestions)
 ├── auto_ideas.py         (180) — parameter variation generator
 ├── upgrade.py            (223) — auto-upgrade pipeline

@@ -1,21 +1,20 @@
-"""VRAM-based GPU scheduler for multi-job-per-GPU and multi-GPU-per-job.
-
-Schedules by actual GPU memory — no fixed slot counts needed. Queries
-nvidia-smi (batched, cached) to check free VRAM before each assignment.
-
-Also monitors system-level resources (CPU load, RAM) to prevent overload
-when jobs are tiny (low VRAM but high CPU/RAM per process).
+"""GPU scheduler with exclusive and VRAM-based modes.
 
 Config (orze.yaml):
     gpu_scheduling:
-      max_vram_pct: 85           # stop assigning when GPU VRAM hits 85%
-      min_free_vram_mib: 2000    # stop if less than 2GB free
-      max_jobs_per_gpu: 20       # safety cap (raise for many tiny jobs)
+      mode: exclusive            # 'exclusive' (default) = 1 job per GPU
+                                 # 'vram' = pack by VRAM until full
+      max_vram_pct: 85           # (vram mode) stop when GPU VRAM hits 85%
+      min_free_vram_mib: 2000    # (vram mode) stop if less than 2GB free
+      max_jobs_per_gpu: 20       # (vram mode) safety cap
       max_load_per_cpu: 2.0      # pause scheduling when load/cpu exceeds this
       min_free_ram_gb: 16        # pause scheduling when free RAM drops below
 
-Backward compatible: without gpu_scheduling config, max_jobs_per_gpu=1
-gives identical behavior to old Dict[int, TrainingProcess].
+Exclusive mode: each GPU runs at most 1 job. Simple, predictable, safe
+for multi-tenant and when you need to reserve GPUs. This is the default.
+
+VRAM mode: packs multiple jobs per GPU based on actual VRAM usage.
+Higher throughput for small jobs, but can cause contention.
 """
 
 import logging
@@ -162,6 +161,7 @@ class GpuSlotManager:
     """
 
     def __init__(self, gpu_ids: List[int],
+                 mode: str = "exclusive",
                  max_vram_pct: float = 90,
                  min_free_vram_mib: int = 1000,
                  max_jobs_per_gpu: int = 20,
@@ -169,9 +169,13 @@ class GpuSlotManager:
                  min_free_ram_gb: float = 16.0,
                  slots_per_gpu: int = 1):  # legacy compat, maps to max_jobs
         self.gpu_ids = list(gpu_ids)
+        self.mode = mode  # "exclusive" or "vram"
         self.max_vram_pct = max_vram_pct
         self.min_free_vram_mib = min_free_vram_mib
-        self.max_jobs_per_gpu = max(max_jobs_per_gpu, slots_per_gpu)
+        if mode == "exclusive":
+            self.max_jobs_per_gpu = 1
+        else:
+            self.max_jobs_per_gpu = max(max_jobs_per_gpu, slots_per_gpu)
         self.max_load_per_cpu = max_load_per_cpu
         self.min_free_ram_gb = min_free_ram_gb
         self._active: Dict[str, object] = {}
@@ -251,7 +255,11 @@ class GpuSlotManager:
                 total - used >= self.min_free_vram_mib)
 
     def _gpu_has_capacity(self, gpu_id: int) -> bool:
-        """Check VRAM, job count, AND system resources (CPU/RAM)."""
+        """Check if GPU can accept another job.
+        Exclusive mode: only checks job count (1 per GPU).
+        VRAM mode: checks VRAM + job count + system resources."""
+        if self.mode == "exclusive":
+            return len(self._gpu_jobs.get(gpu_id, [])) < 1
         if not self._gpu_has_vram(gpu_id):
             return False
         if not self._system_has_capacity():
