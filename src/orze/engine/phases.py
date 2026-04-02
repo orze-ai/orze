@@ -133,6 +133,15 @@ class OrzePhaseMixin:
                 else:
                     logger.debug("Skipping ideas.md consumption (lock held)")
 
+        # 5a-pre. Inline Tier 1 filter (orze-pro): skip garbage before it's claimed
+        try:
+            from orze.extensions import get_extension
+            idea_filter = get_extension("idea_filter")
+            if idea_filter:
+                idea_filter.filter_queued_ideas(self.results_dir)
+        except Exception:
+            pass  # pro not installed or filter failed — continue normally
+
         # 5a. Expand sweeps and find unclaimed work
         sweep_max = cfg.get("sweep", {}).get("max_combos", 20)
         queue_ideas = {}
