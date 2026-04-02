@@ -62,15 +62,26 @@ def pro_activate(key=None):
         print("  - Contact support@orze.ai if the problem persists")
         return
 
-    # Save
+    # Save key locally
     key_path.write_text(key)
     key_path.chmod(0o600)
+
+    # Activate with server
+    from orze_pro.license import _activate_online, _get_machine_id
+    activation = _activate_online(key)
 
     customer = payload.get("customer", "?")
     tier = payload.get("tier", "pro")
     expires = payload.get("expires", "never")
 
     print(f"\033[32m\u2713 Licensed to {customer} ({tier}), expires {expires}\033[0m")
+    if activation:
+        used = activation.get("machines_used", "?")
+        max_m = activation.get("machines_max", "?")
+        print(f"  Machines: {used}/{max_m} activated")
+    else:
+        print("  Activation server unreachable — will activate on next check")
+    print(f"  Machine ID: {_get_machine_id()}")
     print(f"  Key saved to {key_path}")
     print(f"  Pro features activate automatically — no config changes needed.")
 
@@ -85,11 +96,21 @@ def pro_status():
         return
 
     from orze.extensions import has_pro, pro_version, pro_features
-    from orze_pro.license import license_info, is_licensed
+    from orze_pro.license import license_info, is_licensed, get_activation_status, _get_machine_id
 
     print(f"orze-pro {pro_version()}")
     print(f"Status: {license_info()}")
     if is_licensed():
+        # Show activation info
+        act = get_activation_status()
+        if act:
+            used = act.get("machines_used", "?")
+            max_m = act.get("machines_max", "?")
+            print(f"Machines: {used}/{max_m} activated")
+            last = act.get("last_verified_at", "never")
+            print(f"Last verified: {last}")
+        print(f"Machine ID: {_get_machine_id()}")
+        print()
         _descriptions = {
             "role_runner": "Multi-agent orchestration",
             "agents.research": "Autonomous research agents",
@@ -111,7 +132,7 @@ def pro_status():
 
 
 def pro_deactivate(force=False):
-    """Remove saved license key."""
+    """Remove saved license key and deactivate with server to free machine slot."""
     key_path = Path.home() / ".orze-pro.key"
     if key_path.exists():
         if not force:
@@ -122,7 +143,31 @@ def pro_deactivate(force=False):
             if resp != "y":
                 print("Cancelled. (Use -y to skip confirmation)")
                 return
+
+        # Deactivate with server to free machine slot
+        try:
+            from orze_pro.license import deactivate_online, _get_machine_id
+            key = key_path.read_text().strip()
+            result = deactivate_online(key)
+            if result and result.get("ok"):
+                used = result.get("machines_used", "?")
+                max_m = result.get("machines_max", "?")
+                print(f"Machine slot freed. Machines: {used}/{max_m}")
+            else:
+                print("Could not reach activation server — slot may not be freed.")
+                print("Contact support@orze.ai if you need to free this slot manually.")
+        except Exception:
+            pass
+
         key_path.unlink()
+        # Also remove activation cache
+        activation_cache = Path.home() / ".orze-pro-activation.json"
+        if activation_cache.exists():
+            try:
+                activation_cache.unlink()
+            except OSError:
+                pass
+
         print(f"License key removed from {key_path}")
         print("Pro features deactivated.")
     else:
