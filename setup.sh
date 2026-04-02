@@ -47,8 +47,31 @@ fi
 
 # --- Install orze ----------------------------------------------------------
 step "Installing orze..."
-uv tool install --quiet --force "orze>=3.2.4"
-info "orze installed ($(orze --version 2>/dev/null || echo 'unknown'))"
+# uv tool install doesn't handle version constraints well — use pip in a venv
+# or uv tool upgrade to get the latest version
+if command -v orze &>/dev/null; then
+    # Already installed — upgrade to latest
+    uv tool upgrade --quiet orze 2>/dev/null || \
+        uv tool install --quiet --force --upgrade orze 2>/dev/null || \
+        pip install --quiet --upgrade orze 2>/dev/null || true
+else
+    # Fresh install — use uv tool (no constraint, always gets latest)
+    uv tool install --quiet orze 2>/dev/null || \
+        pip install --quiet orze 2>/dev/null || true
+fi
+
+# Verify minimum version
+ORZE_VER=$(orze --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
+MIN_VER="3.2.4"
+if printf '%s\n' "$MIN_VER" "$ORZE_VER" | sort -V | head -1 | grep -q "^$MIN_VER$"; then
+    info "orze ${ORZE_VER} installed"
+else
+    warn "orze ${ORZE_VER} is below minimum ${MIN_VER} — forcing upgrade..."
+    pip install --quiet "orze>=${MIN_VER}" 2>/dev/null || \
+        uv pip install --quiet "orze>=${MIN_VER}" 2>/dev/null || true
+    ORZE_VER=$(orze --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' || echo "unknown")
+    info "orze ${ORZE_VER} installed"
+fi
 
 # --- orze-pro (optional) ---------------------------------------------------
 step "Checking orze-pro..."
@@ -84,9 +107,8 @@ if [ "$INSTALL_PRO" = true ]; then
     # Install package
     if ! python3 -c "import orze_pro" &>/dev/null 2>&1; then
         info "Installing orze-pro..."
-        uv tool install --quiet --force "orze-pro>=0.2.4" 2>/dev/null || \
-            uv pip install --quiet "orze-pro>=0.2.4" 2>/dev/null || \
-            pip install --quiet "orze-pro>=0.2.4" 2>/dev/null || true
+        pip install --quiet "orze-pro>=0.2.4" 2>/dev/null || \
+            uv pip install --quiet "orze-pro>=0.2.4" 2>/dev/null || true
     fi
 
     # Activate license
