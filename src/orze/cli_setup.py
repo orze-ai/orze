@@ -382,13 +382,43 @@ def do_init(init_arg: str):
     _create(".env", env_content)
 
     # ORZE-AGENT.md and ORZE-RULES.md (project-local copies)
+    # Try 3 sources in order: package dir, importlib.resources, inline fallback
     pkg_dir = Path(__file__).resolve().parent
     for src_name, dst_name in {"AGENT.md": "ORZE-AGENT.md", "RULES.md": "ORZE-RULES.md"}.items():
+        content = None
+        # Source 1: file in package directory
         src = pkg_dir / src_name
         if src.exists():
-            _create(dst_name, src.read_text(encoding="utf-8"))
+            content = src.read_text(encoding="utf-8")
+        # Source 2: importlib.resources (works with zipped eggs)
+        if content is None:
+            try:
+                import importlib.resources
+                ref = importlib.resources.files("orze").joinpath(src_name)
+                content = ref.read_text(encoding="utf-8")
+            except Exception:
+                pass
+        # Source 3: fetch from GitHub (latest main)
+        if content is None:
+            try:
+                import urllib.request
+                url = f"https://raw.githubusercontent.com/warlockee/orze/main/src/orze/{src_name}"
+                with urllib.request.urlopen(url, timeout=5) as resp:
+                    content = resp.read().decode("utf-8")
+            except Exception:
+                pass
+        # Source 4: minimal inline fallback (always works)
+        if content is None and src_name == "AGENT.md":
+            content = (
+                "# Orze — Setup Agent\n\n"
+                "You are setting up orze. Read the codebase, write GOAL.md, "
+                "configure orze.yaml, write seed ideas, and run `orze -c orze.yaml`.\n\n"
+                "Full docs: https://github.com/warlockee/orze\n"
+            )
+        if content:
+            _create(dst_name, content)
         else:
-            print(f"  \033[33mwarning\033[0m  {dst_name} — source {src_name} not found in package")
+            print(f"  \033[33mwarning\033[0m  {dst_name} — could not find source")
 
     # 1. Train script stub
     train_script = "train.py"
