@@ -244,6 +244,17 @@ class NotificationProcessor:
                             eval_metrics[key] = em[key]
                 except (json.JSONDecodeError, OSError):
                     pass
+            # Fallback: read metrics.json directly (flat format from train.py)
+            if not eval_metrics:
+                metrics_path = self.results_dir / idea_id / "metrics.json"
+                if metrics_path.exists():
+                    try:
+                        md = json.loads(metrics_path.read_text(encoding="utf-8"))
+                        for k, v in md.items():
+                            if isinstance(v, (int, float)) and k != "num_eval_tasks":
+                                eval_metrics[k] = v
+                    except (json.JSONDecodeError, OSError):
+                        pass
 
             def _raw_field(field):
                 match = re.search(
