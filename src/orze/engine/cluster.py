@@ -98,9 +98,12 @@ def kill_orphans(results_dir: Path, cfg: dict):
     """Kill orphaned train/eval processes from a previous Orze instance.
 
     Scans /proc for reparented (ppid==1) processes whose cmdline references
-    results_dir and matches configured script names, then kills their
-    process groups.
+    results_dir and matches configured script names. Only kills processes
+    whose idea has a claim.json with a different PID (from a previous orze
+    instance). Processes without a claim are left alone — they may be
+    manually launched experiments.
     """
+    import json as _json
     my_pid = os.getpid()
     results_str = str(results_dir)
     patterns = [Path(cfg.get("train_script", "train.py")).name]
@@ -121,16 +124,46 @@ def kill_orphans(results_dir: Path, cfg: dict):
                     continue
                 cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
                 cmdline_str = cmdline.decode("utf-8", errors="replace")
-                if (results_str in cmdline_str and
+                if not (results_str in cmdline_str and
                         any(p in cmdline_str for p in patterns)):
-                    try:
-                        pgid = os.getpgid(pid)
-                        os.killpg(pgid, signal.SIGKILL)
-                        killed += 1
-                        logger.info("Killed orphan process group %d "
-                                    "(leader PID %d)", pgid, pid)
-                    except (ProcessLookupError, PermissionError, OSError):
-                        pass
+                    continue
+
+                # Extract idea_id from cmdline to check claim ownership
+                idea_id = None
+                parts = cmdline_str.replace("\x00", " ").split()
+                for i, p in enumerate(parts):
+                    if p == "--idea-id" and i + 1 < len(parts):
+                        idea_id = parts[i + 1]
+                        break
+
+                # Only kill if the idea has a claim.json from a previous
+                # orze instance. No claim = manually launched, leave it.
+                if idea_id:
+                    claim_path = results_dir / idea_id / "claim.json"
+                    if claim_path.exists():
+                        try:
+                            claim = _json.loads(claim_path.read_text())
+                            claim_pid = claim.get("pid", 0)
+                            # If claimed by our PID, it's ours — don't kill
+                            if claim_pid == my_pid:
+                                continue
+                        except Exception:
+                            pass
+                    else:
+                        # No claim file — manually launched, skip
+                        logger.debug("Skipping unclaimed process %d (%s)",
+                                     pid, idea_id)
+                        continue
+
+                try:
+                    pgid = os.getpgid(pid)
+                    os.killpg(pgid, signal.SIGKILL)
+                    killed += 1
+                    logger.info("Killed orphan process group %d "
+                                "(leader PID %d, idea %s)", pgid, pid,
+                                idea_id or "?")
+                except (ProcessLookupError, PermissionError, OSError):
+                    pass
             except (FileNotFoundError, ValueError, IndexError,
                     PermissionError, OSError):
                 continue
