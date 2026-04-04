@@ -950,6 +950,51 @@ noise: 0.1
             print()
             print("  \033[33mSome features need setup — see details above.\033[0m")
 
+    # =================================================================
+    # Professor bootstrap (orze-pro only)
+    # =================================================================
+    if _has_pro:
+        goal_path = project_dir / "GOAL.md"
+        if goal_path.exists() and _detected:
+            # GOAL.md exists and API keys are available — try bootstrap
+            try:
+                from orze_pro.agents.professor_bootstrap import (
+                    needs_bootstrap, bootstrap_professor,
+                )
+                # Determine professor rules path from the config we just wrote
+                prof_rules = Path(_pro_prompts) / "PROFESSOR_RULES.md"
+                # Check orze.yaml for custom path
+                try:
+                    import yaml
+                    with open(project_dir / "orze.yaml", encoding="utf-8") as _f:
+                        _cfg = yaml.safe_load(_f) or {}
+                    _prof_cfg = (_cfg.get("roles") or {}).get("professor", {})
+                    _custom = _prof_cfg.get("rules_file")
+                    if _custom:
+                        prof_rules = Path(_custom)
+                except Exception:
+                    pass
+
+                if needs_bootstrap(prof_rules):
+                    print()
+                    print("\033[1mProfessor Bootstrap:\033[0m")
+                    print(f"  Generating task-specific rules from GOAL.md...")
+                    ok = bootstrap_professor(
+                        goal_file=str(goal_path),
+                        config_file=str(project_dir / "orze.yaml"),
+                        base_config_file=str(project_dir / "configs" / "base.yaml"),
+                        output_file=str(prof_rules),
+                    )
+                    if ok:
+                        print(f"  \033[32mcreated\033[0m  {prof_rules}")
+                    else:
+                        print(f"  \033[33mskipped\033[0m  bootstrap failed — using generic rules")
+            except ImportError:
+                pass
+            except Exception as e:
+                # Never break init due to bootstrap failure
+                print(f"  \033[33mskipped\033[0m  professor bootstrap error: {e}")
+
     print()
     print("\033[1mNext steps:\033[0m")
     if _has_pro:
