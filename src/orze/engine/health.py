@@ -48,20 +48,52 @@ _FS_RETRIABLE_ERRNOS = {errno.EROFS, errno.ENOSPC, errno.EIO, errno.ESTALE}
 
 
 def check_stalled(tp: TrainingProcess, stall_minutes: int) -> bool:
-    """Check if a process has stalled (no log growth). Returns True if stalled."""
+    """Check if a process has stalled. Two independent checks:
+    1. Log file not growing for stall_minutes (existing)
+    2. metrics.json samples_done not increasing for stall_minutes (new)
+
+    A process is stalled if EITHER check triggers. This catches processes
+    that wrote partial metrics but then hung (0% GPU util, no progress).
+    """
     if stall_minutes <= 0:
         return False
 
     import time
+    import json
     now = time.time()
+
+    # Check 1: log file growth
+    log_growing = False
     try:
         current_size = tp.log_path.stat().st_size
     except OSError:
-        return False
+        current_size = tp._last_log_size
 
     if current_size > tp._last_log_size:
         tp._last_log_size = current_size
         tp._last_log_check = now
+        log_growing = True
+
+    # Check 2: metrics.json samples_done progress
+    metrics_progressing = False
+    try:
+        metrics_path = tp.log_path.parent / "metrics.json"
+        if metrics_path.exists():
+            md = json.loads(metrics_path.read_text())
+            samples = md.get("samples_done", 0)
+            prev_samples = getattr(tp, "_last_samples_done", 0)
+            if samples > prev_samples:
+                tp._last_samples_done = samples
+                tp._last_samples_check = now
+                metrics_progressing = True
+            elif not hasattr(tp, "_last_samples_check"):
+                tp._last_samples_check = now
+                tp._last_samples_done = samples
+    except Exception:
+        pass
+
+    # Reset stall timer if either shows progress
+    if log_growing or metrics_progressing:
         tp._stall_since = 0.0
         return False
 
