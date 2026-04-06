@@ -950,6 +950,122 @@ noise: 0.1
             print()
             print("  \033[33mSome features need setup — see details above.\033[0m")
 
+    # =================================================================
+    # Multi-task detection & project split (orze-pro only)
+    # =================================================================
+    _multitask_done = False
+    if _has_pro:
+        goal_path = project_dir / "GOAL.md"
+        if goal_path.exists():
+            try:
+                from orze_pro.agents.task_splitter import (
+                    detect_tasks, propose_gpu_allocation,
+                    format_proposal, create_task_folders,
+                )
+
+                goal_text = goal_path.read_text(encoding="utf-8")
+                tasks = detect_tasks(goal_text)
+
+                if len(tasks) > 1:
+                    # Detect GPUs
+                    try:
+                        from orze_pro.agents.professor_bootstrap import detect_gpu_info
+                        gpu_info = detect_gpu_info()
+                        n_gpus = gpu_info.get("gpu_count", 1)
+                    except Exception:
+                        n_gpus = 1
+
+                    tasks = propose_gpu_allocation(tasks, n_gpus)
+
+                    # Show proposal
+                    proposal = format_proposal(tasks, project_dir)
+                    print()
+                    print("\033[1mMulti-Task Detection:\033[0m")
+                    print(proposal)
+
+                    # Prompt user (only in interactive mode)
+                    proceed = True
+                    if sys.stdin.isatty():
+                        response = input("").strip().lower()
+                        if response == "n":
+                            print("  Skipping multi-task setup.")
+                            proceed = False
+                        elif response == "edit":
+                            # Let user edit GPU allocation
+                            print(f"  Enter GPU counts per task (comma-separated, "
+                                  f"{n_gpus} GPUs total):")
+                            print(f"  e.g. {','.join(str(len(t.get('gpus', [0]))) for t in tasks)}")
+                            try:
+                                counts_str = input("  > ").strip()
+                                counts = [int(x.strip()) for x in counts_str.split(",")]
+                                if len(counts) == len(tasks) and sum(counts) <= n_gpus:
+                                    gpu_cursor = 0
+                                    for i, t in enumerate(tasks):
+                                        t["gpus"] = list(range(gpu_cursor, gpu_cursor + counts[i]))
+                                        gpu_cursor += counts[i]
+                                else:
+                                    print(f"  \033[33mInvalid allocation — using defaults.\033[0m")
+                            except (ValueError, EOFError):
+                                print(f"  \033[33mInvalid input — using defaults.\033[0m")
+
+                    if proceed:
+                        env_path = project_dir / ".env"
+                        create_task_folders(tasks, project_dir, env_path)
+                        _multitask_done = True
+                        print(f"\n  \033[32mCreated {len(tasks)} task folders.\033[0m")
+                        print(f"  Write train.py for each task, then run start_all.sh")
+
+            except ImportError:
+                pass
+            except Exception as e:
+                # Never break init due to multi-task failure
+                print(f"  \033[33mskipped\033[0m  multi-task detection error: {e}")
+
+    # =================================================================
+    # Professor bootstrap (orze-pro only, single-task)
+    # =================================================================
+    if _has_pro and not _multitask_done:
+        goal_path = project_dir / "GOAL.md"
+        if goal_path.exists() and _detected:
+            # GOAL.md exists and API keys are available — try bootstrap
+            try:
+                from orze_pro.agents.professor_bootstrap import (
+                    needs_bootstrap, bootstrap_professor,
+                )
+                # Determine professor rules path from the config we just wrote
+                prof_rules = Path(_pro_prompts) / "PROFESSOR_RULES.md"
+                # Check orze.yaml for custom path
+                try:
+                    import yaml
+                    with open(project_dir / "orze.yaml", encoding="utf-8") as _f:
+                        _cfg = yaml.safe_load(_f) or {}
+                    _prof_cfg = (_cfg.get("roles") or {}).get("professor", {})
+                    _custom = _prof_cfg.get("rules_file")
+                    if _custom:
+                        prof_rules = Path(_custom)
+                except Exception:
+                    pass
+
+                if needs_bootstrap(prof_rules):
+                    print()
+                    print("\033[1mProfessor Bootstrap:\033[0m")
+                    print(f"  Generating task-specific rules from GOAL.md...")
+                    ok = bootstrap_professor(
+                        goal_file=str(goal_path),
+                        config_file=str(project_dir / "orze.yaml"),
+                        base_config_file=str(project_dir / "configs" / "base.yaml"),
+                        output_file=str(prof_rules),
+                    )
+                    if ok:
+                        print(f"  \033[32mcreated\033[0m  {prof_rules}")
+                    else:
+                        print(f"  \033[33mskipped\033[0m  bootstrap failed — using generic rules")
+            except ImportError:
+                pass
+            except Exception as e:
+                # Never break init due to bootstrap failure
+                print(f"  \033[33mskipped\033[0m  professor bootstrap error: {e}")
+
     print()
     print("\033[1mNext steps:\033[0m")
     if _has_pro:

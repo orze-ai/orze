@@ -31,6 +31,12 @@ CALLING SPEC:
         reason: str — error description
         side effects: atomically writes {"status": "FAILED", "error": reason} to idea_dir/metrics.json
 
+    _detect_zombie(tp) -> bool
+        tp: TrainingProcess — the process to check
+        returns: True if process is stuck (alive but no CPU/GPU activity and no log growth)
+                 for 3 consecutive checks; False otherwise
+        side effects: stores _zombie_cpu, _zombie_log_size, _zombie_count on tp for state tracking
+
     _get_checkpoint_dir(cfg) -> Path | None
         cfg: dict — orze config
         returns: value of --checkpoint-dir from train_extra_args, or None
@@ -82,6 +88,89 @@ def _format_args(args, template_vars: dict) -> list:
             s = s.replace(f"{{{k}}}", str(v))
         formatted.append(s)
     return formatted
+
+
+def _detect_zombie(tp) -> bool:
+    """Check if a training process is stuck (alive but doing nothing).
+
+    Returns True if the process has:
+    - Near-zero CPU usage (parent and children)
+    - No GPU memory usage (parent and children)
+    - No log file growth
+    All three must be true to avoid false positives.
+    Requires 3 consecutive positive detections (~90s at 30s poll).
+    """
+    pid = tp.process.pid
+
+    # 1. Check CPU usage via /proc/pid/stat
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            stat = f.read().split()
+        utime = int(stat[13])   # user time in jiffies
+        stime = int(stat[14])   # system time in jiffies
+        total_cpu = utime + stime
+
+        # Store previous reading for comparison
+        prev = getattr(tp, '_zombie_cpu', None)
+        tp._zombie_cpu = (time.time(), total_cpu)
+
+        if prev is not None:
+            dt = tp._zombie_cpu[0] - prev[0]
+            dcpu = tp._zombie_cpu[1] - prev[1]
+            if dt > 30 and dcpu > 10:  # any meaningful CPU in last 30s
+                tp._zombie_count = 0
+                return False
+    except (FileNotFoundError, IndexError, ValueError):
+        return False  # can't check, assume alive
+
+    # 2. Check GPU memory (nvidia-smi for this PID and children)
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-compute-apps=pid,used_gpu_memory",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+        nvsmi_lines = result.stdout.strip().splitlines()
+
+        # Check parent PID
+        for line in nvsmi_lines:
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) >= 2 and int(parts[0]) == pid:
+                tp._zombie_count = 0
+                return False  # process has GPU memory allocated
+
+        # Check child process PIDs
+        try:
+            with open(f"/proc/{pid}/task/{pid}/children") as f:
+                child_pids = [int(p) for p in f.read().split()]
+            for cpid in child_pids:
+                for line in nvsmi_lines:
+                    parts = [p.strip() for p in line.split(",")]
+                    if len(parts) >= 2 and int(parts[0]) == cpid:
+                        tp._zombie_count = 0
+                        return False  # child has GPU memory
+        except (FileNotFoundError, ValueError, OSError):
+            pass  # can't read children, continue with other checks
+    except Exception:
+        pass  # nvidia-smi failed, check other signals
+
+    # 3. Check log file growth
+    if tp.log_path and tp.log_path.exists():
+        try:
+            current_size = tp.log_path.stat().st_size
+            prev_size = getattr(tp, '_zombie_log_size', 0)
+            tp._zombie_log_size = current_size
+            if current_size > prev_size:
+                tp._zombie_count = 0
+                return False  # log is growing
+        except OSError:
+            pass
+
+    # All checks failed — this process looks stuck.
+    # Require 3 consecutive detections to avoid transient false positives.
+    zombie_count = getattr(tp, '_zombie_count', 0) + 1
+    tp._zombie_count = zombie_count
+    return zombie_count >= 3  # 3 consecutive checks (~90s at 30s poll)
 
 
 def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProcess:
@@ -219,6 +308,36 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 del active[gpu]
                 finished.append((tp.idea_id, gpu))
                 continue
+
+            # --- Zombie detection: process alive but not using resources ---
+            if ret is None and elapsed > 120:
+                is_zombie = _detect_zombie(tp)
+                if is_zombie:
+                    logger.warning("[ZOMBIE] %s — alive for %.0fs but no CPU/GPU activity, killing",
+                                   tp.idea_id, elapsed)
+                    notify("stall", {"idea_id": tp.idea_id, "gpu": gpu,
+                                     "reason": "Zombie process (no CPU/GPU activity)"}, cfg)
+                    _terminate_and_reap(tp.process, tp.idea_id)
+                    tp.close_log()
+                    error_msg = "Process stuck (zombie: no CPU/GPU activity)"
+                    if _try_executor_fix(tp.idea_id, error_msg,
+                                         results_dir, cfg, fix_counts):
+                        _reset_idea_for_retry(results_dir / tp.idea_id)
+                        try:
+                            new_tp = launch(tp.idea_id, actual_gpu, results_dir, cfg)
+                            active[gpu] = new_tp
+                            logger.info("[FIX-RETRY] %s relaunched on GPU %s",
+                                         tp.idea_id, gpu)
+                            continue
+                        except Exception as e:
+                            logger.error("[FIX-RETRY] %s relaunch failed: %s",
+                                          tp.idea_id, e)
+                    _write_failure(results_dir / tp.idea_id, error_msg)
+                    write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, -1, "training"), error_msg)
+                    _record_failure(failure_counts, tp.idea_id)
+                    del active[gpu]
+                    finished.append((tp.idea_id, gpu))
+                    continue
 
             fatal = detect_fatal_in_log(tp)
             if fatal and tp.process.poll() is None:
