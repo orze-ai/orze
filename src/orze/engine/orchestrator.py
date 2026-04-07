@@ -618,6 +618,13 @@ class Orze(OrzePhaseMixin):
                 else:
                     logger.debug("Cleanup lock held by another host, skipping")
 
+            # 2b. Periodic orphan cleanup (every 10 iterations ≈ 5 min)
+            if self.iteration % 10 == 0:
+                try:
+                    self._kill_orphans()
+                except Exception:
+                    pass
+
             # 3. Check active training processes (with health monitoring)
             finished = []
             if self.active:

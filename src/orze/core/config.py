@@ -137,7 +137,7 @@ DEFAULT_CONFIG = {
     "max_idea_failures": 0,     # 0 = disabled (never skip)
     "max_fix_attempts": 0,      # 0 = disabled; executor LLM fix attempts per idea
     "min_disk_gb": 0,           # 0 = disabled
-    "orphan_timeout_hours": 0,  # 0 = disabled
+    "orphan_timeout_hours": 6,  # reclaim stale claims after 6 hours
     "plateau_threshold": 50,    # fire plateau notification after N completions w/o improvement
     "roles": {},
     "auto_upgrade": False,
