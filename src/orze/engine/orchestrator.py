@@ -92,12 +92,19 @@ class Orze(OrzePhaseMixin):
         self.cfg = cfg
         self.once = once
         self.results_dir = Path(cfg["results_dir"])
-        # VRAM-based GPU scheduler: auto-fills GPUs by memory, not fixed slots
+        # GPU scheduler: "auto" mode starts exclusive, then upgrades to VRAM
+        # packing after the first job completes if it used <30% of GPU VRAM.
         from orze.engine.gpu_slots import GpuSlotManager
         sched_cfg = cfg.get("gpu_scheduling", {})
+        mode = sched_cfg.get("mode", "auto")
+        self._auto_gpu_mode = (mode == "auto")
+        if mode == "auto":
+            mode = "exclusive"  # start safe, upgrade later
+            logger.info("GPU scheduling: auto mode — starting exclusive, "
+                        "will upgrade to VRAM packing if jobs are small")
         self.slot_mgr = GpuSlotManager(
             gpu_ids,
-            mode=sched_cfg.get("mode", "exclusive"),
+            mode=mode,
             max_vram_pct=sched_cfg.get("max_vram_pct", 90),
             min_free_vram_mib=sched_cfg.get("min_free_vram_mib", 1000),
             max_jobs_per_gpu=sched_cfg.get("max_jobs_per_gpu", 200),
@@ -617,6 +624,36 @@ class Orze(OrzePhaseMixin):
                 finished = check_active(self.active, self.results_dir,
                                         cfg, self.failure_counts,
                                         self.fix_counts)
+
+            # 3-auto. After first job finishes, check if GPU mode should upgrade
+            if finished and self._auto_gpu_mode:
+                from orze.engine.gpu_slots import _query_all_gpu_usage
+                try:
+                    usage = _query_all_gpu_usage()
+                    if usage:
+                        # Check VRAM usage of the GPU that just finished
+                        gpu_key = finished[0][1]  # (idea_id, gpu)
+                        gpu_id = int(str(gpu_key).split(":")[0]) if ":" in str(gpu_key) else gpu_key
+                        if gpu_id in usage:
+                            used, total = usage[gpu_id]
+                            pct = used / total * 100 if total > 0 else 100
+                            if pct < 30:
+                                logger.info(
+                                    "Auto GPU mode: job used %d/%d MiB (%.0f%%) — "
+                                    "upgrading to VRAM packing for higher throughput",
+                                    used, total, pct)
+                                self.slot_mgr.mode = "vram"
+                                self.slot_mgr.max_jobs_per_gpu = max(
+                                    int(90 / max(pct, 1)), 2)
+                                logger.info("  max_jobs_per_gpu set to %d",
+                                            self.slot_mgr.max_jobs_per_gpu)
+                            else:
+                                logger.info(
+                                    "Auto GPU mode: job used %.0f%% VRAM — "
+                                    "keeping exclusive mode", pct)
+                    self._auto_gpu_mode = False  # only check once
+                except Exception:
+                    self._auto_gpu_mode = False
 
             # 3a. Check active eval processes
             eval_finished = []
