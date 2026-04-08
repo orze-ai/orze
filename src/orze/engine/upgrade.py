@@ -189,7 +189,8 @@ class UpgradeManager:
         # Upgrade orze-pro from private PyPI (if installed + key available)
         try:
             import orze_pro
-            pro_key = os.environ.get("ORZE_PRO_KEY", "")
+            from orze.extensions import _find_pro_key
+            pro_key = _find_pro_key()
             if pro_key:
                 pro_result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", "orze-pro",

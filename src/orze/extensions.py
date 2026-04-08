@@ -81,12 +81,47 @@ def get_extension(name: str) -> Optional[object]:
     return None
 
 
+_auto_install_attempted = False
+
+
+def _find_pro_key() -> str:
+    """Find ORZE_PRO_KEY from env var, .env file, or ~/.orze-pro.key."""
+    import os
+    from pathlib import Path
+    # 1. Environment variable
+    key = os.environ.get("ORZE_PRO_KEY", "").strip()
+    if key:
+        return key
+    # 2. .env file in current directory
+    env_path = Path(".env")
+    if env_path.exists():
+        try:
+            for line in env_path.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("ORZE_PRO_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+        except OSError:
+            pass
+    # 3. ~/.orze-pro.key
+    home_key = Path.home() / ".orze-pro.key"
+    if home_key.exists():
+        try:
+            return home_key.read_text().strip()
+        except OSError:
+            pass
+    return ""
+
+
 def _auto_install_pro() -> bool:
     """Auto-install orze-pro from private PyPI if ORZE_PRO_KEY is set."""
-    import os
+    global _auto_install_attempted
+    if _auto_install_attempted:
+        return False
+    _auto_install_attempted = True
+
     import subprocess
     import sys
-    key = os.environ.get("ORZE_PRO_KEY", "").strip()
+    key = _find_pro_key()
     if not key or not key.startswith("ORZE-PRO-"):
         return False
     logger.info("Pro license key detected. Installing orze-pro...")
@@ -98,7 +133,7 @@ def _auto_install_pro() -> bool:
     if result.returncode == 0:
         logger.info("orze-pro installed successfully.")
         return True
-    logger.warning("orze-pro install failed: %s", result.stderr[:200])
+    logger.warning("Failed to install orze-pro. Check your license key or visit https://orze.ai/pro")
     return False
 
 

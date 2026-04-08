@@ -57,7 +57,9 @@ def setup_logging(verbose: bool = False):
 # ---------------------------------------------------------------------------
 
 def main():
-    maybe_star()
+    from orze.extensions import _find_pro_key
+    if not _find_pro_key():
+        maybe_star()
 
     parser = argparse.ArgumentParser(
         description="orze: GPU experiment orchestrator",
