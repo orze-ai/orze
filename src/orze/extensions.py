@@ -81,12 +81,39 @@ def get_extension(name: str) -> Optional[object]:
     return None
 
 
+def _auto_install_pro() -> bool:
+    """Auto-install orze-pro from private PyPI if ORZE_PRO_KEY is set."""
+    import os
+    import subprocess
+    import sys
+    key = os.environ.get("ORZE_PRO_KEY", "").strip()
+    if not key or not key.startswith("ORZE-PRO-"):
+        return False
+    logger.info("Pro license key detected. Installing orze-pro...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "orze-pro", "--quiet",
+         "--extra-index-url", f"https://__token__:{key}@pypi.orze.ai/simple/"],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        logger.info("orze-pro installed successfully.")
+        return True
+    logger.warning("orze-pro install failed: %s", result.stderr[:200])
+    return False
+
+
 def has_pro() -> bool:
     """Check if orze-pro is installed and licensed."""
     try:
         mod = importlib.import_module("orze_pro")
     except ImportError:
-        return False
+        if _auto_install_pro():
+            try:
+                mod = importlib.import_module("orze_pro")
+            except ImportError:
+                return False
+        else:
+            return False
     # orze_pro is importable, but check license status too
     is_licensed_fn = getattr(mod, "is_licensed", None)
     if is_licensed_fn is not None and not is_licensed_fn():
