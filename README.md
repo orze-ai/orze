@@ -25,7 +25,7 @@ pip install orze
 When you're ready for autonomous research agents:
 
 ```bash
-pip install orze-pro
+pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/
 orze pro activate ORZE-PRO-xxx...
 # ✓ Licensed to Acme Corp (pro), expires 2027-12-31
 
@@ -113,7 +113,7 @@ You seed the initial ideas. Orze keeps the loop going with Smart Suggestions. Yo
 ### Pro user — "I sleep, orze researches"
 
 ```bash
-pip install orze-pro               # one command, zero config change
+pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/
 orze -c orze.yaml                  # same command — pro features activate automatically
 # → research agent reads results and proposes new ideas
 # → failed experiments get auto-fixed and retried
