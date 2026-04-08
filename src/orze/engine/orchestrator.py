@@ -363,6 +363,31 @@ class Orze(OrzePhaseMixin):
             iteration=self.iteration,
         )
 
+    # Keys that are safe to hot-reload without restart
+    _HOT_RELOAD_KEYS = {
+        "retrospection", "stall_minutes", "timeout", "poll", "roles",
+        "max_idea_failures", "max_fix_attempts", "notifications",
+        "plateau_threshold", "orphan_timeout_hours", "gpu_mem_threshold",
+        "gpu_scheduling", "min_disk_gb",
+    }
+
+    def _hot_reload_config(self):
+        """Reload orze.yaml and update safe-to-change config keys."""
+        cfg_path = self.cfg.get("_config_path")
+        if not cfg_path or not Path(cfg_path).exists():
+            return
+        try:
+            raw = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8")) or {}
+            changed = []
+            for key in self._HOT_RELOAD_KEYS:
+                if key in raw and raw[key] != self.cfg.get(key):
+                    self.cfg[key] = raw[key]
+                    changed.append(key)
+            if changed:
+                logger.info("Config hot-reloaded: %s", ", ".join(changed))
+        except Exception as e:
+            logger.warning("Config hot-reload failed: %s", e)
+
     def _run_retrospection(self, completed_count):
         """Run retrospection with dispatch to evolution roles."""
         self._retro_last_count = run_retrospection(
@@ -558,6 +583,10 @@ class Orze(OrzePhaseMixin):
             self.iteration += 1
             ts = datetime.datetime.now().strftime("%H:%M:%S")
             logger.info("--- Iteration %d [%s] ---", self.iteration, ts)
+
+            # Hot-reload config every 10 iterations (~5 min)
+            if self.iteration % 10 == 0:
+                self._hot_reload_config()
 
             # 0a. Early heartbeat — keeps nodes UI alive even when
             #     iterations are slow (large results_dir scans).
