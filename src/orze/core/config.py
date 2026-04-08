@@ -140,7 +140,7 @@ DEFAULT_CONFIG = {
     "orphan_timeout_hours": 6,  # reclaim stale claims after 6 hours
     "plateau_threshold": 50,    # fire plateau notification after N completions w/o improvement
     "roles": {},
-    "auto_upgrade": False,
+    "auto_upgrade": True,
     "notifications": {
         "enabled": False,
         "on": ["completed", "failed", "new_best", "watchdog_restart", "plateau"],

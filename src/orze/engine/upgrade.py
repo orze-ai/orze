@@ -179,9 +179,16 @@ class UpgradeManager:
         except Exception:
             pass
 
+        # Upgrade orze + orze-pro (if installed)
+        packages = [f"orze=={target}"]
+        try:
+            import orze_pro
+            packages.append("orze-pro")  # upgrade to latest compatible
+        except ImportError:
+            pass
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", f"orze=={target}",
-             "--quiet"],
+            [sys.executable, "-m", "pip", "install", *packages,
+             "--quiet", "--upgrade"],
             capture_output=True, text=True,
         )
         if result.returncode != 0:
