@@ -179,18 +179,32 @@ class UpgradeManager:
         except Exception:
             pass
 
-        # Upgrade orze + orze-pro (if installed)
-        packages = [f"orze=={target}"]
-        try:
-            import orze_pro
-            packages.append("orze-pro")  # upgrade to latest compatible
-        except ImportError:
-            pass
+        # Upgrade orze from PyPI
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", *packages,
-             "--quiet", "--upgrade"],
+            [sys.executable, "-m", "pip", "install", f"orze=={target}",
+             "--quiet"],
             capture_output=True, text=True,
         )
+
+        # Upgrade orze-pro from private PyPI (if installed + key available)
+        try:
+            import orze_pro
+            pro_key = os.environ.get("ORZE_PRO_KEY", "")
+            if pro_key:
+                pro_result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "orze-pro",
+                     "--upgrade", "--quiet",
+                     "--extra-index-url",
+                     f"https://__token__:{pro_key}@pypi.orze.ai/simple/"],
+                    capture_output=True, text=True,
+                )
+                if pro_result.returncode == 0:
+                    logger.info("Auto-upgrade: orze-pro upgraded from private PyPI")
+                else:
+                    logger.warning("Auto-upgrade: orze-pro upgrade failed: %s",
+                                   pro_result.stderr[:200])
+        except ImportError:
+            pass
         if result.returncode != 0:
             logger.error("Auto-upgrade pip install failed (rc=%d): %s",
                          result.returncode, result.stderr[:500])
