@@ -167,7 +167,7 @@ class OrzePhaseMixin:
         skipped = get_skipped_ideas(
             self.failure_counts,
             cfg.get("max_idea_failures", 0))
-        unclaimed = get_unclaimed(ideas, self.results_dir, skipped)
+        unclaimed = get_unclaimed(ideas, self.results_dir, skipped, lake=self.lake)
 
         # On-demand reconcile: if queue returned ideas but none are
         # unclaimed, stale DB rows are blocking — reconcile and retry.
@@ -188,7 +188,7 @@ class OrzePhaseMixin:
                         "raw": "",
                     }
                 ideas = expand_sweeps(queue_ideas, max_combos=sweep_max)
-                unclaimed = get_unclaimed(ideas, self.results_dir, skipped)
+                unclaimed = get_unclaimed(ideas, self.results_dir, skipped, lake=self.lake)
 
         if unclaimed:
             logger.info("Unclaimed queue (top 5): %s", unclaimed[:5])

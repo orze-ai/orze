@@ -55,9 +55,12 @@ PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 
 def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
-                  skipped: Optional[set] = None) -> List[str]:
+                  skipped: Optional[set] = None,
+                  lake=None) -> List[str]:
     """Return idea IDs with no results dir, sorted by priority then ID.
-    Excludes ideas in the skipped set and ideas with missing strategy files."""
+    Excludes ideas in the skipped set and ideas with missing strategy files.
+    When lake is provided, permanently marks unfixable ideas as 'skipped'
+    so they don't clog the queue forever."""
     unclaimed = []
     for idea_id in ideas:
         if skipped and idea_id in skipped:
@@ -72,6 +75,11 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
                     logger.warning(
                         "Skipping %s: strategy file %s does not exist",
                         idea_id, strategy_path)
+                    if lake:
+                        try:
+                            lake.set_status(idea_id, "skipped")
+                        except Exception:
+                            pass
                     continue
             unclaimed.append(idea_id)
 
