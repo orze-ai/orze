@@ -245,8 +245,16 @@ def _validate_config(cfg: dict) -> tuple:
             if mode not in ("script", "claude", "research"):
                 errors.append(f"roles.{rname}.mode: '{mode}' is invalid "
                               f"(expected 'script', 'claude', or 'research')")
-            if mode == "claude" and not rcfg.get("rules_file"):
-                errors.append(f"roles.{rname}: mode 'claude' requires 'rules_file'")
+            if mode == "claude" and not rcfg.get("rules_file") and not rcfg.get("skills"):
+                errors.append(f"roles.{rname}: mode 'claude' requires 'rules_file' or 'skills'")
+            if mode == "claude":
+                import shutil as _shutil
+                _claude_bin = rcfg.get("claude_bin", "claude")
+                if not _shutil.which(_claude_bin):
+                    errors.append(
+                        f"roles.{rname}: mode 'claude' requires Claude CLI "
+                        f"but '{_claude_bin}' not found on PATH. "
+                        f"Install: npm install -g @anthropic-ai/claude-code")
             if mode == "script" and not rcfg.get("script"):
                 errors.append(f"roles.{rname}: mode 'script' requires 'script'")
             if mode == "research" and not rcfg.get("backend"):
@@ -346,7 +354,7 @@ def _validate_config(cfg: dict) -> tuple:
         "train_extra_args", "train_extra_env", "pre_script", "pre_args",
         "pre_timeout", "eval_script", "eval_args", "eval_timeout",
         "eval_output", "post_scripts", "report",
-        "admin_port", "idea_lake_db",
+        "admin_port", "idea_lake_db", "bot", "telegram_bot",
     }
     known_keys = set(DEFAULT_CONFIG.keys()) | _KNOWN_EXTRAS
     for key in cfg:
