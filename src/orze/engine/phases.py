@@ -152,6 +152,20 @@ class OrzePhaseMixin:
                     cfg_parsed = yaml.safe_load(r["config"]) or {}
                 except yaml.YAMLError:
                     cfg_parsed = {}
+                # Pre-filter: skip ideas with missing strategy files BEFORE
+                # sweep expansion. This prevents expanding a broken idea into
+                # N sub-runs that all get skipped individually every iteration.
+                strategy_name = cfg_parsed.get("strategy")
+                if strategy_name:
+                    strategy_path = Path("strategies") / f"{strategy_name}.py"
+                    if not strategy_path.exists():
+                        try:
+                            self.lake.set_status(r["idea_id"], "skipped")
+                            logger.warning("Pre-filter: skipped %s (missing %s)",
+                                           r["idea_id"], strategy_path)
+                        except Exception:
+                            pass
+                        continue
                 queue_ideas[r["idea_id"]] = {
                     "title": r["title"],
                     "priority": r["priority"],
