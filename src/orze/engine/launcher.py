@@ -70,6 +70,41 @@ def _get_checkpoint_dir(cfg: dict) -> Optional[Path]:
     return None
 
 
+def _apply_data_boundary_env(env: Dict[str, str], db_cfg: dict,
+                             idea_dir: Path) -> None:
+    """Populate ORZE_FORBIDDEN_PATHS/WATCH_PATHS/ACCESS_LOG env vars from
+    data_boundaries config. Called when the training subprocess is launched
+    via orze.data_boundaries.wrap. Paths are stored as realpath'd absolute
+    strings joined by ':'; empty lists produce no env var.
+
+    db_cfg keys consumed:
+      forbidden_in_training: list[str] — paths training must NOT read
+      watch_paths:           list[str] — paths to log (soft audit)
+    """
+    def _to_env(paths) -> str:
+        if not paths:
+            return ""
+        resolved = []
+        for p in paths:
+            try:
+                resolved.append(os.path.realpath(str(p)))
+            except Exception:
+                resolved.append(str(p))
+        return ":".join(resolved)
+
+    forbidden = _to_env(db_cfg.get("forbidden_in_training") or [])
+    watch = _to_env(db_cfg.get("watch_paths") or [])
+    if forbidden:
+        env["ORZE_FORBIDDEN_PATHS"] = forbidden
+    if watch:
+        env["ORZE_WATCH_PATHS"] = watch
+    try:
+        idea_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    env["ORZE_ACCESS_LOG"] = str(idea_dir / "_access_log.tsv")
+
+
 def _format_args(args, template_vars: dict) -> list:
     """Safely format arguments without crashing on literal {} braces."""
     if args is None:
@@ -180,13 +215,29 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
     python = cfg.get("python", sys.executable)
     train_script = cfg["train_script"]
 
-    cmd = [
-        python, train_script,
-        "--idea-id", idea_id,
-        "--results-dir", str(results_dir),
-        "--ideas-md", cfg["ideas_file"],
-        "--config", cfg["base_config"],
-    ]
+    # Data boundary guardrails: if configured, wrap the training script with
+    # orze.data_boundaries.wrap, which activates monkey-patched open() checks
+    # from env vars before executing user code.
+    db_cfg = cfg.get("data_boundaries") or {}
+    use_wrapper = bool(
+        db_cfg.get("forbidden_in_training") or db_cfg.get("watch_paths")
+    )
+    if use_wrapper:
+        cmd = [
+            python, "-m", "orze.data_boundaries.wrap", train_script,
+            "--idea-id", idea_id,
+            "--results-dir", str(results_dir),
+            "--ideas-md", cfg["ideas_file"],
+            "--config", cfg["base_config"],
+        ]
+    else:
+        cmd = [
+            python, train_script,
+            "--idea-id", idea_id,
+            "--results-dir", str(results_dir),
+            "--ideas-md", cfg["ideas_file"],
+            "--config", cfg["base_config"],
+        ]
     for arg in (cfg.get("train_extra_args") or []):
         cmd.append(str(arg))
 
@@ -194,6 +245,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
     for k, v in (cfg.get("train_extra_env") or {}).items():
         env[k] = str(v)
     env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    if use_wrapper:
+        _apply_data_boundary_env(env, db_cfg, results_dir / idea_id)
 
     # Keep file handle open for subprocess lifetime
     log_fh = open(log_path, "w", encoding="utf-8")

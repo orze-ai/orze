@@ -141,6 +141,17 @@ DEFAULT_CONFIG = {
     "plateau_threshold": 50,    # fire plateau notification after N completions w/o improvement
     "roles": {},
     "auto_upgrade": True,
+    # Data boundary guardrails. When any prefix is declared here, orze
+    # launches training via orze.data_boundaries.wrap, which monkey-patches
+    # builtins.open() to abort on reads of forbidden paths (data leakage).
+    "data_boundaries": {
+        "forbidden_in_training": [],  # list[str] — abort training on read
+        "watch_paths": [],            # list[str] — log-only audit
+    },
+    # Auto-seal eval scripts. When true, any file matching eval_*.py or
+    # eval_*.sh in the project root is added to sealed_files at config
+    # load time, preventing silent mutation by LLM agents.
+    "auto_seal_eval": True,
     "notifications": {
         "enabled": False,
         "on": ["completed", "failed", "new_best", "watchdog_restart", "plateau"],
@@ -223,6 +234,28 @@ def load_project_config(path: Optional[str] = None) -> dict:
         else:
             logger.info("No API keys found in environment — research agent will not run. "
                         "Add GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY to .env")
+
+    # Auto-seal eval scripts (data leakage guardrail). Any file in the project
+    # root matching eval_*.py or eval_*.sh is added to sealed_files unless
+    # auto_seal_eval is explicitly set to false.
+    if cfg.get("auto_seal_eval", True):
+        sealed = list(cfg.get("sealed_files") or [])
+        existing = set(sealed)
+        auto_added = []
+        try:
+            for pattern in ("eval_*.py", "eval_*.sh"):
+                for match in sorted(Path(".").glob(pattern)):
+                    name = str(match)
+                    if name not in existing:
+                        sealed.append(name)
+                        existing.add(name)
+                        auto_added.append(name)
+        except Exception as e:
+            logger.warning("auto_seal_eval glob failed: %s", e)
+        if auto_added:
+            cfg["sealed_files"] = sealed
+            logger.info("auto_seal_eval: sealed %d eval script(s): %s",
+                        len(auto_added), ", ".join(auto_added))
 
     return cfg
 
