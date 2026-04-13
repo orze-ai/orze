@@ -70,39 +70,83 @@ def _get_checkpoint_dir(cfg: dict) -> Optional[Path]:
     return None
 
 
+_UNSHARE_WARNED = False
+_OVERLAY_DIR = Path("/tmp/orze_empty_overlay")
+
+
+def _resolve_paths(paths) -> list:
+    """Realpath-resolve a list of path strings, dropping empties."""
+    out = []
+    for p in paths or []:
+        try:
+            out.append(os.path.realpath(str(p)))
+        except Exception:
+            out.append(str(p))
+    return [p for p in out if p]
+
+
 def _apply_data_boundary_env(env: Dict[str, str], db_cfg: dict,
                              idea_dir: Path) -> None:
     """Populate ORZE_FORBIDDEN_PATHS/WATCH_PATHS/ACCESS_LOG env vars from
-    data_boundaries config. Called when the training subprocess is launched
-    via orze.data_boundaries.wrap. Paths are stored as realpath'd absolute
-    strings joined by ':'; empty lists produce no env var.
-
-    db_cfg keys consumed:
-      forbidden_in_training: list[str] — paths training must NOT read
-      watch_paths:           list[str] — paths to log (soft audit)
+    data_boundaries config. Used both by the in-process builtins.open patch
+    and by the kernel namespace isolation path.
     """
-    def _to_env(paths) -> str:
-        if not paths:
-            return ""
-        resolved = []
-        for p in paths:
-            try:
-                resolved.append(os.path.realpath(str(p)))
-            except Exception:
-                resolved.append(str(p))
-        return ":".join(resolved)
-
-    forbidden = _to_env(db_cfg.get("forbidden_in_training") or [])
-    watch = _to_env(db_cfg.get("watch_paths") or [])
+    forbidden = _resolve_paths(db_cfg.get("forbidden_in_training"))
+    watch = _resolve_paths(db_cfg.get("watch_paths"))
     if forbidden:
-        env["ORZE_FORBIDDEN_PATHS"] = forbidden
+        env["ORZE_FORBIDDEN_PATHS"] = ":".join(forbidden)
     if watch:
-        env["ORZE_WATCH_PATHS"] = watch
+        env["ORZE_WATCH_PATHS"] = ":".join(watch)
     try:
         idea_dir.mkdir(parents=True, exist_ok=True)
     except Exception:
         pass
     env["ORZE_ACCESS_LOG"] = str(idea_dir / "_access_log.tsv")
+
+
+def _has_unshare() -> bool:
+    """True if `unshare` is on PATH and supports unprivileged user+mount ns."""
+    import shutil
+    return shutil.which("unshare") is not None
+
+
+def _ensure_empty_overlay() -> Path:
+    """Ensure /tmp/orze_empty_overlay exists (empty dir used as bind-mount
+    source to hide forbidden paths inside the training namespace)."""
+    try:
+        _OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    return _OVERLAY_DIR
+
+
+def _build_isolated_cmd(base_cmd: list, forbidden_paths: list) -> list:
+    """Wrap `base_cmd` so it runs inside a private user+mount namespace with
+    each forbidden path bind-mounted over by an empty dir. Any file read
+    rooted at a forbidden path returns ENOENT at the kernel layer — no
+    Python patches, no library-specific hooks.
+
+    Requires Linux `unshare` with unprivileged user namespaces. Callers
+    should check _has_unshare() first and fall back to the in-process
+    builtins.open patch (the 3.2.26 behavior) when unavailable.
+    """
+    import shlex
+    overlay = _ensure_empty_overlay()
+
+    # Build the mount script. We bind-mount the empty overlay over each
+    # forbidden path. Nonexistent paths are skipped (|| true) — orze may
+    # declare paths that don't exist on every host.
+    mount_lines = []
+    for p in forbidden_paths:
+        q_overlay = shlex.quote(str(overlay))
+        q_path = shlex.quote(p)
+        mount_lines.append(
+            f"[ -e {q_path} ] && mount --bind {q_overlay} {q_path} 2>/dev/null || true"
+        )
+    mount_script = "\n".join(mount_lines)
+
+    inner = f"{mount_script}\nexec {shlex.join(base_cmd)}"
+    return ["unshare", "-U", "--map-root-user", "-m", "bash", "-c", inner]
 
 
 def _format_args(args, template_vars: dict) -> list:
@@ -215,15 +259,23 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
     python = cfg.get("python", sys.executable)
     train_script = cfg["train_script"]
 
-    # Data boundary guardrails: if configured, wrap the training script with
-    # orze.data_boundaries.wrap, which activates monkey-patched open() checks
-    # from env vars before executing user code.
+    # Data boundary guardrails. Two layered defenses, activated when
+    # data_boundaries is configured:
+    #   1. Kernel isolation (primary): unshare -U -m bash -c "mount --bind
+    #      empty_dir forbidden_path; exec python -m orze.data_boundaries.wrap
+    #      train.py ...". Any file read rooted at a forbidden path returns
+    #      ENOENT at the kernel layer — works regardless of which library
+    #      does the I/O (pyarrow, h5py, tfrecord, C extensions, network).
+    #   2. In-process audit (secondary): orze.data_boundaries.wrap activates
+    #      a monkey-patched builtins.open() that appends to ORZE_ACCESS_LOG
+    #      for post-hoc audit of Python-level file accesses.
     db_cfg = cfg.get("data_boundaries") or {}
-    use_wrapper = bool(
-        db_cfg.get("forbidden_in_training") or db_cfg.get("watch_paths")
-    )
+    forbidden = _resolve_paths(db_cfg.get("forbidden_in_training"))
+    watch = _resolve_paths(db_cfg.get("watch_paths"))
+    use_wrapper = bool(forbidden or watch)
+
     if use_wrapper:
-        cmd = [
+        base_cmd = [
             python, "-m", "orze.data_boundaries.wrap", train_script,
             "--idea-id", idea_id,
             "--results-dir", str(results_dir),
@@ -231,7 +283,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
             "--config", cfg["base_config"],
         ]
     else:
-        cmd = [
+        base_cmd = [
             python, train_script,
             "--idea-id", idea_id,
             "--results-dir", str(results_dir),
@@ -239,7 +291,25 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
             "--config", cfg["base_config"],
         ]
     for arg in (cfg.get("train_extra_args") or []):
-        cmd.append(str(arg))
+        base_cmd.append(str(arg))
+
+    # Wrap with namespace isolation if forbidden paths are configured and
+    # unshare is available. Falls back to the in-process patch otherwise.
+    if forbidden and _has_unshare():
+        cmd = _build_isolated_cmd(base_cmd, forbidden)
+    else:
+        cmd = base_cmd
+        if forbidden and not _has_unshare():
+            global _UNSHARE_WARNED
+            if not _UNSHARE_WARNED:
+                logger.warning(
+                    "data_boundaries.forbidden_in_training is set but `unshare` "
+                    "is not available. Falling back to in-process builtins.open "
+                    "patch, which does NOT catch pyarrow/h5py/C-extension reads. "
+                    "Install util-linux (provides unshare) for kernel-level "
+                    "isolation."
+                )
+                _UNSHARE_WARNED = True
 
     env = os.environ.copy()
     for k, v in (cfg.get("train_extra_env") or {}).items():
