@@ -1,32 +1,78 @@
-"""Data boundary guardrails — catch data leakage by policing file I/O.
+"""Data boundary guardrails — catch data leakage via two layered defenses.
+
+ORZE data_boundaries supports two modes, set independently per path in
+orze.yaml. Pick the right one for your training script architecture:
+
+    data_boundaries:
+      forbidden_in_training:   # HARD BLOCK — kernel namespace isolation
+        - /path/to/test/data
+      watch_paths:             # AUDIT ONLY — log via builtins.open patch
+        - /path/to/eval/data
+
+Mode 1: forbidden_in_training (kernel-enforced)
+  The orze launcher wraps training with:
+    unshare -U --map-root-user -m bash -c "
+      mount --bind <empty_overlay> <forbidden>
+      exec python -m orze.data_boundaries.wrap train.py ...
+    "
+  Every file rooted at <forbidden> returns ENOENT at the kernel layer.
+  Works against any library — pyarrow, h5py, tfrecord, lmdb, C
+  extensions — because the block happens below the Python layer.
+  Requires Linux with `unshare` available.
+
+  USE WHEN: your training subprocess is pure training — it does not
+  also evaluate on the forbidden path. If train and eval share a
+  subprocess and both read the forbidden path, the namespace hides
+  the path from eval too, breaking legitimate evaluation.
+
+Mode 2: watch_paths (audit only)
+  The orze launcher launches training via
+  `python -m orze.data_boundaries.wrap ...` which monkey-patches
+  builtins.open(). Every open() of a watched path is appended to
+  ORZE_ACCESS_LOG as a `WATCH\\t<prefix>\\t<path>` line. No block.
+
+  USE WHEN: your training subprocess also performs in-loop eval on
+  the same path you want audited. The in-loop eval can still read
+  eval files, but any read is logged so you can post-hoc check that
+  the training loop (not just the eval loop) didn't touch the
+  forbidden data.
+
+  LIMITATION: builtins.open-based audit only catches Python-level
+  reads. PyArrow memory_map, h5py, tfrecord, and direct os.open calls
+  bypass this log. Use watch_paths for audit completeness on plain
+  Python dataloaders; use forbidden_in_training (kernel mode) when
+  you need coverage for binary/native dataloaders.
+
+Both modes also populate ORZE_ACCESS_LOG for any builtins.open hits.
 
 CALLING SPEC:
     activate() -> bool
-        Reads ORZE_FORBIDDEN_PATHS / ORZE_WATCH_PATHS / ORZE_ACCESS_LOG env
-        vars. Monkey-patches builtins.open() to check file paths against a
-        forbidden-prefix list; raises OrzeLeakageError on match. Every
-        matching forbidden/watched path is appended to ORZE_ACCESS_LOG.
-        Returns True if patched, False if env vars unset (no-op).
+        Reads ORZE_FORBIDDEN_PATHS / ORZE_WATCH_PATHS / ORZE_ACCESS_LOG
+        env vars. Monkey-patches builtins.open() to check each read
+        against the forbidden / watched lists. Returns True if patched,
+        False if env vars unset (no-op).
 
     class OrzeLeakageError(RuntimeError)
-        Raised when training code attempts to open a forbidden path.
+        Raised when training code attempts to open a forbidden path at
+        the Python layer. (Kernel-layer blocks raise FileNotFoundError.)
 
-Env vars (set by orze launcher via data_boundaries config):
-    ORZE_FORBIDDEN_PATHS  colon-separated absolute path prefixes that
-                          training MUST NOT read. Match = hard abort.
-    ORZE_WATCH_PATHS      colon-separated prefixes to log (post-hoc audit
-                          without aborting). Subset of FORBIDDEN by default.
-    ORZE_ACCESS_LOG       file path to append watched accesses to.
+Env vars (set by launcher.py when data_boundaries is configured):
+    ORZE_FORBIDDEN_PATHS  colon-separated realpath'd absolute prefixes
+                          that training MUST NOT read. Match at the
+                          Python layer = hard abort via OrzeLeakageError.
+                          Also enforced at the kernel layer when the
+                          launcher wraps training with unshare (Linux).
+    ORZE_WATCH_PATHS      colon-separated realpath'd prefixes to log
+                          (post-hoc audit without aborting).
+    ORZE_ACCESS_LOG       file path to append watched/forbidden accesses
+                          to. Tab-delimited: TAG\\tprefix\\tfull-path.
 
-Design notes:
-  - Patches only builtins.open. Every disk read in Python ultimately hits
-    it (PyArrow memory_map, HuggingFace datasets, soundfile, torchaudio).
-  - String-prefix match is O(P) per open call; P is small (<20 in practice).
-  - Opt-in: no env vars = no patching. Existing training scripts unchanged.
-  - Does NOT patch network I/O. A user fetching test data over HTTP at
-    runtime is not caught — document that as a scope limitation.
-  - Path normalization uses os.path.realpath (resolves symlinks), so a
-    symlinked alias for a forbidden dir still trips the guardrail.
+Scope limitations:
+  - HTTP/network fetches are not caught by either mode. If your code
+    downloads test data at runtime, neither mechanism sees it.
+  - watch_paths is Python-level only; kernel mode covers all libraries
+    but requires a separate subprocess for eval to avoid blocking
+    legitimate test-set reads.
 """
 import builtins
 import os
