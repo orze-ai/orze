@@ -13,6 +13,18 @@ CALLING SPEC:
 import re
 import yaml
 import logging
+
+# Patterns that indicate LLM prompt injection artifacts, not real experiments
+_PI_PATTERNS = re.compile(
+    r"PI_DIRECTIVE|SYSTEM_PROMPT|JAILBREAK|IGNORE_PREVIOUS|"
+    r"STOP_\d+|OVERRIDE|ADMIN_MODE|<\|im_start\|>|<\|endoftext\|>",
+    re.IGNORECASE,
+)
+
+
+def _is_prompt_injection(idea_id: str, title: str) -> bool:
+    """Return True if the idea looks like a prompt injection artifact."""
+    return bool(_PI_PATTERNS.search(idea_id) or _PI_PATTERNS.search(title))
 import copy
 from typing import Dict, Any
 from orze.core.config import _sanitize_config
@@ -79,6 +91,12 @@ def parse_ideas(path: str) -> Dict[str, dict]:
 
         # Sanitize config: replace non-numeric values in numeric fields
         config = _sanitize_config(config)
+
+        # Filter prompt injection artifacts from LLM-generated ideas
+        if _is_prompt_injection(idea_id, title):
+            logger.warning("Skipping %s: prompt injection artifact (%s)",
+                           idea_id, title)
+            continue
 
         ideas[idea_id] = {
             "title": title,
