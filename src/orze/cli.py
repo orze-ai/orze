@@ -189,6 +189,22 @@ Examples:
     reset_parser.add_argument("-y", "--yes", action="store_true",
                               help="Skip confirmation prompt")
 
+    # result — register external/manual experiment results
+    result_parser = subparsers.add_parser(
+        "result", help="Register external experiment results so professor/research agents see them")
+    result_sub = result_parser.add_subparsers(dest="result_action")
+    result_add = result_sub.add_parser("add", help="Add a manual result")
+    result_add.add_argument("--name", required=True, help="Experiment name (e.g. riskprop_repro_ep10)")
+    result_add.add_argument("--map", type=float, required=True, help="mAP score")
+    result_add.add_argument("--epoch", type=int, default=None, help="Best epoch")
+    result_add.add_argument("--pipeline", type=str, default="manual", help="Pipeline name")
+    result_add.add_argument("--notes", type=str, default="", help="Notes about the result")
+    result_add.add_argument("-c", "--config-file", type=str, default=None)
+    result_sub.add_parser("list", help="List all manual results")
+    result_rm = result_sub.add_parser("rm", help="Remove a manual result by name")
+    result_rm.add_argument("name", help="Experiment name to remove")
+    result_rm.add_argument("-c", "--config-file", type=str, default=None)
+
     pro_parser = subparsers.add_parser("pro", help="Manage orze-pro license")
     pro_sub = pro_parser.add_subparsers(dest="pro_action")
     pro_activate_parser = pro_sub.add_parser("activate", help="Activate orze-pro with a license key")
@@ -290,6 +306,65 @@ Examples:
             pause_file.unlink()
             print("Cleared .pause_research sentinel.")
 
+        return
+
+    if command == "result":
+        import json as _json
+        action = getattr(args, "result_action", None)
+        cfg = load_project_config(getattr(args, "config_file", None))
+        results_dir = Path(cfg.get("results_dir", "results"))
+        manual_path = results_dir / "_manual_results.json"
+
+        if action == "add":
+            entries = []
+            if manual_path.exists():
+                try:
+                    entries = _json.loads(manual_path.read_text(encoding="utf-8"))
+                except (ValueError, OSError):
+                    pass
+            # Remove existing entry with same name (update)
+            entries = [e for e in entries if e.get("name") != args.name]
+            entry = {"name": args.name, "map": args.map, "source": "manual"}
+            if args.epoch is not None:
+                entry["epoch"] = args.epoch
+            if args.pipeline != "manual":
+                entry["pipeline"] = args.pipeline
+            if args.notes:
+                entry["notes"] = args.notes
+            entries.append(entry)
+            entries.sort(key=lambda e: float(e.get("map", 0) or 0), reverse=True)
+            manual_path.write_text(_json.dumps(entries, indent=2) + "\n",
+                                   encoding="utf-8")
+            print(f"Registered: {args.name} (mAP={args.map})")
+            print(f"  Saved to {manual_path}")
+            print(f"  Professor and research agents will see this on next cycle.")
+        elif action == "rm":
+            if manual_path.exists():
+                entries = _json.loads(manual_path.read_text(encoding="utf-8"))
+                before = len(entries)
+                entries = [e for e in entries if e.get("name") != args.name]
+                if len(entries) < before:
+                    manual_path.write_text(_json.dumps(entries, indent=2) + "\n",
+                                           encoding="utf-8")
+                    print(f"Removed: {args.name}")
+                else:
+                    print(f"Not found: {args.name}")
+            else:
+                print("No manual results registered.")
+        else:
+            # list
+            if manual_path.exists():
+                entries = _json.loads(manual_path.read_text(encoding="utf-8"))
+                if entries:
+                    print(f"{'Name':<35} {'mAP':>8}  {'Notes'}")
+                    print("-" * 80)
+                    for e in entries:
+                        print(f"{e.get('name','?'):<35} {e.get('map','?'):>8}  {e.get('notes','')[:40]}")
+                else:
+                    print("No manual results.")
+            else:
+                print("No manual results registered yet.")
+                print(f"  Use: orze result add --name <name> --map <score>")
         return
 
     if command == "pro":
