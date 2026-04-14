@@ -91,10 +91,14 @@ def startup_checks(results_dir: Path, cfg: dict,
 def reconcile_stale_running(cfg: dict) -> None:
     """Reset ideas stuck in 'running' from a prior unclean shutdown.
 
-    On startup, no ideas should be running yet. Any 'running' entries
-    in idea_lake.db are leftovers from a crash -- reset them to 'queued'.
+    Only resets ideas that were claimed by THIS host (checked via
+    claim.json). Ideas claimed by other hosts are left as 'running'
+    since the other machine may still be training them.
     """
-    lake_path = Path(cfg.get("idea_lake_db") or Path(cfg.get("results_dir", "results")) / "idea_lake.db")
+    import socket as _socket
+    hostname = _socket.gethostname()
+    results_dir = Path(cfg.get("results_dir", "results"))
+    lake_path = Path(cfg.get("idea_lake_db") or results_dir / "idea_lake.db")
     if not lake_path.exists():
         return
     try:
@@ -102,13 +106,35 @@ def reconcile_stale_running(cfg: dict) -> None:
         conn = sqlite3.connect(str(lake_path), timeout=5)
         cur = conn.execute(
             "SELECT idea_id FROM ideas WHERE status = 'running'")
-        stale = [row[0] for row in cur.fetchall()]
-        if stale:
+        all_running = [row[0] for row in cur.fetchall()]
+
+        mine = []
+        others = []
+        for idea_id in all_running:
+            claim_path = results_dir / idea_id / "claim.json"
+            if claim_path.exists():
+                try:
+                    claim = json.loads(claim_path.read_text(encoding="utf-8"))
+                    if claim.get("claimed_by") == hostname:
+                        mine.append(idea_id)
+                    else:
+                        others.append(idea_id)
+                except (json.JSONDecodeError, OSError):
+                    mine.append(idea_id)  # can't read claim → assume ours
+            else:
+                mine.append(idea_id)  # no claim.json → stale, reset
+
+        if mine:
+            placeholders = ",".join("?" for _ in mine)
             conn.execute(
-                "UPDATE ideas SET status = 'queued' WHERE status = 'running'")
+                f"UPDATE ideas SET status = 'queued' WHERE idea_id IN ({placeholders})",
+                mine)
             conn.commit()
-            logger.info("Reconciled %d stale 'running' ideas -> queued: %s",
-                        len(stale), ", ".join(stale[:10]))
+            logger.info("Reconciled %d stale 'running' ideas (this host) -> queued: %s",
+                        len(mine), ", ".join(mine[:10]))
+        if others:
+            logger.info("Kept %d 'running' ideas owned by other hosts: %s",
+                        len(others), ", ".join(others[:10]))
         conn.close()
     except Exception as e:
         logger.warning("Failed to reconcile stale ideas: %s", e)

@@ -98,11 +98,25 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
 def claim(idea_id: str, results_dir: Path, gpu: int,
           lake=None) -> bool:
     """Atomically claim an idea via mkdir. Returns True if we got it.
-    If lake is provided, also updates the DB status to 'running'."""
+    If lake is provided, also updates the DB status to 'running'.
+
+    Multi-host safety: if the directory already exists with a claim.json
+    owned by another host, refuse to claim (even if the idea was reset
+    to 'queued' in the DB by a stale reconciliation).
+    """
     idea_dir = results_dir / idea_id
     try:
         idea_dir.mkdir(parents=True, exist_ok=False)
     except FileExistsError:
+        # Dir exists — check if another host owns it
+        claim_path = idea_dir / "claim.json"
+        if claim_path.exists():
+            try:
+                existing = json.loads(claim_path.read_text(encoding="utf-8"))
+                if existing.get("claimed_by") != socket.gethostname():
+                    return False  # another host owns this, don't steal
+            except (json.JSONDecodeError, OSError):
+                pass
         return False
 
     claim_info = {

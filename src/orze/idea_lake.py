@@ -368,7 +368,18 @@ class IdeaLake:
             elif has_subs:
                 new_status = "completed"  # sweep parent, sub-runs are the real experiments
             elif has_dir:
-                # Orphan dir (no metrics, no sweep subs) — remove so idea retries
+                # Orphan dir (no metrics, no sweep subs).
+                # Only remove if claimed by this host — another node may
+                # still be training this idea.
+                import socket as _socket
+                claim_path = idea_dir / "claim.json"
+                if claim_path.exists():
+                    try:
+                        claim = json.loads(claim_path.read_text(encoding="utf-8"))
+                        if claim.get("claimed_by") != _socket.gethostname():
+                            continue  # owned by another host, don't touch
+                    except (json.JSONDecodeError, OSError):
+                        pass
                 try:
                     shutil.rmtree(idea_dir)
                 except OSError:
