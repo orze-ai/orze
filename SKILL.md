@@ -1,4 +1,4 @@
-# Orze — Operations & Extension Guide
+# Orze — Complete Operations Guide (v3.2.29)
 
 Orze is a filesystem-coordinated GPU experiment orchestrator. It runs the loop: **generate ideas → train → evaluate → learn → repeat**.
 
@@ -8,115 +8,212 @@ Orze is a filesystem-coordinated GPU experiment orchestrator. It runs the loop: 
 ideas.md → [claim via mkdir] → train on GPU → metrics.json → leaderboard
      ↑                                                           |
      └──── research agent reads results, appends new ideas ──────┘
+                         ↑
+              _manual_results.json ← orze result add (external experiments)
 ```
 
 - **ideas.md**: append-only experiment queue (markdown + YAML config blocks)
 - **idea_lake.db**: SQLite archive (hot ideas consumed from ideas.md into DB)
 - **results/{idea_id}/metrics.json**: the contract — `{"status": "COMPLETED", ...}`
+- **results/_manual_results.json**: user-registered external results (merged into leaderboard)
 - **Coordination**: atomic `mkdir` for claims, filesystem locks for roles — works across machines on shared storage (NFS/FSx/EFS)
 
-## Common Operations
+## CLI Reference
 
-### Start / Stop
+### Lifecycle
+
 ```bash
-orze -c orze.yaml                  # start (auto-detect GPUs)
-orze -c orze.yaml --gpus 0,1      # specific GPUs
+orze start                         # start as background daemon (auto-detect GPUs)
+orze start -c orze.yaml            # with explicit config
+orze start --gpus 0,1,2            # specific GPUs
+orze start --foreground            # run in foreground (for debugging)
+orze stop                          # graceful stop
+orze stop --timeout 120            # wait longer for children
+orze restart                       # stop + start
+orze restart --foreground          # restart in foreground
+```
+
+Legacy flags (still work):
+```bash
 orze --once                        # one cycle then exit
-orze --stop                        # graceful stop (training detaches)
+orze --stop                        # graceful stop
 orze --disable                     # persistent disable (survives restarts)
 orze --enable                      # re-enable
 ```
 
-### Monitor
+### Monitoring
+
 ```bash
 orze --admin                       # web UI at :8787
 orze --report-only                 # regenerate leaderboard
-orze --check                       # validate config, API keys, GPUs
-cat results/status.json            # machine-readable status
+orze --check                       # validate config, files, API keys, GPUs
 cat results/report.md              # human-readable leaderboard
+cat results/status.json            # machine-readable status
 ```
 
 ### Run a Single Role
+
 ```bash
 orze --role-only research          # run research agent once
+orze --role-only professor         # run professor once
 orze --role-only documenter        # any configured role
+orze --research-only               # alias for --role-only research
 ```
 
-### Service (auto-restart)
+### Register External Results
+
+**Problem**: experiments run outside orze (manual launches, external repos) are invisible to the professor and research agents.
+
+**Solution**: `orze result` writes to `results/_manual_results.json`, which is merged into the leaderboard context that professor and research agents see.
+
+```bash
+# Register a result
+orze result add --name riskprop_ep10 --map 0.8337 --epoch 10 \
+  --pipeline riskprop_slowonly_r50 \
+  --notes "AdaLEA loss, 8 GPUs, val 300 samples"
+
+# List all manual results
+orze result list
+
+# Remove a result
+orze result rm old_experiment
+```
+
+The professor and research agents automatically see manual results in their leaderboard context on the next cycle — sorted by mAP alongside orze-tracked results.
+
+### Reset Idea Lake
+
+```bash
+orze reset                         # show status summary
+orze reset --failed                # purge all failed ideas
+orze reset --all                   # purge all non-completed ideas
+orze reset --full                  # wipe entire lake (backup created)
+orze reset --full -y               # skip confirmation
+```
+
+### Service (Auto-Restart Watchdog)
+
 ```bash
 orze service install -c orze.yaml  # install watchdog (crontab or systemd)
 orze service status                # check health
+orze service logs -n 100           # show watchdog logs
 orze service uninstall
 ```
 
-### GPU Scheduling
-```yaml
-# orze.yaml
-gpu_scheduling:
-  mode: exclusive            # (default) 1 job per GPU — safe, predictable
-  # mode: vram              # pack multiple jobs per GPU by VRAM usage
+### Pro License
 
-  # vram mode settings (ignored in exclusive mode):
-  max_vram_pct: 85           # stop assigning when GPU VRAM hits 85%
-  min_free_vram_mib: 2000    # stop if less than 2GB free
-  max_jobs_per_gpu: 20       # safety cap
-
-  # system throttling (both modes):
-  max_load_per_cpu: 2.0      # pause scheduling when load/cpu exceeds this
-  min_free_ram_gb: 16        # pause scheduling when free RAM drops below
+```bash
+orze pro status                    # show license info
+orze pro activate ORZE-PRO-xxx    # activate with key
+orze pro deactivate               # remove license
+orze pro bootstrap-professor      # generate PROFESSOR_RULES.md from GOAL.md
 ```
 
-**Exclusive mode** (default): one job per GPU. Use when jobs are large (LLM training/eval), when sharing a machine, or when you need to reserve GPUs for other work. `--gpu 0,1,2` means exactly 3 jobs max.
+### Upgrade / Uninstall
 
-**VRAM mode**: packs jobs until VRAM is full. Use for many small jobs (hyperparameter sweeps, tiny models). Can cause contention on large models.
+```bash
+orze --upgrade                     # upgrade from PyPI
+orze --uninstall                   # full uninstall (keeps results)
+```
 
-### Sentinel Files (multi-machine control)
+## Multi-Machine Operation
+
+Orze supports multiple instances on a shared filesystem. Each node:
+- Gets a host-specific PID file: `results/.orze.pid.{hostname}`
+- Gets a host-specific state file: `results/.orze_state_{hostname}.json`
+- Claims ideas atomically via `mkdir` — no double-execution
+- Shares the same `idea_lake.db`, `ideas.md`, and `results/`
+
+**Starting on a remote node** (SSH doesn't preserve CWD):
+```bash
+ssh node2 "env -C /path/to/project orze start"
+```
+
+**Sentinel files (affect all nodes)**:
 ```bash
 touch results/.orze_stop_all       # stop all nodes
 touch results/.orze_disabled       # persistent disable
 rm results/.orze_disabled          # re-enable
 ```
 
-## Extending Orze
+**Known limitation**: SQLite on network filesystems (Lustre, NFS) requires `flock` support. Journal mode `delete` (default) is safer than WAL on network FS.
 
-### Add a New Role (LLM Agent)
+## GPU Scheduling
+
 ```yaml
 # orze.yaml
-roles:
-  my_analyzer:
-    mode: claude                   # or: script, research
-    rules_file: ANALYZER_RULES.md  # prompt for Claude
-    model: sonnet
-    cooldown: 600                  # seconds between runs
-    timeout: 300                   # max execution time
-    allowed_tools: "Read,Glob,Grep,Bash"
+gpu_scheduling:
+  mode: exclusive            # (default) 1 job per GPU — safe, predictable
+  # mode: auto              # start exclusive, upgrade to VRAM packing if jobs are small
+  # mode: vram              # pack multiple jobs per GPU by VRAM usage
+
+  # vram mode settings:
+  max_vram_pct: 85
+  min_free_vram_mib: 2000
+  max_jobs_per_gpu: 20
+
+  # system throttling (both modes):
+  max_load_per_cpu: 2.0
+  min_free_ram_gb: 16
 ```
 
-Modes:
+**Auto mode** starts exclusive, upgrades to VRAM packing if the first job uses <10% VRAM. Caution: if early jobs fail fast (0 VRAM), auto mode may pack too aggressively.
+
+## Roles (AI Agents — requires orze-pro)
+
+### Configured Roles
+```yaml
+roles:
+  professor:
+    mode: claude                   # spawns Claude CLI
+    model: claude-opus-4-6
+    rules_file: PROFESSOR_RULES.md
+    cycle_interval: 600
+    timeout: 1200
+  research:
+    mode: research                 # built-in multi-backend LLM
+    backend: anthropic
+    model: claude-opus-4-6
+    num_ideas: 5
+    cycle_interval: 300
+    rules_file: RESEARCH_RULES.md
+  research_gemini:
+    mode: research
+    backend: gemini
+    model: gemini-3.1-pro-preview
+```
+
+### Auto-Enabled Roles (when professor is active)
+- **data_analyst**: dataset auditing and error analysis
+- **bug_fixer**: auto-fix failed experiments
+- **thinker**: creative paradigm shifts on plateau
+- **bot**: interactive Telegram/Slack bot
+
+### Role Modes
 - `mode: claude` — spawns `claude -p <rules_file>` as subprocess
 - `mode: research` — built-in multi-backend LLM agent (gemini/openai/anthropic/ollama)
 - `mode: script` — any Python script: `script: my_agent.py`, `args: [...]`
 
 Template vars in rules_file and args: `{ideas_file}`, `{results_dir}`, `{cycle}`, `{gpu_count}`, `{completed}`, `{queued}`, `{role_name}`.
 
-### Add Pre/Post Scripts
-```yaml
-pre_script: check_features.py            # runs before training (exit 0 = proceed)
-pre_args: ["--idea-id", "{idea_id}", "--gpu", "{gpu}"]
+## Key Files
 
-eval_script: evaluate.py                 # runs after successful training
-eval_args: ["--idea-id", "{idea_id}", "--gpu", "{gpu}"]
-eval_output: eval_report.json            # skip if exists
+| File | Purpose | Who reads it |
+|------|---------|--------------|
+| `GOAL.md` | Research objective, dataset, target metric | Professor, thinker, data_analyst |
+| `RESEARCH_RULES.md` | Hard constraints, dead techniques, active vectors | Research agents |
+| `PROFESSOR_RULES.md` | Professor behavior, web search mandate | Professor |
+| `ideas.md` | Idea queue (consumed into idea_lake.db) | Orze engine |
+| `orze.yaml` | Project config | Everything |
+| `results/report.md` | Human-readable leaderboard | You |
+| `results/status.json` | Machine-readable status | Admin UI, monitoring |
+| `results/_leaderboard.json` | Full leaderboard with metrics | Research context builder |
+| `results/_manual_results.json` | User-registered external results | Research context builder (merged into leaderboard) |
+| `results/_retrospection.txt` | Automated trend analysis | Research agents |
+| `results/idea_lake.db` | SQLite idea archive | Orze engine |
 
-post_scripts:                            # run after eval
-  - name: overlay
-    script: generate_overlay.py
-    args: ["--idea-id", "{idea_id}"]
-    timeout: 1800
-    output: overlay_done.json            # skip if exists
-```
+## Training Script Contract
 
-### Training Script Contract
 Input (provided by orze):
 ```bash
 CUDA_VISIBLE_DEVICES=N python train.py \
@@ -130,11 +227,13 @@ Output (required):
 {"status": "COMPLETED", "test_accuracy": 0.92, "training_time": 142.5}
 ```
 
-### Ideas Format
+## Ideas Format
+
 ```markdown
-## idea-001: My Experiment
+## idea-abc123: My Experiment
 - **Priority**: high
 - **Category**: architecture
+- **Approach Family**: optimization
 - **Parent**: none
 - **Hypothesis**: Why this might work.
 
@@ -146,72 +245,35 @@ training:
 \```
 ```
 
-### Report Columns from Eval Output
+Ideas with IDs or titles matching prompt injection patterns (`PI_DIRECTIVE`, `SYSTEM_PROMPT`, `JAILBREAK`, etc.) are automatically filtered at parse time.
+
+## Data Boundaries (Leakage Prevention)
+
 ```yaml
-report:
-  columns:
-    - key: auc
-      source: "eval_report.json:metrics.auc_roc"
+data_boundaries:
+  forbidden_in_training: []         # hard abort if training reads these
+  watch_paths:                      # log-only audit
+    - /path/to/test/features
+auto_seal_eval: true                # seal eval scripts (hash integrity)
 ```
 
-## Diagnosing Problems
+## Notifications
 
-| Symptom | Check | Fix |
-|---------|-------|-----|
-| No experiments running | `cat results/status.json` — check `free_gpus`, `queue_depth` | Add ideas to ideas.md, check `orze --check` |
-| Training stuck | `results/{idea_id}/train_output.log` | Set `stall_minutes` in orze.yaml |
-| Research agent not producing ideas | `results/_research_logs/cycle_*.log` | Check `rules_file` exists, API keys set |
-| Disk full | `df -h` | Set `gc.enabled: true`, `min_disk_gb`, `cleanup.patterns` |
-| Ideas duplicating | Config dedup cache at `results/_config_hashes.json` | Normal — dedup auto-skips duplicates |
-| Eval not running | Check `eval_script` exists, `eval_output` not already present | Delete stale eval output to re-run |
-| Multi-machine desync | `results/_host_*.json` heartbeats | Check shared filesystem mount, version compat |
+Channels: telegram, slack, discord, webhook.
 
-## Architecture (source: `src/orze/`)
+Events: `completed`, `failed`, `new_best`, `heartbeat`, `milestone`, `disk_warning`, `stall`, `plateau`, `role_summary`, `shutdown`, `started`, `upgrading`, `watchdog_restart`.
 
+```yaml
+notifications:
+  enabled: true
+  heartbeat_interval: 1800
+  on: [completed, failed, new_best]
+  channels:
+    - type: telegram
+      bot_token: "..."
+      chat_id: "..."
+      on: [new_best, heartbeat, milestone, stall, plateau, role_summary]
 ```
-engine/
-├── orchestrator.py       (679) — Orze class, __init__, run() recipe
-├── phases.py             (600) — main loop phases (OrzePhaseMixin)
-├── lifecycle.py          (390) — startup, shutdown, PID management
-├── retrospection.py      (362) — signal detection + dispatch
-├── experiment_analysis.py(375) — cross-experiment regression analysis
-├── reporter.py           (338) — notifications + plateau detection
-├── launcher.py           (324) — training subprocess launch
-├── evaluator.py          (298) — eval script launch & monitoring
-├── health.py             (263) — disk, stall, FS health monitoring
-├── gpu_slots.py          (230) — GPU scheduling (exclusive/VRAM modes)
-├── smart_suggestions.py  (200) — rule-based idea generation (Smart Suggestions)
-├── auto_ideas.py         (180) — parameter variation generator
-├── upgrade.py            (223) — auto-upgrade pipeline
-├── scheduler.py          (273) — idea claiming, GPU scheduling
-├── failure.py            (240) — failure tracking
-├── failure_analysis.py   (210) — structured failure classification
-├── family_guard.py       (180) — approach family taxonomy
-├── sealed.py             (143) — sealed file integrity
-├── process.py            (197) — process tracking dataclasses
-├── cluster.py            (140) — multi-machine coordination
-├── roles.py         (115) — role process health checks
-├── config_dedup.py   (85) — config hash deduplication
-└── retrospection.py  (67) — periodic analysis runner
-
-core/
-├── config.py     — config loading, validation
-├── ideas.py      — ideas.md parsing, sweep expansion
-└── fs.py         — atomic filesystem ops, locks
-
-agents/
-├── research.py   — multi-backend LLM idea generator
-├── bug_fixer.py  — auto-diagnosis watchdog
-├── train_idea.py — example training script
-└── ...           — archive, GC, HF discover, notify
-
-reporting/
-├── leaderboard.py    — report generation
-├── state.py          — state persistence, heartbeats
-└── notifications.py  — telegram/slack/discord/webhook
-```
-
-Each module has a calling spec at the top — read it before reading the implementation.
 
 ## Admin API
 
@@ -219,7 +281,7 @@ Each module has a calling spec at the top — read it before reading the impleme
 
 | Method | Endpoint | Returns |
 |--------|----------|---------|
-| GET | `/api/status` | Machine-readable pipeline status |
+| GET | `/api/status` | Pipeline status |
 | GET | `/api/leaderboard` | Top models ranked by primary metric |
 | GET | `/api/runs` | Active + recent runs (paginated) |
 | GET | `/api/run/detail?idea_id=...` | Metrics for one run |
@@ -231,21 +293,58 @@ Each module has a calling spec at the top — read it before reading the impleme
 | POST | `/api/actions/stop` | Stop all instances |
 | POST | `/api/actions/kill` | Kill specific run |
 
-## Notifications
+## Diagnosing Problems
 
-Channels: telegram, slack, discord, webhook.
+| Symptom | Check | Fix |
+|---------|-------|-----|
+| No experiments running | `orze --check`, `cat results/status.json` | Add ideas, check GPUs, check train_script exists |
+| Training stuck | `results/{idea_id}/train_output.log` | Set `stall_minutes` in orze.yaml |
+| Research agent no ideas | `results/_research_logs/cycle_*.log` | Check `rules_file`, API keys, model access |
+| Professor not steering | `results/_professor_logs/cycle_*.log` | Update PROFESSOR_RULES.md with critical context |
+| Manual results invisible | `orze result list` | `orze result add --name X --map 0.83` |
+| Disk full | `df -h` | Set `gc.enabled: true`, `min_disk_gb` |
+| Ideas duplicating | Config dedup cache | Normal — dedup auto-skips |
+| Multi-machine conflict | `results/.orze.pid.*` files | Check shared FS mount, use `env -C` for SSH |
+| "Already running" on SSH | pgrep self-detection with `-c` flag | Use `env -C /project/dir orze start` instead |
+| GPUs idle after restart | VRAM packing escalated from early failures | Restart orze to reset GPU scheduling mode |
 
-Events: `completed`, `failed`, `new_best`, `heartbeat`, `milestone`, `disk_warning`, `stall`, `shutdown`, `started`, `role_summary`, `upgrading`, `watchdog_restart`.
+## Architecture (source: `src/orze/`)
 
-```yaml
-notifications:
-  enabled: true
-  on: [completed, failed, new_best]
-  channels:
-    - type: telegram
-      bot_token: "..."
-      chat_id: "..."
 ```
+engine/
+├── orchestrator.py       — Orze class, run() recipe
+├── phases.py             — main loop phases (sync, launch, eval, report)
+├── launcher.py           — training subprocess launch
+├── evaluator.py          — eval script launch & monitoring
+├── gpu_slots.py          — GPU scheduling (exclusive/auto/VRAM modes)
+├── scheduler.py          — idea claiming, GPU assignment
+├── retrospection.py      — signal detection + dispatch
+├── experiment_analysis.py— cross-experiment regression analysis
+├── reporter.py           — notifications + plateau detection
+├── health.py             — disk, stall, FS health monitoring
+├── failure_analysis.py   — structured failure classification
+├── sealed.py             — sealed file integrity
+├── cluster.py            — multi-machine coordination
+└── config_dedup.py       — config hash deduplication
+
+core/
+├── config.py     — config loading, validation, sanitization
+├── ideas.py      — ideas.md parsing, sweep expansion, PI filtering
+└── fs.py         — atomic filesystem ops, locks
+
+lifecycle.py      — start/stop/restart, PID management, daemon fork
+cli.py            — argparse + dispatch (result, reset, pro, service)
+
+hardware/
+└── gpu.py        — GPU detection, VRAM queries
+
+reporting/
+├── leaderboard.py    — report generation
+├── state.py          — state persistence, heartbeats
+└── notifications.py  — telegram/slack/discord/webhook
+```
+
+Each module has a calling spec at the top — read it before reading the implementation.
 
 ## orze.yaml Quick Reference
 
@@ -257,106 +356,63 @@ ideas_file: ideas.md
 # Paths
 base_config: configs/base.yaml
 results_dir: results
-python: /path/to/venv/bin/python3
 
 # Execution
-timeout: 21600
-poll: 30
-stall_minutes: 30
+timeout: 7200
+poll: 15
+stall_minutes: 10
 max_idea_failures: 3
-max_fix_attempts: 2
-min_disk_gb: 50
-orphan_timeout_hours: 6
-auto_upgrade: true
 
-# Roles
+# GPU scheduling
+gpu_scheduling:
+  mode: auto                       # exclusive | auto | vram
+
+# Data integrity
+data_boundaries:
+  forbidden_in_training: []
+  watch_paths: []
+auto_seal_eval: true
+
+# Report
+report:
+  primary_metric: map
+  columns:
+    - {key: "map", label: "mAP"}
+    - {key: "training_time", label: "Time (s)"}
+
+# Notifications
+notifications:
+  enabled: true
+  heartbeat_interval: 1800
+  on: [completed, failed, new_best]
+  channels:
+    - type: telegram
+      bot_token: "..."
+      chat_id: "..."
+
+# Roles (requires orze-pro)
 roles:
+  professor:
+    mode: claude
+    model: claude-opus-4-6
+    rules_file: PROFESSOR_RULES.md
+    cycle_interval: 600
+    timeout: 1200
   research:
-    mode: claude
+    mode: research
+    backend: anthropic
+    num_ideas: 5
+    cycle_interval: 300
     rules_file: RESEARCH_RULES.md
-    model: sonnet
-    cooldown: 300
-    timeout: 600
-  code_evolution:               # requires orze-pro (triggered by retrospection on plateau)
-    mode: claude
-    model: opus
-    timeout: 900
-    triggered_by: retrospection
-    allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
-  meta_research:                # triggered by retrospection on family imbalance
-    mode: script
-    script: src/orze/agents/meta_research.py
-    timeout: 300
-    triggered_by: retrospection
 
-# Sealed evaluation (metric integrity)
-sealed_files: []                # e.g. ["eval.py", "data/test_set.json"]
-metric_validation:
-  reject_nan: true
-  reject_inf: true
-  min_value: {}                 # e.g. {accuracy: 0.0}
-  max_value: {}                 # e.g. {accuracy: 1.0}
-
-# Auto-evolution
-evolution:
-  enabled: false                # opt-in
-  max_attempts_per_plateau: 2   # evolution attempts before pause
-
-# Retrospection (periodic analysis + dispatch)
-retrospection:
-  enabled: false
-  script: ""                    # optional custom analysis script
-  interval: 50                  # trigger every N completions
-  timeout: 120
-  max_consecutive_family: 5     # family concentration threshold
-  evolution_attempts_before_pause: 2
-  dispatch:                     # signal → role mapping
-    plateau: code_evolution
-    family_imbalance: meta_research
-    high_failure_rate: meta_research
-    persistent_failure: pause
+# Bot
+bot:
+  type: telegram
+  bot_token: "..."
+  chat_id: "..."
 
 # GC
 gc:
   enabled: true
-  checkpoints_dir: checkpoints
   keep_top: 50
-
-# Report
-report:
-  title: "My Project"
-  primary_metric: accuracy
-  sort: descending
-  columns:
-    - {key: "accuracy", label: "Acc", fmt: ".4f"}
 ```
-
-### Approach Family Taxonomy
-
-Ideas are tagged with an `approach_family` field for diversity tracking:
-`architecture`, `training_config`, `data`, `infrastructure`, `optimization`, `regularization`, `ensemble`, `other`.
-
-In `ideas.md`: `- **Approach Family**: training_config`
-
-The research agent auto-assigns families. Retrospection detects when one family dominates and dispatches to `meta_research` to rebalance.
-
-### Auto-Evolution Flow
-
-```
-Retrospection detects signal (plateau / failure rate / family concentration)
-  → dispatch to evolution role (code_evolution or meta_research)
-  → role makes changes (code patches or strategy adjustment)
-  → generates new ideas exercising the changes
-  → if evolution exhausted → escalate to pause
-  → on metric improvement → reset attempt counters
-```
-
-### Structured Failure Analysis
-
-Every failed experiment gets `results/{id}/failure_analysis.json`:
-```json
-{"category": "oom", "what": "CUDA out of memory", "why": "...", "lesson": "..."}
-```
-Categories: `oom`, `timeout`, `stall`, `crash`, `pre_script_error`, `eval_failure`, `config_error`, `sealed_violation`.
-
-The research agent reads these to avoid repeating failure patterns.
