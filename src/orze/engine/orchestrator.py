@@ -417,20 +417,46 @@ class Orze(OrzePhaseMixin):
         return check_disabled(self.results_dir)
 
     def _check_auto_upgrade(self):
-        """Check PyPI for a newer orze version. Rate-limited. Never raises."""
+        """Check PyPI for a newer orze version. Rate-limited.
+
+        Never auto-upgrades. Only logs a warning and sends a one-time
+        notification. The user triggers the upgrade manually via
+        `orze --upgrade` or `orze restart`.
+        """
         self._upgrade_mgr.check_pypi()
-        self._pending_upgrade = self._upgrade_mgr.pending
+        available = self._upgrade_mgr.pending
+        if available and available != self._pending_upgrade:
+            # First time seeing this version — warn once
+            self._pending_upgrade = available
+            logger.warning("New orze v%s available (current v%s). "
+                           "Run 'orze --upgrade' to install.",
+                           available, __version__)
+            try:
+                notify("upgrade_available", {
+                    "host": socket.gethostname(),
+                    "current_version": __version__,
+                    "available_version": available,
+                    "message": f"orze v{available} available (current v{__version__}). "
+                               f"Run 'orze --upgrade' to install.",
+                }, self._cfg)
+            except Exception:
+                pass
 
     def _check_upgrade_sentinel(self):
         """Check if another node wrote .orze_upgrade sentinel.
-        If the target version is newer, restart via os.execv (pip already done)."""
+
+        If another node already upgraded (pip install done), this node
+        should restart to pick up the new code. This is the only case
+        where automatic restart is safe — pip is already done, we just
+        need to exec the new binary.
+        """
         self._upgrade_mgr.check_sentinel()
         if self._upgrade_mgr.pending:
             self._pending_upgrade = self._upgrade_mgr.pending
             self._do_auto_upgrade()
 
     def _do_auto_upgrade(self):
-        """Install pending upgrade, kill everything, and restart via os.execv."""
+        """Restart to pick up an already-installed upgrade (sentinel-triggered only)."""
         self._upgrade_mgr.pending = self._pending_upgrade
         self._upgrade_mgr.do_upgrade(self._kill_and_save, self._remove_pid_file)
         self._pending_upgrade = None
@@ -715,10 +741,9 @@ class Orze(OrzePhaseMixin):
             if not self.running:
                 break
 
-            # 3c. Auto-upgrade: trigger immediately if pending
-            if self._pending_upgrade:
-                self._do_auto_upgrade()
-                self._pending_upgrade = None
+            # 3c. Upgrade notification (user-triggered only, no auto-restart)
+            # Sentinel-triggered upgrades (another node already pip-installed)
+            # are handled in _check_upgrade_sentinel() above.
 
             # 4. Run agent roles (research, documenter, etc.)
             try:
