@@ -457,12 +457,17 @@ class OrzePhaseMixin:
                     if not claim(idea_id, self.results_dir, gpu,
                                  lake=self.lake):
                         continue
-                    # Write idea config so train scripts can read it
+                    # Write idea config so train scripts can read it.
+                    # Flatten nested dicts (research agents sometimes generate
+                    # nested YAML like "training: {lr: 0.001}" which breaks
+                    # argparse). Strip dict/list values — only scalars pass.
                     idea_cfg = ideas.get(idea_id, {}).get("config", {})
                     if idea_cfg:
+                        flat_cfg = {k: v for k, v in idea_cfg.items()
+                                    if not isinstance(v, (dict, list))}
                         atomic_write(
                             self.results_dir / idea_id / "idea_config.yaml",
-                            yaml.dump(idea_cfg,
+                            yaml.dump(flat_cfg,
                                       default_flow_style=False))
                     # Write sweep config for sub-runs (legacy compat)
                     if ideas.get(idea_id, {}).get("_sweep_parent"):

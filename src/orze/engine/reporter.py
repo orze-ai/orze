@@ -153,10 +153,20 @@ class NotificationProcessor:
                                    row_lookup, rank_lookup,
                                    leaderboard, view_lbs)
         elif status == "FAILED":
-            notify("failed", {"idea_id": idea_id, "title": title,
-                              "error": m.get("error", "unknown"),
-                              "leaderboard": leaderboard,
-                              "view_leaderboards": view_lbs}, cfg)
+            error_msg = m.get("error", "unknown")
+            # Suppress notifications for config/argparse errors (exit code 2)
+            # and fast crashes (<10s, typically import errors). These are
+            # research-agent-generated junk, not worth spamming Telegram.
+            is_config_error = "code 2" in error_msg or "code 1" in error_msg
+            training_time = m.get("training_time", 999)
+            if is_config_error and training_time < 10:
+                logger.info("Suppressed notification for %s: config error (%s)",
+                            idea_id, error_msg)
+            else:
+                notify("failed", {"idea_id": idea_id, "title": title,
+                                  "error": error_msg,
+                                  "leaderboard": leaderboard,
+                                  "view_leaderboards": view_lbs}, cfg)
 
         if self.lake and status in ("COMPLETED", "FAILED"):
             self._archive_to_lake(idea_id, status, ideas, cfg)
