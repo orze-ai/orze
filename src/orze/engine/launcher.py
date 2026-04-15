@@ -259,6 +259,20 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
     python = cfg.get("python", sys.executable)
     train_script = cfg["train_script"]
 
+    # Per-idea train_script override: read from idea_config.yaml if present
+    idea_cfg_path = results_dir / idea_id / "idea_config.yaml"
+    if idea_cfg_path.exists():
+        try:
+            import yaml
+            with open(idea_cfg_path) as _f:
+                idea_cfg = yaml.safe_load(_f) or {}
+            if idea_cfg.get("train_script"):
+                train_script = idea_cfg["train_script"]
+                logger.info("Per-idea train_script override: %s -> %s",
+                            idea_id, train_script)
+        except Exception:
+            pass  # fall back to global train_script
+
     # Data boundary guardrails. Two layered defenses, activated when
     # data_boundaries is configured:
     #   1. Kernel isolation (primary): unshare -U -m bash -c "mount --bind
@@ -274,13 +288,18 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
     watch = _resolve_paths(db_cfg.get("watch_paths"))
     use_wrapper = bool(forbidden or watch)
 
+    # Use per-idea config if it exists, otherwise global base config
+    config_path = cfg["base_config"]
+    if idea_cfg_path.exists():
+        config_path = str(idea_cfg_path)
+
     if use_wrapper:
         base_cmd = [
             python, "-m", "orze.data_boundaries.wrap", train_script,
             "--idea-id", idea_id,
             "--results-dir", str(results_dir),
             "--ideas-md", cfg["ideas_file"],
-            "--config", cfg["base_config"],
+            "--config", config_path,
         ]
     else:
         base_cmd = [
@@ -288,7 +307,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
             "--idea-id", idea_id,
             "--results-dir", str(results_dir),
             "--ideas-md", cfg["ideas_file"],
-            "--config", cfg["base_config"],
+            "--config", config_path,
         ]
     for arg in (cfg.get("train_extra_args") or []):
         base_cmd.append(str(arg))
