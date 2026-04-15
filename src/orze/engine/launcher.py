@@ -382,13 +382,15 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
     from orze.engine.failure import _record_failure, _try_executor_fix, _reset_idea_for_retry
     from orze.engine.failure_analysis import classify_failure, write_failure_analysis as _write_fa_orig
 
-    # Wrap write_failure_analysis to also run Tier 1 SOP feedback
+    # Wrap write_failure_analysis to also run SOP feedback (orze-pro)
     def write_failure_analysis(idea_dir, category, error_msg):
         _write_fa_orig(idea_dir, category, error_msg)
         if cfg.get("sops", {}).get("failure_feedback", True):
             try:
-                from orze.engine.sops import analyze_failure_feedback
-                analyze_failure_feedback(idea_dir, results_dir, cfg)
+                from orze.extensions import get_extension
+                _sops = get_extension("sops")
+                if _sops:
+                    _sops.analyze_failure_feedback(idea_dir, results_dir, cfg)
             except Exception:
                 pass
 

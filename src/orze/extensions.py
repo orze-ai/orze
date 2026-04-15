@@ -43,6 +43,8 @@ _PRO_MODULES = {
     "agents.bot": "orze_pro.agents.bot",
     "agents.professor_bootstrap": "orze_pro.agents.professor_bootstrap",
     "idea_filter": "orze_pro.engine.idea_filter",
+    "sops": "orze_pro.engine.sops",
+    "sop_tier2": "orze_pro.engine.sop_tier2",
 }
 
 # No built-in fallbacks — these modules live in orze-pro only.

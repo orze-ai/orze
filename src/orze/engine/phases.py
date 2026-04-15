@@ -95,29 +95,33 @@ class OrzePhaseMixin:
                     def _raw_f(field):
                         m = re.search(rf"\*\*{re.escape(field)}\*\*:\s*(.+)", raw_text)
                         return m.group(1).strip() if m else None
-                    # Tier 1 SOP: validate idea config before ingesting
+                    # SOP: validate idea config before ingesting (orze-pro)
                     idea_cfg = idea.get("config", {})
                     sop_cfg = cfg.get("sops", {})
                     if sop_cfg.get("validate_ideas", True) and idea_cfg:
-                        from orze.engine.sops import validate_idea
-                        # Resolve train_script: per-idea override or global
-                        ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
-                        if ts:
-                            is_valid, err_msg = validate_idea(
-                                ts, idea_cfg, cfg.get("python", sys.executable))
-                            if not is_valid:
-                                logger.warning("Skipping %s: %s", idea_id, err_msg)
-                                self.lake.insert(
-                                    idea_id, idea["title"], yaml.dump(idea_cfg),
-                                    raw_text, status="skipped",
-                                    priority=raw_pri,
-                                    category=_raw_f("Category"),
-                                    parent=_raw_f("Parent"),
-                                    hypothesis=err_msg,
-                                    approach_family=idea.get("approach_family",
-                                                            _raw_f("Approach Family") or "other"),
-                                )
-                                continue
+                        try:
+                            from orze.extensions import get_extension
+                            _sops = get_extension("sops")
+                            if _sops:
+                                ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
+                                if ts:
+                                    is_valid, err_msg = _sops.validate_idea(
+                                        ts, idea_cfg, cfg.get("python", sys.executable))
+                                    if not is_valid:
+                                        logger.warning("Skipping %s: %s", idea_id, err_msg)
+                                        self.lake.insert(
+                                            idea_id, idea["title"], yaml.dump(idea_cfg),
+                                            raw_text, status="skipped",
+                                            priority=raw_pri,
+                                            category=_raw_f("Category"),
+                                            parent=_raw_f("Parent"),
+                                            hypothesis=err_msg,
+                                            approach_family=idea.get("approach_family",
+                                                                    _raw_f("Approach Family") or "other"),
+                                        )
+                                        continue
+                        except Exception:
+                            pass
 
                     self.lake.insert(
                         idea_id, idea["title"], yaml.dump(idea_cfg),
@@ -167,13 +171,14 @@ class OrzePhaseMixin:
         except Exception:
             pass  # pro not installed or filter failed — continue normally
 
-        # 5a-pre2. Tier 2 SOP: auto-generate ideas from portfolios
+        # 5a-pre2. Tier 2 SOP: auto-generate ideas from portfolios (orze-pro)
         try:
-            from orze.extensions import get_extension, has_pro
-            if has_pro() and self.lake:
-                from orze_pro.engine.sop_tier2 import (
-                    load_portfolios, load_method_specs, generate_portfolio_ideas,
-                )
+            from orze.extensions import get_extension
+            _sop_t2 = get_extension("sop_tier2")
+            if _sop_t2 and self.lake:
+                load_portfolios = _sop_t2.load_portfolios
+                load_method_specs = _sop_t2.load_method_specs
+                generate_portfolio_ideas = _sop_t2.generate_portfolio_ideas
                 portfolios = load_portfolios(self.results_dir)
                 methods = load_method_specs(self.results_dir)
                 for portfolio in portfolios:

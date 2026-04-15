@@ -342,9 +342,14 @@ Examples:
             print(f"  Professor and research agents will see this on next cycle.")
             # Tier 1 SOP: extract method spec from source code
             if getattr(args, "source_dir", None):
-                from orze.engine.sops import analyze_method
-                method_path = analyze_method(args.name, Path(args.source_dir),
-                                             results_dir)
+                from orze.extensions import get_extension
+                _sops = get_extension("sops")
+                if _sops:
+                    method_path = _sops.analyze_method(args.name, Path(args.source_dir),
+                                                        results_dir)
+                else:
+                    method_path = None
+                    print("  (Install orze-pro for method analysis)")
                 if method_path:
                     print(f"  Method spec written to {method_path}")
         elif action == "rm":
