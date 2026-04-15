@@ -388,6 +388,7 @@ def _validate_config(cfg: dict) -> tuple:
         "pre_timeout", "eval_script", "eval_args", "eval_timeout",
         "eval_output", "post_scripts", "report",
         "admin_port", "idea_lake_db", "bot", "telegram_bot",
+        "sops",
     }
     known_keys = set(DEFAULT_CONFIG.keys()) | _KNOWN_EXTRAS
     for key in cfg:

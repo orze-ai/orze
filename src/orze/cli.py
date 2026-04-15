@@ -199,6 +199,8 @@ Examples:
     result_add.add_argument("--epoch", type=int, default=None, help="Best epoch")
     result_add.add_argument("--pipeline", type=str, default="manual", help="Pipeline name")
     result_add.add_argument("--notes", type=str, default="", help="Notes about the result")
+    result_add.add_argument("--source-dir", type=str, default=None,
+                            help="Source code directory for method analysis (writes _methods/<name>.yaml)")
     result_add.add_argument("-c", "--config-file", type=str, default=None)
     result_sub.add_parser("list", help="List all manual results")
     result_rm = result_sub.add_parser("rm", help="Remove a manual result by name")
@@ -338,6 +340,13 @@ Examples:
             print(f"Registered: {args.name} (mAP={args.map})")
             print(f"  Saved to {manual_path}")
             print(f"  Professor and research agents will see this on next cycle.")
+            # Tier 1 SOP: extract method spec from source code
+            if getattr(args, "source_dir", None):
+                from orze.engine.sops import analyze_method
+                method_path = analyze_method(args.name, Path(args.source_dir),
+                                             results_dir)
+                if method_path:
+                    print(f"  Method spec written to {method_path}")
         elif action == "rm":
             if manual_path.exists():
                 entries = _json.loads(manual_path.read_text(encoding="utf-8"))

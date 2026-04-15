@@ -380,7 +380,17 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
     """
     from orze.engine.health import check_stalled, detect_fatal_in_log, _adaptive_stall_minutes
     from orze.engine.failure import _record_failure, _try_executor_fix, _reset_idea_for_retry
-    from orze.engine.failure_analysis import classify_failure, write_failure_analysis
+    from orze.engine.failure_analysis import classify_failure, write_failure_analysis as _write_fa_orig
+
+    # Wrap write_failure_analysis to also run Tier 1 SOP feedback
+    def write_failure_analysis(idea_dir, category, error_msg):
+        _write_fa_orig(idea_dir, category, error_msg)
+        if cfg.get("sops", {}).get("failure_feedback", True):
+            try:
+                from orze.engine.sops import analyze_failure_feedback
+                analyze_failure_feedback(idea_dir, results_dir, cfg)
+            except Exception:
+                pass
 
     finished = []
     stall_minutes = _adaptive_stall_minutes(

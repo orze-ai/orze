@@ -17,6 +17,7 @@ import logging
 import re
 import shutil
 import socket
+import sys
 import time
 from pathlib import Path
 from typing import Dict
@@ -94,8 +95,32 @@ class OrzePhaseMixin:
                     def _raw_f(field):
                         m = re.search(rf"\*\*{re.escape(field)}\*\*:\s*(.+)", raw_text)
                         return m.group(1).strip() if m else None
+                    # Tier 1 SOP: validate idea config before ingesting
+                    idea_cfg = idea.get("config", {})
+                    sop_cfg = cfg.get("sops", {})
+                    if sop_cfg.get("validate_ideas", True) and idea_cfg:
+                        from orze.engine.sops import validate_idea
+                        # Resolve train_script: per-idea override or global
+                        ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
+                        if ts:
+                            is_valid, err_msg = validate_idea(
+                                ts, idea_cfg, cfg.get("python", sys.executable))
+                            if not is_valid:
+                                logger.warning("Skipping %s: %s", idea_id, err_msg)
+                                self.lake.insert(
+                                    idea_id, idea["title"], yaml.dump(idea_cfg),
+                                    raw_text, status="skipped",
+                                    priority=raw_pri,
+                                    category=_raw_f("Category"),
+                                    parent=_raw_f("Parent"),
+                                    hypothesis=err_msg,
+                                    approach_family=idea.get("approach_family",
+                                                            _raw_f("Approach Family") or "other"),
+                                )
+                                continue
+
                     self.lake.insert(
-                        idea_id, idea["title"], yaml.dump(idea["config"]),
+                        idea_id, idea["title"], yaml.dump(idea_cfg),
                         raw_text,
                         status="queued",
                         priority=raw_pri,
@@ -141,6 +166,47 @@ class OrzePhaseMixin:
                 idea_filter.filter_queued_ideas(self.results_dir)
         except Exception:
             pass  # pro not installed or filter failed — continue normally
+
+        # 5a-pre2. Tier 2 SOP: auto-generate ideas from portfolios
+        try:
+            from orze.extensions import get_extension, has_pro
+            if has_pro() and self.lake:
+                from orze_pro.engine.sop_tier2 import (
+                    load_portfolios, load_method_specs, generate_portfolio_ideas,
+                )
+                portfolios = load_portfolios(self.results_dir)
+                methods = load_method_specs(self.results_dir)
+                for portfolio in portfolios:
+                    new_ideas = generate_portfolio_ideas(portfolio, self.results_dir, methods)
+                    for idea in new_ideas:
+                        self.lake.insert(
+                            idea["idea_id"], idea["title"],
+                            yaml.dump(idea["config"]),
+                            "", status="queued",
+                            priority=idea.get("priority", "high"),
+                            approach_family=idea.get("approach_family", "portfolio"),
+                        )
+                    if new_ideas:
+                        # Track generated IDs in portfolio file
+                        pf = portfolio.get("_file")
+                        if pf:
+                            portfolio.setdefault("generated_ideas", [])
+                            portfolio["generated_ideas"].extend(
+                                [i["idea_id"] for i in new_ideas])
+                            try:
+                                Path(pf).write_text(
+                                    yaml.dump({k: v for k, v in portfolio.items()
+                                               if k != "_file"},
+                                              default_flow_style=False),
+                                    encoding="utf-8")
+                            except OSError:
+                                pass
+                        logger.info("Portfolio '%s': generated %d ideas",
+                                    portfolio.get("name", "?"), len(new_ideas))
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug("Portfolio generation skipped: %s", e)
 
         # 5a. Expand sweeps and find unclaimed work
         sweep_max = cfg.get("sweep", {}).get("max_combos", 20)
