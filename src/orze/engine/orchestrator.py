@@ -698,35 +698,54 @@ class Orze(OrzePhaseMixin):
                                         cfg, self.failure_counts,
                                         self.fix_counts)
 
-            # 3-auto. After first job finishes, check if GPU mode should upgrade
+            # 3-auto. After a SUCCESSFUL job finishes, check if GPU mode
+            # should upgrade from exclusive to VRAM packing.
+            # Critical: only check on success — failed jobs (exit code 2,
+            # argparse errors) use 0 VRAM and would falsely trigger packing
+            # mode, cascading into 90 launches per GPU.
             if finished and self._auto_gpu_mode:
                 from orze.engine.gpu_slots import _query_all_gpu_usage
-                try:
-                    usage = _query_all_gpu_usage()
-                    if usage:
-                        # Check VRAM usage of the GPU that just finished
-                        gpu_key = finished[0][1]  # (idea_id, gpu)
-                        gpu_id = int(str(gpu_key).split(":")[0]) if ":" in str(gpu_key) else gpu_key
-                        if gpu_id in usage:
-                            used, total = usage[gpu_id]
-                            pct = used / total * 100 if total > 0 else 100
-                            if pct < 30:
-                                logger.info(
-                                    "Auto GPU mode: job used %d/%d MiB (%.0f%%) — "
-                                    "upgrading to VRAM packing for higher throughput",
-                                    used, total, pct)
-                                self.slot_mgr.mode = "vram"
-                                self.slot_mgr.max_jobs_per_gpu = max(
-                                    int(90 / max(pct, 1)), 2)
-                                logger.info("  max_jobs_per_gpu set to %d",
-                                            self.slot_mgr.max_jobs_per_gpu)
-                            else:
-                                logger.info(
-                                    "Auto GPU mode: job used %.0f%% VRAM — "
-                                    "keeping exclusive mode", pct)
-                    self._auto_gpu_mode = False  # only check once
-                except Exception:
-                    self._auto_gpu_mode = False
+                # Find the first successful completion (has metrics.json
+                # with status=COMPLETED and ran for >30 seconds)
+                success_gpu = None
+                for idea_id, gpu_key in finished:
+                    metrics_path = self.results_dir / idea_id / "metrics.json"
+                    if metrics_path.exists():
+                        try:
+                            m = json.loads(metrics_path.read_text(encoding="utf-8"))
+                            if m.get("status") == "COMPLETED" and m.get("training_time", 0) > 30:
+                                success_gpu = gpu_key
+                                break
+                        except (json.JSONDecodeError, OSError):
+                            pass
+
+                if success_gpu is not None:
+                    try:
+                        usage = _query_all_gpu_usage()
+                        if usage:
+                            gpu_id = int(str(success_gpu).split(":")[0]) if ":" in str(success_gpu) else success_gpu
+                            if gpu_id in usage:
+                                used, total = usage[gpu_id]
+                                pct = used / total * 100 if total > 0 else 100
+                                if pct < 30:
+                                    logger.info(
+                                        "Auto GPU mode: successful job used %d/%d MiB (%.0f%%) — "
+                                        "upgrading to VRAM packing for higher throughput",
+                                        used, total, pct)
+                                    self.slot_mgr.mode = "vram"
+                                    self.slot_mgr.max_jobs_per_gpu = max(
+                                        int(90 / max(pct, 1)), 2)
+                                    logger.info("  max_jobs_per_gpu set to %d",
+                                                self.slot_mgr.max_jobs_per_gpu)
+                                else:
+                                    logger.info(
+                                        "Auto GPU mode: successful job used %.0f%% VRAM — "
+                                        "keeping exclusive mode", pct)
+                        self._auto_gpu_mode = False  # only check once
+                    except Exception:
+                        self._auto_gpu_mode = False
+                # Don't disable auto_gpu_mode on failures — wait for a
+                # real success to make the decision.
 
             # 3a. Check active eval processes
             eval_finished = []
