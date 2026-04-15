@@ -339,8 +339,7 @@ Examples:
                                    encoding="utf-8")
             print(f"Registered: {args.name} (mAP={args.map})")
             print(f"  Saved to {manual_path}")
-            print(f"  Professor and research agents will see this on next cycle.")
-            # Tier 1 SOP: extract method spec from source code
+            # SOP: extract method spec from source code (orze-pro)
             if getattr(args, "source_dir", None):
                 from orze.extensions import get_extension
                 _sops = get_extension("sops")
@@ -352,6 +351,16 @@ Examples:
                     print("  (Install orze-pro for method analysis)")
                 if method_path:
                     print(f"  Method spec written to {method_path}")
+            # SOP: trigger professor to analyze the new result and create portfolio
+            trigger_path = results_dir / "_trigger_professor"
+            trigger_path.write_text(
+                f"new_external_result: {args.name} (mAP={args.map}). "
+                f"Read the method spec at results/_methods/{args.name}.yaml, "
+                f"enrich it with exact loss formulas from the source code, "
+                f"then write a portfolio to results/_portfolios/ that ports "
+                f"this method to all viable backbones.",
+                encoding="utf-8")
+            print(f"  Professor triggered to analyze and create portfolio.")
         elif action == "rm":
             if manual_path.exists():
                 entries = _json.loads(manual_path.read_text(encoding="utf-8"))
