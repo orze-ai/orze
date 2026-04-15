@@ -372,7 +372,11 @@ class Orze(OrzePhaseMixin):
     }
 
     def _hot_reload_config(self):
-        """Reload orze.yaml and update safe-to-change config keys."""
+        """Reload orze.yaml and update safe-to-change config keys.
+
+        For 'roles', merges disk config with runtime-added roles (e.g.
+        auto-enabled thinker/data_analyst) instead of replacing outright.
+        """
         cfg_path = self.cfg.get("_config_path")
         if not cfg_path or not Path(cfg_path).exists():
             return
@@ -380,7 +384,22 @@ class Orze(OrzePhaseMixin):
             raw = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8")) or {}
             changed = []
             for key in self._HOT_RELOAD_KEYS:
-                if key in raw and raw[key] != self.cfg.get(key):
+                if key not in raw:
+                    continue
+                if raw[key] == self.cfg.get(key):
+                    continue
+                if key == "roles":
+                    # Merge: update existing roles from disk, but preserve
+                    # runtime-added roles (auto-enabled by orze-pro) that
+                    # are not in the on-disk config.
+                    disk_roles = raw[key] or {}
+                    live_roles = self.cfg.get("roles") or {}
+                    merged = dict(live_roles)  # keep runtime-added roles
+                    merged.update(disk_roles)  # disk config wins for shared keys
+                    if merged != live_roles:
+                        self.cfg[key] = merged
+                        changed.append(key)
+                else:
                     self.cfg[key] = raw[key]
                     changed.append(key)
             if changed:
