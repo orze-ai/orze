@@ -95,34 +95,7 @@ class OrzePhaseMixin:
                     def _raw_f(field):
                         m = re.search(rf"\*\*{re.escape(field)}\*\*:\s*(.+)", raw_text)
                         return m.group(1).strip() if m else None
-                    # SOP: validate idea config before ingesting (orze-pro)
-                    idea_cfg = idea.get("config", {})
-                    sop_cfg = cfg.get("sops", {})
-                    if sop_cfg.get("validate_ideas", True) and idea_cfg:
-                        try:
-                            from orze.extensions import get_extension
-                            _sops = get_extension("sops")
-                            if _sops:
-                                ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
-                                if ts:
-                                    is_valid, err_msg = _sops.validate_idea(
-                                        ts, idea_cfg, cfg.get("python", sys.executable))
-                                    if not is_valid:
-                                        logger.warning("Skipping %s: %s", idea_id, err_msg)
-                                        self.lake.insert(
-                                            idea_id, idea["title"], yaml.dump(idea_cfg),
-                                            raw_text, status="skipped",
-                                            priority=raw_pri,
-                                            category=_raw_f("Category"),
-                                            parent=_raw_f("Parent"),
-                                            hypothesis=err_msg,
-                                            approach_family=idea.get("approach_family",
-                                                                    _raw_f("Approach Family") or "other"),
-                                        )
-                                        continue
-                        except Exception:
-                            pass
-
+                    # Validation moved to launch time (catches ALL idea sources)
                     self.lake.insert(
                         idea_id, idea["title"], yaml.dump(idea_cfg),
                         raw_text,
@@ -181,82 +154,40 @@ class OrzePhaseMixin:
                 load_portfolios = _sop_t2.load_portfolios
                 load_method_specs = _sop_t2.load_method_specs
                 generate_portfolio_ideas = _sop_t2.generate_portfolio_ideas
-                validate_bb = getattr(_sop_t2, "validate_portfolio_backbone", None)
-                trigger_impl = getattr(_sop_t2, "trigger_implementation", None)
 
                 portfolios = load_portfolios(self.results_dir)
                 methods = load_method_specs(self.results_dir)
-                python = cfg.get("python", sys.executable)
 
                 for portfolio in portfolios:
-                    if portfolio.get("status") != "active":
-                        continue
-                    method_name = portfolio.get("method", "")
-                    method = methods.get(method_name, {})
-                    grid = portfolio.get("hyperparameter_grid", {})
-                    blocked = {b["name"] for b in portfolio.get("blocked_backbones", [])}
-
-                    # Validate each backbone before generating
-                    valid_backbones = []
-                    for bb in portfolio.get("backbones", []):
-                        bb_name = bb.get("name", bb.get("train_script", "?"))
-                        if bb_name in blocked:
-                            continue  # already blocked, don't re-trigger
-                        if validate_bb:
-                            is_valid, err = validate_bb(bb, grid, method, python)
-                            if not is_valid:
-                                logger.warning(
-                                    "Portfolio '%s': backbone '%s' blocked — %s",
-                                    portfolio.get("name", "?"), bb_name, err)
-                                # Record blocked backbone
-                                portfolio.setdefault("blocked_backbones", [])
-                                import datetime
-                                portfolio["blocked_backbones"].append({
-                                    "name": bb_name,
-                                    "reason": err,
-                                    "triggered_at": datetime.datetime.now().isoformat(),
-                                })
-                                # Trigger implementation
-                                if trigger_impl:
-                                    trigger_impl(bb, method, err, self.results_dir)
-                                continue
-                        valid_backbones.append(bb)
-
-                    # Generate ideas only for valid backbones
-                    if valid_backbones:
-                        # Temporarily replace backbones with valid ones
-                        orig_backbones = portfolio.get("backbones", [])
-                        portfolio["backbones"] = valid_backbones
-                        new_ideas = generate_portfolio_ideas(
-                            portfolio, self.results_dir, methods)
-                        portfolio["backbones"] = orig_backbones
-
-                        for idea in new_ideas:
-                            self.lake.insert(
-                                idea["idea_id"], idea["title"],
-                                yaml.dump(idea["config"]),
-                                "", status="queued",
-                                priority=idea.get("priority", "high"),
-                                approach_family=idea.get("approach_family", "portfolio"),
-                            )
-                        if new_ideas:
+                    new_ideas = generate_portfolio_ideas(
+                        portfolio, self.results_dir, methods)
+                    for idea in new_ideas:
+                        self.lake.insert(
+                            idea["idea_id"], idea["title"],
+                            yaml.dump(idea["config"]),
+                            "", status="queued",
+                            priority=idea.get("priority", "high"),
+                            approach_family=idea.get("approach_family", "portfolio"),
+                        )
+                    if new_ideas:
+                        # Track generated IDs in portfolio file
+                        pf = portfolio.get("_file")
+                        if pf:
                             portfolio.setdefault("generated_ideas", [])
                             portfolio["generated_ideas"].extend(
                                 [i["idea_id"] for i in new_ideas])
-                            logger.info("Portfolio '%s': generated %d ideas",
-                                        portfolio.get("name", "?"), len(new_ideas))
-
-                    # Persist portfolio state (blocked backbones, generated IDs)
-                    pf = portfolio.get("_file")
-                    if pf:
-                        try:
-                            Path(pf).write_text(
-                                yaml.dump({k: v for k, v in portfolio.items()
-                                           if k != "_file"},
-                                          default_flow_style=False),
-                                encoding="utf-8")
-                        except OSError:
-                            pass
+                            try:
+                                Path(pf).write_text(
+                                    yaml.dump({k: v for k, v in portfolio.items()
+                                               if k != "_file"},
+                                              default_flow_style=False),
+                                    encoding="utf-8")
+                            except OSError:
+                                pass
+                        logger.info("Portfolio '%s': generated %d ideas",
+                                    portfolio.get("name", "?"), len(new_ideas))
+                    # Launch-time validate_idea catches bad configs — no need
+                    # for pre-generation validation here.
         except ImportError:
             pass
         except Exception as e:
@@ -620,6 +551,28 @@ class OrzePhaseMixin:
                             _record_failure(
                                 self.failure_counts, idea_id)
                             continue
+                    # SOP: validate idea config right before launch (catches all sources)
+                    try:
+                        from orze.extensions import get_extension
+                        _sops = get_extension("sops")
+                        if _sops:
+                            idea_cfg = ideas.get(idea_id, {}).get("config", {})
+                            ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
+                            if ts and idea_cfg:
+                                is_valid, err_msg = _sops.validate_idea(
+                                    ts, idea_cfg, cfg.get("python", sys.executable))
+                                if not is_valid:
+                                    logger.warning("Skipping %s at launch: %s",
+                                                   idea_id, err_msg)
+                                    _write_failure(
+                                        self.results_dir / idea_id,
+                                        f"Config validation failed: {err_msg}")
+                                    if self.lake:
+                                        self.lake.set_status(idea_id, "skipped")
+                                    continue
+                    except Exception:
+                        pass
+
                     logger.info("Launching %s on GPU %s: %s",
                                 idea_id, gpu,
                                 ideas[idea_id]["title"][:50])
