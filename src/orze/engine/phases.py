@@ -569,6 +569,21 @@ class OrzePhaseMixin:
                                         f"Config validation failed: {err_msg}")
                                     if self.lake:
                                         self.lake.set_status(idea_id, "skipped")
+                                    # Trigger engineer to implement missing args
+                                    # (once per script, not per idea)
+                                    if "unrecognized args" in err_msg:
+                                        trigger_key = f"{ts}:{err_msg}"
+                                        if not hasattr(self, '_impl_triggered'):
+                                            self._impl_triggered = set()
+                                        if trigger_key not in self._impl_triggered:
+                                            self._impl_triggered.add(trigger_key)
+                                            _sop_t2 = get_extension("sop_tier2")
+                                            if _sop_t2:
+                                                methods = _sop_t2.load_method_specs(self.results_dir)
+                                                _sop_t2.trigger_implementation(
+                                                    {"train_script": ts, "name": ts},
+                                                    next(iter(methods.values()), {}),
+                                                    err_msg, self.results_dir)
                                     continue
                     except Exception:
                         pass
