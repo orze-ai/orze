@@ -96,6 +96,7 @@ class OrzePhaseMixin:
                         m = re.search(rf"\*\*{re.escape(field)}\*\*:\s*(.+)", raw_text)
                         return m.group(1).strip() if m else None
                     # Validation moved to launch time (catches ALL idea sources)
+                    idea_cfg = idea.get("config", {})
                     self.lake.insert(
                         idea_id, idea["title"], yaml.dump(idea_cfg),
                         raw_text,
