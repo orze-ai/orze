@@ -113,40 +113,73 @@ def compose_skills(role_cfg: dict, project_root: Path,
             content = _substitute(content, template_vars)
         return content
 
-    # Skills path: compose from list
+    # Skills path: compose from list, honoring frontmatter ``order`` and
+    # ``trigger`` gates.
     skills_list = role_cfg["skills"]
     if not isinstance(skills_list, list):
         logger.warning("'skills' must be a list, got %s", type(skills_list).__name__)
         return ""
 
-    loaded: List[Skill] = []
+    loaded_with_meta: List[tuple] = []  # [(Skill, meta_dict)]
     for ref in skills_list:
         ref = str(ref).strip()
         if ref.startswith("@"):
             name = ref[1:]
             try:
-                loaded.append(load_builtin(name))
+                loaded_with_meta.append((load_builtin(name), {}))
             except FileNotFoundError as e:
                 logger.warning("Skill %s: %s", ref, e)
         else:
             path = Path(ref)
             if not path.is_absolute():
                 path = project_root / path
+            if not path.exists():
+                logger.warning("Skill %s: file not found", ref)
+                continue
             try:
-                loaded.append(load_file(path))
-            except FileNotFoundError as e:
+                text = path.read_text(encoding="utf-8")
+                meta, body = parse_frontmatter(text)
+                skill = Skill(name=meta.get("name", path.stem), content=body)
+                loaded_with_meta.append((skill, meta))
+            except OSError as e:
                 logger.warning("Skill %s: %s", ref, e)
 
-    if not loaded:
+    # Trigger gating: skills whose trigger evaluates False are omitted.
+    # Role passes the evaluation context via role_cfg["_trigger_context"].
+    try:
+        from orze.skills.triggers import evaluate_trigger
+    except ImportError:  # should not happen, but fail open
+        evaluate_trigger = None  # type: ignore
+
+    trigger_ctx = role_cfg.get("_trigger_context", {}) or {}
+    gated: List[tuple] = []
+    for skill, meta in loaded_with_meta:
+        trig = meta.get("trigger") if meta else None
+        if evaluate_trigger is None or trig is None:
+            gated.append((skill, meta))
+            continue
+        try:
+            if evaluate_trigger(trig, trigger_ctx):
+                gated.append((skill, meta))
+            else:
+                logger.info("Skill %s gated out by trigger %r", skill.name, trig)
+        except ValueError as e:
+            logger.warning("Skill %s: unknown trigger %r (%s) — including",
+                           skill.name, trig, e)
+            gated.append((skill, meta))
+
+    # Order sorting — lower ``order`` composed first.
+    gated.sort(key=lambda pair: int((pair[1] or {}).get("order", 100)))
+
+    if not gated:
         return ""
 
-    # Compose
-    sections = [skill.content for skill in loaded]
+    sections = [skill.content for skill, _ in gated]
     composed = "\n\n---\n\n".join(sections)
 
     if template_vars:
         composed = _substitute(composed, template_vars)
 
     logger.info("Composed %d skills: %s",
-                len(loaded), ", ".join(s.name for s in loaded))
+                len(gated), ", ".join(s.name for s, _ in gated))
     return composed

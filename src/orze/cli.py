@@ -53,6 +53,78 @@ def setup_logging(verbose: bool = False):
 
 
 # ---------------------------------------------------------------------------
+# sop subcommand
+# ---------------------------------------------------------------------------
+
+def _run_sop_subcommand(args) -> int:
+    from orze.skills.registry import discover_skills, validate_wiring
+    from orze.skills.receipts import read_receipt
+
+    project_root = Path(args.project_root).resolve()
+    sub = getattr(args, "sop_command", None)
+
+    if sub == "list":
+        skills = discover_skills(project_root)
+        if not skills:
+            print(f"No SOP skills found in {project_root}/skills/")
+            return 0
+        print(f"{'ID':<22} {'ROLE':<14} {'ORDER':<6} {'TRIGGER':<32} NAME")
+        print("-" * 90)
+        for s in sorted(skills, key=lambda x: ((x.role or ''), x.order)):
+            trig = s.trigger or "always"
+            print(f"{s.id:<22} {(s.role or '-'):<14} {s.order:<6} "
+                  f"{trig:<32} {s.name}")
+        return 0
+
+    if sub == "check":
+        skills = discover_skills(project_root)
+        issues = validate_wiring(skills)
+        errors = [i for i in issues if i.severity == "error"]
+        warnings = [i for i in issues if i.severity == "warning"]
+        if not issues:
+            print(f"OK: {len(skills)} skills, no wiring issues")
+            return 0
+        for i in errors:
+            print(f"ERROR [{i.skill_id}] {i.message}")
+        for i in warnings:
+            print(f"WARN  [{i.skill_id}] {i.message}")
+        print(f"\n{len(skills)} skills, {len(errors)} error(s), "
+              f"{len(warnings)} warning(s)")
+        return 1 if errors else 0
+
+    if sub == "status":
+        skills = discover_skills(project_root)
+        receipts_dir = project_root / args.results_dir / "_receipts"
+        last_evidence: dict = {}
+        if receipts_dir.exists():
+            for rpath in sorted(receipts_dir.glob("*.json")):
+                try:
+                    r = read_receipt(rpath)
+                except Exception:
+                    continue
+                for sid in r.skills_declared:
+                    evidenced = sid in r.skills_evidenced
+                    prev = last_evidence.get(sid)
+                    if prev is None or r.cycle > prev[1]:
+                        last_evidence[sid] = (r.role, r.cycle, evidenced)
+        print(f"{'ID':<22} {'ROLE':<14} {'LAST_CYCLE':<11} EVIDENCED")
+        print("-" * 65)
+        for s in sorted(skills, key=lambda x: ((x.role or ''), x.order)):
+            ev = last_evidence.get(s.id)
+            if ev is None:
+                print(f"{s.id:<22} {(s.role or '-'):<14} "
+                      f"{'never':<11} -")
+            else:
+                _role, cycle, flag = ev
+                print(f"{s.id:<22} {(s.role or '-'):<14} "
+                      f"{cycle:<11} {'yes' if flag else 'NO'}")
+        return 0
+
+    print("usage: orze sop {list|check|status}")
+    return 2
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -245,12 +317,31 @@ Examples:
         "--force", action="store_true",
         help="Regenerate even if already bootstrapped")
 
+    # --- sop: inspect and validate SOP skills ---
+    sop_parser = subparsers.add_parser(
+        "sop", help="Inspect SOP skills")
+    sop_sub = sop_parser.add_subparsers(dest="sop_command")
+    sop_list_p = sop_sub.add_parser("list", help="List registered SOP skills")
+    sop_list_p.add_argument("--project-root", default=".",
+                            help="Project root (default: cwd)")
+    sop_check_p = sop_sub.add_parser(
+        "check", help="Validate SOP wiring (requires/consumed_by/overrides)")
+    sop_check_p.add_argument("--project-root", default=".")
+    sop_status_p = sop_sub.add_parser(
+        "status",
+        help="Show last-run execution evidence per SOP from receipts")
+    sop_status_p.add_argument("--project-root", default=".")
+    sop_status_p.add_argument("--results-dir", default="results")
+
     args = parser.parse_args()
 
     setup_logging(args.verbose)
 
     # --- subcommand dispatch ---
     command = getattr(args, "command", None)
+
+    if command == "sop":
+        return _run_sop_subcommand(args)
 
     if command == "stop":
         from orze.lifecycle import do_stop
