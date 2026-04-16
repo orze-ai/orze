@@ -264,9 +264,13 @@ Examples:
     sop_parser = subparsers.add_parser(
         "sop", help="Inspect SOP skills")
     sop_sub = sop_parser.add_subparsers(dest="sop_command")
-    sop_list_p = sop_sub.add_parser("list", help="List registered SOP skills")
+    sop_list_p = sop_sub.add_parser(
+        "list", help="List all SOPs (skills + validators + methods + portfolios)")
     sop_list_p.add_argument("--project-root", default=".",
                             help="Project root (default: cwd)")
+    sop_list_p.add_argument("--results-dir", default="results",
+                            help="Results dir for Tier 2 YAML SOPs "
+                                 "(default: results)")
     sop_check_p = sop_sub.add_parser(
         "check", help="Validate SOP wiring (requires/consumed_by/overrides)")
     sop_check_p.add_argument("--project-root", default=".")
