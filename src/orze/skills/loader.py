@@ -123,7 +123,26 @@ def compose_skills(role_cfg: dict, project_root: Path,
     loaded_with_meta: List[tuple] = []  # [(Skill, meta_dict)]
     for ref in skills_list:
         ref = str(ref).strip()
-        if ref.startswith("@"):
+        if ref.startswith("@sop:"):
+            # Bundled SOP from orze-pro (tier 1, static).
+            # Delegated import so orze (basic) has no hard dependency on
+            # orze-pro (pro feature).
+            name = ref[len("@sop:"):]
+            try:
+                from orze_pro.skills.bundled import load_bundled_skill
+            except ImportError:
+                logger.warning("Skill %s: orze-pro not installed, "
+                               "bundled SOPs unavailable", ref)
+                continue
+            try:
+                text, path = load_bundled_skill(name)
+                meta, body = parse_frontmatter(text)
+                skill = Skill(name=meta.get("name", path.stem.replace(
+                    ".skill", "")), content=body)
+                loaded_with_meta.append((skill, meta))
+            except FileNotFoundError as e:
+                logger.warning("Skill %s: %s", ref, e)
+        elif ref.startswith("@"):
             name = ref[1:]
             try:
                 loaded_with_meta.append((load_builtin(name), {}))

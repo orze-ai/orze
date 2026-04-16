@@ -109,6 +109,34 @@ def test_compose_skills_skips_gated_skills(tmp_path):
     assert "GATED_BODY" not in composed
 
 
+def test_compose_skills_resolves_sop_prefix_via_orze_pro(tmp_path):
+    """@sop:<name> refs delegate to orze_pro.skills.bundled.load_bundled_skill.
+
+    This test verifies the loader-side plumbing: when orze-pro is importable,
+    @sop:<name> should be resolved. We use the smoke SOP that ships with
+    orze-pro as the fixture.
+    """
+    pytest = __import__("pytest")
+    try:
+        import orze_pro.skills.bundled  # noqa: F401
+    except ImportError:
+        pytest.skip("orze-pro not installed")
+    role_cfg = {"skills": ["@sop:_smoke"]}
+    composed = compose_skills(role_cfg, tmp_path, template_vars=None)
+    assert "Smoke SOP" in composed
+
+
+def test_compose_skills_unknown_sop_prefix_logs_and_skips(tmp_path, caplog):
+    pytest = __import__("pytest")
+    try:
+        import orze_pro.skills.bundled  # noqa: F401
+    except ImportError:
+        pytest.skip("orze-pro not installed")
+    role_cfg = {"skills": ["@sop:nonexistent_bundled"]}
+    composed = compose_skills(role_cfg, tmp_path, template_vars=None)
+    assert composed == ""  # nothing loaded
+
+
 def test_compose_skills_unknown_trigger_is_included_and_warns(tmp_path, caplog):
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
