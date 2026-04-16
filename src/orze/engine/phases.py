@@ -172,6 +172,8 @@ class OrzePhaseMixin:
             pass  # pro not installed or filter failed — continue normally
 
         # 5a-pre2. Tier 2 SOP: auto-generate ideas from portfolios (orze-pro)
+        # Validates each backbone's train_script BEFORE generating ideas.
+        # If validation fails, triggers thinker/professor to implement.
         try:
             from orze.extensions import get_extension
             _sop_t2 = get_extension("sop_tier2")
@@ -179,35 +181,82 @@ class OrzePhaseMixin:
                 load_portfolios = _sop_t2.load_portfolios
                 load_method_specs = _sop_t2.load_method_specs
                 generate_portfolio_ideas = _sop_t2.generate_portfolio_ideas
+                validate_bb = getattr(_sop_t2, "validate_portfolio_backbone", None)
+                trigger_impl = getattr(_sop_t2, "trigger_implementation", None)
+
                 portfolios = load_portfolios(self.results_dir)
                 methods = load_method_specs(self.results_dir)
+                python = cfg.get("python", sys.executable)
+
                 for portfolio in portfolios:
-                    new_ideas = generate_portfolio_ideas(portfolio, self.results_dir, methods)
-                    for idea in new_ideas:
-                        self.lake.insert(
-                            idea["idea_id"], idea["title"],
-                            yaml.dump(idea["config"]),
-                            "", status="queued",
-                            priority=idea.get("priority", "high"),
-                            approach_family=idea.get("approach_family", "portfolio"),
-                        )
-                    if new_ideas:
-                        # Track generated IDs in portfolio file
-                        pf = portfolio.get("_file")
-                        if pf:
+                    if portfolio.get("status") != "active":
+                        continue
+                    method_name = portfolio.get("method", "")
+                    method = methods.get(method_name, {})
+                    grid = portfolio.get("hyperparameter_grid", {})
+                    blocked = {b["name"] for b in portfolio.get("blocked_backbones", [])}
+
+                    # Validate each backbone before generating
+                    valid_backbones = []
+                    for bb in portfolio.get("backbones", []):
+                        bb_name = bb.get("name", bb.get("train_script", "?"))
+                        if bb_name in blocked:
+                            continue  # already blocked, don't re-trigger
+                        if validate_bb:
+                            is_valid, err = validate_bb(bb, grid, method, python)
+                            if not is_valid:
+                                logger.warning(
+                                    "Portfolio '%s': backbone '%s' blocked — %s",
+                                    portfolio.get("name", "?"), bb_name, err)
+                                # Record blocked backbone
+                                portfolio.setdefault("blocked_backbones", [])
+                                import datetime
+                                portfolio["blocked_backbones"].append({
+                                    "name": bb_name,
+                                    "reason": err,
+                                    "triggered_at": datetime.datetime.now().isoformat(),
+                                })
+                                # Trigger implementation
+                                if trigger_impl:
+                                    trigger_impl(bb, method, err, self.results_dir)
+                                continue
+                        valid_backbones.append(bb)
+
+                    # Generate ideas only for valid backbones
+                    if valid_backbones:
+                        # Temporarily replace backbones with valid ones
+                        orig_backbones = portfolio.get("backbones", [])
+                        portfolio["backbones"] = valid_backbones
+                        new_ideas = generate_portfolio_ideas(
+                            portfolio, self.results_dir, methods)
+                        portfolio["backbones"] = orig_backbones
+
+                        for idea in new_ideas:
+                            self.lake.insert(
+                                idea["idea_id"], idea["title"],
+                                yaml.dump(idea["config"]),
+                                "", status="queued",
+                                priority=idea.get("priority", "high"),
+                                approach_family=idea.get("approach_family", "portfolio"),
+                            )
+                        if new_ideas:
                             portfolio.setdefault("generated_ideas", [])
                             portfolio["generated_ideas"].extend(
                                 [i["idea_id"] for i in new_ideas])
-                            try:
-                                Path(pf).write_text(
-                                    yaml.dump({k: v for k, v in portfolio.items()
-                                               if k != "_file"},
-                                              default_flow_style=False),
-                                    encoding="utf-8")
-                            except OSError:
-                                pass
-                        logger.info("Portfolio '%s': generated %d ideas",
-                                    portfolio.get("name", "?"), len(new_ideas))
+                            logger.info("Portfolio '%s': generated %d ideas",
+                                        portfolio.get("name", "?"), len(new_ideas))
+
+                    # Persist portfolio state (blocked backbones, generated IDs)
+                    pf = portfolio.get("_file")
+                    if pf:
+                        try:
+                            Path(pf).write_text(
+                                yaml.dump({k: v for k, v in portfolio.items()
+                                           if k != "_file"},
+                                          default_flow_style=False),
+                                encoding="utf-8")
+                        except OSError:
+                            pass
         except ImportError:
             pass
         except Exception as e:
