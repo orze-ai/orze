@@ -53,75 +53,18 @@ def setup_logging(verbose: bool = False):
 
 
 # ---------------------------------------------------------------------------
-# sop subcommand
+# sop subcommand (delegates to orze-pro; SOPs are a pro feature)
 # ---------------------------------------------------------------------------
 
 def _run_sop_subcommand(args) -> int:
-    from orze.skills.registry import discover_skills, validate_wiring
-    from orze.skills.receipts import read_receipt
-
-    project_root = Path(args.project_root).resolve()
-    sub = getattr(args, "sop_command", None)
-
-    if sub == "list":
-        skills = discover_skills(project_root)
-        if not skills:
-            print(f"No SOP skills found in {project_root}/skills/")
-            return 0
-        print(f"{'ID':<22} {'ROLE':<14} {'ORDER':<6} {'TRIGGER':<32} NAME")
-        print("-" * 90)
-        for s in sorted(skills, key=lambda x: ((x.role or ''), x.order)):
-            trig = s.trigger or "always"
-            print(f"{s.id:<22} {(s.role or '-'):<14} {s.order:<6} "
-                  f"{trig:<32} {s.name}")
-        return 0
-
-    if sub == "check":
-        skills = discover_skills(project_root)
-        issues = validate_wiring(skills)
-        errors = [i for i in issues if i.severity == "error"]
-        warnings = [i for i in issues if i.severity == "warning"]
-        if not issues:
-            print(f"OK: {len(skills)} skills, no wiring issues")
-            return 0
-        for i in errors:
-            print(f"ERROR [{i.skill_id}] {i.message}")
-        for i in warnings:
-            print(f"WARN  [{i.skill_id}] {i.message}")
-        print(f"\n{len(skills)} skills, {len(errors)} error(s), "
-              f"{len(warnings)} warning(s)")
-        return 1 if errors else 0
-
-    if sub == "status":
-        skills = discover_skills(project_root)
-        receipts_dir = project_root / args.results_dir / "_receipts"
-        last_evidence: dict = {}
-        if receipts_dir.exists():
-            for rpath in sorted(receipts_dir.glob("*.json")):
-                try:
-                    r = read_receipt(rpath)
-                except Exception:
-                    continue
-                for sid in r.skills_declared:
-                    evidenced = sid in r.skills_evidenced
-                    prev = last_evidence.get(sid)
-                    if prev is None or r.cycle > prev[1]:
-                        last_evidence[sid] = (r.role, r.cycle, evidenced)
-        print(f"{'ID':<22} {'ROLE':<14} {'LAST_CYCLE':<11} EVIDENCED")
-        print("-" * 65)
-        for s in sorted(skills, key=lambda x: ((x.role or ''), x.order)):
-            ev = last_evidence.get(s.id)
-            if ev is None:
-                print(f"{s.id:<22} {(s.role or '-'):<14} "
-                      f"{'never':<11} -")
-            else:
-                _role, cycle, flag = ev
-                print(f"{s.id:<22} {(s.role or '-'):<14} "
-                      f"{cycle:<11} {'yes' if flag else 'NO'}")
-        return 0
-
-    print("usage: orze sop {list|check|status}")
-    return 2
+    try:
+        from orze_pro.cli_sop import run_sop_subcommand
+    except ImportError:
+        print("The 'sop' subcommand requires orze-pro. Install orze-pro "
+              "to use SOP registry, wiring validation, and execution "
+              "status commands.")
+        return 2
+    return run_sop_subcommand(args)
 
 
 # ---------------------------------------------------------------------------
