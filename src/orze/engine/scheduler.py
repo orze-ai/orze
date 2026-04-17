@@ -85,7 +85,22 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
 
     def sort_key(idea_id):
         pri = PRIORITY_ORDER.get(ideas[idea_id]["priority"], 2)
-        return (pri, idea_id)
+        # Inference-only ideas run in minutes, training ideas run in hours.
+        # When all GPU slots are held by long training runs, inference-only
+        # ideas can starve indefinitely (observed: a domain_lora_routing eval
+        # queued "P1" in retrospection for 10+ cycles, never dispatched).
+        # Boost them one tier within their priority bucket so a freed GPU
+        # picks the cheap eval before the next heavy train.
+        cfg = ideas[idea_id].get("config") or {}
+        is_inference_only = False
+        strategy = (cfg.get("strategy") or "").lower()
+        if strategy == "eval_only" or strategy.endswith("_eval"):
+            is_inference_only = True
+        elif cfg.get("lora_path") and not cfg.get("training"):
+            # Has a checkpoint to evaluate, no training section → inference
+            is_inference_only = True
+        inference_boost = 0 if is_inference_only else 1
+        return (pri, inference_boost, idea_id)
 
     unclaimed.sort(key=sort_key)
     return unclaimed
