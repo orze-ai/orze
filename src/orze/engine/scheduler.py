@@ -91,14 +91,19 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
         # queued "P1" in retrospection for 10+ cycles, never dispatched).
         # Boost them one tier within their priority bucket so a freed GPU
         # picks the cheap eval before the next heavy train.
+        #
+        # Signals are conservative so projects without a matching
+        # convention aren't silently reordered:
+        #   1. explicit config flag inference_only: true
+        #   2. strategy name == "eval_only" or ending in "_eval"
+        # Other projects can opt in by setting inference_only: true on
+        # ideas that only load a checkpoint and evaluate.
         cfg = ideas[idea_id].get("config") or {}
-        is_inference_only = False
-        strategy = (cfg.get("strategy") or "").lower()
-        if strategy == "eval_only" or strategy.endswith("_eval"):
-            is_inference_only = True
-        elif cfg.get("lora_path") and not cfg.get("training"):
-            # Has a checkpoint to evaluate, no training section → inference
-            is_inference_only = True
+        strategy = str(cfg.get("strategy") or "").lower()
+        is_inference_only = (
+            bool(cfg.get("inference_only"))
+            or strategy == "eval_only"
+            or strategy.endswith("_eval"))
         inference_boost = 0 if is_inference_only else 1
         return (pri, inference_boost, idea_id)
 

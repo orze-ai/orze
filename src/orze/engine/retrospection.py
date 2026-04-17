@@ -60,11 +60,16 @@ def _detect_plateau(results_dir: Path, window: int = 200,
     """Check if the best primary metric has improved in the last N completions.
 
     Only counts experiments that evaluated on the full benchmark set — detected
-    by the number of metric keys starting with the benchmark prefix (`wer_`,
-    `acc_`, `score_`). Single-dataset hyperparameter shards (-ht-*) and
-    eval-only sub-runs would otherwise poison the comparison with their
-    tiny-scope avg_wer values (1-3 %) that never correspond to real
-    leaderboard progress.
+    by the number of numeric per-benchmark metric keys in metrics.json. A
+    per-benchmark key is any flat numeric field in metrics.json OTHER than
+    the reserved aggregate/meta keys (avg_wer, training_time, etc.). This
+    catches common benchmark conventions — wer_/acc_/map_/iou_/bleu_/f1_
+    prefixed dataset columns, *_score suffixes, etc. — without needing to
+    enumerate a prefix whitelist.
+
+    Single-dataset hyperparameter shards (-ht-*) and eval-only sub-runs
+    would otherwise poison the comparison with their tiny-scope primary
+    metric values that never correspond to real leaderboard progress.
 
     Returns (is_plateau: bool, message: str).
     """
@@ -79,14 +84,21 @@ def _detect_plateau(results_dir: Path, window: int = 200,
             m = json.loads(mf.read_text(encoding="utf-8"))
             if m.get("status") != "COMPLETED":
                 continue
-            # Require full-benchmark coverage: count metric keys whose name
-            # matches the convention (<prefix>_<dataset>). This filters shard
-            # runs that only evaluated 1-2 datasets.
+            # Require full-benchmark coverage: count numeric per-dataset
+            # metric keys in metrics.json. Reserved aggregate/meta keys
+            # (avg_wer, status, training_time, ...) are excluded, and only
+            # flat numerics count (nested dicts are run-level metadata).
+            # This works for any benchmark naming convention — wer_ami,
+            # acc_cifar, map_coco, bleu_wmt, f1_squad — without needing a
+            # prefix whitelist.
+            _META = {"avg_wer", "test_accuracy", "score", "status",
+                     "training_time", "error", "num_eval_tasks",
+                     "timestamp", "eval_time", "avg"}
             bench_keys = sum(
-                1 for k in m
-                if isinstance(k, str) and (
-                    k.startswith("wer_") or k.startswith("acc_")
-                    or k.startswith("score_")))
+                1 for k, v in m.items()
+                if isinstance(k, str) and k not in _META
+                and not k.startswith("_")
+                and isinstance(v, (int, float)) and not isinstance(v, bool))
             if bench_keys < min_metric_keys:
                 continue
             # Use avg_wer as primary metric; fall back to any numeric primary
