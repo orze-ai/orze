@@ -721,6 +721,10 @@ class Orze(OrzePhaseMixin):
             # never emit metrics.json otherwise leave the leaderboard
             # blind to mid-run progress. Harvester fills in metrics.json
             # from train_output.log so professor/leaderboard see reality.
+            # When the bundled regex defaults miss (exotic log formats),
+            # orze-pro's pattern_inference can learn patterns via LLM
+            # and cache them keyed by train_script mtime — one call per
+            # new script, free thereafter.
             if self.iteration % 20 == 0:
                 try:
                     from orze.engine.metric_harvester import harvest_running_ideas
@@ -730,9 +734,22 @@ class Orze(OrzePhaseMixin):
                             "primary_metric", "map")
                         extra = mh_cfg.get("patterns") or []
                         maximize = mh_cfg.get("maximize", True)
+                        inferrer = None
+                        if mh_cfg.get("llm_fallback", True):
+                            try:
+                                from orze_pro.agents.pattern_inference import (
+                                    infer_metric_patterns,
+                                )
+                                inferrer = infer_metric_patterns
+                            except ImportError:
+                                inferrer = None
+                        ts_str = cfg.get("train_script")
+                        ts_path = Path(ts_str) if ts_str else None
                         n = harvest_running_ideas(
                             self.results_dir, primary, extra,
-                            maximize=maximize)
+                            maximize=maximize,
+                            pattern_inferrer=inferrer,
+                            train_script=ts_path)
                         if n > 0:
                             logger.info(
                                 "Metric harvest: updated %d running idea(s)", n)

@@ -12,11 +12,31 @@ and writes a harvested `metrics.json`. It only rewrites files it
 authored (sentinel `_source: "harvested_from_log"`); genuine metrics
 written by the training script itself are left untouched.
 
+Pattern resolution order (first hit wins):
+
+    1. Cached patterns learned previously for this (train_script, metric)
+       combination — stored in `results/_metric_patterns_cache.json`,
+       keyed by train_script mtime so edits invalidate the cache.
+    2. User-supplied `metric_harvest.patterns` from orze.yaml.
+    3. Built-in defaults for common metrics (map/accuracy/auc/f1/loss).
+    4. Generic fallback `<metric>\\s*[=:]\\s*NUMBER`.
+    5. If all of the above miss and a `pattern_inferrer` callable is
+       passed in, invoke it with (train_script_path, log_sample,
+       metric_name). Inferrer returns a list of regex strings; we cache
+       them keyed by mtime and retry extraction.
+
+This keeps orze deterministic by default — the LLM-backed inferrer
+(which lives in orze-pro) is an optional upgrade, not a hard
+dependency.
+
 CALLING SPEC:
-    harvest_running_ideas(results_dir, primary_metric, extra_patterns) -> int
+    harvest_running_ideas(
+        results_dir, primary_metric="map", extra_patterns=None,
+        maximize=True, pattern_inferrer=None, train_script=None) -> int
         Scan idea-* subdirs, update harvested metrics.json files, return count.
 
-    extract_best_metric(log_text, metric_name, extra_patterns) -> (best, last_epoch) | None
+    extract_best_metric(log_text, metric_name, extra_patterns, maximize)
+        -> (best, last_epoch) | None
         Pull best numeric score for metric_name from log text.
 """
 from __future__ import annotations
@@ -25,11 +45,19 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 HARVEST_SOURCE = "harvested_from_log"
+PATTERN_CACHE_FILENAME = "_metric_patterns_cache.json"
+
+# Signature for an optional LLM-backed pattern inferrer. Given a path
+# to the train script, a sample of its log output, and the metric we
+# want to capture, it should return a list of Python regex strings
+# whose group(1) is the numeric value. Empty list = "couldn't figure
+# it out, don't retry soon". The harvester caches whatever is returned.
+PatternInferrer = Callable[[Path, str, str], List[str]]
 
 # Per-metric regex patterns. Each pattern captures the score as group 1.
 # First pattern that yields any match wins — we take the max over all
@@ -95,7 +123,9 @@ def extract_best_metric(log_text: str,
         any_match = False
         for m in regex.finditer(log_text):
             try:
-                v = float(m.group(1))
+                # Strip trailing punctuation (commas, periods from sentence
+                # ends) that may have been greedily captured.
+                v = float(m.group(1).rstrip(".,;:"))
             except (ValueError, IndexError):
                 continue
             any_match = True
@@ -112,22 +142,108 @@ def extract_best_metric(log_text: str,
     return (best, last_epoch)
 
 
+def _load_pattern_cache(results_dir: Path) -> Dict:
+    """Load per-train-script learned patterns. Returns {} on any error."""
+    path = results_dir / PATTERN_CACHE_FILENAME
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_pattern_cache(results_dir: Path, cache: Dict) -> None:
+    path = results_dir / PATTERN_CACHE_FILENAME
+    try:
+        path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
+    except OSError as e:
+        logger.debug("pattern cache write failed: %s", e)
+
+
+def _cached_patterns_for(cache: Dict, train_script: Path,
+                         metric_name: str) -> Tuple[bool, List[str]]:
+    """Return (is_cached, patterns).
+
+    `is_cached=True` means we have a previous result — including a
+    cached empty list ("the inferrer tried and couldn't figure it
+    out") that should prevent re-invocation until the script is
+    edited. `is_cached=False` means no entry or entry is stale.
+    """
+    key = train_script.name
+    entry = cache.get(key)
+    if not entry:
+        return False, []
+    try:
+        current_mtime = train_script.stat().st_mtime
+    except OSError:
+        return False, []
+    if abs(entry.get("mtime", 0) - current_mtime) > 0.5:
+        return False, []  # script was edited — cache is stale
+    pbm = entry.get("patterns_by_metric", {})
+    if metric_name not in pbm:
+        return False, []
+    return True, list(pbm[metric_name])
+
+
+def _store_patterns(cache: Dict, train_script: Path, metric_name: str,
+                    patterns: List[str]) -> None:
+    try:
+        mtime = train_script.stat().st_mtime
+    except OSError:
+        return
+    key = train_script.name
+    entry = cache.setdefault(key, {"patterns_by_metric": {}})
+    entry["mtime"] = mtime
+    entry["patterns_by_metric"][metric_name] = patterns
+
+
+def _resolve_train_script(idea_dir: Path,
+                          default_script: Optional[Path]) -> Optional[Path]:
+    """Find the train script path for a given idea dir."""
+    cfg_path = idea_dir / "idea_config.yaml"
+    if cfg_path.is_file():
+        # Simple regex scan is enough — we only need one key.
+        try:
+            for line in cfg_path.read_text(encoding="utf-8").splitlines():
+                m = re.match(r"\s*train_script\s*:\s*(.+?)\s*$", line)
+                if m:
+                    cand = Path(m.group(1).strip().strip('"').strip("'"))
+                    if not cand.is_absolute():
+                        cand = idea_dir.parent.parent / cand
+                    if cand.is_file():
+                        return cand
+        except OSError:
+            pass
+    return default_script if default_script and default_script.is_file() else None
+
+
 def harvest_running_ideas(results_dir: Path,
                           primary_metric: str = "map",
                           extra_patterns: Optional[List[str]] = None,
-                          maximize: bool = True) -> int:
+                          maximize: bool = True,
+                          pattern_inferrer: Optional[PatternInferrer] = None,
+                          train_script: Optional[Path] = None) -> int:
     """Scan results/idea-*/train_output.log and write harvested metrics.json.
 
     Skips ideas whose metrics.json was authored by the training script
     itself (any file without our `_source` sentinel is left untouched).
+
+    If `pattern_inferrer` is provided, it's invoked ONCE per
+    (train_script, metric) tuple when every built-in and config
+    pattern fails. Its returned regex patterns are cached until the
+    train script is edited.
 
     Returns number of metrics.json files written or updated.
     """
     if not results_dir.is_dir():
         return 0
 
+    cache = _load_pattern_cache(results_dir) if pattern_inferrer else {}
+    cache_dirty = False
     written = 0
-    for idea_dir in results_dir.glob("idea-*"):
+
+    for idea_dir in sorted(results_dir.glob("idea-*")):
         if not idea_dir.is_dir():
             continue
         log_file = idea_dir / "train_output.log"
@@ -141,16 +257,52 @@ def harvest_running_ideas(results_dir: Path,
             except (OSError, json.JSONDecodeError):
                 continue
             if existing.get("_source") != HARVEST_SOURCE:
-                # Genuine metrics.json from training script — do not touch.
                 continue
 
         try:
             log_text = log_file.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
+        if not log_text.strip():
+            continue
+
+        # Pattern stack: cached (if any) > user extras > defaults/fallback.
+        idea_script = _resolve_train_script(idea_dir, train_script)
+        is_cached, cached = (
+            _cached_patterns_for(cache, idea_script, primary_metric)
+            if idea_script else (False, []))
+        patterns = cached + list(extra_patterns or [])
 
         result = extract_best_metric(
-            log_text, primary_metric, extra_patterns, maximize=maximize)
+            log_text, primary_metric, patterns, maximize=maximize)
+
+        # Extract miss + inferrer available + script known + never
+        # tried-or-cached for this (script, metric) → call inferrer.
+        if (result is None
+                and pattern_inferrer is not None
+                and idea_script is not None
+                and not is_cached):
+            try:
+                proposed = pattern_inferrer(
+                    idea_script, log_text, primary_metric) or []
+            except Exception as e:
+                logger.debug("pattern inferrer crashed: %s", e)
+                proposed = []
+            # Cache whatever came back — empty list is a valid "I tried"
+            # signal that prevents re-inference until mtime changes.
+            _store_patterns(cache, idea_script, primary_metric, proposed)
+            cache_dirty = True
+            if proposed:
+                result = extract_best_metric(
+                    log_text, primary_metric, proposed + list(extra_patterns or []),
+                    maximize=maximize)
+                if result is not None:
+                    logger.info(
+                        "metric_harvester: learned %d pattern(s) for "
+                        "%s/%s from %s",
+                        len(proposed), idea_script.name,
+                        primary_metric, idea_dir.name)
+
         if result is None:
             continue
         best, last_epoch = result
@@ -167,5 +319,8 @@ def harvest_running_ideas(results_dir: Path,
             written += 1
         except OSError as e:
             logger.debug("harvest write failed for %s: %s", idea_dir.name, e)
+
+    if cache_dirty:
+        _save_pattern_cache(results_dir, cache)
 
     return written
