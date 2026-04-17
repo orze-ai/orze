@@ -55,8 +55,16 @@ def resume_research(results_dir: Path) -> bool:
     return False
 
 
-def _detect_plateau(results_dir: Path, window: int = 200) -> tuple:
+def _detect_plateau(results_dir: Path, window: int = 200,
+                    min_metric_keys: int = 4) -> tuple:
     """Check if the best primary metric has improved in the last N completions.
+
+    Only counts experiments that evaluated on the full benchmark set — detected
+    by the number of metric keys starting with the benchmark prefix (`wer_`,
+    `acc_`, `score_`). Single-dataset hyperparameter shards (-ht-*) and
+    eval-only sub-runs would otherwise poison the comparison with their
+    tiny-scope avg_wer values (1-3 %) that never correspond to real
+    leaderboard progress.
 
     Returns (is_plateau: bool, message: str).
     """
@@ -69,11 +77,22 @@ def _detect_plateau(results_dir: Path, window: int = 200) -> tuple:
             continue
         try:
             m = json.loads(mf.read_text(encoding="utf-8"))
-            if m.get("status") == "COMPLETED":
-                # Use avg_wer as primary metric; fall back to any numeric primary
-                val = m.get("avg_wer") or m.get("test_accuracy") or m.get("score")
-                if val is not None and isinstance(val, (int, float)) and val > 0:
-                    entries.append((mf.stat().st_mtime, float(val)))
+            if m.get("status") != "COMPLETED":
+                continue
+            # Require full-benchmark coverage: count metric keys whose name
+            # matches the convention (<prefix>_<dataset>). This filters shard
+            # runs that only evaluated 1-2 datasets.
+            bench_keys = sum(
+                1 for k in m
+                if isinstance(k, str) and (
+                    k.startswith("wer_") or k.startswith("acc_")
+                    or k.startswith("score_")))
+            if bench_keys < min_metric_keys:
+                continue
+            # Use avg_wer as primary metric; fall back to any numeric primary
+            val = m.get("avg_wer") or m.get("test_accuracy") or m.get("score")
+            if val is not None and isinstance(val, (int, float)) and val > 0:
+                entries.append((mf.stat().st_mtime, float(val)))
         except Exception:
             continue
 

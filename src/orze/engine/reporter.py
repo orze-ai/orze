@@ -230,11 +230,27 @@ class NotificationProcessor:
     def _archive_to_lake(self, idea_id, status, ideas, cfg):
         try:
             idea_data = ideas.get(idea_id, {})
+            # If the in-memory ideas dict doesn't have this idea (common:
+            # ideas.md was wiped after ingestion), preserve the row that's
+            # already in the lake rather than blanking config/raw_markdown.
+            # Previously INSERT OR REPLACE would overwrite valid config with
+            # empty strings, orphaning the idea on any retry.
+            existing = None
+            if not idea_data:
+                try:
+                    existing = self.lake.get(idea_id) if hasattr(
+                        self.lake, "get") else None
+                except Exception:
+                    existing = None
             config_yaml = ""
-            raw_md = idea_data.get("raw", "")
+            raw_md = idea_data.get("raw", "") if idea_data else (
+                (existing or {}).get("raw_markdown", "") if existing else "")
             if idea_data.get("config"):
                 config_yaml = yaml.dump(idea_data["config"],
                                         default_flow_style=False)
+            elif existing and existing.get("config"):
+                # Reuse stored config so we don't wipe it on status updates.
+                config_yaml = existing["config"]
             eval_metrics = {}
             eval_file = cfg.get("eval_output", "eval_report.json")
             eval_path = self.results_dir / idea_id / eval_file

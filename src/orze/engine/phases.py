@@ -570,11 +570,29 @@ class OrzePhaseMixin:
                                         f"Config validation failed: {err_msg}")
                                     if self.lake:
                                         self.lake.set_status(idea_id, "skipped")
-                                    # Trigger engineer (once per script per session)
+                                    # Trigger engineer once per (script, missing_key_set).
+                                    # Previously keyed only by script: once fired for
+                                    # train.py, no further unrecognized-arg rejection
+                                    # could re-trigger it even with a brand-new missing
+                                    # key, so research proposed 251 ideas across 3+
+                                    # new config keys and only 2 engineer triggers
+                                    # fired. Parse the missing keys out of err_msg
+                                    # so each novel schema gap gets one attempt.
                                     if not hasattr(self, '_impl_triggered'):
                                         self._impl_triggered = set()
-                                    if ts not in self._impl_triggered:
-                                        self._impl_triggered.add(ts)
+                                    import re as _re
+                                    _keys = _re.findall(
+                                        r'unrecognized args[^:]*:\s*(.*)$',
+                                        err_msg)
+                                    if _keys:
+                                        _key_set = frozenset(
+                                            k.strip() for k in _keys[0].split(",")
+                                            if k.strip())
+                                    else:
+                                        _key_set = frozenset()
+                                    _sig = (ts, _key_set)
+                                    if _sig not in self._impl_triggered:
+                                        self._impl_triggered.add(_sig)
                                         _sop_t2 = get_extension("sop_tier2")
                                         if _sop_t2 and hasattr(_sop_t2, 'trigger_implementation'):
                                             methods = _sop_t2.load_method_specs(self.results_dir)
