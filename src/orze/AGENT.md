@@ -201,15 +201,14 @@ No need to copy files — everything resolves from pip-installed packages.
 
 ### 9d: Configure pro roles in orze.yaml
 
-**IMPORTANT**: Resolve prompt paths from the installed package, NOT from a submodule.
-Run this to get the absolute path:
-```python
-import orze_pro; from pathlib import Path
-prompts = Path(orze_pro.__file__).parent / "prompts"
-print(prompts)  # e.g. /home/user/venv/lib/python3.10/site-packages/orze_pro/prompts
-```
+Pro role behavior ships as bundled **static SOPs** inside the orze-pro
+wheel. There are no paths to resolve — reference SOPs by id via
+`@sop:<name>` in the role's `skills:` list. Discover available ids with:
 
-Use the resolved absolute path in orze.yaml (not relative or submodule paths).
+```bash
+orze sop list      # shows all static + dynamic SOPs
+orze sop check     # validates wiring (requires/consumed_by/overrides)
+```
 
 Add these roles to orze.yaml:
 ```yaml
