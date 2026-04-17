@@ -118,7 +118,7 @@ def pro_status():
             "agents.research_llm": "LLM backends (Gemini/OpenAI/Anthropic)",
             "agents.code_evolution": "Auto-evolve code on plateau",
             "agents.meta_research": "Meta-level strategy adjustment",
-            "agents.bug_fixer": "Auto-fix failed experiments",
+            "agents.bug_fixer": "Orze-process watchdog (auto-restart + log-error diagnosis)",
             "agents.bot": "Interactive Telegram/Slack bot",
         }
         features = pro_features()

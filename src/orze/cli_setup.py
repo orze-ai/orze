@@ -967,16 +967,9 @@ roles:
     timeout: 600
     model: opus
     pausable: false
-    allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
-  bug_fixer:
-    mode: claude
-    triggered_by: fsm
-    skills:
-      - "@sop:bug_fixer_base"
-    timeout: 600
-    model: opus
-    pausable: false
-    allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
+    allowed_tools: "Read,Write,Edit,Glob,Grep,Bash,WebSearch,WebFetch"
+  # The engineer role bundles both strategy implementation and bug
+  # fixing. There is no separate bug_fixer role.
   fsm:
     mode: script
     script: fsm/runner.py
