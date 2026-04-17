@@ -56,20 +56,23 @@ def resume_research(results_dir: Path) -> bool:
 
 
 def _detect_plateau(results_dir: Path, window: int = 200,
-                    min_metric_keys: int = 4) -> tuple:
+                    min_metric_keys: int = 4,
+                    primary_metric: Optional[str] = None,
+                    benchmark_keys: Optional[set] = None) -> tuple:
     """Check if the best primary metric has improved in the last N completions.
 
-    Only counts experiments that evaluated on the full benchmark set — detected
-    by the number of numeric per-benchmark metric keys in metrics.json. A
-    per-benchmark key is any flat numeric field in metrics.json OTHER than
-    the reserved aggregate/meta keys (avg_wer, training_time, etc.). This
-    catches common benchmark conventions — wer_/acc_/map_/iou_/bleu_/f1_
-    prefixed dataset columns, *_score suffixes, etc. — without needing to
-    enumerate a prefix whitelist.
+    Only counts experiments that evaluated on the full benchmark set.
+    Coverage is measured authoritatively from the project's report.columns
+    in orze.yaml — those are the per-dataset metric keys the project
+    itself declares as "the benchmark." An experiment counts if at least
+    ``min_metric_keys`` of the declared benchmark_keys are present and
+    numeric in its metrics.json, filtering out single-dataset shards
+    and eval-only sub-runs whose tiny-scope values would otherwise
+    poison best_recent vs best_older comparison.
 
-    Single-dataset hyperparameter shards (-ht-*) and eval-only sub-runs
-    would otherwise poison the comparison with their tiny-scope primary
-    metric values that never correspond to real leaderboard progress.
+    If benchmark_keys is None (caller didn't declare report.columns),
+    falls back to a conservative heuristic: count flat numeric keys
+    that aren't the primary_metric and aren't common meta-fields.
 
     Returns (is_plateau: bool, message: str).
     """
@@ -84,25 +87,38 @@ def _detect_plateau(results_dir: Path, window: int = 200,
             m = json.loads(mf.read_text(encoding="utf-8"))
             if m.get("status") != "COMPLETED":
                 continue
-            # Require full-benchmark coverage: count numeric per-dataset
-            # metric keys in metrics.json. Reserved aggregate/meta keys
-            # (avg_wer, status, training_time, ...) are excluded, and only
-            # flat numerics count (nested dicts are run-level metadata).
-            # This works for any benchmark naming convention — wer_ami,
-            # acc_cifar, map_coco, bleu_wmt, f1_squad — without needing a
-            # prefix whitelist.
-            _META = {"avg_wer", "test_accuracy", "score", "status",
-                     "training_time", "error", "num_eval_tasks",
-                     "timestamp", "eval_time", "avg"}
-            bench_keys = sum(
-                1 for k, v in m.items()
-                if isinstance(k, str) and k not in _META
-                and not k.startswith("_")
-                and isinstance(v, (int, float)) and not isinstance(v, bool))
-            if bench_keys < min_metric_keys:
+            # Coverage: count presence of the project-declared benchmark
+            # keys. Fall back to "numeric non-primary, non-meta, flat"
+            # heuristic only when caller didn't pass benchmark_keys.
+            if benchmark_keys:
+                present = sum(
+                    1 for k in benchmark_keys
+                    if isinstance(m.get(k), (int, float))
+                    and not isinstance(m.get(k), bool))
+            else:
+                _FALLBACK_META = {"avg_wer", "test_accuracy", "score",
+                                  "status", "training_time", "error",
+                                  "num_eval_tasks", "timestamp",
+                                  "eval_time", "avg"}
+                skip = set(_FALLBACK_META)
+                if primary_metric:
+                    skip.add(primary_metric)
+                present = sum(
+                    1 for k, v in m.items()
+                    if isinstance(k, str) and k not in skip
+                    and not k.startswith("_")
+                    and isinstance(v, (int, float))
+                    and not isinstance(v, bool))
+            if present < min_metric_keys:
                 continue
-            # Use avg_wer as primary metric; fall back to any numeric primary
-            val = m.get("avg_wer") or m.get("test_accuracy") or m.get("score")
+            # Use the project-declared primary_metric; fall back to
+            # common aggregate names.
+            val = None
+            if primary_metric:
+                val = m.get(primary_metric)
+            if val is None:
+                val = (m.get("avg_wer") or m.get("test_accuracy")
+                       or m.get("score"))
             if val is not None and isinstance(val, (int, float)) and val > 0:
                 entries.append((mf.stat().st_mtime, float(val)))
         except Exception:
@@ -165,9 +181,30 @@ def _run_builtin_checks(results_dir: Path, cfg: dict,
     fail_window = retro_cfg.get("fail_window", 100)
     fail_threshold = retro_cfg.get("fail_threshold", 0.5)
 
+    # Derive project's benchmark metric set from report.columns.
+    # Each project declares its own full-benchmark coverage (per-dataset
+    # metric keys) + primary aggregate. We exclude the primary_metric
+    # itself so only per-dataset coverage counts toward min_metric_keys.
+    report_cfg = cfg.get("report", {}) or {}
+    primary_metric = report_cfg.get("primary_metric")
+    benchmark_keys = None
+    try:
+        cols = report_cfg.get("columns") or []
+        bench_set = {c.get("key") for c in cols if isinstance(c, dict)}
+        bench_set.discard(primary_metric)
+        bench_set.discard("training_time")
+        bench_set.discard(None)
+        if bench_set:
+            benchmark_keys = bench_set
+    except Exception:
+        benchmark_keys = None
+
     reasons = []
 
-    is_plateau, plateau_msg = _detect_plateau(results_dir, plateau_window)
+    is_plateau, plateau_msg = _detect_plateau(
+        results_dir, plateau_window,
+        primary_metric=primary_metric,
+        benchmark_keys=benchmark_keys)
     if is_plateau:
         reasons.append(f"PLATEAU: No improvement in last {plateau_window} experiments ({plateau_msg})")
         logger.warning("Retrospection: %s", reasons[-1])
