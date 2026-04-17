@@ -1,5 +1,38 @@
 # Changelog
 
+## 3.4.1
+
+### Added
+
+- **`orze.engine.metric_harvester`**: periodic scan of
+  `results/idea-*/train_output.log` every 20 iterations (~5 min).
+  Extracts best-so-far for the configured `primary_metric` via
+  regex patterns and writes `metrics.json`. Closes the telemetry
+  gap for training scripts that log per-epoch metrics to stdout
+  but never emit `metrics.json` — previously left the leaderboard
+  blind to mid-run progress for the entire 4-12h training window.
+
+  Default patterns cover `map`, `accuracy`, `auc`, `f1`, `loss`.
+  Customize via:
+  ```yaml
+  metric_harvest:
+    enabled: true            # default
+    patterns:
+      - "score\\s*=\\s*([0-9.]+)"
+    maximize: true           # false for loss-like metrics
+  ```
+
+  Only rewrites files it authored (sentinel
+  `_source: "harvested_from_log"`); genuine `metrics.json` from
+  training scripts is left untouched.
+
+### Fixed
+
+- `fix(phases): don't crash on slot-race between launch and register`
+  (merged from 733b80b).
+- `fix(config): reject legacy rules_file key on role configs`
+  (8cf5003 from 3.4.0 development).
+
 ## 3.4.0
 
 ### Breaking
