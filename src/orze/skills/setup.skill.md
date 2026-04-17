@@ -106,8 +106,11 @@ min_disk_gb: 20
 
 roles:
   research:
-    mode: claude
-    rules_file: RESEARCH_RULES.md
+    mode: research
+    backend: anthropic
+    skills:
+      - "@sop:research_base"
+      - ./RESEARCH_RULES.md
     model: sonnet
     cooldown: 300
     timeout: 600

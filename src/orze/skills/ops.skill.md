@@ -106,7 +106,7 @@ notifications:
 |---------|-------|-----|
 | No experiments running | `cat results/status.json` — check `free_gpus`, `queue_depth` | Add ideas to ideas.md, check `orze --check` |
 | Training stuck | `results/{idea_id}/train_output.log` | Set `stall_minutes` in orze.yaml |
-| Research agent not producing ideas | `results/_research_logs/cycle_*.log` | Check `rules_file` exists, API keys set |
+| Research agent not producing ideas | `results/_research_logs/cycle_*.log` | Run `orze sop check`, verify API keys set, confirm composed prompt is non-empty |
 | Disk full | `df -h` | Set `gc.enabled: true`, `min_disk_gb`, `cleanup.patterns` |
 | Ideas duplicating | Config dedup cache at `results/_config_hashes.json` | Normal — dedup auto-skips duplicates |
 | Eval not running | Check `eval_script` exists, `eval_output` not already present | Delete stale eval output to re-run |
@@ -137,9 +137,11 @@ auto_upgrade: true
 # Roles
 roles:
   research:
-    mode: claude
-    rules_file: RESEARCH_RULES.md
-    model: sonnet
+    mode: research
+    backend: anthropic
+    skills:
+      - "@sop:research_base"
+      - ./RESEARCH_RULES.md
     cooldown: 300
     timeout: 600
 

@@ -41,7 +41,6 @@ _PRO_MODULES = {
     "agents.meta_research": "orze_pro.agents.meta_research",
     "agents.bug_fixer": "orze_pro.agents.bug_fixer",
     "agents.bot": "orze_pro.agents.bot",
-    "agents.professor_bootstrap": "orze_pro.agents.professor_bootstrap",
     "idea_filter": "orze_pro.engine.idea_filter",
     "sops": "orze_pro.engine.sops",
     "sop_tier2": "orze_pro.engine.sop_tier2",

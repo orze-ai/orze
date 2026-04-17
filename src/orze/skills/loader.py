@@ -102,9 +102,8 @@ def compose_skills(role_cfg: dict, project_root: Path,
                    template_vars: Optional[Dict[str, str]] = None) -> str:
     """Compose the prompt string from role_cfg['skills'].
 
-    Returns "" when the role declares no skills. The previous rules_file
-    fallback has been removed — every role that uses a Claude prompt
-    must declare a skills list.
+    Returns "" when the role declares no skills. Every role that uses
+    a Claude or research-agent prompt must declare a skills list.
     """
     if "skills" not in role_cfg:
         return ""

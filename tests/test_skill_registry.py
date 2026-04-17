@@ -121,9 +121,10 @@ def test_compose_skills_resolves_sop_prefix_via_orze_pro(tmp_path):
         import orze_pro.skills.bundled  # noqa: F401
     except ImportError:
         pytest.skip("orze-pro not installed")
-    role_cfg = {"skills": ["@sop:_smoke"]}
+    role_cfg = {"skills": ["@sop:thinker_base"]}
     composed = compose_skills(role_cfg, tmp_path, template_vars=None)
-    assert "Smoke SOP" in composed
+    # thinker_base's H1 heading is the stable check — content may evolve
+    assert "The Thinker" in composed
 
 
 def test_compose_skills_unknown_sop_prefix_logs_and_skips(tmp_path, caplog):

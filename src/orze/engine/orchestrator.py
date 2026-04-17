@@ -569,8 +569,14 @@ class Orze(OrzePhaseMixin):
             if not isinstance(rcfg, dict):
                 continue
             rmode = rcfg.get("mode", "script")
-            rtarget = (rcfg.get("rules_file") if rmode == "claude"
-                       else rcfg.get("script"))
+            if rmode == "claude":
+                skills = rcfg.get("skills") or []
+                rtarget = f"{len(skills)} skill(s)" if skills else None
+            elif rmode == "research":
+                skills = rcfg.get("skills") or []
+                rtarget = f"{rcfg.get('backend', '?')} + {len(skills)} skill(s)"
+            else:
+                rtarget = rcfg.get("script")
             if rtarget:
                 logger.info("Role '%s' [%s]: %s (cooldown: %ds, timeout: %ds)",
                             rname, rmode, rtarget,

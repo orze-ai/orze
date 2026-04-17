@@ -243,20 +243,6 @@ Examples:
     pro_sub.add_parser("status", help="Show orze-pro license status")
     pro_deactivate_parser = pro_sub.add_parser("deactivate", help="Remove saved license key")
     pro_deactivate_parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
-    bootstrap_prof_parser = pro_sub.add_parser(
-        "bootstrap-professor",
-        help="(Deprecated) Professor now composes from bundled static "
-             "SOPs; see 'orze sop list'")
-    bootstrap_prof_parser.add_argument(
-        "--goal", default="GOAL.md", help=argparse.SUPPRESS)
-    bootstrap_prof_parser.add_argument(
-        "--config", default="orze.yaml", help=argparse.SUPPRESS)
-    bootstrap_prof_parser.add_argument(
-        "--base-config", default="configs/base.yaml", help=argparse.SUPPRESS)
-    bootstrap_prof_parser.add_argument(
-        "--output", default=None, help=argparse.SUPPRESS)
-    bootstrap_prof_parser.add_argument(
-        "--force", action="store_true", help=argparse.SUPPRESS)
 
     # --- sop: inspect and validate SOP skills ---
     sop_parser = subparsers.add_parser(
@@ -448,15 +434,6 @@ Examples:
             pro_status()
         elif action == "deactivate":
             pro_deactivate(force=getattr(args, "yes", False))
-        elif action == "bootstrap-professor":
-            # Deprecated after the static-SOP refactor. Professor
-            # behavior ships bundled in orze-pro; task-specific tailoring
-            # now lives in dynamic SOPs under <project>/skills/.
-            print("bootstrap-professor is no longer needed: the professor "
-                  "composes from bundled static SOPs (see 'orze sop list').")
-            print("For task-specific behavior, author a dynamic SOP at "
-                  "<project>/skills/<name>.skill.md and append it to the "
-                  "professor role's skills: list in orze.yaml.")
         else:
             parser.parse_args(["pro", "--help"])
         return

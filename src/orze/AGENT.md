@@ -93,7 +93,7 @@ Use their answer to write GOAL.md, then continue.
 orze --init .
 ```
 
-This creates: venv, orze.yaml, train.py (demo), ideas.md, configs/base.yaml, RESEARCH_RULES.md, and reference docs. If it's already been run, it skips existing files.
+This creates: venv, orze.yaml (with bundled-SOP `skills:` lists), train.py (demo), ideas.md, configs/base.yaml, RESEARCH_RULES.md (project-specific research constraints), and reference docs. If it's already been run, it skips existing files.
 
 ## Step 4: Adapt train.py
 
@@ -127,13 +127,19 @@ Update the generated orze.yaml:
 
 ## Step 6: Write RESEARCH_RULES.md
 
-Generate from GOAL.md. Include:
+`RESEARCH_RULES.md` is the project-specific half of the research role's
+prompt. Orze composes it together with the bundled `@sop:research_base`
+via the research role's `skills:` list. Generate from GOAL.md:
+
 - The research goal and metric
 - Template vars: `{cycle}`, `{completed}`, `{queued}`, `{results_dir}`, `{ideas_file}`
 - Domain-specific guidance (what approaches work for this task)
 - Concrete directions to explore
-- The idea format from `ORZE-RULES.md`
 - Rules: append-only, unique IDs, complete YAML configs
+
+Domain-specific **behavior** changes (not just knowledge) should be
+authored as additional dynamic SOPs under `./skills/<name>.skill.md`
+and appended to the role's `skills:` list, not piled into RESEARCH_RULES.md.
 
 ## Step 7: Write seed ideas
 
@@ -222,14 +228,16 @@ roles:
   research:
     mode: research
     backend: <detected from API key>
-    rules_file: RESEARCH_RULES.md
+    skills:
+      - "@sop:research_base"
+      - ./RESEARCH_RULES.md
     cooldown: 120
     timeout: 600
     model: <best model for the backend>
   code_evolution:
     mode: claude
     triggered_by: fsm
-    rules_file: <pro_dir>/prompts/CODE_EVOLUTION_RULES.md
+    skills: ["@sop:code_evolution_base"]
     timeout: 900
     model: opus
     allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
@@ -237,13 +245,24 @@ roles:
     mode: research
     backend: <same as research>
     triggered_by: fsm
-    rules_file: RESEARCH_RULES.md
+    skills:
+      - "@sop:research_base"
+      - ./RESEARCH_RULES.md
     cooldown: 3600
     timeout: 600
     model: <same as research>
   professor:
     mode: claude
-    rules_file: <pro_dir>/prompts/PROFESSOR_RULES.md
+    skills:
+      - "@sop:professor_base"
+      - "@sop:professor_web_search"
+      - "@sop:professor_cross_domain_query"
+      - "@sop:professor_idea_review"
+      - "@sop:professor_diversity_enforcement"
+      - "@sop:professor_gap_closure"
+      - "@sop:professor_strategy_review"
+      - "@sop:professor_regression_detection"
+      - "@sop:professor_steering"
     cooldown: 600
     timeout: 600
     model: opus
@@ -252,7 +271,7 @@ roles:
   bug_fixer:
     mode: claude
     triggered_by: fsm
-    rules_file: <pro_dir>/prompts/BUG_FIXER_RULES.md
+    skills: ["@sop:bug_fixer_base"]
     timeout: 600
     model: opus
     pausable: false
@@ -264,6 +283,9 @@ roles:
     cooldown: 120
     timeout: 30
 ```
+
+Discover bundled static SOPs with `orze sop list`. Validate wiring with
+`orze sop check`.
 
 ### 9e: Verify pro setup
 ```bash

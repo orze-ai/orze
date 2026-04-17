@@ -278,8 +278,8 @@ def _validate_config(cfg: dict) -> tuple:
             if mode not in ("script", "claude", "research"):
                 errors.append(f"roles.{rname}.mode: '{mode}' is invalid "
                               f"(expected 'script', 'claude', or 'research')")
-            if mode == "claude" and not rcfg.get("rules_file") and not rcfg.get("skills"):
-                errors.append(f"roles.{rname}: mode 'claude' requires 'rules_file' or 'skills'")
+            if mode == "claude" and not rcfg.get("skills"):
+                errors.append(f"roles.{rname}: mode 'claude' requires 'skills'")
             if mode == "claude":
                 import shutil as _shutil
                 _claude_bin = rcfg.get("claude_bin", "claude")

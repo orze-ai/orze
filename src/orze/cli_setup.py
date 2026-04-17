@@ -1182,7 +1182,7 @@ noise: 0.1
                 if len(tasks) > 1:
                     # Detect GPUs
                     try:
-                        from orze_pro.agents.professor_bootstrap import detect_gpu_info
+                        from orze_pro.agents._llm_utils import detect_gpu_info
                         gpu_info = detect_gpu_info()
                         n_gpus = gpu_info.get("gpu_count", 1)
                     except Exception:

@@ -223,29 +223,35 @@ The most common role is `research` (generates new experiment ideas), but you can
 
 ### Configuration
 
-Roles are defined under the `roles:` key in `orze.yaml`:
+Roles are defined under the `roles:` key in `orze.yaml`. Each claude-mode
+role composes its prompt from a `skills:` list — references to bundled
+static SOPs (`@sop:<name>`, shipped with orze-pro) and/or project-local
+dynamic SOPs (`./path/to/file.skill.md`).
 
 ```yaml
 roles:
   research:
-    mode: claude
-    rules_file: RESEARCH_RULES.md
+    mode: research
+    backend: anthropic
+    skills:
+      - "@sop:research_base"
+      - ./RESEARCH_RULES.md          # project-specific constraints
     cooldown: 300
     timeout: 600
-    model: sonnet
-    allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
     log_dir: _research_logs
 
   documenter:
     mode: claude
-    rules_file: DOCUMENTER_RULES.md
+    skills:
+      - ./skills/documenter.skill.md  # dynamic SOP you author
     cooldown: 600
     timeout: 300
     model: haiku
     log_dir: _documenter_logs
 ```
 
-**Legacy support**: A top-level `research:` key (without `roles:`) is auto-migrated to `roles: {research: ...}`.
+Discover available static SOPs with `orze sop list`. Validate wiring
+(dangling requires / orphan produces) with `orze sop check`.
 
 ### Role Modes
 
@@ -299,7 +305,8 @@ Template variables for `args`: `{ideas_file}`, `{results_dir}`, `{cycle}`, `{gpu
 roles:
   my_role:
     mode: claude
-    rules_file: MY_ROLE_RULES.md
+    skills:
+      - ./skills/my_role.skill.md
     cooldown: 300
     timeout: 600
     model: sonnet
@@ -308,7 +315,10 @@ roles:
     claude_args: []
 ```
 
-In this mode, orze spawns `claude -p "<rules_file content>" --allowedTools ... --model ...` as a subprocess. The `rules_file` supports the same template variables.
+In this mode, orze composes the skills list into a single prompt and
+spawns `claude -p "<composed prompt>" --allowedTools ... --model ...`
+as a subprocess. The composed prompt supports template variables
+(`{ideas_file}`, `{results_dir}`, `{cycle}`, etc.).
 
 ### Role Behavior
 
@@ -318,16 +328,18 @@ In this mode, orze spawns `claude -p "<rules_file content>" --allowedTools ... -
 - **Logged**: Cycles go to `results/{log_dir}/cycle_NNN.log`
 - **Cross-machine safe**: Each role uses its own `_{role_name}_lock` directory for coordination
 
-### Research Rules Contract (mode: claude)
+### Research Rules Contract
 
-The `rules_file` is a markdown file that serves as Claude's prompt. It should tell Claude:
+A skill is a markdown file with optional YAML frontmatter whose body
+becomes part of Claude's prompt. A research skill should tell Claude:
 1. What the research goal is
 2. Where to find results (`{results_dir}/report.md`, `{results_dir}/status.json`)
 3. How to format ideas (the Ideas Format from this document)
 4. Where to append ideas (`{ideas_file}`)
 5. What makes a good experiment idea for this domain
 
-Example `RESEARCH_RULES.md`:
+Example `./skills/research.skill.md` (or `RESEARCH_RULES.md` referenced
+directly in the skills list):
 ```markdown
 You are a research agent for [project description].
 
