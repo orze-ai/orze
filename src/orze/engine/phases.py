@@ -515,8 +515,24 @@ class OrzePhaseMixin:
                     # argparse). Strip dict/list values — only scalars pass.
                     idea_cfg = ideas.get(idea_id, {}).get("config", {})
                     if idea_cfg:
-                        flat_cfg = {k: v for k, v in idea_cfg.items()
-                                    if not isinstance(v, (dict, list))}
+                        flat_cfg = {}
+                        for k, v in idea_cfg.items():
+                            if isinstance(v, (dict, list)):
+                                continue
+                            # Fix LLM-generated malformed keys like "epochs: 40"
+                            # where the key-value pair was collapsed into a single
+                            # string key with null value.
+                            if v is None and ": " in str(k):
+                                parts = str(k).split(": ", 1)
+                                try:
+                                    flat_cfg[parts[0]] = yaml.safe_load(parts[1])
+                                except Exception:
+                                    flat_cfg[parts[0]] = parts[1]
+                                logger.warning(
+                                    "Fixed malformed config key %r -> %s: %s",
+                                    k, parts[0], flat_cfg[parts[0]])
+                            else:
+                                flat_cfg[k] = v
                         atomic_write(
                             self.results_dir / idea_id / "idea_config.yaml",
                             yaml.dump(flat_cfg,

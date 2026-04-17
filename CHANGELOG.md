@@ -1,5 +1,32 @@
 # Changelog
 
+## 3.4.3
+
+### Fixed
+
+- **`metric_harvester` inference gating and empty-cache TTL.**
+  3.4.2's harvester would invoke the LLM pattern_inferrer on any
+  idea whose regex missed — including warmup-only logs that hadn't
+  yet produced metrics. The inferrer correctly returned `[]` for
+  those, but the empty result got cached permanently, blocking
+  future (legitimate) inference for that train script forever.
+
+  Two guards added:
+
+  1. `_log_has_training_signal(log_text)` pre-check — the inferrer
+     is only called on logs that are >= 50 bytes AND contain an
+     eval/epoch marker AND contain a plausibly-metric-like number.
+     Warmup-only logs skip inference entirely.
+
+  2. Empty cache entries now expire after 30 min. Non-empty
+     entries stick around until the train script mtime changes.
+     A log that was too early on first harvest will get retried
+     automatically on the next 5-min cycle after it grows.
+
+  Existing poisoned `results/_metric_patterns_cache.json` files
+  from 3.4.2 should be deleted once on upgrade; they'll regenerate
+  cleanly from the fresh gating rules.
+
 ## 3.4.2
 
 ### Added
