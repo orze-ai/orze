@@ -618,7 +618,28 @@ class OrzePhaseMixin:
                                            error_msg)
                             _record_failure(self.failure_counts, idea_id)
                             continue
-                    self.active[gpu] = tp
+                    try:
+                        self.active[gpu] = tp
+                    except RuntimeError as slot_err:
+                        # Race: capacity check passed at target selection but
+                        # failed at registration (system-load throttle kicked in
+                        # between launch() and assign()). Don't crash the
+                        # orchestrator — terminate the orphan subprocess and
+                        # retry the idea later.
+                        logger.warning(
+                            "[SLOT-RACE] %s on GPU %s: %s — terminating orphan "
+                            "and deferring idea", idea_id, gpu, slot_err)
+                        try:
+                            from orze.engine.process import _terminate_and_reap
+                            _terminate_and_reap(tp.process, f"orphan {idea_id}")
+                            tp.close_log()
+                        except Exception as cleanup_err:
+                            logger.warning("Cleanup after slot-race failed: %s",
+                                           cleanup_err)
+                        if self.lake:
+                            # Return idea to queue so a later iteration retries
+                            self.lake.set_status(idea_id, "queued")
+                        continue
                     base_id = idea_id
                     if "-ht-" in base_id:
                         base_id = base_id.split("-ht-", 1)[0]
