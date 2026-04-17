@@ -2,7 +2,7 @@
 
 CALLING SPEC:
     compose_skills(role_cfg, project_root, template_vars=None) -> str
-        role_cfg:       dict with 'skills' list or 'rules_file' (legacy)
+        role_cfg:       dict with a 'skills' list
         project_root:   Path to project directory
         template_vars:  dict of {key: value} for substitution, or None to skip
         returns:        composed prompt string
@@ -12,15 +12,22 @@ CALLING SPEC:
         returns: Skill namedtuple(name, content)
         raises: FileNotFoundError if name is unknown
 
-LEGACY PATH:
-    If role_cfg has 'rules_file' instead of 'skills', reads the file and
-    optionally substitutes template vars. Identical behavior to old code.
+SKILLS GRAMMAR:
+    role_cfg['skills'] is a list of references in composition order.
+    Each ref is one of:
+      - '@core' | '@research' | '@ops' | '@setup'
+            built-in .skill.md shipped with orze.
+      - '@sop:<name>'
+            static SOP bundled in orze-pro (orze_pro/sops/<name>.skill.md).
+            Resolved via optional import of orze_pro.skills.bundled; if
+            orze-pro is not installed the ref is skipped with a warning.
+      - './path.md' | 'path.md'
+            project-local file relative to project_root. Used for dynamic
+            (project-authored) SOPs or free-form prompt fragments.
 
-SKILLS PATH:
-    If role_cfg has 'skills' list, loads each ref in order:
-      - '@core', '@research', etc -> built-in .skill.md from this package
-      - './path.md' or 'path.md' -> project file relative to project_root
-    Concatenates with separator. Substitutes template vars if provided.
+    Skills declaring frontmatter 'order' are sorted ascending; skills
+    declaring 'trigger' are gated by the role's _trigger_context. The
+    composed output substitutes template_vars if provided.
 """
 
 import logging
@@ -93,25 +100,14 @@ def _substitute(text: str, template_vars: Dict[str, str]) -> str:
 
 def compose_skills(role_cfg: dict, project_root: Path,
                    template_vars: Optional[Dict[str, str]] = None) -> str:
-    """Compose prompt from skills list or legacy rules_file.
+    """Compose the prompt string from role_cfg['skills'].
 
-    Returns the composed prompt string ready to pass to an LLM.
+    Returns "" when the role declares no skills. The previous rules_file
+    fallback has been removed — every role that uses a Claude prompt
+    must declare a skills list.
     """
-    # Legacy path: rules_file
     if "skills" not in role_cfg:
-        rules_file = role_cfg.get("rules_file")
-        if not rules_file:
-            return ""
-        path = Path(rules_file)
-        if not path.is_absolute():
-            path = project_root / path
-        if not path.exists():
-            logger.warning("Rules file not found: %s", path)
-            return ""
-        content = path.read_text(encoding="utf-8")
-        if template_vars:
-            content = _substitute(content, template_vars)
-        return content
+        return ""
 
     # Skills path: compose from list, honoring frontmatter ``order`` and
     # ``trigger`` gates.
