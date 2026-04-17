@@ -1,5 +1,28 @@
 # Changelog
 
+## 3.4.6
+
+### Breaking
+
+- **`check_active_roles` now returns `list[tuple[role_name, Outcome]]`**
+  instead of `list[tuple[role_name, str]]`. `Outcome` is a small enum
+  (`OK`, `SOFT_FAILURE`, `TIMEOUT`, `ERROR`); use `is_success(outcome)`
+  when the caller only cares whether the cycle produced useful output.
+  Strategy roles that don't append to `ideas.md` (professor, thinker,
+  data_analyst, engineer, code_evolution) no longer trip the
+  ideas-modified soft-failure check — they set
+  `rp.writes_ideas_file = False` at launch and are judged purely on
+  exit code.
+
+### Changed
+
+- **`orze.agents.bug_fixer` renamed to `orze.agents.watchdog`.** The
+  legacy `bug_fixer` role has been retired from scaffolding (`orze
+  --init` no longer materializes `BUG_FIXER_RULES.md`) and from the
+  scheduler role registry. Existing projects with `roles.bug_fixer:`
+  in `orze.yaml` keep working but receive a one-time warning suggesting
+  migration to the watchdog daemon.
+
 ## 3.4.5
 
 ### Added
