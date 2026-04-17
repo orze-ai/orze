@@ -95,30 +95,27 @@ def _check_pro_license() -> tuple:
         return False, "not activated — run: orze pro activate <key>"
 
 
-def _check_pro_role(role_name: str, prompts_dir: str, project_dir: Path) -> tuple:
-    """Check if a pro role's prompt file exists."""
-    # Map role names to their prompt files
-    prompt_map = {
-        "research": "RESEARCH_RULES.md",
-        "professor": "PROFESSOR_RULES.md",
-        "code_evolution": "CODE_EVOLUTION_RULES.md",
-        "meta_research": "RESEARCH_RULES.md",
-        "bug_fixer": "BUG_FIXER_RULES.md",
-    }
-    filename = prompt_map.get(role_name, "")
-    if not filename:
-        return True, "configured"
+def _check_pro_role(role_name: str, project_dir: Path) -> tuple:
+    """Check if a pro role's SOP skills are discoverable.
 
-    # Check project-level first, then pro package
-    if (project_dir / filename).exists():
-        return True, f"ready ({filename})"
-    prompt_path = Path(prompts_dir) / filename
-    if prompt_path.exists():
-        return True, f"ready ({prompt_path.name})"
-    if role_name == "research":
-        # Research uses RESEARCH_RULES.md which is always generated
-        return True, "ready (RESEARCH_RULES.md)"
-    return False, f"missing: {filename}"
+    Post-refactor, roles compose from bundled static SOPs (@sop:<name>)
+    and optional project-local dynamic SOPs. Success means orze-pro is
+    installed AND at least one SOP for the role is registered.
+    """
+    try:
+        from orze_pro.skills.registry import discover_skills
+    except ImportError:
+        return False, "orze-pro not installed"
+    skills = discover_skills(project_dir)
+    role_skills = [s for s in skills if s.role == role_name]
+    if not role_skills:
+        return False, f"no SOPs registered for role '{role_name}'"
+    static = [s for s in role_skills if s.tier == "static"]
+    dynamic = [s for s in role_skills if s.tier == "dynamic"]
+    detail = f"{len(static)} static"
+    if dynamic:
+        detail += f" + {len(dynamic)} dynamic"
+    return True, f"ready ({detail})"
 
 
 def _check_fsm(project_dir: Path) -> tuple:
@@ -871,11 +868,9 @@ def do_init(init_arg: str):
 
     # Detect orze-pro for full config generation
     _has_pro = False
-    _pro_prompts = ""
     try:
-        import orze_pro
+        import orze_pro  # noqa: F401
         _has_pro = True
-        _pro_prompts = str(Path(orze_pro.__file__).parent / "prompts")
     except ImportError:
         pass
 
@@ -925,17 +920,25 @@ evolution:
   enabled: false              # FSM dispatches triggers, not orze
 
 # --- ROLES (orze-pro autopilot) ---
+# Roles compose from bundled static SOPs (@sop:<name>) shipped with
+# orze-pro. Inspect with:  orze sop list
+# To add project-specific behavior, create <project>/skills/<name>.skill.md
+# and append it to the role's skills list. Dynamic skills override
+# static ones with the same id.
 roles:
   research:
     mode: research
     backend: {backend}
-    rules_file: RESEARCH_RULES.md
+    skills:
+      - "@sop:research_base"
+      - ./RESEARCH_RULES.md   # project-specific research constraints
     cooldown: 120
     timeout: 600
   code_evolution:
     mode: claude
     triggered_by: fsm
-    rules_file: {_pro_prompts}/CODE_EVOLUTION_RULES.md
+    skills:
+      - "@sop:code_evolution_base"
     timeout: 900
     model: opus
     allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
@@ -943,12 +946,23 @@ roles:
     mode: research
     backend: {backend}
     triggered_by: fsm
-    rules_file: RESEARCH_RULES.md
+    skills:
+      - "@sop:research_base"
+      - ./RESEARCH_RULES.md
     cooldown: 3600
     timeout: 600
   professor:
     mode: claude
-    rules_file: {_pro_prompts}/PROFESSOR_RULES.md
+    skills:
+      - "@sop:professor_base"
+      - "@sop:professor_web_search"
+      - "@sop:professor_cross_domain_query"
+      - "@sop:professor_idea_review"
+      - "@sop:professor_diversity_enforcement"
+      - "@sop:professor_gap_closure"
+      - "@sop:professor_strategy_review"
+      - "@sop:professor_regression_detection"
+      - "@sop:professor_steering"
     cooldown: 600
     timeout: 600
     model: opus
@@ -957,7 +971,8 @@ roles:
   bug_fixer:
     mode: claude
     triggered_by: fsm
-    rules_file: {_pro_prompts}/BUG_FIXER_RULES.md
+    skills:
+      - "@sop:bug_fixer_base"
     timeout: 600
     model: opus
     pausable: false
@@ -1116,11 +1131,12 @@ noise: 0.1
 
         _checks = [
             ("license", lambda: _check_pro_license()),
-            ("research agent", lambda: _check_pro_role("research", _pro_prompts, project_dir)),
-            ("professor", lambda: _check_pro_role("professor", _pro_prompts, project_dir)),
-            ("code evolution", lambda: _check_pro_role("code_evolution", _pro_prompts, project_dir)),
-            ("meta research", lambda: _check_pro_role("meta_research", _pro_prompts, project_dir)),
-            ("bug fixer", lambda: _check_pro_role("bug_fixer", _pro_prompts, project_dir)),
+            ("research agent", lambda: _check_pro_role("research", project_dir)),
+            ("professor", lambda: _check_pro_role("professor", project_dir)),
+            ("code evolution", lambda: _check_pro_role("code_evolution", project_dir)),
+            # meta_research reuses research SOPs
+            ("meta research", lambda: _check_pro_role("research", project_dir)),
+            ("bug fixer", lambda: _check_pro_role("bug_fixer", project_dir)),
             ("FSM engine", lambda: _check_fsm(project_dir)),
             ("FSM procedures", lambda: _check_pro_procedures()),
             ("idea verifier", lambda: _check_pro_plugin("idea_verifier")),
@@ -1218,50 +1234,11 @@ noise: 0.1
                 # Never break init due to multi-task failure
                 print(f"  \033[33mskipped\033[0m  multi-task detection error: {e}")
 
-    # =================================================================
-    # Professor bootstrap (orze-pro only, single-task)
-    # =================================================================
-    if _has_pro and not _multitask_done:
-        goal_path = project_dir / "GOAL.md"
-        if goal_path.exists() and _detected:
-            # GOAL.md exists and API keys are available — try bootstrap
-            try:
-                from orze_pro.agents.professor_bootstrap import (
-                    needs_bootstrap, bootstrap_professor,
-                )
-                # Determine professor rules path from the config we just wrote
-                prof_rules = Path(_pro_prompts) / "PROFESSOR_RULES.md"
-                # Check orze.yaml for custom path
-                try:
-                    import yaml
-                    with open(project_dir / "orze.yaml", encoding="utf-8") as _f:
-                        _cfg = yaml.safe_load(_f) or {}
-                    _prof_cfg = (_cfg.get("roles") or {}).get("professor", {})
-                    _custom = _prof_cfg.get("rules_file")
-                    if _custom:
-                        prof_rules = Path(_custom)
-                except Exception:
-                    pass
-
-                if needs_bootstrap(prof_rules):
-                    print()
-                    print("\033[1mProfessor Bootstrap:\033[0m")
-                    print(f"  Generating task-specific rules from GOAL.md...")
-                    ok = bootstrap_professor(
-                        goal_file=str(goal_path),
-                        config_file=str(project_dir / "orze.yaml"),
-                        base_config_file=str(project_dir / "configs" / "base.yaml"),
-                        output_file=str(prof_rules),
-                    )
-                    if ok:
-                        print(f"  \033[32mcreated\033[0m  {prof_rules}")
-                    else:
-                        print(f"  \033[33mskipped\033[0m  bootstrap failed — using generic rules")
-            except ImportError:
-                pass
-            except Exception as e:
-                # Never break init due to bootstrap failure
-                print(f"  \033[33mskipped\033[0m  professor bootstrap error: {e}")
+    # Professor behavior now ships as bundled static SOPs in orze-pro
+    # (orze_pro/sops/professor_*.skill.md). No per-project bootstrap
+    # needed at init. Projects wanting task-specific tailoring author
+    # dynamic SOPs under <project>/skills/ and append them to the
+    # professor role's skills: list in orze.yaml.
 
     print()
     print("\033[1mNext steps:\033[0m")

@@ -245,20 +245,18 @@ Examples:
     pro_deactivate_parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
     bootstrap_prof_parser = pro_sub.add_parser(
         "bootstrap-professor",
-        help="Generate task-specific PROFESSOR_RULES.md from GOAL.md")
+        help="(Deprecated) Professor now composes from bundled static "
+             "SOPs; see 'orze sop list'")
     bootstrap_prof_parser.add_argument(
-        "--goal", default="GOAL.md", help="Path to GOAL.md")
+        "--goal", default="GOAL.md", help=argparse.SUPPRESS)
     bootstrap_prof_parser.add_argument(
-        "--config", default="orze.yaml", help="Path to orze.yaml")
+        "--config", default="orze.yaml", help=argparse.SUPPRESS)
     bootstrap_prof_parser.add_argument(
-        "--base-config", default="configs/base.yaml",
-        help="Path to base config YAML")
+        "--base-config", default="configs/base.yaml", help=argparse.SUPPRESS)
     bootstrap_prof_parser.add_argument(
-        "--output", default=None,
-        help="Output path (default: from orze.yaml professor rules_file)")
+        "--output", default=None, help=argparse.SUPPRESS)
     bootstrap_prof_parser.add_argument(
-        "--force", action="store_true",
-        help="Regenerate even if already bootstrapped")
+        "--force", action="store_true", help=argparse.SUPPRESS)
 
     # --- sop: inspect and validate SOP skills ---
     sop_parser = subparsers.add_parser(
@@ -451,32 +449,14 @@ Examples:
         elif action == "deactivate":
             pro_deactivate(force=getattr(args, "yes", False))
         elif action == "bootstrap-professor":
-            try:
-                from orze_pro.agents.professor_bootstrap import bootstrap_professor
-            except ImportError:
-                print("orze-pro is not installed. Install with: pip install orze-pro")
-                return
-            # Determine output path
-            output = args.output
-            if not output:
-                try:
-                    cfg = load_project_config(args.config)
-                    prof_cfg = (cfg.get("roles") or {}).get("professor", {})
-                    output = prof_cfg.get("rules_file", "PROFESSOR_RULES.md")
-                except Exception:
-                    output = "PROFESSOR_RULES.md"
-            ok = bootstrap_professor(
-                goal_file=args.goal,
-                config_file=args.config,
-                base_config_file=args.base_config,
-                output_file=output,
-                force=args.force,
-            )
-            if ok:
-                print(f"Generated {output}")
-            else:
-                print("Skipped (already bootstrapped or failed). "
-                      "Use --force to regenerate.")
+            # Deprecated after the static-SOP refactor. Professor
+            # behavior ships bundled in orze-pro; task-specific tailoring
+            # now lives in dynamic SOPs under <project>/skills/.
+            print("bootstrap-professor is no longer needed: the professor "
+                  "composes from bundled static SOPs (see 'orze sop list').")
+            print("For task-specific behavior, author a dynamic SOP at "
+                  "<project>/skills/<name>.skill.md and append it to the "
+                  "professor role's skills: list in orze.yaml.")
         else:
             parser.parse_args(["pro", "--help"])
         return
