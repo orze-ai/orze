@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.4.4
+
+### Fixed
+
+- **Tighter `_log_has_training_signal` gate.** 3.4.3's gate used two
+  separate regexes — an eval-keyword check and a numeric check —
+  anywhere in the log. That matched dataset-stats lines like
+  `"Train: 1500, Test: 1344"` plus a completely unrelated `0.95`
+  from a config echo, producing a false "ready for inference"
+  signal. New `_EVAL_LINE_PATTERN` requires both signals on the
+  same line and at least two decimal digits (filters out integers
+  like sample counts).
+
+- **`phases.py`: thread `flat_cfg` into SOP validator.** The dict-
+  /list-stripped config (and the repair of LLM-collapsed keys like
+  `"epochs: 40": None` → `{"epochs": 40}`) was being built but not
+  handed to the SOP `validate_idea` step, which re-fetched the raw
+  config and then flagged the collapsed key as unrecognized. Auto-
+  patched by the engineer SOP on the live daemon at 16:20 UTC and
+  carried into this release.
+
 ## 3.4.3
 
 ### Fixed

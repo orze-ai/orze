@@ -96,6 +96,17 @@ _DEFAULT_PATTERNS: Dict[str, List[str]] = {
 
 _EPOCH_PATTERN = re.compile(r"Epoch\s+(\d+)\s*/")
 
+# A single line that looks like post-eval output: contains an epoch /
+# iter / step / eval-* / valid-* keyword AND a decimal metric-like
+# number. "Test: 1344" (dataset stats) is filtered out because 1344
+# has no decimal point; "Training: 40 epochs" is filtered because
+# it has no decimal after the `epochs` token.
+_EVAL_LINE_PATTERN = re.compile(
+    r"(?im)^[^\n]*\b"
+    r"(epoch|iter|iteration|step|eval\w*|valid\w*|phase)\b"
+    r"[^\n]*?\b\d+\.\d{2,}\b"
+)
+
 
 def extract_best_metric(log_text: str,
                         metric_name: str,
@@ -168,31 +179,22 @@ def _save_pattern_cache(results_dir: Path, cache: Dict) -> None:
 # entries stick around until the train script is edited.
 _EMPTY_TTL_SECONDS = 1800  # 30 min
 
-# Inference is an LLM call, so we only invoke it on logs that actually
-# look like evaluation has produced numbers. A warmup-only log with no
-# eval output would cause the inferrer to correctly return nothing,
-# and that "correctly nothing" would poison the cache until TTL.
-_HAS_EVAL_SIGNAL = re.compile(
-    r"\b(epoch|eval|step|iter|iteration|valid|test)\s*[\s:=/]+\s*\d",
-    re.IGNORECASE)
-_HAS_NUMERIC = re.compile(r"\b0\.\d{2,}|\b\d+\.\d{3,}\b")
-
-
 def _log_has_training_signal(log_text: str) -> bool:
     """Heuristic: is there enough in this log to warrant LLM inference?
 
-    Require: (a) non-trivial log size, (b) at least one eval/epoch
-    marker, (c) at least one numeric value that could be a metric.
-    Warmup-only logs with just "loading checkpoint" lines get skipped
-    so we don't waste LLM calls and poison the cache with empties.
+    Require at least one line that contains BOTH an epoch/iter/step
+    keyword AND a decimal number (metric-like). This filters out:
+
+    - Warmup-only logs (just "loading checkpoint" lines).
+    - Config echoes ("Test: 1344", "Training: 40 epochs").
+    - In-progress eval-batch counters without completed metrics.
+
+    Inference is an LLM call, so we stay off it unless the log really
+    looks like it contains evaluation numbers.
     """
     if len(log_text) < 50:
         return False
-    if not _HAS_EVAL_SIGNAL.search(log_text):
-        return False
-    if not _HAS_NUMERIC.search(log_text):
-        return False
-    return True
+    return bool(_EVAL_LINE_PATTERN.search(log_text))
 
 
 def _cached_patterns_for(cache: Dict, train_script: Path,

@@ -514,8 +514,8 @@ class OrzePhaseMixin:
                     # nested YAML like "training: {lr: 0.001}" which breaks
                     # argparse). Strip dict/list values — only scalars pass.
                     idea_cfg = ideas.get(idea_id, {}).get("config", {})
+                    flat_cfg = {}
                     if idea_cfg:
-                        flat_cfg = {}
                         for k, v in idea_cfg.items():
                             if isinstance(v, (dict, list)):
                                 continue
@@ -569,11 +569,14 @@ class OrzePhaseMixin:
                                 self.failure_counts, idea_id)
                             continue
                     # SOP: validate idea config right before launch (catches all sources)
+                    # Use flat_cfg (malformed-key-cleaned) if available, else raw config.
+                    # flat_cfg is built at lines 518-535 above, which fixes LLM-generated
+                    # collapsed keys like "epochs: 40" → {"epochs": 40}.
                     try:
                         from orze.extensions import get_extension
                         _sops = get_extension("sops")
                         if _sops:
-                            idea_cfg = ideas.get(idea_id, {}).get("config", {})
+                            idea_cfg = flat_cfg if flat_cfg else ideas.get(idea_id, {}).get("config", {})
                             ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
                             if ts and idea_cfg:
                                 is_valid, err_msg = _sops.validate_idea(
