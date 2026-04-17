@@ -44,6 +44,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -161,14 +162,49 @@ def _save_pattern_cache(results_dir: Path, cache: Dict) -> None:
         logger.debug("pattern cache write failed: %s", e)
 
 
+# Empty cache entries (inferrer returned no patterns) expire after this
+# many seconds so that a log which simply didn't have metrics yet can
+# trigger a fresh inference once it has grown. Non-empty (successful)
+# entries stick around until the train script is edited.
+_EMPTY_TTL_SECONDS = 1800  # 30 min
+
+# Inference is an LLM call, so we only invoke it on logs that actually
+# look like evaluation has produced numbers. A warmup-only log with no
+# eval output would cause the inferrer to correctly return nothing,
+# and that "correctly nothing" would poison the cache until TTL.
+_HAS_EVAL_SIGNAL = re.compile(
+    r"\b(epoch|eval|step|iter|iteration|valid|test)\s*[\s:=/]+\s*\d",
+    re.IGNORECASE)
+_HAS_NUMERIC = re.compile(r"\b0\.\d{2,}|\b\d+\.\d{3,}\b")
+
+
+def _log_has_training_signal(log_text: str) -> bool:
+    """Heuristic: is there enough in this log to warrant LLM inference?
+
+    Require: (a) non-trivial log size, (b) at least one eval/epoch
+    marker, (c) at least one numeric value that could be a metric.
+    Warmup-only logs with just "loading checkpoint" lines get skipped
+    so we don't waste LLM calls and poison the cache with empties.
+    """
+    if len(log_text) < 50:
+        return False
+    if not _HAS_EVAL_SIGNAL.search(log_text):
+        return False
+    if not _HAS_NUMERIC.search(log_text):
+        return False
+    return True
+
+
 def _cached_patterns_for(cache: Dict, train_script: Path,
-                         metric_name: str) -> Tuple[bool, List[str]]:
+                         metric_name: str,
+                         now: Optional[float] = None) -> Tuple[bool, List[str]]:
     """Return (is_cached, patterns).
 
-    `is_cached=True` means we have a previous result — including a
-    cached empty list ("the inferrer tried and couldn't figure it
-    out") that should prevent re-invocation until the script is
-    edited. `is_cached=False` means no entry or entry is stale.
+    `is_cached=True` means we have a still-valid previous result.
+    A cached empty list ("the inferrer tried and couldn't figure
+    it out") counts as cached only for `_EMPTY_TTL_SECONDS` — after
+    that it's treated as stale so the next harvest cycle gets to
+    retry on a (hopefully longer) log.
     """
     key = train_script.name
     entry = cache.get(key)
@@ -180,14 +216,23 @@ def _cached_patterns_for(cache: Dict, train_script: Path,
         return False, []
     if abs(entry.get("mtime", 0) - current_mtime) > 0.5:
         return False, []  # script was edited — cache is stale
+
     pbm = entry.get("patterns_by_metric", {})
     if metric_name not in pbm:
         return False, []
-    return True, list(pbm[metric_name])
+    patterns = list(pbm[metric_name])
+    if not patterns:
+        learned_at_all = entry.get("learned_at", {}) or {}
+        learned_at = learned_at_all.get(metric_name, 0)
+        current = now if now is not None else time.time()
+        if current - learned_at > _EMPTY_TTL_SECONDS:
+            return False, []  # stale empty — allow retry
+    return True, patterns
 
 
 def _store_patterns(cache: Dict, train_script: Path, metric_name: str,
-                    patterns: List[str]) -> None:
+                    patterns: List[str],
+                    now: Optional[float] = None) -> None:
     try:
         mtime = train_script.stat().st_mtime
     except OSError:
@@ -196,6 +241,9 @@ def _store_patterns(cache: Dict, train_script: Path, metric_name: str,
     entry = cache.setdefault(key, {"patterns_by_metric": {}})
     entry["mtime"] = mtime
     entry["patterns_by_metric"][metric_name] = patterns
+    # Track when we learned each metric so TTL-on-empty works.
+    learned_at = entry.setdefault("learned_at", {})
+    learned_at[metric_name] = now if now is not None else time.time()
 
 
 def _resolve_train_script(idea_dir: Path,
@@ -277,11 +325,13 @@ def harvest_running_ideas(results_dir: Path,
             log_text, primary_metric, patterns, maximize=maximize)
 
         # Extract miss + inferrer available + script known + never
-        # tried-or-cached for this (script, metric) → call inferrer.
+        # tried-or-cached for this (script, metric) + log looks like
+        # training has actually produced numbers → call inferrer.
         if (result is None
                 and pattern_inferrer is not None
                 and idea_script is not None
-                and not is_cached):
+                and not is_cached
+                and _log_has_training_signal(log_text)):
             try:
                 proposed = pattern_inferrer(
                     idea_script, log_text, primary_metric) or []

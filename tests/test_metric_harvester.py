@@ -283,3 +283,100 @@ def test_harvest_without_inferrer_leaves_exotic_log_untouched(tmp_path):
     assert not (idea_dir / "metrics.json").exists()
     # Cache file must not be created if no inferrer is used.
     assert not (results / PATTERN_CACHE_FILENAME).exists()
+
+
+def test_harvest_skips_inferrer_on_warmup_only_log(tmp_path):
+    """Log with no eval-like signal must not burn an LLM call."""
+    project = tmp_path / "project"
+    project.mkdir()
+    train_script = project / "train_sparse.py"
+    train_script.write_text("# stub\n")
+    results = project / "results"
+    idea_dir = results / "idea-warmup"
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "idea_config.yaml").write_text(
+        "train_script: train_sparse.py\n")
+    # Early training — no eval, no metric numbers yet.
+    (idea_dir / "train_output.log").write_text(
+        "Loading checkpoint...\n"
+        "Building model architecture...\n"
+        "Starting training loop...\n"
+    )
+
+    calls = []
+
+    def spy_inferrer(script_path, log_text, metric_name):
+        calls.append(1)
+        return ["this_should_never_be_cached\\s*([0-9.]+)"]
+
+    n = harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=spy_inferrer,
+        train_script=train_script)
+    assert n == 0
+    assert calls == []  # gated by _log_has_training_signal
+    assert not (results / PATTERN_CACHE_FILENAME).exists()
+
+
+def test_cached_empty_entry_expires_and_retries(tmp_path):
+    """Empty cache entry older than TTL must allow re-inference."""
+    from orze.engine import metric_harvester as mh
+    project, results, idea_dir, train_script = _setup_exotic_idea(tmp_path)
+    calls = []
+
+    def inferrer_v1(script_path, log_text, metric_name):
+        calls.append("v1")
+        return []  # empty — simulates "log too early"
+
+    def inferrer_v2(script_path, log_text, metric_name):
+        calls.append("v2")
+        return [r"NDCG score came in at ([0-9.]+)"]
+
+    # First harvest: inferrer returns empty, cached with timestamp.
+    harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=inferrer_v1,
+        train_script=train_script)
+    assert calls == ["v1"]
+
+    # Monkey-patch time to jump past the TTL.
+    original_time = mh.time.time
+    try:
+        mh.time.time = lambda: original_time() + mh._EMPTY_TTL_SECONDS + 60
+        harvest_running_ideas(
+            results, primary_metric="ndcg", pattern_inferrer=inferrer_v2,
+            train_script=train_script)
+    finally:
+        mh.time.time = original_time
+
+    assert calls == ["v1", "v2"]
+    data = json.loads((idea_dir / "metrics.json").read_text())
+    assert data["best_ndcg"] == pytest.approx(0.81)
+
+
+def test_cached_empty_entry_honored_within_ttl(tmp_path):
+    """Empty cache entry within TTL must NOT re-invoke."""
+    project, results, idea_dir, train_script = _setup_exotic_idea(tmp_path)
+    calls = []
+
+    def inferrer(script_path, log_text, metric_name):
+        calls.append(1)
+        return []
+
+    harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=inferrer,
+        train_script=train_script)
+    assert calls == [1]
+
+    # Same immediate retry — within TTL.
+    harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=inferrer,
+        train_script=train_script)
+    assert calls == [1]
+
+
+def test_store_patterns_records_learned_at_timestamp(tmp_path):
+    from orze.engine.metric_harvester import _store_patterns
+    ts = tmp_path / "s.py"
+    ts.write_text("pass\n")
+    cache = {}
+    _store_patterns(cache, ts, "map", ["pat"], now=12345.0)
+    assert cache["s.py"]["learned_at"]["map"] == 12345.0
