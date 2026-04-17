@@ -336,7 +336,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
             rp.close_log()
             _fs_unlock(rp.lock_dir)
 
-    # 3. Write shutdown sentinel (tells bug_fixer not to restart us)
+    # 3. Write shutdown sentinel (tells the watchdog not to restart us)
     sentinel = results_dir / ".orze_shutdown"
     try:
         sentinel.write_text(

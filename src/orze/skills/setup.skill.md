@@ -141,14 +141,16 @@ orze -c orze.yaml --once --gpus 0
 
 # If it works, launch the full system
 nohup orze -c orze.yaml >> results/orze.log 2>&1 &
-nohup python -m orze.agents.bug_fixer -c orze.yaml >> results/bug_fixer.log 2>&1 &
+nohup python -m orze_pro.agents.watchdog -c orze.yaml >> results/watchdog.log 2>&1 &
 ```
 
 Run the smoke test first. If it fails, fix the issue and retry. Once it passes, launch all processes.
 
-## The bug-fixer agent
+## The watchdog agent
 
-The bug-fixer is a **lifetime companion process** to orze. It runs forever alongside the main orchestrator, continuously monitoring for issues and self-healing the system.
+The watchdog is a **lifetime companion process** to orze. It runs forever alongside the main orchestrator, continuously monitoring the ORCHESTRATOR PROCESS for issues and self-healing.
+
+Not to be confused with the `engineer` role (which fixes experiment-level code bugs via `@sop:engineer_fix_bugs`). The watchdog is platform-level — it fixes orze-runtime problems only.
 
 ### What it does
 
@@ -163,14 +165,14 @@ Runs every 60 seconds (configurable) and checks for:
 
 ### Always start both
 
-When launching orze, **always start the bug-fixer alongside the orchestrator**:
+When launching orze, **always start the watchdog alongside the orchestrator**:
 
 ```bash
 nohup orze -c orze.yaml >> results/orze.log 2>&1 &
-nohup python -m orze.agents.bug_fixer -c orze.yaml >> results/bug_fixer.log 2>&1 &
+nohup python -m orze_pro.agents.watchdog -c orze.yaml >> results/watchdog.log 2>&1 &
 ```
 
-If orze dies, the bug-fixer will detect it within 60 seconds and restart it.
+If orze dies, the watchdog will detect it within 60 seconds and restart it.
 
 ## Files you create
 
@@ -184,7 +186,7 @@ project/
 ├── train.py               # Training script
 └── results/               # Auto-generated
     ├── orze.log            # Orchestrator log
-    └── bug_fixer.log       # Watchdog log
+    └── watchdog.log        # Watchdog log
 ```
 
 **To change research direction:** edit `GOAL.md` and/or `RESEARCH_RULES.md`.

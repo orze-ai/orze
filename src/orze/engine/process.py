@@ -142,7 +142,7 @@ class RoleProcess:
     ideas_pre_count: int = 0  # idea count before role started
     # True for research-type roles whose job is to append to ideas.md.
     # False for strategy roles (professor, data_analyst, thinker,
-    # engineer, bug_fixer) that modify other files — skipping the
+    # engineer, code_evolution) that modify other files — skipping the
     # ideas-modified soft-failure check for those avoids spurious
     # "completed successfully but ideas file was not modified" warnings.
     writes_ideas_file: bool = True

@@ -1014,8 +1014,9 @@ python: {python_for_yaml}
 
 # --- UPGRADE TO PRO ---
 # pip install orze-pro
-# Adds: autonomous research agents, code evolution, The Professor,
-# bug fixer, 7 FSM procedures, idea filtering, and more.
+# Adds: autonomous research agents, the engineer role (implement +
+# fix), code evolution, The Professor, watchdog, 7 FSM procedures,
+# idea filtering, and more.
 # Re-run orze --init to regenerate this config with pro features.
 """
     _create("orze.yaml", yaml_content)
@@ -1126,10 +1127,10 @@ noise: 0.1
             ("license", lambda: _check_pro_license()),
             ("research agent", lambda: _check_pro_role("research", project_dir)),
             ("professor", lambda: _check_pro_role("professor", project_dir)),
+            ("engineer", lambda: _check_pro_role("engineer", project_dir)),
             ("code evolution", lambda: _check_pro_role("code_evolution", project_dir)),
             # meta_research reuses research SOPs
             ("meta research", lambda: _check_pro_role("research", project_dir)),
-            ("bug fixer", lambda: _check_pro_role("bug_fixer", project_dir)),
             ("FSM engine", lambda: _check_fsm(project_dir)),
             ("FSM procedures", lambda: _check_pro_procedures()),
             ("idea verifier", lambda: _check_pro_plugin("idea_verifier")),

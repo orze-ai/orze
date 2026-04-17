@@ -18,7 +18,7 @@ Extension points (all in the autonomy layer):
     "agents.research_llm"      — LLM backends (Gemini/OpenAI/Anthropic)
     "agents.code_evolution"    — auto-evolve train script on plateau
     "agents.meta_research"     — meta-level strategy adjustment
-    "agents.bug_fixer"         — auto-fix failed experiments
+    "agents.watchdog"          — orze-process watchdog (auto-restart + stall diagnosis)
     "agents.bot"               — interactive Telegram/Slack bot
 """
 
@@ -39,7 +39,7 @@ _PRO_MODULES = {
     "agents.research_llm": "orze_pro.agents.research_llm",
     "agents.code_evolution": "orze_pro.agents.code_evolution",
     "agents.meta_research": "orze_pro.agents.meta_research",
-    "agents.bug_fixer": "orze_pro.agents.bug_fixer",
+    "agents.watchdog": "orze_pro.agents.watchdog",
     "agents.bot": "orze_pro.agents.bot",
     "idea_filter": "orze_pro.engine.idea_filter",
     "sops": "orze_pro.engine.sops",

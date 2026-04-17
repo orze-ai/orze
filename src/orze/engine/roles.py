@@ -52,7 +52,7 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
             # Only apply the ideas-modified soft-failure check to roles
             # whose job IS to append to ideas.md (research / research_gemini).
             # Strategy roles (professor, data_analyst, engineer, thinker,
-            # bug_fixer) modify RESEARCH_RULES.md / *.py / _retrospection.txt
+            # code_evolution) modify RESEARCH_RULES.md / *.py / _retrospection.txt
             # instead — their launcher sets rp.writes_ideas_file = False.
             if not getattr(rp, "writes_ideas_file", True):
                 logger.info("%s cycle %d completed", role_name, rp.cycle_num)
