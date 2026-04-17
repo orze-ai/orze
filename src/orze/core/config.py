@@ -280,6 +280,13 @@ def _validate_config(cfg: dict) -> tuple:
                               f"(expected 'script', 'claude', or 'research')")
             if mode == "claude" and not rcfg.get("skills"):
                 errors.append(f"roles.{rname}: mode 'claude' requires 'skills'")
+            # rules_file was removed in 3.4.0 — reject explicitly rather
+            # than silently ignoring a stale legacy key.
+            if "rules_file" in rcfg:
+                errors.append(
+                    f"roles.{rname}: 'rules_file' was removed in orze 3.4.0. "
+                    f"Replace with 'skills: [./{rcfg['rules_file']}]' "
+                    f"(or add bundled '@sop:<name>' entries).")
             if mode == "claude":
                 import shutil as _shutil
                 _claude_bin = rcfg.get("claude_bin", "claude")
