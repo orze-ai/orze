@@ -740,7 +740,20 @@ class Orze(OrzePhaseMixin):
                                 from orze_pro.agents.pattern_inference import (
                                     infer_metric_patterns,
                                 )
-                                inferrer = infer_metric_patterns
+                                inf_model = mh_cfg.get(
+                                    "inference_model", "haiku")
+                                inf_timeout = int(mh_cfg.get(
+                                    "inference_timeout", 60))
+                                inf_bin = mh_cfg.get("claude_bin", "") or ""
+
+                                def inferrer(script, text, metric,
+                                             _fn=infer_metric_patterns,
+                                             _m=inf_model,
+                                             _t=inf_timeout,
+                                             _b=inf_bin):
+                                    return _fn(script, text, metric,
+                                               model=_m, timeout=_t,
+                                               claude_bin=_b)
                             except ImportError:
                                 inferrer = None
                         ts_str = cfg.get("train_script")

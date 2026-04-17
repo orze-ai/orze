@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.4.5
+
+### Added
+
+- **`metric_harvest.inference_model` / `inference_timeout` / `claude_bin`**
+  are now honored by the orchestrator's pattern_inferrer wiring.
+  Previously the inferrer was called with hardcoded `model="haiku"`
+  / `timeout=60`. Override in `orze.yaml`:
+  ```yaml
+  metric_harvest:
+    inference_model: sonnet        # haiku (default) / sonnet / opus
+    inference_timeout: 120         # seconds (default 60)
+    claude_bin: /opt/claude        # (default: PATH lookup)
+  ```
+
 ## 3.4.4
 
 ### Fixed
