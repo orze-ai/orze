@@ -1,4 +1,4 @@
-# Orze — Complete Operations Guide (v3.2.29)
+# Orze — Complete Operations Guide (v3.4.0)
 
 Orze is a filesystem-coordinated GPU experiment orchestrator. It runs the loop: **generate ideas → train → evaluate → learn → repeat**.
 
@@ -106,7 +106,14 @@ orze service uninstall
 orze pro status                    # show license info
 orze pro activate ORZE-PRO-xxx    # activate with key
 orze pro deactivate               # remove license
-orze pro bootstrap-professor      # generate PROFESSOR_RULES.md from GOAL.md
+```
+
+### SOP Inspection
+
+```bash
+orze sop list                      # all registered SOPs (skill/method/validator/portfolio)
+orze sop check                     # validate wiring
+orze sop status                    # per-SOP execution evidence
 ```
 
 ### Upgrade / Uninstall
@@ -167,7 +174,11 @@ roles:
   professor:
     mode: claude                   # spawns Claude CLI
     model: claude-opus-4-6
-    rules_file: PROFESSOR_RULES.md
+    skills:                        # compose prompt from SOPs
+      - "@sop:professor_base"
+      - "@sop:professor_web_search"
+      - "@sop:professor_idea_review"
+      # see 'orze sop list' for the full set
     cycle_interval: 600
     timeout: 1200
   research:
@@ -176,11 +187,16 @@ roles:
     model: claude-opus-4-6
     num_ideas: 5
     cycle_interval: 300
-    rules_file: RESEARCH_RULES.md
+    skills:
+      - "@sop:research_base"
+      - ./RESEARCH_RULES.md        # project-specific dynamic SOP
   research_gemini:
     mode: research
     backend: gemini
     model: gemini-3.1-pro-preview
+    skills:
+      - "@sop:research_base"
+      - ./RESEARCH_RULES.md
 ```
 
 ### Auto-Enabled Roles (when professor is active)
@@ -190,11 +206,13 @@ roles:
 - **bot**: interactive Telegram/Slack bot
 
 ### Role Modes
-- `mode: claude` — spawns `claude -p <rules_file>` as subprocess
+- `mode: claude` — spawns `claude -p <composed-prompt>` as subprocess
 - `mode: research` — built-in multi-backend LLM agent (gemini/openai/anthropic/ollama)
 - `mode: script` — any Python script: `script: my_agent.py`, `args: [...]`
 
-Template vars in rules_file and args: `{ideas_file}`, `{results_dir}`, `{cycle}`, `{gpu_count}`, `{completed}`, `{queued}`, `{role_name}`.
+Template vars in the composed prompt and in `args`: `{ideas_file}`,
+`{results_dir}`, `{cycle}`, `{gpu_count}`, `{completed}`, `{queued}`,
+`{role_name}`, `{trigger_reason}`, `{timestamp}`.
 
 ## Key Files
 
@@ -202,7 +220,7 @@ Template vars in rules_file and args: `{ideas_file}`, `{results_dir}`, `{cycle}`
 |------|---------|--------------|
 | `GOAL.md` | Research objective, dataset, target metric | Professor, thinker, data_analyst |
 | `RESEARCH_RULES.md` | Hard constraints, dead techniques, active vectors | Research agents |
-| `PROFESSOR_RULES.md` | Professor behavior, web search mandate | Professor |
+| `@sop:professor_*` | Professor behavior, web search mandate (bundled in orze-pro) | Professor |
 | `ideas.md` | Idea queue (consumed into idea_lake.db) | Orze engine |
 | `orze.yaml` | Project config | Everything |
 | `results/report.md` | Human-readable leaderboard | You |
@@ -299,8 +317,8 @@ notifications:
 |---------|-------|-----|
 | No experiments running | `orze --check`, `cat results/status.json` | Add ideas, check GPUs, check train_script exists |
 | Training stuck | `results/{idea_id}/train_output.log` | Set `stall_minutes` in orze.yaml |
-| Research agent no ideas | `results/_research_logs/cycle_*.log` | Check `rules_file`, API keys, model access |
-| Professor not steering | `results/_professor_logs/cycle_*.log` | Update PROFESSOR_RULES.md with critical context |
+| Research agent no ideas | `results/_research_logs/cycle_*.log` | `orze sop check`, verify API keys, confirm composed prompt is non-empty |
+| Professor not steering | `results/_professor_logs/cycle_*.log` | Edit `RESEARCH_RULES.md` or author a dynamic professor SOP with task context |
 | Manual results invisible | `orze result list` | `orze result add --name X --map 0.83` |
 | Disk full | `df -h` | Set `gc.enabled: true`, `min_disk_gb` |
 | Ideas duplicating | Config dedup cache | Normal — dedup auto-skips |
@@ -395,7 +413,11 @@ roles:
   professor:
     mode: claude
     model: claude-opus-4-6
-    rules_file: PROFESSOR_RULES.md
+    skills:
+      - "@sop:professor_base"
+      - "@sop:professor_web_search"
+      - "@sop:professor_idea_review"
+      # see 'orze sop list' for the full set
     cycle_interval: 600
     timeout: 1200
   research:
@@ -403,7 +425,9 @@ roles:
     backend: anthropic
     num_ideas: 5
     cycle_interval: 300
-    rules_file: RESEARCH_RULES.md
+    skills:
+      - "@sop:research_base"
+      - ./RESEARCH_RULES.md
 
 # Bot
 bot:
