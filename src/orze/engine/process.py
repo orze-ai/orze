@@ -140,6 +140,12 @@ class RoleProcess:
     _log_fh: Any = field(default=None, repr=False)
     ideas_pre_size: int = 0  # ideas.md size before role started
     ideas_pre_count: int = 0  # idea count before role started
+    # True for research-type roles whose job is to append to ideas.md.
+    # False for strategy roles (professor, data_analyst, thinker,
+    # engineer, bug_fixer) that modify other files — skipping the
+    # ideas-modified soft-failure check for those avoids spurious
+    # "completed successfully but ideas file was not modified" warnings.
+    writes_ideas_file: bool = True
 
     def close_log(self):
         if self._log_fh and not self._log_fh.closed:

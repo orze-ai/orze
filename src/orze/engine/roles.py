@@ -49,22 +49,30 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
         rp.close_log()
         _fs_unlock(rp.lock_dir)
         if ret == 0:
-            # Check if ideas.md was actually modified (detect zero-output success)
-            ideas_modified = _ideas_were_modified(ideas_file, rp)
-            if ideas_modified:
+            # Only apply the ideas-modified soft-failure check to roles
+            # whose job IS to append to ideas.md (research / research_gemini).
+            # Strategy roles (professor, data_analyst, engineer, thinker,
+            # bug_fixer) modify RESEARCH_RULES.md / *.py / _retrospection.txt
+            # instead — their launcher sets rp.writes_ideas_file = False.
+            if not getattr(rp, "writes_ideas_file", True):
                 logger.info("%s cycle %d completed", role_name, rp.cycle_num)
                 _consecutive_soft_failures.pop(role_name, None)
             else:
-                count = _consecutive_soft_failures.get(role_name, 0) + 1
-                _consecutive_soft_failures[role_name] = count
-                logger.warning("%s cycle %d exited 0 but ideas.md was not modified "
-                               "(soft failure %d/%d)",
-                               role_name, rp.cycle_num, count,
-                               _SOFT_FAILURE_ERROR_THRESHOLD)
-                if count >= _SOFT_FAILURE_ERROR_THRESHOLD:
-                    logger.error("%s has %d consecutive soft failures "
-                                 "(exit 0, no output) — role may be misconfigured",
-                                 role_name, count)
+                ideas_modified = _ideas_were_modified(ideas_file, rp)
+                if ideas_modified:
+                    logger.info("%s cycle %d completed", role_name, rp.cycle_num)
+                    _consecutive_soft_failures.pop(role_name, None)
+                else:
+                    count = _consecutive_soft_failures.get(role_name, 0) + 1
+                    _consecutive_soft_failures[role_name] = count
+                    logger.warning("%s cycle %d exited 0 but ideas.md was not modified "
+                                   "(soft failure %d/%d)",
+                                   role_name, rp.cycle_num, count,
+                                   _SOFT_FAILURE_ERROR_THRESHOLD)
+                    if count >= _SOFT_FAILURE_ERROR_THRESHOLD:
+                        logger.error("%s has %d consecutive soft failures "
+                                     "(exit 0, no output) — role may be misconfigured",
+                                     role_name, count)
         else:
             logger.warning("%s cycle %d failed (exit %d), see %s",
                            role_name, rp.cycle_num, ret, rp.log_path)
