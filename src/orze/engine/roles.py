@@ -2,15 +2,29 @@
 
 CALLING SPEC:
     check_active_roles(active_roles: Dict[str, RoleProcess],
-                       ideas_file: str = "ideas.md") -> list[tuple[str, bool]]
+                       ideas_file: str = "ideas.md")
+        -> list[tuple[str, Outcome]]
         Poll all running role processes. Kill any that exceed their timeout.
-        Returns list of (role_name, success) for roles that finished this call.
+        Returns list of (role_name, outcome) for roles that finished this call.
+        Outcome is one of OUTCOME_OK / OUTCOME_TIMEOUT / OUTCOME_ERROR /
+        OUTCOME_SOFT_FAILURE (see Outcome enum below).
         Releases filesystem locks and checks ideas.md integrity after each role.
+
+    Outcome (IntEnum)
+        OUTCOME_OK             = 0  process exited 0 and produced its output
+        OUTCOME_TIMEOUT        = 1  killed after exceeding rp.timeout
+        OUTCOME_ERROR          = 2  process exited non-zero
+        OUTCOME_SOFT_FAILURE   = 3  exit 0 but writes_ideas_file=True role
+                                     did not modify ideas.md
+
+    is_success(outcome) -> bool
+        Back-compat helper: True iff outcome == OUTCOME_OK.
 """
 import logging
 import re
 import shutil
 import time
+from enum import IntEnum
 from pathlib import Path
 from typing import Dict
 
@@ -19,6 +33,27 @@ from orze.core.fs import _fs_unlock
 
 logger = logging.getLogger("orze")
 
+
+class Outcome(IntEnum):
+    OK = 0
+    TIMEOUT = 1
+    ERROR = 2
+    SOFT_FAILURE = 3
+
+
+OUTCOME_OK = Outcome.OK
+OUTCOME_TIMEOUT = Outcome.TIMEOUT
+OUTCOME_ERROR = Outcome.ERROR
+OUTCOME_SOFT_FAILURE = Outcome.SOFT_FAILURE
+
+
+def is_success(outcome: "Outcome | bool") -> bool:
+    """True iff the outcome represents a clean successful cycle."""
+    if isinstance(outcome, bool):
+        return outcome
+    return outcome == OUTCOME_OK
+
+
 # Track consecutive soft failures per role (exit 0 but no ideas.md modification)
 _consecutive_soft_failures: Dict[str, int] = {}
 _SOFT_FAILURE_ERROR_THRESHOLD = 5
@@ -26,7 +61,7 @@ _SOFT_FAILURE_ERROR_THRESHOLD = 5
 
 def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                        ideas_file: str = "ideas.md") -> list:
-    """Check running role processes. Returns list of (role_name, success) tuples."""
+    """Check running role processes. Returns list of (role_name, Outcome) tuples."""
     finished = []
     for role_name in list(active_roles.keys()):
         rp = active_roles[role_name]
@@ -42,12 +77,13 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                 rp.close_log()
                 _fs_unlock(rp.lock_dir)
                 del active_roles[role_name]
-                finished.append((role_name, False))
+                finished.append((role_name, OUTCOME_TIMEOUT))
             continue
 
         # Process exited
         rp.close_log()
         _fs_unlock(rp.lock_dir)
+        outcome: Outcome
         if ret == 0:
             # Only apply the ideas-modified soft-failure check to roles
             # whose job IS to append to ideas.md (research / research_gemini).
@@ -57,11 +93,13 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
             if not getattr(rp, "writes_ideas_file", True):
                 logger.info("%s cycle %d completed", role_name, rp.cycle_num)
                 _consecutive_soft_failures.pop(role_name, None)
+                outcome = OUTCOME_OK
             else:
                 ideas_modified = _ideas_were_modified(ideas_file, rp)
                 if ideas_modified:
                     logger.info("%s cycle %d completed", role_name, rp.cycle_num)
                     _consecutive_soft_failures.pop(role_name, None)
+                    outcome = OUTCOME_OK
                 else:
                     count = _consecutive_soft_failures.get(role_name, 0) + 1
                     _consecutive_soft_failures[role_name] = count
@@ -73,15 +111,17 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                         logger.error("%s has %d consecutive soft failures "
                                      "(exit 0, no output) — role may be misconfigured",
                                      role_name, count)
+                    outcome = OUTCOME_SOFT_FAILURE
         else:
             logger.warning("%s cycle %d failed (exit %d), see %s",
                            role_name, rp.cycle_num, ret, rp.log_path)
+            outcome = OUTCOME_ERROR
 
         # CORRUPTION GUARD: check if ideas.md was truncated by the role
         _check_ideas_integrity(ideas_file, rp)
 
         del active_roles[role_name]
-        finished.append((role_name, ret == 0))
+        finished.append((role_name, outcome))
 
     return finished
 
