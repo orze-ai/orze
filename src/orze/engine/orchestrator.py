@@ -716,6 +716,29 @@ class Orze(OrzePhaseMixin):
                 except Exception:
                     pass
 
+            # 2c. Periodic metric harvest (every 20 iterations ≈ 5 min).
+            # Training scripts that log per-epoch metrics to stdout but
+            # never emit metrics.json otherwise leave the leaderboard
+            # blind to mid-run progress. Harvester fills in metrics.json
+            # from train_output.log so professor/leaderboard see reality.
+            if self.iteration % 20 == 0:
+                try:
+                    from orze.engine.metric_harvester import harvest_running_ideas
+                    mh_cfg = cfg.get("metric_harvest") or {}
+                    if mh_cfg.get("enabled", True):
+                        primary = (cfg.get("report") or {}).get(
+                            "primary_metric", "map")
+                        extra = mh_cfg.get("patterns") or []
+                        maximize = mh_cfg.get("maximize", True)
+                        n = harvest_running_ideas(
+                            self.results_dir, primary, extra,
+                            maximize=maximize)
+                        if n > 0:
+                            logger.info(
+                                "Metric harvest: updated %d running idea(s)", n)
+                except Exception as e:
+                    logger.debug("Metric harvest failed: %s", e)
+
             # 3. Check active training processes (with health monitoring)
             finished = []
             if self.active:
