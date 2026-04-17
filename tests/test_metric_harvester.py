@@ -8,6 +8,7 @@ import pytest
 
 from orze.engine.metric_harvester import (
     HARVEST_SOURCE,
+    PATTERN_CACHE_FILENAME,
     extract_best_metric,
     harvest_running_ideas,
 )
@@ -138,3 +139,147 @@ def test_harvest_ignores_non_idea_dirs(tmp_path):
     (results / "_analysis" / "train_output.log").write_text(VJEPA2_LOG)
     assert harvest_running_ideas(results) == 0
     assert not (results / "_analysis" / "metrics.json").exists()
+
+
+def _setup_exotic_idea(tmp_path):
+    """Idea whose log format matches no default pattern."""
+    project = tmp_path / "project"
+    project.mkdir()
+    train_script = project / "train_weird.py"
+    train_script.write_text("# fake train script\n")
+
+    results = project / "results"
+    idea_dir = results / "idea-exotic"
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "idea_config.yaml").write_text(
+        "lr: 1e-5\ntrain_script: train_weird.py\n")
+    # Log format the built-in regex can't parse: prose sentences with the
+    # metric embedded mid-string, not a `metric=VALUE` kv.
+    (idea_dir / "train_output.log").write_text(
+        "Finished evaluation pass on fold 1 — NDCG score came in at 0.72.\n"
+        "Epoch 1/5\n"
+        "Finished evaluation pass on fold 2 — NDCG score came in at 0.81.\n"
+        "Epoch 2/5\n"
+    )
+    return project, results, idea_dir, train_script
+
+
+def test_harvest_calls_inferrer_when_regex_misses(tmp_path):
+    project, results, idea_dir, train_script = _setup_exotic_idea(tmp_path)
+    calls = []
+
+    def fake_inferrer(script_path, log_text, metric_name):
+        calls.append((script_path.name, metric_name))
+        return [r"NDCG score came in at ([0-9.]+)"]
+
+    n = harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=fake_inferrer,
+        train_script=train_script)
+
+    assert n == 1
+    assert calls == [("train_weird.py", "ndcg")]
+    data = json.loads((idea_dir / "metrics.json").read_text())
+    assert data["best_ndcg"] == pytest.approx(0.81)
+    assert data["last_epoch"] == 2
+
+
+def test_harvest_caches_inferred_patterns_per_train_script(tmp_path):
+    project, results, idea_dir, train_script = _setup_exotic_idea(tmp_path)
+    calls = []
+
+    def fake_inferrer(script_path, log_text, metric_name):
+        calls.append(1)
+        return [r"NDCG score came in at ([0-9.]+)"]
+
+    # First harvest triggers the inferrer and caches.
+    harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=fake_inferrer,
+        train_script=train_script)
+    assert len(calls) == 1
+
+    # Cache file exists and contains the learned pattern.
+    cache = json.loads((results / PATTERN_CACHE_FILENAME).read_text())
+    assert "train_weird.py" in cache
+    assert "ndcg" in cache["train_weird.py"]["patterns_by_metric"]
+
+    # Second harvest with a different idea for the same script must
+    # NOT call the inferrer again.
+    idea2 = results / "idea-exotic2"
+    idea2.mkdir()
+    (idea2 / "idea_config.yaml").write_text("train_script: train_weird.py\n")
+    (idea2 / "train_output.log").write_text(
+        "Finished evaluation pass on fold 1 — NDCG score came in at 0.77.\n"
+        "Epoch 1/5\n")
+
+    harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=fake_inferrer,
+        train_script=train_script)
+    assert len(calls) == 1  # still one — served from cache
+    data = json.loads((idea2 / "metrics.json").read_text())
+    assert data["best_ndcg"] == pytest.approx(0.77)
+
+
+def test_harvest_inferrer_not_retried_when_it_returns_empty(tmp_path):
+    project, results, idea_dir, train_script = _setup_exotic_idea(tmp_path)
+    calls = []
+
+    def empty_inferrer(script_path, log_text, metric_name):
+        calls.append(1)
+        return []  # Couldn't figure out patterns.
+
+    harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=empty_inferrer,
+        train_script=train_script)
+    assert len(calls) == 1
+
+    # Another idea with the same (unmodified) train script — must not retry.
+    idea2 = results / "idea-exotic2"
+    idea2.mkdir()
+    (idea2 / "idea_config.yaml").write_text("train_script: train_weird.py\n")
+    (idea2 / "train_output.log").write_text("same exotic format 0.9 something\n")
+
+    harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=empty_inferrer,
+        train_script=train_script)
+    assert len(calls) == 1  # still one; cached the empty result
+
+
+def test_harvest_reinvokes_inferrer_when_train_script_edited(tmp_path):
+    import time
+    project, results, idea_dir, train_script = _setup_exotic_idea(tmp_path)
+    calls = []
+
+    def fake_inferrer(script_path, log_text, metric_name):
+        calls.append(1)
+        return [r"NDCG score came in at ([0-9.]+)"]
+
+    harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=fake_inferrer,
+        train_script=train_script)
+    assert len(calls) == 1
+
+    # Simulate a script edit — bump mtime past the cache tolerance.
+    time.sleep(0.7)
+    train_script.write_text("# edited\n")
+
+    # New idea, same (but modified) train script.
+    idea2 = results / "idea-exotic2"
+    idea2.mkdir()
+    (idea2 / "idea_config.yaml").write_text("train_script: train_weird.py\n")
+    (idea2 / "train_output.log").write_text(
+        "Finished evaluation pass on fold 1 — NDCG score came in at 0.88.\n"
+        "Epoch 1/5\n")
+
+    harvest_running_ideas(
+        results, primary_metric="ndcg", pattern_inferrer=fake_inferrer,
+        train_script=train_script)
+    assert len(calls) == 2  # cache was invalidated by mtime change
+
+
+def test_harvest_without_inferrer_leaves_exotic_log_untouched(tmp_path):
+    project, results, idea_dir, train_script = _setup_exotic_idea(tmp_path)
+    n = harvest_running_ideas(results, primary_metric="ndcg")
+    assert n == 0
+    assert not (idea_dir / "metrics.json").exists()
+    # Cache file must not be created if no inferrer is used.
+    assert not (results / PATTERN_CACHE_FILENAME).exists()

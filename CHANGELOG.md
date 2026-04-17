@@ -1,5 +1,31 @@
 # Changelog
 
+## 3.4.2
+
+### Added
+
+- **LLM pattern-inferrer hook in `metric_harvester`.** When the
+  built-in regex patterns and user-configured `metric_harvest.patterns`
+  all fail to extract the primary metric from a training script's log,
+  the harvester can invoke an optional `pattern_inferrer` callable
+  that proposes regex patterns for the specific script + metric.
+  Results are cached keyed by `(train_script.name, mtime)` — one call
+  per new script per edit, never again.
+
+  orze's harvester stays pure regex by default; the LLM-backed
+  inferrer ships in orze-pro (`orze_pro.agents.pattern_inference`)
+  and is auto-wired when orze-pro is installed. Disable via
+  `metric_harvest.llm_fallback: false`.
+
+  Cached patterns are persisted to `results/_metric_patterns_cache.json`.
+
+### Changed
+
+- `harvest_running_ideas()` gained keyword args `pattern_inferrer` and
+  `train_script`. Extraction now strips trailing punctuation
+  (`.,;:`) from the captured number, so prose-style patterns like
+  `NDCG came in at ([0-9.]+)` safely match values followed by a period.
+
 ## 3.4.1
 
 ### Added
