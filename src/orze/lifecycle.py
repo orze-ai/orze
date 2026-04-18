@@ -16,7 +16,13 @@ from pathlib import Path
 
 # Pattern used to find the orze orchestrator via pgrep/pkill.
 # The [o] trick prevents the grep/pgrep process from matching itself.
-_ORZE_PAT = r"[o]rze.*orze\.yaml"
+#
+# Match ONLY the detached orchestrator — `python -m orze.cli -c …orze.yaml`
+# (daemon mode) and the foreground equivalent after os.execv. A looser
+# pattern like `orze.*orze\.yaml` also matches the *caller* shell whose
+# cmdline is literally `orze start -c orze.yaml`, producing a phantom
+# "already running" error on the very first `orze start` from bash.
+_ORZE_PAT = r"[o]rze\.cli.*orze\.yaml"
 
 # Child process script names to kill on stop.
 _CHILD_PAT = (

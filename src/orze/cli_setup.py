@@ -757,6 +757,55 @@ def resolve_init_path(explicit_path: str) -> str:
 # --init: scaffold a new orze project
 # ---------------------------------------------------------------------------
 
+def _try_create_venv(venv_dir: Path, venv_python: Path) -> bool:
+    """Create *venv_dir* with pyyaml installed. Returns True on success.
+
+    Tries `python -m venv` first (matches the user's Python). If that
+    fails — typically because `python3-venv` is missing on Debian/Ubuntu
+    — fall back to `uv venv --python <sys.executable>`. uv uses the same
+    Python interpreter but ships its own venv creation path and does not
+    need `ensurepip`.
+    """
+    # Path A: standard library venv.
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "venv", str(venv_dir)],
+            check=True, timeout=60,
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        )
+        subprocess.run(
+            [str(venv_python), "-m", "pip", "install", "--quiet", "pyyaml"],
+            check=True, timeout=120,
+        )
+        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+            FileNotFoundError):
+        # Clean up any partial venv before the fallback.
+        shutil.rmtree(venv_dir, ignore_errors=True)
+
+    # Path B: uv fallback (common on hosts without python3-venv).
+    uv = shutil.which("uv")
+    if not uv:
+        return False
+    try:
+        subprocess.run(
+            [uv, "venv", str(venv_dir), "--python", sys.executable],
+            check=True, timeout=60,
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        )
+        # `uv pip` works against a venv without bootstrapping pip inside it.
+        subprocess.run(
+            [uv, "pip", "install", "--python", str(venv_python),
+             "--quiet", "pyyaml"],
+            check=True, timeout=120,
+        )
+        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+            FileNotFoundError):
+        shutil.rmtree(venv_dir, ignore_errors=True)
+        return False
+
+
 def do_init(init_arg: str):
     """Scaffold a new orze project at the resolved path.
 
@@ -839,21 +888,13 @@ def do_init(init_arg: str):
 
     if not venv_ok:
         print(f"  \033[32mcreating\033[0m venv/...")
-        try:
-            subprocess.run(
-                [sys.executable, "-m", "venv", str(venv_dir)],
-                check=True, timeout=60,
-            )
-            subprocess.run(
-                [str(venv_python), "-m", "pip", "install", "--quiet", "pyyaml"],
-                check=True, timeout=120,
-            )
+        if _try_create_venv(venv_dir, venv_python):
             created.append("venv/ (with pyyaml)")
             print(f"  \033[32mcreated\033[0m  venv/ (with pyyaml)")
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
-                FileNotFoundError) as exc:
-            print(f"  \033[33mwarning\033[0m  venv creation failed: {exc}")
-            print(f"           You can create one manually: python3 -m venv venv && venv/bin/pip install pyyaml")
+        else:
+            print(f"  \033[33mwarning\033[0m  venv creation failed — neither `python -m venv` nor `uv venv` succeeded.")
+            print(f"           On Debian/Ubuntu: `sudo apt install python3-venv`, or install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`")
+            print(f"           Once a venv creator is available, re-run `orze --init .` (it is idempotent).")
 
     # Determine python path for orze.yaml
     if (venv_dir / "bin" / "python3").exists():
