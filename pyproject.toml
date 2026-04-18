@@ -38,10 +38,12 @@ Issues = "https://github.com/warlockee/orze/issues"
 
 [project.scripts]
 orze = "orze.cli:main"
-# Drop-in `claude -p` wrapper that uses the Claude Code subscription by
-# default and falls back to `ANTHROPIC_API_KEY` when the subscription
-# quota is exhausted. See orze/shims/claude.py for the full contract.
-orze-claude = "orze.shims.claude:main"
+# Drop-in LLM-CLI wrappers. All entries route to the same dispatcher in
+# orze.shims.llm:main — it resolves the backend from the script's own
+# basename (e.g. `orze-claude` -> the "claude" BackendSpec). Add a new
+# backend by (1) extending orze.shims.llm.BACKENDS and (2) adding an
+# `orze-<name>` line below. See orze/shims/llm.py for the full contract.
+orze-claude = "orze.shims.llm:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
