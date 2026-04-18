@@ -13,9 +13,18 @@ CALLING SPEC:
     Outcome (IntEnum)
         OUTCOME_OK             = 0  process exited 0 and produced its output
         OUTCOME_TIMEOUT        = 1  killed after exceeding rp.timeout
-        OUTCOME_ERROR          = 2  process exited non-zero
+        OUTCOME_ERROR          = 2  process exited non-zero for a real reason
+                                     (script bug, config error, etc.)
         OUTCOME_SOFT_FAILURE   = 3  exit 0 but writes_ideas_file=True role
                                      did not modify ideas.md
+        OUTCOME_RATE_LIMITED   = 4  process exited non-zero because the
+                                     backing LLM hit a billing / usage /
+                                     rate-limit ceiling (Claude CLI
+                                     "out of extra usage", Gemini 429,
+                                     Anthropic 529, etc.). Transient —
+                                     do NOT count toward circuit-breaker
+                                     consecutive_failures; just retry on
+                                     the next scheduled cycle.
 
     is_success(outcome) -> bool
         Back-compat helper: True iff outcome == OUTCOME_OK.
@@ -39,12 +48,50 @@ class Outcome(IntEnum):
     TIMEOUT = 1
     ERROR = 2
     SOFT_FAILURE = 3
+    RATE_LIMITED = 4
 
 
 OUTCOME_OK = Outcome.OK
 OUTCOME_TIMEOUT = Outcome.TIMEOUT
 OUTCOME_ERROR = Outcome.ERROR
 OUTCOME_SOFT_FAILURE = Outcome.SOFT_FAILURE
+OUTCOME_RATE_LIMITED = Outcome.RATE_LIMITED
+
+
+# Signals in role stdout/stderr that indicate an LLM rate-limit /
+# billing cap / quota exhaustion, NOT a script bug. Matched against the
+# last ~4 KB of the role log. Patterns are lowercased-case-insensitive.
+_RATE_LIMIT_SIGNATURES = (
+    "out of extra usage",            # Claude CLI (`claude -p`)
+    "rate limit exceeded",           # generic
+    "429 too many requests",         # HTTP 429
+    "resource_exhausted",            # Google API
+    "quota exceeded",                # Google / OpenAI
+    "insufficient_quota",            # OpenAI
+    "overloaded_error",              # Anthropic API
+    "429 resource has been exhausted",
+)
+
+
+def _is_rate_limit_exit(log_path: "Path") -> bool:
+    """Scan the last ~4 KB of a role log for LLM rate-limit signatures.
+
+    Rate-limit hits surface as exit-code-non-zero from the Claude/Gemini
+    CLI with the error printed to stdout/stderr. We don't want those
+    one-off transient events to advance the consecutive-failure counter
+    and trip the circuit-breaker backoff — the role was blocked by the
+    provider, not broken.
+    """
+    try:
+        with open(log_path, "rb") as fh:
+            try:
+                fh.seek(-4096, 2)
+            except OSError:
+                fh.seek(0)
+            tail = fh.read().decode("utf-8", errors="ignore").lower()
+    except OSError:
+        return False
+    return any(sig in tail for sig in _RATE_LIMIT_SIGNATURES)
 
 
 def is_success(outcome: "Outcome | bool") -> bool:
@@ -113,9 +160,16 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                                      role_name, count)
                     outcome = OUTCOME_SOFT_FAILURE
         else:
-            logger.warning("%s cycle %d failed (exit %d), see %s",
-                           role_name, rp.cycle_num, ret, rp.log_path)
-            outcome = OUTCOME_ERROR
+            if _is_rate_limit_exit(rp.log_path):
+                logger.warning("%s cycle %d hit LLM rate-limit (exit %d) "
+                               "— transient, not counting toward "
+                               "consecutive_failures",
+                               role_name, rp.cycle_num, ret)
+                outcome = OUTCOME_RATE_LIMITED
+            else:
+                logger.warning("%s cycle %d failed (exit %d), see %s",
+                               role_name, rp.cycle_num, ret, rp.log_path)
+                outcome = OUTCOME_ERROR
 
         # CORRUPTION GUARD: check if ideas.md was truncated by the role
         _check_ideas_integrity(ideas_file, rp)
