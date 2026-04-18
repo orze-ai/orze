@@ -169,11 +169,43 @@ def _format_args(args, template_vars: dict) -> list:
     return formatted
 
 
+def _tree_cpu_jiffies(root_pid: int) -> int:
+    """Sum utime+stime (jiffies) across *root_pid* and all its descendants.
+
+    A naked `accelerate launch` / `python -u` parent sleeps in epoll for
+    most of the run — it's the child process that does the heavy data
+    indexing, model load, and training steps. Reading the parent's
+    /proc/pid/stat alone massively underestimates real work and yielded
+    false positives from `_detect_zombie` during cold-cache dataset
+    indexing (which legitimately shows 0 GPU activity for minutes).
+    """
+    total = 0
+    stack = [root_pid]
+    seen = set()
+    while stack:
+        pid = stack.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        try:
+            with open(f"/proc/{pid}/stat") as f:
+                parts = f.read().split()
+            total += int(parts[13]) + int(parts[14])
+        except (FileNotFoundError, IndexError, ValueError):
+            continue
+        try:
+            with open(f"/proc/{pid}/task/{pid}/children") as f:
+                stack.extend(int(p) for p in f.read().split())
+        except (FileNotFoundError, ValueError, OSError):
+            pass
+    return total
+
+
 def _detect_zombie(tp) -> bool:
     """Check if a training process is stuck (alive but doing nothing).
 
     Returns True if the process has:
-    - Near-zero CPU usage (parent and children)
+    - Near-zero CPU usage (parent AND all descendants summed)
     - No GPU memory usage (parent and children)
     - No log file growth
     All three must be true to avoid false positives.
@@ -181,15 +213,10 @@ def _detect_zombie(tp) -> bool:
     """
     pid = tp.process.pid
 
-    # 1. Check CPU usage via /proc/pid/stat
+    # 1. Check CPU usage across the process tree.
     try:
-        with open(f"/proc/{pid}/stat") as f:
-            stat = f.read().split()
-        utime = int(stat[13])   # user time in jiffies
-        stime = int(stat[14])   # system time in jiffies
-        total_cpu = utime + stime
+        total_cpu = _tree_cpu_jiffies(pid)
 
-        # Store previous reading for comparison
         prev = getattr(tp, '_zombie_cpu', None)
         tp._zombie_cpu = (time.time(), total_cpu)
 
