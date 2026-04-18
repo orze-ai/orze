@@ -1,5 +1,30 @@
 # Changelog
 
+## 3.4.7
+
+### Fixed
+
+- **`cleanup_orphans` no longer leaves cross-host dead claims stuck
+  forever.** The previous logic only reclaimed directories that had
+  `claim.json` AND *no* `metrics.json`. A training that wrote partial
+  metrics mid-run (e.g. per-epoch snapshots) and then crashed — exactly
+  what happens when a second orze host dies mid-training — left
+  `metrics.json` on disk, so the directory was skipped by cleanup even
+  though the lake still said `status='running'`. Queue slots leaked
+  silently.
+
+  Cleanup now has a second branch: when `claim.json` exists AND
+  `metrics.json` exists AND the lake reports `status='running'` AND
+  last activity is older than `orphan_timeout_hours`, it removes just
+  `claim.json` and resets the lake status to `queued`. The directory
+  itself (partial metrics, checkpoints, logs) is preserved for
+  inspection. Ideas with status `completed`/`failed`/`skipped` remain
+  untouched.
+
+  Observed impact: a second node that died 23h earlier had 9 claims
+  stuck running; this release reclaims them without losing partial
+  work.
+
 ## 3.4.6
 
 ### Breaking

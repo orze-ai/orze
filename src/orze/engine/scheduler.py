@@ -162,9 +162,25 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
 
 def cleanup_orphans(results_dir: Path, hours: float,
                     lake=None) -> int:
-    """Remove result dirs with claim.json but no metrics.json older than hours.
-    If lake is provided, resets their DB status to 'queued' so they retry.
-    Returns count of cleaned dirs."""
+    """Reclaim stale claims on result dirs. Returns count reclaimed.
+
+    Two classes of stale claims are reclaimed:
+
+    1. ``claim.json`` exists, ``metrics.json`` does NOT, activity older than
+       ``hours``: the whole directory is deleted (no useful output) and the
+       lake status is reset to 'queued' so the idea retries.
+
+    2. ``claim.json`` exists, ``metrics.json`` DOES exist, but the lake
+       still says ``status='running'`` and activity is older than ``hours``:
+       the training crashed mid-run after writing partial metrics (e.g. a
+       second node died between epochs). The dir is kept so partial
+       checkpoints/logs remain inspectable, but ``claim.json`` is removed
+       and lake status reset to 'queued' so the idea can be re-attempted.
+
+    Before this second class was handled, any cross-host claim that had
+    written partial metrics got stuck as 'running' forever, silently
+    consuming a queue slot even after the owning host was confirmed dead.
+    """
     if hours <= 0:
         return 0
 
@@ -177,26 +193,63 @@ def cleanup_orphans(results_dir: Path, hours: float,
         claim_path = d / "claim.json"
         metrics_path = d / "metrics.json"
 
-        if claim_path.exists() and not metrics_path.exists():
+        if not claim_path.exists():
+            continue
+
+        try:
+            last_activity = claim_path.stat().st_mtime
+            log_path = d / "train_output.log"
+            if log_path.exists():
+                last_activity = max(last_activity,
+                                    log_path.stat().st_mtime)
+            if last_activity >= cutoff:
+                continue
+
+            idea_id = d.name
+            age_hours = (time.time() - last_activity) / 3600
+
+            if not metrics_path.exists():
+                # No output at all — delete the whole dir.
+                shutil.rmtree(d)
+                logger.info("Cleaned orphan: %s (last activity %.1fh ago)",
+                            idea_id, age_hours)
+                if lake:
+                    try:
+                        lake.set_status(idea_id, "queued")
+                    except Exception:
+                        pass
+                cleaned += 1
+                continue
+
+            # metrics.json exists. Only reclaim if lake still thinks this
+            # is running — i.e. training crashed before marking completion.
+            # Finished ideas (completed/failed/skipped) stay untouched.
+            if lake is None:
+                continue
             try:
-                last_activity = claim_path.stat().st_mtime
-                log_path = d / "train_output.log"
-                if log_path.exists():
-                    last_activity = max(last_activity,
-                                        log_path.stat().st_mtime)
-                if last_activity < cutoff:
-                    idea_id = d.name
-                    shutil.rmtree(d)
-                    logger.info("Cleaned orphan: %s (last activity %.1fh ago)",
-                                idea_id, (time.time() - last_activity) / 3600)
-                    if lake:
-                        try:
-                            lake.set_status(idea_id, "queued")
-                        except Exception:
-                            pass
-                    cleaned += 1
+                idea = lake.get(idea_id)
+            except Exception:
+                continue
+            if not idea or idea.get("status") != "running":
+                continue
+
+            try:
+                claim_path.unlink()
+            except OSError as e:
+                logger.warning("Failed to unlink claim for %s: %s",
+                               idea_id, e)
+                continue
+            try:
+                lake.set_status(idea_id, "queued")
             except Exception as e:
-                logger.warning("Failed to clean orphan %s: %s", d.name, e)
+                logger.warning("Failed to re-queue %s: %s", idea_id, e)
+                continue
+            logger.info(
+                "Reclaimed stale running claim: %s (last activity %.1fh ago, "
+                "partial metrics preserved)", idea_id, age_hours)
+            cleaned += 1
+        except Exception as e:
+            logger.warning("Failed to clean orphan %s: %s", d.name, e)
 
     return cleaned
 
