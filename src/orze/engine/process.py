@@ -148,6 +148,17 @@ class RoleProcess:
     # this counter, the post-exit size/count check cannot distinguish
     # "appended then consumed" from "never appended".
     ideas_consumed_during_run: int = 0
+    # ideas.md mtime snapshot taken at role launch. Used as a cross-daemon
+    # fallback signal: in multi-daemon deployments (shared ideas.md,
+    # separate active_roles dicts) the ideas_consumed_during_run counter
+    # is only incremented by the daemon whose active_roles contains this
+    # RoleProcess. If a DIFFERENT daemon performs the consumption (wipes
+    # ideas.md), this daemon's counter stays 0 and the size/count check
+    # also returns False (ideas_pre_size matches the post-wipe size by
+    # coincidence). mtime changes on any write to the shared file, so
+    # current_mtime > ideas_md_mtime_pre means ideas.md was touched
+    # during the role's lifetime — enough to credit the role.
+    ideas_md_mtime_pre: float = 0.0
     # True for research-type roles whose job is to append to ideas.md.
     # False for strategy roles (professor, data_analyst, thinker,
     # engineer, code_evolution) that modify other files — skipping the

@@ -173,3 +173,60 @@ def test_default_writes_ideas_file_is_true(tmp_path):
         cycle_num=1,
     )
     assert rp.writes_ideas_file is True
+
+
+def test_cross_daemon_consumption_credits_via_mtime(tmp_path, caplog):
+    """Multi-daemon case: ideas.md wiped by ANOTHER daemon during this
+    role's run. ideas_consumed_during_run stays 0 (only the consuming
+    daemon bumps it), and post-wipe file size happens to match the
+    pre-role snapshot (both are small). Without the mtime fallback
+    this false-positives as "ideas.md was not modified". With the
+    mtime fallback, the role is credited."""
+    caplog.set_level(logging.WARNING)
+    roles_mod._consecutive_soft_failures.clear()
+
+    import os
+    ideas = tmp_path / "ideas.md"
+    ideas.write_text("# header\n")
+    pre_size = ideas.stat().st_size
+    pre_mtime = ideas.stat().st_mtime
+
+    # Simulate another daemon wiping the file after our role started.
+    # Rewrite to the same byte-length (so the size/count fallback cannot
+    # rescue the check) and advance mtime via os.utime. Using explicit
+    # utime rather than sleep+write avoids flakiness on filesystems
+    # with coarse mtime resolution.
+    ideas.write_text("# header\n")
+    os.utime(str(ideas), (pre_mtime + 5.0, pre_mtime + 5.0))
+
+    rp = _make_rp("research", writes_ideas_file=True, tmp_path=tmp_path,
+                  ideas_pre_size=pre_size)
+    rp.ideas_md_mtime_pre = pre_mtime
+    active = {"research": rp}
+
+    finished = roles_mod.check_active_roles(active, ideas_file=str(ideas))
+
+    assert finished == [("research", OUTCOME_OK)]
+    assert "soft failure" not in caplog.text.lower()
+
+
+def test_unchanged_mtime_still_soft_failures(tmp_path, caplog):
+    """Guard: if ideas.md mtime hasn't advanced past ideas_md_mtime_pre
+    and no other signal fired, we still want the soft-failure outcome.
+    Prevents the mtime fallback from silently hiding all real cases."""
+    caplog.set_level(logging.WARNING)
+    roles_mod._consecutive_soft_failures.clear()
+
+    ideas = tmp_path / "ideas.md"
+    ideas.write_text("x" * 100)
+    pre_size = ideas.stat().st_size
+    pre_mtime = ideas.stat().st_mtime
+
+    rp = _make_rp("research", writes_ideas_file=True, tmp_path=tmp_path,
+                  ideas_pre_size=pre_size)
+    rp.ideas_md_mtime_pre = pre_mtime  # matches current mtime exactly
+    active = {"research": rp}
+
+    finished = roles_mod.check_active_roles(active, ideas_file=str(ideas))
+
+    assert finished == [("research", OUTCOME_SOFT_FAILURE)]

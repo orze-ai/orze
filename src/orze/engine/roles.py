@@ -183,16 +183,29 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
 def _ideas_were_modified(ideas_file: str, rp: "RoleProcess") -> bool:
     """Check if ideas.md was modified by the role (size or idea count changed).
 
-    If orze's consumption phase ingested ideas while this role was still
-    running, credit the role — those ideas are gone from ideas.md now
-    but the role did append them. Without this, the post-exit size/count
-    check would false-positive "ideas.md was not modified".
+    Three credit signals, in order:
+
+    1. `ideas_consumed_during_run > 0`: this daemon's consumption phase
+       credited the role mid-run — same-daemon case.
+    2. ideas.md mtime > `ideas_md_mtime_pre`: ideas.md was touched on
+       the shared filesystem during the role's lifetime. Catches the
+       cross-daemon case where a DIFFERENT daemon wiped ideas.md (and
+       so only bumped its own active_roles' counters).
+    3. Post-exit size/count differs from pre-snapshot: fallback for
+       roles whose output never got consumed.
     """
     if getattr(rp, "ideas_consumed_during_run", 0) > 0:
         return True
     ideas_path = Path(ideas_file)
     if not ideas_path.exists():
         return False
+    pre_mtime = getattr(rp, "ideas_md_mtime_pre", 0.0)
+    try:
+        current_mtime = ideas_path.stat().st_mtime
+        if pre_mtime > 0 and current_mtime > pre_mtime:
+            return True
+    except OSError:
+        pass
     if rp.ideas_pre_size == 0:
         # No pre-snapshot; can't tell — assume modified to avoid false positives
         return True
