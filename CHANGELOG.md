@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.4.9
+
+### Fixed
+
+- **`orze stop` output no longer misleads on clean or single-daemon
+  hosts.** Previously the command printed "No orchestrator PID file
+  found" on the same run where it went on to kill an untracked orze
+  process found via `pgrep`, so the first line read like "nothing to
+  do." It now prints a single summary:
+  - `Nothing to stop — no PID file, no matching process` (clean host)
+  - `No PID file but found and killed N untracked orze process(es)…`
+  "additional orze process" is renamed to "untracked orze process" —
+  it wasn't additional to anything when the PID file was missing.
+
 ## 3.4.8
 
 ### Fixed
