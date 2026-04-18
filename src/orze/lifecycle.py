@@ -234,15 +234,15 @@ def do_stop(cfg: dict, timeout: int = 60):
                 pass
         _log("stop", "Orchestrator stopped")
     elif pid:
-        _log("stop", f"Orchestrator PID {pid} not running")
-    else:
-        _log("stop", "No orchestrator PID file found")
+        _log("stop", f"PID file points at PID {pid} but it is not running")
 
-    # Also catch any orze process for OUR config not tracked by PID file.
+    # Also catch any orze process for OUR config not tracked by PID file
+    # (e.g. PID file missing / stale, or a parallel foreground daemon).
     # Scope the pgrep to processes whose command line contains our results_dir
     # or config path so we don't kill other tenants' instances.
     our_results = str(results_dir.resolve())
     config_path = cfg.get("_config_path") or ""
+    untracked_killed = 0
     for extra_pid in _pgrep(_ORZE_PAT):
         try:
             cmdline = Path(f"/proc/{extra_pid}/cmdline").read_bytes().decode(
@@ -252,8 +252,17 @@ def do_stop(cfg: dict, timeout: int = 60):
                 continue
         except OSError:
             continue
-        _log("stop", f"Killing additional orze process (PID {extra_pid})")
+        _log("stop", f"Killing untracked orze process (PID {extra_pid})")
         _kill_pid(extra_pid, timeout=10)
+        untracked_killed += 1
+
+    # Summarise — especially helpful when there was no PID file but we still
+    # found (or didn't find) an untracked orchestrator via pgrep.
+    if pid is None and untracked_killed == 0:
+        _log("stop", "Nothing to stop — no PID file, no matching process")
+    elif pid is None and untracked_killed > 0:
+        _log("stop", f"No PID file but found and killed {untracked_killed} "
+             f"untracked orze process(es) for this config")
 
     # 4. Kill child processes — only children of our orchestrator PID, not globally.
     if pid:
