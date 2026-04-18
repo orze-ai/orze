@@ -125,10 +125,17 @@ class OrzePhaseMixin:
                                     len(ingested_ids), cfg["ideas_file"])
                         # Update pre-snapshots on active roles so the corruption
                         # guard doesn't false-positive on the legitimate wipe.
+                        # Also credit research-writer roles with the ingested
+                        # count so they don't trip the "ideas.md was not
+                        # modified" soft-failure check — they appended, we
+                        # just consumed it before they exited.
                         new_size = Path(cfg["ideas_file"]).stat().st_size
+                        ingested_n = len(ingested_ids)
                         for rp in self.active_roles.values():
                             rp.ideas_pre_size = new_size
                             rp.ideas_pre_count = 0
+                            if getattr(rp, "writes_ideas_file", True) and ingested_n:
+                                rp.ideas_consumed_during_run += ingested_n
                     except Exception as e:
                         logger.warning("Failed to consume ideas.md: %s", e)
                     finally:

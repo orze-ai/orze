@@ -127,7 +127,15 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
 
 
 def _ideas_were_modified(ideas_file: str, rp: "RoleProcess") -> bool:
-    """Check if ideas.md was modified by the role (size or idea count changed)."""
+    """Check if ideas.md was modified by the role (size or idea count changed).
+
+    If orze's consumption phase ingested ideas while this role was still
+    running, credit the role — those ideas are gone from ideas.md now
+    but the role did append them. Without this, the post-exit size/count
+    check would false-positive "ideas.md was not modified".
+    """
+    if getattr(rp, "ideas_consumed_during_run", 0) > 0:
+        return True
     ideas_path = Path(ideas_file)
     if not ideas_path.exists():
         return False

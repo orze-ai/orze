@@ -140,6 +140,14 @@ class RoleProcess:
     _log_fh: Any = field(default=None, repr=False)
     ideas_pre_size: int = 0  # ideas.md size before role started
     ideas_pre_count: int = 0  # idea count before role started
+    # Running tally of ideas consumed from ideas.md while this role was
+    # still active. Incremented by the consumption phase whenever it
+    # ingests ideas and a research-writer role is running. Used to avoid
+    # the _ideas_were_modified false-negative where a role appends ideas
+    # that get consumed (ideas.md wiped) before the role exits — without
+    # this counter, the post-exit size/count check cannot distinguish
+    # "appended then consumed" from "never appended".
+    ideas_consumed_during_run: int = 0
     # True for research-type roles whose job is to append to ideas.md.
     # False for strategy roles (professor, data_analyst, thinker,
     # engineer, code_evolution) that modify other files — skipping the

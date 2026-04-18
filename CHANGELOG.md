@@ -1,5 +1,28 @@
 # Changelog
 
+## 3.4.10
+
+### Fixed
+
+- **`_ideas_were_modified` no longer false-flags research roles that
+  append ideas that get consumed mid-run.** Previously, if a research
+  agent appended N ideas and orze's consumption phase ingested them
+  into `idea_lake.db` (wiping `ideas.md` back to the header) *before*
+  the role process exited, the post-exit check compared
+  `current_size == pre_size` and `current_count == pre_count` (both
+  reflecting the post-consumption state) and returned False → the
+  role tripped `OUTCOME_SOFT_FAILURE` and logged
+  `"ideas.md was not modified"` despite having produced useful output.
+  Over enough cycles this bumped the consecutive-soft-failure counter
+  toward the 5/5 circuit breaker.
+
+  Fix: track `ideas_consumed_during_run` per `RoleProcess`. When the
+  consumption phase ingests ideas and a research-writer role is still
+  running, increment its counter by the ingested count.
+  `_ideas_were_modified` short-circuits to True if that counter is
+  non-zero, crediting the role for ideas it appended even after the
+  file has been wiped.
+
 ## 3.4.9
 
 ### Fixed
