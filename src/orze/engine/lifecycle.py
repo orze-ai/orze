@@ -25,6 +25,7 @@ from pathlib import Path
 from orze import __version__
 from orze.engine.process import _kill_pg
 from orze.engine.health import fs_startup_check, cleanup_stale_locks, HealthMonitor
+from orze.engine.upgrade_cleanup import check_and_clean as upgrade_check_and_clean
 from orze.reporting.state import save_state
 from orze.reporting.notifications import notify
 from orze.core.fs import _fs_unlock, atomic_write
@@ -56,10 +57,16 @@ def startup_checks(results_dir: Path, cfg: dict,
     # 2. Clean up stale locks from our own hostname
     cleanup_stale_locks(results_dir, hostname)
 
-    # 3. Initialize per-iteration health monitor
+    # 3. Scrub stale state files if orze (or orze-pro) was upgraded since
+    # the last boot. Must run before the FSM / roles start so they don't
+    # observe pre-upgrade one-shot triggers or a pause sentinel that the
+    # old binary wrote. Silent no-op on first boot.
+    upgrade_check_and_clean(results_dir)
+
+    # 4. Initialize per-iteration health monitor
     health_monitor = HealthMonitor(results_dir)
 
-    # 4. Detect watchdog restart marker and notify
+    # 5. Detect watchdog restart marker and notify
     marker = results_dir / f".orze_watchdog_restart_{hostname}.json"
     if marker.exists():
         try:
@@ -78,7 +85,7 @@ def startup_checks(results_dir: Path, cfg: dict,
         except Exception as e:
             logger.warning("Failed to process watchdog restart marker: %s", e)
 
-    # 5. Reconcile stale "running" ideas from prior unclean shutdown
+    # 6. Reconcile stale "running" ideas from prior unclean shutdown
     reconcile_stale_running(cfg)
 
     logger.info("=== Startup checks passed ===")
