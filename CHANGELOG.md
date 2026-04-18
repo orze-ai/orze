@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.4.8
+
+### Fixed
+
+- **`orze/__init__.py:__version__` now reads from `importlib.metadata`
+  instead of a hardcoded string.** 3.4.7 shipped with the pyproject
+  version bumped to 3.4.7 but `__init__.py` still hardcoding `"3.4.6"`.
+  `upgrade.check_pypi` compares `parse_version(latest) > parse_version(__version__)`
+  to decide whether to auto-upgrade; with `__version__ = "3.4.6"` and
+  PyPI serving `3.4.7`, the check always fired, pip reinstalled no-op,
+  and `_restart_in_place` relaunched via `os.execv` — producing an
+  infinite restart loop (observed ~8s per cycle on two deployments).
+  Reading from installed metadata means the runtime version string
+  can never desync from the wheel on disk again.
+
 ## 3.4.7
 
 ### Fixed
