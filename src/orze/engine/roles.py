@@ -73,6 +73,31 @@ _RATE_LIMIT_SIGNATURES = (
 )
 
 
+def _is_role_stalled(rp: "RoleProcess", stall_minutes: int) -> bool:
+    """True if rp's log file hasn't grown for ``stall_minutes``.
+
+    Mutates rp's `_last_log_size` and `_stall_since` fields across calls
+    so the caller (check_active_roles polling loop) doesn't need to
+    manage timer state. Returns False immediately when stall_minutes
+    <= 0 (feature disabled).
+    """
+    if stall_minutes <= 0:
+        return False
+    now = time.time()
+    try:
+        current_size = rp.log_path.stat().st_size
+    except OSError:
+        current_size = rp._last_log_size
+    if current_size > rp._last_log_size:
+        rp._last_log_size = current_size
+        rp._stall_since = 0.0
+        return False
+    if rp._stall_since == 0.0:
+        rp._stall_since = now
+        return False
+    return (now - rp._stall_since) > stall_minutes * 60
+
+
 def _is_rate_limit_exit(log_path: "Path") -> bool:
     """Scan the last ~4 KB of a role log for LLM rate-limit signatures.
 
@@ -107,8 +132,15 @@ _SOFT_FAILURE_ERROR_THRESHOLD = 5
 
 
 def check_active_roles(active_roles: Dict[str, "RoleProcess"],
-                       ideas_file: str = "ideas.md") -> list:
-    """Check running role processes. Returns list of (role_name, Outcome) tuples."""
+                       ideas_file: str = "ideas.md",
+                       role_stall_minutes: int = 0) -> list:
+    """Check running role processes. Returns list of (role_name, Outcome) tuples.
+
+    ``role_stall_minutes`` (default 0 = disabled): kill a running role
+    whose log file hasn't grown for this many minutes, even when the
+    wall-clock timeout hasn't elapsed. Catches claude-CLI hangs that
+    produce a 0-byte log and would otherwise burn the full timeout.
+    """
     finished = []
     for role_name in list(active_roles.keys()):
         rp = active_roles[role_name]
@@ -116,10 +148,18 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
         elapsed = time.time() - rp.start_time
 
         if ret is None:
-            # Still running — check timeout
+            # Still running — check wall-clock timeout first, then stall.
             if elapsed > rp.timeout:
                 logger.warning("[ROLE TIMEOUT] %s after %.0fm — killing",
                                role_name, elapsed / 60)
+                _terminate_and_reap(rp.process, f"role {role_name}")
+                rp.close_log()
+                _fs_unlock(rp.lock_dir)
+                del active_roles[role_name]
+                finished.append((role_name, OUTCOME_TIMEOUT))
+            elif _is_role_stalled(rp, role_stall_minutes):
+                logger.warning("[ROLE STALL] %s — no log output for %dm, "
+                               "killing", role_name, role_stall_minutes)
                 _terminate_and_reap(rp.process, f"role {role_name}")
                 rp.close_log()
                 _fs_unlock(rp.lock_dir)

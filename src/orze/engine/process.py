@@ -159,6 +159,15 @@ class RoleProcess:
     # current_mtime > ideas_md_mtime_pre means ideas.md was touched
     # during the role's lifetime — enough to credit the role.
     ideas_md_mtime_pre: float = 0.0
+    # Stall-detection state. Mirrors TrainingProcess: `_last_log_size`
+    # tracks the last observed log bytes and `_stall_since` is the
+    # epoch-time the log last stopped growing. Used by
+    # check_active_roles to kill roles whose stdout has been silent for
+    # longer than `role_stall_minutes` — catches claude-CLI hangs that
+    # produce a 0-byte log and would otherwise burn the full wall-clock
+    # timeout.
+    _last_log_size: int = field(default=0, repr=False)
+    _stall_since: float = field(default=0.0, repr=False)
     # True for research-type roles whose job is to append to ideas.md.
     # False for strategy roles (professor, data_analyst, thinker,
     # engineer, code_evolution) that modify other files — skipping the

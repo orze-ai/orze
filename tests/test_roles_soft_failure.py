@@ -210,6 +210,74 @@ def test_cross_daemon_consumption_credits_via_mtime(tmp_path, caplog):
     assert "soft failure" not in caplog.text.lower()
 
 
+def test_role_stall_kills_zero_output_role(tmp_path, caplog):
+    """A running role whose log hasn't grown for longer than
+    role_stall_minutes is killed and returns OUTCOME_TIMEOUT — before
+    the wall-clock timeout would fire. Backfills _stall_since by
+    invoking the check twice with the log size held constant."""
+    caplog.set_level(logging.WARNING)
+    roles_mod._consecutive_soft_failures.clear()
+
+    running = _make_running_proc()
+    import orze.engine.roles as mod
+    original_terminate = mod._terminate_and_reap
+    mod._terminate_and_reap = lambda *a, **kw: None
+    try:
+        rp = _make_rp("research", writes_ideas_file=True, tmp_path=tmp_path,
+                      process=running,
+                      start_time=time.time() - 60,  # 1 min elapsed (< timeout)
+                      timeout=1200.0)
+        # Pretend the log was already observed 400s ago with zero bytes
+        # and hasn't grown since — this collapses the two-call handshake
+        # the real polling loop would do.
+        rp._last_log_size = 0
+        rp._stall_since = time.time() - 400
+        active = {"research": rp}
+
+        finished = roles_mod.check_active_roles(
+            active, ideas_file=str(tmp_path / "ideas.md"),
+            role_stall_minutes=5)
+    finally:
+        mod._terminate_and_reap = original_terminate
+
+    assert finished == [("research", OUTCOME_TIMEOUT)]
+    assert "role stall" in caplog.text.lower()
+    assert "research" not in active
+
+
+def test_role_stall_does_not_kill_active_role(tmp_path, caplog):
+    """A running role whose log is growing on this poll is NOT killed —
+    _is_role_stalled must reset _stall_since when it sees progress."""
+    caplog.set_level(logging.WARNING)
+    roles_mod._consecutive_soft_failures.clear()
+
+    running = _make_running_proc()
+    import orze.engine.roles as mod
+    original_terminate = mod._terminate_and_reap
+    mod._terminate_and_reap = lambda *a, **kw: None
+    try:
+        rp = _make_rp("research", writes_ideas_file=True, tmp_path=tmp_path,
+                      process=running,
+                      start_time=time.time() - 60,
+                      timeout=1200.0)
+        # Log is growing: current size (100) > _last_log_size (50). Stall
+        # timer was armed a long time ago but must be reset by the poll.
+        rp.log_path.write_text("x" * 100)
+        rp._last_log_size = 50
+        rp._stall_since = time.time() - 400
+        active = {"research": rp}
+
+        finished = roles_mod.check_active_roles(
+            active, ideas_file=str(tmp_path / "ideas.md"),
+            role_stall_minutes=5)
+    finally:
+        mod._terminate_and_reap = original_terminate
+
+    assert finished == []  # still running
+    assert "research" in active
+    assert rp._stall_since == 0.0  # reset on progress
+
+
 def test_unchanged_mtime_still_soft_failures(tmp_path, caplog):
     """Guard: if ideas.md mtime hasn't advanced past ideas_md_mtime_pre
     and no other signal fired, we still want the soft-failure outcome.
