@@ -517,18 +517,23 @@ class OrzePhaseMixin:
                                  lake=self.lake):
                         continue
                     # Write idea config so train scripts can read it.
-                    # Flatten nested dicts (research agents sometimes generate
-                    # nested YAML like "training: {lr: 0.001}" which breaks
-                    # argparse). Strip dict/list values — only scalars pass.
+                    # The only sanitization needed here is the LLM-generated
+                    # "collapsed" key pattern: {"epochs: 40": None}, which
+                    # research agents occasionally emit when their response
+                    # parser eats the ": " between key and value.
+                    #
+                    # Do NOT strip dict/list values — research agents often
+                    # use structured config intentionally, e.g.
+                    #   picks:
+                    #     SmolTalk: 1.0
+                    # which is a config-driven script's main knob. An earlier
+                    # version of this code dropped those silently; every
+                    # first-user idea that nested a dict under a key lost that
+                    # key and had to be debugged at the train-script level.
                     idea_cfg = ideas.get(idea_id, {}).get("config", {})
                     flat_cfg = {}
                     if idea_cfg:
                         for k, v in idea_cfg.items():
-                            if isinstance(v, (dict, list)):
-                                continue
-                            # Fix LLM-generated malformed keys like "epochs: 40"
-                            # where the key-value pair was collapsed into a single
-                            # string key with null value.
                             if v is None and ": " in str(k):
                                 parts = str(k).split(": ", 1)
                                 try:
