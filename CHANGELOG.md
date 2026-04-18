@@ -1,5 +1,52 @@
 # Changelog
 
+## 3.4.11
+
+### Added
+
+- **Role stall detection** (`role_stall_minutes`, default 0 / off in
+  core; orze-pro ≥ 0.7.7 opts projects in at 5 min).
+  `check_active_roles` now kills a running role whose log file hasn't
+  grown for the configured number of minutes, even if the wall-clock
+  timeout hasn't elapsed. Mirrors the existing experiment-side
+  `stall_minutes` pattern (same `_last_log_size` / `_stall_since`
+  semantics). Catches `claude -p` hangs that produce a 0-byte log and
+  would otherwise burn the full 20-min role timeout. Emits
+  `[ROLE STALL]` (distinct from `[ROLE TIMEOUT]`) so the observability
+  signal survives. Reuses `OUTCOME_TIMEOUT` — existing callers don't
+  need to branch on a new outcome.
+
+### Fixed
+
+- **`_ideas_were_modified` now credits cross-daemon consumption via
+  ideas.md mtime.** `3.4.10`'s `ideas_consumed_during_run` counter
+  only works within a single daemon: the consumption phase walks
+  `self.active_roles` and can't reach a `RoleProcess` owned by a
+  different daemon. In multi-daemon deployments (shared ideas.md on
+  FSx, per-daemon `active_roles`), daemon A consuming daemon B's
+  research output left B's counter at 0, and the size/count fallback
+  also failed because `current_size == pre_size` by coincidence after
+  the wipe. Observed ≥9 consecutive soft-failure warnings on a
+  productive role in a 2-daemon deployment.
+
+  Fix: snapshot `ideas.md` mtime at role launch into a new
+  `RoleProcess.ideas_md_mtime_pre` field. When the consumption-counter
+  short-circuit misses, `_ideas_were_modified` checks whether mtime
+  advanced past the snapshot. mtime lives on the shared file so every
+  daemon sees the same value. Same generosity trade-off as 3.4.10 —
+  crediting an idle role is preferable to false-failing a productive
+  one.
+
+### Refactored
+
+- **LLM-CLI shim dispatcher** (`orze.shims.llm`). Extracts the
+  retry-with-API-key-fallback loop into a single module with a
+  `BACKENDS: dict[str, BackendSpec]` registry. Adding a new console
+  entry (`orze-codex`, `orze-gemini`, …) is a one-line `BACKENDS`
+  addition + one-line `pyproject.toml` entry — no new Python file.
+  Behaviour unchanged for the Claude backend; `orze.shims.claude`
+  remains as a back-compat re-export.
+
 ## 3.4.10
 
 ### Fixed
