@@ -278,6 +278,28 @@ Examples:
                                 help="Update .orze_state_*.json for every "
                                      "host (shared FSx multi-daemon case)")
 
+    # --- catalog: artifact catalog (F9) ---
+    catalog_parser = subparsers.add_parser(
+        "catalog",
+        help="Manage the ArtifactCatalog (ckpts / preds NPZs index)",
+    )
+    catalog_sub = catalog_parser.add_subparsers(dest="catalog_action")
+    catalog_scan = catalog_sub.add_parser("scan", help="Scan a results dir")
+    catalog_scan.add_argument("--results-dir", required=True,
+                              help="Root directory to walk for artifacts")
+    catalog_scan.add_argument("--db", default=None,
+                              help="Artifact DB path "
+                                   "(default: <results>/idea_lake_artifacts.db)")
+    catalog_scan.add_argument("--no-hash", action="store_true",
+                              help="Skip ckpt hashing (faster, but ckpt_sha "
+                                   "won't be available for bundling)")
+    catalog_scan.add_argument("--limit", type=int, default=None,
+                              help="Stop after N files (debug)")
+    catalog_ls = catalog_sub.add_parser("list", help="List artifacts")
+    catalog_ls.add_argument("--db", required=True)
+    catalog_ls.add_argument("--kind", default=None)
+    catalog_ls.add_argument("--ckpt-sha", default=None)
+
     args = parser.parse_args()
 
     setup_logging(args.verbose)
@@ -287,6 +309,27 @@ Examples:
 
     if command == "sop":
         return _run_sop_subcommand(args)
+
+    if command == "catalog":
+        from orze.artifact_catalog import ArtifactCatalog, cli_scan
+        action = getattr(args, "catalog_action", None)
+        if action == "scan":
+            return cli_scan(args)
+        if action == "list":
+            cat = ArtifactCatalog(args.db)
+            rows = (cat.by_ckpt_sha(args.ckpt_sha) if args.ckpt_sha
+                    else cat.list_by_kind(args.kind) if args.kind
+                    else [cat.get(r[0]) for r in cat.conn.execute(
+                        "SELECT path FROM artifacts ORDER BY created_at DESC")])
+            for r in rows:
+                if not r:
+                    continue
+                print(f"[{r['kind']:10s}] sha={r.get('ckpt_sha') or '-':>16s} "
+                      f"val={r.get('metric_val')} {r['path']}")
+            cat.close()
+            return 0
+        print("usage: orze catalog {scan,list} …")
+        return 2
 
     if command == "rebuild-state":
         from orze.engine.rebuild_state import rebuild_state_file

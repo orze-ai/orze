@@ -375,4 +375,59 @@ def harvest_running_ideas(results_dir: Path,
     if cache_dirty:
         _save_pattern_cache(results_dir, cache)
 
+    # F9: opportunistically register any new on-disk artifacts for this idea
+    # into the catalog so post-hoc search can discover them. Failure is
+    # non-fatal: the harvester's contract is metrics.json, not catalog rows.
+    try:
+        _register_artifacts(results_dir)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("artifact catalog update skipped: %s", e)
+
     return written
+
+
+def _register_artifacts(results_dir: Path) -> int:
+    """Best-effort upsert of newly-seen ckpts / preds NPZs into the catalog.
+
+    Only touches files that appeared after the last scan (mtime-based).
+    Safe to call on every harvest cycle.
+    """
+    try:
+        from orze.artifact_catalog import ArtifactCatalog
+    except ImportError:
+        return 0
+    db = results_dir / "idea_lake_artifacts.db"
+    cat = ArtifactCatalog(db)
+    existing = {r["path"] for r in cat.conn.execute("SELECT path FROM artifacts")}
+    added = 0
+    from orze.artifact_catalog import _iter_ckpts, _iter_npzs, hash_ckpt
+    for p in _iter_ckpts(results_dir):
+        if str(p) in existing:
+            continue
+        try:
+            sha = hash_ckpt(p)
+        except OSError:
+            continue
+        idea_id = p.parent.name if p.parent != results_dir else None
+        cat.upsert(p, "ckpt", ckpt_sha=sha, idea_id=idea_id)
+        added += 1
+    # Refresh existing view so sibling NPZs inherit SHA from just-added ckpts.
+    existing_rows = {
+        r["path"]: (r["size_bytes"], r["ckpt_sha"])
+        for r in cat.conn.execute("SELECT path, size_bytes, ckpt_sha FROM artifacts")
+    }
+    for p in _iter_npzs(results_dir):
+        if str(p) in existing:
+            continue
+        kind = "tta_preds" if "tta" in p.name.lower() else "preds_npz"
+        sibling_sha = None
+        for name in ("best_model.pt", "best_ema_model.pt", "ema_best.pt"):
+            prev = existing_rows.get(str(p.parent / name))
+            if prev and prev[1]:
+                sibling_sha = prev[1]
+                break
+        idea_id = p.parent.name if p.parent != results_dir else None
+        cat.upsert(p, kind, ckpt_sha=sibling_sha, idea_id=idea_id)
+        added += 1
+    cat.close()
+    return added
