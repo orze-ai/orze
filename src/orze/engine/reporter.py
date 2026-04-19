@@ -309,6 +309,32 @@ class NotificationProcessor:
         if (self._best_idea_id is not None
                 and current_best != self._best_idea_id):
             best_val = completed_rows[0].get("primary_val")
+            # F14: champion-promotion guard — verify + z-score check before
+            # firing new_best. If blocked, we DO NOT update self._best_idea_id
+            # (caller keeps the prior best) and enqueue an audit idea.
+            if isinstance(best_val, (int, float)):
+                try:
+                    from orze.engine.champion_guard import (
+                        check_promotion, create_audit_idea,
+                    )
+                    def _make_audit(aid, sid, payload):
+                        if getattr(self, "_lake", None) is not None:
+                            create_audit_idea(self._lake, aid, sid, payload)
+                    allow, info = check_promotion(
+                        self.results_dir, current_best, float(best_val), cfg,
+                        notify_fn=lambda k, p, c: notify(k, p, c),
+                        create_audit_idea_fn=_make_audit,
+                    )
+                    if not allow:
+                        logger.warning(
+                            "champion_guard blocked promotion of %s "
+                            "(claimed=%.4f verified=%s z=%s)",
+                            current_best, float(best_val),
+                            info.get("verified"), info.get("z"),
+                        )
+                        return False
+                except Exception as e:  # pragma: no cover - defensive
+                    logger.debug("champion_guard skipped: %s", e)
             fmt = (f"{best_val:.4f}"
                    if isinstance(best_val, (int, float)) else best_val)
             # Find previous best value for delta display
