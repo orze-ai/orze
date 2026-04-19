@@ -392,3 +392,131 @@ class GpuSlotManager:
             return self[key]
         except KeyError:
             return default
+
+
+# ---------------------------------------------------------------------------
+# F13: cross-host opportunistic scheduler
+# ---------------------------------------------------------------------------
+
+
+_CHEAP_KINDS = {"posthoc_eval", "tta_sweep", "bundle_combine", "agg_search"}
+
+
+def _parse_nvidia_smi_stdout(stdout: str) -> Dict[int, Dict[str, int]]:
+    """Parse `nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total`
+    CSV output into {gpu_id: {util, free_mib, total_mib}}.
+    """
+    out: Dict[int, Dict[str, int]] = {}
+    for line in stdout.strip().splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 4:
+            continue
+        try:
+            idx = int(parts[0])
+            util = int(parts[1])
+            used = int(parts[2])
+            total = int(parts[3])
+        except ValueError:
+            continue
+        out[idx] = {
+            "util": util,
+            "free_mib": max(total - used, 0),
+            "total_mib": total,
+        }
+    return out
+
+
+def _run_ssh(host: str, cmd: List[str], *, timeout: int = 10) -> str:
+    """Run a remote command via ssh. Returns stdout (empty on failure)."""
+    full = [
+        "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+        "-o", "StrictHostKeyChecking=accept-new",
+        host, "--",
+    ] + cmd
+    try:
+        r = subprocess.run(full, capture_output=True, text=True, timeout=timeout)
+        if r.returncode == 0:
+            return r.stdout
+    except Exception as e:  # pragma: no cover
+        logger.debug("ssh to %s failed: %s", host, e)
+    return ""
+
+
+def poll_fleet(
+    hosts: List[str],
+    *,
+    smi_cmd: Optional[List[str]] = None,
+) -> Dict[str, Dict[int, Dict[str, int]]]:
+    """Return ``{host: {gpu_id: {util, free_mib, total_mib}}}`` for every
+    reachable host. Local host(s) use a direct nvidia-smi call; others ssh.
+
+    Missing / unreachable hosts are simply omitted.
+    """
+    smi_cmd = smi_cmd or [
+        "nvidia-smi",
+        "--query-gpu=index,utilization.gpu,memory.used,memory.total",
+        "--format=csv,noheader,nounits",
+    ]
+    out: Dict[str, Dict[int, Dict[str, int]]] = {}
+    local_names = {"localhost", "127.0.0.1", os.uname().nodename}
+    for host in hosts:
+        if host in local_names:
+            try:
+                r = subprocess.run(smi_cmd, capture_output=True,
+                                    text=True, timeout=5)
+                if r.returncode == 0:
+                    out[host] = _parse_nvidia_smi_stdout(r.stdout)
+            except Exception as e:  # pragma: no cover
+                logger.debug("local nvidia-smi failed: %s", e)
+        else:
+            stdout = _run_ssh(host, smi_cmd)
+            if stdout:
+                out[host] = _parse_nvidia_smi_stdout(stdout)
+    return out
+
+
+def pick_least_loaded(
+    fleet: Dict[str, Dict[int, Dict[str, int]]],
+    *,
+    min_free_mib: int = 1024,
+) -> Optional[Tuple[str, int]]:
+    """Return (host, gpu_id) with the lowest utilization among those with
+    at least ``min_free_mib`` free VRAM, or None if none qualify.
+
+    Ties on utilization break on larger free_mib.
+    """
+    best = None  # (util, -free_mib, host, gpu)
+    for host, gpus in fleet.items():
+        for gpu_id, stats in gpus.items():
+            if stats["free_mib"] < min_free_mib:
+                continue
+            key = (stats["util"], -stats["free_mib"], host, gpu_id)
+            if best is None or key < best:
+                best = key
+    if best is None:
+        return None
+    return best[2], best[3]
+
+
+def wrap_remote_cmd(host: str, cmd: List[str]) -> List[str]:
+    """Build the argv to execute ``cmd`` on ``host`` via ssh. For the local
+    host the command is returned unchanged. Use this in the scheduler
+    when dispatching to a remote node selected by pick_least_loaded().
+    """
+    local_names = {"localhost", "127.0.0.1", os.uname().nodename}
+    if host in local_names:
+        return list(cmd)
+    return [
+        "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+        host, "--",
+    ] + [_shlex_quote(a) for a in cmd]
+
+
+def _shlex_quote(s: str) -> str:
+    import shlex
+    return shlex.quote(str(s))
+
+
+def is_fleet_eligible_kind(kind: Optional[str]) -> bool:
+    """Only cheap inference-only kinds are dispatched across hosts."""
+    return kind in _CHEAP_KINDS
