@@ -211,9 +211,16 @@ def _resolve_backend(argv0: str) -> Tuple[str, BackendSpec]:
 
 
 def _resolve_fallback_backends(backend_name: str, base_env: dict) -> List[str]:
-    """Parse ``ORZE_<NAME>_FALLBACK`` into a validated list of backend names."""
+    """Parse ``ORZE_<NAME>_FALLBACK`` into a validated list of backend names.
+
+    When the env var is not set, default to ``gemini`` for ``claude`` backend
+    if ``GEMINI_API_KEY`` is available. This matches the documented priority:
+    claude subscription -> claude api -> gemini.
+    """
     n = backend_name.upper()
     raw = base_env.get(f"ORZE_{n}_FALLBACK", "").strip()
+    if not raw and backend_name == "claude" and base_env.get("GEMINI_API_KEY"):
+        raw = "gemini"
     if not raw:
         return []
     out: List[str] = []

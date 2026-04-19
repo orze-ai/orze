@@ -41,12 +41,19 @@ def test_resolve_fallback_backends_empty_when_unset():
     assert llm._resolve_fallback_backends("claude", {}) == []
 
 
+def test_resolve_fallback_backends_default_gemini_when_key_present():
+    """claude backend with GEMINI_API_KEY defaults to gemini fallback."""
+    env = {"GEMINI_API_KEY": "gm-fake"}
+    assert llm._resolve_fallback_backends("claude", env) == ["gemini"]
+
+
 def test_main_returns_sentinel_on_quota_without_fallback(monkeypatch):
     """claude shim: force-API path, quota hit, no fallback => rc == 42."""
     monkeypatch.setattr(sys, "argv", ["orze-claude", "-p", "hi"])
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-fake")
     monkeypatch.setenv("ORZE_CLAUDE_FORCE_API", "1")
     monkeypatch.delenv("ORZE_CLAUDE_FALLBACK", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
     def fake_run_once(argv, env):
         return 1, (
