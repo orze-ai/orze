@@ -1,5 +1,89 @@
 # Changelog
 
+## 3.6.0 — Post-hoc search capability
+
+Turns the manual Nexar Collision 0.8994 → 0.9057 recovery into a
+first-class orze capability: post-hoc inference search (agg × calib ×
+TTA bundles) is now a native scheduling path, complete with a
+single-model bundle discipline, a catalog of inference artifacts, a
+promotion guard, and a tight-loop search role.
+
+### Added
+
+- **F8 — idea.kind field.** `ideas` schema gains a `kind` column
+  (`train` | `posthoc_eval` | `tta_sweep` | `agg_search` |
+  `bundle_combine` | `audit`). Any other value is a hard error.
+  YAML configs accept `kind:`. Back-compat migration via
+  `idea_lake._migrate_if_needed` — existing rows default to `train`.
+- **F9 — ArtifactCatalog.** New SQLite-backed catalog at
+  `results/idea_lake_artifacts.db` tracking ckpts, preds_npz,
+  features, and tta_preds keyed by `ckpt_sha` (SHA-256 of first +
+  last 4 MB of the weight file). `orze catalog scan` walks
+  `results/`; `metric_harvester` auto-registers artifacts produced
+  by new experiments.
+- **F10 — InferenceBundle + bundle_combiner.** An
+  `InferenceBundle` is ≥ 2 `preds_npz` artifacts with the SAME
+  `ckpt_sha` (TTA views of ONE model, not an ensemble). The combiner
+  sweeps k × subsets × aggregations × calibrators and records the
+  winner as a `kind='bundle_combine'` idea. Mixed-sha loads raise
+  `ValueError` — single-model discipline is enforced.
+- **F11 — Aggregation + calibration registry.** A single `REGISTRY`
+  dict of aggregations (`last`, `mean`, `max`, `late_k1..k5`,
+  `top_k_mean(k)`, `exp_weighted(alpha)`, `noisy_or`,
+  `dense_late_softmax(t)`) and calibrators (`identity`, `platt`,
+  `isotonic`, `group_calibrated`, `cv_mix`). `agg_search` does a
+  nested-CV sweep over the registry and records the winner as a
+  `kind='agg_search'` idea. No test-set leakage by construction.
+- **F12 — posthoc_runner + launcher kind dispatch.** New inference-
+  only runner (`src/orze/engine/posthoc_runner.py`) with pluggable
+  adapters (`@register_adapter`). Built-in `null` adapter (canned
+  metrics, used in tests) and `nexar_collision` adapter (shells out
+  to `eval_tta.py` / `eval_champion_0905_final.py` /
+  `eval_agg_sweep.py` without modifying consumer training scripts).
+  `launcher.launch()` now dispatches non-`train` ideas through this
+  path; the `train` path is preserved byte-exact.
+- **F13 — Cross-host opportunistic scheduler.** `gpu_slots.poll_fleet`
+  / `pick_least_loaded` / `wrap_remote_cmd`. Cheap ideas
+  (`posthoc_eval`, `tta_sweep`, `bundle_combine`, `agg_search`) can
+  be dispatched to the least-loaded GPU across all `hosts:` listed in
+  `orze.yaml` (ssh `BatchMode=yes`). Training stays host-pinned.
+  Only the F2 leader assigns remote work.
+- **F14 — Champion-promotion guard.** Before firing `new_best`,
+  `champion_guard.check_promotion` (a) re-verifies the claim
+  (rerunning `idea.reproducer` if present, else reading
+  `metrics.json`) and (b) computes z-score against the rolling
+  last-50 promotion distribution. `z > 4.0` blocks the promotion,
+  fires Telegram `notify('audit', …)`, and creates a
+  `kind='audit'` follow-up idea that flows into `bug_fixer`.
+  Config keys in `orze.yaml`:
+  `champion_guard: {enabled, z_threshold, min_history}`.
+- **F15 — Tight-loop `search` role.** Default `cooldown: 30`,
+  `timeout: 600`. Composes agg_search → bundle_combiner → posthoc_
+  runner: reads the ArtifactCatalog, enqueues `agg_search` and
+  `bundle_combine` ideas until no free combinations remain or the
+  champion hasn't moved in N cycles. Idempotent. Opt-in via
+  `orze.yaml.example`.
+- **F16 — Retroactive champion ingest.** `orze ingest-champion
+  --results-dir … --idea-id …` (and `python -m
+  orze.agents.ingest_champion`) records a pre-v3.6.0 manual champion
+  as a `kind='bundle_combine'` idea, registers its ckpt + the 4 TTA
+  NPZs in the ArtifactCatalog under the same ckpt_sha, and updates
+  `_orze_state.json:best_idea_id`. Used to preserve the Nexar
+  Collision 0.9057 (Public 0.9199 / Private 0.8929) record after the
+  upgrade.
+
+### Tests
+
+50 new tests (177 total, all green). Dedicated suites:
+`test_idea_kind.py`, `test_artifact_catalog.py`, `test_aggregations.py`,
+`test_agg_search.py`, `test_posthoc_runner.py`,
+`test_bundle_combiner.py`, `test_champion_guard.py`,
+`test_fleet_scheduler.py`, `test_search_role.py`,
+`test_ingest_champion.py`, and an E2E plumbing test
+(`test_e2e_search.py`) that runs the full baseline → agg_search →
+bundle_combine → champion-guard → ingest loop without a GPU, using
+mocked `@register_adapter` adapters.
+
 ## 3.5.0
 
 Multi-host robustness + observability pass. Ships 8 independently-tested
