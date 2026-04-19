@@ -160,6 +160,28 @@ orphan_timeout_hours: 0              # reclaim orphaned claims after N hours
 #     cooldown: 1800
 #     timeout: 120
 #
+#   search:                              # F15 tight-loop post-hoc search
+#     mode: script                        # Proposes agg_search / bundle_combine
+#     script: -m orze.agents.search_role  # ideas from the ArtifactCatalog.
+#     args: ["--results-dir", "{results_dir}"]
+#     cooldown: 30
+#     timeout: 600
+#
+# F13 cross-host fleet (optional): lets the scheduler dispatch cheap
+# inference-only kinds (posthoc_eval / tta_sweep / bundle_combine /
+# agg_search) to the least-loaded GPU across the fleet. Training kinds
+# stay host-pinned. Only the leader's scheduler issues remote work.
+# hosts:
+#   - localhost
+#   - ip-172-31-81-194.ec2.internal
+#
+# F14 champion-promotion guard: re-verifies new_best claims + refuses
+# >z_threshold jumps, enqueueing a kind='audit' idea instead.
+# champion_guard:
+#   enabled: true
+#   z_threshold: 4.0
+#   min_history: 10
+#
 # Template variables available in args: {cycle}, {ideas_file}, {results_dir}
 #
 # Legacy: top-level "research:" still works (auto-migrated to roles.research)
