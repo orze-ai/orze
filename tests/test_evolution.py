@@ -132,34 +132,7 @@ class TestSealed:
 # Feature 3: Approach Family
 # ---------------------------------------------------------------------------
 
-class TestFamilyGuard:
-    def test_infer_architecture(self):
-        from orze.engine.family_guard import infer_approach_family
-        assert infer_approach_family({"model": {"type": "resnet"}}, "") == "architecture"
-
-    def test_infer_training_config(self):
-        from orze.engine.family_guard import infer_approach_family
-        assert infer_approach_family({"lr": 0.001, "optimizer": "adam"}, "") == "training_config"
-
-    def test_infer_data(self):
-        from orze.engine.family_guard import infer_approach_family
-        assert infer_approach_family({"augment": True, "data": {}}, "") == "data"
-
-    def test_infer_other(self):
-        from orze.engine.family_guard import infer_approach_family
-        assert infer_approach_family({"foo": "bar"}, "") == "other"
-
-    def test_concentration_detected(self):
-        from orze.engine.family_guard import check_family_concentration
-        assert check_family_concentration(["architecture"] * 5, 5) is not None
-
-    def test_concentration_ok(self):
-        from orze.engine.family_guard import check_family_concentration
-        assert check_family_concentration(["architecture"] * 4 + ["data"], 5) is None
-
-    def test_concentration_too_few(self):
-        from orze.engine.family_guard import check_family_concentration
-        assert check_family_concentration(["architecture"] * 3, 5) is None
+# (TestFamilyGuard removed in v4.0 — family_guard dropped.)
 
 
 class TestIdeasApproachFamily:
@@ -235,58 +208,8 @@ class TestIdeaLakeMigration:
 # Feature 5: Retrospection Dispatch
 # ---------------------------------------------------------------------------
 
-class TestRetrospectionDispatch:
-    def test_classify_signals(self):
-        from orze.engine.retrospection import _classify_signals
-        assert "plateau" in _classify_signals("PLATEAU: no improvement")
-        assert "high_failure_rate" in _classify_signals("HIGH FAILURE RATE: 60%")
-        assert "family_imbalance" in _classify_signals("FAMILY CONCENTRATION: x")
-        assert _classify_signals("PLATEAU: x; HIGH FAILURE RATE: y") == [
-            "plateau", "high_failure_rate"
-        ]
-        assert _classify_signals("unknown") == ["persistent_failure"]
-
-    def test_dispatch_with_evolution(self, tmp_path):
-        from orze.engine.retrospection import _dispatch_signal, is_research_paused
-
-        cfg = {"evolution": {"enabled": True},
-               "retrospection": {"evolution_attempts_before_pause": 2}}
-        state = {}
-
-        # First attempt → triggers code_evolution
-        action = _dispatch_signal("plateau", tmp_path, cfg, state)
-        assert action == "code_evolution"
-        assert (tmp_path / "_trigger_code_evolution").exists()
-        assert state["plateau_evolution_attempts"] == 1
-        (tmp_path / "_trigger_code_evolution").unlink()
-
-        # Second attempt → still code_evolution
-        action = _dispatch_signal("plateau", tmp_path, cfg, state)
-        assert action == "code_evolution"
-        assert state["plateau_evolution_attempts"] == 2
-        (tmp_path / "_trigger_code_evolution").unlink()
-
-        # Third attempt → exhausted → pause
-        action = _dispatch_signal("plateau", tmp_path, cfg, state)
-        assert action == "pause"
-        assert is_research_paused(tmp_path)
-
-    def test_dispatch_evolution_disabled(self, tmp_path):
-        from orze.engine.retrospection import _dispatch_signal, is_research_paused
-
-        cfg = {"evolution": {"enabled": False}}
-        action = _dispatch_signal("plateau", tmp_path, cfg, {})
-        assert action == "pause"
-        assert is_research_paused(tmp_path)
-
-    def test_dispatch_family_imbalance(self, tmp_path):
-        from orze.engine.retrospection import _dispatch_signal
-
-        cfg = {"evolution": {"enabled": True},
-               "retrospection": {"evolution_attempts_before_pause": 2}}
-        action = _dispatch_signal("family_imbalance", tmp_path, cfg, {})
-        assert action == "meta_research"
-        assert (tmp_path / "_trigger_meta_research").exists()
+# (TestRetrospectionDispatch removed in v4.0 — signal dispatch logic
+# removed from shrunk retrospection module.)
 
 
 # ---------------------------------------------------------------------------

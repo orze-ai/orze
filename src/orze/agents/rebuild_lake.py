@@ -59,14 +59,16 @@ def rebuild(results_dir: Path, db_path: Path):
                 for k, v in metrics["test_metrics"].items():
                     eval_metrics[f"test_{k}"] = v
 
-            # Infer approach family from config
+            # Infer approach family from config (v4.0: simple on-the-fly)
             approach_family = "other"
             if config_yaml:
                 try:
-                    from orze.engine.family_guard import infer_approach_family
                     cfg_obj = yaml.safe_load(config_yaml)
                     if isinstance(cfg_obj, dict):
-                        approach_family = infer_approach_family(cfg_obj, "")
+                        from orze.research.context_builder import (
+                            _flatten, _infer_family,
+                        )
+                        approach_family = _infer_family(_flatten(cfg_obj))
                 except Exception:
                     pass
 

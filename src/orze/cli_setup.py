@@ -118,19 +118,6 @@ def _check_pro_role(role_name: str, project_dir: Path) -> tuple:
     return True, f"ready ({detail})"
 
 
-def _check_fsm(project_dir: Path) -> tuple:
-    """Check if FSM runner is set up."""
-    runner = project_dir / "fsm" / "runner.py"
-    if runner.exists():
-        return True, "ready (fsm/runner.py)"
-    # Check if importable from orze package
-    try:
-        from orze.fsm.runner import main
-        return True, "ready (from orze package)"
-    except ImportError:
-        return False, "missing fsm/runner.py"
-
-
 def _check_pro_procedures() -> tuple:
     """Check if pro procedures are discoverable."""
     try:
@@ -292,7 +279,6 @@ def do_uninstall(cfg: dict):
     ]
     # Directories orze --init creates
     _ORZE_DIRS = [
-        "fsm",                 # FSM engine
         "procedures",          # user procedure overrides
     ]
 
@@ -1062,21 +1048,8 @@ python: {python_for_yaml}
 """
     _create("orze.yaml", yaml_content)
 
-    # For pro users, create the FSM runner wrapper
     if _has_pro:
-        fsm_runner = """\
-#!/usr/bin/env python3
-\"\"\"FSM runner — delegates to installed orze package.\"\"\"
-from orze.fsm.runner import main
-if __name__ == "__main__":
-    main()
-"""
-        Path("fsm").mkdir(exist_ok=True)
-        Path("fsm/plugins").mkdir(exist_ok=True)
         Path("procedures").mkdir(exist_ok=True)
-        _create("fsm/__init__.py", "")
-        _create("fsm/plugins/__init__.py", "")
-        _create("fsm/runner.py", fsm_runner, "fsm/runner.py (FSM engine)")
 
     # 4. ideas.md with task-agnostic seed experiments
     ideas_content = """\
@@ -1172,7 +1145,6 @@ noise: 0.1
             ("code evolution", lambda: _check_pro_role("code_evolution", project_dir)),
             # meta_research reuses research SOPs
             ("meta research", lambda: _check_pro_role("research", project_dir)),
-            ("FSM engine", lambda: _check_fsm(project_dir)),
             ("FSM procedures", lambda: _check_pro_procedures()),
             ("idea verifier", lambda: _check_pro_plugin("idea_verifier")),
             ("activity log", lambda: _check_pro_plugin("role_logger")),

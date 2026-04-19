@@ -311,12 +311,6 @@ class Orze(OrzePhaseMixin):
             self._cleanup_stale_root_dbs()
         except Exception as e:
             logger.debug("cleanup_stale_root_dbs: %s", e)
-        # F5: compact oversized retrospection / skill-composed files.
-        try:
-            from orze.engine.compactor import compact_standard_paths
-            compact_standard_paths(self.results_dir)
-        except Exception as e:
-            logger.debug("compactor (startup): %s", e)
 
     def _cleanup_stale_root_dbs(self):
         """Move zero-byte ``*.db`` files at CWD that collide with canonical
@@ -517,13 +511,6 @@ class Orze(OrzePhaseMixin):
         self._retro_last_count = run_retrospection(
             self.results_dir, self.cfg, completed_count, self._retro_last_count,
             retro_state=self._retro_state)
-        # F5: compact any oversized LLM-context files that retrospection
-        # may have just appended to.
-        try:
-            from orze.engine.compactor import compact_standard_paths
-            compact_standard_paths(self.results_dir)
-        except Exception as e:
-            logger.debug("compactor (post-retro): %s", e)
 
     def _kill_orphans(self):
         """Kill orphaned train/eval processes from a previous Orze instance."""
@@ -734,11 +721,7 @@ class Orze(OrzePhaseMixin):
             logger.error("Config hash cache rebuild failed: %s", e)
             notify("config_hash_failure", {"error": str(e)}, self.cfg)
 
-        # Initialize code change detector
-        from orze.engine.code_change import CodeChangeDetector
-        self._code_change = CodeChangeDetector(
-            cfg["train_script"], self.results_dir,
-            Path(cfg["ideas_file"]), cfg.get("base_config", ""))
+        # Initialize code change detector (removed in v4.0)
 
         # Compute sealed file manifest for metric integrity
         sealed_files = cfg.get("sealed_files", [])
@@ -756,11 +739,6 @@ class Orze(OrzePhaseMixin):
             # Hot-reload config every 10 iterations (~5 min)
             if self.iteration % 10 == 0:
                 self._hot_reload_config()
-                # Check train script for changes and auto-generate smoke tests
-                try:
-                    self._code_change.check()
-                except Exception:
-                    pass
 
             # 0a. Early heartbeat — keeps nodes UI alive even when
             #     iterations are slow (large results_dir scans).

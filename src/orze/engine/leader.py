@@ -213,7 +213,7 @@ LLM_ROLE_NAMES = frozenset({
     "professor", "research", "research_gemini", "research_gpt",
     "research_claude", "research_anthropic", "research_local",
     "thinker", "engineer", "bug_fixer", "data_analyst",
-    "documenter", "code_evolution", "analyst_bridge",
+    "documenter", "code_evolution",
 })
 
 
