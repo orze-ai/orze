@@ -322,27 +322,12 @@ class Orze(OrzePhaseMixin):
         """Move zero-byte ``*.db`` files at CWD that collide with canonical
         DB names into ``<results>/_stale/``. They confuse sqlite-connect
         callers into silently creating empty tables."""
-        stale_names = ("idea_lake.db", "queue.db", "orze.db", "lake.db",
-                       "orze_queue.db", "ideas.db")
-        stale_dir = self.results_dir / "_stale"
-        for name in stale_names:
-            p = Path.cwd() / name
-            if not p.exists() or p.is_dir():
-                continue
-            try:
-                if p.stat().st_size != 0:
-                    continue
-            except OSError:
-                continue
-            try:
-                stale_dir.mkdir(parents=True, exist_ok=True)
-                dest = stale_dir / f"{name}.{int(time.time())}"
-                shutil.move(str(p), str(dest))
-                logger.warning(
-                    "Moved stale 0-byte %s at CWD to %s (canonical DB is "
-                    "at results/idea_lake.db)", p, dest)
-            except OSError as e:
-                logger.warning("Could not move stale %s: %s", p, e)
+        from orze.engine.stale_dbs import relocate_zero_byte_dbs
+        moved = relocate_zero_byte_dbs(Path.cwd(), self.results_dir / "_stale")
+        for src, dest in moved:
+            logger.warning(
+                "Moved stale 0-byte %s at CWD to %s (canonical DB is at "
+                "results/idea_lake.db)", src, dest)
 
     def _reconcile_stale_running(self):
         reconcile_stale_running(self.cfg)
