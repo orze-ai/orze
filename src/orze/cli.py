@@ -312,6 +312,27 @@ Examples:
              "(defaults to <results_dir>/_champion_config.json)")
     ingest_parser.add_argument("--project-root", default=None)
 
+    # --- rebuild-lake (v4.0): rebuild idea_lake.db from results dirs ---
+    rl_parser = subparsers.add_parser(
+        "rebuild-lake",
+        help="Rebuild idea_lake.db from existing results directories")
+    rl_parser.add_argument("--results-dir", default="results")
+    rl_parser.add_argument("--db", default="idea_lake.db")
+
+    # --- manual-notify (v4.0): send a manual report ---
+    mn_parser = subparsers.add_parser(
+        "manual-notify",
+        help="Send a manual status notification report")
+    mn_parser.add_argument("-c", "--config", default="orze.yaml")
+
+    # --- hf-discover (v4.0): query HuggingFace Hub for models ---
+    hf_parser = subparsers.add_parser(
+        "hf-discover",
+        help="Query the HuggingFace Hub for models matching criteria")
+    hf_parser.add_argument("--pipeline-tag", default="image-feature-extraction")
+    hf_parser.add_argument("--min-downloads", type=int, default=50000)
+    hf_parser.add_argument("--limit", type=int, default=20)
+
     args = parser.parse_args()
 
     setup_logging(args.verbose)
@@ -353,6 +374,27 @@ Examples:
         )
         import json as _json
         print(_json.dumps(info, indent=2))
+        return 0
+
+    if command == "rebuild-lake":
+        from orze.rebuild_lake import rebuild
+        rebuild(Path(args.results_dir), Path(args.db))
+        return 0
+
+    if command == "manual-notify":
+        from orze.manual_notify import main as _mn_main
+        import sys as _sys
+        _sys.argv = ["orze manual-notify", "-c", args.config]
+        _mn_main()
+        return 0
+
+    if command == "hf-discover":
+        from orze.hf_discover import search_models
+        import json as _json
+        models = search_models(pipeline_tag=args.pipeline_tag,
+                               min_downloads=args.min_downloads,
+                               limit=args.limit)
+        print(_json.dumps(models, indent=2))
         return 0
 
     if command == "rebuild-state":
