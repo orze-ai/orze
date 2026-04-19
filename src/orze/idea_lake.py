@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS ideas (
     training_time REAL,
     archived_at TEXT,
     created_at TEXT,
-    approach_family TEXT DEFAULT 'other'
+    approach_family TEXT DEFAULT 'other',
+    kind TEXT NOT NULL DEFAULT 'train'
 );
 
 CREATE INDEX IF NOT EXISTS idx_status ON ideas(status);
@@ -73,7 +74,18 @@ _KNOWN_META_COLS = {
     "idea_id", "id_num", "title", "priority", "category", "parent",
     "hypothesis", "config", "raw_markdown", "config_summary",
     "eval_metrics", "status", "training_time", "archived_at", "created_at",
-    "approach_family",
+    "approach_family", "kind",
+}
+
+# F8: closed vocabulary of idea kinds. Anything else is a hard error so the
+# launcher / scheduler can safely dispatch on kind.
+ALLOWED_KINDS = {
+    "train",           # legacy / default: run train_script
+    "posthoc_eval",    # inference-only job on an existing ckpt/npz
+    "tta_sweep",       # generate a TTA view (subclass of posthoc_eval)
+    "agg_search",      # sweep aggregations/calibrators on a bundle
+    "bundle_combine",  # combine N views of ONE ckpt
+    "audit",           # F14: champion-promotion audit
 }
 
 
@@ -184,6 +196,15 @@ class IdeaLake:
             )
             self.conn.commit()
 
+        # F8: add kind column if missing (defaults to 'train' for back-compat).
+        if "kind" not in cols:
+            logger.info("Migrating idea_lake schema: adding kind column (F8)")
+            self.conn.execute(
+                "ALTER TABLE ideas ADD COLUMN kind TEXT NOT NULL DEFAULT 'train'"
+            )
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_kind ON ideas(kind)")
+            self.conn.commit()
+
     def insert(
         self,
         idea_id: str,
@@ -200,8 +221,13 @@ class IdeaLake:
         training_time: Optional[float] = None,
         created_at: Optional[str] = None,
         approach_family: str = "other",
+        kind: str = "train",
     ):
         """Insert or update an idea in the lake."""
+        if kind not in ALLOWED_KINDS:
+            raise ValueError(
+                f"idea kind={kind!r} not in {sorted(ALLOWED_KINDS)}"
+            )
         # Extract numeric ID for indexed sorting (supports both numeric and hex IDs)
         id_num = None
         match = re.search(r"idea-([a-z0-9]+)", idea_id)
@@ -232,13 +258,13 @@ class IdeaLake:
                     config, raw_markdown,
                     config_summary, eval_metrics,
                     status, training_time, archived_at, created_at,
-                    approach_family
+                    approach_family, kind
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?,
                     ?, ?,
                     ?, ?,
                     ?, ?, ?, ?,
-                    ?
+                    ?, ?
                 )""",
                 (
                     idea_id,
@@ -257,6 +283,7 @@ class IdeaLake:
                     datetime.datetime.now().isoformat(),
                     created_at or datetime.datetime.now().isoformat(),
                     approach_family,
+                    kind,
                 ),
             )
             self.conn.commit()
