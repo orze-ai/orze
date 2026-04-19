@@ -1,5 +1,64 @@
 # Changelog
 
+## 3.5.0
+
+Multi-host robustness + observability pass. Ships 8 independently-tested
+fixes to keep the autopilot stable in 2+ host FSx-shared deployments.
+
+### Added
+
+- **Cross-backend LLM fallback (`ddddf10`).** `orze-claude` shim now
+  honors `ORZE_CLAUDE_FALLBACK=gemini` and falls back to `orze-gemini`
+  on subscription-or-API exhaustion. Quota-signal detection extended:
+  exit code 42, "quota exceeded", "rate limit", "insufficient
+  credits" all trigger the fallback path. Priority order is
+  subscription → API → gemini, covered by the new priority-order
+  test in `7c2df47`.
+- **Flock-based leader election (`34d242f`).** Multi-host deployments
+  sharing an FSx state directory now use `fcntl.flock` on
+  `results/.orze_leader.lock` to pick exactly one leader per
+  role-class cycle. Followers log `follower mode: skipping role <X>`
+  and skip leader-only roles (professor, thinker, data_analyst). The
+  lock is released on graceful shutdown or process death.
+- **`analyst_bridge` agent (`b624e74`).** New agent that converts
+  data-analyst insights into queued ideas carrying `origin:analyst`
+  metadata. Closes the loop from `_analyst_insights.md` to
+  `idea_lake.db` without requiring professor re-ingestion.
+- **`orze rebuild-state --all-hosts` (`ebba7e6`, `d7186ea`).**
+  Reconstructs `best_idea_id` from `idea_lake.db` and per-idea
+  `metrics.json` on startup and on-demand. Covers the case where
+  a crashed host left `best_idea_id = null`.
+
+### Fixed
+
+- **Ideas.md corruption detector respects designed wipes (`f57fb1f`).**
+  The post-ingest wipe (0 → full regenerate cycle) is no longer
+  flagged as corruption. Detector now requires both a shrink AND an
+  unexpected timing pattern before restoring from backup.
+- **Rolling-window compactor for oversized prompt files (`71c310d`).**
+  `_retrospection.txt` and `_skill_composed_research.md` are trimmed
+  to a configurable cap (default 150 KB) on every role launch,
+  keeping the tail (most recent entries). Prevents 600 KB+ files
+  from silently inflating prompt budget.
+- **Dedicated stale-DB relocator (`3641a1e`).** Zero-byte `*.db`
+  files at the results root (common artifact of a crash during
+  sqlite init) are moved to `results/_stale_dbs/` at daemon start,
+  instead of being repeatedly re-opened and re-leaked.
+
+### Tested
+
+- Subscription → API → gemini priority order covered end-to-end in
+  the shim test suite (`7c2df47`).
+
+### Upgrade notes
+
+Daemons running 3.4.x must be restarted to pick up the fixes — they
+cache module code in-process. After restart, run
+`orze rebuild-state --results <results> --all-hosts` once to rebuild
+`best_idea_id` from the idea lake.
+
+---
+
 ## 3.4.11
 
 ### Added
