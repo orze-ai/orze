@@ -56,6 +56,11 @@ from orze.engine.cluster import (
 from orze.engine.upgrade import UpgradeManager
 from orze.engine.reporter import NotificationProcessor
 from orze.engine.retrospection import run_retrospection
+from orze.engine.leader import (
+    try_acquire as _leader_try_acquire,
+    read_current_leader as _leader_read_current,
+    should_skip_role_as_follower as _leader_skip_role,
+)
 from orze.extensions import get_extension as _get_ext
 
 _role_mod = _get_ext("role_runner")
@@ -120,6 +125,11 @@ class Orze(OrzePhaseMixin):
         self._hostname = socket.gethostname()
         self._instance_uuid = uuid.uuid4().hex[:12]
         self._incompatible_hosts: set = set()
+
+        # Leader election state: set by _acquire_leadership on run().
+        # None = not yet attempted. Falsy handle = we are a follower.
+        self._leader_handle = None
+        self._follower_last_log: float = 0.0
 
         # Validate config on startup
         config_errors, config_warnings = _validate_config(cfg)
@@ -328,6 +338,36 @@ class Orze(OrzePhaseMixin):
         ctx = self._role_context()
         _run_role_once_impl(role_name, ctx)
 
+    def _acquire_leadership(self) -> None:
+        """Attempt to acquire the cross-host leader lock once per tick.
+
+        We re-try on every tick so that when the current leader dies,
+        this follower becomes the new leader automatically. If we were
+        already leader, just refresh the heartbeat.
+        """
+        if self._leader_handle is not None:
+            self._leader_handle.heartbeat()
+            return
+        handle = _leader_try_acquire(self.results_dir)
+        if handle is not None:
+            self._leader_handle = handle
+            logger.info("leader acquired host=%s pid=%d",
+                        handle.host, handle.pid)
+
+    def _is_leader(self) -> bool:
+        return self._leader_handle is not None
+
+    def _log_follower_status_rate_limited(self, role_name: str) -> None:
+        """Log ``follower mode: skipping role X`` at most once per minute."""
+        now = time.time()
+        if now - self._follower_last_log < 60.0:
+            return
+        self._follower_last_log = now
+        current = _leader_read_current(self.results_dir) or {}
+        who = f"{current.get('host', '?')}:{current.get('pid', '?')}"
+        logger.info("follower mode: skipping role %s (leader=%s)",
+                    role_name, who)
+
     def _run_all_roles(self):
         global _roles_unavailable_warned
         if _run_all_roles_impl is None:
@@ -338,8 +378,23 @@ class Orze(OrzePhaseMixin):
                 )
                 _roles_unavailable_warned = True
             return
+        # Multi-host coordination: only the leader drives LLM-role cycles.
+        # Followers still run experiment execution and metric harvesting.
+        self._acquire_leadership()
+        if not self._is_leader():
+            self._log_follower_status_rate_limited("<all llm roles>")
+            return
         ctx = self._role_context()
         _run_all_roles_impl(ctx)
+
+    def _run_role_step_leader_gated(self, role_name, role_cfg):
+        """Like _run_role_step but gates LLM-token roles on leadership."""
+        if _leader_skip_role(role_name):
+            self._acquire_leadership()
+            if not self._is_leader():
+                self._log_follower_status_rate_limited(role_name)
+                return
+        self._run_role_step(role_name, role_cfg)
 
     def _build_claude_cmd(self, research_cfg, template_vars):
         if build_claude_cmd is None:
@@ -960,4 +1015,9 @@ class Orze(OrzePhaseMixin):
                 except Exception:
                     pass
             self._remove_pid_file()
+        try:
+            if self._leader_handle is not None:
+                self._leader_handle.release()
+        except Exception:
+            pass
         logger.info("Exited after %d iterations.", self.iteration)
