@@ -264,6 +264,17 @@ Examples:
     sop_status_p.add_argument("--project-root", default=".")
     sop_status_p.add_argument("--results-dir", default="results")
 
+    # --- rebuild-state: rebuild best_idea_id from idea_lake.db ---
+    rebuild_parser = subparsers.add_parser(
+        "rebuild-state",
+        help="Rebuild best_idea_id + completions_since_best from idea_lake.db",
+    )
+    rebuild_parser.add_argument("-c", "--config-file", type=str, default=None)
+    rebuild_parser.add_argument("--results", type=str, default=None,
+                                help="Results dir (default: from config)")
+    rebuild_parser.add_argument("--overwrite", action="store_true",
+                                help="Overwrite even if best_idea_id is set")
+
     args = parser.parse_args()
 
     setup_logging(args.verbose)
@@ -273,6 +284,23 @@ Examples:
 
     if command == "sop":
         return _run_sop_subcommand(args)
+
+    if command == "rebuild-state":
+        from orze.engine.rebuild_state import rebuild_state_file
+        cfg = load_project_config(args.config_file)
+        results_dir = Path(args.results or cfg.get("results_dir", "results"))
+        summary = rebuild_state_file(results_dir, cfg,
+                                     overwrite=args.overwrite)
+        print(f"primary_metric: {summary['primary_metric']}")
+        print(f"best_idea_id: {summary['best_idea_id']}")
+        print(f"completions_since_best: {summary['completions_since_best']}")
+        print(f"previous_best_idea_id: {summary['previous_best_idea_id']}")
+        if summary['wrote_state_file']:
+            print(f"Wrote: {summary['state_file']}")
+        else:
+            print("(state file already had best_idea_id; "
+                  "pass --overwrite to force)")
+        return
 
     if command == "stop":
         from orze.lifecycle import do_stop

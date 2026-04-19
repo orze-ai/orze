@@ -230,6 +230,22 @@ class Orze(OrzePhaseMixin):
         self._upgrade_mgr = UpgradeManager(self.results_dir, cfg)
         self._reporter = NotificationProcessor(self.results_dir, cfg, lake=self.lake)
         self._reporter.load_state(state)
+        # F4: rebuild best_idea_id / completions_since_best from lake if
+        # state lost them (e.g. upgrade reset). Idempotent fill-only.
+        try:
+            from orze.engine.rebuild_state import rebuild_best_from_lake
+            if state.get("best_idea_id") is None and self.lake is not None:
+                primary = cfg.get("report", {}).get("primary_metric",
+                                                    "test_accuracy")
+                best_id, since = rebuild_best_from_lake(self.lake, primary)
+                if best_id is not None:
+                    self._reporter._best_idea_id = best_id
+                    self._reporter._completions_since_best = since
+                    logger.info("Rebuilt best_idea_id=%s "
+                                "completions_since_best=%d from idea_lake "
+                                "(metric=%s)", best_id, since, primary)
+        except Exception as e:
+            logger.debug("rebuild_best_from_lake failed on startup: %s", e)
 
         # Event used to interrupt poll sleep instantly on shutdown signal
         self._stop_event = threading.Event()
