@@ -274,6 +274,9 @@ Examples:
                                 help="Results dir (default: from config)")
     rebuild_parser.add_argument("--overwrite", action="store_true",
                                 help="Overwrite even if best_idea_id is set")
+    rebuild_parser.add_argument("--all-hosts", action="store_true",
+                                help="Update .orze_state_*.json for every "
+                                     "host (shared FSx multi-daemon case)")
 
     args = parser.parse_args()
 
@@ -290,13 +293,16 @@ Examples:
         cfg = load_project_config(args.config_file)
         results_dir = Path(args.results or cfg.get("results_dir", "results"))
         summary = rebuild_state_file(results_dir, cfg,
-                                     overwrite=args.overwrite)
+                                     overwrite=args.overwrite,
+                                     all_hosts=args.all_hosts)
         print(f"primary_metric: {summary['primary_metric']}")
         print(f"best_idea_id: {summary['best_idea_id']}")
         print(f"completions_since_best: {summary['completions_since_best']}")
         print(f"previous_best_idea_id: {summary['previous_best_idea_id']}")
         if summary['wrote_state_file']:
             print(f"Wrote: {summary['state_file']}")
+            if summary.get("updated_hosts"):
+                print(f"Updated hosts: {', '.join(summary['updated_hosts'])}")
         else:
             print("(state file already had best_idea_id; "
                   "pass --overwrite to force)")
