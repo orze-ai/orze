@@ -279,15 +279,128 @@ def _detect_zombie(tp) -> bool:
     return zombie_count >= 3  # 3 consecutive checks (~90s at 30s poll)
 
 
+# --------------------------------------------------------------------- #
+# F12: idea kind resolution + post-hoc launch                            #
+# --------------------------------------------------------------------- #
+
+
+def _resolve_idea_kind(idea_id: str, idea_cfg_path: Path,
+                       results_dir: Path, cfg: dict) -> Optional[str]:
+    """Return the idea's kind ('train' etc.), or None if unknown."""
+    # 1) idea_config.yaml wins
+    if idea_cfg_path.exists():
+        try:
+            import yaml
+            with open(idea_cfg_path) as _f:
+                obj = yaml.safe_load(_f) or {}
+            if isinstance(obj, dict) and obj.get("kind"):
+                return str(obj["kind"])
+        except Exception:  # pragma: no cover
+            pass
+    # 2) idea_lake row fallback
+    try:
+        from orze.idea_lake import IdeaLake
+        db_path = (cfg.get("idea_lake_db")
+                   or Path(results_dir) / "idea_lake.db")
+        if Path(db_path).exists():
+            lake = IdeaLake(str(db_path))
+            row = lake.get(idea_id)
+            if row and row.get("kind"):
+                return row["kind"]
+    except Exception:  # pragma: no cover
+        pass
+    return None
+
+
+def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
+                    *, kind: str,
+                    idea_cfg_path: Path) -> TrainingProcess:
+    """Run a post-hoc idea in a subprocess and return a TrainingProcess-like
+    handle so the rest of the scheduler (check_active etc.) is unchanged.
+    """
+    import yaml
+
+    idea_dir = Path(results_dir) / idea_id
+    idea_dir.mkdir(parents=True, exist_ok=True)
+    log_path = idea_dir / "train_output.log"
+
+    # Read the per-idea YAML so the subprocess has it as JSON on stdin.
+    idea_cfg: Dict[str, object] = {}
+    if idea_cfg_path.exists():
+        try:
+            with open(idea_cfg_path) as _f:
+                idea_cfg = yaml.safe_load(_f) or {}
+        except Exception:  # pragma: no cover
+            idea_cfg = {}
+    idea_cfg.setdefault("kind", kind)
+    if not idea_cfg.get("adapter"):
+        idea_cfg["adapter"] = cfg.get("posthoc_adapter") or "null"
+    artifact_db = (cfg.get("artifact_catalog_db")
+                   or str(Path(results_dir) / "idea_lake_artifacts.db"))
+
+    python = cfg.get("python", sys.executable)
+    # Run via -c so we don't need a new module in the wire format.
+    driver = (
+        "import json, sys; "
+        "from orze.engine.posthoc_runner import run_posthoc; "
+        "cfg = json.loads(sys.stdin.read()); "
+        f"run_posthoc('{idea_id}', cfg, "
+        f"r'{idea_dir}', "
+        f"artifact_catalog_db=r'{artifact_db}')"
+    )
+    cmd = [python, "-c", driver]
+
+    env = os.environ.copy()
+    if gpu is not None and int(gpu) >= 0:
+        env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+
+    log_fh = open(log_path, "a")
+    log_fh.write(f"\n[posthoc_runner] kind={kind} gpu={gpu}\n")
+    log_fh.flush()
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=log_fh, stderr=subprocess.STDOUT,
+        env=env, preexec_fn=_new_process_group,
+    )
+    try:
+        proc.stdin.write(json.dumps(idea_cfg).encode())
+        proc.stdin.close()
+    except Exception:  # pragma: no cover
+        pass
+    tp = TrainingProcess(
+        idea_id=idea_id, gpu=gpu, process=proc,
+        start_time=time.time(),
+        log_path=log_path,
+        timeout=float(cfg.get("posthoc_timeout", 3600)),
+        _log_fh=log_fh,
+    )
+    tp.is_posthoc = True
+    return tp
+
+
 def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProcess:
-    """Launch a training subprocess on the given GPU."""
+    """Launch a training subprocess on the given GPU.
+
+    F12: If the idea's YAML specifies ``kind`` other than 'train' (or the
+    idea_lake row has such a kind), dispatch to posthoc_runner instead of
+    the training script. The 'train' path below is preserved byte-exact
+    for back-compat.
+    """
     log_path = results_dir / idea_id / "train_output.log"
+
+    # F12: detect non-train ideas and dispatch to posthoc_runner.
+    idea_cfg_path = results_dir / idea_id / "idea_config.yaml"
+    idea_kind = _resolve_idea_kind(idea_id, idea_cfg_path, results_dir, cfg)
+    if idea_kind and idea_kind != "train":
+        return _launch_posthoc(idea_id, gpu, results_dir, cfg,
+                               kind=idea_kind,
+                               idea_cfg_path=idea_cfg_path)
 
     python = cfg.get("python", sys.executable)
     train_script = cfg["train_script"]
 
     # Per-idea train_script override: read from idea_config.yaml if present
-    idea_cfg_path = results_dir / idea_id / "idea_config.yaml"
     if idea_cfg_path.exists():
         try:
             import yaml
