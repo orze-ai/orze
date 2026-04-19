@@ -667,5 +667,529 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     return completed
 
 
-# Moved to leaderboard_admin.py — re-export for backward compatibility
-from orze.reporting.leaderboard_admin import write_admin_cache, format_report_text as _format_report_text
+
+
+# ---------------------------------------------------------------------------
+# Admin cache + report formatting (merged from leaderboard_admin.py in v4.0)
+# ---------------------------------------------------------------------------
+
+
+def write_admin_cache(results_dir: Path, ideas: dict, cfg: dict):
+    """Write pre-aggregated _admin_cache.json for instant admin panel access."""
+    now = time.time()
+
+    # Nodes
+    raw_hb = _read_all_heartbeats(results_dir, stale_seconds=600)
+    heartbeats = []
+    for hb in raw_hb:
+        age = now - hb.get("epoch", 0)
+        status = "online" if age <= 120 else ("degraded" if age <= 300 else "offline")
+        heartbeats.append({**hb, "status": status, "heartbeat_age_sec": round(age, 1)})
+
+    # Queue
+    sweep_max = cfg.get("sweep", {}).get("max_combos", 20)
+    expanded = expand_sweeps(dict(ideas), max_combos=sweep_max)
+    all_statuses: dict = {}
+    queue_items = []
+    for idea_id, idea in expanded.items():
+        idea_dir = results_dir / idea_id
+        idea_status = "pending"
+        if idea_dir.exists():
+            mpath = idea_dir / "metrics.json"
+            if mpath.exists():
+                try:
+                    m = json.loads(mpath.read_text(encoding="utf-8"))
+                    idea_status = m.get("status", "COMPLETED").lower()
+                except (json.JSONDecodeError, OSError):
+                    idea_status = "running"
+            else:
+                idea_status = "running"
+        all_statuses[idea_status] = all_statuses.get(idea_status, 0) + 1
+        raw = idea.get("raw", "")
+        _cat_m = re.search(r"\*\*Category\*\*:\s*(.+)", raw)
+        _par_m = re.search(r"\*\*Parent\*\*:\s*(.+)", raw)
+        _hyp_m = re.search(r"\*\*Hypothesis\*\*:\s*(.+)", raw)
+        queue_items.append({
+            "idea_id": idea_id,
+            "title": idea.get("title", ""),
+            "priority": idea.get("priority", "medium"),
+            "status": idea_status,
+            "config": idea.get("config", {}),
+            "sweep_parent": idea.get("_sweep_parent"),
+            "category": _cat_m.group(1).strip() if _cat_m else "architecture",
+            "parent": _par_m.group(1).strip() if _par_m else "none",
+            "hypothesis": _hyp_m.group(1).strip() if _hyp_m else "",
+        })
+
+    # Alerts
+    alerts = []
+    two_hours_ago = now - 7200
+    try:
+        with os.scandir(results_dir) as it:
+            for entry in it:
+                if not entry.is_dir() or not entry.name.startswith("idea-"):
+                    continue
+                try:
+                    mtime = entry.stat().st_mtime
+                except OSError:
+                    continue
+                if mtime < two_hours_ago:
+                    continue
+                mpath = Path(entry.path) / "metrics.json"
+                if not mpath.exists():
+                    continue
+                try:
+                    m = json.loads(mpath.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    continue
+                if m.get("status") not in ("FAILED", "ERROR"):
+                    continue
+                alerts.append({
+                    "type": "failure", "idea_id": entry.name,
+                    "error": str(m.get("error", m.get("status", "")))[:200],
+                    "minutes_ago": round((now - mtime) / 60, 1),
+                })
+    except OSError:
+        pass
+
+    for hb in heartbeats:
+        if hb.get("status") == "offline":
+            alerts.append({
+                "type": "stale_host",
+                "host": hb.get("host", "unknown"),
+                "minutes_ago": round(hb.get("heartbeat_age_sec", 0) / 60, 1),
+            })
+
+    try:
+        usage = shutil.disk_usage(results_dir)
+        if round(usage.free / (1024 ** 3), 1) < 50:
+            alerts.append({"type": "low_disk",
+                           "disk_free_gb": round(usage.free / (1024 ** 3), 1)})
+    except Exception:
+        pass
+
+    cache = {
+        "nodes": {"heartbeats": heartbeats, "local_gpus": []},
+        "queue": {"items": queue_items, "counts": all_statuses,
+                  "total_all": sum(all_statuses.values())},
+        "alerts": {"alerts": alerts, "count": len(alerts)},
+        "epoch": now,
+    }
+    atomic_write(results_dir / "_admin_cache.json",
+                 json.dumps(cache, default=str))
+
+
+def format_report_text(data: dict) -> str:
+    """Format a periodic report summary for notifications."""
+    c, f, a, q = (data.get(k, 0) for k in
+                   ("completed", "failed", "active_count", "queued"))
+    title = data.get("title", "Report")
+    metric = data.get("metric_name", "score")
+    board = data.get("leaderboard", [])
+    machines = data.get("machines", [])
+
+    lines = [title, f"{c} completed | {f} failed | {a} active | {q} queued", ""]
+
+    if machines:
+        lines.append("Machines:")
+        for m in machines:
+            lines.append(f"  {m.get('host','?')}: "
+                         f"{m.get('gpus_busy',0)}/{m.get('gpus_total',0)} GPUs, "
+                         f"{m.get('utilization','?')}% util")
+        lines.append("")
+
+    if board:
+        lines.append(f"Top {len(board)} ({metric}):")
+        for i, entry in enumerate(board, 1):
+            val = entry.get("value")
+            val_str = f"{val:.4f}" if isinstance(val, float) else str(val)
+            lines.append(f"  #{i} {entry.get('id','?')}: {val_str} "
+                         f"{entry.get('title','')[:25]}")
+
+    return "\n".join(lines)
+
+# Legacy alias preserved for existing callers
+_format_report_text = format_report_text
+
+
+# ---------------------------------------------------------------------------
+# NotificationProcessor (merged from engine/reporter.py in v4.0)
+# ---------------------------------------------------------------------------
+
+class NotificationProcessor:
+    """Fires notifications for finished experiments.
+
+    Owns plateau-detection counters and periodic-report timing so that
+    the orchestrator can persist / restore them across restarts.
+    """
+
+    def __init__(self, results_dir: Path, cfg: dict, lake=None):
+        self.results_dir = results_dir
+        self.cfg = cfg
+        self.lake = lake
+        self._best_idea_id = None  # Optional[str]
+        self._completions_since_best: int = 0
+        self._plateau_notified: bool = False
+        self._last_report_notify: float = 0.0
+
+    def load_state(self, state: dict):
+        """Restore persisted state from state.json."""
+        self._best_idea_id = state.get("best_idea_id")
+        self._completions_since_best = state.get("completions_since_best", 0)
+        self._plateau_notified = state.get("plateau_notified", False)
+
+    def get_state(self) -> dict:
+        """Return state dict for persistence."""
+        return {
+            "best_idea_id": self._best_idea_id,
+            "completions_since_best": self._completions_since_best,
+            "plateau_notified": self._plateau_notified,
+        }
+
+    def process(self, finished: list, completed_rows: list, ideas: dict,
+                counts: dict, active_count: int,
+                save_config_hash_fn, build_machine_status_fn):
+        """Fire notifications for finished experiments. Never raises."""
+        try:
+            cfg = self.cfg
+            ncfg = cfg.get("notifications") or {}
+            if not ncfg.get("enabled", False):
+                logger.debug("Notifications disabled")
+                return
+            if not finished:
+                return
+
+            logger.info("Processing notifications for %d finished items",
+                        len(finished))
+            primary = cfg["report"].get("primary_metric", "test_accuracy")
+
+            # Build rank lookup and top-10 leaderboard
+            rank_lookup, leaderboard = {}, []
+            for rank, r in enumerate(completed_rows, 1):
+                rank_lookup[r["id"]] = rank
+                if rank <= 10:
+                    leaderboard.append({"id": r["id"],
+                                        "title": r.get("title", r["id"]),
+                                        "value": r.get("primary_val")})
+
+            view_lbs = self._build_view_leaderboards(cfg)
+            row_lookup = {r["id"]: r for r in completed_rows}
+
+            for idea_id, gpu in finished:
+                self._notify_finished(
+                    idea_id, gpu, cfg, primary, row_lookup, rank_lookup,
+                    leaderboard, view_lbs, ideas, save_config_hash_fn)
+
+            # New best detection + plateau tracking
+            new_best = self._check_new_best(
+                completed_rows, primary, leaderboard, view_lbs, cfg)
+            n_completed = self._count_completed_in_batch(finished)
+            if new_best:
+                self._completions_since_best = 0
+                self._plateau_notified = False
+            else:
+                self._completions_since_best += n_completed
+
+            self._check_plateau(completed_rows, cfg)
+            self._periodic_report(ncfg, cfg, primary, counts, active_count,
+                                  leaderboard, view_lbs, build_machine_status_fn)
+        except Exception as e:
+            logger.warning("Notification processing error: %s", e)
+
+    # -- internal helpers ------------------------------------------------
+
+    def _build_view_leaderboards(self, cfg: dict) -> dict:
+        view_leaderboards = {}
+        for view in (cfg.get("report", {}).get("views") or []):
+            vname = view.get("name")
+            if not vname:
+                continue
+            vpath = self.results_dir / f"_leaderboard_{vname}.json"
+            if not vpath.exists():
+                continue
+            try:
+                vdata = json.loads(vpath.read_text(encoding="utf-8"))
+                vtop = [{"id": e.get("idea_id", "?"), "title": e.get("title", ""),
+                         "value": e.get("metric_value")}
+                        for e in (vdata.get("top") or [])[:10]]
+                if vtop:
+                    view_leaderboards[vname] = {
+                        "title": vdata.get("title", vname), "entries": vtop}
+            except (json.JSONDecodeError, OSError):
+                pass
+        return view_leaderboards
+
+    def _notify_finished(self, idea_id, gpu, cfg, primary, row_lookup,
+                         rank_lookup, leaderboard, view_lbs, ideas,
+                         save_config_hash_fn):
+        m_path = self.results_dir / idea_id / "metrics.json"
+        if not m_path.exists():
+            return
+        try:
+            m = json.loads(m_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            return
+
+        status = m.get("status", "UNKNOWN")
+        title = ideas.get(idea_id, {}).get("title", idea_id)
+
+        if status == "COMPLETED":
+            self._notify_completed(idea_id, title, m, cfg, primary,
+                                   row_lookup, rank_lookup,
+                                   leaderboard, view_lbs)
+        elif status == "FAILED":
+            error_msg = m.get("error", "unknown")
+            # Suppress notifications for config/argparse errors (exit code 2)
+            # and fast crashes (<10s, typically import errors). These are
+            # research-agent-generated junk, not worth spamming Telegram.
+            is_config_error = "code 2" in error_msg or "code 1" in error_msg
+            training_time = m.get("training_time", 999)
+            if is_config_error and training_time < 10:
+                logger.info("Suppressed notification for %s: config error (%s)",
+                            idea_id, error_msg)
+            else:
+                notify("failed", {"idea_id": idea_id, "title": title,
+                                  "error": error_msg,
+                                  "leaderboard": leaderboard,
+                                  "view_leaderboards": view_lbs}, cfg)
+
+        if self.lake and status in ("COMPLETED", "FAILED"):
+            self._archive_to_lake(idea_id, status, ideas, cfg)
+
+        if status == "COMPLETED":
+            try:
+                rp = self.results_dir / idea_id / "resolved_config.yaml"
+                if rp.exists():
+                    rcfg = yaml.safe_load(rp.read_text(encoding="utf-8")) or {}
+                    save_config_hash_fn(idea_id, rcfg)
+            except Exception as exc:
+                logger.debug("Config hash save failed for %s: %s",
+                             idea_id, exc)
+
+    def _notify_completed(self, idea_id, title, m, cfg, primary,
+                          row_lookup, rank_lookup, leaderboard, view_lbs):
+        row = row_lookup.get(idea_id, {})
+        metric_val = row.get("primary_val") or m.get(primary)
+        if metric_val is None:
+            eval_file = cfg.get("eval_output", "eval_report.json")
+            eval_path = self.results_dir / idea_id / eval_file
+            if eval_path.exists():
+                try:
+                    ed = json.loads(eval_path.read_text(encoding="utf-8"))
+                    metric_val = _resolve_primary_metric(cfg, eval_file, ed)
+                except (json.JSONDecodeError, OSError,
+                        KeyError, UnicodeDecodeError):
+                    pass
+
+        if metric_val is None:
+            logger.warning(
+                "Notification for %s has metric_val=None "
+                "(row_pv=%s, m.get(%s)=%s, eval_exists=%s)",
+                idea_id, row_lookup.get(idea_id, {}).get("primary_val"),
+                primary, m.get(primary),
+                (self.results_dir / idea_id /
+                 cfg.get("eval_output", "eval_report.json")).exists())
+
+        t_time = m.get("training_time") or None
+        fmt_val = (f"{metric_val:.4f}"
+                   if isinstance(metric_val, (int, float)) else metric_val)
+        rank = rank_lookup.get(idea_id, None)
+
+        # notify_top_n: only send "completed" notifications for top-N results.
+        # Default 0 = notify all (backward compat). Set in orze.yaml:
+        #   notifications:
+        #     notify_top_n: 20
+        top_n = (cfg.get("notifications") or {}).get("notify_top_n", 0)
+        summary_only = (top_n > 0 and isinstance(rank, int) and rank > top_n)
+
+        notify("completed", {
+            "idea_id": idea_id, "title": title,
+            "metric_name": primary, "metric_value": fmt_val,
+            "training_time": t_time,
+            "rank": rank if rank is not None else "?",
+            "leaderboard": leaderboard,
+            "view_leaderboards": view_lbs,
+            "summary_only": summary_only,
+        }, cfg)
+
+    def _archive_to_lake(self, idea_id, status, ideas, cfg):
+        try:
+            idea_data = ideas.get(idea_id, {})
+            # If the in-memory ideas dict doesn't have this idea (common:
+            # ideas.md was wiped after ingestion), preserve the row that's
+            # already in the lake rather than blanking config/raw_markdown.
+            # Previously INSERT OR REPLACE would overwrite valid config with
+            # empty strings, orphaning the idea on any retry.
+            existing = None
+            if not idea_data:
+                try:
+                    existing = self.lake.get(idea_id) if hasattr(
+                        self.lake, "get") else None
+                except Exception:
+                    existing = None
+            config_yaml = ""
+            raw_md = idea_data.get("raw", "") if idea_data else (
+                (existing or {}).get("raw_markdown", "") if existing else "")
+            if idea_data.get("config"):
+                config_yaml = yaml.dump(idea_data["config"],
+                                        default_flow_style=False)
+            elif existing and existing.get("config"):
+                # Reuse stored config so we don't wipe it on status updates.
+                config_yaml = existing["config"]
+            eval_metrics = {}
+            eval_file = cfg.get("eval_output", "eval_report.json")
+            eval_path = self.results_dir / idea_id / eval_file
+            if eval_path.exists():
+                try:
+                    ed = json.loads(eval_path.read_text(encoding="utf-8"))
+                    em = ed.get("metrics", {})
+                    for col in cfg.get("report", {}).get("columns", []):
+                        src, key = col.get("source", ""), col.get("key", "")
+                        if ":" in src:
+                            src_file, json_path = src.split(":", 1)
+                            if src_file == eval_file:
+                                val = deep_get(ed, json_path)
+                                if val is not None:
+                                    eval_metrics[key] = val
+                        elif key and key in em:
+                            eval_metrics[key] = em[key]
+                except (json.JSONDecodeError, OSError):
+                    pass
+            # Fallback: read metrics.json directly (flat format from train.py)
+            if not eval_metrics:
+                metrics_path = self.results_dir / idea_id / "metrics.json"
+                if metrics_path.exists():
+                    try:
+                        md = json.loads(metrics_path.read_text(encoding="utf-8"))
+                        for k, v in md.items():
+                            if isinstance(v, (int, float)) and k != "num_eval_tasks":
+                                eval_metrics[k] = v
+                    except (json.JSONDecodeError, OSError):
+                        pass
+
+            def _raw_field(field):
+                match = re.search(
+                    rf"\*\*{re.escape(field)}\*\*:\s*(.+)", raw_md)
+                return match.group(1).strip() if match else None
+
+            self.lake.insert(
+                idea_id, idea_data.get("title", idea_id),
+                config_yaml, raw_md,
+                eval_metrics=eval_metrics or None,
+                status=status.lower(),
+                priority=idea_data.get("priority", "medium"),
+                category=_raw_field("Category"),
+                parent=_raw_field("Parent"),
+                hypothesis=_raw_field("Hypothesis"),
+                approach_family=idea_data.get("approach_family", _raw_field("Approach Family") or "other"))
+        except Exception as exc:
+            logger.warning("Failed to archive %s to lake: %s", idea_id, exc)
+
+    def _check_new_best(self, completed_rows, primary, leaderboard,
+                        view_lbs, cfg) -> bool:
+        if not completed_rows:
+            return False
+        current_best = completed_rows[0]["id"]
+        fired = False
+        if (self._best_idea_id is not None
+                and current_best != self._best_idea_id):
+            best_val = completed_rows[0].get("primary_val")
+            # F14: champion-promotion guard — verify + z-score check before
+            # firing new_best. If blocked, we DO NOT update self._best_idea_id
+            # (caller keeps the prior best) and enqueue an audit idea.
+            if isinstance(best_val, (int, float)):
+                try:
+                    from orze.engine.champion_guard import (
+                        check_promotion, create_audit_idea,
+                    )
+                    def _make_audit(aid, sid, payload):
+                        if getattr(self, "_lake", None) is not None:
+                            create_audit_idea(self._lake, aid, sid, payload)
+                    allow, info = check_promotion(
+                        self.results_dir, current_best, float(best_val), cfg,
+                        notify_fn=lambda k, p, c: notify(k, p, c),
+                        create_audit_idea_fn=_make_audit,
+                    )
+                    if not allow:
+                        logger.warning(
+                            "champion_guard blocked promotion of %s "
+                            "(claimed=%.4f verified=%s z=%s)",
+                            current_best, float(best_val),
+                            info.get("verified"), info.get("z"),
+                        )
+                        return False
+                except Exception as e:  # pragma: no cover - defensive
+                    logger.debug("champion_guard skipped: %s", e)
+            fmt = (f"{best_val:.4f}"
+                   if isinstance(best_val, (int, float)) else best_val)
+            # Find previous best value for delta display
+            prev_val = None
+            for r in completed_rows[1:]:
+                if r["id"] == self._best_idea_id:
+                    prev_val = r.get("primary_val")
+                    break
+            prev_fmt = (f"{prev_val:.4f}"
+                        if isinstance(prev_val, (int, float)) else prev_val)
+            notify("new_best", {
+                "idea_id": current_best,
+                "title": completed_rows[0]["title"],
+                "metric_name": primary, "metric_value": fmt,
+                "prev_best_id": self._best_idea_id,
+                "prev_best_val": prev_fmt,
+                "leaderboard": leaderboard,
+                "view_leaderboards": view_lbs,
+            }, cfg)
+            fired = True
+        self._best_idea_id = current_best
+        return fired
+
+    def _count_completed_in_batch(self, finished: list) -> int:
+        n = 0
+        for idea_id, _ in finished:
+            mp = self.results_dir / idea_id / "metrics.json"
+            if not mp.exists():
+                continue
+            try:
+                if json.loads(mp.read_text(encoding="utf-8")
+                              ).get("status") == "COMPLETED":
+                    n += 1
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                continue
+        return n
+
+    def _check_plateau(self, completed_rows, cfg):
+        threshold = cfg.get("plateau_threshold", 50)
+        if (threshold > 0
+                and self._completions_since_best >= threshold
+                and not self._plateau_notified):
+            best_score = (completed_rows[0].get("primary_val")
+                          if completed_rows else None)
+            notify("plateau", {
+                "message": (f"No improvement in {self._completions_since_best}"
+                            f" ideas. Best: {best_score}"
+                            f" ({self._best_idea_id})"),
+                "best_id": self._best_idea_id,
+                "since_best": self._completions_since_best,
+                "threshold": threshold,
+            }, cfg)
+            self._plateau_notified = True
+
+    def _periodic_report(self, ncfg, cfg, primary, counts, active_count,
+                         leaderboard, view_lbs, build_machine_status_fn):
+        interval = ncfg.get("report_interval", 0)
+        if interval <= 0:
+            return
+        if time.time() - self._last_report_notify < interval:
+            return
+        notify("report", {
+            "title": cfg["report"].get("title", "Report"),
+            "completed": counts.get("COMPLETED", 0),
+            "failed": counts.get("FAILED", 0),
+            "active_count": active_count,
+            "queued": counts.get("QUEUED", 0),
+            "metric_name": primary,
+            "leaderboard": leaderboard,
+            "view_leaderboards": view_lbs,
+            "machines": build_machine_status_fn(),
+        }, cfg)
+        self._last_report_notify = time.time()
