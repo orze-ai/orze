@@ -300,6 +300,18 @@ Examples:
     catalog_ls.add_argument("--kind", default=None)
     catalog_ls.add_argument("--ckpt-sha", default=None)
 
+    # --- ingest-champion (F16): retroactive champion record ---
+    ingest_parser = subparsers.add_parser(
+        "ingest-champion",
+        help="Retroactively ingest a manual champion bundle into idea_lake"
+    )
+    ingest_parser.add_argument("--results-dir", required=True)
+    ingest_parser.add_argument("--idea-id", default="idea-champion-0905")
+    ingest_parser.add_argument("--config", default=None,
+        help="Path to _champion_config.json "
+             "(defaults to <results_dir>/_champion_config.json)")
+    ingest_parser.add_argument("--project-root", default=None)
+
     args = parser.parse_args()
 
     setup_logging(args.verbose)
@@ -330,6 +342,18 @@ Examples:
             return 0
         print("usage: orze catalog {scan,list} …")
         return 2
+
+    if command == "ingest-champion":
+        from orze.agents.ingest_champion import ingest
+        info = ingest(
+            Path(args.results_dir),
+            idea_id=args.idea_id,
+            config_path=Path(args.config) if args.config else None,
+            project_root=Path(args.project_root) if args.project_root else None,
+        )
+        import json as _json
+        print(_json.dumps(info, indent=2))
+        return 0
 
     if command == "rebuild-state":
         from orze.engine.rebuild_state import rebuild_state_file
