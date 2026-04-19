@@ -311,6 +311,12 @@ class Orze(OrzePhaseMixin):
             self._cleanup_stale_root_dbs()
         except Exception as e:
             logger.debug("cleanup_stale_root_dbs: %s", e)
+        # F5: compact oversized retrospection / skill-composed files.
+        try:
+            from orze.engine.compactor import compact_standard_paths
+            compact_standard_paths(self.results_dir)
+        except Exception as e:
+            logger.debug("compactor (startup): %s", e)
 
     def _cleanup_stale_root_dbs(self):
         """Move zero-byte ``*.db`` files at CWD that collide with canonical
@@ -526,6 +532,13 @@ class Orze(OrzePhaseMixin):
         self._retro_last_count = run_retrospection(
             self.results_dir, self.cfg, completed_count, self._retro_last_count,
             retro_state=self._retro_state)
+        # F5: compact any oversized LLM-context files that retrospection
+        # may have just appended to.
+        try:
+            from orze.engine.compactor import compact_standard_paths
+            compact_standard_paths(self.results_dir)
+        except Exception as e:
+            logger.debug("compactor (post-retro): %s", e)
 
     def _kill_orphans(self):
         """Kill orphaned train/eval processes from a previous Orze instance."""
