@@ -49,6 +49,18 @@ name — e.g. ``CLAUDE``):
 * ``ORZE_<NAME>_BIN``         — override the underlying binary
 * ``ORZE_<NAME>_FORCE_API``   — skip subscription attempt, use key
 * ``ORZE_<NAME>_NO_FALLBACK`` — pure passthrough, no retry logic
+* ``ORZE_<NAME>_FALLBACK``    — comma-separated list of alternative
+  backends to transparently re-dispatch to when the primary hits a
+  quota signal (e.g. ``ORZE_CLAUDE_FALLBACK=gemini,codex``). Each
+  fallback is invoked as ``orze-<backend>`` with the same argv.
+
+Exit-code contract
+------------------
+* ``rc == 42`` is the *quota-exhausted sentinel*: emitted when the
+  primary (and any in-shim fallback) was specifically blocked by a
+  provider quota signal rather than a generic failure. Callers (the
+  orze role runner) can observe rc==42 to trigger engine-level
+  cross-backend retry.
 """
 from __future__ import annotations
 
@@ -85,22 +97,50 @@ BACKENDS: dict = {
             "usage limit reached",
             "monthly limit reached",
             "subscription limit",
+            # Anthropic API 400 message (seen 2026-04 onward):
+            "reached your specified api usage limits",
+            "api usage limits",
+            "rate_limit_error",
+            "you will regain access on",
         ),
     ),
-    # Future — unverified quota strings, add once we've seen them in the wild:
-    # "codex": BackendSpec(
-    #     binary="codex", api_key_var="OPENAI_API_KEY",
-    #     allow_subscription_mode=False, quota_signals=(),
-    # ),
-    # "gemini": BackendSpec(
-    #     binary="gemini", api_key_var="GEMINI_API_KEY",
-    #     allow_subscription_mode=False, quota_signals=(),
-    # ),
-    # "kimi": BackendSpec(
-    #     binary="kimi", api_key_var="MOONSHOT_API_KEY",
-    #     allow_subscription_mode=False, quota_signals=(),
-    # ),
+    "gemini": BackendSpec(
+        binary="gemini",
+        api_key_var="GEMINI_API_KEY",
+        allow_subscription_mode=False,
+        quota_signals=(
+            "resource_exhausted",
+            "quota exceeded",
+            "429 resource has been exhausted",
+            "rate limit exceeded",
+        ),
+    ),
+    "codex": BackendSpec(
+        binary="codex",
+        api_key_var="OPENAI_API_KEY",
+        allow_subscription_mode=False,
+        quota_signals=(
+            "insufficient_quota",
+            "rate limit exceeded",
+            "you exceeded your current quota",
+        ),
+    ),
+    "kimi": BackendSpec(
+        binary="kimi",
+        api_key_var="MOONSHOT_API_KEY",
+        allow_subscription_mode=False,
+        quota_signals=(
+            "rate limit exceeded",
+            "insufficient_quota",
+        ),
+    ),
 }
+
+
+# Distinct sentinel return code for "primary (and in-shim retries) blocked
+# by a provider quota cap". The role runner uses this to trigger engine-
+# level cross-backend fallback.
+QUOTA_EXHAUSTED_RC = 42
 
 
 # Env vars the shim consumes itself — never forward to child.
@@ -110,6 +150,7 @@ def _shim_only_vars(backend_name: str) -> Tuple[str, ...]:
         f"ORZE_{n}_BIN",
         f"ORZE_{n}_FORCE_API",
         f"ORZE_{n}_NO_FALLBACK",
+        f"ORZE_{n}_FALLBACK",
     )
 
 
@@ -169,6 +210,50 @@ def _resolve_backend(argv0: str) -> Tuple[str, BackendSpec]:
     return name, spec
 
 
+def _resolve_fallback_backends(backend_name: str, base_env: dict) -> List[str]:
+    """Parse ``ORZE_<NAME>_FALLBACK`` into a validated list of backend names."""
+    n = backend_name.upper()
+    raw = base_env.get(f"ORZE_{n}_FALLBACK", "").strip()
+    if not raw:
+        return []
+    out: List[str] = []
+    for name in (s.strip().lower() for s in raw.split(",")):
+        if not name or name == backend_name:
+            continue
+        if name not in BACKENDS:
+            print(
+                f"[orze-{backend_name}] ignoring unknown fallback backend "
+                f"{name!r}; known: {', '.join(sorted(BACKENDS))}",
+                file=sys.stderr,
+            )
+            continue
+        out.append(name)
+    return out
+
+
+def _dispatch_fallback(fallback_name: str, args: List[str],
+                       base_env: dict, primary_name: str) -> int:
+    """Re-run as if invoked as ``orze-<fallback_name>``.
+
+    We recurse into ``main()`` with a synthesized argv so the full
+    shim contract (subscription retry, quota detection, per-backend
+    env hygiene) applies to the fallback too. To prevent infinite
+    recursion, we strip ``ORZE_<primary>_FALLBACK`` from the env seen
+    by the child dispatch so a bad config can't loop.
+    """
+    print(
+        f"\n[orze-{primary_name}] Cross-backend fallback → {fallback_name}",
+        file=sys.stderr,
+    )
+    os.environ.pop(f"ORZE_{primary_name.upper()}_FALLBACK", None)
+    saved_argv0 = sys.argv[0]
+    try:
+        sys.argv[0] = f"orze-{fallback_name}"
+        return main(args)
+    finally:
+        sys.argv[0] = saved_argv0
+
+
 def main(argv: List[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     backend_name, spec = _resolve_backend(sys.argv[0])
@@ -179,18 +264,17 @@ def main(argv: List[str] | None = None) -> int:
     force_api = base_env.get(f"ORZE_{n}_FORCE_API", "") not in ("", "0")
     no_fallback = base_env.get(f"ORZE_{n}_NO_FALLBACK", "") not in ("", "0")
     api_key_available = bool(base_env.get(spec.api_key_var))
+    fallback_backends = (
+        [] if no_fallback else _resolve_fallback_backends(backend_name, base_env)
+    )
 
     invocation = [claude_bin, *args]
 
     # --- Fast paths ---------------------------------------------------
-    # Pure passthrough when nothing to fall back to, or user opted out.
-    # Exec-replace to avoid one extra Python process hanging around.
-    if no_fallback or not spec.allow_subscription_mode or not api_key_available:
+    # Pure passthrough when user opted out entirely.
+    if no_fallback:
         child_env = _child_env(
-            base_env, spec, backend_name,
-            # For API-key-only CLIs, the key must be present. For claude
-            # with no key set, there's nothing to strip anyway.
-            include_api_key=True,
+            base_env, spec, backend_name, include_api_key=True,
         )
         try:
             os.execvpe(claude_bin, invocation, child_env)
@@ -200,11 +284,35 @@ def main(argv: List[str] | None = None) -> int:
             return 127
         # Unreachable — execvpe replaces the process.
 
+    # No subscription mode OR no key to fall back to → run once; still
+    # honor cross-backend fallback on quota-exhaustion.
+    if not spec.allow_subscription_mode or not api_key_available:
+        rc, captured = _run_once(
+            invocation,
+            _child_env(base_env, spec, backend_name, include_api_key=True),
+        )
+        if rc != 0 and _is_quota_exhausted(captured, spec) and fallback_backends:
+            next_b, rest = fallback_backends[0], fallback_backends[1:]
+            if rest:
+                os.environ[f"ORZE_{next_b.upper()}_FALLBACK"] = ",".join(rest)
+            return _dispatch_fallback(next_b, args, base_env, backend_name)
+        if rc != 0 and _is_quota_exhausted(captured, spec):
+            return QUOTA_EXHAUSTED_RC
+        return rc
+
     # Explicit force-API: skip subscription attempt entirely.
     if force_api:
-        rc, _ = _run_once(invocation,
-                          _child_env(base_env, spec, backend_name,
-                                     include_api_key=True))
+        rc, captured = _run_once(
+            invocation,
+            _child_env(base_env, spec, backend_name, include_api_key=True),
+        )
+        if rc != 0 and _is_quota_exhausted(captured, spec) and fallback_backends:
+            next_b, rest = fallback_backends[0], fallback_backends[1:]
+            if rest:
+                os.environ[f"ORZE_{next_b.upper()}_FALLBACK"] = ",".join(rest)
+            return _dispatch_fallback(next_b, args, base_env, backend_name)
+        if rc != 0 and _is_quota_exhausted(captured, spec):
+            return QUOTA_EXHAUSTED_RC
         return rc
 
     # --- Default path: subscription first, API-key fallback on quota signal.
@@ -221,11 +329,19 @@ def main(argv: List[str] | None = None) -> int:
             f"with {spec.api_key_var}.",
             file=sys.stderr,
         )
-        rc, _ = _run_once(
+        rc, captured = _run_once(
             invocation,
             _child_env(base_env, spec, backend_name, include_api_key=True),
         )
-        return rc
+        if rc == 0:
+            return 0
+        if _is_quota_exhausted(captured, spec) and fallback_backends:
+            next_b, rest = fallback_backends[0], fallback_backends[1:]
+            if rest:
+                os.environ[f"ORZE_{next_b.upper()}_FALLBACK"] = ",".join(rest)
+            return _dispatch_fallback(next_b, args, base_env, backend_name)
+        if _is_quota_exhausted(captured, spec):
+            return QUOTA_EXHAUSTED_RC
 
     return rc
 

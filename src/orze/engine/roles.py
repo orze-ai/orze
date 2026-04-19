@@ -200,7 +200,7 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                                      role_name, count)
                     outcome = OUTCOME_SOFT_FAILURE
         else:
-            if _is_rate_limit_exit(rp.log_path):
+            if ret == 42 or _is_rate_limit_exit(rp.log_path):
                 logger.warning("%s cycle %d hit LLM rate-limit (exit %d) "
                                "— transient, not counting toward "
                                "consecutive_failures",
