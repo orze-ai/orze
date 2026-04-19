@@ -11,7 +11,7 @@ roles can find them.
 
 The core entry point ``run_posthoc(idea_id, cfg, idea_dir)`` delegates the
 "actually run inference" step to a pluggable adapter (picked by project
-name). This keeps orze generic while letting each consumer (nexar, smac,
+name). This keeps orze generic while letting each consumer register a
 …) plug in its own eval commands.
 
 Adapters are registered by the @register_adapter decorator; the ``null``
@@ -199,10 +199,26 @@ def subprocess_adapter(
 
 
 def _load_builtin_adapters():
+    """Auto-import built-in adapter modules so they self-register.
+
+    Iterates the ``orze.engine.posthoc_adapters`` package and imports
+    each submodule for its side effects (``@register_adapter(...)``).
+    Generic — no per-adapter knowledge here.
+    """
+    import importlib
+    import pkgutil
     try:
-        from orze.engine.posthoc_adapters import nexar_collision  # noqa
+        from orze.engine import posthoc_adapters as _ad_pkg
     except Exception as e:  # pragma: no cover
-        logger.debug("nexar_collision adapter not loaded: %s", e)
+        logger.debug("posthoc_adapters package missing: %s", e)
+        return
+    for mod in pkgutil.iter_modules(_ad_pkg.__path__):
+        if mod.name.startswith("_"):
+            continue
+        try:
+            importlib.import_module(f"{_ad_pkg.__name__}.{mod.name}")
+        except Exception as e:  # pragma: no cover
+            logger.debug("adapter %s not loaded: %s", mod.name, e)
 
 
 _load_builtin_adapters()
