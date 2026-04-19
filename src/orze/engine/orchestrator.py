@@ -278,6 +278,49 @@ class Orze(OrzePhaseMixin):
     def _startup_checks(self):
         self._health_monitor = startup_checks(
             self.results_dir, self.cfg, self._hostname, self._instance_uuid)
+        # F3: migrate any stray ideas.md.corrupt.* files from cwd into
+        # results/_corrupt_ideas/ and prune to last 5.
+        try:
+            from orze.engine.roles import cleanup_stale_corrupt_files
+            ideas_path = Path(self.cfg.get("ideas_file", "ideas.md"))
+            moved = cleanup_stale_corrupt_files(ideas_path)
+            if moved:
+                logger.info(
+                    "Archived %d stray ideas.md.corrupt.* files to "
+                    "_corrupt_ideas/ (kept last 5)", moved)
+        except Exception as e:
+            logger.debug("cleanup_stale_corrupt_files: %s", e)
+        # F6: relocate zero-byte stale DB files at CWD out of the way.
+        try:
+            self._cleanup_stale_root_dbs()
+        except Exception as e:
+            logger.debug("cleanup_stale_root_dbs: %s", e)
+
+    def _cleanup_stale_root_dbs(self):
+        """Move zero-byte ``*.db`` files at CWD that collide with canonical
+        DB names into ``<results>/_stale/``. They confuse sqlite-connect
+        callers into silently creating empty tables."""
+        stale_names = ("idea_lake.db", "queue.db", "orze.db", "lake.db",
+                       "orze_queue.db", "ideas.db")
+        stale_dir = self.results_dir / "_stale"
+        for name in stale_names:
+            p = Path.cwd() / name
+            if not p.exists() or p.is_dir():
+                continue
+            try:
+                if p.stat().st_size != 0:
+                    continue
+            except OSError:
+                continue
+            try:
+                stale_dir.mkdir(parents=True, exist_ok=True)
+                dest = stale_dir / f"{name}.{int(time.time())}"
+                shutil.move(str(p), str(dest))
+                logger.warning(
+                    "Moved stale 0-byte %s at CWD to %s (canonical DB is "
+                    "at results/idea_lake.db)", p, dest)
+            except OSError as e:
+                logger.warning("Could not move stale %s: %s", p, e)
 
     def _reconcile_stale_running(self):
         reconcile_stale_running(self.cfg)

@@ -123,6 +123,10 @@ class OrzePhaseMixin:
                                                            encoding="utf-8")
                         logger.info("Consumed %d ideas from %s (wiped file)",
                                     len(ingested_ids), cfg["ideas_file"])
+                        # Record the legitimate wipe so the corruption
+                        # guard knows this shrink was designed, not rogue.
+                        from orze.engine.roles import mark_ingest
+                        mark_ingest(Path(cfg["ideas_file"]))
                         # Update pre-snapshots on active roles so the corruption
                         # guard doesn't false-positive on the legitimate wipe.
                         # Also credit research-writer roles with the ingested

@@ -262,11 +262,93 @@ def _ideas_were_modified(ideas_file: str, rp: "RoleProcess") -> bool:
         return False
 
 
+def _prune_corrupt_archive(archive_dir: Path, basename: str,
+                           keep: int = 5) -> None:
+    """Keep at most ``keep`` most-recent ``<basename>.corrupt.*`` files."""
+    try:
+        candidates = sorted(archive_dir.glob(f"{basename}.corrupt.*"),
+                            key=lambda p: p.stat().st_mtime, reverse=True)
+    except OSError:
+        return
+    for extra in candidates[keep:]:
+        try:
+            extra.unlink()
+        except OSError:
+            pass
+
+
+def cleanup_stale_corrupt_files(ideas_path: Path,
+                                archive_dir=None,
+                                keep: int = 5) -> int:
+    """Move legacy ``ideas.md.corrupt.*`` files out of the project root
+    into a ``_corrupt_ideas/`` archive next to the ideas file and keep
+    only the ``keep`` most-recent. Returns the number moved. Idempotent;
+    safe to call on every startup.
+    """
+    if archive_dir is None:
+        archive_dir = ideas_path.parent / "_corrupt_ideas"
+    try:
+        archive_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return 0
+    moved = 0
+    pattern = f"{ideas_path.name}.corrupt.*"
+    for stray in ideas_path.parent.glob(pattern):
+        if stray.parent == archive_dir:
+            continue
+        try:
+            shutil.move(str(stray), str(archive_dir / stray.name))
+            moved += 1
+        except OSError:
+            continue
+    _prune_corrupt_archive(archive_dir, ideas_path.name, keep=keep)
+    return moved
+
+
+def _read_ingest_state(ideas_path: Path) -> dict:
+    """Read the ingest-state sidecar: {size, mtime, ts}."""
+    sidecar = ideas_path.with_suffix(ideas_path.suffix + ".ingest_state.json")
+    try:
+        import json
+        return json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def mark_ingest(ideas_path: Path) -> None:
+    """Record a successful legitimate consumption/wipe of ideas.md.
+
+    The shrink-is-corruption detector uses the recorded timestamp to
+    distinguish a DESIGNED post-ingest wipe (legitimate) from a rogue
+    role truncating the file (real corruption). Callers: the ideas-
+    ingester after successfully moving queued ideas into idea_lake.
+    """
+    import json
+    sidecar = ideas_path.with_suffix(ideas_path.suffix + ".ingest_state.json")
+    try:
+        st = ideas_path.stat()
+        sidecar.write_text(
+            json.dumps({"size": st.st_size, "mtime": st.st_mtime,
+                        "ts": time.time()}),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        logger.debug("mark_ingest failed: %s", e)
+
+
+# Ingest happened within this many seconds → shrink is expected, not corrupt.
+_INGEST_GRACE_WINDOW_S = 120.0
+
+
 def _check_ideas_integrity(ideas_file: str, rp: "RoleProcess"):
     """Detect and auto-restore ideas.md if a role truncated/corrupted it.
 
-    Compares current file size and idea count against pre-role snapshot.
-    If file shrunk by >10% or lost ideas, restore from the .safe backup.
+    A shrink is only flagged as corruption when NEITHER of the following
+    is true:
+      (a) a successful ingest was recorded in the sidecar within the
+          last ``_INGEST_GRACE_WINDOW_S`` seconds (designed wipe), OR
+      (b) the sidecar's recorded size matches (or is larger than) the
+          current size (the file already was small before this role).
     """
     ideas_path = Path(ideas_file)
     if not ideas_path.exists() or rp.ideas_pre_size == 0:
@@ -275,6 +357,26 @@ def _check_ideas_integrity(ideas_file: str, rp: "RoleProcess"):
     current_size = ideas_path.stat().st_size
     # Quick check: if file grew or stayed same, it's fine
     if current_size >= rp.ideas_pre_size:
+        return
+
+    # Shrink — but was this a legitimate post-ingest wipe?
+    ingest_state = _read_ingest_state(ideas_path)
+    ingest_ts = ingest_state.get("ts", 0.0)
+    if ingest_ts and (time.time() - ingest_ts) < _INGEST_GRACE_WINDOW_S:
+        logger.debug(
+            "ideas.md shrunk after %s cycle %d but ingest recorded "
+            "%.0fs ago — treating as designed wipe, not corruption",
+            rp.role_name, rp.cycle_num, time.time() - ingest_ts)
+        return
+    # Also defend against: sidecar recorded the small post-wipe size; the
+    # role was invoked with a pre-snapshot taken BEFORE the wipe but only
+    # ran AFTER. Compare against recorded post-ingest size, not pre-snapshot.
+    recorded_size = ingest_state.get("size")
+    if (isinstance(recorded_size, (int, float))
+            and current_size >= recorded_size):
+        logger.debug(
+            "ideas.md size %d >= last-ingest size %d — no corruption",
+            current_size, int(recorded_size))
         return
 
     # File shrunk — check idea count to confirm corruption
@@ -310,10 +412,16 @@ def _check_ideas_integrity(ideas_file: str, rp: "RoleProcess"):
             backup_count = 0
 
         if backup_count >= rp.ideas_pre_count:
-            # Save the corrupted file for forensics
-            corrupt_path = ideas_path.with_suffix(
-                f".md.corrupt.{int(time.time())}")
+            # Save the corrupted file for forensics — in a dedicated
+            # subdir of the results/ tree, keeping only the last 5.
+            corrupt_dir = ideas_path.parent / "_corrupt_ideas"
+            try:
+                corrupt_dir.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                corrupt_dir = ideas_path.parent
+            corrupt_path = corrupt_dir / f"{ideas_path.name}.corrupt.{int(time.time())}"
             shutil.copy2(str(ideas_path), str(corrupt_path))
+            _prune_corrupt_archive(corrupt_dir, ideas_path.name, keep=5)
             # Restore
             shutil.copy2(str(backup_path), str(ideas_path))
             logger.info("Restored ideas.md from backup (%d ideas). "
