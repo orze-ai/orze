@@ -238,3 +238,160 @@ so the experiment can succeed on retry.
     except Exception as e:
         logger.error("[FIX] %s — LLM fix error: %s", idea_id, e)
         return False
+
+
+# ---------------------------------------------------------------------------
+# Structured failure classification, analysis, and persistence
+# (merged from failure_analysis.py in v4.0)
+# ---------------------------------------------------------------------------
+
+import json as _json
+import re as _re
+import time as _time
+from typing import Any as _Any, Dict as _Dict, List as _List
+
+FAILURE_CATEGORIES = frozenset({
+    "oom", "timeout", "stall", "crash", "pre_script_error",
+    "eval_failure", "config_error", "sealed_violation",
+})
+
+_OOM_PATTERNS = _re.compile(
+    r"CUDA out of memory|OutOfMemoryError|OOM|"
+    r"out of memory|Cannot allocate memory|"
+    r"CUDNN_STATUS_NOT_SUPPORTED.*memory",
+    _re.IGNORECASE,
+)
+_CONFIG_PATTERNS = _re.compile(
+    r"KeyError|ValueError.*config|Unknown \w+:|"
+    r"missing.*required|invalid.*config|"
+    r"yaml\.scanner\.ScannerError|"
+    r"expected.*got|shape mismatch",
+    _re.IGNORECASE,
+)
+
+_CATEGORY_INFO: _Dict[str, _Dict[str, str]] = {
+    "oom": {
+        "why": "Model or batch size exceeds GPU VRAM capacity",
+        "lesson": "Reduce batch_size, use gradient accumulation, reduce model dimensions, or enable mixed precision",
+    },
+    "timeout": {
+        "why": "Training exceeded the configured time limit",
+        "lesson": "Reduce epochs, use early stopping, or increase timeout for this config profile",
+    },
+    "stall": {
+        "why": "Process hung — no log output for extended period",
+        "lesson": "Check for deadlocks, data loader issues, or I/O bottlenecks",
+    },
+    "crash": {
+        "why": "Process exited with non-zero code due to unhandled exception",
+        "lesson": "Review traceback for bug in training script; may need code fix",
+    },
+    "pre_script_error": {
+        "why": "Pre-training script failed before training could start",
+        "lesson": "Check data preparation, feature extraction, or environment setup",
+    },
+    "eval_failure": {
+        "why": "Post-training evaluation script failed",
+        "lesson": "Check eval script compatibility with model output format",
+    },
+    "config_error": {
+        "why": "Training script could not parse or use the provided config",
+        "lesson": "Verify config key names, value types, and required fields",
+    },
+    "sealed_violation": {
+        "why": "Protected evaluation files were modified during training or fixing",
+        "lesson": "Do not modify sealed files; adjust training code or config instead",
+    },
+}
+
+
+def classify_failure(error_text: str, exit_code: int = -1,
+                     source: str = "training") -> str:
+    if source == "pre_script":
+        return "pre_script_error"
+    if source == "eval":
+        return "eval_failure"
+    text = error_text[:2000]
+    if _OOM_PATTERNS.search(text):
+        return "oom"
+    if "Timed out" in text or "Timeout" in text:
+        return "timeout"
+    if "Stalled" in text or "no output for" in text:
+        return "stall"
+    if _CONFIG_PATTERNS.search(text):
+        return "config_error"
+    return "crash"
+
+
+def build_failure_analysis(category: str, error_text: str) -> dict:
+    info = _CATEGORY_INFO.get(category, _CATEGORY_INFO["crash"])
+    return {
+        "category": category,
+        "what": error_text.split("\n")[0][:300],
+        "why": info["why"],
+        "lesson": info["lesson"],
+        "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+
+
+def write_failure_analysis(idea_dir: Path, category: str,
+                           error_text: str) -> None:
+    analysis = build_failure_analysis(category, error_text)
+    try:
+        idea_dir.mkdir(parents=True, exist_ok=True)
+        path = idea_dir / "failure_analysis.json"
+        path.write_text(_json.dumps(analysis, indent=2), encoding="utf-8")
+    except OSError as e:
+        logger.warning("Could not write failure analysis for %s: %s",
+                       idea_dir.name, e)
+
+
+def load_recent_failures(results_dir: Path,
+                         limit: int = 200) -> _Dict[str, _List[_Dict[str, _Any]]]:
+    if not results_dir.exists():
+        return {}
+    idea_names = []
+    try:
+        with os.scandir(results_dir) as it:
+            for entry in it:
+                if entry.is_dir(follow_symlinks=False) and entry.name.startswith("idea-"):
+                    idea_names.append(entry.name)
+    except OSError:
+        return {}
+    idea_names.sort()
+    scan_names = idea_names[-limit:] if len(idea_names) > limit else idea_names
+    grouped: _Dict[str, _List[_Dict[str, _Any]]] = {}
+    for name in scan_names:
+        idea_dir = results_dir / name
+        fa_path = idea_dir / "failure_analysis.json"
+        if fa_path.exists():
+            try:
+                fa = _json.loads(fa_path.read_text(encoding="utf-8"))
+                cat = fa.get("category", "crash")
+                grouped.setdefault(cat, []).append({
+                    "idea_id": name,
+                    "what": fa.get("what", ""),
+                    "why": fa.get("why", ""),
+                    "lesson": fa.get("lesson", ""),
+                })
+                continue
+            except (_json.JSONDecodeError, OSError):
+                pass
+        mf = idea_dir / "metrics.json"
+        if not mf.exists():
+            continue
+        try:
+            m = _json.loads(mf.read_text(encoding="utf-8"))
+        except (_json.JSONDecodeError, OSError):
+            continue
+        if m.get("status") not in ("FAILED", "ERROR"):
+            continue
+        error = m.get("error") or m.get("traceback") or "unknown"
+        cat = classify_failure(str(error))
+        grouped.setdefault(cat, []).append({
+            "idea_id": name,
+            "what": str(error).split("\n")[0][:300],
+            "why": _CATEGORY_INFO.get(cat, _CATEGORY_INFO["crash"])["why"],
+            "lesson": _CATEGORY_INFO.get(cat, _CATEGORY_INFO["crash"])["lesson"],
+        })
+    return grouped

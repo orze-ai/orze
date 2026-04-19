@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from orze.engine import upgrade_cleanup
+from orze.engine import upgrade as upgrade_cleanup
 from orze.engine.upgrade_cleanup import (
     STAMP_FILENAME,
     _GARBAGE_FILES,
