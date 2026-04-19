@@ -83,6 +83,41 @@ def test_main_dispatches_fallback_on_quota(monkeypatch):
     assert call_count["n"] == 2
 
 
+def test_main_full_priority_subscription_then_api_then_gemini(monkeypatch):
+    """Default path must try subscription, then API key, then gemini fallback —
+    in that exact order — when each upstream returns a quota signal."""
+    monkeypatch.setattr(sys, "argv", ["orze-claude", "-p", "hi"])
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-fake")
+    monkeypatch.setenv("GEMINI_API_KEY", "gm-fake")
+    monkeypatch.setenv("ORZE_CLAUDE_FALLBACK", "gemini")
+    monkeypatch.delenv("ORZE_CLAUDE_FORCE_API", raising=False)
+    monkeypatch.delenv("ORZE_CLAUDE_NO_FALLBACK", raising=False)
+
+    attempts = []
+
+    def fake_run_once(argv, env):
+        bin_name = os.path.basename(argv[0])
+        has_anthropic_key = "ANTHROPIC_API_KEY" in env
+        has_gemini_key = "GEMINI_API_KEY" in env
+        attempts.append((bin_name, has_anthropic_key, has_gemini_key))
+        if bin_name == "claude":
+            # Both subscription (no key) and API-key attempts hit quota.
+            return 1, "reached your specified api usage limits"
+        # gemini succeeds
+        return 0, "ok"
+
+    monkeypatch.setattr(llm, "_run_once", fake_run_once)
+    rc = llm.main([])
+
+    assert rc == 0
+    # Order must be: claude-subscription, claude-API, gemini
+    assert len(attempts) == 3, attempts
+    assert attempts[0] == ("claude", False, True), "step 1: subscription (key stripped)"
+    assert attempts[1] == ("claude", True, True), "step 2: API key"
+    assert attempts[2][0] == "gemini", "step 3: gemini fallback"
+    assert attempts[2][2] is True, "gemini must see GEMINI_API_KEY"
+
+
 def test_main_no_fallback_env_preserves_execvpe_passthrough(monkeypatch):
     """ORZE_CLAUDE_NO_FALLBACK=1 short-circuits to execvpe, even with API key."""
     monkeypatch.setattr(sys, "argv", ["orze-claude", "-p", "hi"])
