@@ -335,6 +335,10 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
     idea_cfg.setdefault("kind", kind)
     if not idea_cfg.get("adapter"):
         idea_cfg["adapter"] = cfg.get("posthoc_adapter") or "null"
+    # Merge posthoc_defaults (project_root, solution_csv, python, etc.) —
+    # idea-level cfg still wins.
+    for _dk, _dv in (cfg.get("posthoc_defaults") or {}).items():
+        idea_cfg.setdefault(_dk, _dv)
     artifact_db = (cfg.get("artifact_catalog_db")
                    or str(Path(results_dir) / "idea_lake_artifacts.db"))
 

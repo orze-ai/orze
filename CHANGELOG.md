@@ -1,5 +1,80 @@
 # Changelog
 
+## 3.7.0 — Honest-eval + cleanup
+
+Fixes the one remaining fiction in the v3.6.2 self-evolving proof: the
+0.9057 headline was computed with a 5-fold CV-OOF on **test** labels,
+so the α that maximizes the reported metric was fit on the exact rows
+it was then reported against — a classic label-peek. v3.7.0 removes
+that leakage from the promotion path.
+
+### Breaking
+
+- **CV-OOF on test labels no longer eligible for promotion.** The old
+  `cv_mix` calibrator remains in the registry for reference-only
+  reproduction, but any `metrics.json` that declares `honest: false`
+  (or that was produced by the legacy path) is refused by
+  `champion_guard.check_promotion`. Promote-flow downstream code that
+  used to read `pgmAP_ALL` uncritically must now honor the
+  `honest` flag.
+
+### Added
+
+- **F11 `cv_mix_honest` calibrator** — explicit `fit(fit_mask, …)` /
+  `apply(…)` contract. Hyperparameters (α) are selected only on
+  `fit_mask` rows; apply is mask-free (works on the full population
+  with the chosen α). Also adds `per_group_rank_normalize()` as a
+  public helper so adapters can assemble parts without peeking.
+- **Split-aware `bundle_combiner.search`.** New keyword
+  `splits={"val": mask, "report": {name: mask|None, …}}`. Tuning uses
+  `val`; each `report` mask is scored separately. Leak guard: if
+  every report mask is identical to `val`, raises `ValueError`.
+  Legacy single-mask behavior preserved when `splits` is `None`
+  (returns `honest: false`).
+- **Honest-flag enforcement in `champion_guard`.** `metrics.json` with
+  `honest: false` cannot be promoted.
+- **`posthoc_defaults` in `orze.yaml`.** Top-level dict (e.g.
+  `solution_csv`, `project_root`, `python`) is merged into every
+  posthoc idea before dispatch — keeps per-idea config thin and
+  avoids hand-stamping infra paths into `search_role` output.
+- **Nexar-collision adapter is now F11-native.** Reads per-frame NPZs
+  directly, uses `per_group_rank_normalize` + `cv_mix_honest`, and
+  writes `metrics.json` with `pgmAP_Public`, `pgmAP_Private`,
+  `pgmAP_ALL_honest`, and `alpha_tuned_on_public`.
+- **`tests/test_honest_eval.py`** — `fit_mask` respect, empty-mask
+  error, split-aware reporting, leak detection, adapter end-to-end,
+  champion_guard honest gating.
+
+### Changed (refactor)
+
+- The Nexar-collision adapter **no longer imports
+  `nexar_collision/scripts/eval_tta_npz.py`**. The consumer script is
+  kept in-repo only for the manual reproducer (which is not on the
+  promotion path). This closes the last adapter↔consumer coupling.
+
+### Chore
+
+- `orze/docs/audit_v3_6_2.md` — matrix proving every F8..F16 module is
+  either live-exercised or test-covered (no dead code).
+- Consumer-side: 36 superseded `eval_*.py` scripts archived to
+  `nexar_collision/_archive/eval_superseded/`. The live set is
+  `scripts/eval_tta_npz.py`, `scripts/eval_champion_0905_final.py`,
+  `eval_agg_sweep.py`, `eval_e2e.py`. `ideas.md.safe*` backups and
+  the `_corrupt_ideas/` directory removed.
+
+### Verified numbers (live, autonomous)
+
+| metric               | value  |
+| -------------------- | -----: |
+| `pgmAP_Public`       | 0.9209 |
+| `pgmAP_Private`      | 0.8928 |
+| `pgmAP_ALL_honest`   | 0.9060 |
+| `alpha_tuned_on_public` | 0.85 |
+
+See `nexar_collision/results/_orze_honest_proof.md` for the
+reproducer and full acceptance table.
+
+
 ## 3.6.0 — Post-hoc search capability
 
 Turns the manual Nexar Collision 0.8994 → 0.9057 recovery into a
