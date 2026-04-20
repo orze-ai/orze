@@ -34,6 +34,13 @@ _SWEEP_BLOCKLIST = frozenset({
     "betas", "split_ratio", "stack_layers", "stack_dims",
     "downsampling_factors", "num_heads", "feedforward_dim",
     "output_range", "augmentations", "transforms",
+    # TTA / ensemble sweep keys — these expand into -ht-N sub-runs that
+    # pass unsupported CLI args (e.g. --tta_views) to sealed eval scripts
+    # and fail with exit 2. Blocking stops polluting the queue with
+    # guaranteed-failure sub-runs (root cause of 0-completion streak 2026-04-19).
+    "tta_views", "views", "tta_agg", "tta_aggs",
+    "aggregation", "aggregations", "temperatures",
+    "ensemble_members", "soup_members",
 })
 logger = logging.getLogger("orze")
 
