@@ -219,6 +219,10 @@ def _resolve_fallback_backends(backend_name: str, base_env: dict) -> List[str]:
     """
     n = backend_name.upper()
     raw = base_env.get(f"ORZE_{n}_FALLBACK", "").strip()
+    # Accept truthy boolean shorthand ("1"/"true"/"yes"/"on") as
+    # "enable the documented default fallback chain" for this backend.
+    if raw.lower() in ("1", "true", "yes", "on"):
+        raw = ""  # fall through to default-chain logic below
     if not raw and backend_name == "claude" and base_env.get("GEMINI_API_KEY"):
         raw = "gemini"
     if not raw:

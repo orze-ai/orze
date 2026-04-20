@@ -37,6 +37,50 @@ import sys
 
 _ENV_VAR_RE = re.compile(r"\$\{([^}]+)\}")
 
+# Canonical claude-mode role skill defaults. Users who declare one of these
+# roles with ``mode: claude`` but omit ``skills:`` get the bundled SOP stack
+# auto-injected instead of a hard config error. Keep in sync with the lists
+# in orze_pro.engine.role_runner — this registry is the user-facing
+# self-healing layer so projects that override (e.g. pin a different model)
+# don't have to restate every skill.
+CANONICAL_CLAUDE_SKILL_DEFAULTS: dict = {
+    "professor": [
+        "@sop:professor_base",
+        "@sop:professor_paper_lake",
+        "@sop:professor_web_search",
+        "@sop:professor_cross_domain_query",
+        "@sop:professor_idea_review",
+        "@sop:professor_diversity_enforcement",
+        "@sop:professor_gap_closure",
+        "@sop:professor_strategy_review",
+        "@sop:professor_regression_detection",
+        "@sop:professor_steering",
+    ],
+    "thinker": [
+        "@sop:thinker_synthesis",
+        "@sop:thinker_base",
+        "@sop:thinker_phase_a_reformulation",
+        "@sop:thinker_phase_b_root_cause",
+        "@sop:thinker_axiom_removal",
+        "@sop:thinker_phase_c_constraints",
+        "@sop:thinker_phase_d_cross_domain",
+        "@sop:thinker_phase_e_proposals",
+        "@sop:thinker_phase_f_implementation",
+    ],
+    "data_analyst": [
+        "@sop:data_analyst_base",
+        "@sop:data_analyst_error_analysis",
+        "@sop:data_analyst_visualization",
+        "@sop:data_analyst_insights",
+        "@sop:data_analyst_anomaly_hypotheses",
+    ],
+    "engineer": [
+        "@sop:engineer_base",
+        "@sop:engineer_implement",
+        "@sop:engineer_fix_bugs",
+    ],
+}
+
 
 def _expand_env_vars(obj):
     """Recursively expand ${VAR} references in string values using os.environ."""
@@ -279,7 +323,19 @@ def _validate_config(cfg: dict) -> tuple:
                 errors.append(f"roles.{rname}.mode: '{mode}' is invalid "
                               f"(expected 'script', 'claude', or 'research')")
             if mode == "claude" and not rcfg.get("skills"):
-                errors.append(f"roles.{rname}: mode 'claude' requires 'skills'")
+                default_skills = CANONICAL_CLAUDE_SKILL_DEFAULTS.get(rname)
+                if default_skills:
+                    rcfg["skills"] = list(default_skills)
+                    warnings.append(
+                        f"roles.{rname}: no 'skills' set — auto-injected "
+                        f"{len(default_skills)} canonical SOPs for known role "
+                        f"'{rname}'")
+                else:
+                    errors.append(
+                        f"roles.{rname}: mode 'claude' requires 'skills' "
+                        f"(no canonical defaults for role name '{rname}'; "
+                        f"known canonicals: "
+                        f"{', '.join(sorted(CANONICAL_CLAUDE_SKILL_DEFAULTS))})")
             # rules_file was removed in 3.4.0 — reject explicitly rather
             # than silently ignoring a stale legacy key.
             if "rules_file" in rcfg:
