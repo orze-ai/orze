@@ -45,6 +45,7 @@ import datetime
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -726,6 +727,11 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                                       tp.idea_id, e)
                 write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, ret or -1, "training"), error_msg)
                 _record_failure(failure_counts, tp.idea_id)
+            elif status == "SKIPPED":
+                idea_dir = results_dir / tp.idea_id
+                shutil.rmtree(idea_dir, ignore_errors=True)
+                logger.info("[RE-QUEUED] %s — status SKIPPED, removed result "
+                            "dir so scheduler picks it up again", tp.idea_id)
         else:
             reason = f"exit code {ret}"
             try:
