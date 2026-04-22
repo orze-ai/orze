@@ -37,7 +37,16 @@ from orze.core.fs import deep_get, atomic_write
 from orze.core.ideas import expand_sweeps
 from orze.core.config import DEFAULT_CONFIG, orze_path
 from orze.reporting.state import _read_all_heartbeats
-from orze.reporting.notifications import notify
+
+
+def notify(event, data, cfg):
+    """Lazy-imported wrapper around orze.reporting.notifications.notify.
+
+    Imported lazily because notifications.py imports _format_report_text
+    from this module (circular import).
+    """
+    from orze.reporting.notifications import notify as _notify
+    return _notify(event, data, cfg)
 
 try:
     from orze.idea_lake import IdeaLake
