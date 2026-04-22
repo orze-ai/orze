@@ -21,6 +21,10 @@ PATTERNS: Dict[str, List[str]] = {
         r"Token is required",
         r"HF_TOKEN",
     ],
+    "hf_model_not_found": [
+        r"is not a local folder and is not a valid model identifier",
+        r"Repository Not Found for url.*huggingface",
+    ],
     "gh_login": [
         r"gh auth login",
         r"Bad credentials.*GitHub",
