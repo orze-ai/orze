@@ -37,6 +37,7 @@ from orze.core.fs import deep_get, atomic_write
 from orze.core.ideas import expand_sweeps
 from orze.core.config import DEFAULT_CONFIG, orze_path
 from orze.reporting.state import _read_all_heartbeats
+from orze.reporting.notifications import notify
 
 try:
     from orze.idea_lake import IdeaLake
