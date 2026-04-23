@@ -82,8 +82,8 @@ def _is_argparse_schema_invalid(error_text: str, exit_code: int,
     return bool(_ARGPARSE_UNRECOGNIZED_RE.search(blob))
 
 
-def _mark_schema_invalid_in_lake(idea_id: str, cfg: dict,
-                                 results_dir: Path, reason: str) -> None:
+def _mark_lake_failure(idea_id: str, cfg: dict,
+                       results_dir: Path, reason: str) -> None:
     """Best-effort: mark idea ``failed`` in idea_lake with a failure reason
     stored under ``eval_metrics.failure_reason``. Silent on any error —
     the filesystem ``metrics.json`` is the authoritative failure record.
@@ -143,8 +143,8 @@ def _try_executor_fix(idea_id: str, error_text: str, results_dir: Path,
         logger.info(
             "[SKIP-FIX] %s — schema_invalid: unrecognized arguments "
             "(argparse exit 2)", idea_id)
-        _mark_schema_invalid_in_lake(idea_id, cfg, results_dir,
-                                     "schema_invalid")
+        _mark_lake_failure(idea_id, cfg, results_dir,
+                           "schema_invalid")
         return False
 
     max_fix = cfg.get("max_fix_attempts", 0)

@@ -280,6 +280,191 @@ def _detect_zombie(tp) -> bool:
 
 
 # --------------------------------------------------------------------- #
+# F3: zombie/stuck-training watchdog                                     #
+# --------------------------------------------------------------------- #
+
+# Watchdog activates once the training shows a first-batch marker OR
+# WATCHDOG_GRACE_MIN minutes pass since launch (whichever first). Then
+# every poll it samples GPU util / log mtime / process-tree CPU time.
+# After WATCHDOG_CONSECUTIVE consecutive samples where ALL THREE
+# signals are stuck (GPU<5%, log mtime unchanged, CPU delta <1s),
+# the process is killed and the idea is marked failed.
+#
+# Test override via env vars so unit tests don't have to wait minutes.
+WATCHDOG_GRACE_MIN = int(os.environ.get("ORZE_WD_GRACE_MIN", "60"))
+WATCHDOG_CONSECUTIVE = int(os.environ.get("ORZE_WD_CONSECUTIVE", "15"))
+WATCHDOG_GPU_UTIL_THRESHOLD = int(os.environ.get("ORZE_WD_GPU_UTIL", "5"))
+WATCHDOG_CPU_DELTA_JIFFIES = int(
+    os.environ.get("ORZE_WD_CPU_DELTA_JIFFIES", "100"))  # ~1s @ HZ=100
+
+_FIRST_BATCH_RE = __import__("re").compile(
+    r"\bbatch\s+\d+\s*/\s*\d+|epoch\s+\d+|Epoch\s+\d+|step\s+\d+",
+    __import__("re").IGNORECASE,
+)
+
+
+def _scan_first_batch_marker(log_path: Optional[Path]) -> bool:
+    """True if the log file contains a batch/epoch/step marker."""
+    if not log_path:
+        return False
+    try:
+        if not log_path.exists():
+            return False
+    except OSError:
+        return False
+    try:
+        # Tail the last 32KB — first-batch markers reappear regularly,
+        # we don't need full-file scan and tail is bounded.
+        text = tail_file(log_path, 32768)
+    except Exception:
+        return False
+    return bool(_FIRST_BATCH_RE.search(text))
+
+
+def _gpu_util_for_pid(pid: int) -> Optional[int]:
+    """Return GPU util (0-100) for the GPU process *pid* runs on, or None
+    if pid is not currently using a GPU / nvidia-smi is unavailable.
+
+    Uses ``--query-compute-apps=pid,gpu_uuid`` to map pid → GPU, then
+    ``--query-gpu=utilization.gpu,uuid`` for per-GPU util.
+    """
+    try:
+        a = subprocess.run(
+            ["nvidia-smi", "--query-compute-apps=pid,gpu_uuid",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    gpu_uuid = None
+    for line in a.stdout.strip().splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) >= 2:
+            try:
+                if int(parts[0]) == pid:
+                    gpu_uuid = parts[1]
+                    break
+            except ValueError:
+                continue
+    if gpu_uuid is None:
+        return None
+    try:
+        b = subprocess.run(
+            ["nvidia-smi", "--query-gpu=uuid,utilization.gpu",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    for line in b.stdout.strip().splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) >= 2 and parts[0] == gpu_uuid:
+            try:
+                return int(parts[1])
+            except ValueError:
+                return None
+    return None
+
+
+def _watchdog_check(tp) -> bool:
+    """True once the training process has been stuck for
+    WATCHDOG_CONSECUTIVE consecutive samples post-grace.
+    Mutates ``tp`` to keep watchdog state.
+    """
+    now = time.time()
+    elapsed_min = (now - tp.start_time) / 60.0
+
+    # 1. First-batch detection (latched).
+    if not getattr(tp, "_wd_first_batch", False):
+        if _scan_first_batch_marker(tp.log_path):
+            tp._wd_first_batch = True
+
+    # 2. Activation gate.
+    activated = (
+        getattr(tp, "_wd_first_batch", False)
+        or elapsed_min >= WATCHDOG_GRACE_MIN
+    )
+    if not activated:
+        return False
+
+    # 3. Sample all three signals.
+    gpu_util = _gpu_util_for_pid(tp.process.pid)
+    try:
+        log_mtime = tp.log_path.stat().st_mtime if tp.log_path else 0.0
+    except OSError:
+        log_mtime = 0.0
+    try:
+        cpu_jiffies = _tree_cpu_jiffies(tp.process.pid)
+    except Exception:
+        cpu_jiffies = 0
+
+    prev = getattr(tp, "_wd_prev_sample", None)
+    tp._wd_prev_sample = (now, log_mtime, cpu_jiffies, gpu_util)
+
+    if prev is None:
+        # Need a baseline sample first.
+        tp._wd_bad_count = 0
+        return False
+
+    _, prev_mtime, prev_jiffies, _ = prev
+    log_unchanged = log_mtime <= prev_mtime
+    cpu_delta = cpu_jiffies - prev_jiffies
+    cpu_idle = cpu_delta < WATCHDOG_CPU_DELTA_JIFFIES
+    gpu_idle = (gpu_util is not None and gpu_util < WATCHDOG_GPU_UTIL_THRESHOLD)
+
+    if log_unchanged and cpu_idle and gpu_idle:
+        tp._wd_bad_count = getattr(tp, "_wd_bad_count", 0) + 1
+    else:
+        tp._wd_bad_count = 0
+
+    return tp._wd_bad_count >= WATCHDOG_CONSECUTIVE
+
+
+# --------------------------------------------------------------------- #
+# F5: launch-time nested-config validator                                #
+# --------------------------------------------------------------------- #
+
+# Top-level dict values that ARE allowed in idea_config.yaml. Trainers
+# explicitly accept these as nested sub-configs; everything else must be
+# argparse-style scalar kwargs.
+_NESTED_CONFIG_WHITELIST = {
+    "ema",
+    "augmentation",
+    "augmentations",
+    "data_boundaries",   # orze framework-managed
+    "executor_fix",      # orze framework-managed
+    "report",            # orze framework-managed
+}
+
+
+def validate_idea_config_no_nested(
+    idea_cfg: dict,
+    extra_whitelist: Optional[list] = None,
+) -> Optional[str]:
+    """F5: reject configs whose top-level values are nested dicts.
+
+    Returns None if valid, otherwise an error message. Whitelisted keys
+    (``ema``, ``augmentation``, ...) may have dict values. ``extra_whitelist``
+    extends the default whitelist (configurable via cfg).
+    """
+    if not isinstance(idea_cfg, dict):
+        return None
+    allowed = set(_NESTED_CONFIG_WHITELIST)
+    if extra_whitelist:
+        allowed.update(str(k) for k in extra_whitelist)
+    bad = []
+    for k, v in idea_cfg.items():
+        if isinstance(v, dict) and k not in allowed:
+            bad.append(k)
+    if not bad:
+        return None
+    return ("nested_config_not_allowed: top-level dict values for keys "
+            + ", ".join(sorted(bad))
+            + " — only argparse-style scalar kwargs allowed (whitelist: "
+            + ", ".join(sorted(allowed)) + ")")
+
+
+# --------------------------------------------------------------------- #
 # F12: idea kind resolution + post-hoc launch                            #
 # --------------------------------------------------------------------- #
 
@@ -636,6 +821,41 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     del active[gpu]
                     finished.append((tp.idea_id, gpu))
                     continue
+
+            # --- F3: triple-signal watchdog (post-grace) ---
+            if ret is None and _watchdog_check(tp):
+                logger.warning(
+                    "[WATCHDOG] %s — stuck (no GPU/log/CPU progress for "
+                    "%d consecutive samples), killing",
+                    tp.idea_id, WATCHDOG_CONSECUTIVE)
+                notify("stall", {"idea_id": tp.idea_id, "gpu": gpu,
+                                 "reason": "Watchdog: stuck_no_progress"}, cfg)
+                _terminate_and_reap(tp.process, tp.idea_id)
+                # Give SIGKILL after 30s if still alive.
+                try:
+                    tp.process.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    import signal as _sig
+                    from orze.engine.process import _kill_pg
+                    _kill_pg(tp.process, _sig.SIGKILL)
+                tp.close_log()
+                error_msg = "stuck_no_progress"
+                _write_failure(results_dir / tp.idea_id, error_msg)
+                write_failure_analysis(
+                    results_dir / tp.idea_id,
+                    classify_failure(error_msg, -1, "training"),
+                    error_msg)
+                _record_failure(failure_counts, tp.idea_id)
+                # Mark in idea_lake too (best-effort).
+                try:
+                    from orze.engine.failure import _mark_lake_failure
+                    _mark_lake_failure(
+                        tp.idea_id, cfg, results_dir, "stuck_no_progress")
+                except Exception:
+                    pass
+                del active[gpu]
+                finished.append((tp.idea_id, gpu))
+                continue
 
             fatal = detect_fatal_in_log(tp)
             if fatal and tp.process.poll() is None:

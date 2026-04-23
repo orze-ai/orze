@@ -7,7 +7,7 @@ from pathlib import Path
 from orze.engine.failure import (
     _is_argparse_schema_invalid,
     _try_executor_fix,
-    _mark_schema_invalid_in_lake,
+    _mark_lake_failure,
 )
 
 
@@ -90,8 +90,8 @@ def test_try_executor_fix_skips_and_marks_lake(tmp_path, caplog):
 def test_mark_schema_invalid_idempotent(tmp_path):
     db = _make_lake(tmp_path)
     cfg = {"idea_lake_db": str(db)}
-    _mark_schema_invalid_in_lake("idea-001", cfg, tmp_path, "schema_invalid")
-    _mark_schema_invalid_in_lake("idea-001", cfg, tmp_path, "schema_invalid")
+    _mark_lake_failure("idea-001", cfg, tmp_path, "schema_invalid")
+    _mark_lake_failure("idea-001", cfg, tmp_path, "schema_invalid")
     conn = sqlite3.connect(str(db))
     row = conn.execute(
         "SELECT status FROM ideas WHERE idea_id='idea-001'").fetchone()
@@ -101,4 +101,4 @@ def test_mark_schema_invalid_idempotent(tmp_path):
 
 def test_mark_schema_invalid_missing_db_silent(tmp_path):
     cfg = {"idea_lake_db": str(tmp_path / "nonexistent.db")}
-    _mark_schema_invalid_in_lake("idea-001", cfg, tmp_path, "schema_invalid")
+    _mark_lake_failure("idea-001", cfg, tmp_path, "schema_invalid")
