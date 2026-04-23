@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.0.3 — `orze upgrade` works out-of-box
+
+### Fixed
+- **`orze upgrade` now actually upgrades** — previously it failed silently with `does not appear to be a Python project` because `submodule_search_locations[0].parent` resolved to `<repo>/src/` (no `pyproject.toml`) instead of the project root. Now walks up to the dir containing `pyproject.toml` / `setup.py`.
+- **Non-editable installs are handled** — when `orze` / `orze-pro` are installed normally (not `pip install -e`), `orze upgrade` falls back to `pip install --upgrade <pkg>`. For `orze-pro`, this uses the license-gated private PyPI (`https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/`) — same path as the daemon's auto-upgrade, so a paid user just needs `ORZE_PRO_KEY` set (env / `.env` / `~/.orze-pro.key`).
+- **Uses the active interpreter's pip** — `sys.executable -m pip` instead of bare `pip3`, which previously resolved outside the venv ("Defaulting to user installation because normal site-packages is not writeable").
+- **Non-zero pip exit codes propagate** — `orze upgrade` no longer returns 0 when the underlying `pip install` fails.
+
+### Security
+- **License-key redaction in upgrade paths.** New `orze.extensions.redact_basic_auth(text)` helper scrubs `user:password@` from any URL embedded in a string. Used by:
+  - `orze upgrade` when echoing the pip command to stdout
+  - `engine/upgrade.py` (daemon auto-upgrade) when logging pip stderr on failure — pip error messages frequently echo the full `--extra-index-url`, which would otherwise have written the license key into orze's log.
+
 ## Unreleased
 
 ### Changed

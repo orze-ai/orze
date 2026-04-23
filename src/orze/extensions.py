@@ -85,6 +85,16 @@ def get_extension(name: str) -> Optional[object]:
 _auto_install_attempted = False
 
 
+def redact_basic_auth(text: str) -> str:
+    """Redact ``user:password@`` from any URL embedded in ``text``.
+
+    Used to scrub license-key tokens (``https://__token__:KEY@pypi.orze.ai/...``)
+    out of stdout / log lines before they reach the user or disk.
+    """
+    import re
+    return re.sub(r"(https?://[^/@\s]+:)[^@\s]+(@)", r"\1***\2", text)
+
+
 def _find_pro_key() -> str:
     """Find ORZE_PRO_KEY from env var, .env file, or ~/.orze-pro.key."""
     import os

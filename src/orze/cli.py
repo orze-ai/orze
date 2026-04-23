@@ -506,46 +506,94 @@ Examples:
         import importlib.util
         import signal
         import subprocess
+        import sys
         import time
-        
+
         # Load config to get orze_dir for daemon PID
         cfg = load_project_config(args.config_file)
         orze_dir = Path(cfg.get("_orze_dir", ".orze"))
-        
-        # Step 1: Reinstall packages
-        if not args.no_reinstall:
-            print("Reinstalling orze + orze-pro from source...")
-            
-            # Resolve orze package dir
-            spec = importlib.util.find_spec("orze")
+
+        def _editable_project_root(pkg_name: str):
+            """Return the project root (containing pyproject.toml/setup.py) for an
+            editable install of `pkg_name`, or None for a regular site-packages install."""
+            spec = importlib.util.find_spec(pkg_name)
             if not spec or not spec.submodule_search_locations:
-                print("ERROR: Cannot locate orze package.")
+                return None
+            pkg_dir = Path(spec.submodule_search_locations[0])
+            for parent in pkg_dir.parents:
+                if parent.name == "site-packages":
+                    return None  # regular install, not editable
+                if (parent / "pyproject.toml").exists() or (parent / "setup.py").exists():
+                    return parent
+            return None
+
+        def _pip_install(args_list, label):
+            """Run pip in the *current* interpreter; propagate failure.
+
+            Redacts any embedded basic-auth credentials in printed args so
+            license keys never leak to stdout / logs.
+            """
+            from orze.extensions import redact_basic_auth
+            cmd = [sys.executable, "-m", "pip", "install", *args_list]
+            redacted = [redact_basic_auth(a) for a in cmd]
+            print(f"Running: {' '.join(redacted)}")
+            rc = subprocess.run(cmd).returncode
+            if rc != 0:
+                print(f"ERROR: {label} install failed with code {rc}")
+            return rc
+
+        # Step 1: Reinstall / upgrade packages
+        if not args.no_reinstall:
+            # --- orze ---
+            if importlib.util.find_spec("orze") is None:
+                print("ERROR: orze not importable from this interpreter.")
                 return 1
-            orze_src_dir = Path(spec.submodule_search_locations[0])
-            orze_pkg_dir = orze_src_dir.parent  # /path/to/orze/src -> /path/to/orze
-            
-            # Resolve orze-pro package dir
-            pro_pkg_dir = None
-            try:
-                pro_spec = importlib.util.find_spec("orze_pro")
-                if pro_spec and pro_spec.submodule_search_locations:
-                    pro_src_dir = Path(pro_spec.submodule_search_locations[0])
-                    pro_pkg_dir = pro_src_dir.parent
-            except (ImportError, ModuleNotFoundError):
-                pass
-            
-            # Build pip command
-            cmd = ["pip3", "install", "--force-reinstall", "--no-deps", "-e", str(orze_pkg_dir)]
-            if pro_pkg_dir:
-                cmd.extend(["-e", str(pro_pkg_dir)])
+            orze_root = _editable_project_root("orze")
+            if orze_root:
+                print(f"Reinstalling orze (editable) from {orze_root}...")
+                rc = _pip_install(
+                    ["--force-reinstall", "--no-deps", "-e", str(orze_root)],
+                    "orze",
+                )
             else:
-                print("WARNING: orze-pro not installed or not found — skipping.")
-            
-            print(f"Running: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=False)
-            if result.returncode != 0:
-                print(f"ERROR: Reinstall failed with code {result.returncode}")
-                return result.returncode
+                print("Upgrading orze from PyPI...")
+                rc = _pip_install(["--upgrade", "orze"], "orze")
+            if rc != 0:
+                return rc
+
+            # --- orze-pro ---
+            if importlib.util.find_spec("orze_pro") is None:
+                print("orze-pro not installed — skipping.")
+            else:
+                pro_root = _editable_project_root("orze_pro")
+                if pro_root:
+                    print(f"Reinstalling orze-pro (editable) from {pro_root}...")
+                    rc = _pip_install(
+                        ["--force-reinstall", "--no-deps", "-e", str(pro_root)],
+                        "orze-pro",
+                    )
+                else:
+                    # Regular install: upgrade from license-gated private PyPI.
+                    try:
+                        from orze.extensions import _find_pro_key
+                        pro_key = _find_pro_key()
+                    except Exception:
+                        pro_key = ""
+                    if not pro_key:
+                        print("WARNING: orze-pro is installed but no ORZE_PRO_KEY found "
+                              "(env / .env / ~/.orze-pro.key) — cannot reach private PyPI; "
+                              "skipping orze-pro upgrade.")
+                        rc = 0
+                    else:
+                        print("Upgrading orze-pro from private PyPI...")
+                        rc = _pip_install(
+                            ["--upgrade", "orze-pro",
+                             "--extra-index-url",
+                             f"https://__token__:{pro_key}@pypi.orze.ai/simple/"],
+                            "orze-pro",
+                        )
+                if rc != 0:
+                    return rc
             print("Reinstall complete.")
         
         # Step 2: Daemon restart

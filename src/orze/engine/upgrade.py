@@ -202,8 +202,11 @@ class UpgradeManager:
                 if pro_result.returncode == 0:
                     logger.info("Auto-upgrade: orze-pro upgraded from private PyPI")
                 else:
+                    # Pip error messages frequently echo the full --extra-index-url
+                    # (license-key URL) — redact before logging.
+                    from orze.extensions import redact_basic_auth
                     logger.warning("Auto-upgrade: orze-pro upgrade failed: %s",
-                                   pro_result.stderr[:200])
+                                   redact_basic_auth(pro_result.stderr or "")[:200])
         except ImportError:
             pass
         if result.returncode != 0:
