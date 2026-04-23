@@ -80,7 +80,8 @@ else:
     build_claude_cmd = None
     build_research_cmd = None
 from orze.engine.lifecycle import (
-    startup_checks, reconcile_stale_running, print_startup_summary,
+    startup_checks, reconcile_stale_running, reconcile_running_dead_pids,
+    print_startup_summary,
     graceful_shutdown, atexit_cleanup, write_shutdown_heartbeat,
     write_pid_file, remove_pid_file,
 )
@@ -467,7 +468,7 @@ class Orze(OrzePhaseMixin):
         "retrospection", "stall_minutes", "timeout", "poll", "roles",
         "max_idea_failures", "max_fix_attempts", "notifications",
         "plateau_threshold", "orphan_timeout_hours", "gpu_mem_threshold",
-        "gpu_scheduling", "min_disk_gb",
+        "gpu_scheduling", "min_disk_gb", "post_scripts",
     }
 
     def _hot_reload_config(self):
@@ -805,6 +806,14 @@ class Orze(OrzePhaseMixin):
                     self._kill_orphans()
                 except Exception:
                     pass
+
+            # 2b'. F7: every 30 min, mark 'running' rows whose training
+            # process has died as 'failed' with reason orphaned_pid.
+            if self.iteration % 60 == 0:
+                try:
+                    reconcile_running_dead_pids(cfg)
+                except Exception as e:
+                    logger.debug("reconcile_running_dead_pids: %s", e)
 
             # 2c. Periodic metric harvest (every 20 iterations ≈ 5 min).
             # Training scripts that log per-epoch metrics to stdout but
