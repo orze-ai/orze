@@ -1,15 +1,4 @@
-"""F3: zombie/stuck-training watchdog.
-
-Two scenarios:
-  (a) A subprocess that does nothing (sleeps) and produces no log/CPU/GPU
-      activity — must be flagged as stuck after WATCHDOG_CONSECUTIVE samples.
-  (b) A subprocess whose log keeps growing (batch lines) — must NEVER be
-      flagged stuck.
-
-We don't want to wait minutes in tests, so we shrink the watchdog
-constants via env vars before importing the module-level code that
-reads them, and monkeypatch the GPU + CPU samplers.
-"""
+"""F3: zombie/stuck-training watchdog."""
 import os
 import subprocess
 import sys
@@ -19,19 +8,15 @@ from types import SimpleNamespace
 
 import pytest
 
+from orze.engine import launcher as L
 
-# Shrink watchdog before module import so module-level constants are tiny.
-os.environ["ORZE_WD_GRACE_MIN"] = "0"          # no grace
-os.environ["ORZE_WD_CONSECUTIVE"] = "3"        # 3 consecutive samples
-os.environ["ORZE_WD_GPU_UTIL"] = "5"
-os.environ["ORZE_WD_CPU_DELTA_JIFFIES"] = "100"
 
-# Force re-import so constants are re-read.
-for _mod in list(sys.modules):
-    if _mod.startswith("orze.engine.launcher"):
-        del sys.modules[_mod]
-
-from orze.engine import launcher as L  # noqa: E402
+@pytest.fixture(autouse=True)
+def _shrink_watchdog(monkeypatch):
+    monkeypatch.setattr(L, "WATCHDOG_GRACE_MIN", 0)
+    monkeypatch.setattr(L, "WATCHDOG_CONSECUTIVE", 3)
+    monkeypatch.setattr(L, "WATCHDOG_GPU_UTIL_THRESHOLD", 5)
+    monkeypatch.setattr(L, "WATCHDOG_CPU_DELTA_JIFFIES", 100)
 
 
 def _mk_tp(tmp_path: Path, pid: int = 12345):
@@ -48,33 +33,27 @@ def _mk_tp(tmp_path: Path, pid: int = 12345):
 
 
 def test_watchdog_kills_idle_process(tmp_path, monkeypatch):
-    """Process with 0% GPU + frozen log + flat CPU is killed."""
     tp = _mk_tp(tmp_path)
-    # Stub samplers: GPU idle, CPU flat.
     monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid: 0)
     monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: 100)
 
-    # Sample N+1 times — the first establishes baseline, then N consecutive
-    # bad samples must trigger.
     results = [L._watchdog_check(tp) for _ in range(L.WATCHDOG_CONSECUTIVE + 1)]
-    assert results[0] is False  # baseline
-    assert results[-1] is True   # stuck
+    assert results[0] is False
+    assert results[-1] is True
     assert tp._wd_bad_count >= L.WATCHDOG_CONSECUTIVE
 
 
 def test_watchdog_spares_active_process(tmp_path, monkeypatch):
-    """Process with growing log is never killed."""
     tp = _mk_tp(tmp_path)
     monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid: 0)
 
     cpu = [100]
     def cpu_jiffies(pid):
-        cpu[0] += 1000  # simulate CPU progress
+        cpu[0] += 1000
         return cpu[0]
     monkeypatch.setattr(L, "_tree_cpu_jiffies", cpu_jiffies)
 
     for i in range(L.WATCHDOG_CONSECUTIVE * 3):
-        # Touch log mtime forward (and append bytes for good measure).
         with tp.log_path.open("a") as f:
             f.write(f"batch {i}/100 loss=0.5\n")
         new_t = time.time() + i + 1
@@ -83,11 +62,9 @@ def test_watchdog_spares_active_process(tmp_path, monkeypatch):
 
 
 def test_watchdog_grace_period_blocks_kill(tmp_path, monkeypatch):
-    """If grace period not yet elapsed AND no first batch seen, watchdog
-    cannot fire."""
     monkeypatch.setattr(L, "WATCHDOG_GRACE_MIN", 60)
     tp = _mk_tp(tmp_path)
-    tp.start_time = time.time()  # just launched
+    tp.start_time = time.time()
     monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid: 0)
     monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: 100)
     for _ in range(L.WATCHDOG_CONSECUTIVE + 5):
@@ -97,13 +74,12 @@ def test_watchdog_grace_period_blocks_kill(tmp_path, monkeypatch):
 def test_watchdog_first_batch_marker_activates(tmp_path, monkeypatch):
     monkeypatch.setattr(L, "WATCHDOG_GRACE_MIN", 60)
     tp = _mk_tp(tmp_path)
-    tp.start_time = time.time()  # just launched
+    tp.start_time = time.time()
     tp.log_path.write_text("epoch 1 step 5 loss=0.4\n")
     monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid: 0)
     monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: 100)
-    # Now activated via first-batch marker.
     results = [L._watchdog_check(tp) for _ in range(L.WATCHDOG_CONSECUTIVE + 1)]
-    assert results[0] is False  # baseline
+    assert results[0] is False
     assert results[-1] is True
 
 
@@ -119,16 +95,13 @@ def test_first_batch_scanner(tmp_path):
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Linux /proc only")
 def test_real_sleep_subprocess_marked_stuck(tmp_path, monkeypatch):
-    """Integration-ish: spawn a real `sleep` subprocess; with stubbed
-    GPU samplers (no real nvidia-smi), watchdog must mark it stuck.
-    """
     proc = subprocess.Popen(
         ["sleep", "30"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     try:
         log = tmp_path / "log.txt"
-        log.write_text("epoch 0 batch 1/10\n")  # marker -> activate
+        log.write_text("epoch 0 batch 1/10\n")
         tp = SimpleNamespace(
             idea_id="idea-sleep",
             process=proc,
@@ -137,7 +110,7 @@ def test_real_sleep_subprocess_marked_stuck(tmp_path, monkeypatch):
             timeout=3600.0,
         )
         monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid: 0)
-        # CPU jiffies flat (sleep doesn't burn CPU).
+        stuck = False
         for _ in range(L.WATCHDOG_CONSECUTIVE + 2):
             stuck = L._watchdog_check(tp)
         assert stuck is True
