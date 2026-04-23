@@ -713,7 +713,8 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
             if status == "FAILED":
                 error_msg = metrics.get("error", "Training script reported FAILED")
                 if _try_executor_fix(tp.idea_id, error_msg,
-                                     results_dir, cfg, fix_counts):
+                                     results_dir, cfg, fix_counts,
+                                     exit_code=ret if ret is not None else -1):
                     _reset_idea_for_retry(results_dir / tp.idea_id)
                     try:
                         new_tp = launch(tp.idea_id, actual_gpu, results_dir, cfg)
@@ -737,7 +738,8 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 pass
             logger.warning("[FAILED] %s on GPU %s — %s", tp.idea_id, gpu, reason)
             if _try_executor_fix(tp.idea_id, reason,
-                                 results_dir, cfg, fix_counts):
+                                 results_dir, cfg, fix_counts,
+                                 exit_code=ret if ret is not None else -1):
                 _reset_idea_for_retry(results_dir / tp.idea_id)
                 try:
                     new_tp = launch(tp.idea_id, actual_gpu, results_dir, cfg)
