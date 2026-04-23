@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.0.4 — Release skill + ship built-in skill files
+
+### Added
+- **`@release` built-in skill** — new `src/orze/skills/release.skill.md` documenting the canonical release process for both **basic (orze → public PyPI)** and **pro (orze-pro → private `pypi.orze.ai`)**. Covers pre-flight checks, version bump, changelog, tag, build, twine upload, post-release verification, and the security pattern for handling license-key URLs. Loadable as `@release` from any role's `skills` list.
+
+### Fixed
+- **Built-in `.skill.md` files now ship in the wheel.** `[tool.setuptools.package-data]` previously listed only top-level `*.md` and `admin/ui/dist/**`, so `core.skill.md`, `ops.skill.md`, `research.skill.md`, `setup.skill.md` were absent from the published wheel. Editable installs hid the bug because they resolve to the source tree. Added `skills/*.skill.md` to package-data; verified with `zipfile.namelist()` on the built wheel.
+
 ## 4.0.3 — `orze upgrade` works out-of-box
 
 ### Fixed

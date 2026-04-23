@@ -15,7 +15,7 @@ CALLING SPEC:
 SKILLS GRAMMAR:
     role_cfg['skills'] is a list of references in composition order.
     Each ref is one of:
-      - '@core' | '@research' | '@ops' | '@setup'
+      - '@core' | '@research' | '@ops' | '@setup' | '@release'
             built-in .skill.md shipped with orze.
       - '@sop:<name>'
             static SOP bundled in orze-pro (orze_pro/sops/<name>.skill.md).
@@ -44,7 +44,7 @@ Skill = namedtuple("Skill", ["name", "content"])
 _SKILLS_DIR = Path(__file__).parent
 
 # Valid built-in skill names
-_BUILTINS = {"core", "research", "ops", "setup"}
+_BUILTINS = {"core", "research", "ops", "setup", "release"}
 
 
 def parse_frontmatter(text: str) -> tuple:
