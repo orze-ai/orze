@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.0.5 — Release matrix in `@release` skill
+
+### Changed
+- **`@release` skill now codifies the per-package publish matrix.** orze ships to **github + pypi.orze.ai + pypi.org** (all three required); orze-pro ships to **github + pypi.orze.ai only** (never to public PyPI — proprietary). Skill includes per-target `twine` commands with the correct `__admin__` vs `__token__` username, the right credential env var, and a final-checklist enforcement step that requires explicit confirmation before any orze-pro upload that no implicit `pypi.org` push happened.
+
 ## 4.0.4 — Release skill + ship built-in skill files
 
 ### Added
