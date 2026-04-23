@@ -87,6 +87,12 @@ def startup_checks(results_dir: Path, cfg: dict,
 
     # 6. Reconcile stale "running" ideas from prior unclean shutdown
     reconcile_stale_running(cfg)
+    # 6b. F7: any 'running' rows still missing their training process
+    # are orphans → mark failed (covers crashes that escaped 6).
+    try:
+        reconcile_running_dead_pids(cfg)
+    except Exception as e:
+        logger.warning("F7 startup reconcile_running_dead_pids: %s", e)
 
     logger.info("=== Startup checks passed ===")
 
@@ -145,6 +151,117 @@ def reconcile_stale_running(cfg: dict) -> None:
         conn.close()
     except Exception as e:
         logger.warning("Failed to reconcile stale ideas: %s", e)
+
+
+def _running_idea_pids() -> set:
+    """Return the set of idea_ids that have a live python training
+    subprocess on this host (cmdline contains '--idea-id <id>').
+
+    Uses psutil if available; falls back to /proc scanning. Returns an
+    empty set if neither is usable (caller treats as 'unknown' and
+    skips reconcile to avoid false orphan-marks).
+    """
+    found = set()
+    try:
+        import psutil  # type: ignore
+    except ImportError:
+        psutil = None  # noqa: N806
+
+    if psutil is not None:
+        for p in psutil.process_iter(["pid", "cmdline"]):
+            try:
+                cmd = p.info.get("cmdline") or []
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            for i, tok in enumerate(cmd):
+                if tok == "--idea-id" and i + 1 < len(cmd):
+                    found.add(cmd[i + 1])
+                    break
+        return found
+
+    # /proc fallback (Linux only).
+    try:
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                with open(f"/proc/{entry}/cmdline", "rb") as f:
+                    raw = f.read().split(b"\x00")
+                cmd = [x.decode("utf-8", errors="replace") for x in raw if x]
+            except (OSError, IOError):
+                continue
+            for i, tok in enumerate(cmd):
+                if tok == "--idea-id" and i + 1 < len(cmd):
+                    found.add(cmd[i + 1])
+                    break
+    except OSError:
+        return set()
+    return found
+
+
+def reconcile_running_dead_pids(cfg: dict) -> int:
+    """F7: For every status='running' idea, verify a python training
+    process exists on this host with ``--idea-id <id>`` in its cmdline.
+    If not, mark the row 'failed' with reason 'orphaned_pid'.
+
+    Multi-host safety: only acts on rows whose claim.json says they
+    belong to THIS host. Rows owned by another host are left alone.
+
+    Returns the number of rows marked failed.
+    """
+    import json as _json
+    import socket as _socket
+    import sqlite3
+    hostname = _socket.gethostname()
+    results_dir = Path(cfg.get("results_dir", "orze_results"))
+    lake_path = Path(cfg.get("idea_lake_db") or results_dir / "idea_lake.db")
+    if not lake_path.exists():
+        return 0
+
+    alive_ideas = _running_idea_pids()
+
+    n_orphaned = 0
+    try:
+        conn = sqlite3.connect(str(lake_path), timeout=5)
+        cur = conn.execute(
+            "SELECT idea_id, eval_metrics FROM ideas WHERE status = 'running'")
+        rows = cur.fetchall()
+        for idea_id, em_raw in rows:
+            # Only reconcile rows owned by this host (or with no claim).
+            claim_path = results_dir / idea_id / "claim.json"
+            if claim_path.exists():
+                try:
+                    claim = _json.loads(claim_path.read_text(encoding="utf-8"))
+                    if claim.get("claimed_by") != hostname:
+                        continue
+                except (_json.JSONDecodeError, OSError):
+                    pass
+
+            if idea_id in alive_ideas:
+                continue  # process still running
+
+            # No matching process → orphan; mark failed.
+            try:
+                em = _json.loads(em_raw) if em_raw else {}
+                if not isinstance(em, dict):
+                    em = {}
+            except (ValueError, TypeError):
+                em = {}
+            em["failure_reason"] = "orphaned_pid"
+            conn.execute(
+                "UPDATE ideas SET status = 'failed', eval_metrics = ? "
+                "WHERE idea_id = ?",
+                (_json.dumps(em), idea_id))
+            n_orphaned += 1
+        if n_orphaned:
+            conn.commit()
+            logger.info(
+                "Reconciled %d orphaned 'running' rows (dead PID) -> failed",
+                n_orphaned)
+        conn.close()
+    except Exception as e:
+        logger.warning("Failed to reconcile dead-PID rows: %s", e)
+    return n_orphaned
 
 
 def print_startup_summary(cfg: dict) -> None:

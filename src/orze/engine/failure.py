@@ -61,8 +61,69 @@ def _reset_idea_for_retry(idea_dir: Path):
         log.rename(idea_dir / f"train_output.attempt{attempt}.log")
 
 
+_ARGPARSE_UNRECOGNIZED_RE = __import__("re").compile(
+    r"error:\s*unrecognized arguments:"
+)
+
+
+def _is_argparse_schema_invalid(error_text: str, exit_code: int,
+                                log_tail_text: str = "") -> bool:
+    """True if the failure is an argparse ``unrecognized arguments`` error.
+
+    F2: such failures are NOT LLM-fixable in this direct-patch path — the
+    engineer-triggered ``missing_key_set`` implementation path in
+    ``phases.py`` handles schema gaps by adding args to train scripts.
+    Running the LLM fix loop here just wastes tokens + time and loops
+    forever (the schema problem isn't in the idea's own code).
+    """
+    if exit_code != 2:
+        return False
+    blob = f"{error_text}\n{log_tail_text}"
+    return bool(_ARGPARSE_UNRECOGNIZED_RE.search(blob))
+
+
+def _mark_lake_failure(idea_id: str, cfg: dict,
+                       results_dir: Path, reason: str) -> None:
+    """Best-effort: mark idea ``failed`` in idea_lake with a failure reason
+    stored under ``eval_metrics.failure_reason``. Silent on any error —
+    the filesystem ``metrics.json`` is the authoritative failure record.
+    """
+    import sqlite3
+    import json as _json_mod
+    try:
+        db_path = cfg.get("idea_lake_db") or str(results_dir / "idea_lake.db")
+        if not Path(db_path).exists():
+            return
+        conn = sqlite3.connect(db_path, timeout=5)
+        try:
+            cur = conn.execute(
+                "SELECT eval_metrics FROM ideas WHERE idea_id = ?",
+                (idea_id,))
+            row = cur.fetchone()
+            if row is None:
+                return
+            em_raw = row[0]
+            try:
+                em = _json_mod.loads(em_raw) if em_raw else {}
+                if not isinstance(em, dict):
+                    em = {"_prev": em}
+            except (ValueError, TypeError):
+                em = {}
+            em["failure_reason"] = reason
+            conn.execute(
+                "UPDATE ideas SET status = 'failed', eval_metrics = ? "
+                "WHERE idea_id = ?",
+                (_json_mod.dumps(em), idea_id))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+
 def _try_executor_fix(idea_id: str, error_text: str, results_dir: Path,
-                      cfg: dict, fix_counts: dict) -> bool:
+                      cfg: dict, fix_counts: dict,
+                      exit_code: int = -1) -> bool:
     """Spawn an LLM to diagnose and fix a failed idea.
 
     The LLM can modify the project's scripts, configs, or any other project
@@ -71,6 +132,21 @@ def _try_executor_fix(idea_id: str, error_text: str, results_dir: Path,
 
     Returns True if the LLM reports a fix was applied (idea should be retried).
     """
+    # F2: short-circuit argparse schema errors. These are never fixable by
+    # patching the idea's own files — the engineer SOP handles schema gaps.
+    log_tail_text = ""
+    try:
+        log_tail_text = tail_file(results_dir / idea_id / "train_output.log", 8192)
+    except Exception:
+        pass
+    if _is_argparse_schema_invalid(error_text, exit_code, log_tail_text):
+        logger.info(
+            "[SKIP-FIX] %s — schema_invalid: unrecognized arguments "
+            "(argparse exit 2)", idea_id)
+        _mark_lake_failure(idea_id, cfg, results_dir,
+                           "schema_invalid")
+        return False
+
     max_fix = cfg.get("max_fix_attempts", 0)
     if max_fix <= 0:
         return False

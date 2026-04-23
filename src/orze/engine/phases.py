@@ -584,6 +584,75 @@ class OrzePhaseMixin:
                             _record_failure(
                                 self.failure_counts, idea_id)
                             continue
+                    # F5: launch-time nested-config validator. Reject
+                    # YAML-nested configs (backbone: {...}, data: {...})
+                    # because train scripts only accept argparse-style
+                    # scalar kwargs. Mark SKIPPED (not failed) since no
+                    # compute is spent.
+                    try:
+                        from orze.engine.launcher import (
+                            validate_idea_config_no_nested,
+                        )
+                        _idea_cfg_for_validate = (
+                            flat_cfg if flat_cfg
+                            else ideas.get(idea_id, {}).get("config", {}))
+                        _wl = (cfg.get("nested_config_whitelist") or [])
+                        _err = validate_idea_config_no_nested(
+                            _idea_cfg_for_validate, extra_whitelist=_wl)
+                        if _err:
+                            logger.warning(
+                                "[SKIP-VALIDATE] %s — %s", idea_id, _err)
+                            _write_failure(
+                                self.results_dir / idea_id,
+                                f"schema_invalid: {_err}")
+                            if self.lake:
+                                try:
+                                    self.lake.set_status(idea_id, "skipped")
+                                except Exception:
+                                    pass
+                                try:
+                                    from orze.engine.failure import (
+                                        _mark_lake_failure,
+                                    )
+                                    # status stays 'skipped' below — but
+                                    # also stamp failure_reason for audit.
+                                    import sqlite3 as _sql
+                                    import json as _json
+                                    db_path = (cfg.get("idea_lake_db")
+                                               or str(self.results_dir
+                                                      / "idea_lake.db"))
+                                    if Path(db_path).exists():
+                                        c = _sql.connect(db_path, timeout=5)
+                                        try:
+                                            row = c.execute(
+                                                "SELECT eval_metrics FROM "
+                                                "ideas WHERE idea_id=?",
+                                                (idea_id,)).fetchone()
+                                            em = {}
+                                            if row and row[0]:
+                                                try:
+                                                    em = _json.loads(row[0])
+                                                    if not isinstance(em, dict):
+                                                        em = {}
+                                                except Exception:
+                                                    em = {}
+                                            em["failure_reason"] = (
+                                                "schema_invalid:"
+                                                "nested_config_not_allowed")
+                                            c.execute(
+                                                "UPDATE ideas SET "
+                                                "eval_metrics=? "
+                                                "WHERE idea_id=?",
+                                                (_json.dumps(em), idea_id))
+                                            c.commit()
+                                        finally:
+                                            c.close()
+                                except Exception:
+                                    pass
+                            continue
+                    except Exception:
+                        pass
+
                     # SOP: validate idea config right before launch (catches all sources)
                     # Use flat_cfg (malformed-key-cleaned) if available, else raw config.
                     # flat_cfg is built at lines 518-535 above, which fixes LLM-generated
