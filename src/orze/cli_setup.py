@@ -67,7 +67,7 @@ def _get_embedded_docs() -> dict:
         import urllib.request
         result = {}
         for name in ("AGENT.md", "RULES.md"):
-            url = f"https://raw.githubusercontent.com/warlockee/orze/main/src/orze/{name}"
+            url = f"https://raw.githubusercontent.com/orze-ai/orze/main/src/orze/{name}"
             with urllib.request.urlopen(url, timeout=5) as resp:
                 result[name] = resp.read().decode("utf-8")
         if "AGENT.md" in result:
@@ -940,7 +940,7 @@ def do_init(init_arg: str) -> bool:
     if _has_pro:
         yaml_content = f"""\
 # orze.yaml — Project configuration (orze-pro enabled)
-# Docs: https://github.com/warlockee/orze
+# Docs: https://github.com/orze-ai/orze
 
 # --- REQUIRED ---
 train_script: {train_script}
@@ -1060,7 +1060,7 @@ containers:
     else:
         yaml_content = f"""\
 # orze.yaml — Project configuration
-# Docs: https://github.com/warlockee/orze
+# Docs: https://github.com/orze-ai/orze
 
 # --- REQUIRED ---
 train_script: {train_script}

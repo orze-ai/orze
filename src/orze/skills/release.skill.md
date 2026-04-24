@@ -8,7 +8,7 @@ This skill covers cutting a new release for **orze** (basic) and **orze-pro** (p
 
 ### Release matrix (publish targets)
 
-| Package    | github (`warlockee/<repo>`) | pypi.orze.ai (private) | pypi.org (public)         |
+| Package    | github (`orze-ai/<repo>`) | pypi.orze.ai (private) | pypi.org (public)         |
 |------------|:--:|:--:|:--:|
 | `orze`     | ✓ | ✓ | ✓ |
 | `orze-pro` | ✓ | ✓ | ✗ (proprietary — never publish to public PyPI) |

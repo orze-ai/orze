@@ -233,4 +233,4 @@ Containers are auto-pulled and recreated when a new image is available.
 
 Apache 2.0 — orze is and will always be free and open source.
 
-[orze-pro](https://github.com/warlockee/orze-pro) (autopilot features) is commercially licensed.
+[orze-pro](https://github.com/orze-ai/orze-pro) (autopilot features) is commercially licensed.

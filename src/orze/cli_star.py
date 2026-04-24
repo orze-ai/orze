@@ -9,7 +9,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-_STAR_REPO = "warlockee/orze"
+_STAR_REPO = "orze-ai/orze"
 _STAR_MARKER = Path.home() / ".orze_starred"
 
 
