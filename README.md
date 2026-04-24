@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/orze)](https://pypi.org/project/orze/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
-[![PyPI - orze-pro](https://img.shields.io/pypi/v/orze-pro?label=orze-pro)](https://pypi.org/project/orze-pro/)
+[![orze-pro](https://img.shields.io/badge/orze--pro-private-blue)](https://orze.ai/pro)
 
 A GPU experiment orchestrator for ML research.
 
@@ -41,19 +41,22 @@ orze is a **complete, production-ready tool**. orze-pro adds **autopilot** — s
 | Idea queue (ideas.md + SQLite) | ✓ | ✓ |
 | Hyperparameter sweep (auto-expand grid) | ✓ | ✓ |
 | Leaderboard report | ✓ | ✓ |
-| Telegram/Slack notifications (rich) | ✓ | ✓ |
+| Notifications (Telegram/Slack) | ✓ | ✓ |
 | Admin dashboard & MCP server | ✓ | ✓ |
 | Retrospection (plateau detection) | ✓ | ✓ |
 | Cross-experiment regression analysis | ✓ | ✓ |
 | Failure analysis & categorization | ✓ | ✓ |
 | Checkpoint GC | ✓ | ✓ |
 | Sealed eval protection | ✓ | ✓ |
-| Service watchdog (auto-restart) | ✓ | ✓ |
+| Service watchdog (auto-restart + containers) | ✓ | ✓ |
 | **Autonomous research agents** (Gemini/GPT/Claude) | | ✓ |
+| **The Professor** (paper lake, cross-domain search, strategy) | | ✓ |
+| **Engineer** (implement ideas, fix bugs) | | ✓ |
 | **Auto-fix failed experiments** | | ✓ |
 | **Code evolution on plateau** | | ✓ |
 | **Meta-research (strategy adjustment)** | | ✓ |
-| **Interactive Telegram/Slack bot** | | ✓ |
+| **FSM orchestration** (7 procedures) | | ✓ |
+| **Data analyst & thinker** (auto-injected) | | ✓ |
 
 ### Research Loop Comparison
 
@@ -73,17 +76,12 @@ orze is a **complete, production-ready tool**. orze-pro adds **autopilot** — s
 
 ## Quick Start
 
+After install, orze auto-detects GPUs and starts running experiments.
+
 **AI CLI users (Claude Code, Cursor, Codex):**
 ```bash
 do @ORZE-AGENT.md
 ```
-
-**Everyone else:**
-```bash
-orze init        # set up project — detects codebase, generates files, starts orze
-```
-
-That's it. Orze auto-detects GPUs and starts running experiments.
 
 ## CLI Reference
 
@@ -203,10 +201,22 @@ notifications:
 ## Service Management
 
 ```bash
-orze service install -c orze.yaml    # auto-restart on crash
+orze service install -c orze.yaml    # auto-restart on crash + manage containers
 orze service status                  # check health
 orze service uninstall               # remove
 ```
+
+The watchdog runs every minute (crontab) or every 5 minutes (systemd). It restarts orze on crash/stall and manages Docker containers defined in `orze.yaml`:
+
+```yaml
+containers:
+  paperdog:
+    image: warlockee/paperdog:latest
+    ports:
+      - "8000:8000"
+```
+
+Containers are auto-pulled and recreated when a new image is available.
 
 ## Citation
 
