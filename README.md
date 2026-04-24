@@ -211,7 +211,7 @@ The watchdog runs every minute (crontab) or every 5 minutes (systemd). It restar
 ```yaml
 containers:
   paperdog:
-    image: warlockee/paperdog:latest
+    image: orzeai/paperdog:latest
     ports:
       - "8000:8000"
 ```

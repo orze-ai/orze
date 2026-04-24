@@ -1053,7 +1053,7 @@ roles:
 # The watchdog auto-pulls new images and recreates containers on update.
 containers:
   paperdog:
-    image: warlockee/paperdog:latest
+    image: orzeai/paperdog:latest
     ports:
       - "8000:8000"
 """
