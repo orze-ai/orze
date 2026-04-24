@@ -6,7 +6,7 @@ name: setup
 
 You are setting up **orze** — a system that automates the full research loop: generate ideas, train on GPUs, evaluate, learn from results, repeat.
 
-> **Shortcut:** Run `orze --init /path/to/shared/storage/project` to scaffold everything, then jump to step 8.
+> **Shortcut:** Run `orze init /path/to/shared/storage/project` to scaffold everything, then jump to step 8.
 > If you omit the path, orze auto-detects shared storage (FSX, NFS, EFS) when root disk is small.
 
 ### 1. Understand the project (explore first, don't ask)

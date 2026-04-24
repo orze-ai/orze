@@ -125,7 +125,7 @@ Examples:
     parser.add_argument("--train-script", type=str, default=None,
                         help="Training script to run per idea")
     parser.add_argument("--init", nargs="?", const="__ask__", default=None, metavar="PATH",
-                        help="Initialize a new orze project (default: current directory)")
+                        help="(deprecated — use 'orze init [path]') Initialize a new project")
     parser.add_argument("--admin", action="store_true",
                         help="Launch admin panel instead of farm loop")
     parser.add_argument("--upgrade", action="store_true",
@@ -432,56 +432,7 @@ Examples:
         return 0
 
     if command == "init":
-        from orze.cli_setup import resolve_init_path, do_init as do_legacy_init
-        from orze.engine.migrate import CURRENT_LAYOUT, write_layout_version
-        
-        # Use legacy init logic but add .orze/ setup
-        init_path = args.path if args.path else "."
-        
-        # Run legacy init first (creates orze.yaml, train.py, venv, etc.)
-        do_legacy_init(init_path or "__ask__")
-
-        # Now add .orze/ structure
-        project_dir = Path(init_path or ".").resolve()
-        orze_dir = project_dir / ".orze"
-
-        print("\nInitializing .orze/ structure...")
-
-        # Create .orze/ subdirs
-        for subdir in ("state", "rules", "logs", "locks", "receipts",
-                       "triggers", "heartbeats", "mcp", "backups", "feedback"):
-            (orze_dir / subdir).mkdir(parents=True, exist_ok=True)
-        print(f"  \033[32mcreated\033[0m  .orze/ (directory structure)")
-
-        # Write version.json
-        write_layout_version(orze_dir, CURRENT_LAYOUT)
-        print(f"  \033[32mcreated\033[0m  .orze/state/version.json")
-
-        # Create GOAL.md stub if missing (and README exists)
-        goal_file = project_dir / "GOAL.md"
-        readme_file = project_dir / "README.md"
-        if not goal_file.exists():
-            if readme_file.exists():
-                goal_file.write_text("# Goal\n\nAuto-generated placeholder. Edit this file to steer orze.\n")
-                print(f"  \033[32mcreated\033[0m  GOAL.md")
-
-        # Ensure orze_results/ exists with .gitkeep
-        results_dir = project_dir / "orze_results"
-        results_dir.mkdir(exist_ok=True)
-        (results_dir / ".gitkeep").touch()
-        
-        # Check if .orze/ in .gitignore, add if missing
-        gitignore = project_dir / ".gitignore"
-        if gitignore.exists():
-            content = gitignore.read_text()
-            if ".orze/" not in content.splitlines() and ".orze" not in content.splitlines():
-                if content and not content.endswith("\n"):
-                    content += "\n"
-                content += ".orze/\n"
-                gitignore.write_text(content)
-                print(f"  \033[32mupdated\033[0m  .gitignore (added .orze/)")
-        
-        print("\n\033[1m✓ Initialization complete!\033[0m")
+        do_init(args.path or ".")
         return 0
 
     if command == "upgrade":
@@ -955,6 +906,12 @@ Examples:
             parser.parse_args(["service", "--help"])
         return
 
+    # --init: deprecated, use `orze init` subcommand (check before config load)
+    if args.init is not None:
+        print("\033[33mNote:\033[0m --init is deprecated. Use: orze init [path]")
+        do_init(args.init)
+        return
+
     # Load project config, then apply CLI overrides
     cfg = load_project_config(args.config_file)
     cfg["_config_path"] = args.config_file or "orze.yaml"  # stored for mode: research
@@ -997,11 +954,6 @@ Examples:
     # --uninstall: full cleanup, keep only research results
     if args.uninstall:
         do_uninstall(cfg)
-        return
-
-    # --init: initialize a new project
-    if args.init is not None:
-        do_init(args.init)
         return
 
     # --check: validate config and environment, then exit

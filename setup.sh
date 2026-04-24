@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
-# Orze — zero-dependency setup
-# Requirements: bash + curl (present on all Linux/macOS systems)
+# Orze — one-line setup
 #
 # Usage:
-#   curl -sL https://orze.ai/setup.sh | bash
-#   curl -sL https://orze.ai/setup.sh | bash -s /path/to/project
+#   curl -sL https://orze.ai/install | bash
+#   curl -sL https://orze.ai/install | bash -s /path/to/project
 #
 # With pro:
-#   ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://orze.ai/setup.sh | bash
+#   ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://orze.ai/install | bash
 #
 # With API key:
-#   GEMINI_API_KEY=AIza... curl -sL https://orze.ai/setup.sh | bash
+#   GEMINI_API_KEY=AIza... curl -sL https://orze.ai/install | bash
 set -euo pipefail
 
-# --- Colors ---------------------------------------------------------------
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
@@ -23,128 +21,115 @@ RESET='\033[0m'
 
 info()  { echo -e "${GREEN}[+]${RESET} $*"; }
 warn()  { echo -e "${YELLOW}[!]${RESET} $*"; }
-step()  { echo -e "${BOLD}${CYAN}==> $*${RESET}"; }
+step()  { echo -e "\n${BOLD}${CYAN}==> $*${RESET}"; }
 
 echo ""
-echo -e "${BOLD}Orze — GPU Experiment Orchestrator${RESET}"
+echo -e "${BOLD}orze — GPU Experiment Orchestrator${RESET}"
 echo "==================================="
-echo ""
 
-# --- Install uv if missing ------------------------------------------------
-step "Checking for uv..."
-if command -v uv &>/dev/null; then
-    info "uv already installed ($(uv --version))"
-else
-    info "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-    if ! command -v uv &>/dev/null; then
-        warn "uv installed but not on PATH. Add ~/.local/bin to your PATH."
-        exit 1
+# --- 1. Python ---------------------------------------------------------------
+step "Checking Python..."
+PYTHON=""
+for cmd in python3 python; do
+    if command -v "$cmd" &>/dev/null; then
+        ver=$("$cmd" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
+        major=${ver%%.*}
+        minor=${ver#*.}
+        if [ "$major" -ge 3 ] && [ "$minor" -ge 9 ]; then
+            PYTHON="$cmd"
+            info "Python $ver ($cmd)"
+            break
+        fi
     fi
-    info "uv installed ($(uv --version))"
+done
+if [ -z "$PYTHON" ]; then
+    warn "Python >= 3.9 required. Install it first."
+    exit 1
 fi
 
-# --- Install orze ----------------------------------------------------------
+# --- 2. Install orze ---------------------------------------------------------
 step "Installing orze..."
-# uv tool install doesn't handle version constraints well — use pip in a venv
-# or uv tool upgrade to get the latest version
+if command -v uv &>/dev/null; then
+    PKG_MGR="uv pip"
+    INSTALL_CMD="uv pip install --quiet"
+else
+    PKG_MGR="pip"
+    INSTALL_CMD="$PYTHON -m pip install --quiet"
+fi
+
 if command -v orze &>/dev/null; then
-    # Already installed — upgrade to latest
-    uv tool upgrade --quiet orze 2>/dev/null || \
-        uv tool install --quiet --force --upgrade orze 2>/dev/null || \
-        pip install --quiet --upgrade orze 2>/dev/null || true
+    ORZE_VER=$(orze --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
+    info "orze $ORZE_VER already installed — upgrading"
+    $INSTALL_CMD --upgrade orze 2>/dev/null || true
 else
-    # Fresh install — use uv tool (no constraint, always gets latest)
-    uv tool install --quiet orze 2>/dev/null || \
-        pip install --quiet orze 2>/dev/null || true
+    $INSTALL_CMD orze 2>/dev/null || {
+        warn "pip install failed. Try: $PYTHON -m pip install orze"
+        exit 1
+    }
 fi
+ORZE_VER=$(orze --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
+info "orze $ORZE_VER"
 
-# Verify minimum version
-ORZE_VER=$(orze --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
-MIN_VER="3.2.4"
-if printf '%s\n' "$MIN_VER" "$ORZE_VER" | sort -V | head -1 | grep -q "^$MIN_VER$"; then
-    info "orze ${ORZE_VER} installed"
-else
-    warn "orze ${ORZE_VER} is below minimum ${MIN_VER} — forcing upgrade..."
-    pip install --quiet "orze>=${MIN_VER}" 2>/dev/null || \
-        uv pip install --quiet "orze>=${MIN_VER}" 2>/dev/null || true
-    ORZE_VER=$(orze --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' || echo "unknown")
-    info "orze ${ORZE_VER} installed"
-fi
-
-# --- orze-pro (optional) ---------------------------------------------------
+# --- 3. orze-pro (optional) --------------------------------------------------
 step "Checking orze-pro..."
 
 INSTALL_PRO=false
 PRO_KEY="${ORZE_PRO_KEY:-}"
 
-# Already installed?
-if orze pro status 2>/dev/null | grep -q "Licensed"; then
+if orze pro status 2>/dev/null | grep -qi "licensed"; then
     info "orze-pro already activated"
     INSTALL_PRO=true
 elif [ -n "$PRO_KEY" ]; then
-    # Key provided via env var
     INSTALL_PRO=true
     info "License key found in ORZE_PRO_KEY"
 elif [ -t 0 ]; then
-    # Interactive: ask
     echo ""
-    echo -e "  ${DIM}orze-pro adds: autonomous research agents, The Professor,"
-    echo -e "  code evolution, bug fixer, 7 FSM procedures.${RESET}"
+    echo -e "  ${DIM}orze-pro adds autopilot: autonomous research agents,"
+    echo -e "  auto-fix, code evolution, The Professor, 7 FSM procedures.${RESET}"
     echo ""
     echo -n "  Enter orze-pro license key (or Enter to skip): "
     read -r PRO_KEY
-    if [ -n "$PRO_KEY" ]; then
-        INSTALL_PRO=true
-    fi
+    [ -n "$PRO_KEY" ] && INSTALL_PRO=true
 else
-    info "Skipping orze-pro (non-interactive, no ORZE_PRO_KEY)"
-    echo -e "  ${DIM}To install later: pip install orze-pro${RESET}"
+    info "No ORZE_PRO_KEY set — skipping pro"
 fi
 
 if [ "$INSTALL_PRO" = true ]; then
-    # Install package
-    if ! python3 -c "import orze_pro" &>/dev/null 2>&1; then
+    if ! $PYTHON -c "import orze_pro" &>/dev/null; then
         info "Installing orze-pro..."
-        pip install --quiet "orze-pro>=0.2.4" 2>/dev/null || \
-            uv pip install --quiet "orze-pro>=0.2.4" 2>/dev/null || true
+        $INSTALL_CMD orze-pro 2>/dev/null || true
     fi
-
-    # Activate license
     if [ -n "$PRO_KEY" ]; then
         info "Activating license..."
         orze pro activate "$PRO_KEY" 2>&1 | head -1 || true
     fi
 fi
 
-# --- API key ---------------------------------------------------------------
+# --- 4. API key ---------------------------------------------------------------
 step "Checking API keys..."
 
 API_KEY=""
 API_VAR=""
 
-# Check env
-for var in GEMINI_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY; do
+for var in ANTHROPIC_API_KEY GEMINI_API_KEY OPENAI_API_KEY; do
     val="${!var:-}"
     if [ -n "$val" ]; then
         API_KEY="$val"
         API_VAR="$var"
-        info "Found $var in environment"
+        info "Found $var"
         break
     fi
 done
 
-# Ask if not found (interactive only)
 if [ -z "$API_KEY" ] && [ -t 0 ]; then
     echo ""
-    echo -e "  ${DIM}An API key enables autonomous idea generation.${RESET}"
-    echo -n "  Enter API key (Gemini/Anthropic/OpenAI, or Enter to skip): "
+    echo -e "  ${DIM}An API key enables LLM-powered codebase analysis and idea generation.${RESET}"
+    echo -n "  Enter API key (Anthropic/Gemini/OpenAI, or Enter to skip): "
     read -r API_KEY
     if [ -n "$API_KEY" ]; then
         case "$API_KEY" in
-            AIza*)    API_VAR="GEMINI_API_KEY" ;;
             sk-ant*)  API_VAR="ANTHROPIC_API_KEY" ;;
+            AIza*)    API_VAR="GEMINI_API_KEY" ;;
             sk-*)     API_VAR="OPENAI_API_KEY" ;;
             *)        API_VAR="GEMINI_API_KEY" ;;
         esac
@@ -152,75 +137,40 @@ if [ -z "$API_KEY" ] && [ -t 0 ]; then
     fi
 fi
 
-if [ -z "$API_KEY" ] && [ ! -t 0 ]; then
-    info "No API key (set GEMINI_API_KEY or ANTHROPIC_API_KEY before running)"
-fi
+# --- 5. Project path ---------------------------------------------------------
+PROJECT_PATH="${1:-.}"
 
-# --- Auto-detect shared storage -------------------------------------------
-PROJECT_PATH="${1:-}"
-
-if [ -z "$PROJECT_PATH" ]; then
-    step "Detecting shared storage..."
-    SHARED_MOUNT=""
-    if [ -f /proc/mounts ]; then
-        SHARED_MOUNT=$(awk '$3 ~ /^(lustre|nfs|nfs4|efs|gpfs|beegfs|glusterfs|pvfs2|fuse\.s3fs|fuse\.goofys)$/ || $1 ~ /@tcp:/ { print $2 }' /proc/mounts | head -1)
-    fi
-    if [ -z "$SHARED_MOUNT" ] && command -v mount &>/dev/null; then
-        SHARED_MOUNT=$(mount | awk '$5 == "nfs" || $5 == "nfs4" { print $3 }' | head -1)
-    fi
-    if [ -n "$SHARED_MOUNT" ]; then
-        info "Detected shared storage: ${SHARED_MOUNT}"
-        PROJECT_PATH="$SHARED_MOUNT"
-    else
-        info "No shared storage detected, using current directory"
-        PROJECT_PATH="."
-    fi
-fi
-
-# --- Initialize project ---------------------------------------------------
-step "Initializing project at ${PROJECT_PATH}..."
-
-# Export API key so orze --init can detect it
+# Export API key so orze init can detect it
 if [ -n "$API_KEY" ] && [ -n "$API_VAR" ]; then
     export "$API_VAR=$API_KEY"
 fi
 
-if ! orze --init "$PROJECT_PATH"; then
-    warn "orze --init failed. Check the output above for details."
+# --- 6. Initialize ------------------------------------------------------------
+step "Initializing project..."
+
+orze init "$PROJECT_PATH" || {
+    warn "Initialization failed. Check the output above."
     exit 1
-fi
+}
 
-# Write API key to .env
+# Write API key to .env if provided manually
 if [ -n "$API_KEY" ] && [ -n "$API_VAR" ]; then
-    cd "$PROJECT_PATH"
-    # Remove placeholder line if present, add real key
-    if [ -f .env ]; then
-        grep -v "^# .*${API_VAR}" .env > .env.tmp 2>/dev/null || true
-        mv .env.tmp .env
+    ENV_FILE="$PROJECT_PATH/.env"
+    if [ -f "$ENV_FILE" ]; then
+        if ! grep -q "^${API_VAR}=" "$ENV_FILE" 2>/dev/null; then
+            echo "${API_VAR}=${API_KEY}" >> "$ENV_FILE"
+            info "API key written to .env"
+        fi
     fi
-    echo "${API_VAR}=${API_KEY}" >> .env
-    info "API key written to .env"
-    cd - >/dev/null
 fi
 
-# --- Done ------------------------------------------------------------------
+# --- Done ---------------------------------------------------------------------
 echo ""
-echo "==========================================="
+echo -e "${BOLD}Done.${RESET}"
 if [ "$INSTALL_PRO" = true ]; then
-    info "Orze + Pro installed and initialized."
+    echo -e "  orze + orze-pro installed and running."
 else
-    info "Orze installed and initialized."
-fi
-echo -e "  ${BOLD}Project:${RESET} ${PROJECT_PATH}"
-echo ""
-echo -e "  ${BOLD}Next steps:${RESET}"
-echo -e "    cd ${PROJECT_PATH}"
-echo -e "    ${CYAN}# In Claude Code / Cursor / Codex CLI:${RESET}"
-echo -e "    do @ORZE-AGENT.md"
-echo -e "    ${CYAN}# Or run directly:${RESET}"
-echo -e "    orze --check"
-if [ "$INSTALL_PRO" != true ]; then
-    echo ""
+    echo -e "  orze installed and running."
     echo -e "  ${DIM}Upgrade to autopilot: pip install orze-pro${RESET}"
 fi
 echo ""

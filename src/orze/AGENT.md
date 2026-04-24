@@ -87,10 +87,10 @@ If they correct you, update GOAL.md and continue.
 
 Use their answer to write GOAL.md, then continue.
 
-## Step 3: Run `orze --init`
+## Step 3: Run `orze init`
 
 ```bash
-orze --init .
+orze init .
 ```
 
 This creates: venv, orze.yaml (with bundled-SOP `skills:` lists), train.py (demo), ideas.md, configs/base.yaml, RESEARCH_RULES.md (project-specific research constraints), and reference docs. If it's already been run, it skips existing files.

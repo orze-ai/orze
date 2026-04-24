@@ -12,7 +12,7 @@ Calling spec:
     stop_running_instance(p)   # SIGTERM a running orze via PID file
     do_upgrade(cfg)            # pip/uv upgrade + optional restart
     find_shared_mounts()       # detect network FS mounts
-    resolve_init_path(path)    # resolve --init target directory
+    resolve_init_path(path)    # resolve init target directory
     do_init(init_arg)          # scaffold a new orze project
     do_check(cfg)              # validate config and environment
 
@@ -264,22 +264,26 @@ def do_uninstall(cfg: dict):
 
     # --- 2b. Remove orze-generated scaffolding files -------------------
     print("[2b/6] Cleaning orze scaffolding...")
-    # Files orze --init creates (safe to remove — not user content)
+    # Files orze init creates (safe to remove — not user content)
     _ORZE_GENERATED = [
         "ORZE-AGENT.md",
         "ORZE-RULES.md",
         "RESEARCH_RULES.md",
         ".env",
         "orze.yaml",
+        "GOAL.md",
     ]
     # Patterns for orze runtime artifacts
     _ORZE_PATTERNS = [
         "ideas.md.safe*",      # backup files from role_runner
+        "ideas.md.ingest_state.json",
         "idea_lake.db",
     ]
-    # Directories orze --init creates
+    # Directories orze init creates
     _ORZE_DIRS = [
         "procedures",          # user procedure overrides
+        ".orze",               # runtime state directory
+        "fsm",                 # FSM runner (pro)
     ]
 
     for name in _ORZE_GENERATED:
@@ -370,7 +374,7 @@ def do_uninstall(cfg: dict):
     ideas_file = Path(cfg.get("ideas_file", "ideas.md"))
     if ideas_file.exists():
         preserved.append(f"  {ideas_file}")
-    for name in ["GOAL.md", "train.py", "configs"]:
+    for name in ["train.py", "configs"]:
         p = Path(name)
         if p.exists():
             preserved.append(f"  {name}")
@@ -714,7 +718,7 @@ def find_shared_mounts() -> list:
 
 
 def resolve_init_path(explicit_path: str) -> str:
-    """Resolve the project directory for --init.
+    """Resolve the project directory for `orze init`.
 
     Explicit path -> use it. No path (__ask__ sentinel) -> detect shared mount,
     prompt once (interactive) or auto-pick (non-interactive / piped).
@@ -740,7 +744,7 @@ def resolve_init_path(explicit_path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# --init: scaffold a new orze project
+# orze init: scaffold a new orze project
 # ---------------------------------------------------------------------------
 
 def _try_create_venv(venv_dir: Path, venv_python: Path) -> bool:
@@ -798,6 +802,7 @@ def do_init(init_arg: str) -> bool:
     Returns True if interactive init completed (caller should skip "Next steps").
     """
     from orze.cli_demo import BASELINE_TRAIN_PY, RESEARCH_RULES_TEMPLATE
+    from orze.engine.migrate import CURRENT_LAYOUT, write_layout_version
 
     init_path = resolve_init_path(init_arg)
     project_dir = Path(init_path).resolve()
@@ -808,6 +813,37 @@ def do_init(init_arg: str) -> bool:
     print(f"  Project : {project_dir}")
     print("---------------------")
     created = []
+
+    # Create .orze/ structure + version.json BEFORE scaffolding files.
+    # This prevents _ensure_migrated() from moving freshly-created files
+    # when interactive init starts orze via subprocess.
+    orze_dir = project_dir / ".orze"
+    for subdir in ("state", "rules", "logs", "locks", "receipts",
+                   "triggers", "heartbeats", "mcp", "backups", "feedback"):
+        (orze_dir / subdir).mkdir(parents=True, exist_ok=True)
+    write_layout_version(orze_dir, CURRENT_LAYOUT)
+
+    # Ensure orze_results/ exists with .gitkeep
+    (project_dir / "orze_results").mkdir(exist_ok=True)
+    (project_dir / "orze_results" / ".gitkeep").touch()
+
+    # Append .orze/ to .gitignore if missing
+    gitignore = project_dir / ".gitignore"
+    if gitignore.exists():
+        gi_content = gitignore.read_text()
+        if ".orze/" not in gi_content.splitlines() and ".orze" not in gi_content.splitlines():
+            if gi_content and not gi_content.endswith("\n"):
+                gi_content += "\n"
+            gi_content += ".orze/\n"
+            gitignore.write_text(gi_content)
+
+    # Create GOAL.md stub if missing (and README exists)
+    goal_file = project_dir / "GOAL.md"
+    readme_file = project_dir / "README.md"
+    if not goal_file.exists() and readme_file.exists():
+        goal_file.write_text("# Goal\n\nAuto-generated placeholder. Edit this file to steer orze.\n")
+
+    print(f"  \033[32mcreated\033[0m  .orze/ (directory structure + version.json)")
 
     def _create(path, content, label=None):
         p = Path(path)
@@ -880,7 +916,7 @@ def do_init(init_arg: str) -> bool:
         else:
             print(f"  \033[33mwarning\033[0m  venv creation failed — neither `python -m venv` nor `uv venv` succeeded.")
             print(f"           On Debian/Ubuntu: `sudo apt install python3-venv`, or install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`")
-            print(f"           Once a venv creator is available, re-run `orze --init .` (it is idempotent).")
+            print(f"           Once a venv creator is available, re-run `orze init .` (it is idempotent).")
 
     # Determine python path for orze.yaml
     if (venv_dir / "bin" / "python3").exists():
@@ -904,7 +940,7 @@ def do_init(init_arg: str) -> bool:
     if _has_pro:
         yaml_content = f"""\
 # orze.yaml — Project configuration (orze-pro enabled)
-# Docs: https://github.com/erikhenriksson/orze
+# Docs: https://github.com/warlockee/orze
 
 # --- REQUIRED ---
 train_script: {train_script}
@@ -1015,7 +1051,7 @@ roles:
     else:
         yaml_content = f"""\
 # orze.yaml — Project configuration
-# Docs: https://github.com/erikhenriksson/orze
+# Docs: https://github.com/warlockee/orze
 
 # --- REQUIRED ---
 train_script: {train_script}
@@ -1052,7 +1088,7 @@ python: {python_for_yaml}
 # Adds: autonomous research agents, the engineer role (implement +
 # fix), code evolution, The Professor, watchdog, 7 FSM procedures,
 # idea filtering, and more.
-# Re-run orze --init to regenerate this config with pro features.
+# Re-run orze init to regenerate this config with pro features.
 """
     _create("orze.yaml", yaml_content)
 
@@ -1320,7 +1356,7 @@ def do_check(cfg: dict):
     cp_ok = cp.exists()
     print(f"    {ok if cp_ok else no} orze.yaml: {cp}")
     if not cp_ok:
-        print(f"      hint: run \033[36morze --init\033[0m to create a project")
+        print(f"      hint: run \033[36morze init\033[0m to create a project")
 
     env_path = find_dotenv(str(cp) if cp_ok else None)
     if env_path:
@@ -1332,7 +1368,7 @@ def do_check(cfg: dict):
     ts_ok = Path(ts).exists()
     print(f"    {ok if ts_ok else no} train_script: {ts}")
     if not ts_ok and not cp_ok:
-        print(f"      hint: run \033[36morze --init\033[0m to scaffold a project")
+        print(f"      hint: run \033[36morze init\033[0m to scaffold a project")
 
     ideas_path = cfg.get("ideas_file", "ideas.md")
     ideas_exists = Path(ideas_path).exists()
@@ -1462,7 +1498,7 @@ def do_check(cfg: dict):
     if errors:
         print(f"\033[31m\u2717 {len(errors)} error(s) — fix before running.\033[0m")
         if not cp_ok:
-            print(f"  hint: run \033[36morze --init\033[0m to create a new project")
+            print(f"  hint: run \033[36morze init\033[0m to create a new project")
         sys.exit(1)
     else:
         from orze.extensions import has_pro, check_pro_status

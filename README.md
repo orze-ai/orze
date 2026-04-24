@@ -13,41 +13,44 @@ Orze runs experiments on GPUs: **schedule ideas → train → evaluate → repor
 ## Install
 
 ```bash
-# One-line install (installs uv if needed, then orze + project scaffold):
-curl -sL https://orze.ai/setup.sh | bash
+curl -sL https://orze.ai/install | bash
+```
 
-# Or with pip:
-pip install orze
+That's the whole setup. It installs orze, analyzes your codebase, generates training scripts and experiment ideas, and starts running — all in one command.
+
+**What it does:**
+1. Installs Python dependencies (orze, optionally orze-pro)
+2. Detects your GPUs, framework, and codebase
+3. Calls an LLM to generate `train.py`, `ideas.md`, `GOAL.md`, and configs
+4. Starts orze on all available GPUs
+
+**With options:**
+```bash
+# Provide API key for LLM-powered setup
+ANTHROPIC_API_KEY=sk-ant-... curl -sL https://orze.ai/install | bash
+
+# With pro license
+ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://orze.ai/install | bash
+
+# Specify project path
+curl -sL https://orze.ai/install | bash -s /nfs/my-project
+```
+
+**Already have orze installed?**
+```bash
+orze init                  # initialize a new project in current dir
+orze init /path/to/project # or specify a path
 ```
 
 ### Upgrade to Pro
 
-When you're ready for autonomous research agents:
-
 ```bash
-pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/
+pip install orze-pro
 orze pro activate ORZE-PRO-xxx...
 # ✓ Licensed to Acme Corp (pro), expires 2027-12-31
-
-orze pro status                    # verify it worked
 ```
 
 No config changes — pro features activate automatically. [What's in pro?](#orze-vs-orze-pro)
-
-**License management:**
-```bash
-orze pro status                    # check license info
-orze pro deactivate                # remove license key
-```
-
-**Alternative activation methods** (for shared clusters or CI):
-```bash
-# In your project .env file:
-ORZE_PRO_KEY=ORZE-PRO-xxx...
-
-# Or as environment variable:
-export ORZE_PRO_KEY=ORZE-PRO-xxx...
-```
 
 ## orze vs orze-pro
 
@@ -87,116 +90,89 @@ orze is a **complete, production-ready tool**. orze-pro adds **autopilot** — s
 
 | orze | orze-pro | Notes |
 |------|----------|-------|
-| 3.0.x | 0.1.x | Current release |
-
-## User Journeys
-
-### Free user — "Smart Suggestions keep my GPUs busy"
-
-```bash
-orze init                          # creates orze.yaml, ideas.md, train.py
-vim ideas.md                       # add your first experiment ideas
-orze -c orze.yaml                  # orze runs them on GPUs
-
-# After your ideas complete, orze doesn't stop:
-# → analyzes results, detects regressions and tradeoffs
-# → Smart Suggestions auto-generates new ideas:
-#   "Fix SPG regression: scale 1.0->0.9"
-#   "Tradeoff sweep: scale=0.95"
-#   "Push further: scale 1.05 (no regressions)"
-# → runs them, analyzes again, generates more
-# → you check in when you want, add your own ideas anytime
-```
-
-You seed the initial ideas. Orze keeps the loop going with Smart Suggestions. You steer when you want.
-
-### Pro user — "I sleep, orze researches"
-
-```bash
-pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/
-orze -c orze.yaml                  # same command — pro features activate automatically
-# → research agent reads results and proposes new ideas
-# → failed experiments get auto-fixed and retried
-# → when stuck on a plateau, code evolution kicks in
-# → you wake up to a better model
-```
-
-Same `orze.yaml`. Same workflow. Pro just adds autonomy.
-
-### The upgrade moment
-
-Smart Suggestions is finding ±5% scale variations. It's keeping GPUs busy. But you see this in the logs:
-
-```
-[Orze Smart Suggestions] Generated 3 ideas from experiment analysis
-  → Fix SPG regression: scale 1.0->0.9
-  → Tradeoff sweep: scale=0.95
-  → Push further: scale 1.05 (no regressions)
-```
-
-It's systematic — but it's not *thinking*. It can't reason about *why* SPG regressed (domain mismatch in training data), or propose *adding SPG training data* as a fix, or decide *the scale sweep is exhausted and a new LoRA training run is needed*.
-
-That's when you `pip install orze-pro`. The research agent reads the same insights and generates:
-
-```
-## idea-r8a2f1: Train LoRA v8 with SPG data to fix domain mismatch
-- **Hypothesis**: SPG regression (+0.66%) is caused by training data lacking
-  financial transcript style. Adding 3K SPG samples should reduce insertions.
-```
-
-Smart Suggestions explores. Research Agents discover.
+| 4.0.x | 0.7.x | Current release |
 
 ## Quick Start
 
-**If you are in Claude/Gemini/Codex CLI:**
+**AI CLI users (Claude Code, Cursor, Codex):**
 ```bash
 do @ORZE-AGENT.md
 ```
 
-**If not:**
+**Everyone else:**
 ```bash
-orze
+orze init        # set up project — detects codebase, generates files, starts orze
 ```
 
-That's it. Orze auto-detects GPUs and starts running experiments from `ideas.md`.
+That's it. Orze auto-detects GPUs and starts running experiments.
+
+## CLI Reference
+
+```bash
+# Project lifecycle
+orze init [path]              # initialize a new project
+orze start                    # start as background daemon
+orze stop                     # stop gracefully
+orze restart                  # stop + start
+orze --check                  # validate config, files, GPUs, API keys
+orze --uninstall              # full cleanup, preserves research results
+
+# Operations
+orze upgrade                  # reinstall from source + restart daemon
+orze admin migrate            # migrate legacy layout to .orze/
+orze service install          # auto-restart on crash (systemd)
+
+# Pro
+orze pro activate <key>       # activate license
+orze pro status               # check license info
+orze pro deactivate           # remove license
+orze sop list                 # list available SOPs
+```
 
 ## File Layout
 
-Orze uses a hidden `.orze/` directory for runtime state and an `orze_results/` directory for research artifacts:
-
 ```
 your-project/
+├── orze.yaml                 # Project config (single source of truth)
+├── train.py                  # Your training script
+├── ideas.md                  # Experiment queue
+├── GOAL.md                   # Research objective
+├── RESEARCH_RULES.md         # Agent constraints
+├── configs/base.yaml         # Default hyperparameters
+├── .env                      # API keys (gitignored)
+├── ORZE-AGENT.md             # AI CLI instructions
+├── ORZE-RULES.md             # Agent guardrails
+├── venv/                     # Training dependencies
 ├── .orze/                    # Runtime state (gitignored)
-│   ├── ideas.md              # Research manifest
-│   ├── idea_lake.db          # Experiment history
-│   ├── logs/                 # Role logs (professor/, engineer/, etc.)
-│   ├── receipts/             # Execution evidence per cycle
-│   ├── state/                # Daemon PID, version.json, caches
-│   ├── rules/                # Custom agent rules (ENGINEER_RULES.md, etc.)
+│   ├── state/version.json    # Layout version
+│   ├── logs/                 # Role logs
+│   ├── locks/                # Filesystem locks
+│   ├── rules/                # Migrated rule files
+│   ├── mcp/                  # MCP server configs
+│   ├── receipts/             # Execution evidence
 │   ├── triggers/             # One-shot role triggers
-│   ├── heartbeats/           # Per-host liveness signals
-│   ├── backups/              # Timestamped ideas.md backups
-│   ├── feedback/             # Failure feedback summaries
-│   └── tmp/                  # Scratch space
-├── orze_results/             # Research outputs
-│   ├── methods/              # Generated code (per-role, per-cycle)
-│   ├── knowledge/            # Analysis insights, retrospection
-│   └── stray/                # Quarantined root-polluting files
-├── orze.yaml                 # Project config
-└── GOAL.md                   # High-level research objective
-```
-
-**Migration:**  
-Existing projects (pre-v4.1) should run `orze admin migrate` once to upgrade to the new layout. Migration is automatic on first `orze run` if not already applied.
-
-**One-liner upgrade:**
-```bash
-orze upgrade                  # Reinstall orze + orze-pro and restart daemon
+│   ├── heartbeats/           # Per-host liveness
+│   ├── backups/              # ideas.md backups
+│   └── feedback/             # Failure feedback
+├── procedures/               # User procedure overrides (pro)
+├── fsm/runner.py             # FSM orchestrator (pro)
+└── orze_results/             # Research outputs
+    ├── idea-0001/metrics.json
+    ├── methods/              # Generated code
+    └── knowledge/            # Analysis insights
 ```
 
 ## Multi-node
 
-Start orze in the same shared folder (e.g. `/nfs/project-52h/`) on any machine — the node automatically joins the research pool. **Orze can auto-update across nodes.**
+Start orze in the same shared folder on any machine — nodes auto-join the research pool.
+
+```bash
+# Node 1
+ssh node1 "cd /nfs/project && orze start"
+
+# Node 2
+ssh node2 "cd /nfs/project && orze start"
+```
 
 ## Key Features
 
@@ -209,11 +185,19 @@ Start orze in the same shared folder (e.g. `/nfs/project-52h/`) on any machine �
 - **Admin Panel** — Real-time web dashboard at `http://localhost:8787`
 - **Clean Uninstall** — `orze --uninstall` removes runtime files, preserves results
 
-## How It Works
+## The Contract
 
-Orze runs a continuous loop: pick an idea from the queue, train it on a free GPU, evaluate, record metrics. When ideas run out, orze generates variations of your best configs automatically — **the research never stops**, even without pro.
+Your training script receives:
+```bash
+python train.py --idea-id idea-001 --results-dir orze_results --ideas-md ideas.md --config base.yaml
+```
 
-With **orze-pro**, LLM agents replace parameter variations with intelligent, hypothesis-driven ideas.
+**Required output:** `orze_results/{idea_id}/metrics.json`:
+```json
+{"status": "COMPLETED", "test_accuracy": 0.92, "training_time": 142.5}
+```
+
+See [**SKILL.md**](SKILL.md) for the full technical specification.
 
 ## Admin Panel
 
@@ -225,19 +209,6 @@ Auto-launches at **http://localhost:8787**. No extra install needed.
 
 ## Telegram Notifications
 
-Rich notifications with GPU VRAM, per-dataset breakdown, and target tracking:
-
-```
-📊 Orze Status — a100-41
-✅ 20 completed | ❌ 0 failed | ⏳ 6 queued | 🔄 4 running
-🎯 Verified: 5.43% avg WER | Target: 5.40% | Gap: +0.03%
-  AMI=9.8 | E22=9.0 | GS=8.5 | LS-C=1.3 | SPG=3.6 | TED=2.7 | VP=6.1
-🖥 GPU0:idle GPU1:18G/80G(51%) GPU3:17G/80G(48%)
-🤖 Model: higgs-audio-v3-8b
-⏱ Up 2h15m
-```
-
-Setup:
 ```yaml
 notifications:
   enabled: true
@@ -250,29 +221,13 @@ notifications:
 
 <img width="521" height="341" alt="tg" src="https://github.com/user-attachments/assets/f931221d-b428-4b85-9a8e-af6d516cb5ad" />
 
-## Service Management (Watchdog)
+## Service Management
 
 ```bash
 orze service install -c orze.yaml    # auto-restart on crash
 orze service status                  # check health
 orze service uninstall               # remove
 ```
-
-## The Contract
-
-Your training script receives:
-```bash
-python train.py --idea-id idea-001 --results-dir results --ideas-md ideas.md --config base.yaml
-```
-
-**Required output:** `results/{idea_id}/metrics.json`:
-```json
-{"status": "COMPLETED", "test_accuracy": 0.92, "training_time": 142.5}
-```
-
-Orze writes `idea_config.yaml` to the results directory before launching, containing the merged base + idea config.
-
-See [**SKILL.md**](SKILL.md) for the full technical specification.
 
 ## Citation
 
