@@ -86,9 +86,9 @@ def _get_embedded_docs() -> dict:
 def _check_pro_license() -> tuple:
     """Check if orze-pro license is activated."""
     try:
-        from orze_pro.license import is_licensed, load_key_payload
+        from orze_pro.license import is_licensed, check_license
         if is_licensed():
-            payload = load_key_payload()
+            payload = check_license() or {}
             return True, f"licensed to {payload.get('customer', '?')} (expires {payload.get('expires', '?')})"
         return False, "not activated — run: orze pro activate <key>"
     except Exception:
@@ -995,8 +995,16 @@ roles:
     model: opus
     pausable: false
     allowed_tools: "Read,Write,Edit,Glob,Grep,Bash,WebSearch,WebFetch"
-  # The engineer role bundles both strategy implementation and bug
-  # fixing. There is no separate bug_fixer role.
+  engineer:
+    mode: claude
+    triggered_by: fsm
+    skills:
+      - "@sop:engineer_base"
+      - "@sop:engineer_implement"
+      - "@sop:engineer_fix_bugs"
+    timeout: 900
+    model: opus
+    allowed_tools: "Read,Write,Edit,Glob,Grep,Bash"
   fsm:
     mode: script
     script: fsm/runner.py
@@ -1050,6 +1058,14 @@ python: {python_for_yaml}
 
     if _has_pro:
         Path("procedures").mkdir(exist_ok=True)
+        fsm_runner = """\
+#!/usr/bin/env python3
+\"\"\"FSM runner — delegates to installed orze package.\"\"\"
+from orze.fsm.runner import main
+if __name__ == "__main__":
+    main()
+"""
+        _create("fsm/runner.py", fsm_runner, "fsm/runner.py")
 
     # 4. ideas.md with task-agnostic seed experiments
     ideas_content = """\

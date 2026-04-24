@@ -348,16 +348,11 @@ Generate these files:
 
 5. **RESEARCH_RULES.md** — Research agent instructions: goal, metrics, strategy, config keys, idea format.
 
-6. **orze.yaml** — Orze config. Must include:
-   - train_script, ideas_file, base_config, results_dir
-   - python: {python_path}
-   - nested_config_whitelist for any nested config keys used in ideas
-   - report section with primary_metric, sort order, columns matching metrics.json keys
-   - timeout appropriate for the task
+6. **requirements.txt** — Python dependencies needed by train.py.
 
-7. **requirements.txt** — Python dependencies needed by train.py.
+7. Any **src/*.py** helper modules needed by train.py (dataset loaders, models, etc.)
 
-8. Any **src/*.py** helper modules needed by train.py (dataset loaders, models, etc.)
+Do NOT generate orze.yaml — it is already created by the init system.
 
 Output each file using the ===FILE: path=== / ===END=== format. Make them complete and correct."""
 
@@ -383,7 +378,7 @@ def _write_generated_files(project_dir: Path, files: dict[str, str]):
     """Write generated files, overwriting template files but not user files."""
     safe_overwrite = {
         "GOAL.md", "train.py", "configs/base.yaml", "ideas.md",
-        "RESEARCH_RULES.md", "orze.yaml", "requirements.txt",
+        "RESEARCH_RULES.md", "requirements.txt",
     }
     resolved_root = project_dir.resolve()
     for rel_path, content in files.items():
