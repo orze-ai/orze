@@ -2,12 +2,12 @@
 """Orze CLI — GPU experiment orchestrator.
 
 Calling spec:
-    python -m orze.cli                          # all GPUs, continuous
-    python -m orze.cli -c orze.yaml --gpus 0,1  # with project config
-    python -m orze.cli --once                   # one cycle then exit
-    python -m orze.cli --report-only            # regenerate report
-    python -m orze.cli --init                   # initialize new project
-    python -m orze.cli --admin                  # launch admin panel
+    orze                                        # all GPUs, continuous
+    orze -c orze.yaml --gpus 0,1                # with project config
+    orze init [path]                            # initialize new project
+    orze start / stop / restart                 # daemon management
+    orze --check                                # validate config
+    orze --admin                                # launch admin panel
 
 This module contains only:
     setup_logging()  — configure log format
@@ -21,13 +21,9 @@ Extracted modules:
 """
 
 import argparse
-import importlib.util
 import logging
 import os
-import signal
-import subprocess
 import sys
-import time
 from pathlib import Path
 
 from orze import __version__
@@ -432,7 +428,7 @@ Examples:
         return 0
 
     if command == "init":
-        do_init(args.path or ".")
+        do_init(args.path or "__ask__")
         return 0
 
     if command == "upgrade":
@@ -668,6 +664,7 @@ Examples:
         import sqlite3
         import shutil
         import tempfile
+        import time
         import glob as glob_module
         
         cfg = load_project_config(args.config_file)
