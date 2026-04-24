@@ -95,9 +95,19 @@ else
 fi
 
 if [ "$INSTALL_PRO" = true ]; then
+    if [ -n "$PRO_KEY" ]; then
+        PRO_INDEX="--extra-index-url https://__token__:${PRO_KEY}@pypi.orze.ai/simple/"
+    else
+        PRO_INDEX=""
+    fi
     if ! $PYTHON -c "import orze_pro" &>/dev/null; then
         info "Installing orze-pro..."
-        $INSTALL_CMD orze-pro 2>/dev/null || true
+        $INSTALL_CMD orze-pro $PRO_INDEX 2>/dev/null || {
+            warn "orze-pro install failed. Check your license key or visit orze.ai/pro"
+        }
+    else
+        info "Upgrading orze-pro..."
+        $INSTALL_CMD --upgrade orze-pro $PRO_INDEX 2>/dev/null || true
     fi
     if [ -n "$PRO_KEY" ]; then
         info "Activating license..."
