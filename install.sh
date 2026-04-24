@@ -23,6 +23,13 @@ info()  { echo -e "${GREEN}[+]${RESET} $*"; }
 warn()  { echo -e "${YELLOW}[!]${RESET} $*"; }
 step()  { echo -e "\n${BOLD}${CYAN}==> $*${RESET}"; }
 
+# When piped via curl|bash, stdin is the script itself.
+# All subprocesses must use </dev/null and interactive prompts use /dev/tty.
+HAS_TTY=false
+if [ -e /dev/tty ]; then
+    HAS_TTY=true
+fi
+
 echo ""
 echo -e "${BOLD}orze — GPU Experiment Orchestrator${RESET}"
 echo "==================================="
@@ -60,9 +67,9 @@ fi
 if command -v orze &>/dev/null; then
     ORZE_VER=$(orze --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
     info "orze $ORZE_VER already installed — upgrading"
-    $INSTALL_CMD --upgrade orze 2>/dev/null || true
+    $INSTALL_CMD --upgrade orze </dev/null 2>/dev/null || true
 else
-    $INSTALL_CMD orze 2>/dev/null || {
+    $INSTALL_CMD orze </dev/null 2>&1 || {
         warn "pip install failed. Try: $PYTHON -m pip install orze"
         exit 1
     }
@@ -76,19 +83,19 @@ step "Checking orze-pro..."
 INSTALL_PRO=false
 PRO_KEY="${ORZE_PRO_KEY:-}"
 
-if orze pro status 2>/dev/null | grep -qi "licensed"; then
+if orze pro status </dev/null 2>/dev/null | grep -qi "licensed"; then
     info "orze-pro already activated"
     INSTALL_PRO=true
 elif [ -n "$PRO_KEY" ]; then
     INSTALL_PRO=true
     info "License key found in ORZE_PRO_KEY"
-elif [ -t 0 ]; then
+elif [ "$HAS_TTY" = true ]; then
     echo ""
     echo -e "  ${DIM}orze-pro adds autopilot: autonomous research agents,"
     echo -e "  auto-fix, code evolution, The Professor, 7 FSM procedures.${RESET}"
     echo ""
     echo -n "  Enter orze-pro license key (or Enter to skip): "
-    read -r PRO_KEY
+    read -r PRO_KEY </dev/tty
     [ -n "$PRO_KEY" ] && INSTALL_PRO=true
 else
     info "No ORZE_PRO_KEY set — skipping pro"
@@ -100,18 +107,18 @@ if [ "$INSTALL_PRO" = true ]; then
     else
         PRO_INDEX=""
     fi
-    if ! $PYTHON -c "import orze_pro" &>/dev/null; then
+    if ! $PYTHON -c "import orze_pro" </dev/null &>/dev/null; then
         info "Installing orze-pro..."
-        $INSTALL_CMD orze-pro $PRO_INDEX 2>/dev/null || {
+        $INSTALL_CMD orze-pro $PRO_INDEX </dev/null 2>&1 || {
             warn "orze-pro install failed. Check your license key or visit orze.ai/pro"
         }
     else
         info "Upgrading orze-pro..."
-        $INSTALL_CMD --upgrade orze-pro $PRO_INDEX 2>/dev/null || true
+        $INSTALL_CMD --upgrade orze-pro $PRO_INDEX </dev/null 2>/dev/null || true
     fi
     if [ -n "$PRO_KEY" ]; then
         info "Activating license..."
-        orze pro activate "$PRO_KEY" 2>&1 | head -1 || true
+        orze pro activate "$PRO_KEY" </dev/null 2>&1 | head -1 || true
     fi
 fi
 
@@ -131,11 +138,11 @@ for var in ANTHROPIC_API_KEY GEMINI_API_KEY OPENAI_API_KEY; do
     fi
 done
 
-if [ -z "$API_KEY" ] && [ -t 0 ]; then
+if [ -z "$API_KEY" ] && [ "$HAS_TTY" = true ]; then
     echo ""
     echo -e "  ${DIM}An API key enables LLM-powered codebase analysis and idea generation.${RESET}"
     echo -n "  Enter API key (Anthropic/Gemini/OpenAI, or Enter to skip): "
-    read -r API_KEY
+    read -r API_KEY </dev/tty
     if [ -n "$API_KEY" ]; then
         case "$API_KEY" in
             sk-ant*)  API_VAR="ANTHROPIC_API_KEY" ;;
@@ -158,7 +165,7 @@ fi
 # --- 6. Initialize ------------------------------------------------------------
 step "Initializing project..."
 
-orze init "$PROJECT_PATH" || {
+orze init "$PROJECT_PATH" </dev/null || {
     warn "Initialization failed. Check the output above."
     exit 1
 }
