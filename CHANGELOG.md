@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.1.2 — orze-ai org migration + admin port fix
+
+### Changed
+- **GitHub org migrated** from `warlockee/orze` to `orze-ai/orze` — repository URLs in `pyproject.toml`, `cli_star._STAR_REPO`, `cli_setup` raw-github fallback + generated `orze.yaml` doc header, README, and release skill
+- **Paperdog Docker image migrated** from `warlockee/paperdog:latest` to `orzeai/paperdog:latest` — README example + `cli_setup` generated orze.yaml
+
+### Fixed
+- **`orze --admin` ignored configured port** — now honors `admin_port` from `orze.yaml` and `ORZE_ADMIN_PORT` env var, with CLI `--port` taking precedence
+
 ## 4.1.1 — FSM engine + Python 3.9 fix
 
 ### Fixed
