@@ -1048,6 +1048,14 @@ roles:
     args: ["--results-dir", "{{results_dir}}"]
     cooldown: 120
     timeout: 30
+
+# --- CONTAINERS (managed by orze watchdog) ---
+# The watchdog auto-pulls new images and recreates containers on update.
+containers:
+  paperdog:
+    image: warlockee/paperdog:latest
+    ports:
+      - "8000:8000"
 """
     else:
         yaml_content = f"""\

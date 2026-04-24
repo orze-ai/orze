@@ -2,11 +2,15 @@
 
 Invokable as: python -m orze.service.watchdog
 Designed to be called every minute from crontab or every 5 minutes from systemd timer.
+Also manages Docker containers defined in orze.yaml (auto-pull, auto-recreate).
 """
+
+from __future__ import annotations
 
 import json
 import logging
 import os
+import shutil
 import signal
 import socket
 import subprocess
@@ -175,6 +179,117 @@ def _write_restart_marker(results_dir, hostname, reason, prev_pid=None):
     marker.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def _has_docker():
+    """Check if docker CLI is available."""
+    return shutil.which("docker") is not None
+
+
+def _docker_run(args, timeout=60):
+    """Run a docker command. Returns (returncode, stdout, stderr)."""
+    try:
+        r = subprocess.run(
+            ["docker"] + args,
+            capture_output=True, text=True, timeout=timeout,
+        )
+        return r.returncode, r.stdout.strip(), r.stderr.strip()
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return -1, "", str(exc)
+
+
+def _container_image_id(name):
+    """Return the image ID currently used by a running/stopped container, or None."""
+    rc, out, _ = _docker_run(["inspect", "--format", "{{.Image}}", name])
+    return out if rc == 0 else None
+
+
+def _pull_image(image):
+    """Pull image. Returns (changed: bool, new_id: str | None)."""
+    rc_before, id_before, _ = _docker_run(
+        ["images", "--format", "{{.ID}}", "--no-trunc", image],
+    )
+    rc, _, stderr = _docker_run(["pull", image], timeout=300)
+    if rc != 0:
+        return False, None
+    rc_after, id_after, _ = _docker_run(
+        ["images", "--format", "{{.ID}}", "--no-trunc", image],
+    )
+    changed = (rc_before != 0) or (id_before != id_after)
+    return changed, id_after
+
+
+def _recreate_container(name, spec):
+    """Stop + remove + run a container from spec dict."""
+    _docker_run(["stop", name], timeout=30)
+    _docker_run(["rm", name], timeout=15)
+
+    cmd = ["run", "-d", "--name", name, "--restart=unless-stopped"]
+    for port in spec.get("ports", []):
+        cmd += ["-p", str(port)]
+    for vol in spec.get("volumes", []):
+        cmd += ["-v", str(vol)]
+    for k, v in spec.get("env", {}).items():
+        cmd += ["-e", f"{k}={v}"]
+    cmd.append(spec["image"])
+    cmd += spec.get("command", [])
+
+    rc, out, err = _docker_run(cmd, timeout=60)
+    return rc == 0, out or err
+
+
+def check_containers(svc_cfg, _log=None):
+    """Check Docker containers defined in config — auto-pull and recreate if image changed."""
+    if _log is None:
+        _log = logger.info
+
+    if not _has_docker():
+        return
+
+    config_file = svc_cfg.get("config_file")
+    if not config_file or not Path(config_file).exists():
+        return
+
+    try:
+        import yaml
+        cfg = yaml.safe_load(Path(config_file).read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    containers = cfg.get("containers", {})
+    if not containers:
+        return
+
+    for name, spec in containers.items():
+        if not isinstance(spec, dict) or "image" not in spec:
+            continue
+
+        image = spec["image"]
+        old_image_id = _container_image_id(name)
+
+        changed, new_id = _pull_image(image)
+        if changed:
+            _log(f"Container '{name}': new image pulled ({image}), recreating.")
+            ok, detail = _recreate_container(name, spec)
+            if ok:
+                _log(f"Container '{name}': recreated successfully.")
+            else:
+                _log(f"Container '{name}': recreate failed — {detail}")
+        else:
+            # Ensure container is running even if image didn't change
+            rc, state, _ = _docker_run(
+                ["inspect", "--format", "{{.State.Running}}", name],
+            )
+            if rc != 0:
+                _log(f"Container '{name}': not found, creating.")
+                ok, detail = _recreate_container(name, spec)
+                if ok:
+                    _log(f"Container '{name}': created successfully.")
+                else:
+                    _log(f"Container '{name}': create failed — {detail}")
+            elif state != "true":
+                _log(f"Container '{name}': not running, starting.")
+                _docker_run(["start", name])
+
+
 def check_and_restart(svc_cfg):
     """Main watchdog logic: check alive -> check stale -> check sentinels -> restart."""
     hostname = socket.gethostname()
@@ -250,6 +365,7 @@ def main():
         sys.exit(1)
 
     check_and_restart(svc_cfg)
+    check_containers(svc_cfg)
 
 
 if __name__ == "__main__":
