@@ -90,7 +90,7 @@ orze is a **complete, production-ready tool**. orze-pro adds **autopilot** — s
 
 | orze | orze-pro | Notes |
 |------|----------|-------|
-| 4.0.x | 0.7.x | Current release |
+| 4.1.x | 0.8.x | Current release |
 
 ## Quick Start
 
