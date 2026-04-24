@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.1.1 — FSM engine + Python 3.9 fix
+
+### Fixed
+- **FSM engine module missing from package** — `src/orze/fsm/` (engine, runner, plugins) was never committed; all FSM-triggered pro roles (code_evolution, engineer, meta_research) were dead on install
+- **Python 3.9 crash in FSM runner** — `Path | None` union syntax requires 3.10+; added `from __future__ import annotations`
+- **Missing `@sop:professor_paper_lake`** in pro YAML template — professor role was scaffolded without paper lake capability
+
 ## 4.1.0 — Unified install UX
 
 ### Changed
