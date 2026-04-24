@@ -570,11 +570,10 @@ Examples:
             if daemon_was_running:
                 # Relaunch daemon
                 print("Relaunching daemon...")
-                config_arg = f"--config-file={args.config_file}" if args.config_file else ""
                 # Use subprocess.Popen to detach
                 null_fd = os.open(os.devnull, os.O_RDWR)
                 subprocess.Popen(
-                    ["orze", "run"] + ([config_arg] if config_arg else []),
+                    ["orze", "start"] + (["-c", args.config_file] if args.config_file else []),
                     stdin=null_fd,
                     stdout=null_fd,
                     stderr=null_fd,
