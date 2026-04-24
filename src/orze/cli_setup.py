@@ -1018,6 +1018,7 @@ roles:
     mode: claude
     skills:
       - "@sop:professor_base"
+      - "@sop:professor_paper_lake"
       - "@sop:professor_web_search"
       - "@sop:professor_cross_domain_query"
       - "@sop:professor_idea_review"
