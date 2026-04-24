@@ -1,5 +1,26 @@
 # Changelog
 
+## 4.0.6 — Interactive init + orze-pro first-time UX
+
+### Added
+- **Interactive init (`cli_interactive.py`)** — `orze init` analyzes the codebase via LLM (Anthropic/Gemini/OpenAI with automatic fallback) and generates GOAL.md, train.py, ideas.md, configs, and src/ helpers.
+- **LLM fallback** — tries all available API keys across backends on failure.
+- **FSM runner scaffolding** — `do_init()` creates `fsm/runner.py` for pro users.
+- **Engineer role** in pro YAML template with 3 SOPs.
+
+### Fixed
+- **orze startup used venv python** — now uses `shutil.which("orze")` with `sys.executable` fallback.
+- **AI CLI detection blocked interactive init** — no longer short-circuits.
+- **Double "Next steps"** — printed exactly once via bool return coordination.
+- **Dual results directories** — unified to `orze_results/`.
+- **Duplicate ideas.md** — removed `.orze/ideas.md` from cli.py init.
+- **LLM-generated orze.yaml overwrote pro template** — removed from `safe_overwrite`.
+- **`_check_pro_license` ImportError** — uses `check_license()` instead of nonexistent `load_key_payload`.
+- **Path traversal in `_write_generated_files`** — `is_relative_to` guard.
+- **`.env` writing** — handles missing file; strips quotes from values.
+- **`subprocess.TimeoutExpired`** — caught for orze start/check.
+- **LLM error messages** — show API response body.
+
 ## 4.0.5 — Release matrix in `@release` skill
 
 ### Changed
