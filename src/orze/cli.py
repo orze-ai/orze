@@ -928,7 +928,8 @@ Examples:
     # --admin: launch web panel
     if args.admin:
         from orze.admin.server import run_admin
-        run_admin(cfg)
+        admin_port = int(cfg.get("admin_port") or os.environ.get("ORZE_ADMIN_PORT", "8787"))
+        run_admin(cfg, port=admin_port)
         return
 
     # --upgrade: upgrade orze from PyPI (stops + restarts if running)
