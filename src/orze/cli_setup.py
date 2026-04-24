@@ -792,10 +792,10 @@ def _try_create_venv(venv_dir: Path, venv_python: Path) -> bool:
         return False
 
 
-def do_init(init_arg: str):
+def do_init(init_arg: str) -> bool:
     """Scaffold a new orze project at the resolved path.
 
-    *init_arg* is the raw value from ``args.init`` (a path or ``"__ask__"``).
+    Returns True if interactive init completed (caller should skip "Next steps").
     """
     from orze.cli_demo import BASELINE_TRAIN_PY, RESEARCH_RULES_TEMPLATE
 
@@ -909,7 +909,7 @@ def do_init(init_arg: str):
 # --- REQUIRED ---
 train_script: {train_script}
 ideas_file: ideas.md
-results_dir: results
+results_dir: orze_results
 python: {python_for_yaml}
 
 # --- ENV ---
@@ -1012,7 +1012,7 @@ roles:
 # --- REQUIRED ---
 train_script: {train_script}
 ideas_file: ideas.md
-results_dir: results
+results_dir: orze_results
 python: {python_for_yaml}
 
 # --- EVALUATION (optional) ---
@@ -1247,19 +1247,39 @@ noise: 0.1
     # dynamic SOPs under <project>/skills/ and append them to the
     # professor role's skills: list in orze.yaml.
 
-    print()
-    print("\033[1mNext steps:\033[0m")
-    if _has_pro:
-        print(f"  1. Edit \033[36m{project_dir}/train.py\033[0m with your training logic")
-        print(f"  2. Add API key to \033[36m{project_dir}/.env\033[0m")
-        print(f"  3. Run: \033[36morze pro activate <key>\033[0m")
-        print(f"  4. Run: \033[36morze --check -c {cfg_path}\033[0m to validate")
-        print(f"  5. Run: \033[36morze start -c {cfg_path}\033[0m")
-    else:
-        print(f"  1. Edit \033[36m{project_dir}/train.py\033[0m with your training logic")
-        print(f"  2. Add API key to \033[36m{project_dir}/.env\033[0m (optional, for auto-research)")
-        print(f"  3. Run: \033[36morze --check -c {cfg_path}\033[0m to validate")
-        print(f"  4. Run: \033[36morze -c {cfg_path}\033[0m to start")
+    # =================================================================
+    # Interactive init — analyze codebase, generate real files, start
+    # =================================================================
+    _interactive_ok = False
+    try:
+        from orze.cli_interactive import do_interactive_init
+        _interactive_ok = bool(do_interactive_init(
+            project_dir,
+            venv_python if isinstance(venv_python, Path) else Path(python_for_yaml),
+        ))
+    except ImportError:
+        pass
+    except KeyboardInterrupt:
+        print("\n  Interrupted.")
+    except Exception as e:
+        print(f"  \033[33mInteractive init skipped:\033[0m {e}")
+
+    if not _interactive_ok:
+        print()
+        print("\033[1mNext steps:\033[0m")
+        if _has_pro:
+            print(f"  1. Edit \033[36m{project_dir}/train.py\033[0m with your training logic")
+            print(f"  2. Add API key to \033[36m{project_dir}/.env\033[0m")
+            print(f"  3. Run: \033[36morze pro activate <key>\033[0m")
+            print(f"  4. Run: \033[36morze --check -c {cfg_path}\033[0m to validate")
+            print(f"  5. Run: \033[36morze start -c {cfg_path}\033[0m")
+        else:
+            print(f"  1. Edit \033[36m{project_dir}/train.py\033[0m with your training logic")
+            print(f"  2. Add API key to \033[36m{project_dir}/.env\033[0m (optional, for auto-research)")
+            print(f"  3. Run: \033[36morze --check -c {cfg_path}\033[0m to validate")
+            print(f"  4. Run: \033[36morze -c {cfg_path}\033[0m to start")
+
+    return _interactive_ok
 
 
 # ---------------------------------------------------------------------------

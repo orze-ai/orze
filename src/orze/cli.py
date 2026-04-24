@@ -440,37 +440,23 @@ Examples:
         
         # Run legacy init first (creates orze.yaml, train.py, venv, etc.)
         do_legacy_init(init_path or "__ask__")
-        
+
         # Now add .orze/ structure
         project_dir = Path(init_path or ".").resolve()
         orze_dir = project_dir / ".orze"
-        results_dir = project_dir / "orze_results"
-        
+
         print("\nInitializing .orze/ structure...")
-        
+
         # Create .orze/ subdirs
-        (orze_dir / "state").mkdir(parents=True, exist_ok=True)
-        (orze_dir / "rules").mkdir(parents=True, exist_ok=True)
-        (orze_dir / "logs").mkdir(parents=True, exist_ok=True)
-        (orze_dir / "locks").mkdir(parents=True, exist_ok=True)
-        (orze_dir / "receipts").mkdir(parents=True, exist_ok=True)
-        (orze_dir / "triggers").mkdir(parents=True, exist_ok=True)
-        (orze_dir / "heartbeats").mkdir(parents=True, exist_ok=True)
-        (orze_dir / "mcp").mkdir(parents=True, exist_ok=True)
-        (orze_dir / "backups").mkdir(parents=True, exist_ok=True)
-        (orze_dir / "feedback").mkdir(parents=True, exist_ok=True)
+        for subdir in ("state", "rules", "logs", "locks", "receipts",
+                       "triggers", "heartbeats", "mcp", "backups", "feedback"):
+            (orze_dir / subdir).mkdir(parents=True, exist_ok=True)
         print(f"  \033[32mcreated\033[0m  .orze/ (directory structure)")
-        
+
         # Write version.json
         write_layout_version(orze_dir, CURRENT_LAYOUT)
         print(f"  \033[32mcreated\033[0m  .orze/state/version.json")
-        
-        # Create minimal ideas.md if missing
-        ideas_file = orze_dir / "ideas.md"
-        if not ideas_file.exists():
-            ideas_file.write_text("# Ideas\n\nOrze research manifest. Add ideas as YAML blocks below.\n")
-            print(f"  \033[32mcreated\033[0m  .orze/ideas.md")
-        
+
         # Create GOAL.md stub if missing (and README exists)
         goal_file = project_dir / "GOAL.md"
         readme_file = project_dir / "README.md"
@@ -478,11 +464,11 @@ Examples:
             if readme_file.exists():
                 goal_file.write_text("# Goal\n\nAuto-generated placeholder. Edit this file to steer orze.\n")
                 print(f"  \033[32mcreated\033[0m  GOAL.md")
-        
-        # Create orze_results/.gitkeep
+
+        # Ensure orze_results/ exists with .gitkeep
+        results_dir = project_dir / "orze_results"
         results_dir.mkdir(exist_ok=True)
         (results_dir / ".gitkeep").touch()
-        print(f"  \033[32mcreated\033[0m  orze_results/")
         
         # Check if .orze/ in .gitignore, add if missing
         gitignore = project_dir / ".gitignore"
@@ -496,10 +482,6 @@ Examples:
                 print(f"  \033[32mupdated\033[0m  .gitignore (added .orze/)")
         
         print("\n\033[1m✓ Initialization complete!\033[0m")
-        print(f"\nNext steps:")
-        print(f"  1. Edit orze.yaml (set train_script, base_config, etc.)")
-        print(f"  2. Add ideas to .orze/ideas.md")
-        print(f"  3. Run: orze start")
         return 0
 
     if command == "upgrade":
