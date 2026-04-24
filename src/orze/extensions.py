@@ -88,7 +88,7 @@ _auto_install_attempted = False
 def redact_basic_auth(text: str) -> str:
     """Redact ``user:password@`` from any URL embedded in ``text``.
 
-    Used to scrub license-key tokens (``https://__token__:KEY@pypi.orze.ai/...``)
+    Used to scrub license-key tokens (``https://admin:KEY@pypi.orze.ai/...``)
     out of stdout / log lines before they reach the user or disk.
     """
     import re
@@ -138,7 +138,7 @@ def _auto_install_pro() -> bool:
     logger.info("Pro license key detected. Installing orze-pro...")
     result = subprocess.run(
         [sys.executable, "-m", "pip", "install", "orze-pro", "--quiet",
-         "--extra-index-url", f"https://__token__:{key}@pypi.orze.ai/simple/"],
+         "--extra-index-url", f"https://admin:{key}@pypi.orze.ai/simple/"],
         capture_output=True, text=True,
     )
     if result.returncode == 0:

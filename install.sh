@@ -56,13 +56,7 @@ fi
 
 # --- 2. Install orze ---------------------------------------------------------
 step "Installing orze..."
-if command -v uv &>/dev/null; then
-    PKG_MGR="uv pip"
-    INSTALL_CMD="uv pip install --quiet"
-else
-    PKG_MGR="pip"
-    INSTALL_CMD="$PYTHON -m pip install --quiet"
-fi
+INSTALL_CMD="$PYTHON -m pip install --quiet"
 
 if command -v orze &>/dev/null; then
     ORZE_VER=$(orze --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
@@ -103,7 +97,7 @@ fi
 
 if [ "$INSTALL_PRO" = true ]; then
     if [ -n "$PRO_KEY" ]; then
-        PRO_INDEX="--extra-index-url https://__token__:${PRO_KEY}@pypi.orze.ai/simple/"
+        PRO_INDEX="--extra-index-url https://admin:${PRO_KEY}@pypi.orze.ai/simple/"
     else
         PRO_INDEX=""
     fi

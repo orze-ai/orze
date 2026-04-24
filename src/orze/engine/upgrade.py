@@ -196,7 +196,7 @@ class UpgradeManager:
                     [sys.executable, "-m", "pip", "install", "orze-pro",
                      "--upgrade", "--quiet",
                      "--extra-index-url",
-                     f"https://__token__:{pro_key}@pypi.orze.ai/simple/"],
+                     f"https://admin:{pro_key}@pypi.orze.ai/simple/"],
                     capture_output=True, text=True,
                 )
                 if pro_result.returncode == 0:

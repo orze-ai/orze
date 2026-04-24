@@ -133,7 +133,7 @@ twine upload --repository-url 'https://pypi.orze.ai/' dist/orze-X.Y.Z*
 **Verify:**
 
 ```bash
-pip index versions orze --index-url "https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
+pip index versions orze --index-url "https://admin:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
 # Available versions: X.Y.Z
 ```
 
@@ -170,7 +170,7 @@ orze-pro is distributed via the license-gated private index `https://pypi.orze.a
 
 ```bash
 pip install --upgrade orze-pro \
-    --extra-index-url "https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
+    --extra-index-url "https://admin:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
 ```
 
 `ORZE_PRO_KEY` resolution order (see `orze.extensions._find_pro_key`):
@@ -204,7 +204,7 @@ Or do a clean-venv install matching the consumer flow:
 ```bash
 python -m venv /tmp/pro-verify
 /tmp/pro-verify/bin/pip install --upgrade orze-pro \
-    --extra-index-url "https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
+    --extra-index-url "https://admin:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
 /tmp/pro-verify/bin/python -c "import orze_pro; print(orze_pro.__version__)"
 ```
 
@@ -255,7 +255,7 @@ orze-pro — **two required, never publish to pypi.org**:
 ```
 [ ] github push
 [ ] pypi.orze.ai upload (TWINE_USERNAME=__admin__, TWINE_PASSWORD=$ORZE_AI_ADMIN_TOKEN, --repository-url https://pypi.orze.ai/)
-[ ] Verified in clean venv with --extra-index-url "https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
+[ ] Verified in clean venv with --extra-index-url "https://admin:${ORZE_PRO_KEY}@pypi.orze.ai/simple/"
 [ ] EXPLICITLY confirmed no `twine upload` ran without --repository-url (which would have hit pypi.org)
 ```
 
