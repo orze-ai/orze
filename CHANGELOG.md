@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.1.0 — Unified install UX
+
+### Changed
+- **One-line install is the single entry point** — `curl -sL https://orze.ai/install | bash` handles everything (packages, init, start)
+- **`orze init` subcommand** replaces `orze --init` (deprecated with notice)
+- **GitHub org** changed from `erikhenriksson/orze` to `warlockee/orze` everywhere
+- **README rewritten** — single install path, no confusing alternatives
+
+### Fixed
+- **Migration timing bug** — `version.json` now written before scaffolding, preventing migration from moving freshly created files
+- **`UnboundLocalError` on `orze --init`** — removed redundant local import that shadowed module-level `do_init`
+- **`grep -oP` portability** — `setup.sh` uses `grep -oE` for macOS compatibility
+- **Incomplete uninstall** — added `.orze/`, `fsm/`, `GOAL.md`, `ideas.md.ingest_state.json` to cleanup
+- **Shared-mount detection** — `orze init` (no path) passes `__ask__` sentinel for cluster auto-detection
+- **Dead top-level imports** removed from `cli.py`
+
 ## 4.0.6 — Interactive init + orze-pro first-time UX
 
 ### Added

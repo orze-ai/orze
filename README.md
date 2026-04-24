@@ -16,41 +16,20 @@ Orze runs experiments on GPUs: **schedule ideas → train → evaluate → repor
 curl -sL https://orze.ai/install | bash
 ```
 
-That's the whole setup. It installs orze, analyzes your codebase, generates training scripts and experiment ideas, and starts running — all in one command.
+That's it. It installs orze, detects your GPUs and codebase, generates training scripts and experiment ideas, and starts running — all in one command.
 
-**What it does:**
-1. Installs Python dependencies (orze, optionally orze-pro)
-2. Detects your GPUs, framework, and codebase
-3. Calls an LLM to generate `train.py`, `ideas.md`, `GOAL.md`, and configs
-4. Starts orze on all available GPUs
+Pass environment variables for additional options:
 
-**With options:**
 ```bash
-# Provide API key for LLM-powered setup
+# LLM-powered setup
 ANTHROPIC_API_KEY=sk-ant-... curl -sL https://orze.ai/install | bash
 
-# With pro license
+# With pro (autopilot)
 ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://orze.ai/install | bash
 
-# Specify project path
+# Custom project path
 curl -sL https://orze.ai/install | bash -s /nfs/my-project
 ```
-
-**Already have orze installed?**
-```bash
-orze init                  # initialize a new project in current dir
-orze init /path/to/project # or specify a path
-```
-
-### Upgrade to Pro
-
-```bash
-pip install orze-pro
-orze pro activate ORZE-PRO-xxx...
-# ✓ Licensed to Acme Corp (pro), expires 2027-12-31
-```
-
-No config changes — pro features activate automatically. [What's in pro?](#orze-vs-orze-pro)
 
 ## orze vs orze-pro
 
