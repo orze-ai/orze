@@ -624,7 +624,10 @@ class Orze(OrzePhaseMixin):
         if has_pro() and _run_all_roles_impl is not None:
             logger.info("orze-pro %s detected — autopilot features enabled", pro_version())
         elif has_pro() and _run_all_roles_impl is None:
-            logger.warning("orze-pro installed but not activated — check license with ORZE_PRO_KEY")
+            logger.error(
+                "orze-pro licensed but role_runner failed to import — "
+                "version mismatch? Try: pip install --upgrade orze orze-pro"
+            )
         elif _role_mod is not None:
             logger.info("Using built-in agent modules (install orze-pro to upgrade)")
         else:

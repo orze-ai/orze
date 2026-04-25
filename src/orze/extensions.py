@@ -66,7 +66,12 @@ def get_extension(name: str) -> Optional[object]:
             err_msg = str(exc)
             if "not activated" in err_msg or "ORZE_PRO_KEY" in err_msg:
                 logger.error("orze-pro license check failed: %s. Roles will not run.", err_msg)
-            pass
+            else:
+                import traceback as _tb
+                logger.error(
+                    "orze-pro extension %r import failed: %s\n%s",
+                    name, exc, _tb.format_exc(),
+                )
 
     # Fallback to built-in (transition period)
     fallback_path = _BUILTIN_FALLBACK.get(name)

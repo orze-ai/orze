@@ -237,11 +237,10 @@ class UpgradeManager:
         kill_and_save_fn()
         remove_pid_fn()
 
-        config_path = str(self._cfg.get("_config_path", "orze.yaml"))
-        logger.info("Auto-upgrade: restarting (config: %s)", config_path)
+        args = sys.argv[:]
+        logger.info("Auto-upgrade: restarting with original args: %s", args)
         try:
-            os.execv(sys.executable,
-                     [sys.executable, "-m", "orze.cli", "-c", config_path])
+            os.execv(sys.executable, [sys.executable] + args)
         except OSError as exc:
             logger.error("Auto-upgrade: os.execv failed: %s — restart manually", exc)
             sys.exit(1)
