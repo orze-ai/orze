@@ -399,20 +399,46 @@ def classify_failure(error_text: str, exit_code: int = -1,
     return "crash"
 
 
-def build_failure_analysis(category: str, error_text: str) -> dict:
+def build_failure_analysis(category: str, error_text: str,
+                           log_tail: str = "") -> dict:
     info = _CATEGORY_INFO.get(category, _CATEGORY_INFO["crash"])
+    traceback_lines = _extract_traceback(log_tail or error_text)
     return {
         "category": category,
         "what": error_text.split("\n")[0][:300],
         "why": info["why"],
         "lesson": info["lesson"],
+        "traceback": traceback_lines,
         "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
 
 
+def _extract_traceback(text: str) -> str:
+    """Extract the last Python traceback from log text, or last 10 meaningful lines."""
+    lines = text.strip().splitlines()
+    # Find last "Traceback (most recent call last):"
+    tb_start = -1
+    for i in range(len(lines) - 1, -1, -1):
+        if "Traceback (most recent call last)" in lines[i]:
+            tb_start = i
+            break
+    if tb_start >= 0:
+        return "\n".join(lines[tb_start:])[-2000:]
+    # No traceback found — return last non-empty lines
+    tail = [l for l in lines[-15:] if l.strip()]
+    return "\n".join(tail)[-2000:]
+
+
 def write_failure_analysis(idea_dir: Path, category: str,
                            error_text: str) -> None:
-    analysis = build_failure_analysis(category, error_text)
+    log_tail = ""
+    log_path = idea_dir / "train_output.log"
+    if log_path.exists():
+        try:
+            log_tail = tail_file(log_path, 16384)
+        except Exception:
+            pass
+    analysis = build_failure_analysis(category, error_text, log_tail=log_tail)
     try:
         idea_dir.mkdir(parents=True, exist_ok=True)
         path = idea_dir / "failure_analysis.json"
