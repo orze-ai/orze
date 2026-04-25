@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.1.3 — maintenance release
+
+### Changed
+- Version bump to synchronize with orze-pro 0.8.3 and admin dashboard improvements
+
 ## 4.1.2 — orze-ai org migration + admin port fix
 
 ### Changed
