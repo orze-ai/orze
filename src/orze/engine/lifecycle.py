@@ -202,12 +202,13 @@ def _running_idea_pids() -> set:
 def reconcile_running_dead_pids(cfg: dict) -> int:
     """F7: For every status='running' idea, verify a python training
     process exists on this host with ``--idea-id <id>`` in its cmdline.
-    If not, mark the row 'failed' with reason 'orphaned_pid'.
+    If the process is gone but metrics.json shows COMPLETED, mark as
+    'completed'. Otherwise mark 'failed' with reason 'orphaned_pid'.
 
     Multi-host safety: only acts on rows whose claim.json says they
     belong to THIS host. Rows owned by another host are left alone.
 
-    Returns the number of rows marked failed.
+    Returns the number of rows reconciled.
     """
     import json as _json
     import socket as _socket
@@ -220,6 +221,7 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
 
     alive_ideas = _running_idea_pids()
 
+    n_completed = 0
     n_orphaned = 0
     try:
         conn = sqlite3.connect(str(lake_path), timeout=5)
@@ -227,7 +229,6 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
             "SELECT idea_id, eval_metrics FROM ideas WHERE status = 'running'")
         rows = cur.fetchall()
         for idea_id, em_raw in rows:
-            # Only reconcile rows owned by this host (or with no claim).
             claim_path = results_dir / idea_id / "claim.json"
             if claim_path.exists():
                 try:
@@ -238,9 +239,22 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                     pass
 
             if idea_id in alive_ideas:
-                continue  # process still running
+                continue
 
-            # No matching process → orphan; mark failed.
+            # Process gone — check if it completed successfully.
+            metrics_path = results_dir / idea_id / "metrics.json"
+            if metrics_path.exists():
+                try:
+                    m = _json.loads(metrics_path.read_text(encoding="utf-8"))
+                    if m.get("status") == "COMPLETED":
+                        conn.execute(
+                            "UPDATE ideas SET status = 'completed' "
+                            "WHERE idea_id = ?", (idea_id,))
+                        n_completed += 1
+                        continue
+                except (_json.JSONDecodeError, OSError):
+                    pass
+
             try:
                 em = _json.loads(em_raw) if em_raw else {}
                 if not isinstance(em, dict):
@@ -253,15 +267,20 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                 "WHERE idea_id = ?",
                 (_json.dumps(em), idea_id))
             n_orphaned += 1
-        if n_orphaned:
+        if n_completed or n_orphaned:
             conn.commit()
+        if n_completed:
+            logger.info(
+                "Reconciled %d 'running' rows (completed on disk) -> completed",
+                n_completed)
+        if n_orphaned:
             logger.info(
                 "Reconciled %d orphaned 'running' rows (dead PID) -> failed",
                 n_orphaned)
         conn.close()
     except Exception as e:
         logger.warning("Failed to reconcile dead-PID rows: %s", e)
-    return n_orphaned
+    return n_completed + n_orphaned
 
 
 def print_startup_summary(cfg: dict) -> None:

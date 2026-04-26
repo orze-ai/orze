@@ -67,8 +67,6 @@ def _fs_lock(lock_dir: Path, stale_seconds: float = 600) -> bool:
                 lock_host = meta.get("host", "")
                 lock_pid = meta.get("pid", 0)
 
-                # Break condition: lock is stale by age, OR the owning
-                # process is on this host and has died.
                 pid_dead = (lock_host == socket.gethostname()
                             and lock_pid
                             and not _is_pid_alive(lock_host, lock_pid))
@@ -83,30 +81,35 @@ def _fs_lock(lock_dir: Path, stale_seconds: float = 600) -> bool:
                 else:
                     logger.warning("Breaking stale lock: %s (age %.0fs)",
                                    lock_dir, lock_age)
+            else:
+                # Orphaned lock dir with no lock.json — treat as stale
+                # unless very recently created (< 30s grace period)
+                dir_age = time.time() - lock_dir.stat().st_mtime
+                if dir_age < 30:
+                    return False
+                logger.warning("Breaking orphaned lock (no lock.json): %s (age %.0fs)",
+                               lock_dir, dir_age)
 
-                # Atomic takeover: rename the stale lock dir to a unique name.
-                # Only one node can succeed at this rename — the loser gets OSError.
-                stale_name = lock_dir.with_name(
-                    f"{lock_dir.name}._stale_{uuid.uuid4().hex[:12]}"
-                )
-                try:
-                    os.rename(str(lock_dir), str(stale_name))
-                except OSError:
-                    # Another node already renamed it — they'll get the lock
-                    return False
-                # We won the rename race. Clean up the stale dir.
-                try:
-                    shutil.rmtree(stale_name)
-                except OSError:
-                    pass
-                # Now acquire the (now-free) lock dir
-                try:
-                    lock_dir.mkdir(parents=True, exist_ok=False)
-                    new_meta = {"host": socket.gethostname(), "pid": os.getpid(), "time": time.time()}
-                    (lock_dir / "lock.json").write_text(json.dumps(new_meta), encoding="utf-8")
-                    return True
-                except FileExistsError:
-                    return False
+            # Atomic takeover: rename the stale lock dir to a unique name.
+            # Only one node can succeed at this rename — the loser gets OSError.
+            stale_name = lock_dir.with_name(
+                f"{lock_dir.name}._stale_{uuid.uuid4().hex[:12]}"
+            )
+            try:
+                os.rename(str(lock_dir), str(stale_name))
+            except OSError:
+                return False
+            try:
+                shutil.rmtree(stale_name)
+            except OSError:
+                pass
+            try:
+                lock_dir.mkdir(parents=True, exist_ok=False)
+                new_meta = {"host": socket.gethostname(), "pid": os.getpid(), "time": time.time()}
+                (lock_dir / "lock.json").write_text(json.dumps(new_meta), encoding="utf-8")
+                return True
+            except FileExistsError:
+                return False
         except Exception:
             pass
         return False
