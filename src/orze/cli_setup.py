@@ -968,6 +968,12 @@ report:
     - {{key: "test_loss", label: "Loss", fmt: ".4f"}}
     - {{key: "training_time", label: "Time(s)", fmt: ".0f"}}
 
+# --- GC (results cleanup) ---
+gc:
+  enabled: true
+  keep_top: 10
+  keep_recent: 5
+
 # --- RETROSPECTION ---
 # Detection only — FSM owns all pause/trigger decisions
 retrospection:
