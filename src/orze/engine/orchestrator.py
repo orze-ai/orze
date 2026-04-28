@@ -465,10 +465,10 @@ class Orze(OrzePhaseMixin):
 
     # Keys that are safe to hot-reload without restart
     _HOT_RELOAD_KEYS = {
-        "retrospection", "stall_minutes", "timeout", "poll", "roles",
-        "max_idea_failures", "max_fix_attempts", "notifications",
-        "plateau_threshold", "orphan_timeout_hours", "gpu_mem_threshold",
-        "gpu_scheduling", "min_disk_gb", "post_scripts",
+        "retrospection", "stall_minutes", "role_stall_minutes", "timeout",
+        "poll", "roles", "max_idea_failures", "max_fix_attempts",
+        "notifications", "plateau_threshold", "orphan_timeout_hours",
+        "gpu_mem_threshold", "gpu_scheduling", "min_disk_gb", "post_scripts",
     }
 
     def _hot_reload_config(self):
