@@ -369,8 +369,10 @@ class OrzePhaseMixin:
                 rpath = d / eval_output
                 if mpath.exists() and not rpath.exists():
                     # Skip ideas without checkpoints
+                    ckpt_name = cfg.get("eval_checkpoint", "best_model.pt")
+                    has_ckpt = (d / ckpt_name).exists()
                     if ckpt_dir and not (
-                            ckpt_dir / iid / "best.pt").exists():
+                            ckpt_dir / iid / "best.pt").exists() and not has_ckpt:
                         continue
                     # Only eval ideas we have configs for
                     if iid not in known_ideas:
@@ -378,7 +380,7 @@ class OrzePhaseMixin:
                     try:
                         m = json.loads(
                             mpath.read_text(encoding="utf-8"))
-                        if m.get("status") == "COMPLETED":
+                        if m.get("status") == "COMPLETED" or has_ckpt:
                             try:
                                 num = int(iid.split("-", 1)[1])
                             except (IndexError, ValueError):

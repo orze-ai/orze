@@ -62,14 +62,22 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         return None
 
     metrics_path = results_dir / idea_id / "metrics.json"
+    checkpoint_name = cfg.get("eval_checkpoint", "best_model.pt")
+    has_checkpoint = (results_dir / idea_id / checkpoint_name).exists()
     if metrics_path.exists():
         try:
             metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-            if metrics.get("status") != "COMPLETED":
+            status = metrics.get("status", "")
+            if status == "COMPLETED":
+                pass  # always eligible
+            elif has_checkpoint:
+                pass  # timed out or failed but has a valid checkpoint
+            else:
                 return None
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-            return None
-    else:
+            if not has_checkpoint:
+                return None
+    elif not has_checkpoint:
         return None
 
     python = cfg.get("python", sys.executable)
@@ -238,16 +246,19 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
     if not post_scripts:
         return
 
-    # Check training succeeded
+    # Check training produced a checkpoint (completed OR timed out with valid ckpt)
     metrics_path = results_dir / idea_id / "metrics.json"
+    checkpoint_name = cfg.get("eval_checkpoint", "best_model.pt")
+    has_checkpoint = (results_dir / idea_id / checkpoint_name).exists()
     if metrics_path.exists():
         try:
             metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-            if metrics.get("status") != "COMPLETED":
+            if metrics.get("status") != "COMPLETED" and not has_checkpoint:
                 return
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-            return
-    else:
+            if not has_checkpoint:
+                return
+    elif not has_checkpoint:
         return
 
     python = cfg.get("python", sys.executable)

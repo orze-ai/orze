@@ -423,7 +423,10 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         "",
     ]
 
-    completed = [r for r in rows if r["status"] == "COMPLETED"]
+    eval_output = cfg.get("eval_output", "eval_report.json")
+    completed = [r for r in rows if r["status"] == "COMPLETED"
+                 or (r.get("primary_val") is not None
+                     and (results_dir / r["id"] / eval_output).exists())]
 
     # Exclude experiments that completed trivially without producing
     # meaningful results (e.g. all eval datasets missing, script exited
