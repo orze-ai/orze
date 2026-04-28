@@ -245,7 +245,9 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     report_cfg = cfg.get("report") or DEFAULT_CONFIG["report"]
     primary_metric = report_cfg.get("primary_metric") or "test_accuracy"
     sort_order = report_cfg.get("sort") or "descending"
-    columns = report_cfg.get("columns") or DEFAULT_CONFIG["report"]["columns"]
+    columns = (report_cfg.get("columns")
+               or (cfg.get("metric_harvest") or {}).get("columns")
+               or DEFAULT_CONFIG["report"]["columns"])
     import hashlib as _hl
     _col_hash = _hl.md5(json.dumps(columns, sort_keys=True, default=str).encode()).hexdigest()
     title = report_cfg.get("title") or "Orze Report"
