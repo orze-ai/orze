@@ -89,14 +89,14 @@ ALLOWED_KINDS = {
 }
 
 
-def _retry_on_busy(func, max_retries=5, base_delay=0.5):
+def _retry_on_busy(func, max_retries=10, base_delay=1.0):
     """Retry a callable on SQLITE_BUSY / OperationalError with exponential backoff."""
     for attempt in range(max_retries):
         try:
             return func()
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e) and attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt)
+                delay = min(base_delay * (2 ** attempt), 30)
                 logger.warning("SQLite busy (attempt %d/%d), retrying in %.1fs",
                                attempt + 1, max_retries, delay)
                 time.sleep(delay)
@@ -114,7 +114,7 @@ class IdeaLake:
         # DELETE journal mode is safe on network filesystems (Lustre/NFS).
         # WAL mode requires shared-memory (mmap) which Lustre does not support.
         self.conn.execute("PRAGMA journal_mode=DELETE")
-        self.conn.execute("PRAGMA busy_timeout=15000")
+        self.conn.execute("PRAGMA busy_timeout=60000")
         self._ensure_schema()
 
     def _ensure_schema(self):
