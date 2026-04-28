@@ -5,3 +5,7 @@ try:
     __version__ = _pkg_version("orze")
 except PackageNotFoundError:
     __version__ = "unknown"
+
+from orze.journal import Journal, Iteration
+
+__all__ = ["Journal", "Iteration"]
