@@ -948,6 +948,9 @@ ideas_file: ideas.md
 results_dir: orze_results
 python: {python_for_yaml}
 
+# --- TELEMETRY ---
+telemetry: true
+
 # --- ENV ---
 train_extra_env:
   PYTHONUNBUFFERED: "1"
@@ -956,17 +959,30 @@ train_extra_env:
 timeout: 3600
 poll: 30
 stall_minutes: 60
-max_idea_failures: 2
+max_idea_failures: 3
 max_fix_attempts: 2
+min_disk_gb: 5
+
+# --- GPU SCHEDULING ---
+gpu_scheduling:
+  mode: exclusive
 
 # --- REPORT ---
 report:
   primary_metric: test_accuracy
   sort: descending
+
+# --- METRIC HARVEST ---
+metric_harvest:
+  maximize: true
   columns:
     - {{key: "test_accuracy", label: "Accuracy", fmt: ".4f"}}
     - {{key: "test_loss", label: "Loss", fmt: ".4f"}}
     - {{key: "training_time", label: "Time(s)", fmt: ".0f"}}
+
+# --- CONFIG SAFETY ---
+nested_config_whitelist: [model, training, loss, data]
+sweep_allowlist: [{train_script}]
 
 # --- GC (results cleanup) ---
 gc:
@@ -975,7 +991,6 @@ gc:
   keep_recent: 5
 
 # --- RETROSPECTION ---
-# Detection only — FSM owns all pause/trigger decisions
 retrospection:
   enabled: true
   interval: 6
@@ -1054,6 +1069,13 @@ roles:
     args: ["--results-dir", "{{results_dir}}"]
     cooldown: 120
     timeout: 30
+    enabled: true
+
+# --- NOTIFICATIONS ---
+notifications:
+  enabled: true
+  on: [completed, failed, new_best, heartbeat]
+  heartbeat_interval: 1800
 
 # --- CONTAINERS (managed by orze watchdog) ---
 # The watchdog auto-pulls new images and recreates containers on update.
