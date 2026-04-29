@@ -549,6 +549,8 @@ class OrzePhaseMixin:
                                 logger.warning(
                                     "Fixed malformed config key %r -> %s: %s",
                                     k, parts[0], flat_cfg[parts[0]])
+                            elif v is None:
+                                pass
                             else:
                                 flat_cfg[k] = v
                         atomic_write(
