@@ -111,14 +111,9 @@ def find_dotenv(config_path: Optional[str] = None) -> Optional[Path]:
     return None
 
 
-def _load_dotenv(config_path: Optional[str] = None) -> int:
-    """Load .env file. Only sets vars NOT already in os.environ. Returns count loaded."""
-    env_file = find_dotenv(config_path)
-
-    if not env_file:
-        return 0
-
-    loaded = 0
+def _parse_dotenv(env_file: Path) -> dict:
+    """Parse a .env file into a dict of key-value pairs."""
+    result = {}
     for line in env_file.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
@@ -130,13 +125,42 @@ def _load_dotenv(config_path: Optional[str] = None) -> int:
         key, _, value = line.partition("=")
         key = key.strip()
         value = value.strip().strip("'\"")
-        if key and not os.environ.get(key):
+        if key:
+            result[key] = value
+    return result
+
+
+def _load_dotenv(config_path: Optional[str] = None) -> int:
+    """Load .env file. Only sets vars NOT already in os.environ. Returns count loaded."""
+    env_file = find_dotenv(config_path)
+    if not env_file:
+        return 0
+
+    loaded = 0
+    for key, value in _parse_dotenv(env_file).items():
+        if not os.environ.get(key):
             os.environ[key] = value
             loaded += 1
 
     if loaded:
         logger.info("Loaded %d env var(s) from %s", loaded, env_file)
     return loaded
+
+
+def reload_dotenv(config_path: Optional[str] = None) -> int:
+    """Re-read .env and update os.environ with changed values. Returns count updated."""
+    env_file = find_dotenv(config_path)
+    if not env_file:
+        return 0
+
+    updated = 0
+    for key, value in _parse_dotenv(env_file).items():
+        if os.environ.get(key) != value:
+            os.environ[key] = value
+            updated += 1
+            logger.info(".env hot-reload: %s changed", key)
+
+    return updated
 
 
 DEFAULT_CONFIG = {

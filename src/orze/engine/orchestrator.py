@@ -38,7 +38,7 @@ from orze.engine.failure import (
 )
 from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
 from orze.core.ideas import parse_ideas, expand_sweeps
-from orze.core.config import _validate_config
+from orze.core.config import _validate_config, reload_dotenv
 from orze.reporting.state import (
     load_state, save_state, write_host_heartbeat,
     write_status_json,
@@ -472,7 +472,7 @@ class Orze(OrzePhaseMixin):
     }
 
     def _hot_reload_config(self):
-        """Reload orze.yaml and update safe-to-change config keys.
+        """Reload orze.yaml and .env, updating safe-to-change config keys.
 
         For 'roles', merges disk config with runtime-added roles (e.g.
         auto-enabled thinker/data_analyst) instead of replacing outright.
@@ -480,6 +480,13 @@ class Orze(OrzePhaseMixin):
         cfg_path = self.cfg.get("_config_path")
         if not cfg_path or not Path(cfg_path).exists():
             return
+
+        # Hot-reload .env — picks up rotated API keys without restart
+        try:
+            reload_dotenv(cfg_path)
+        except Exception as e:
+            logger.warning(".env hot-reload failed: %s", e)
+
         try:
             raw = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8")) or {}
             changed = []
