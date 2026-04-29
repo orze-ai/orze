@@ -1051,19 +1051,19 @@ Examples:
                     _run_admin_server(cfg, port=admin_port)
                 except OSError as e:
                     if "address already in use" in str(e).lower():
-                        logger.warning(
-                            "Admin port %d already in use by another process. "
-                            "Skipping admin panel to avoid killing another instance. "
-                            "Set admin_port in orze.yaml to use a different port.",
+                        logger.error(
+                            "Admin panel NOT started — port %d already in use. "
+                            "Another process is holding this port. Kill it or "
+                            "set admin_port in orze.yaml to use a different port.",
                             admin_port)
                     else:
-                        logger.warning("Admin panel failed to start: %s", e)
+                        logger.error("Admin panel failed to start: %s", e)
                 except Exception as e:
-                    logger.warning("Admin panel failed to start: %s", e)
+                    logger.error("Admin panel failed to start: %s", e)
 
             t = threading.Thread(target=_admin_thread, daemon=True)
             t.start()
-            logger.info("Admin panel starting on http://0.0.0.0:%d", admin_port)
+            logger.info("Admin panel binding on http://0.0.0.0:%d ...", admin_port)
         except Exception as e:
             logger.warning("Could not start admin panel: %s", e)
 
