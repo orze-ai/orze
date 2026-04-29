@@ -156,7 +156,30 @@ if [ -n "$API_KEY" ] && [ -n "$API_VAR" ]; then
     export "$API_VAR=$API_KEY"
 fi
 
-# --- 6. Initialize ------------------------------------------------------------
+# --- 6. Auto-detect leader/follower -------------------------------------------
+RESULTS_DIR="$PROJECT_PATH/orze_results"
+HEARTBEAT_FILE="$RESULTS_DIR/.orze_leader.heartbeat"
+
+if [ -f "$HEARTBEAT_FILE" ]; then
+    # Another host wrote a heartbeat — check if it's fresh (< 5 min)
+    LEADER_HOST=$($PYTHON -c "
+import json, time, socket
+try:
+    hb = json.load(open('$HEARTBEAT_FILE'))
+    age = time.time() - hb.get('ts', 0)
+    leader = hb.get('host', '')
+    me = socket.gethostname()
+    if age < 300 and leader != me:
+        print(leader)
+except: pass
+" 2>/dev/null)
+    if [ -n "$LEADER_HOST" ]; then
+        info "Active leader detected on $LEADER_HOST — this node will be a follower"
+        export ORZE_FORCE_FOLLOWER=1
+    fi
+fi
+
+# --- 7. Initialize ------------------------------------------------------------
 step "Initializing project..."
 
 orze init "$PROJECT_PATH" </dev/null || {
@@ -178,7 +201,10 @@ fi
 # --- Done ---------------------------------------------------------------------
 echo ""
 echo -e "${BOLD}Done.${RESET}"
-if [ "$INSTALL_PRO" = true ]; then
+if [ -n "${ORZE_FORCE_FOLLOWER:-}" ]; then
+    echo -e "  Running as ${CYAN}follower${RESET} (leader on $LEADER_HOST)."
+    echo -e "  This node runs training only — roles run on the leader."
+elif [ "$INSTALL_PRO" = true ]; then
     echo -e "  orze + orze-pro installed and running."
 else
     echo -e "  orze installed and running."
