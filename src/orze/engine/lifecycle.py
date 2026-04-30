@@ -220,16 +220,33 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
         return 0
 
     alive_ideas = _running_idea_pids()
+    # Grace period: skip reconcile for rows whose claim.json or
+    # idea-dir activity is younger than this. Covers the launch
+    # race window (claim.json written → subprocess spawn) and the
+    # post-completion flush window (best_submission.csv written →
+    # metrics.json status=COMPLETED). Cycle-092 cross-domain row
+    # 65: standard distributed-task-queue grace is 120s.
+    grace_seconds = 180
+    now_ts = time.time()
 
     n_completed = 0
     n_orphaned = 0
+    n_requeued = 0
+    n_skipped_grace = 0
+    n_warned = 0
     try:
         conn = sqlite3.connect(str(lake_path), timeout=5)
         cur = conn.execute(
-            "SELECT idea_id, eval_metrics FROM ideas WHERE status = 'running'")
+            "SELECT idea_id, eval_metrics FROM ideas "
+            "WHERE status = 'running' "
+            "OR (status = 'failed' "
+            "AND eval_metrics LIKE '%\"failure_reason\": \"orphaned_pid\"%')")
         rows = cur.fetchall()
         for idea_id, em_raw in rows:
-            claim_path = results_dir / idea_id / "claim.json"
+            idea_dir = results_dir / idea_id
+            claim_path = idea_dir / "claim.json"
+
+            # ---- Ownership check (multi-host safety) ----
             if claim_path.exists():
                 try:
                     claim = _json.loads(claim_path.read_text(encoding="utf-8"))
@@ -237,12 +254,40 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                         continue
                 except (_json.JSONDecodeError, OSError):
                     pass
+            else:
+                # No claim.json — dispatch never started on any host.
+                # Re-queue rather than orphan-mark (engineer fix #1).
+                conn.execute(
+                    "UPDATE ideas SET status = 'queued' WHERE idea_id = ?",
+                    (idea_id,))
+                n_requeued += 1
+                continue
 
+            # ---- Live process? ----
             if idea_id in alive_ideas:
                 continue
 
-            # Process gone — check if it completed successfully.
-            metrics_path = results_dir / idea_id / "metrics.json"
+            # ---- Grace window: ----
+            # If the idea_dir was modified within `grace_seconds`, the
+            # subprocess may be in the launch race window or the
+            # completion-flush window. Skip this iteration.
+            try:
+                latest = claim_path.stat().st_mtime
+                # Also consider any submission/metrics file mtime — the
+                # train.py may write submission.csv just before exiting.
+                for fname in ("metrics.json", "best_submission.csv",
+                              "submission.csv", "best_solution.py"):
+                    fp = idea_dir / fname
+                    if fp.exists():
+                        latest = max(latest, fp.stat().st_mtime)
+                if (now_ts - latest) < grace_seconds:
+                    n_skipped_grace += 1
+                    continue
+            except OSError:
+                pass
+
+            # ---- Completed-on-disk check ----
+            metrics_path = idea_dir / "metrics.json"
             if metrics_path.exists():
                 try:
                     m = _json.loads(metrics_path.read_text(encoding="utf-8"))
@@ -255,27 +300,64 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                 except (_json.JSONDecodeError, OSError):
                     pass
 
-            try:
-                em = _json.loads(em_raw) if em_raw else {}
-                if not isinstance(em, dict):
+            # ---- Submission-on-disk check ----
+            # If a submission was written but no COMPLETED metrics, the
+            # work is empirically usable. Mark completed rather than
+            # orphan; let the grader/leaderboard score it.
+            for sub_name in ("best_submission.csv", "submission.csv"):
+                if (idea_dir / sub_name).exists():
+                    conn.execute(
+                        "UPDATE ideas SET status = 'completed' "
+                        "WHERE idea_id = ?", (idea_id,))
+                    n_completed += 1
+                    break
+            else:
+                try:
+                    em = _json.loads(em_raw) if em_raw else {}
+                    if not isinstance(em, dict):
+                        em = {}
+                except (ValueError, TypeError):
                     em = {}
-            except (ValueError, TypeError):
-                em = {}
-            em["failure_reason"] = "orphaned_pid"
-            conn.execute(
-                "UPDATE ideas SET status = 'failed', eval_metrics = ? "
-                "WHERE idea_id = ?",
-                (_json.dumps(em), idea_id))
-            n_orphaned += 1
-        if n_completed or n_orphaned:
+                # Require 2 consecutive liveness misses before orphan-marking
+                # (Phi-Accrual anti-flap: cross-domain row 93). A single miss
+                # can occur when the reconciler fires between process exit and
+                # metrics.json flush (the 180s grace window covers most cases
+                # but not all — especially slow FSx flushes under I/O load).
+                miss_count = em.get("liveness_misses", 0) + 1
+                if miss_count >= 2:
+                    em["failure_reason"] = "orphaned_pid"
+                    conn.execute(
+                        "UPDATE ideas SET status = 'failed', eval_metrics = ? "
+                        "WHERE idea_id = ?",
+                        (_json.dumps(em), idea_id))
+                    n_orphaned += 1
+                else:
+                    em["liveness_misses"] = miss_count
+                    conn.execute(
+                        "UPDATE ideas SET eval_metrics = ? WHERE idea_id = ?",
+                        (_json.dumps(em), idea_id))
+                    n_warned += 1
+        if n_completed or n_orphaned or n_requeued:
             conn.commit()
         if n_completed:
             logger.info(
                 "Reconciled %d 'running' rows (completed on disk) -> completed",
                 n_completed)
+        if n_requeued:
+            logger.info(
+                "Reconciled %d 'running' rows (no claim.json) -> queued",
+                n_requeued)
+        if n_skipped_grace:
+            logger.debug(
+                "Reconcile: %d 'running' rows skipped (within %ds grace)",
+                n_skipped_grace, grace_seconds)
+        if n_warned:
+            logger.info(
+                "Reconcile: %d 'running' rows — 1st liveness miss (need 2 to orphan)",
+                n_warned)
         if n_orphaned:
             logger.info(
-                "Reconciled %d orphaned 'running' rows (dead PID) -> failed",
+                "Reconciled %d orphaned 'running' rows (dead PID, 2+ misses) -> failed",
                 n_orphaned)
         conn.close()
     except Exception as e:

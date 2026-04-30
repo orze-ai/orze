@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.2.8 — orphan reconciliation hardening
+
+### Fixed
+- **Grace window for orphan detection** — Added 180s grace period before marking running ideas as orphaned. Covers the launch race window (claim.json → subprocess spawn) and post-completion flush window (submission.csv → metrics.json). Prevents false orphaning during slow FSx I/O flushes.
+- **Re-queue on missing claim.json** — Ideas marked 'running' in the DB but with no claim.json on disk are now re-queued instead of orphan-marked, since dispatch never started.
+- **2-miss anti-flap for orphan detection** — Requires 2 consecutive liveness misses before marking a process as orphaned (Phi-Accrual style). A single miss can occur between process exit and metrics.json flush.
+
 ## 4.1.3 — maintenance release
 
 ### Changed
