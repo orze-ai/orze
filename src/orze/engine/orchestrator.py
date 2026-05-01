@@ -38,7 +38,10 @@ from orze.engine.failure import (
 )
 from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
 from orze.core.ideas import parse_ideas, expand_sweeps
-from orze.core.config import _validate_config, reload_dotenv
+from orze.core.config import (
+    _validate_config, reload_dotenv,
+    _expand_env_vars, _find_unresolved_env_vars,
+)
 from orze.reporting.state import (
     load_state, save_state, write_host_heartbeat,
     write_status_json,
@@ -492,6 +495,26 @@ class Orze(OrzePhaseMixin):
 
         try:
             raw = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8")) or {}
+            # Hot-reload must run the same ${VAR} expansion that the
+            # initial load does (orze.core.config.load_config). Otherwise
+            # raw["notifications"]["channels"][i]["bot_token"] arrives as
+            # the literal string "${TELEGRAM_BOT_TOKEN}" and overwrites
+            # the previously-expanded value, silently 404'ing every
+            # subsequent telegram/slack/discord notify(). This actually
+            # happened in production: the boot canary delivered fine,
+            # the very next "Config hot-reloaded: notifications" tick
+            # reverted the channel cfg to placeholders, and notification
+            # delivery quietly broke for the rest of the session.
+            raw = _expand_env_vars(raw)
+            unresolved = _find_unresolved_env_vars(raw)
+            if unresolved:
+                # Surface — same shape as the initial-load warning so
+                # operators don't have to learn a second message.
+                for path, val in unresolved:
+                    logger.warning(
+                        "Config hot-reload: unresolved ${VAR} in %s: %s "
+                        "(env var not set when reload fired)",
+                        path, val)
             changed = []
             for key in self._HOT_RELOAD_KEYS:
                 if key not in raw:
