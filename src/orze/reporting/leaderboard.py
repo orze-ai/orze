@@ -239,7 +239,8 @@ def _analyze_config_diversity(results_dir: Path, completed_ids: list, max_dims: 
 
 
 def update_report(results_dir: Path, ideas: Dict[str, dict],
-                  cfg: dict, lake: Optional[IdeaLake] = None) -> list:
+                  cfg: dict, lake: Optional[IdeaLake] = None,
+                  role_states: Optional[dict] = None) -> list:
     """Generate a configurable leaderboard report.md from all results.
     Returns sorted list of completed row dicts."""
     report_cfg = cfg.get("report") or DEFAULT_CONFIG["report"]
@@ -584,6 +585,37 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         diversity_md = _analyze_config_diversity(results_dir, completed_ids)
         if diversity_md:
             lines.append(diversity_md)
+
+    # --- Role Health (post-mortem fix for 2026-04 silent campaign) ---
+    # Render the same HEALTHY/DEGRADED/LOCKED_OUT verdict that lands in
+    # status.json so a human reading report.md sees brain-death even
+    # when the leaderboard above looks healthy.
+    if role_states is not None and (cfg.get("roles") or {}):
+        from orze.reporting.state import build_role_health_block
+        orze_dir_str = cfg.get("_orze_dir")
+        _orze_dir = Path(orze_dir_str) if orze_dir_str else None
+        rh = build_role_health_block(cfg, role_states or {}, _orze_dir)
+        if rh:
+            lines.append("## Role Health")
+            lines.append("")
+            lines.append("| Role | Status | LastRun | Cooldown | ConsecFails |")
+            lines.append("|------|--------|---------|----------|-------------|")
+            for rname in sorted(rh):
+                h = rh[rname]
+                lr = h.get("last_run_age_min")
+                lr_s = "never" if lr is None else f"{lr} min ago"
+                co = h.get("cooldown_override_s") or 0
+                if co >= 3600:
+                    co_s = f"{co/3600:.1f}h"
+                elif co > 0:
+                    co_s = f"{int(co)}s"
+                else:
+                    co_s = "—"
+                lines.append(
+                    f"| {rname} | {h.get('status','?')} | {lr_s} | "
+                    f"{co_s} | {h.get('consecutive_failures',0)} |"
+                )
+            lines.append("")
 
     report_path = results_dir / "report.md"
     atomic_write(report_path, "\n".join(lines))

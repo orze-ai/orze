@@ -64,12 +64,36 @@ Exit-code contract
 """
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Tuple
+
+logger = logging.getLogger("orze.shims.llm")
+
+
+# Auth-failure signals shared across all backends that support a
+# subscription/OAuth login path. When the subscription session is dead
+# (logged out, expired, never logged in on this host), the CLI prints
+# one of these patterns and exits nonzero — but it is NOT a quota
+# event. Treat it identically to a quota signal for the purpose of
+# falling back to the API key, but log it separately so post-mortems
+# can tell quota-cap from auth-loss without parsing stderr.
+#
+# Substring match, lowercased. Verified against `claude` 1.x output as
+# of 2026-04. Other subscription-capable CLIs (codex/gemini OAuth) are
+# expected to share most of these phrasings.
+_AUTH_FAILURE_SIGNALS_DEFAULT: Tuple[str, ...] = (
+    "not logged in",
+    "please run /login",
+    "please log in",
+    "unauthenticated",
+    "authentication failed",
+    "invalid credentials",
+)
 
 
 @dataclass(frozen=True)
@@ -80,6 +104,14 @@ class BackendSpec:
     api_key_var: str
     allow_subscription_mode: bool
     quota_signals: Tuple[str, ...] = field(default_factory=tuple)
+    # Substrings (lowercased) indicating the subscription session is
+    # not authenticated. Matched in addition to ``quota_signals`` for
+    # the purpose of triggering API-key fallback, but logged distinctly.
+    # Defaults to a generic set covering Claude Code 1.x; backends that
+    # need different phrasing can override.
+    subscription_auth_failure_patterns: Tuple[str, ...] = (
+        _AUTH_FAILURE_SIGNALS_DEFAULT
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +224,42 @@ def _is_quota_exhausted(output: str, spec: BackendSpec) -> bool:
         return False
     low = output.lower()
     return any(sig in low for sig in spec.quota_signals)
+
+
+def _is_auth_failure(output: str, spec: BackendSpec) -> bool:
+    """True iff output indicates the subscription session is unauthenticated.
+
+    Distinct from quota exhaustion (which means the session is fine but the
+    plan is capped). Triggers the same API-key fallback path so a logged-out
+    host can still steer Claude-mode roles when ANTHROPIC_API_KEY is set.
+    """
+    patterns = spec.subscription_auth_failure_patterns
+    if not patterns:
+        return False
+    low = output.lower()
+    return any(sig in low for sig in patterns)
+
+
+def _should_fallback_to_api(output: str, spec: BackendSpec,
+                            backend_name: str) -> bool:
+    """Unified subscription-fallback predicate.
+
+    Quota and auth-failure are different *causes* but trigger the same
+    *response*: rerun with the API key. Logged at INFO so future
+    post-mortems can tell which case fired without parsing stderr.
+    """
+    if _is_quota_exhausted(output, spec):
+        return True
+    if _is_auth_failure(output, spec):
+        logger.info(
+            "[orze-%s] subscription auth failure detected — falling back "
+            "to %s. (Common cause: host has no Claude subscription "
+            "credentials; set ORZE_%s_FORCE_API=1 to skip the "
+            "subscription attempt entirely.)",
+            backend_name, spec.api_key_var, backend_name.upper(),
+        )
+        return True
+    return False
 
 
 def _resolve_backend(argv0: str) -> Tuple[str, BackendSpec]:
@@ -334,9 +402,13 @@ def main(argv: List[str] | None = None) -> int:
     if rc == 0:
         return 0
 
-    if _is_quota_exhausted(captured, spec):
+    if _should_fallback_to_api(captured, spec, backend_name):
+        if _is_quota_exhausted(captured, spec):
+            reason = "subscription quota hit"
+        else:
+            reason = "subscription auth failure"
         print(
-            f"\n[orze-{backend_name}] Subscription quota hit — retrying "
+            f"\n[orze-{backend_name}] {reason} — retrying "
             f"with {spec.api_key_var}.",
             file=sys.stderr,
         )

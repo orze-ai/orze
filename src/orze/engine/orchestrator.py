@@ -982,7 +982,9 @@ class Orze(OrzePhaseMixin):
             free = self._launch_training(unclaimed, disk_ok, ideas)
 
             # 8. Update report
-            completed_rows = update_report(self.results_dir, ideas, cfg, lake=self.lake)
+            completed_rows = update_report(self.results_dir, ideas, cfg,
+                                           lake=self.lake,
+                                           role_states=self.role_states)
 
             # 9-10. Report, notify, heartbeat, status.json, save state
             write_host_heartbeat(self.results_dir, socket.gethostname(), self.active, free)

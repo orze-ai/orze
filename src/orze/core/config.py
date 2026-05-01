@@ -99,6 +99,35 @@ def _expand_env_vars(obj):
     return obj
 
 
+# Strict re-scan after substitution: any ${VAR} left in a string value
+# means the env var was not set when config loaded. We don't error
+# (that would break first-run setups where the user is wiring secrets
+# in stages) but we surface the *path* to the offending key so the
+# operator knows exactly which value will silently 404 / 401 at use
+# time. This is the post-mortem fix for the 5-day silent campaign
+# where ${TELEGRAM_BOT_TOKEN} stayed unresolved in
+# notifications.channels and every notify() 404'd.
+_UNRESOLVED_VAR_RE = re.compile(r"\$\{[A-Z_][A-Z0-9_]*\}")
+
+
+def _find_unresolved_env_vars(obj, path: str = "") -> list:
+    """Return list of (dotted_path, raw_value) for any ${VAR} placeholder
+    that survived _expand_env_vars."""
+    found: list = []
+    if isinstance(obj, str):
+        if _UNRESOLVED_VAR_RE.search(obj):
+            found.append((path or "<root>", obj))
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            sub = f"{path}.{k}" if path else str(k)
+            found.extend(_find_unresolved_env_vars(v, sub))
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            sub = f"{path}[{i}]"
+            found.extend(_find_unresolved_env_vars(item, sub))
+    return found
+
+
 def find_dotenv(config_path: Optional[str] = None) -> Optional[Path]:
     """Find .env file: next to config or CWD. Returns path or None."""
     candidates = []
@@ -227,7 +256,8 @@ DEFAULT_CONFIG = {
     "auto_seal_eval": True,
     "notifications": {
         "enabled": False,
-        "on": ["completed", "failed", "new_best", "watchdog_restart", "plateau", "needs_intervention"],
+        "on": ["completed", "failed", "new_best", "watchdog_restart", "plateau",
+               "needs_intervention", "role_circuit_breaker", "role_degraded"],
         "channels": [],
     },
     "retrospection": {
@@ -265,6 +295,18 @@ def load_project_config(path: Optional[str] = None) -> dict:
 
     # Expand ${VAR} references in config values using os.environ
     cfg = _expand_env_vars(cfg)
+
+    # Loud-warn on unresolved ${VAR} placeholders. Calls relying on these
+    # (notifications, webhooks) will silently fail at runtime — make the
+    # diagnosis a one-liner instead of a 5-day silent campaign.
+    unresolved = _find_unresolved_env_vars(cfg)
+    for path, raw in unresolved:
+        logger.warning(
+            "Unresolved ${VAR} placeholder at %s: %r — env var not set; "
+            "any call relying on this value will silently fail "
+            "(set the variable in .env or shell, then reload).",
+            path, raw,
+        )
 
     # Migrate legacy research: into roles: dict
     if "research" in cfg and isinstance(cfg["research"], dict):
@@ -536,6 +578,18 @@ def _validate_config(cfg: dict) -> tuple:
     python_path = cfg.get("python")
     if python_path and not Path(python_path).exists():
         errors.append(f"python interpreter not found: {python_path}")
+
+    # --- Unresolved ${VAR} placeholders: surface in `orze --check` output ---
+    # Skip the computed/internal keys (prefix _) and the canonical-skill
+    # registry which contains literal @sop:... (no ${} but also we don't
+    # need to walk it).
+    scan_cfg = {k: v for k, v in cfg.items() if not k.startswith("_")}
+    for path, raw in _find_unresolved_env_vars(scan_cfg):
+        warnings.append(
+            f"Unresolved env var placeholder at '{path}': {raw!r} — "
+            f"variable not set in environment; any call relying on this "
+            f"value will silently fail at runtime"
+        )
 
     return errors, warnings
 

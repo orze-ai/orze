@@ -589,12 +589,41 @@ def notify(event: str, data: dict, cfg: dict):
 
         logger.info("Sending notification for event: %s", event)
 
-        # Suppress role_summary if configured
-        if event == "role_summary" and ncfg.get("suppress_role_summary", False):
-            logger.debug("Suppressing role_summary notification (configured)")
-            return
+        # Health alerts always pass through, regardless of any role-summary
+        # suppression flag. Post-mortem 2026-04: a coarse
+        # suppress_role_summary=true also silenced role_circuit_breaker for
+        # 5 days. The two concerns are now strictly separated.
+        _ALWAYS_DELIVER = {"role_circuit_breaker", "role_degraded"}
 
-        global_on = ncfg.get("on") or ["completed", "failed", "new_best"]
+        # Suppress role_summary if configured. The flag was renamed to
+        # ``suppress_role_completion_pings`` to clarify intent (it was
+        # never about health). Old name accepted for one release with a
+        # DeprecationWarning so existing orze.yaml files keep working.
+        if event == "role_summary" and event not in _ALWAYS_DELIVER:
+            suppress = ncfg.get("suppress_role_completion_pings", None)
+            if suppress is None and "suppress_role_summary" in ncfg:
+                import warnings as _warnings
+                _warnings.warn(
+                    "notifications.suppress_role_summary is deprecated; "
+                    "rename to notifications.suppress_role_completion_pings "
+                    "(same behavior). The old key will be removed in a "
+                    "future release.",
+                    DeprecationWarning, stacklevel=2,
+                )
+                suppress = ncfg.get("suppress_role_summary", False)
+            if suppress:
+                logger.debug(
+                    "Suppressing role_summary notification (configured)")
+                return
+
+        # Health events (role_circuit_breaker, role_degraded) are in the
+        # default subscription set so silent role death surfaces even
+        # when an operator hasn't explicitly listed them. See post-mortem
+        # 2026-04 (5-day silent steering-stack failure).
+        global_on = ncfg.get("on") or [
+            "completed", "failed", "new_best",
+            "role_circuit_breaker", "role_degraded",
+        ]
         # Lifecycle/system events always delivered (not filtered)
         lifecycle = {"started", "shutdown", "heartbeat", "milestone",
                      "disk_warning", "stall", "role_summary", "upgrading",

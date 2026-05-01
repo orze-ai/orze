@@ -166,6 +166,103 @@ def check_heartbeat_versions(heartbeats: list) -> List[str]:
     return incompatible
 
 
+# ---------------------------------------------------------------------------
+# Role health derivation.
+#
+# Post-mortem (2026-04): the higher-order steering stack (engineer,
+# professor, thinker, code_evolution) silently produced 35-byte stubs
+# for 5+ days because the orze-claude shim couldn't fall back to the
+# API key on auth-failure signals. The dashboard and report.md kept
+# rendering as healthy because role-state surfacing only counted
+# *runs*, not *outcomes*. This block derives a coarse health verdict
+# from existing state + on-disk cycle logs, so any future silent role
+# death is visible at a glance.
+# ---------------------------------------------------------------------------
+
+# Threshold constants — see derive_role_health docstring.
+_HEALTH_LOCKOUT_FAILURES = 5
+_HEALTH_LOCKOUT_COOLDOWN_S = 3600
+_HEALTH_DEGRADED_LOG_WINDOW = 5
+_HEALTH_DEGRADED_TINY_BYTES = 100
+
+
+def _recent_role_cycle_logs(orze_dir: Path, role_name: str,
+                            limit: int = _HEALTH_DEGRADED_LOG_WINDOW) -> list:
+    """Return up to ``limit`` most recent cycle log file paths for a role.
+
+    Cycle logs live at ``.orze/logs/<role>/`` (one file per cycle, named
+    by timestamp). Returns newest-first. Missing dir → empty list.
+    """
+    log_dir = orze_dir / "logs" / role_name
+    if not log_dir.is_dir():
+        return []
+    try:
+        files = [p for p in log_dir.iterdir() if p.is_file()]
+    except OSError:
+        return []
+    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return files[:limit]
+
+
+def derive_role_health(role_name: str, role_state: dict,
+                       orze_dir: Optional[Path]) -> dict:
+    """Classify a role as HEALTHY / DEGRADED / LOCKED_OUT.
+
+    Verdict (first-match wins):
+      - LOCKED_OUT: ``consecutive_failures >= 5`` OR
+                    ``cooldown_override > 3600``  (1h)
+      - DEGRADED:   last 5 cycle logs are byte-identical
+                    OR all <= 100 bytes (covers the silent-stub case
+                    that motivated this fix)
+      - HEALTHY:    everything else
+
+    Returns dict with keys: status, last_run_age_min,
+    consecutive_failures, cooldown_override_s.
+    """
+    now = time.time()
+    last_run = role_state.get("last_run_time", 0.0) or 0.0
+    last_run_age_min = (
+        round((now - last_run) / 60, 1) if last_run > 0 else None
+    )
+    cf = int(role_state.get("consecutive_failures",
+                            role_state.get("consecutive_errors", 0)) or 0)
+    co = float(role_state.get("cooldown_override", 0) or 0)
+
+    status = "HEALTHY"
+    if cf >= _HEALTH_LOCKOUT_FAILURES or co > _HEALTH_LOCKOUT_COOLDOWN_S:
+        status = "LOCKED_OUT"
+    elif orze_dir is not None:
+        recent = _recent_role_cycle_logs(orze_dir, role_name)
+        if len(recent) >= _HEALTH_DEGRADED_LOG_WINDOW:
+            try:
+                blobs = [p.read_bytes() for p in recent]
+                if all(len(b) <= _HEALTH_DEGRADED_TINY_BYTES for b in blobs):
+                    status = "DEGRADED"
+                elif len(set(blobs)) == 1:
+                    status = "DEGRADED"
+            except OSError:
+                pass
+
+    return {
+        "status": status,
+        "last_run_age_min": last_run_age_min,
+        "consecutive_failures": cf,
+        "cooldown_override_s": co,
+    }
+
+
+def build_role_health_block(cfg: dict,
+                            role_states: dict,
+                            orze_dir: Optional[Path]) -> dict:
+    """Build {role_name -> health-dict} for every configured role."""
+    out: dict = {}
+    for rname in (cfg.get("roles") or {}):
+        out[rname] = derive_role_health(
+            rname, role_states.get(rname, {}) or {}, orze_dir,
+        )
+    return out
+
+
 def write_status_json(results_dir: Path, iteration: int,
                       active: Dict[int, TrainingProcess],
                       free_gpus: List[int], queue_depth: int,
@@ -214,6 +311,13 @@ def write_status_json(results_dir: Path, iteration: int,
     research_rs = role_states.get("research", {})
     research_last = research_rs.get("last_run_time", 0.0)
 
+    # Role-health surface (post-mortem fix for 2026-04 silent campaign):
+    # classify each role as HEALTHY/DEGRADED/LOCKED_OUT so a human glancing
+    # at status.json sees brain-death even when the leaderboard ticks.
+    orze_dir_str = cfg.get("_orze_dir")
+    orze_dir = Path(orze_dir_str) if orze_dir_str else None
+    role_health = build_role_health_block(cfg, role_states, orze_dir)
+
     hostname = socket.gethostname()
     status = {
         "timestamp": datetime.datetime.now().isoformat(),
@@ -229,6 +333,7 @@ def write_status_json(results_dir: Path, iteration: int,
         "disk_free_gb": round(disk_free_gb, 1),
         "top_results": top_results[:10],
         "roles": roles_status,
+        "role_health": role_health,
         "research_enabled": "research" in roles_cfg,
         "research_cycles": research_rs.get("cycles", 0),
         "last_research_min_ago": (
