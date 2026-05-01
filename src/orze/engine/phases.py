@@ -467,21 +467,42 @@ class OrzePhaseMixin:
         """Phase: launch training on free GPUs, enforce sweep limits, circuit breaker."""
         cfg = self.cfg
 
-        # Verify sealed file integrity before launching any training
+        # Verify sealed file integrity before launching any training.
+        # The training loop runs this phase every iteration (~30s); if a
+        # sealed file is genuinely modified, we'd otherwise emit ERROR
+        # and a Telegram notification on every tick. Dedupe: only log +
+        # notify when the changed-set (or its content hashes) differs
+        # from the last alert. Re-alerts on further changes; resets when
+        # files revert to manifest.
         sealed_files = cfg.get("sealed_files", [])
         if sealed_files:
             manifest = load_sealed_manifest(self.results_dir)
             if manifest:
                 changed = verify_sealed_files(sealed_files, manifest)
                 if changed:
-                    logger.error(
-                        "Sealed file integrity check FAILED: %d file(s) changed: %s",
-                        len(changed), ", ".join(changed))
-                    notify("sealed_file_changed", {
-                        "changed_files": changed,
-                        "message": (f"{len(changed)} sealed file(s) changed since startup. "
-                                    "Training will proceed but results may be inconsistent."),
-                    }, cfg)
+                    # Build a stable signature: (filename, current-hash)
+                    # tuples sorted, so we re-alert if the file changes
+                    # again but stay silent on identical state.
+                    try:
+                        from orze.core.integrity import compute_sealed_hashes
+                        cur_hashes = compute_sealed_hashes(changed)
+                        sig = tuple(sorted(cur_hashes.items()))
+                    except Exception:
+                        sig = tuple(sorted(changed))
+                    last_sig = getattr(self, "_sealed_alert_sig", None)
+                    if sig != last_sig:
+                        logger.error(
+                            "Sealed file integrity check FAILED: %d file(s) changed: %s",
+                            len(changed), ", ".join(changed))
+                        notify("sealed_file_changed", {
+                            "changed_files": changed,
+                            "message": (f"{len(changed)} sealed file(s) changed since startup. "
+                                        "Training will proceed but results may be inconsistent."),
+                        }, cfg)
+                        self._sealed_alert_sig = sig
+                else:
+                    # Files reverted — clear so future drift re-alerts.
+                    self._sealed_alert_sig = None
 
         eval_gpus = set(self.active_evals.keys())
         if hasattr(self, 'slot_mgr'):
