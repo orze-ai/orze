@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.3.1]
+
+### Added
+- Boot-time notification delivery canary on daemon start, so a broken
+  notifier surfaces immediately instead of on first real alert
+  (commit dafbce5).
+
+### Fixed
+- `derive_role_health` no longer false-flags a role as `LOCKED_OUT` on
+  a single transient timeout; classification now requires the
+  documented repeated-failure signal (commit 828928d).
+
 ## 4.3.0 — silent-role-death fixes (round-1 + round-2)
 
 Two-round response to a 5+ day campaign where every higher-order role
