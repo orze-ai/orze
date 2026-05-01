@@ -10,6 +10,17 @@ CALLING SPEC:
         leaderboard). cfg must contain 'notifications' key with 'enabled',
         'on' (event filter list), and 'channels' (list of channel configs
         with type: slack|discord|telegram|webhook).
+
+    startup_canary(cfg: dict) -> dict
+        Probe each configured channel with a low-noise canary message and
+        return a per-channel delivery report:
+            {channel_label: {"delivered": bool, "last_error": str|None,
+                             "type": str}}
+        Never raises. The orchestrator surfaces this on status.json under
+        ``notification_health`` and (when ``notifications.startup_canary``
+        is true — default true) exits nonzero if any channel failed so
+        systemd / loop-restart picks it up. Closes the meta-audit blind
+        spot that delivery was previously trust-based.
 """
 import datetime
 import html as html_mod
@@ -17,7 +28,7 @@ import json
 import logging
 import socket
 import urllib.request
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from orze import __version__
 from orze.reporting.leaderboard import _format_report_text
@@ -27,8 +38,15 @@ logger = logging.getLogger("orze")
 
 def _notify_send(url: str, payload: dict,
                  headers: Optional[Dict[str, str]] = None,
-                 timeout: int = 10):
-    """POST JSON payload to a URL. Never raises."""
+                 timeout: int = 10) -> Tuple[bool, Optional[str]]:
+    """POST JSON payload to a URL. Never raises.
+
+    Returns (ok, last_error). ok is True iff a 2xx response came back;
+    last_error is a human-readable cause on failure (network error,
+    timeout, non-2xx status). Callers that don't care about the result
+    can ignore the return value — the previous void contract is
+    preserved at runtime since this never raises.
+    """
     try:
         data = json.dumps(payload).encode("utf-8")
         req_headers = {
@@ -39,10 +57,102 @@ def _notify_send(url: str, payload: dict,
             req_headers.update(headers)
         req = urllib.request.Request(url, data=data, method="POST",
                                      headers=req_headers)
-        urllib.request.urlopen(req, timeout=timeout)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            status = getattr(resp, "status", 200)
+            if 200 <= int(status) < 300:
+                return True, None
+            return False, f"HTTP {status}"
+    except urllib.request.HTTPError as e:
+        # urllib treats non-2xx as exceptions; record status + first 200B
+        try:
+            body = e.read().decode("utf-8", errors="replace")[:200]
+        except Exception:
+            body = ""
+        msg = f"HTTP {e.code} {body}".strip()
+        logger.error("Notification delivery failed (%s): %s",
+                     url[:60], msg)
+        return False, msg
     except Exception as e:
-        logger.error("Notification delivery failed (%s): %s: %s",
-                     url[:60], type(e).__name__, e)
+        msg = f"{type(e).__name__}: {e}"
+        logger.error("Notification delivery failed (%s): %s",
+                     url[:60], msg)
+        return False, msg
+
+
+def _channel_label(ch: dict, idx: int) -> str:
+    """Stable label for status.json keys; prefers explicit ``name``, else
+    falls back to ``<type>[<idx>]``."""
+    if isinstance(ch, dict):
+        nm = ch.get("name")
+        if nm:
+            return str(nm)
+        t = ch.get("type", "webhook")
+        return f"{t}[{idx}]"
+    return f"channel[{idx}]"
+
+
+def startup_canary(cfg: dict) -> Dict[str, Dict[str, object]]:
+    """Probe each configured channel with a canary; return delivery report.
+
+    Never raises. Returns ``{}`` when notifications are disabled or no
+    channels are configured. Each entry has ``{type, delivered,
+    last_error}``. Format is intentionally minimal — same payload shape
+    as the ``started`` event so a passing canary looks like a normal
+    boot ping to operators.
+    """
+    out: Dict[str, Dict[str, object]] = {}
+    try:
+        ncfg = cfg.get("notifications") or {}
+        if not ncfg.get("enabled", False):
+            return out
+        channels = ncfg.get("channels") or []
+        if not channels:
+            return out
+        data = {
+            "host": socket.gethostname(),
+            "message": (f"orze v{__version__} startup canary — "
+                        "if you see this, delivery works"),
+        }
+        for idx, ch in enumerate(channels):
+            label = _channel_label(ch, idx)
+            ch_type = (ch or {}).get("type", "webhook")
+            try:
+                if ch_type == "slack":
+                    ok, err = _notify_send(ch["webhook_url"],
+                                           _format_slack("started", data))
+                elif ch_type == "discord":
+                    ok, err = _notify_send(ch["webhook_url"],
+                                           _format_discord("started", data))
+                elif ch_type == "telegram":
+                    url, payload = _format_telegram("started", data, ch)
+                    ok, err = _notify_send(url, payload)
+                elif ch_type == "webhook":
+                    payload = {"event": "started", "data": data,
+                               "host": socket.gethostname(),
+                               "timestamp":
+                                   datetime.datetime.now().isoformat()}
+                    ok, err = _notify_send(ch["url"], payload,
+                                           headers=ch.get("headers"))
+                else:
+                    ok, err = False, f"unknown channel type {ch_type!r}"
+            except Exception as e:
+                ok, err = False, f"{type(e).__name__}: {e}"
+            out[label] = {
+                "type": ch_type,
+                "delivered": bool(ok),
+                "last_error": err,
+            }
+            if not ok:
+                logger.error(
+                    "Startup canary FAILED for channel %s (%s): %s",
+                    label, ch_type, err)
+            else:
+                logger.info(
+                    "Startup canary delivered to %s (%s)", label, ch_type)
+    except Exception as e:
+        logger.error("startup_canary dispatch error: %s: %s",
+                     type(e).__name__, e)
+    return out
 
 
 def _format_leaderboard(data: dict, bold_fn=str, escape_fn=str) -> str:

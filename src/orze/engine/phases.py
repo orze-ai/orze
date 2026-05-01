@@ -1010,6 +1010,7 @@ class OrzePhaseMixin:
             len(unclaimed), counts.get("COMPLETED", 0),
             counts.get("FAILED", 0), len(skipped), top_results, cfg,
             role_states=self.role_states,
+            notification_health=getattr(self, "notification_health", None),
         )
 
         # 9b. Admin cache (pre-aggregated nodes/queue/alerts)

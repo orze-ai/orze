@@ -392,7 +392,8 @@ def write_status_json(results_dir: Path, iteration: int,
                       completed_count: int, failed_count: int,
                       skipped_count: int, top_results: list,
                       cfg: dict,
-                      role_states: Optional[dict] = None):
+                      role_states: Optional[dict] = None,
+                      notification_health: Optional[dict] = None):
     """Write machine-readable status.json for LLM agents.
     Merges heartbeats from all hosts for a combined multi-machine view."""
     disk_free_gb = 0.0
@@ -464,6 +465,12 @@ def write_status_json(results_dir: Path, iteration: int,
             else None
         ),
     }
+
+    # Notification delivery health (boot canary). Surfaces here so a
+    # misconfigured webhook/token shows up in the same machine-readable
+    # status surface humans and LLM agents already watch.
+    if notification_health is not None:
+        status["notification_health"] = notification_health
 
     atomic_write(results_dir / "status.json", json.dumps(status, indent=2))
 

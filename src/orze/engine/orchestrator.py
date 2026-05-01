@@ -46,7 +46,7 @@ from orze.reporting.state import (
 from orze.reporting.leaderboard import (
     update_report, write_admin_cache,
 )
-from orze.reporting.notifications import notify
+from orze.reporting.notifications import notify, startup_canary
 from orze.hardware.gpu import get_gpu_memory_used, _eval_already_running
 from orze.engine.config_dedup import hash_config, load_hashes, save_hash, rebuild_hashes
 from orze.engine.cluster import (
@@ -126,6 +126,9 @@ class Orze(OrzePhaseMixin):
         self._hostname = socket.gethostname()
         self._instance_uuid = uuid.uuid4().hex[:12]
         self._incompatible_hosts: set = set()
+        # Populated by startup_canary in run(); surfaced via
+        # write_status_json under status.json["notification_health"].
+        self.notification_health: Dict[str, Dict[str, object]] = {}
 
         # Leader election state: set by _acquire_leadership on run().
         # None = not yet attempted. Falsy handle = we are a follower.
@@ -701,6 +704,31 @@ class Orze(OrzePhaseMixin):
             "message": (f"v{__version__} | {len(self.gpu_ids)} GPUs | "
                         f"{n_roles} roles | pid {os.getpid()}"),
         }, cfg)
+
+        # Boot-time delivery canary. Closes the meta-audit blind spot
+        # that notification delivery was trust-based — a misconfigured
+        # webhook URL or revoked Telegram token would silently swallow
+        # every alert. Runs once on leader boot; per-channel result is
+        # stashed on self for write_status to surface under
+        # ``notification_health``. When ``notifications.startup_canary``
+        # is true (default true) any delivery failure exits the daemon
+        # nonzero so systemd / loop-restart picks it up.
+        ncfg = cfg.get("notifications") or {}
+        self.notification_health = startup_canary(cfg)
+        if (ncfg.get("enabled") and ncfg.get("startup_canary", True)
+                and self.notification_health):
+            failed = [lbl for lbl, st in self.notification_health.items()
+                      if not st.get("delivered")]
+            if failed:
+                logger.error(
+                    "Startup canary FAILED on %d/%d channel(s): %s — "
+                    "exiting nonzero so the supervisor restarts. Set "
+                    "notifications.startup_canary: false in orze.yaml "
+                    "to disable this check.",
+                    len(failed), len(self.notification_health),
+                    ", ".join(failed))
+                raise SystemExit(
+                    f"startup_canary failed for: {', '.join(failed)}")
 
         # Initialize milestone from current state (avoid spurious on restart)
         try:
