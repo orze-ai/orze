@@ -264,7 +264,24 @@ def _trigger_gate_open(role_name: str, role_cfg: dict,
         return gate.exists()
     if role_cfg.get("trigger_conditions"):
         rs = role_states.get(role_name, {}) or {}
-        return bool(rs.get("_trigger_reason"))
+        if not rs.get("_trigger_reason"):
+            return False
+        # Round-3 fix (2026-05-01 audit): _trigger_reason is set when a
+        # role's trigger fires and is meant to be cleared after the
+        # resulting cycle finishes. If the cycle never reached the
+        # cleanup path (e.g. host crash, daemon restart, role still
+        # circuit-breaker-locked when state was serialized), the stale
+        # value persists and falsely signals an active gate. Treat the
+        # gate as closed when last_run_time is older than
+        # 1.5 × min_cooldown — a cycle that long-stalled is not in
+        # progress; it's a leftover from a prior run, and the role is
+        # IDLE waiting for the next trigger fire.
+        last_run = float(rs.get("last_run_time", 0.0) or 0.0)
+        min_cooldown = float(role_cfg.get("min_cooldown",
+                                          role_cfg.get("cooldown", 1800)))
+        if last_run > 0 and (time.time() - last_run) > 1.5 * min_cooldown:
+            return False
+        return True
     return True  # no gate — always eligible to run
 
 
