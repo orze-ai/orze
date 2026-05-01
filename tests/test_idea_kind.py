@@ -1,1 +1,0 @@
-/home/ec2-user/orze_overflow/files/tests/test_idea_kind.py
