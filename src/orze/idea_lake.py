@@ -325,13 +325,19 @@ class IdeaLake:
         _retry_on_busy(_do)
 
     def has(self, idea_id: str) -> bool:
-        row = self.conn.execute(
-            "SELECT 1 FROM ideas WHERE idea_id = ?", (idea_id,)
-        ).fetchone()
+        # SQLITE_BUSY exposure: same as get(). Wrap the read so a transient
+        # lock contention is retried instead of raised into the orchestrator.
+        def _do_has():
+            return self.conn.execute(
+                "SELECT 1 FROM ideas WHERE idea_id = ?", (idea_id,)
+            ).fetchone()
+        row = _retry_on_busy(_do_has)
         return row is not None
 
     def count(self) -> int:
-        row = self.conn.execute("SELECT COUNT(*) FROM ideas").fetchone()
+        def _do_count():
+            return self.conn.execute("SELECT COUNT(*) FROM ideas").fetchone()
+        row = _retry_on_busy(_do_count)
         return row[0]
 
     def get_all_ids(self, status: Optional[str] = None) -> Set[str]:
@@ -341,27 +347,31 @@ class IdeaLake:
         if status:
             query += " WHERE status = ?"
             params.append(status)
-        rows = self.conn.execute(query, params).fetchall()
+        def _do_all_ids():
+            return self.conn.execute(query, params).fetchall()
+        rows = _retry_on_busy(_do_all_ids)
         return {r[0] for r in rows}
 
     def get_queue(self, limit: int = 1000) -> List[Dict[str, Any]]:
         """Return unclaimed ideas, sorted by priority then ID."""
-        rows = self.conn.execute(
-            """SELECT idea_id, title, priority, config, created_at 
-               FROM ideas 
-               WHERE status = 'queued' OR status = 'pending'
-               ORDER BY 
-                 CASE priority 
-                   WHEN 'critical' THEN 0 
-                   WHEN 'high' THEN 1 
-                   WHEN 'medium' THEN 2 
-                   WHEN 'low' THEN 3 
-                   ELSE 2 
-                 END,
-                 id_num ASC
-               LIMIT ?""",
-            (limit,)
-        ).fetchall()
+        def _do_get_queue():
+            return self.conn.execute(
+                """SELECT idea_id, title, priority, config, created_at
+                   FROM ideas
+                   WHERE status = 'queued' OR status = 'pending'
+                   ORDER BY
+                     CASE priority
+                       WHEN 'critical' THEN 0
+                       WHEN 'high' THEN 1
+                       WHEN 'medium' THEN 2
+                       WHEN 'low' THEN 3
+                       ELSE 2
+                     END,
+                     id_num ASC
+                   LIMIT ?""",
+                (limit,)
+            ).fetchall()
+        rows = _retry_on_busy(_do_get_queue)
         return [dict(r) for r in rows]
 
     def reconcile_statuses(self, results_dir: str, limit: int = 0) -> int:
@@ -384,7 +394,9 @@ class IdeaLake:
                    ORDER BY id_num ASC"""
         if limit > 0:
             query += f" LIMIT {limit}"
-        rows = self.conn.execute(query).fetchall()
+        def _do_reconcile_select():
+            return self.conn.execute(query).fetchall()
+        rows = _retry_on_busy(_do_reconcile_select)
         updated = 0
         for (idea_id,) in rows:
             idea_dir = rd / idea_id
@@ -434,9 +446,11 @@ class IdeaLake:
 
     def get_max_id_num(self) -> int:
         """Return the highest numeric idea ID in the lake."""
-        row = self.conn.execute(
-            "SELECT MAX(id_num) FROM ideas WHERE id_num IS NOT NULL"
-        ).fetchone()
+        def _do_max_id():
+            return self.conn.execute(
+                "SELECT MAX(id_num) FROM ideas WHERE id_num IS NOT NULL"
+            ).fetchone()
+        row = _retry_on_busy(_do_max_id)
         if row is None or row[0] is None:
             return 0
         return int(row[0])
@@ -485,24 +499,28 @@ class IdeaLake:
         else:
             sort_col = "archived_at"
         params.append(limit)
-        rows = self.conn.execute(
-            f"SELECT * FROM ideas WHERE {where} "
-            f"ORDER BY {sort_col} DESC NULLS LAST LIMIT ?",
-            params,
-        ).fetchall()
+        def _do_query():
+            return self.conn.execute(
+                f"SELECT * FROM ideas WHERE {where} "
+                f"ORDER BY {sort_col} DESC NULLS LAST LIMIT ?",
+                params,
+            ).fetchall()
+        rows = _retry_on_busy(_do_query)
         return [dict(r) for r in rows]
 
     def get_top_models(
         self, metric: str = "test_accuracy", n: int = 20
     ) -> List[dict]:
         """Return top N models by the given metric (from eval_metrics JSON)."""
-        rows = self.conn.execute(
-            "SELECT idea_id, title, config_summary, eval_metrics, status "
-            "FROM ideas "
-            "WHERE json_extract(eval_metrics, ?) IS NOT NULL "
-            "ORDER BY json_extract(eval_metrics, ?) DESC LIMIT ?",
-            (f"$.{metric}", f"$.{metric}", n),
-        ).fetchall()
+        def _do_top():
+            return self.conn.execute(
+                "SELECT idea_id, title, config_summary, eval_metrics, status "
+                "FROM ideas "
+                "WHERE json_extract(eval_metrics, ?) IS NOT NULL "
+                "ORDER BY json_extract(eval_metrics, ?) DESC LIMIT ?",
+                (f"$.{metric}", f"$.{metric}", n),
+            ).fetchall()
+        rows = _retry_on_busy(_do_top)
         results = []
         for r in rows:
             d = dict(r)
