@@ -293,7 +293,10 @@ def derive_role_health(role_name: str, role_state: dict,
 
     Verdict (first-match wins):
       - LOCKED_OUT: ``consecutive_failures >= 5`` OR
-                    ``cooldown_override > 3600``  (1h)
+                    ``cooldown_override > 3600`` *with* a real fault
+                    signal (errors >= 1 or consecutive_timeouts >= 2).
+                    A bare cooldown_override with only one transient
+                    timeout is BACKOFF, not lockout — see round-3 fix.
       - IDLE (round-2 C1): the role declares ``triggered_by:`` /
                     ``trigger_conditions:`` and the gate is closed —
                     not firing is correct, not a fault.
@@ -313,9 +316,19 @@ def derive_role_health(role_name: str, role_state: dict,
     cf = int(role_state.get("consecutive_failures",
                             role_state.get("consecutive_errors", 0)) or 0)
     co = float(role_state.get("cooldown_override", 0) or 0)
+    ct = int(role_state.get("consecutive_timeouts", 0) or 0)
 
     status = "HEALTHY"
-    if cf >= _HEALTH_LOCKOUT_FAILURES or co > _HEALTH_LOCKOUT_COOLDOWN_S:
+    # Round-3: cooldown_override alone is not enough to declare
+    # LOCKED_OUT. The TIMEOUT branch in role_runner sets
+    # cooldown_override = base_cooldown * 2 on the *first* timeout, which
+    # for any role with cooldown >= 1801s instantly trips the 3600s
+    # threshold despite no real fault. Require an actual fault signal:
+    # either error counter is non-zero, or timeouts have repeated.
+    cooldown_with_fault = (
+        co > _HEALTH_LOCKOUT_COOLDOWN_S and (cf >= 1 or ct >= 2)
+    )
+    if cf >= _HEALTH_LOCKOUT_FAILURES or cooldown_with_fault:
         status = "LOCKED_OUT"
     else:
         # Round-2 C1: distinguish IDLE (gated, correctly waiting) from
