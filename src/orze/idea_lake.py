@@ -291,9 +291,17 @@ class IdeaLake:
 
     def get(self, idea_id: str) -> Optional[dict]:
         """Get a single idea by ID."""
-        row = self.conn.execute(
-            "SELECT * FROM ideas WHERE idea_id = ?", (idea_id,)
-        ).fetchone()
+        # SQLITE_BUSY here had been bubbling up through update_report() into
+        # cli.main() and crashing the daemon (observed 2026-04-30). Writes in
+        # this class are wrapped in _retry_on_busy; reads are not, but they
+        # are equally exposed when a competing writer holds the lock past
+        # busy_timeout. Wrap the read so a transient lock contention is
+        # retried instead of being raised into the orchestrator main loop.
+        def _do_get():
+            return self.conn.execute(
+                "SELECT * FROM ideas WHERE idea_id = ?", (idea_id,)
+            ).fetchone()
+        row = _retry_on_busy(_do_get)
         if row is None:
             return None
         d = dict(row)
