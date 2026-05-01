@@ -54,6 +54,46 @@ from orze.reporting.leaderboard import _format_report_text
 logger = logging.getLogger("orze")
 
 
+# Runtime per-channel delivery state, keyed by channel label (same key
+# space as ``startup_canary`` / ``validate_channels`` outputs). Updated
+# from inside ``notify()`` after every send so silent post-boot drift —
+# e.g. a token rotated or revoked between boot and the first hourly
+# heartbeat — surfaces on ``status.json["notification_health"]`` within
+# one notification cycle instead of staying frozen at the boot snapshot.
+#
+# Pre-fix behavior: ``notification_health`` was set once at boot from
+# the canary and only refreshed on config hot-reload. A telegram 404 on
+# every heartbeat could fire indefinitely while the dashboard kept
+# showing ``delivered: true`` from boot. Operators trusting status.json
+# would not notice until they manually grep'd orze.log.
+_RUNTIME_HEALTH: Dict[str, Dict[str, object]] = {}
+
+
+def get_runtime_health() -> Dict[str, Dict[str, object]]:
+    """Return a snapshot of the latest per-channel delivery state.
+
+    Returns a shallow copy so callers can merge into status.json without
+    racing the dispatch path. Each entry has the same shape as
+    ``startup_canary``: ``{type, delivered, last_error}``. Empty dict
+    when no notify() has fired yet (boot canary still authoritative).
+    """
+    return {k: dict(v) for k, v in _RUNTIME_HEALTH.items()}
+
+
+def _record_runtime(label: str, ch_type: str, ok: bool,
+                    err: Optional[str]) -> None:
+    """Record a delivery outcome for ``label``. Never raises."""
+    try:
+        _RUNTIME_HEALTH[label] = {
+            "type": ch_type,
+            "delivered": bool(ok),
+            "last_error": err,
+        }
+    except Exception:
+        # State write must never break the dispatch path.
+        pass
+
+
 def _notify_send(url: str, payload: dict,
                  headers: Optional[Dict[str, str]] = None,
                  timeout: int = 10) -> Tuple[bool, Optional[str]]:
@@ -836,25 +876,35 @@ def notify(event: str, data: dict, cfg: dict):
                      "disk_warning", "stall", "role_summary", "upgrading",
                      "watchdog_restart"}
 
-        for ch in (ncfg.get("channels") or []):
+        for idx, ch in enumerate(ncfg.get("channels") or []):
             ch_on = ch.get("on") or global_on
             if event not in lifecycle and event not in ch_on:
                 continue
 
             ch_type = ch.get("type", "webhook")
+            label = _channel_label(ch, idx)
+            # Capture (ok, err) on every send and surface it in
+            # ``_RUNTIME_HEALTH`` so status.json["notification_health"]
+            # tracks live delivery, not just the boot canary snapshot.
+            ok, err = False, "unsent"
             if ch_type == "slack":
-                _notify_send(ch["webhook_url"], _format_slack(event, data))
+                ok, err = _notify_send(ch["webhook_url"],
+                                       _format_slack(event, data))
             elif ch_type == "discord":
-                _notify_send(ch["webhook_url"], _format_discord(event, data))
+                ok, err = _notify_send(ch["webhook_url"],
+                                       _format_discord(event, data))
             elif ch_type == "telegram":
                 url, payload = _format_telegram(event, data, ch)
-                _notify_send(url, payload)
+                ok, err = _notify_send(url, payload)
             elif ch_type == "webhook":
                 payload = {"event": event, "data": data,
                            "host": socket.gethostname(),
                            "timestamp": datetime.datetime.now().isoformat()}
-                _notify_send(ch["url"], payload, headers=ch.get("headers"))
+                ok, err = _notify_send(ch["url"], payload,
+                                       headers=ch.get("headers"))
             else:
                 logger.warning("Unknown notification channel: %s", ch_type)
+                err = f"unknown channel type {ch_type!r}"
+            _record_runtime(label, ch_type, ok, err)
     except Exception as e:
         logger.error("Notification dispatch error: %s: %s", type(e).__name__, e)

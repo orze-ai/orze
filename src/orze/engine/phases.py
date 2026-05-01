@@ -1005,12 +1005,30 @@ class OrzePhaseMixin:
                     primary: r.get("primary_val"),
                 })
 
+        # Merge runtime per-channel delivery state on top of the boot
+        # canary / hot-reload validation snapshot so status.json reflects
+        # live deliverability, not a stale boot reading. Without this,
+        # a token rotated mid-run keeps showing ``delivered: true`` from
+        # the canary even as every heartbeat 404s — an operator looking
+        # at the dashboard sees no problem.
+        nh = getattr(self, "notification_health", None)
+        try:
+            from orze.reporting.notifications import get_runtime_health
+            runtime = get_runtime_health()
+            if runtime:
+                merged = dict(nh or {})
+                merged.update(runtime)
+                nh = merged
+        except Exception as _e:  # pragma: no cover
+            logger.debug("notification runtime-health merge skipped: %s",
+                         _e)
+
         write_status_json(
             self.results_dir, self.iteration, self.active, free,
             len(unclaimed), counts.get("COMPLETED", 0),
             counts.get("FAILED", 0), len(skipped), top_results, cfg,
             role_states=self.role_states,
-            notification_health=getattr(self, "notification_health", None),
+            notification_health=nh,
         )
 
         # 9b. Admin cache (pre-aggregated nodes/queue/alerts)
