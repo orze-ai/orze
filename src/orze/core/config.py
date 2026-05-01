@@ -308,6 +308,40 @@ def load_project_config(path: Optional[str] = None) -> dict:
             path, raw,
         )
 
+    # Round-2 F1: top-level ``evolution.enabled`` /
+    # ``evolution.max_attempts_per_plateau`` were a separate naming for
+    # the same concept the ``code_evolution`` role implements. Migrate
+    # them into ``roles.code_evolution`` and emit one DeprecationWarning
+    # at config-load so operators have a release to update orze.yaml.
+    # Old keys keep working until removed in a future release.
+    legacy_evolution = cfg.get("evolution")
+    if isinstance(legacy_evolution, dict):
+        import warnings as _warnings
+        _warnings.warn(
+            "Top-level 'evolution:' is deprecated; move 'evolution.enabled' "
+            "and 'evolution.max_attempts_per_plateau' under "
+            "'roles.code_evolution.{enabled, max_attempts_per_plateau}'. "
+            "Old keys will be honored for one release.",
+            DeprecationWarning, stacklevel=2,
+        )
+        logger.warning(
+            "Deprecated config key 'evolution:' detected — fold into "
+            "roles.code_evolution.{enabled,max_attempts_per_plateau}. "
+            "Migrating in-place for this run.")
+        if not isinstance(cfg.get("roles"), dict):
+            cfg["roles"] = {}
+        roles = cfg["roles"]
+        ce = roles.setdefault("code_evolution", {})
+        if isinstance(ce, dict):
+            for src, dst in (("enabled", "enabled"),
+                              ("max_attempts_per_plateau",
+                               "max_attempts_per_plateau"),
+                              ("model", "model"),
+                              ("timeout", "timeout"),
+                              ("claude_bin", "claude_bin")):
+                if src in legacy_evolution and dst not in ce:
+                    ce[dst] = legacy_evolution[src]
+
     # Migrate legacy research: into roles: dict
     if "research" in cfg and isinstance(cfg["research"], dict):
         logger.warning("Migrating legacy 'research:' config to 'roles: {research: ...}'. "

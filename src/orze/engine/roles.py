@@ -80,14 +80,31 @@ def _is_role_stalled(rp: "RoleProcess", stall_minutes: int) -> bool:
     so the caller (check_active_roles polling loop) doesn't need to
     manage timer state. Returns False immediately when stall_minutes
     <= 0 (feature disabled).
+
+    Round-2 B2: ``rp.stall_minutes_override`` (when set on the
+    RoleProcess) wins over the global ``stall_minutes`` argument.
+    Round-2 B3: until ``rp.stall_warmup_seconds`` has elapsed since
+    process spawn, the stall timer is suppressed. The warmup ends
+    early as soon as the child writes its first stdout byte —
+    ``current_size > 0`` is the signal.
     """
-    if stall_minutes <= 0:
+    effective = (rp.stall_minutes_override
+                 if getattr(rp, "stall_minutes_override", None) is not None
+                 else stall_minutes)
+    if effective <= 0:
         return False
     now = time.time()
     try:
         current_size = rp.log_path.stat().st_size
     except OSError:
         current_size = rp._last_log_size
+    # B3 warmup: skip stall detection during the warmup window unless
+    # the child has already produced output (in which case we want the
+    # normal stall logic to apply immediately).
+    warmup = float(getattr(rp, "stall_warmup_seconds", 0.0) or 0.0)
+    if warmup > 0 and current_size == 0:
+        if (now - rp.start_time) < warmup:
+            return False
     if current_size > rp._last_log_size:
         rp._last_log_size = current_size
         rp._stall_since = 0.0
@@ -95,7 +112,7 @@ def _is_role_stalled(rp: "RoleProcess", stall_minutes: int) -> bool:
     if rp._stall_since == 0.0:
         rp._stall_since = now
         return False
-    return (now - rp._stall_since) > stall_minutes * 60
+    return (now - rp._stall_since) > effective * 60
 
 
 def _is_rate_limit_exit(log_path: "Path") -> bool:

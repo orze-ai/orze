@@ -314,6 +314,13 @@ Examples:
         help="Path to _champion_config.json "
              "(defaults to <results_dir>/_champion_config.json)")
     ingest_parser.add_argument("--project-root", default=None)
+    # Round-2 D2: pgmAP-specific behavior is opt-in. Default reads
+    # report.primary_metric / report.columns from orze.yaml.
+    ingest_parser.add_argument(
+        "--legacy-pgmap", action="store_true",
+        help="Use the original pgmAP_ALL/ckpt_sha schema (pre-round-2). "
+             "Default behavior is project-agnostic and reads "
+             "report.primary_metric from orze.yaml.")
 
     # --- rebuild-lake (v4.0): rebuild idea_lake.db from results dirs ---
     rl_parser = subparsers.add_parser(
@@ -345,6 +352,56 @@ Examples:
                                help="Path to orze.yaml")
     admin_migrate.add_argument("--dry-run", action="store_true",
                                help="Show what would be migrated without applying changes")
+
+    # Round-2 E1: first-class command to clear role circuit-breaker state
+    # across one or all hosts (replaces the project-local
+    # scripts/reset_local_role_state.sh workaround).
+    admin_reset = admin_sub.add_parser(
+        "reset-role-state",
+        help="Clear stale role circuit-breaker state "
+             "(cooldown_override + consecutive_failures)")
+    admin_reset.add_argument("-c", "--config-file", type=str, default=None)
+    admin_reset.add_argument("--role", type=str, default=None,
+                             help="Only clear state for this role (default: all)")
+    admin_reset.add_argument("--all-hosts", action="store_true",
+                             help="Drop a marker on shared FSx so every host's "
+                                  "running daemon clears its own state on the "
+                                  "next iteration. Marker self-deletes once "
+                                  "every host has seen it.")
+    admin_reset.add_argument("--force", action="store_true",
+                             help="Skip the running-daemon safety check")
+
+    # Round-2 D1: first-class `orze ideas inject` to write a row into
+    # idea_lake.db (replaces project-local scripts/inject_idea.py shims).
+    ideas_parser = subparsers.add_parser(
+        "ideas", help="Manage rows in idea_lake.db")
+    ideas_sub = ideas_parser.add_subparsers(dest="ideas_action")
+    ideas_inject = ideas_sub.add_parser(
+        "inject",
+        help="Inject a single idea row into idea_lake.db (manual import)")
+    ideas_inject.add_argument("-c", "--config-file", type=str, default=None)
+    ideas_inject.add_argument("--idea-id", required=True,
+                              help="Idea ID (e.g. idea-02e83b)")
+    ideas_inject.add_argument("--title", required=True,
+                              help="Human-readable idea title")
+    ideas_inject.add_argument("--priority", default="medium",
+                              choices=["low", "medium", "high", "critical"])
+    ideas_inject.add_argument("--category", default="architecture")
+    ideas_inject.add_argument("--parent", default=None,
+                              help="Parent idea ID")
+    ideas_inject.add_argument("--hypothesis", default=None)
+    ideas_inject.add_argument("--config-file-yaml", dest="config_file_yaml",
+                              default=None,
+                              help="YAML file to embed as the idea's config")
+    ideas_inject.add_argument("--status", default="queued",
+                              choices=["queued", "running", "completed",
+                                       "failed", "archived"])
+    ideas_inject.add_argument("--metrics-json", default=None,
+                              help="metrics.json to embed as eval_metrics "
+                                   "(used with --status completed)")
+    ideas_inject.add_argument("--approach-family", default="other")
+    ideas_inject.add_argument("--force", action="store_true",
+                              help="Replace an existing row with the same idea-id")
 
     # --- init: initialize new orze project ---
     init_parser = subparsers.add_parser("init", help="Initialize a new orze project")
@@ -401,6 +458,7 @@ Examples:
             idea_id=args.idea_id,
             config_path=Path(args.config) if args.config else None,
             project_root=Path(args.project_root) if args.project_root else None,
+            legacy_pgmap=getattr(args, "legacy_pgmap", False),
         )
         import json as _json
         print(_json.dumps(info, indent=2))
@@ -612,7 +670,36 @@ Examples:
                 else:
                     print("\nDry-run complete. Use 'orze admin migrate' without --dry-run to apply.")
             return 0
-        print("usage: orze admin {migrate} …")
+        if action == "reset-role-state":
+            from orze.admin.reset_role_state import reset_role_state
+            cfg = load_project_config(args.config_file)
+            return reset_role_state(
+                cfg, role=args.role, all_hosts=args.all_hosts,
+                force=args.force,
+            )
+        print("usage: orze admin {migrate, reset-role-state} …")
+        return 2
+
+    if command == "ideas":
+        action = getattr(args, "ideas_action", None)
+        if action == "inject":
+            from orze.admin.ideas_inject import inject_idea
+            cfg = load_project_config(args.config_file)
+            return inject_idea(
+                cfg,
+                idea_id=args.idea_id,
+                title=args.title,
+                priority=args.priority,
+                category=args.category,
+                parent=args.parent,
+                hypothesis=args.hypothesis,
+                config_yaml_path=args.config_file_yaml,
+                status=args.status,
+                metrics_json=args.metrics_json,
+                approach_family=args.approach_family,
+                force=args.force,
+            )
+        print("usage: orze ideas {inject} …")
         return 2
 
     if command == "rebuild-state":

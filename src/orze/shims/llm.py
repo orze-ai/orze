@@ -66,11 +66,13 @@ from __future__ import annotations
 
 import logging
 import os
+import select
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger("orze.shims.llm")
 
@@ -333,6 +335,157 @@ def _dispatch_fallback(fallback_name: str, args: List[str],
         sys.argv[0] = saved_argv0
 
 
+# ---------------------------------------------------------------------------
+# Round-2 Fix A1: auth-fallback should fire by default, no env-var required.
+#
+# The round-1 fix added auth-failure pattern detection but only triggered
+# AFTER the subscription attempt exited — meaning every cycle still paid
+# the cost of spawning Claude, waiting for it to print "Not logged in",
+# and exiting. On a host that is *permanently* logged-out (no Claude
+# subscription credentials at all), this is pure overhead.
+#
+# Round-2 closes the loop:
+# 1. Stream the first 30 seconds of subscription-attempt stderr; if an
+#    auth-failure pattern appears, kill the child and fall back to the
+#    API key without waiting for the wall-clock timeout.
+# 2. Cache the verdict in ``~/.orze-pro-cache/claude_auth_mode``. Until
+#    the cache is older than 24h, subsequent invocations skip the
+#    subscription attempt entirely and go straight to the API key. The
+#    user can force a re-check by deleting the cache file (``orze pro
+#    logout`` is a future hook that does the same thing).
+# 3. ``ORZE_<NAME>_FORCE_API=1`` becomes an optional fast-path override
+#    rather than a mandatory env-var that the operator must learn about.
+# ---------------------------------------------------------------------------
+_AUTH_CACHE_DIR_ENV = "ORZE_PRO_CACHE_DIR"
+_AUTH_CACHE_TTL_S = 24 * 3600
+_EARLY_AUTH_SCAN_WINDOW_S = 30.0
+
+
+def _auth_cache_path(backend_name: str) -> Path:
+    base = os.environ.get(_AUTH_CACHE_DIR_ENV)
+    if base:
+        return Path(base) / f"{backend_name}_auth_mode"
+    return Path.home() / ".orze-pro-cache" / f"{backend_name}_auth_mode"
+
+
+def _read_auth_mode_cache(backend_name: str) -> Optional[str]:
+    """Return cached auth verdict ('api' or 'subscription') if fresh.
+
+    Returns None when no cache exists, the cache is stale (>24h), or
+    the file is unreadable. ``api`` means the last subscription attempt
+    on this host produced an auth-failure signal — skip subscription on
+    subsequent invocations and go straight to the API key.
+    """
+    p = _auth_cache_path(backend_name)
+    try:
+        st = p.stat()
+    except OSError:
+        return None
+    if (time.time() - st.st_mtime) > _AUTH_CACHE_TTL_S:
+        return None
+    try:
+        val = p.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return val if val in ("api", "subscription") else None
+
+
+def _write_auth_mode_cache(backend_name: str, mode: str) -> None:
+    """Best-effort write of the cached auth verdict. Failures are silent."""
+    if mode not in ("api", "subscription"):
+        return
+    p = _auth_cache_path(backend_name)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(mode, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _run_with_early_auth_kill(argv: List[str], env: dict, spec: BackendSpec,
+                              backend_name: str
+                              ) -> Tuple[int, str, bool]:
+    """Run argv; abort early if an auth-failure pattern shows up in the
+    first ~30 seconds of merged stdout+stderr.
+
+    Returns ``(returncode, captured_output, killed_for_auth)``. When
+    ``killed_for_auth`` is True the caller should immediately retry
+    with the API key. The early-kill optimisation only fires within
+    ``_EARLY_AUTH_SCAN_WINDOW_S`` seconds of process start; after that
+    the run completes normally and the post-exit auth-failure scan
+    (``_should_fallback_to_api``) takes over.
+    """
+    proc = subprocess.Popen(
+        argv, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        bufsize=1, text=True,
+    )
+    assert proc.stdout is not None
+    captured: List[str] = []
+    deadline = time.time() + _EARLY_AUTH_SCAN_WINDOW_S
+    killed_for_auth = False
+    fd = proc.stdout.fileno()
+    while True:
+        if proc.poll() is not None:
+            # Drain any remaining output.
+            try:
+                rest = proc.stdout.read()
+            except (OSError, ValueError):
+                rest = ""
+            if rest:
+                sys.stdout.write(rest)
+                sys.stdout.flush()
+                captured.append(rest)
+            break
+        timeout = max(0.05, deadline - time.time()) if time.time() < deadline else None
+        try:
+            ready, _, _ = select.select([fd], [], [], timeout if timeout is not None else 1.0)
+        except (OSError, ValueError):
+            ready = []
+        if ready:
+            line = proc.stdout.readline()
+            if line:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                captured.append(line)
+                if (time.time() < deadline
+                        and _is_auth_failure("".join(captured), spec)):
+                    logger.info(
+                        "[orze-%s] subscription auth failure detected within "
+                        "%.0fs — killing child and falling back to API key.",
+                        backend_name, _EARLY_AUTH_SCAN_WINDOW_S,
+                    )
+                    try:
+                        proc.terminate()
+                    except OSError:
+                        pass
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        try:
+                            proc.kill()
+                        except OSError:
+                            pass
+                        proc.wait()
+                    killed_for_auth = True
+                    break
+        # If past the early-scan window with no auth signal, just wait
+        # for the process to finish in normal streaming mode.
+        if time.time() >= deadline and not ready:
+            try:
+                rest = proc.stdout.read()
+            except (OSError, ValueError):
+                rest = ""
+            if rest:
+                sys.stdout.write(rest)
+                sys.stdout.flush()
+                captured.append(rest)
+            proc.wait()
+            break
+    rc = proc.returncode if proc.returncode is not None else 0
+    return rc, "".join(captured), killed_for_auth
+
+
 def main(argv: List[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     backend_name, spec = _resolve_backend(sys.argv[0])
@@ -379,6 +532,22 @@ def main(argv: List[str] | None = None) -> int:
             return QUOTA_EXHAUSTED_RC
         return rc
 
+    # Round-2 A1: cached auth verdict — skip subscription attempt when a
+    # recent subscription run on this host failed auth. ``ORZE_<N>_FORCE_API``
+    # remains an explicit override; ``ORZE_<N>_NO_AUTH_CACHE`` skips the
+    # cache lookup for one invocation (used by tests and by ``orze pro
+    # login``-style flows that want to re-probe).
+    no_auth_cache = base_env.get(f"ORZE_{n}_NO_AUTH_CACHE", "") not in ("", "0")
+    if (not force_api and not no_auth_cache
+            and api_key_available
+            and _read_auth_mode_cache(backend_name) == "api"):
+        logger.info(
+            "[orze-%s] cached auth verdict 'api' (set within last 24h) — "
+            "skipping subscription attempt. Delete %s to re-probe.",
+            backend_name, _auth_cache_path(backend_name),
+        )
+        force_api = True
+
     # Explicit force-API: skip subscription attempt entirely.
     if force_api:
         rc, captured = _run_once(
@@ -395,14 +564,45 @@ def main(argv: List[str] | None = None) -> int:
         return rc
 
     # --- Default path: subscription first, API-key fallback on quota signal.
-    rc, captured = _run_once(
+    # Round-2 A1: stream the first 30s; abort early on auth-failure pattern.
+    rc, captured, killed_for_auth = _run_with_early_auth_kill(
         invocation,
         _child_env(base_env, spec, backend_name, include_api_key=False),
+        spec, backend_name,
     )
+    if killed_for_auth:
+        # Cache the verdict so future invocations skip the subscription
+        # attempt entirely (round-2 A1 bullet 2).
+        _write_auth_mode_cache(backend_name, "api")
+        print(
+            f"\n[orze-{backend_name}] subscription auth failure (early-kill) "
+            f"— retrying with {spec.api_key_var}.",
+            file=sys.stderr,
+        )
+        rc, captured = _run_once(
+            invocation,
+            _child_env(base_env, spec, backend_name, include_api_key=True),
+        )
+        if rc == 0:
+            return 0
+        if _is_quota_exhausted(captured, spec) and fallback_backends:
+            next_b, rest = fallback_backends[0], fallback_backends[1:]
+            if rest:
+                os.environ[f"ORZE_{next_b.upper()}_FALLBACK"] = ",".join(rest)
+            return _dispatch_fallback(next_b, args, base_env, backend_name)
+        if _is_quota_exhausted(captured, spec):
+            return QUOTA_EXHAUSTED_RC
+        return rc
     if rc == 0:
+        # Successful subscription run — record the verdict so we keep
+        # using subscription mode without paying the early-scan cost.
+        if not no_auth_cache:
+            _write_auth_mode_cache(backend_name, "subscription")
         return 0
 
     if _should_fallback_to_api(captured, spec, backend_name):
+        if _is_auth_failure(captured, spec) and not no_auth_cache:
+            _write_auth_mode_cache(backend_name, "api")
         if _is_quota_exhausted(captured, spec):
             reason = "subscription quota hit"
         else:

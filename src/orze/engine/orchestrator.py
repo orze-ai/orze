@@ -781,6 +781,16 @@ class Orze(OrzePhaseMixin):
             if self._check_stop_all() or self._check_disabled():
                 break
 
+            # Round-2 E1: honor .orze_reset_role_state markers dropped by
+            # `orze admin reset-role-state --all-hosts`. Each host clears
+            # its own per-host state file once per marker; the marker
+            # self-deletes after every host has claimed it.
+            try:
+                from orze.admin.reset_role_state import consume_marker_on_this_host
+                consume_marker_on_this_host(self.results_dir)
+            except Exception as _e:  # pragma: no cover — non-fatal hook
+                logger.debug("reset-role-state marker hook failed: %s", _e)
+
             # 1. Check disk space (only gates launches, never skips reaping)
             disk_ok = check_disk_space(self.results_dir,
                                        cfg.get("min_disk_gb", 0))

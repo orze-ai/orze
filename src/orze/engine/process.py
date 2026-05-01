@@ -46,7 +46,7 @@ import signal
 import subprocess
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 from pathlib import Path
 
 logger = logging.getLogger("orze")
@@ -168,6 +168,18 @@ class RoleProcess:
     # timeout.
     _last_log_size: int = field(default=0, repr=False)
     _stall_since: float = field(default=0.0, repr=False)
+    # Round-2 B2: optional per-role override of role_stall_minutes.
+    # When None, the global ``role_stall_minutes`` (from orze.yaml) is
+    # used. Roles with `<role>.stall_minutes:` set this at launch so
+    # check_active_roles can enforce a per-role timer instead of the
+    # global one.
+    stall_minutes_override: Optional[int] = None
+    # Round-2 B3: warmup tolerance — the stall timer doesn't begin
+    # counting until either (a) the first stdout byte is observed, or
+    # (b) ``stall_warmup_seconds`` has elapsed since process spawn,
+    # whichever is sooner. This protects LLM-mode roles whose first
+    # 30-90s is model init / skill composition with no stdout yet.
+    stall_warmup_seconds: float = 60.0
     # True for research-type roles whose job is to append to ideas.md.
     # False for strategy roles (professor, data_analyst, thinker,
     # engineer, code_evolution) that modify other files — skipping the

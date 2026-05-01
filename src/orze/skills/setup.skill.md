@@ -123,6 +123,17 @@ roles:
   #   mode: research
   #   backend: gemini
 
+# ─── orze-claude shim auth ────────────────────────────────────────────
+# Roles with `mode: claude` invoke the bundled `orze-claude` shim, which
+# prefers a host-local Claude Code subscription and falls back to
+# ANTHROPIC_API_KEY when the subscription is missing or hits its quota.
+# Round-2 made the fallback automatic — no env-var is required for it
+# to work. ORZE_CLAUDE_FORCE_API=1 is an *optional* override that skips
+# the subscription probe entirely (useful on CI hosts that will never
+# have a subscription). Do NOT set it as a workaround for "Claude roles
+# silently producing 35-byte stubs" — that's the auth-failure signature
+# the shim now handles automatically; see `orze --check` for diagnosis.
+
 report:
   title: "Research Report"
   primary_metric: test_accuracy     # from GOAL.md

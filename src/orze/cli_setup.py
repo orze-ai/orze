@@ -1520,6 +1520,31 @@ def do_check(cfg: dict):
 
     # --- Validation ---
     errors, warnings = _validate_config(cfg)
+
+    # Round-2 A2: Claude roles configured without ANTHROPIC_API_KEY is a
+    # hard error, not a warning. Round-1 surfaced silent role death after
+    # the fact; this catches the misconfiguration up front so a 5-day
+    # quiet failure can't recur. The shim's auth-fallback (round-1 A,
+    # round-2 A1) only helps when an API key is actually present — if
+    # there's no key AND the host has no Claude subscription credentials,
+    # every cycle will hard-fail. Surface that during ``orze --check``
+    # rather than at minute 1 of cycle 1 of day 5.
+    claude_roles_missing_key = []
+    for rname, rcfg in (cfg.get("roles") or {}).items():
+        if isinstance(rcfg, dict) and rcfg.get("mode") == "claude":
+            if not os.environ.get("ANTHROPIC_API_KEY"):
+                claude_roles_missing_key.append(rname)
+    if claude_roles_missing_key:
+        errors.append(
+            "ANTHROPIC_API_KEY not set in environment but the following "
+            "claude-mode role(s) require it for shim API-key fallback: "
+            + ", ".join(sorted(claude_roles_missing_key))
+            + ". Add ANTHROPIC_API_KEY to .env (next to orze.yaml) or "
+              "export it in the daemon's shell. Without it, every cycle "
+              "of these roles will silently fail on hosts that have no "
+              "Claude subscription credentials."
+        )
+
     if errors or warnings:
         print()
     if errors:

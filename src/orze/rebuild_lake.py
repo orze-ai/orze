@@ -28,7 +28,18 @@ def rebuild(results_dir: Path, db_path: Path):
     for d in idea_dirs:
         idea_id = d.name
         metrics_path = d / "metrics.json"
-        config_path = d / "resolved_config.yaml"
+        # Round-2 D3: be tolerant of dirs that have a metrics.json but
+        # no orze-managed idea_config.yaml / resolved_config.yaml. This
+        # is the common case when re-importing pre-existing results
+        # produced outside the orze pipeline (manual runs, ports of
+        # legacy pipelines). Try the canonical names in order; fall
+        # back to ``_champion_config.json`` (round-2 D2 / F2 holdover).
+        config_candidates = [
+            d / "resolved_config.yaml",
+            d / "idea_config.yaml",
+            d / "_champion_config.json",
+        ]
+        config_path = next((c for c in config_candidates if c.exists()), None)
 
         if not metrics_path.exists():
             continue
@@ -36,8 +47,14 @@ def rebuild(results_dir: Path, db_path: Path):
         try:
             metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
             config_yaml = ""
-            if config_path.exists():
+            if config_path and config_path.exists():
                 config_yaml = config_path.read_text(encoding="utf-8")
+            elif metrics_path.exists():
+                logger.warning(
+                    "%s: metrics.json present but no idea config "
+                    "(idea_config.yaml / resolved_config.yaml / "
+                    "_champion_config.json) — ingesting with empty config",
+                    idea_id)
 
             title = metrics.get("idea_title") or idea_id
             status = metrics.get("status", "archived").lower()

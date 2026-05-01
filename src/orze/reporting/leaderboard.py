@@ -389,17 +389,41 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         except OSError:
             pass
 
-    # Filter out experiments with too few per-dataset metrics
+    # Filter out experiments with too few per-dataset metrics.
+    # Round-2 C3: previously this counted only ``wer_*`` keys, ignoring
+    # report columns whose values are pulled from ``source:`` paths
+    # rather than the flat ``metrics.json`` namespace. We now count any
+    # column declared in ``report.columns`` whose value resolved to a
+    # finite number — that's the same notion of "did we get a real
+    # per-dataset metric for this row" but works for projects that
+    # don't use the wer_* convention.
     min_ds = report_cfg.get("min_datasets", 0)
     if min_ds > 0:
+        col_keys = []
+        for c in (report_cfg.get("columns") or []):
+            if isinstance(c, dict) and c.get("key"):
+                col_keys.append(c["key"])
         filtered = []
         for r in rows:
             if r["status"] != "COMPLETED":
                 filtered.append(r)
                 continue
-            ds_count = sum(1 for k, v in (r.get("metrics") or {}).items()
-                          if k.startswith("wer_") and v is not None
-                          and isinstance(v, (int, float)))
+            metrics = r.get("metrics") or {}
+            values = r.get("values") or {}
+            ds_count = sum(
+                1 for k in col_keys
+                if (
+                    isinstance(values.get(k), (int, float))
+                    or (isinstance(metrics.get(k), (int, float)))
+                )
+            )
+            # Back-compat: also accept the legacy wer_* heuristic so
+            # projects that depend on it keep working without re-config.
+            if ds_count == 0:
+                ds_count = sum(
+                    1 for k, v in metrics.items()
+                    if k.startswith("wer_") and isinstance(v, (int, float))
+                )
             if ds_count >= min_ds:
                 filtered.append(r)
         rows = filtered
@@ -598,12 +622,18 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         if rh:
             lines.append("## Role Health")
             lines.append("")
-            lines.append("| Role | Status | LastRun | Cooldown | ConsecFails |")
-            lines.append("|------|--------|---------|----------|-------------|")
+            lines.append(
+                "| Role | Status | LastRun | LastMeaningful | Cooldown | "
+                "ConsecFails | WorstHost |")
+            lines.append(
+                "|------|--------|---------|----------------|----------|"
+                "-------------|-----------|")
             for rname in sorted(rh):
                 h = rh[rname]
                 lr = h.get("last_run_age_min")
                 lr_s = "never" if lr is None else f"{lr} min ago"
+                lm = h.get("last_meaningful_age_min")
+                lm_s = "—" if lm is None else f"{lm} min ago"
                 co = h.get("cooldown_override_s") or 0
                 if co >= 3600:
                     co_s = f"{co/3600:.1f}h"
@@ -611,9 +641,10 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                     co_s = f"{int(co)}s"
                 else:
                     co_s = "—"
+                wh = h.get("worst_host") or "—"
                 lines.append(
-                    f"| {rname} | {h.get('status','?')} | {lr_s} | "
-                    f"{co_s} | {h.get('consecutive_failures',0)} |"
+                    f"| {rname} | {h.get('status','?')} | {lr_s} | {lm_s} | "
+                    f"{co_s} | {h.get('consecutive_failures',0)} | {wh} |"
                 )
             lines.append("")
 

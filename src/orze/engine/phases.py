@@ -46,12 +46,51 @@ from orze.engine.sealed import load_sealed_manifest, verify_sealed_files
 
 
 def _load_verified(results_dir: Path, report_cfg: dict):
-    """Load verified full-scale results from file if configured."""
-    vpath = report_cfg.get("verified_results")
-    if not vpath:
+    """Load verified full-scale results from config.
+
+    Round-2 F2: ``verified_results`` is now polymorphic.
+
+      * legacy form: a path string pointing at a JSON file (the
+        ``results/verified_best.json`` shape that pre-round-2 projects
+        wrote). Loaded and returned verbatim.
+      * new form: a list of idea IDs. For each ID, we load
+        ``<results_dir>/<idea_id>/full_scale_metrics.json`` (the
+        canonical "verified full-scale" marker) and merge into a single
+        dict keyed by idea ID. ``_champion_config.json`` is no longer
+        required.
+
+    Format detection: ``isinstance(value, list)`` for the new form.
+    """
+    vval = report_cfg.get("verified_results")
+    if not vval:
         return None
+
+    if isinstance(vval, list):
+        # New form (round-2 F2): list of idea_ids → merge their
+        # full_scale_metrics.json into a single mapping.
+        out: dict = {}
+        for idea_id in vval:
+            if not isinstance(idea_id, str):
+                continue
+            p = results_dir / idea_id / "full_scale_metrics.json"
+            if not p.exists():
+                # Legacy fallback: some projects still write
+                # _champion_config.json sidecars; keep reading them so
+                # the migration is non-destructive.
+                p_alt = results_dir / idea_id / "_champion_config.json"
+                if p_alt.exists():
+                    p = p_alt
+                else:
+                    continue
+            try:
+                out[idea_id] = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+        return out or None
+
+    # Legacy form: path string → JSON object on disk.
+    vpath = vval
     p = results_dir / vpath if not Path(vpath).is_absolute() else Path(vpath)
-    # Also try relative to cwd
     if not p.exists():
         p = Path(vpath)
     if not p.exists():
