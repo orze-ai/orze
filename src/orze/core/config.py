@@ -571,6 +571,15 @@ def _validate_config(cfg: dict) -> tuple:
                     warnings.append(f"Notification channel '{ch_type}': missing url")
 
     # --- Issue A: Warn about unknown/misspelled config keys ---
+    # NOTE: this allowlist must stay in lockstep with the keys we
+    # emit from the `orze setup` template (cli_setup.py) AND with
+    # any keys consumed by `cfg.get(...)` across the engine. When
+    # we add a new top-level config key, add it here too — otherwise
+    # users get a noisy "Unknown config key" warning on a key orze
+    # itself shipped them. See Round-3: nested_config_whitelist /
+    # metric_harvest / sweep_allowlist were emitted by the template
+    # but absent from this list, producing false-positive validator
+    # warnings on every fresh `orze setup` install.
     _KNOWN_EXTRAS = {
         "_config_path", "research", "gc", "metric_validation", "sealed_files",
         "min_expected_results", "goal_file", "gpu_scheduling", "roles",
@@ -580,6 +589,14 @@ def _validate_config(cfg: dict) -> tuple:
         "eval_output", "post_scripts", "report",
         "admin_port", "idea_lake_db", "bot", "telegram_bot",
         "sops", "containers",
+        # Round-3: shipped by `orze setup` template; consumed by
+        # phases (nested_config_whitelist), reporting/leaderboard
+        # (metric_harvest), and reserved for sweep guardrails
+        # (sweep_allowlist; emitted by template, consumed by future
+        # sweep_stray hardening — keep allowlisted so users can
+        # configure ahead of time without warnings).
+        "nested_config_whitelist", "metric_harvest", "sweep_allowlist",
+        "telemetry",
     }
     known_keys = set(DEFAULT_CONFIG.keys()) | _KNOWN_EXTRAS
     for key in cfg:
