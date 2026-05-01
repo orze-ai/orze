@@ -249,7 +249,7 @@ class OrzePhaseMixin:
         queue_ideas = {}
 
         if self.lake:
-            for r in self.lake.get_queue(limit=100):
+            for r in self.lake.get_queue(limit=2000):
                 try:
                     cfg_parsed = yaml.safe_load(r["config"]) or {}
                 except yaml.YAMLError:
@@ -292,7 +292,7 @@ class OrzePhaseMixin:
             if n:
                 logger.info("On-demand reconcile: cleared %d stale ideas", n)
                 queue_ideas = {}
-                for r in self.lake.get_queue(limit=100):
+                for r in self.lake.get_queue(limit=2000):
                     try:
                         cfg_parsed = yaml.safe_load(r["config"]) or {}
                     except yaml.YAMLError:
