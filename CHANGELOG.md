@@ -1,5 +1,92 @@
 # Changelog
 
+## 4.3.0 — silent-role-death fixes (round-1 + round-2)
+
+Two-round response to a 5+ day campaign where every higher-order role
+(engineer/professor/thinker/code_evolution) returned identical 35-byte
+"Not logged in" stubs while the dashboard rendered healthy. Round-1
+patched the immediate failure modes; round-2 turned the workarounds
+into defaults and added first-class operator CLIs.
+
+### Added
+- **Role health surface** (`src/orze/reporting/state.py`,
+  `leaderboard.py`) — `derive_role_health` emits HEALTHY / DEGRADED /
+  LOCKED_OUT / IDLE per role from existing state and on-disk cycle
+  logs; surfaces in `status.json` under `role_health` and as a
+  `## Role Health` table in `report.md`. IDLE recognises
+  `triggered_by:` / `trigger_conditions:` roles whose gate is closed
+  (no longer flagged DEGRADED). `worst_host` per row when
+  `per_host_role_states={host: role_states}` is supplied.
+- **Auth-failure fallback signals** in `src/orze/shims/llm.py` —
+  `BackendSpec.subscription_auth_failure_patterns` lets the shim
+  fall back to `ANTHROPIC_API_KEY` on `not logged in`,
+  `please run /login`, `unauthenticated`, `authentication failed`,
+  `invalid credentials`, `please log in`, not just quota signals.
+- **Auth verdict cache** (`src/orze/shims/llm.py`) —
+  `~/.orze-pro-cache/claude_auth_mode` (24h TTL,
+  `ORZE_PRO_CACHE_DIR` override) skips the subscription probe on
+  subsequent invocations. First 30s of subscription stdout/stderr
+  is streamed and aborted early on auth-failure pattern.
+- **`orze ideas inject`** (`src/orze/admin/ideas_inject.py` +
+  `cli.py`) — `--idea-id`, `--title`, `--status`, `--metrics-json`,
+  `--config-file-yaml`, `--force`. Writes a row directly into
+  `idea_lake.db` with the canonical schema; replaces the project-local
+  `scripts/inject_idea.py` workaround.
+- **`orze admin reset-role-state`** (`src/orze/admin/reset_role_state.py`
+  + `cli.py` + `engine/orchestrator.py`) — `[--role NAME]`
+  `[--all-hosts] [--force]`. `--all-hosts` drops a
+  `.orze_reset_role_state` marker on FSx; every running daemon's
+  iteration loop consumes it (`consume_marker_on_this_host`) and the
+  marker self-deletes after the last host claims it.
+- **Stall warmup grace period** (`src/orze/engine/process.py`,
+  `roles.py`) — `stall_warmup_seconds` (60s default) suppresses stall
+  detection until the child writes its first byte or warmup elapses.
+- **Per-role stall override** (`src/orze/engine/process.py`,
+  `roles.py`) — `RoleProcess.stall_minutes_override`;
+  `_is_role_stalled` prefers it over the global `role_stall_minutes`.
+- **`last_meaningful_age_min`** per role
+  (`src/orze/reporting/state.py`) — most recent cycle log >500 bytes.
+- **Hard error in `orze --check`** (`src/orze/cli_setup.py:do_check`)
+  — fails with role names listed when any role has `mode: claude` but
+  `ANTHROPIC_API_KEY` is missing from the resolved env.
+- **Default `notifications.on`** now includes `role_circuit_breaker`
+  and `role_degraded` so silent role death surfaces without explicit
+  opt-in (`src/orze/reporting/notifications.py`).
+
+### Changed
+- **`${VAR}` substitution validation** (`src/orze/core/config.py`)
+  — after env-var substitution, recursively scans for any string
+  still matching `${VAR}` and logs a WARNING with the dotted path.
+  Surfaces in `orze --check` validator warnings.
+- **`min_datasets` filter** (`src/orze/reporting/leaderboard.py`)
+  — counts any column declared in `report.columns` whose value
+  resolved to a finite number; falls back to the legacy `wer_*`
+  heuristic for back-compat.
+- **`rebuild_lake.py`** tolerant of dirs that have a `metrics.json`
+  but no `idea_config.yaml`. Falls through to `resolved_config.yaml`
+  / `idea_config.yaml` / `_champion_config.json`; ingests with empty
+  config and a WARNING when none of those exist.
+- **`ingest_champion.py`** rewritten — reads `report.primary_metric`
+  and `report.columns` from `orze.yaml`, pulls matching values from
+  `results/<id>/metrics.json` or source-routed paths. The
+  `pgmAP_ALL/ckpt_sha` legacy path stays behind `--legacy-pgmap`.
+- **`report.verified_results`** is now polymorphic
+  (`src/orze/engine/phases.py:_load_verified`) — list of idea-ids
+  (new canonical) or path string (legacy). New form merges
+  `full_scale_metrics.json` (preferred) / `_champion_config.json`
+  (legacy fallback) for each idea-id.
+
+### Deprecated
+- **Top-level `evolution.{enabled,max_attempts_per_plateau,…}`**
+  (`src/orze/core/config.py`) — migrate at load time into
+  `roles.code_evolution.{...}` with a `DeprecationWarning`. Old keys
+  keep working for one release.
+- **`suppress_role_summary`** renamed to
+  `suppress_role_completion_pings` (intent match). Old key still
+  works for one release with a `DeprecationWarning`.
+  `role_circuit_breaker` / `role_degraded` are hard-allowlisted to
+  bypass any suppression flag (always deliver).
+
 ## 4.2.8 — orphan reconciliation hardening
 
 ### Fixed
