@@ -24,6 +24,17 @@ logger = logging.getLogger("orze")
 
 MAX_BYTES_DEFAULT = 16 * 1024
 
+# Sentinel-score guard: filter known placeholder constants that pollute
+# the ranking (NYC-taxi RMSE fallback 10.02927, BCE-chance AUC 0.5).
+SENTINEL_SCORES = (10.02927, 0.5)
+SENTINEL_TOL = 1e-4
+
+
+def _is_sentinel(score) -> bool:
+    if not isinstance(score, (int, float)):
+        return False
+    return any(abs(score - s) < SENTINEL_TOL for s in SENTINEL_SCORES)
+
 
 def _load_metrics(idea_dir: Path) -> Optional[dict]:
     mf = idea_dir / "metrics.json"
@@ -104,7 +115,8 @@ def build_digest(results_dir: Path,
 
     rows = _collect(results_dir)
     completed = [r for r in rows if r["status"] == "COMPLETED"
-                 and isinstance(r["metrics"].get(primary), (int, float))]
+                 and isinstance(r["metrics"].get(primary), (int, float))
+                 and not _is_sentinel(r["metrics"].get(primary))]
     failed = [r for r in rows if r["status"] and r["status"] != "COMPLETED"]
 
     completed.sort(key=lambda r: r["metrics"].get(primary, 0),
