@@ -21,14 +21,32 @@ CALLING SPEC:
         is true — default true) exits nonzero if any channel failed so
         systemd / loop-restart picks it up. Closes the meta-audit blind
         spot that delivery was previously trust-based.
+
+    validate_channels(cfg: dict) -> dict
+        Cheap, no-network re-validation of channel configs. Returns the
+        same shape as ``startup_canary`` but ``delivered`` is True iff
+        every URL/token field for the channel is fully resolved (no
+        leftover ``${VAR}`` placeholder, no empty/None). Designed to run
+        after every config hot-reload so an env-expansion regression
+        (the bug a5eb216 fixed, plus its near siblings) surfaces in
+        seconds instead of waiting for the next hourly heartbeat to
+        404. Doesn't replace ``startup_canary`` — that still owns
+        end-to-end delivery proof at boot.
 """
 import datetime
 import html as html_mod
 import json
 import logging
+import re
 import socket
 import urllib.request
 from typing import Dict, Optional, Tuple
+
+# Same shape as orze.core.config._UNRESOLVED_VAR_RE — a literal ${VAR}
+# left in any field means env-expansion didn't run on that load path
+# (or the env var was unset when it did). Either way the URL will 404
+# at notify() time, silently.
+_UNRESOLVED_VAR_RE = re.compile(r"\$\{[A-Z_][A-Z0-9_]*\}")
 
 from orze import __version__
 from orze.reporting.leaderboard import _format_report_text
@@ -151,6 +169,85 @@ def startup_canary(cfg: dict) -> Dict[str, Dict[str, object]]:
                     "Startup canary delivered to %s (%s)", label, ch_type)
     except Exception as e:
         logger.error("startup_canary dispatch error: %s: %s",
+                     type(e).__name__, e)
+    return out
+
+
+# Per-channel-type list of fields that must be fully resolved (non-empty,
+# no ${VAR} placeholder) before the channel can deliver. Kept here so
+# adding a new channel type only touches one place.
+_CHANNEL_REQUIRED_FIELDS = {
+    "slack":    ("webhook_url",),
+    "discord":  ("webhook_url",),
+    "telegram": ("bot_token", "chat_id"),
+    "webhook":  ("url",),
+}
+
+
+def _has_unresolved(val: object) -> bool:
+    """True iff val is a string with a ${VAR} placeholder still in it."""
+    return isinstance(val, str) and bool(_UNRESOLVED_VAR_RE.search(val))
+
+
+def validate_channels(cfg: dict) -> Dict[str, Dict[str, object]]:
+    """Re-validate channel configs without sending a network probe.
+
+    Returns the same shape as :func:`startup_canary`. ``delivered`` is
+    True iff every required URL/token field for the channel is present
+    and free of ``${VAR}`` placeholders. Logs an ERROR on each failed
+    channel so an env-expansion regression (a5eb216 and its near
+    siblings) surfaces immediately instead of waiting for the next
+    hourly heartbeat to 404 silently.
+
+    Designed to be called after every config hot-reload — cheap, never
+    raises, no I/O. Does NOT replace startup_canary; that still owns
+    end-to-end delivery proof at boot.
+    """
+    out: Dict[str, Dict[str, object]] = {}
+    try:
+        ncfg = cfg.get("notifications") or {}
+        if not ncfg.get("enabled", False):
+            return out
+        channels = ncfg.get("channels") or []
+        if not channels:
+            return out
+        for idx, ch in enumerate(channels):
+            label = _channel_label(ch, idx)
+            ch = ch or {}
+            ch_type = ch.get("type", "webhook")
+            required = _CHANNEL_REQUIRED_FIELDS.get(ch_type)
+            if required is None:
+                out[label] = {
+                    "type": ch_type,
+                    "delivered": False,
+                    "last_error": f"unknown channel type {ch_type!r}",
+                }
+                continue
+            missing = [f for f in required if not ch.get(f)]
+            unresolved = [f for f in required if _has_unresolved(ch.get(f))]
+            if missing:
+                err = f"missing required field(s): {', '.join(missing)}"
+                ok = False
+            elif unresolved:
+                # The exact failure mode of the a5eb216 hot-reload bug:
+                # ${TELEGRAM_BOT_TOKEN} survives into the live URL.
+                err = (f"unresolved ${{VAR}} in: {', '.join(unresolved)} "
+                       "(env var not set, or hot-reload didn't expand)")
+                ok = False
+            else:
+                err = None
+                ok = True
+            out[label] = {
+                "type": ch_type,
+                "delivered": bool(ok),
+                "last_error": err,
+            }
+            if not ok:
+                logger.error(
+                    "Channel validation FAILED for %s (%s): %s",
+                    label, ch_type, err)
+    except Exception as e:
+        logger.error("validate_channels error: %s: %s",
                      type(e).__name__, e)
     return out
 

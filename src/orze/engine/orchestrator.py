@@ -537,6 +537,39 @@ class Orze(OrzePhaseMixin):
                     changed.append(key)
             if changed:
                 logger.info("Config hot-reloaded: %s", ", ".join(changed))
+                # Re-validate channel configs whenever notifications
+                # changed. Catches env-expansion regressions on the
+                # *output* side: a5eb216 fixed the input path
+                # (yaml->expand), but the only previous proof that
+                # ``self.cfg["notifications"]`` was deliverable was the
+                # boot-time canary. Without this, a re-introduced
+                # placeholder leak (sibling defect, new code path) would
+                # again wait for the next hourly heartbeat to 404
+                # silently. Cheap, no-network — see
+                # orze.reporting.notifications.validate_channels.
+                if "notifications" in changed:
+                    try:
+                        from orze.reporting.notifications import (
+                            validate_channels)
+                        report = validate_channels(self.cfg)
+                        # Surface on status.json so operators see the
+                        # current state, not the boot-time snapshot.
+                        if report:
+                            self.notification_health = report
+                            failed = [lbl for lbl, st in report.items()
+                                      if not st.get("delivered")]
+                            if failed:
+                                logger.error(
+                                    "Post-hot-reload channel validation "
+                                    "FAILED on %d/%d channel(s): %s — "
+                                    "notifications will silently drop "
+                                    "until config is fixed.",
+                                    len(failed), len(report),
+                                    ", ".join(failed))
+                    except Exception as _e:  # pragma: no cover
+                        logger.warning(
+                            "Post-hot-reload validate_channels failed: "
+                            "%s", _e)
         except Exception as e:
             logger.warning("Config hot-reload failed: %s", e)
 
