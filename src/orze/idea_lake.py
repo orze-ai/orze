@@ -413,7 +413,68 @@ class IdeaLake:
                 except (json.JSONDecodeError, OSError):
                     new_status = "failed"
             elif has_subs:
-                new_status = "completed"  # sweep parent, sub-runs are the real experiments
+                # Sweep parent: sub-runs (-ht-*) are the real experiments.
+                # Two gaps the original logic missed:
+                #   1. We marked the parent 'completed' even when every sub-run
+                #      was PARTIAL/failed — the leaderboard then showed a green
+                #      row that had no real metrics behind it.
+                #   2. We never copied the best sub-run's metrics into the
+                #      parent's eval_metrics, so downstream consumers
+                #      (report.md, status.json top_results, the campaign-side
+                #      "did anything land?" queries) saw NULL even when one
+                #      sub-run finished cleanly.
+                # Fix: treat parent as completed iff ≥1 sub-run reached
+                # status=COMPLETED on disk, and lift that sub-run's metrics
+                # onto the parent. Otherwise mark failed.
+                sub_dirs = sorted(glob.glob(str(rd / f"{idea_id}-ht-*")))
+                best_sub_metrics: Optional[Dict[str, Any]] = None
+                any_completed = False
+                for sd in sub_dirs:
+                    sm_path = Path(sd) / "metrics.json"
+                    if not sm_path.exists():
+                        continue
+                    try:
+                        sm = json.loads(sm_path.read_text(encoding="utf-8"))
+                    except (json.JSONDecodeError, OSError):
+                        continue
+                    if not isinstance(sm, dict):
+                        continue
+                    if sm.get("status") != "COMPLETED":
+                        continue
+                    any_completed = True
+                    # Pick the sub-run with the best primary score we can
+                    # see. We don't know the project's primary_metric here,
+                    # so prefer common ones in priority order: avg_wer (ASR),
+                    # score (generic), test_accuracy (classification). Lower-
+                    # is-better for *_wer / *_loss, higher otherwise.
+                    if best_sub_metrics is None:
+                        best_sub_metrics = sm
+                    else:
+                        for k, lower_better in (
+                            ("avg_wer", True), ("wer", True),
+                            ("test_loss", True), ("loss", True),
+                            ("score", False), ("test_accuracy", False),
+                            ("accuracy", False),
+                        ):
+                            if k in sm and k in best_sub_metrics:
+                                try:
+                                    a = float(sm[k])
+                                    b = float(best_sub_metrics[k])
+                                except (TypeError, ValueError):
+                                    continue
+                                if (lower_better and a < b) or (
+                                        not lower_better and a > b):
+                                    best_sub_metrics = sm
+                                break
+                new_status = "completed" if any_completed else "failed"
+                if best_sub_metrics is not None:
+                    em = dict(best_sub_metrics)
+                    em["_aggregated_from"] = "sweep_sub_runs"
+                    self.conn.execute(
+                        "UPDATE ideas SET eval_metrics = ? "
+                        "WHERE idea_id = ?",
+                        (json.dumps(em), idea_id),
+                    )
             elif has_dir:
                 # Orphan dir (no metrics, no sweep subs).
                 # Only remove if claimed by this host — another node may
