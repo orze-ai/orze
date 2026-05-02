@@ -887,6 +887,28 @@ def notify(event: str, data: dict, cfg: dict):
             # ``_RUNTIME_HEALTH`` so status.json["notification_health"]
             # tracks live delivery, not just the boot canary snapshot.
             ok, err = False, "unsent"
+            # Short-circuit channels whose required URL/token field still
+            # contains an unresolved ${VAR}. Without this gate every
+            # event (heartbeat, sealed_file_changed, etc.) blasts an
+            # HTTP 404 against api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/...
+            # and floods the log with a hard error class — even though
+            # validate_channels already flagged the misconfig at boot
+            # and on every hot-reload. _CHANNEL_REQUIRED_FIELDS /
+            # _has_unresolved are the same predicates validate_channels
+            # uses, kept in one place so a new channel type only needs
+            # one edit.
+            required = _CHANNEL_REQUIRED_FIELDS.get(ch_type)
+            if required is not None:
+                bad = [f for f in required
+                       if not ch.get(f) or _has_unresolved(ch.get(f))]
+                if bad:
+                    err = (f"channel not deliverable — unresolved/missing "
+                           f"field(s): {', '.join(bad)}")
+                    logger.debug(
+                        "Skipping notify on %s (%s): %s",
+                        label, ch_type, err)
+                    _record_runtime(label, ch_type, False, err)
+                    continue
             if ch_type == "slack":
                 ok, err = _notify_send(ch["webhook_url"],
                                        _format_slack(event, data))
