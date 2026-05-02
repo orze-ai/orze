@@ -83,21 +83,19 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
                     continue
             unclaimed.append(idea_id)
 
+    no_medal_comps = set()
+    no_medal_file = results_dir / "_no_medal_competitions.txt"
+    if no_medal_file.exists():
+        try:
+            no_medal_comps = {
+                line.strip() for line in no_medal_file.read_text().splitlines()
+                if line.strip()
+            }
+        except Exception:
+            pass
+
     def sort_key(idea_id):
         pri = PRIORITY_ORDER.get(ideas[idea_id]["priority"], 2)
-        # Inference-only ideas run in minutes, training ideas run in hours.
-        # When all GPU slots are held by long training runs, inference-only
-        # ideas can starve indefinitely (observed: a domain_lora_routing eval
-        # queued "P1" in retrospection for 10+ cycles, never dispatched).
-        # Boost them one tier within their priority bucket so a freed GPU
-        # picks the cheap eval before the next heavy train.
-        #
-        # Signals are conservative so projects without a matching
-        # convention aren't silently reordered:
-        #   1. explicit config flag inference_only: true
-        #   2. strategy name == "eval_only" or ending in "_eval"
-        # Other projects can opt in by setting inference_only: true on
-        # ideas that only load a checkpoint and evaluate.
         cfg = ideas[idea_id].get("config") or {}
         strategy = str(cfg.get("strategy") or "").lower()
         is_inference_only = (
@@ -105,7 +103,11 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
             or strategy == "eval_only"
             or strategy.endswith("_eval"))
         inference_boost = 0 if is_inference_only else 1
-        return (pri, inference_boost, idea_id)
+        comp_id = cfg.get("competition_id") or ""
+        if not comp_id and isinstance(cfg.get("data"), dict):
+            comp_id = cfg["data"].get("competition_id", "")
+        medal_need = 0 if comp_id in no_medal_comps else 1
+        return (pri, medal_need, inference_boost, idea_id)
 
     unclaimed.sort(key=sort_key)
     return unclaimed
