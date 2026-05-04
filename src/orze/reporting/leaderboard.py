@@ -267,6 +267,10 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     # Tie-breaker: use secondary_metric from config, else just primary
     secondary_metric = report_cfg.get("secondary_metric")
 
+    # Medal-tier ordering (highest first when reverse=True). Single source
+    # of truth: orze.core.medal — used by auto_ideas, code_evolution, etc.
+    from orze.core.medal import MEDAL_RANK as _MEDAL_RANK, medal_rank as _medal_rank  # noqa: F401
+
     def _get_tiebreaker_sort_key(r):
         pv = _safe_float(r.get("primary_val"))
         if secondary_metric:
@@ -276,7 +280,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 or 0.0)
         else:
             sv = _safe_float(0.0)
-        return (pv, sv)
+        return (_medal_rank(r), pv, sv)
 
     # --- Load results cache ---
     cache_path = results_dir / "_results_cache.json"

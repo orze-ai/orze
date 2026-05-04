@@ -24,12 +24,18 @@ logger = logging.getLogger("orze")
 
 
 def _get_best_config(results_dir: Path, cfg: dict) -> Optional[dict]:
-    """Find the best completed experiment and return its config."""
+    """Find the best completed experiment and return its config.
+
+    Selection is medal-tier first (gold > silver > bronze > above_median > ...),
+    then by raw primary metric in the configured sort direction. This avoids
+    picking a wrong-direction RMSE (e.g. 12.5) over a 1.0 accuracy gold just
+    because the raw value is larger. Reuses orze.core.medal."""
+    from orze.core.medal import medal_rank
     report_cfg = cfg.get("report", {})
     primary = report_cfg.get("primary_metric", "avg_wer")
     sort_asc = report_cfg.get("sort", "descending") == "ascending"
 
-    best_val = float("inf") if sort_asc else float("-inf")
+    best_key = None  # (medal_rank, primary_val_signed)
     best_cfg = None
 
     for d in results_dir.iterdir():
@@ -46,9 +52,11 @@ def _get_best_config(results_dir: Path, cfg: dict) -> Optional[dict]:
             val = m.get(primary)
             if val is None or not isinstance(val, (int, float)):
                 continue
-            better = val < best_val if sort_asc else val > best_val
-            if better:
-                best_val = val
+            mr = medal_rank(m)
+            signed = -val if sort_asc else val
+            key = (mr, signed)
+            if best_key is None or key > best_key:
+                best_key = key
                 best_cfg = yaml.safe_load(cf.read_text()) or {}
                 best_cfg["_idea_id"] = d.name
                 best_cfg["_primary_val"] = val

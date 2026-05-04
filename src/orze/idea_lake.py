@@ -104,6 +104,17 @@ def _retry_on_busy(func, max_retries=10, base_delay=1.0):
                 raise
 
 
+_MEDAL_ORDER = ("none", "below_median", "above_median", "bronze", "silver", "gold")
+
+
+def _medal_rank(medal) -> int:
+    """Rank a medal label so higher == better. Unknown/None -> 0."""
+    try:
+        return _MEDAL_ORDER.index(medal)
+    except (ValueError, TypeError):
+        return 0
+
+
 class IdeaLake:
     """SQLite-backed archive for ideas."""
 
@@ -572,14 +583,18 @@ class IdeaLake:
     def get_top_models(
         self, metric: str = "test_accuracy", n: int = 20
     ) -> List[dict]:
-        """Return top N models by the given metric (from eval_metrics JSON)."""
+        """Return top N models, ordered by medal tier then raw score (both desc).
+
+        Medal tier sidesteps per-competition metric-direction issues: gold means
+        "good" regardless of whether the metric is maximized or minimized.
+        Within a tier, rows are sorted by raw `metric` value descending.
+        """
         def _do_top():
             return self.conn.execute(
                 "SELECT idea_id, title, config_summary, eval_metrics, status "
                 "FROM ideas "
-                "WHERE json_extract(eval_metrics, ?) IS NOT NULL "
-                "ORDER BY json_extract(eval_metrics, ?) DESC LIMIT ?",
-                (f"$.{metric}", f"$.{metric}", n),
+                "WHERE json_extract(eval_metrics, ?) IS NOT NULL",
+                (f"$.{metric}",),
             ).fetchall()
         rows = _retry_on_busy(_do_top)
         results = []
@@ -592,7 +607,17 @@ class IdeaLake:
                     except (json.JSONDecodeError, TypeError):
                         pass
             results.append(d)
-        return results
+        def _key(d):
+            em = d.get("eval_metrics") or {}
+            if not isinstance(em, dict):
+                em = {}
+            try:
+                score = float(em.get(metric))
+            except (TypeError, ValueError):
+                score = float("-inf")
+            return (_medal_rank(em.get("medal")), score)
+        results.sort(key=_key, reverse=True)
+        return results[:n]
 
     def get_next_id(self) -> int:
         """Atomically get and increment the next idea ID number.
