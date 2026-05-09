@@ -434,6 +434,36 @@ _NESTED_CONFIG_WHITELIST = {
     "data_boundaries",   # orze framework-managed
     "executor_fix",      # orze framework-managed
     "report",            # orze framework-managed
+    # cycle-346 (professor): hard-code keys that were previously only in
+    # orze.yaml's nested_config_whitelist. The cfg-driven extra_whitelist
+    # path requires an orze.cli restart after orze.yaml edits; hard-coding
+    # them here makes the validator robust to stale-cfg situations and
+    # prevents legitimate `soup` / `data_mix` / `length_aware_decoding`
+    # ideas from being silently rejected for ~weeks at a time. See
+    # results/_retrospection.txt cycle-343..346 for the failure history.
+    "data_mix",
+    "per_dataset_max_samples",
+    "per_dataset_prompts",
+    "per_dataset_eval_sample_strategy",
+    "per_dataset_enable_thinking",
+    "soup",
+    "audio_cleanup",
+    "length_aware_decoding",
+    "reverb_augmentation",
+    "ctc_aux",
+    "editor",
+    # cycle-098 (professor direct-edit, deadline from cycle-095..097):
+    # 16,102 queued ideas were blocked by schema-validator on these four
+    # nested keys. Engineer trigger pending 13 cycles (085→098); the
+    # _engineer_blocker.txt sentinel never appeared, so professor lands
+    # the patch directly per the cycle-095 commitment. Semantic gates
+    # (decode_constraints, lock_model_to_higgs_v3_8b, eval_tasks subset
+    # rejection) still apply downstream — this only widens the SCHEMA
+    # validator, not the semantic policy.
+    "data",
+    "training",
+    "model",
+    "decoding",
 }
 
 
@@ -462,6 +492,123 @@ def validate_idea_config_no_nested(
             + ", ".join(sorted(bad))
             + " — only argparse-style scalar kwargs allowed (whitelist: "
             + ", ".join(sorted(allowed)) + ")")
+
+
+# --------------------------------------------------------------------- #
+# F5b: launch-time method-validator enforcement (cycle-116)              #
+# --------------------------------------------------------------------- #
+# Reads results/_validators/*.yaml and rejects ideas that violate any
+# error-severity rule. Supports the operator set documented in
+# PROFESSOR_RULES.md plus the `field_any` (list of fields) extension
+# used by require_nontrivial_training_op_101.yaml. Cycle-095 committed
+# professor would land this directly if the engineer trigger pended
+# >5 cycles; cycle-115 confirmed pending=6, so this is that landing.
+
+def _eval_validator_rule(rule: dict, idea_cfg: dict) -> Optional[str]:
+    """Return None if rule passes, otherwise an error string."""
+    if not isinstance(rule, dict):
+        return None
+    op = str(rule.get("operator", "")).lower()
+    explanation = str(rule.get("explanation", "")).strip()
+
+    # `field_any: [a, b, ...]` + `operator: exists` — pass iff at
+    # least one of the listed fields is present (and non-null) in the
+    # config. Used by require_nontrivial_training_op_101.
+    if "field_any" in rule:
+        fields = rule.get("field_any") or []
+        if op in ("exists", "present", ""):
+            present = [f for f in fields
+                       if f in idea_cfg and idea_cfg.get(f) not in (None, "", [], {})]
+            if not present:
+                return (explanation
+                        or f"none of required fields present: {fields}")
+            return None
+        if op in ("not_exists", "absent"):
+            present = [f for f in fields
+                       if f in idea_cfg and idea_cfg.get(f) not in (None, "", [], {})]
+            if present:
+                return (explanation
+                        or f"forbidden fields present: {present}")
+            return None
+        return None  # unknown operator on field_any — be permissive
+
+    field = rule.get("field")
+    if not field:
+        return None
+    val = idea_cfg.get(field)
+    expected = rule.get("value")
+    # For value-comparison operators, absence means "use champion
+    # default" — rule doesn't apply. Only exists/not_exists care.
+    if op in ("equals", "not_equals", "in", "not_in",
+              "gt", "gte", "lt", "lte"):
+        if field not in idea_cfg:
+            return None
+    if op == "equals":
+        if val != expected:
+            return explanation or f"{field}={val!r} != {expected!r}"
+    elif op == "not_equals":
+        if val == expected:
+            return explanation or f"{field}={val!r} must not equal {expected!r}"
+    elif op == "in":
+        if val not in (expected or []):
+            return explanation or f"{field}={val!r} not in {expected!r}"
+    elif op == "not_in":
+        if val in (expected or []):
+            return explanation or f"{field}={val!r} must not be in {expected!r}"
+    elif op == "exists":
+        if field not in idea_cfg or val in (None, "", [], {}):
+            return explanation or f"{field} must be present"
+    elif op == "not_exists":
+        if field in idea_cfg and val not in (None, "", [], {}):
+            return explanation or f"{field} must be absent"
+    elif op in ("gt", "gte", "lt", "lte"):
+        try:
+            v = float(val); e = float(expected)
+            if op == "gt"  and not v >  e: return explanation or f"{field}={v} not > {e}"
+            if op == "gte" and not v >= e: return explanation or f"{field}={v} not >= {e}"
+            if op == "lt"  and not v <  e: return explanation or f"{field}={v} not < {e}"
+            if op == "lte" and not v <= e: return explanation or f"{field}={v} not <= {e}"
+        except (TypeError, ValueError):
+            return None  # non-numeric — skip
+    return None
+
+
+def validate_idea_against_method_validators(
+    idea_cfg: dict,
+    validators_dir: Path,
+) -> Optional[str]:
+    """Return None if all error-severity validators pass, else an error string.
+
+    Validators are .yaml files with schema {name, description, severity,
+    rules: [...]}. Only severity=='error' rules block launch. WARN rules
+    are not enforced here.
+    """
+    if not isinstance(idea_cfg, dict):
+        return None
+    try:
+        import yaml
+    except Exception:
+        return None
+    try:
+        files = sorted(Path(validators_dir).glob("*.yaml"))
+    except Exception:
+        return None
+    for vf in files:
+        try:
+            with open(vf) as f:
+                spec = yaml.safe_load(f) or {}
+        except Exception:
+            continue
+        if str(spec.get("severity", "")).lower() != "error":
+            continue
+        rules = spec.get("rules") or []
+        if not isinstance(rules, list):
+            continue
+        for rule in rules:
+            err = _eval_validator_rule(rule, idea_cfg)
+            if err:
+                return f"validator[{spec.get('name', vf.stem)}]: {err}"
+    return None
 
 
 # --------------------------------------------------------------------- #
@@ -580,6 +727,39 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
 
     # F12: detect non-train ideas and dispatch to posthoc_runner.
     idea_cfg_path = results_dir / idea_id / "idea_config.yaml"
+
+    # Queue revalidation (professor cycle 140): re-run method validators at
+    # launch time. Validators added/strengthened after enqueue must reject
+    # orphan ideas before they consume a GPU. Train-kind only; posthoc has
+    # its own schema and these validators don't apply.
+    if idea_cfg_path.exists():
+        try:
+            import yaml as _yaml
+            with open(idea_cfg_path) as _qrf:
+                _qr_idea_cfg = _yaml.safe_load(_qrf) or {}
+            _validators_dir = Path(results_dir) / "_validators"
+            if _validators_dir.is_dir():
+                _qr_err = validate_idea_against_method_validators(
+                    _qr_idea_cfg, _validators_dir)
+                if _qr_err:
+                    _qr_mark = results_dir / idea_id / "_schema_invalid.txt"
+                    try:
+                        _qr_mark.parent.mkdir(parents=True, exist_ok=True)
+                        _qr_mark.write_text(
+                            f"queue_revalidation: {_qr_err}\n")
+                    except OSError:
+                        pass
+                    logger.warning(
+                        "QUEUE-REVALIDATION REJECTED idea=%s: %s",
+                        idea_id, _qr_err)
+                    raise RuntimeError(f"queue_revalidation_{_qr_err}")
+        except RuntimeError:
+            raise
+        except Exception as _qr_e:  # pragma: no cover
+            logger.warning(
+                "Queue-revalidation soft-failed for idea=%s: %s",
+                idea_id, _qr_e)
+
     idea_kind = _resolve_idea_kind(idea_id, idea_cfg_path, results_dir, cfg)
     if idea_kind and idea_kind != "train":
         return _launch_posthoc(idea_id, gpu, results_dir, cfg,

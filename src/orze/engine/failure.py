@@ -147,6 +147,17 @@ def _try_executor_fix(idea_id: str, error_text: str, results_dir: Path,
                            "schema_invalid")
         return False
 
+    # Professor cycle 140: short-circuit queue-revalidation rejections.
+    # These come from launcher.py validators; the LLM cannot fix a method
+    # validator violation by editing user code — the idea must be dropped.
+    if "queue_revalidation_" in (error_text or ""):
+        logger.info(
+            "[SKIP-FIX] %s — schema_invalid: queue_revalidation rejection",
+            idea_id)
+        _mark_lake_failure(idea_id, cfg, results_dir,
+                           "schema_invalid")
+        return False
+
     max_fix = cfg.get("max_fix_attempts", 0)
     if max_fix <= 0:
         return False

@@ -717,6 +717,42 @@ class OrzePhaseMixin:
                     except Exception:
                         pass
 
+                    # F5b (cycle-116): method-validator enforcement.
+                    # Reads results/_validators/*.yaml and rejects any
+                    # idea that violates a severity=error rule (e.g.
+                    # require_nontrivial_training_op_101 — blocks no-op
+                    # LoRAs that train against the base model and report
+                    # bit-identical baseline WERs). 8 cycles of escalation
+                    # to engineer pending; professor lands directly per
+                    # cycle-095 commitment.
+                    try:
+                        from orze.engine.launcher import (
+                            validate_idea_against_method_validators,
+                        )
+                        _idea_cfg_for_mv = (
+                            flat_cfg if flat_cfg
+                            else ideas.get(idea_id, {}).get("config", {}))
+                        _vdir = (self.results_dir / "_validators")
+                        _mv_err = validate_idea_against_method_validators(
+                            _idea_cfg_for_mv, _vdir)
+                        if _mv_err:
+                            logger.warning(
+                                "[SKIP-METHOD-VALIDATOR] %s — %s",
+                                idea_id, _mv_err)
+                            _write_failure(
+                                self.results_dir / idea_id,
+                                f"method_validator_rejected: {_mv_err}")
+                            if self.lake:
+                                try:
+                                    self.lake.set_status(idea_id, "skipped")
+                                except Exception:
+                                    pass
+                            _record_failure(
+                                self.failure_counts, idea_id)
+                            continue
+                    except Exception:
+                        pass
+
                     # SOP: validate idea config right before launch (catches all sources)
                     # Use flat_cfg (malformed-key-cleaned) if available, else raw config.
                     # flat_cfg is built at lines 518-535 above, which fixes LLM-generated
