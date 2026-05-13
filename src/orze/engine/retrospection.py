@@ -86,4 +86,43 @@ def run_retrospection(results_dir: Path, cfg: dict,
     except Exception as e:
         logger.warning("Retrospection digest failed: %s", e)
 
+    # Run competition diagnosis if not cached
+    _run_diagnosis_if_needed(results_dir, cfg)
+
     return completed_count
+
+
+def _run_diagnosis_if_needed(results_dir: Path, cfg: dict) -> None:
+    """Run competition diagnosis once per competition, cache the result."""
+    try:
+        from orze.engine.competition_diagnosis import (
+            diagnose_dataset, save_diagnosis, load_cached_diagnosis,
+        )
+    except ImportError:
+        return
+
+    competition_id = results_dir.name
+    if load_cached_diagnosis(results_dir, competition_id):
+        return
+
+    train_path = cfg.get("train_csv", "")
+    if not train_path:
+        for candidate in ("train.csv", "data/train.csv"):
+            p = Path(cfg.get("_project_root", ".")) / candidate
+            if p.exists():
+                train_path = str(p)
+                break
+    if not train_path:
+        return
+
+    try:
+        diag = diagnose_dataset(
+            train_path,
+            competition_id=competition_id,
+        )
+        save_diagnosis(results_dir, competition_id, diag)
+        logger.info("Competition diagnosis saved for %s: target=%s, imbalanced=%s, groups=%s",
+                    competition_id, diag.target_type, diag.is_imbalanced,
+                    diag.group_columns)
+    except Exception as e:
+        logger.warning("Competition diagnosis failed: %s", e)
