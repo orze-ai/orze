@@ -41,6 +41,15 @@ _SWEEP_BLOCKLIST = frozenset({
     "tta_views", "views", "tta_agg", "tta_aggs",
     "aggregation", "aggregations", "temperatures",
     "ensemble_members", "soup_members",
+    # LoRA-soup bundle keys — soup.adapters is a list of paths and
+    # soup.weights / soup.ingredients are list scalars. Each is semantically
+    # one bundle, not a sweep axis. Without blocking, expand_sweeps Cartesian-
+    # products them into nonsense sub-runs (e.g. weights=[1.0,0.0] becomes
+    # 2 weight assignments x 2 adapter orderings = 4 bit-identical outputs).
+    # Root cause of bit-identical 4.92% sibling pattern across
+    # idea-{0eb1bf,2aec20,00c55d,2d126f} and the 11x idea-pf-* lambda-ramp
+    # queue inflation observed 2026-05-15.
+    "adapters", "weights", "ingredients",
 })
 logger = logging.getLogger("orze")
 

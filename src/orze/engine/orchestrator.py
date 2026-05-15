@@ -475,6 +475,7 @@ class Orze(OrzePhaseMixin):
         "poll", "roles", "max_idea_failures", "max_fix_attempts",
         "notifications", "plateau_threshold", "orphan_timeout_hours",
         "gpu_mem_threshold", "gpu_scheduling", "min_disk_gb", "post_scripts",
+        "nested_config_whitelist",
     }
 
     def _hot_reload_config(self):
@@ -535,6 +536,28 @@ class Orze(OrzePhaseMixin):
                 else:
                     self.cfg[key] = raw[key]
                     changed.append(key)
+                    if key == "gpu_scheduling" and hasattr(self, "slot_mgr"):
+                        sched = raw[key] or {}
+                        for attr, cfg_key in [
+                            ("max_load_per_cpu", "max_load_per_cpu"),
+                            ("min_free_ram_gb", "min_free_ram_gb"),
+                            ("max_vram_pct", "max_vram_pct"),
+                            ("min_free_vram_mib", "min_free_vram_mib"),
+                        ]:
+                            if cfg_key in sched:
+                                setattr(self.slot_mgr, attr, sched[cfg_key])
+            # Always sync slot_mgr with current cfg — handles cfg already
+            # updated before propagation existed (change-detection skips).
+            if hasattr(self, "slot_mgr"):
+                sched = self.cfg.get("gpu_scheduling") or {}
+                for attr, cfg_key in [
+                    ("max_load_per_cpu", "max_load_per_cpu"),
+                    ("min_free_ram_gb", "min_free_ram_gb"),
+                    ("max_vram_pct", "max_vram_pct"),
+                    ("min_free_vram_mib", "min_free_vram_mib"),
+                ]:
+                    if cfg_key in sched:
+                        setattr(self.slot_mgr, attr, sched[cfg_key])
             if changed:
                 logger.info("Config hot-reloaded: %s", ", ".join(changed))
                 # Re-validate channel configs whenever notifications

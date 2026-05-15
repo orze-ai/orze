@@ -31,6 +31,7 @@ import time
 import socket
 import shutil
 import datetime
+import yaml
 from typing import Dict, Optional
 from pathlib import Path
 from orze.core.fs import deep_get, atomic_write

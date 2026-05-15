@@ -464,6 +464,14 @@ _NESTED_CONFIG_WHITELIST = {
     "training",
     "model",
     "decoding",
+    # engineer cycle-287: contextual_biasing (trie-based decode-time
+    # shallow fusion), merge_helper, and adapter_svd_truncation were in
+    # orze.yaml nested_config_whitelist but not here. The daemon hot-reload
+    # does not cover nested_config_whitelist, so a stale in-memory cfg
+    # silently blocked all 5 P0 trie-bias ideas with schema_invalid errors.
+    "contextual_biasing",
+    "merge_helper",
+    "adapter_svd_truncation",
 }
 
 
@@ -535,13 +543,32 @@ def _eval_validator_rule(rule: dict, idea_cfg: dict) -> Optional[str]:
     field = rule.get("field")
     if not field:
         return None
-    val = idea_cfg.get(field)
+    # Dot-notation traversal: "a.b.c" → idea_cfg["a"]["b"]["c"]. Without this,
+    # any validator using nested-field paths (e.g. length_aware_decoding.enabled)
+    # is a silent no-op — the literal key doesn't exist at top level so val=None
+    # and the rule short-circuits via the absence-skip below. Confirmed root cause
+    # of the cycle-253/254 decoder-kwargs bug: idea-055b25/064773/123800/ht-1/2/3
+    # all bypassed block_length_aware_decoding_linear_244.yaml because of this.
+    def _resolve_dotted(cfg, path):
+        cur = cfg
+        for part in str(path).split("."):
+            if isinstance(cur, dict) and part in cur:
+                cur = cur[part]
+            else:
+                return None, False
+        return cur, True
+
+    if "." in str(field):
+        val, present = _resolve_dotted(idea_cfg, field)
+    else:
+        present = field in idea_cfg
+        val = idea_cfg.get(field)
     expected = rule.get("value")
     # For value-comparison operators, absence means "use champion
     # default" — rule doesn't apply. Only exists/not_exists care.
     if op in ("equals", "not_equals", "in", "not_in",
               "gt", "gte", "lt", "lte"):
-        if field not in idea_cfg:
+        if not present:
             return None
     if op == "equals":
         if val != expected:
@@ -556,10 +583,10 @@ def _eval_validator_rule(rule: dict, idea_cfg: dict) -> Optional[str]:
         if val in (expected or []):
             return explanation or f"{field}={val!r} must not be in {expected!r}"
     elif op == "exists":
-        if field not in idea_cfg or val in (None, "", [], {}):
+        if not present or val in (None, "", [], {}):
             return explanation or f"{field} must be present"
     elif op == "not_exists":
-        if field in idea_cfg and val not in (None, "", [], {}):
+        if present and val not in (None, "", [], {}):
             return explanation or f"{field} must be absent"
     elif op in ("gt", "gte", "lt", "lte"):
         try:

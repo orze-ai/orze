@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.3.3 — Sweep blocklist for soup bundles + nested-config & validator fixes
+
+### Fixed
+- **Sweep expansion no longer Cartesian-explodes LoRA-soup bundles.** `soup.adapters` (list of paths) and `soup.weights` / `soup.ingredients` (list of scalars) are now in `_SWEEP_BLOCKLIST` (`src/orze/core/ideas.py`). Previously a single soup config like `weights=[1.0, 0.0]` was treated as a 2-element sweep axis and crossed with `adapters=[A, B]` to produce 4 bit-identical sub-runs. Root cause of the 4.92 % bit-identical sibling pattern across `idea-{0eb1bf,2aec20,00c55d,2d126f}` and the 11x `idea-pf-*` lambda-ramp queue inflation observed 2026-05-15.
+- **`nested_config_whitelist` is now hot-reloadable** (`src/orze/engine/orchestrator.py:_HOT_RELOAD_KEYS`). Five P0 trie-bias ideas had been silently rejected with `schema_invalid` because the daemon's in-memory whitelist was stale relative to `orze.yaml`.
+- **Engine-side nested whitelist** additionally accepts `contextual_biasing`, `merge_helper`, `adapter_svd_truncation` (`src/orze/engine/launcher.py`).
+- **Validator rules now traverse dot-notation field paths** (`src/orze/engine/launcher.py:_eval_validator_rule`). `field: length_aware_decoding.enabled` previously short-circuited (literal key absent at top level) and silently passed every idea, defeating block rules. Confirmed root cause of the cycle-253/254 decoder-kwargs bypass on `idea-055b25/064773/123800` and `-ht-1/2/3` siblings.
+- **`gpu_scheduling` config hot-reload now propagates to `slot_mgr`** so `max_load_per_cpu`, `min_free_ram_gb`, `max_vram_pct`, `min_free_vram_mib` take effect without restart.
+
 ## [4.3.1]
 
 ### Added
