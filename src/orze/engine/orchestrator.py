@@ -116,6 +116,7 @@ class Orze(OrzePhaseMixin):
             mode=mode,
             max_vram_pct=sched_cfg.get("max_vram_pct", 90),
             min_free_vram_mib=sched_cfg.get("min_free_vram_mib", 1000),
+            min_free_vram_mib_exclusive=sched_cfg.get("min_free_vram_mib_exclusive", 30000),
             max_jobs_per_gpu=sched_cfg.get("max_jobs_per_gpu", 200),
             max_load_per_cpu=sched_cfg.get("max_load_per_cpu", 2.0),
             min_free_ram_gb=sched_cfg.get("min_free_ram_gb", 16.0),

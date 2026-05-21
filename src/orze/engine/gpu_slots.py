@@ -164,6 +164,7 @@ class GpuSlotManager:
                  mode: str = "exclusive",
                  max_vram_pct: float = 90,
                  min_free_vram_mib: int = 1000,
+                 min_free_vram_mib_exclusive: int = 30000,
                  max_jobs_per_gpu: int = 20,
                  max_load_per_cpu: float = 2.0,
                  min_free_ram_gb: float = 16.0,
@@ -175,6 +176,7 @@ class GpuSlotManager:
         self.mode = mode
         self.max_vram_pct = max_vram_pct
         self.min_free_vram_mib = min_free_vram_mib
+        self.min_free_vram_mib_exclusive = min_free_vram_mib_exclusive
         if mode == "exclusive":
             self.max_jobs_per_gpu = 1
         else:
@@ -259,11 +261,24 @@ class GpuSlotManager:
 
     def _gpu_has_capacity(self, gpu_id: int) -> bool:
         """Check if GPU can accept another job.
-        Exclusive mode: job count + system resources (no VRAM check).
+        Exclusive mode: job count + free VRAM gate + system resources.
         VRAM mode: VRAM + job count + system resources."""
         if self.mode == "exclusive":
             if len(self._gpu_jobs.get(gpu_id, [])) >= 1:
                 return False
+            # Gate: require min_free_vram_mib_exclusive free VRAM so an
+            # external process holding VRAM doesn't cause a silent OOM run.
+            if self.min_free_vram_mib_exclusive > 0:
+                usage = _get_gpu_usage(gpu_id)
+                if usage is not None:
+                    used, total = usage
+                    free_mib = total - used
+                    if free_mib < self.min_free_vram_mib_exclusive:
+                        logger.info(
+                            "[gpu_not_free] gpu=%d free_mib=%d required=%d — "
+                            "deferring dispatch to next launcher pass",
+                            gpu_id, free_mib, self.min_free_vram_mib_exclusive)
+                        return False
             return self._system_has_capacity()
         if not self._gpu_has_vram(gpu_id):
             return False
