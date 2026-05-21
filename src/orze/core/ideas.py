@@ -56,9 +56,57 @@ logger = logging.getLogger("orze")
 _parse_ideas_cache: Dict[str, Any] = {"mtime": 0.0, "result": {}, "path": ""}
 
 
+def _overlay_sidecar_ideas(ideas_md_path: str, ideas: dict) -> dict:
+    """Merge ideas from ideas.d/*.md that are absent from ideas.md.
+    This is an additive overlay — ideas.md entries take precedence.
+    Immune to research-agent strip because ideas.d/ is never consumed.
+    """
+    ideas_d = Path(ideas_md_path).parent / "ideas.d"
+    if not ideas_d.is_dir():
+        return ideas
+    result = dict(ideas)
+    sp = re.compile(r"^## (idea-[a-z0-9][a-z0-9-]*):\s*(.+?)$", re.MULTILINE)
+    for sidecar in sorted(ideas_d.glob("*.md")):
+        try:
+            st = sidecar.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        sm_list = list(sp.finditer(st))
+        for j, sm in enumerate(sm_list):
+            sid = sm.group(1)
+            if sid in result:
+                continue
+            stitle = sm.group(2).strip()
+            ss = sm.end()
+            se = sm_list[j + 1].start() if j + 1 < len(sm_list) else len(st)
+            sraw = st[ss:se]
+            spri = re.search(r"\*\*Priority\*\*:\s*(\w+)", sraw)
+            sfam = re.search(r"\*\*Approach Family\*\*:\s*(\w+)", sraw)
+            syml = re.search(r"```ya?ml\s*\n(.*?)```", sraw, re.DOTALL)
+            if not syml:
+                continue
+            try:
+                scfg = yaml.safe_load(syml.group(1)) or {}
+            except yaml.YAMLError:
+                continue
+            scfg = _sanitize_config(scfg)
+            if _is_prompt_injection(sid, stitle):
+                continue
+            result[sid] = {
+                "title": stitle,
+                "priority": spri.group(1).lower() if spri else "medium",
+                "approach_family": sfam.group(1).lower() if sfam else "other",
+                "config": scfg,
+                "raw": sraw.strip(),
+            }
+    return result
+
+
 def parse_ideas(path: str) -> Dict[str, dict]:
     """Parse ideas.md into {idea_id: {title, priority, config, raw}}.
     Results are cached by file mtime to avoid re-parsing on every iteration.
+    ideas.d/*.md sidecar files are always scanned fresh (not cached) so
+    entries survive research-agent strip cycles on ideas.md.
     """
     try:
         p = Path(path)
@@ -66,7 +114,7 @@ def parse_ideas(path: str) -> Dict[str, dict]:
         if (mtime == _parse_ideas_cache["mtime"]
                 and path == _parse_ideas_cache["path"]
                 and _parse_ideas_cache["result"]):
-            return _parse_ideas_cache["result"]
+            return _overlay_sidecar_ideas(path, _parse_ideas_cache["result"])
         text = p.read_text(encoding="utf-8")
     except FileNotFoundError:
         return {}
@@ -76,10 +124,10 @@ def parse_ideas(path: str) -> Dict[str, dict]:
         if _parse_ideas_cache["path"] == path and _parse_ideas_cache["result"]:
             logger.warning("Returning cached ideas (%d entries) due to read error",
                            len(_parse_ideas_cache["result"]))
-            return _parse_ideas_cache["result"]
+            return _overlay_sidecar_ideas(path, _parse_ideas_cache["result"])
         return {}
     ideas = {}
-    pattern = re.compile(r"^## (idea-[a-z0-9]+):\s*(.+?)$", re.MULTILINE)
+    pattern = re.compile(r"^## (idea-[a-z0-9][a-z0-9-]*):\s*(.+?)$", re.MULTILINE)
     matches = list(pattern.finditer(text))
 
     for i, m in enumerate(matches):
@@ -124,7 +172,7 @@ def parse_ideas(path: str) -> Dict[str, dict]:
     _parse_ideas_cache["mtime"] = mtime
     _parse_ideas_cache["path"] = path
     _parse_ideas_cache["result"] = ideas
-    return ideas
+    return _overlay_sidecar_ideas(path, ideas)
 
 
 def _find_sweep_keys(config: dict, prefix: str = "") -> Dict[str, list]:

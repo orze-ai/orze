@@ -149,7 +149,7 @@ def get_idea_config(ideas_md: str, idea_id: str) -> dict:
         text = Path(ideas_md).read_text(encoding="utf-8")
     except FileNotFoundError:
         return {}
-    pattern = re.compile(r"^## (idea-[a-z0-9]+):\s*(.+?)$", re.MULTILINE)
+    pattern = re.compile(r"^## (idea-[a-z0-9][a-z0-9-]*):\s*(.+?)$", re.MULTILINE)
     matches = list(pattern.finditer(text))
 
     for i, m in enumerate(matches):
@@ -161,6 +161,13 @@ def get_idea_config(ideas_md: str, idea_id: str) -> dict:
         yaml_match = re.search(r"```ya?ml\s*\n(.*?)```", raw, re.DOTALL)
         if yaml_match:
             return yaml.safe_load(yaml_match.group(1)) or {}
+    # Sidecar overlay: check ideas.d/<idea_id>.md if not in ideas.md
+    sidecar = Path(ideas_md).parent / "ideas.d" / f"{idea_id}.md"
+    if sidecar.exists():
+        stext = sidecar.read_text(encoding="utf-8")
+        sm = re.search(r"```ya?ml\s*\n(.*?)```", stext, re.DOTALL)
+        if sm:
+            return yaml.safe_load(sm.group(1)) or {}
     return {}
 
 
