@@ -887,10 +887,47 @@ class OrzePhaseMixin:
                 logger.info("No unclaimed ideas. %d training, %d eval.",
                             len(self.active), len(self.active_evals))
         else:
-            logger.info("%d ideas queued, no free GPUs (%d training, "
-                        "%d eval)",
-                        len(unclaimed), len(self.active),
-                        len(self.active_evals))
+            # Force-pack: dispatch critical ideas with declared VRAM floors onto
+            # co-tenanted GPUs when no GPU is exclusively free. The VRAM precheck
+            # in train.py (engineer cycle 838) is the safety gate; force-pack just
+            # lets critical ideas reach it despite the exclusive job-count cap.
+            _fp_dispatched = False
+            if (unclaimed and disk_ok and hasattr(self, "slot_mgr")
+                    and self.slot_mgr.mode == "exclusive"):
+                from orze.engine.scheduler import get_critical_force_pack_eligible
+                from orze.engine.gpu_slots import _query_all_gpu_usage
+                fp_set = set(get_critical_force_pack_eligible(ideas, self.results_dir))
+                for _fp_id in (i for i in unclaimed if i in fp_set):
+                    _fp_cfg = (ideas.get(_fp_id) or {}).get("config") or {}
+                    _vram_floor = _fp_cfg.get("min_free_vram_mib_for_eval", 12000)
+                    _fp_gpus = self.slot_mgr.free_gpu_ids_force_pack(
+                        _vram_floor, exclude=eval_gpus)
+                    if not _fp_gpus:
+                        break
+                    _fp_gpu = _fp_gpus[0]
+                    if not claim(_fp_id, self.results_dir, _fp_gpu, lake=self.lake):
+                        continue
+                    _fp_usage = _query_all_gpu_usage().get(_fp_gpu) or (0, 0)
+                    logger.info("force_pack: idea=%s gpu=%d free_mib=%d threshold_mib=%d",
+                                _fp_id, _fp_gpu, _fp_usage[1] - _fp_usage[0], _vram_floor)
+                    atomic_write(
+                        self.results_dir / _fp_id / "idea_config.yaml",
+                        yaml.dump({k: v for k, v in _fp_cfg.items() if v is not None},
+                                  default_flow_style=False))
+                    try:
+                        _fp_tp = launch(_fp_id, _fp_gpu, self.results_dir, cfg)
+                        self.slot_mgr.force_assign(_fp_tp, _fp_gpu)
+                        _fp_dispatched = True
+                    except Exception as _fp_err:
+                        logger.error("force_pack launch failed %s: %s", _fp_id, _fp_err)
+                        _write_failure(self.results_dir / _fp_id, f"force_pack: {_fp_err}")
+                        _record_failure(self.failure_counts, _fp_id)
+                    break
+            if not _fp_dispatched:
+                logger.info("%d ideas queued, no free GPUs (%d training, "
+                            "%d eval)",
+                            len(unclaimed), len(self.active),
+                            len(self.active_evals))
 
         # Circuit Breaker: if too many ideas exceeded max retries, stop the farm
         max_fail = cfg.get("max_idea_failures", 0)

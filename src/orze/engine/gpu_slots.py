@@ -290,6 +290,22 @@ class GpuSlotManager:
     # Core API
     # ------------------------------------------------------------------
 
+    def force_assign(self, tp, gpu: int) -> str:
+        """Assign a force-pack job, bypassing the exclusive capacity check.
+        Only for critical ideas with declared VRAM floors in exclusive mode.
+        The VRAM precheck in train.py is the real safety gate."""
+        if gpu not in self._gpu_jobs:
+            raise RuntimeError(f"GPU {gpu} not managed ({self.gpu_ids})")
+        sid = self._next_id
+        self._next_id += 1
+        slot_key = f"{gpu}:{sid}"
+        self._gpu_jobs[gpu].append(slot_key)
+        self._active[slot_key] = tp
+        if hasattr(tp, "slot_key"):
+            tp.slot_key = slot_key
+        _invalidate_cache(gpu)
+        return slot_key
+
     def assign(self, tp, gpus: List[int]) -> str:
         """Assign process to GPU(s). Returns slot key (e.g. "0:42" or "0:42+1:43").
         Raises RuntimeError if GPU has no capacity."""
@@ -339,6 +355,28 @@ class GpuSlotManager:
             usage = _get_gpu_usage(g)
             free_mib = (usage[1] - usage[0]) if usage else 99999
             candidates.append((free_mib, g))
+        candidates.sort(key=lambda x: -x[0])
+        return [g for _, g in candidates]
+
+    def free_gpu_ids_force_pack(self, min_free_vram_mib: int,
+                                exclude: Optional[Set[int]] = None) -> List[int]:
+        """Exclusive-mode: GPUs with actual free VRAM >= min_free_vram_mib + 5000 MiB headroom.
+        Ignores the exclusive job-count cap; VRAM precheck in train.py is the safety gate."""
+        if self.mode != "exclusive":
+            return []
+        exc = exclude or set()
+        threshold = min_free_vram_mib + 5000
+        gpu_usage = _query_all_gpu_usage()
+        candidates = []
+        for g in self.gpu_ids:
+            if g in exc:
+                continue
+            usage = gpu_usage.get(g)
+            if usage is None:
+                continue
+            used, total = usage
+            if total - used >= threshold:
+                candidates.append((total - used, g))
         candidates.sort(key=lambda x: -x[0])
         return [g for _, g in candidates]
 

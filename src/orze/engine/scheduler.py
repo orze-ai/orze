@@ -117,6 +117,20 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
 # Claiming (atomic mkdir)
 # ---------------------------------------------------------------------------
 
+def get_critical_force_pack_eligible(ideas: Dict[str, dict],
+                                     results_dir: Path) -> List[str]:
+    """Unclaimed critical idea IDs that declare min_free_vram_mib_for_eval (force-pack eligible)."""
+    eligible = []
+    for idea_id, meta in ideas.items():
+        if meta.get("priority") != "critical":
+            continue
+        if (results_dir / idea_id).exists():
+            continue
+        if (meta.get("config") or {}).get("min_free_vram_mib_for_eval") is not None:
+            eligible.append(idea_id)
+    return eligible
+
+
 def claim(idea_id: str, results_dir: Path, gpu: int,
           lake=None) -> bool:
     """Atomically claim an idea via mkdir. Returns True if we got it.
