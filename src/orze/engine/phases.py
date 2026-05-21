@@ -127,8 +127,11 @@ class OrzePhaseMixin:
                         continue
                     # Clamp priority: "critical" is reserved for
                     # human/API-submitted ideas, not auto-ingested ones.
+                    # Exception: sidecar ideas (ideas.d/*.md) are controlled
+                    # by the professor SOP, not the research agent, so they
+                    # may legitimately declare critical priority.
                     raw_pri = idea.get("priority", "medium")
-                    if raw_pri == "critical":
+                    if raw_pri == "critical" and idea.get("_overlay_source") != "sidecar":
                         raw_pri = "high"
                     raw_text = idea.get("raw", "")
                     def _raw_f(field):

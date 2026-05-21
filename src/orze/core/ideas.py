@@ -98,6 +98,7 @@ def _overlay_sidecar_ideas(ideas_md_path: str, ideas: dict) -> dict:
                 "approach_family": sfam.group(1).lower() if sfam else "other",
                 "config": scfg,
                 "raw": sraw.strip(),
+                "_overlay_source": "sidecar",
             }
     return result
 
