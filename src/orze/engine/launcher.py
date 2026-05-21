@@ -1139,9 +1139,27 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     logger.warning("[ANOMALY] %s", anomaly)
             if status == "FAILED":
                 error_msg = metrics.get("error", "Training script reported FAILED")
-                if _try_executor_fix(tp.idea_id, error_msg,
-                                     results_dir, cfg, fix_counts,
-                                     exit_code=ret if ret is not None else -1):
+                # VRAM precheck failure is environmental (GPU busy), not a code bug.
+                # Re-queue so the idea retries when VRAM is available; don't burn fix budget.
+                if str(error_msg).startswith("insufficient_vram:"):
+                    logger.warning("[VRAM-CONTENTION] %s — %s — re-queuing",
+                                   tp.idea_id, str(error_msg)[:100])
+                    _reset_idea_for_retry(results_dir / tp.idea_id)
+                    try:
+                        import sqlite3 as _sq3
+                        _db = cfg.get("idea_lake_db") or str(results_dir / "idea_lake.db")
+                        if Path(_db).exists():
+                            _conn = _sq3.connect(_db, timeout=5)
+                            _conn.execute(
+                                "UPDATE ideas SET status='queued' WHERE idea_id=?",
+                                (tp.idea_id,))
+                            _conn.commit()
+                            _conn.close()
+                    except Exception:
+                        pass
+                elif _try_executor_fix(tp.idea_id, error_msg,
+                                       results_dir, cfg, fix_counts,
+                                       exit_code=ret if ret is not None else -1):
                     _reset_idea_for_retry(results_dir / tp.idea_id)
                     try:
                         new_tp = launch(tp.idea_id, actual_gpu, results_dir, cfg)
@@ -1152,8 +1170,9 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     except Exception as e:
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
-                write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, ret or -1, "training"), error_msg)
-                _record_failure(failure_counts, tp.idea_id)
+                else:
+                    write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, ret or -1, "training"), error_msg)
+                    _record_failure(failure_counts, tp.idea_id)
         else:
             reason = f"exit code {ret}"
             try:
