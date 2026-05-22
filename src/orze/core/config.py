@@ -737,7 +737,15 @@ def orze_path(cfg: dict, kind: str, name: str = "") -> Path:
     Raises:
         ValueError: If kind is not recognized.
     """
-    if kind in _ORZE_DIR_KINDS:
+    # 2026-05-22: trigger files were path-split — role_runner.py + bot.py +
+    # sop_tier2.py wrote to .orze/triggers/_trigger_<role>, but every RULES
+    # file, SOP skill, and orze/cli.py write/read results/_trigger_<role>.
+    # Unify on the user-visible results/ path that the RULES files already
+    # use as the contract. _RESULTS_KINDS would prefix a "triggers/" subdir,
+    # so special-case to return results_dir directly.
+    if kind == "triggers":
+        base = Path(cfg["_env_ORZE_RESULTS_DIR"])
+    elif kind in _ORZE_DIR_KINDS:
         base = Path(cfg["_orze_dir"]) / kind
     elif kind in _RESULTS_KINDS:
         base = Path(cfg["_env_ORZE_RESULTS_DIR"]) / kind
