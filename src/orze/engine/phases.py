@@ -109,6 +109,24 @@ class OrzePhaseMixin:
     def _sync_ideas(self, cfg):
         """Phase: sync ideas from ideas.md to lake, expand sweeps, build unclaimed queue."""
         raw_ideas = parse_ideas(cfg["ideas_file"])
+        # Typed-schema validation (v2 ``proposal_version: 2`` ideas only).
+        # Backward compatible: legacy ``## idea-XXX:`` entries pass through
+        # untouched. v2 ideas with validation errors are flagged in logs so
+        # the professor / research role sees them, but not rejected — the
+        # legacy ingestion above is the source of truth.
+        try:
+            from orze_substrate.role_outputs import (
+                IdeaProposal, parse_ideas_md,
+            )
+            for item in parse_ideas_md(cfg["ideas_file"]):
+                if isinstance(item, IdeaProposal):
+                    errs = item.validate()
+                    if errs:
+                        logger.warning(
+                            "ideas.md v2 validation errors in %s: %s",
+                            item.idea_id, "; ".join(errs))
+        except Exception as e:  # pragma: no cover — never block ingest on validator bugs
+            logger.debug("v2 ideas validator skipped: %s", e)
         if self.lake:
             # Sync new ideas to DB queue
             db_ids = self.lake.get_all_ids()
