@@ -515,9 +515,15 @@ class OrzePhaseMixin:
                 pre = list(unclaimed[:10])
                 unclaimed = select_for_launch(unclaimed, n=len(unclaimed))
                 if pre != unclaimed[:10]:
-                    logger.info(
-                        "Elo reordered unclaimed top 10: before=%s after=%s",
-                        pre, unclaimed[:10])
+                    # Dedup: same (pre, after) transformation as last tick →
+                    # no new information, don't re-log. Stops the every-tick
+                    # noise when queue is stable.
+                    _reorder_sig = (tuple(pre), tuple(unclaimed[:10]))
+                    if getattr(self, "_last_elo_reorder_sig", None) != _reorder_sig:
+                        logger.info(
+                            "Elo reordered unclaimed top 10: before=%s after=%s",
+                            pre, unclaimed[:10])
+                        self._last_elo_reorder_sig = _reorder_sig
         except Exception as e:  # pragma: no cover — never block launch
             logger.warning("Elo reorder skipped: %s", e)
 
