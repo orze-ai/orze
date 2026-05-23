@@ -628,6 +628,25 @@ def validate_idea_against_method_validators(
             continue
         if str(spec.get("severity", "")).lower() != "error":
             continue
+        # unblock_when: self-disable validator when a named artifact exists.
+        # Resolves the half-implemented spec (problem #3 in architecture audit):
+        # validator yamls advertised this contract but the engine ignored it,
+        # forcing manual .disabled renames once the unblocking method-spec
+        # was published. Path is resolved relative to validators_dir's parent
+        # (typically the results/ dir) so authors can write "results/_methods/..."
+        # the same way they reference it in idea configs.
+        uw = spec.get("unblock_when")
+        if isinstance(uw, dict):
+            ap = uw.get("artifact_exists")
+            if isinstance(ap, str) and ap:
+                try:
+                    cands = [Path(ap)]
+                    if not Path(ap).is_absolute():
+                        cands.append(Path(validators_dir).parent.parent / ap)
+                    if any(c.exists() for c in cands):
+                        continue
+                except Exception:
+                    pass
         rules = spec.get("rules") or []
         if not isinstance(rules, list):
             continue
