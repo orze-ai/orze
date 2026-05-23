@@ -600,6 +600,50 @@ class OrzePhaseMixin:
                     # first-user idea that nested a dict under a key lost that
                     # key and had to be debugged at the train-script level.
                     idea_cfg = ideas.get(idea_id, {}).get("config", {})
+                    # Re-read latest config at dispatch time to pick up any
+                    # backfills that landed between tick-start and now (e.g.
+                    # training_proposal key added by engineer mid-tick).
+                    if self.lake is not None:
+                        try:
+                            _fresh = self.lake.get(idea_id)
+                            if _fresh is not None and _fresh.get("config"):
+                                _fresh_cfg = yaml.safe_load(_fresh["config"]) or {}
+                                if _fresh_cfg:
+                                    idea_cfg = _fresh_cfg
+                        except Exception:
+                            pass  # fall back to tick-cached idea_cfg
+
+                    # orze_substrate v2: exec-hash pre-launch dedup.
+                    # Skip launches whose proposed config matches a hash
+                    # already produced by a prior completed idea.
+                    try:
+                        from orze_substrate.exec_hash import check as _exec_check
+                        _eh, _first, _wer = _exec_check(idea_cfg)
+                        if _first and _first != idea_id:
+                            logger.info(
+                                "[exec-dedup] skipping %s — exec_hash=%s "
+                                "already produced by %s (avg_wer=%s)",
+                                idea_id, _eh, _first, _wer)
+                            _dup_metrics = {
+                                "status": "SKIPPED_DUPLICATE",
+                                "duplicate_of": _first,
+                                "exec_hash": _eh,
+                                "duplicate_avg_wer": _wer,
+                                "skip_reason": "exec_hash matches prior completed idea",
+                            }
+                            try:
+                                (self.results_dir / idea_id / "metrics.json"
+                                 ).write_text(json.dumps(_dup_metrics, indent=2))
+                            except Exception:
+                                pass
+                            if self.lake is not None:
+                                try:
+                                    self.lake.set_status(idea_id, "skipped")
+                                except Exception:
+                                    pass
+                            continue
+                    except Exception as _eh_err:
+                        logger.debug("exec_hash pre-check failed: %r", _eh_err)
                     flat_cfg = {}
                     if idea_cfg:
                         for k, v in idea_cfg.items():
