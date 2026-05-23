@@ -600,6 +600,47 @@ def _eval_validator_rule(rule: dict, idea_cfg: dict) -> Optional[str]:
     return None
 
 
+def log_validator_rejection(
+    results_dir: Path,
+    idea_id: str,
+    validator: str,
+    rejection: str,
+    idea_cfg: Optional[dict] = None,
+) -> None:
+    """Append a rejection record to results/_validator_rejections.jsonl.
+
+    Backedge for the research role (problem #5b in architecture audit):
+    today validator rejections are one-way (logger.warning + skipped state)
+    so research re-proposes the same idea family for many cycles silently.
+    This file lets research read recent rejections at prompt-build time.
+    Best-effort: never raises.
+    """
+    try:
+        import datetime as _dt
+        import json as _json
+        keys = ("kind", "continuation_parent", "lora_path", "inference_only",
+                "train_script", "approach_family", "method_spec", "dataset",
+                "data_mix", "decoder_method")
+        summary = {}
+        if isinstance(idea_cfg, dict):
+            for k in keys:
+                if k in idea_cfg:
+                    summary[k] = idea_cfg[k]
+        rec = {
+            "ts": _dt.datetime.utcnow().isoformat() + "Z",
+            "idea_id": idea_id,
+            "validator": validator,
+            "rejection": rejection,
+            "config_summary": summary,
+        }
+        path = Path(results_dir) / "_validator_rejections.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a") as f:
+            f.write(_json.dumps(rec) + "\n")
+    except Exception:
+        pass
+
+
 def validate_idea_against_method_validators(
     idea_cfg: dict,
     validators_dir: Path,

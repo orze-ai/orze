@@ -713,6 +713,16 @@ class OrzePhaseMixin:
                         if _err:
                             logger.warning(
                                 "[SKIP-VALIDATE] %s — %s", idea_id, _err)
+                            try:
+                                from orze.engine.launcher import (
+                                    log_validator_rejection,
+                                )
+                                log_validator_rejection(
+                                    self.results_dir, idea_id,
+                                    "nested_config_not_allowed", _err,
+                                    _idea_cfg_for_validate)
+                            except Exception:
+                                pass
                             _write_failure(
                                 self.results_dir / idea_id,
                                 f"schema_invalid: {_err}")
@@ -786,6 +796,16 @@ class OrzePhaseMixin:
                             logger.warning(
                                 "[SKIP-METHOD-VALIDATOR] %s — %s",
                                 idea_id, _mv_err)
+                            try:
+                                from orze.engine.launcher import (
+                                    log_validator_rejection,
+                                )
+                                log_validator_rejection(
+                                    self.results_dir, idea_id,
+                                    "method_validator", _mv_err,
+                                    _idea_cfg_for_mv)
+                            except Exception:
+                                pass
                             _write_failure(
                                 self.results_dir / idea_id,
                                 f"method_validator_rejected: {_mv_err}")
