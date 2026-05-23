@@ -103,6 +103,78 @@ def _load_verified(results_dir: Path, report_cfg: dict):
 logger = logging.getLogger("orze")
 
 
+def _run_elo_tournament_for_ingested(lake, ingested_ids, substrate_cfg):
+    """Run one Elo tournament round on freshly ingested ideas.
+
+    Pulled out as a module-level function so the phases mixin stays thin and
+    so the import of orze_substrate is lazy (so old environments without the
+    substrate installed don't break ingestion).
+    """
+    if not lake or not ingested_ids:
+        return
+    import yaml as _yaml
+    from orze_substrate.elo_ranking import run_tournament_round
+    from orze_substrate.role_outputs import IdeaProposal
+
+    proposals = []
+    rows = []
+    try:
+        rows = lake.get_by_ids(list(ingested_ids))  # type: ignore[attr-defined]
+    except AttributeError:
+        # Fallback: query each id (lake API drift).
+        rows = []
+        for iid in ingested_ids:
+            try:
+                r = lake.get(iid)  # type: ignore[attr-defined]
+                if r:
+                    rows.append(r)
+            except Exception:
+                continue
+    except Exception:
+        rows = []
+    for r in rows or []:
+        try:
+            cfg_parsed = _yaml.safe_load(r.get("config") or "") or {}
+        except Exception:
+            cfg_parsed = {}
+        if not isinstance(cfg_parsed, dict):
+            cfg_parsed = {"raw": str(cfg_parsed)}
+        fam = r.get("approach_family") or "other"
+        # Map non-canonical families to "other" so validator-free
+        # IdeaProposal construction is still useful for the judge prompt.
+        valid_families = {"data_mix", "architecture", "decode",
+                          "regularization", "distillation",
+                          "infrastructure", "other"}
+        if fam not in valid_families:
+            fam = "other"
+        proposals.append(IdeaProposal(
+            idea_id=r["idea_id"],
+            title=(r.get("title") or "")[:80],
+            approach_family=fam,
+            hypothesis=(r.get("hypothesis") or "")[:600],
+            kill_criterion="auto (judged pre-launch)",
+            config=cfg_parsed,
+            predicted_metric_gain_pp=0.0,
+            estimated_cost_gpu_hours=1.0,
+        ))
+    if len(proposals) < 2:
+        return
+    max_matches = int(substrate_cfg.get("elo_max_matches_per_cycle", 10))
+    judge_model = substrate_cfg.get("elo_judge_model", "claude-sonnet-4-6")
+    judge_bin = substrate_cfg.get("elo_judge_bin", "orze-claude")
+    res = run_tournament_round(
+        proposals,
+        judge_model=judge_model,
+        judge_bin=judge_bin,
+        max_matches=max_matches,
+    )
+    logger.info(
+        "Elo tournament round: matches=%d errors=%d top_3=%s",
+        res["n_matches"], res["n_errors"],
+        [(e["idea_id"], round(e["elo"], 1)) for e in res["top_3"]],
+    )
+
+
 class OrzePhaseMixin:
     """Phase methods for the main orchestration loop."""
 
@@ -172,6 +244,17 @@ class OrzePhaseMixin:
             if ingested_ids:
                 logger.info("Ingested %d new ideas from %s to SQLite queue",
                             len(ingested_ids), cfg["ideas_file"])
+                # Co-Scientist-style Elo triage (Item 1, 2026-05-23 spec).
+                # Behind feature flag substrate.elo_ranking_enabled (default
+                # off). Best-effort: never blocks ingestion. See
+                # orze_substrate/elo_ranking.py for design notes.
+                try:
+                    substrate_cfg = cfg.get("substrate", {}) or {}
+                    if substrate_cfg.get("elo_ranking_enabled"):
+                        _run_elo_tournament_for_ingested(
+                            self.lake, ingested_ids, substrate_cfg)
+                except Exception as e:  # pragma: no cover — never block ingest
+                    logger.warning("Elo tournament round skipped: %s", e)
                 # Consumption: wipe ideas.md after ingestion, keeping header.
                 # Use fs lock to prevent race with concurrent research agent appends.
                 ideas_lock = self.results_dir / ".ideas_md.lock"
@@ -326,6 +409,23 @@ class OrzePhaseMixin:
                     }
                 ideas = expand_sweeps(queue_ideas, max_combos=sweep_max)
                 unclaimed = get_unclaimed(ideas, self.results_dir, skipped, lake=self.lake)
+
+        # Co-Scientist-style Elo reordering of the unclaimed launch queue.
+        # Behind feature flag substrate.elo_ranking_enabled (default off).
+        # Stable: ties preserve original (priority/recency) order; ideas
+        # with no Elo entry default to 1500 so they aren't penalized.
+        try:
+            substrate_cfg = cfg.get("substrate", {}) or {}
+            if substrate_cfg.get("elo_ranking_enabled") and unclaimed:
+                from orze_substrate.elo_ranking import select_for_launch
+                pre = list(unclaimed[:10])
+                unclaimed = select_for_launch(unclaimed, n=len(unclaimed))
+                if pre != unclaimed[:10]:
+                    logger.info(
+                        "Elo reordered unclaimed top 10: before=%s after=%s",
+                        pre, unclaimed[:10])
+        except Exception as e:  # pragma: no cover — never block launch
+            logger.warning("Elo reorder skipped: %s", e)
 
         if unclaimed:
             logger.info("Unclaimed queue (top 5): %s", unclaimed[:5])
