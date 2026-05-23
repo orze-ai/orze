@@ -1142,6 +1142,32 @@ class OrzePhaseMixin:
                 notify("milestone", {"count": curr_milestone}, cfg)
                 self._last_milestone = curr_milestone
 
+        # 8d.0 Housekeeper (orze_substrate.housekeeper) — runs every
+        # ~30 min (wall-clock). Demotes Professor God Agent by handling
+        # mechanical/housekeeping jobs (archive stale triggers, disable
+        # satisfied validators, auto-close expired DECs, promote top
+        # exec_hashes). Pure-Python, no LLM. Idempotent and safe to run
+        # alongside legacy manual professor housekeeping.
+        try:
+            _hk_interval = 1800  # 30 min
+            _hk_now = time.time()
+            if _hk_now - self._last_housekeep >= _hk_interval:
+                from orze_substrate import housekeeper as _hk
+                _prof_cyc = ((self.role_states or {}).get("professor")
+                             or {}).get("cycles", 0) or 0
+                _hk_db = Path(".orze/exec_registry.db")
+                _hk_out = _hk.run_all(self.results_dir,
+                                      int(_prof_cyc), _hk_db)
+                logger.info(
+                    "[housekeeper] archived=%d disabled=%d closed=%d "
+                    "promoted=%d (prof_cycle=%d)",
+                    len(_hk_out["archived"]), len(_hk_out["disabled"]),
+                    len(_hk_out["closed"]), len(_hk_out["promoted"]),
+                    int(_prof_cyc))
+                self._last_housekeep = _hk_now
+        except Exception as _hk_e:  # pragma: no cover - never break loop
+            logger.warning("housekeeper sweep failed: %s", _hk_e)
+
         # 8d. Disk warning (at most once per 30 min)
         if not disk_ok and time.time() - self._last_disk_warning > 1800:
             try:

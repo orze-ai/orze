@@ -160,6 +160,9 @@ class Orze(OrzePhaseMixin):
         self._hb_completed_count: int = 0  # for heartbeat rate calc
         self._last_milestone: int = 0      # last milestone boundary hit
         self._last_disk_warning: float = 0.0
+        # Last wall-clock time we ran the housekeeper subprocess
+        # (orze_substrate.housekeeper). 0.0 forces first-run on startup.
+        self._last_housekeep: float = 0.0
 
         self._pending_upgrade: Optional[str] = None
 
