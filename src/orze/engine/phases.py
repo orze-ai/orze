@@ -175,6 +175,87 @@ def _run_elo_tournament_for_ingested(lake, ingested_ids, substrate_cfg):
     )
 
 
+def _run_reflection_for_ingested(lake, ingested_ids, substrate_cfg, results_dir):
+    """Run the Reflection critic on freshly ingested ideas.
+
+    Item 2 of docs/superpowers/specs/2026-05-23-co-scientist-comparison.md:
+    pre-launch devil's-advocate that flags wiring-gap / false-positive /
+    trivial-result risks. Writes results/_reflections/_reflection_<id>.md.
+
+    Pulled out as a module-level function so the phases mixin stays thin and
+    so the import of orze_substrate is lazy (old environments without the
+    substrate installed don't break ingestion).
+    """
+    if not lake or not ingested_ids:
+        return
+    import yaml as _yaml
+    from orze_substrate.reflection import critique_batch
+    from orze_substrate.role_outputs import IdeaProposal
+
+    rows = []
+    try:
+        rows = lake.get_by_ids(list(ingested_ids))  # type: ignore[attr-defined]
+    except AttributeError:
+        rows = []
+        for iid in ingested_ids:
+            try:
+                r = lake.get(iid)  # type: ignore[attr-defined]
+                if r:
+                    rows.append(r)
+            except Exception:
+                continue
+    except Exception:
+        rows = []
+
+    valid_families = {"data_mix", "architecture", "decode",
+                      "regularization", "distillation",
+                      "infrastructure", "other"}
+    proposals = []
+    for r in rows or []:
+        try:
+            cfg_parsed = _yaml.safe_load(r.get("config") or "") or {}
+        except Exception:
+            cfg_parsed = {}
+        if not isinstance(cfg_parsed, dict):
+            cfg_parsed = {"raw": str(cfg_parsed)}
+        fam = r.get("approach_family") or "other"
+        if fam not in valid_families:
+            fam = "other"
+        title = (r.get("title") or "")[:80]
+        hyp = (r.get("hypothesis") or title)
+        proposals.append(IdeaProposal(
+            idea_id=r["idea_id"],
+            title=title,
+            approach_family=fam,
+            hypothesis=hyp[:600],
+            kill_criterion="auto (critiqued pre-launch)",
+            config=cfg_parsed,
+            predicted_metric_gain_pp=0.0,
+            estimated_cost_gpu_hours=1.0,
+        ))
+    if not proposals:
+        return
+    max_critiques = int(substrate_cfg.get("reflection_max_per_cycle", 5))
+    critic_model = substrate_cfg.get("reflection_critic_model",
+                                     "claude-sonnet-4-6")
+    critic_bin = substrate_cfg.get("reflection_critic_bin", "orze-claude")
+    timeout_s = int(substrate_cfg.get("reflection_timeout_seconds", 90))
+    verdicts = critique_batch(
+        proposals, Path(results_dir),
+        max_critiques=max_critiques,
+        critic_model=critic_model,
+        critic_bin=critic_bin,
+        timeout_seconds=timeout_s,
+    )
+    block = sum(1 for v in verdicts if v.severity == "block")
+    warn = sum(1 for v in verdicts if v.severity == "warn")
+    passed = sum(1 for v in verdicts if v.severity == "pass")
+    logger.info(
+        "Reflection round: critiqued=%d block=%d warn=%d pass=%d",
+        len(verdicts), block, warn, passed,
+    )
+
+
 class OrzePhaseMixin:
     """Phase methods for the main orchestration loop."""
 
@@ -255,6 +336,19 @@ class OrzePhaseMixin:
                             self.lake, ingested_ids, substrate_cfg)
                 except Exception as e:  # pragma: no cover — never block ingest
                     logger.warning("Elo tournament round skipped: %s", e)
+                # Co-Scientist-style Reflection critic (Item 2, 2026-05-23 spec).
+                # Behind feature flag substrate.reflection_enabled (default
+                # off). Best-effort: never blocks ingestion. Writes
+                # results/_reflections/_reflection_<idea_id>.md for engineer
+                # / research / professor to consume next cycle.
+                try:
+                    substrate_cfg = cfg.get("substrate", {}) or {}
+                    if substrate_cfg.get("reflection_enabled"):
+                        _run_reflection_for_ingested(
+                            self.lake, ingested_ids, substrate_cfg,
+                            self.results_dir)
+                except Exception as e:  # pragma: no cover — never block ingest
+                    logger.warning("Reflection round skipped: %s", e)
                 # Consumption: wipe ideas.md after ingestion, keeping header.
                 # Use fs lock to prevent race with concurrent research agent appends.
                 ideas_lock = self.results_dir / ".ideas_md.lock"
