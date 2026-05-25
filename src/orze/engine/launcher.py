@@ -805,19 +805,24 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
 def _is_launcher_paused(cfg: dict, results_dir: Path) -> bool:
     """Return True if queue consumption should be suspended this cycle.
 
-    Three ways to set the pause:
+    Four sentinel paths are checked in order (first match wins):
     - orze.yaml: launcher.paused: true
-    - touch results/_launcher_paused.flag  (canonical path)
-    - touch _launcher_paused.flag          (project root, one level above results_dir;
-                                            intended for ad-hoc operator use without
-                                            needing to know the results/ subdirectory)
+    - results/_launcher_paused.flag        (canonical path)
+    - <project_root>/_launcher_paused.flag (one level above results_dir)
+    - ./_launcher_paused.flag              (cwd sentinel; accepted when cwd != results_dir.parent)
     """
     if cfg.get("launcher", {}).get("paused", False):
         return True
     results_path = Path(results_dir)
-    if (results_path / "_launcher_paused.flag").exists():
-        return True
-    return (results_path.parent / "_launcher_paused.flag").exists()
+    for candidate in (
+        results_path / "_launcher_paused.flag",
+        results_path.parent / "_launcher_paused.flag",
+        Path.cwd() / "_launcher_paused.flag",
+    ):
+        if candidate.exists():
+            logger.info("Launcher paused: flag found at %s", candidate)
+            return True
+    return False
 
 
 def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProcess:
