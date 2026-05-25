@@ -107,7 +107,8 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
         if not comp_id and isinstance(cfg.get("data"), dict):
             comp_id = cfg["data"].get("competition_id", "")
         medal_need = 0 if comp_id in no_medal_comps else 1
-        return (pri, medal_need, inference_boost, idea_id)
+        portfolio_boost = 0 if idea_id.startswith("idea-pf-") else 1
+        return (pri, portfolio_boost, medal_need, inference_boost, idea_id)
 
     unclaimed.sort(key=sort_key)
     return unclaimed
