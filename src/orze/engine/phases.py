@@ -32,7 +32,7 @@ from orze.engine.failure import (
     _record_failure, get_skipped_ideas, _try_executor_fix, _reset_idea_for_retry,
 )
 from orze.engine.launcher import (
-    launch, _get_checkpoint_dir, _write_failure,
+    launch, _get_checkpoint_dir, _write_failure, _is_launcher_paused,
 )
 from orze.engine.process import run_pre_script
 from orze.engine.scheduler import claim, get_unclaimed, _count_statuses
@@ -775,6 +775,10 @@ class OrzePhaseMixin:
                     )
                 except Exception as e:
                     logger.warning("Emergency GC failed: %s", e)
+
+        if _is_launcher_paused(cfg, self.results_dir):
+            logger.info("launcher paused — skipping dispatch this cycle")
+            return free
 
         if unclaimed and free and disk_ok:
             # With multi-slot scheduling, keep launching until all slots are full

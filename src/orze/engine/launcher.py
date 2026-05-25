@@ -802,6 +802,18 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
     return tp
 
 
+def _is_launcher_paused(cfg: dict, results_dir: Path) -> bool:
+    """Return True if queue consumption should be suspended this cycle.
+
+    Two ways to set the pause:
+    - orze.yaml: launcher.paused: true
+    - touch results/_launcher_paused.flag
+    """
+    if cfg.get("launcher", {}).get("paused", False):
+        return True
+    return (Path(results_dir) / "_launcher_paused.flag").exists()
+
+
 def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProcess:
     """Launch a training subprocess on the given GPU.
 
