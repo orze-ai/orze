@@ -108,7 +108,13 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
             comp_id = cfg["data"].get("competition_id", "")
         medal_need = 0 if comp_id in no_medal_comps else 1
         portfolio_boost = 0 if idea_id.startswith("idea-pf-") else 1
-        return (pri, portfolio_boost, medal_need, inference_boost, idea_id)
+        # Stable-hash tiebreaker replaces alphabetic idea_id sort to avoid
+        # starving ideas whose IDs sort late (per project_pf_idea_alphabetic_starvation
+        # memory: numeric-prefix IDs always won the previous tiebreaker, so any
+        # alphabetic-prefix idea like idea-bb*/idea-cc* was structurally last).
+        import hashlib
+        hash_tiebreak = hashlib.md5(idea_id.encode()).hexdigest()
+        return (pri, portfolio_boost, medal_need, inference_boost, hash_tiebreak)
 
     unclaimed.sort(key=sort_key)
     return unclaimed
