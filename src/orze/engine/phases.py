@@ -33,6 +33,7 @@ from orze.engine.failure import (
 )
 from orze.engine.launcher import (
     launch, _get_checkpoint_dir, _write_failure, _is_launcher_paused,
+    GpuUnavailableError,
 )
 from orze.engine.process import run_pre_script
 from orze.engine.scheduler import claim, get_unclaimed, _count_statuses
@@ -1102,6 +1103,17 @@ class OrzePhaseMixin:
                                 ideas[idea_id]["title"][:50])
                     try:
                         tp = launch(idea_id, gpu, self.results_dir, cfg)
+                    except GpuUnavailableError as e:
+                        # Resource issue, not a code bug: do NOT invoke
+                        # the executor-fix path and do NOT count this
+                        # against the idea's failure budget. Reset
+                        # artifacts so a future cycle can relaunch.
+                        logger.warning(
+                            "[GPU_VALIDATION_FAIL] idea=%s gpu=%s reason=%s "
+                            "— requeueing (no failure recorded)",
+                            idea_id, gpu, e)
+                        _reset_idea_for_retry(self.results_dir / idea_id)
+                        continue
                     except Exception as e:
                         logger.error("Failed to launch %s on GPU %s: %s",
                                      idea_id, gpu, e)

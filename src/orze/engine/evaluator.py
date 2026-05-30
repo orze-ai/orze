@@ -32,6 +32,7 @@ CALLING SPEC:
         side effects: runs each post-script sequentially (blocking), skips if output file exists,
                       skips entirely if training status != COMPLETED
 """
+import datetime
 import json
 import logging
 import os
@@ -48,6 +49,30 @@ from orze.core.fs import tail_file
 logger = logging.getLogger("orze")
 
 
+def _record_eval_audit(idea_dir: Path, action: str, reason: str,
+                       **extra) -> None:
+    """Append one JSONL line to ``<idea_dir>/_eval_audit.jsonl``.
+
+    Surfaces silent-skip cases (eval output already exists, post-script
+    output already exists) that previously only logged at debug level
+    and left no persistent trace for cross-cycle forensics. Closes the
+    Stage-3 silent-skip class where 4 distinct root causes produced the
+    same observable.
+    """
+    try:
+        audit_path = Path(idea_dir) / "_eval_audit.jsonl"
+        entry = {
+            "ts": datetime.datetime.now().isoformat(),
+            "action": action,
+            "reason": reason,
+            **extra,
+        }
+        with open(audit_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass  # audit must never block the eval pipeline
+
+
 def launch_eval(idea_id: str, gpu: int, results_dir: Path,
                 cfg: dict) -> Optional[EvalProcess]:
     """Launch a non-blocking eval subprocess. Returns EvalProcess or None."""
@@ -58,7 +83,14 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     eval_output = cfg.get("eval_output") or "eval_report.json"
     output_path = results_dir / idea_id / eval_output
     if output_path.exists():
-        logger.debug("Eval already exists for %s, skipping", idea_id)
+        logger.info(
+            "[EVAL_SKIP] idea=%s reason=output_exists path=%s",
+            idea_id, output_path,
+        )
+        _record_eval_audit(
+            results_dir / idea_id, "skip", "output_exists",
+            output_path=str(output_path),
+        )
         return None
 
     metrics_path = results_dir / idea_id / "metrics.json"
@@ -277,8 +309,16 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
         if output_file:
             output_path = results_dir / idea_id / output_file
             if output_path.exists():
-                logger.debug("Post-script %d output exists for %s, skipping",
-                             i, idea_id)
+                name = ps.get("name", f"post-script-{i}")
+                logger.info(
+                    "[POST_SCRIPT_SKIP] idea=%s script=%s reason=output_exists "
+                    "path=%s",
+                    idea_id, name, output_path,
+                )
+                _record_eval_audit(
+                    results_dir / idea_id, "skip", "output_exists",
+                    script=name, output_path=str(output_path),
+                )
                 continue
 
         args = ps.get("args") or []
