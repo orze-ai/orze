@@ -376,7 +376,7 @@ class Orze(OrzePhaseMixin):
         self._reporter.process(
             finished, completed_rows, ideas, counts,
             len(self.active),
-            save_config_hash_fn=lambda idea_id, config: save_hash(self.results_dir, idea_id, config),
+            save_config_hash_fn=self._save_config_hash,
             build_machine_status_fn=lambda: build_machine_status(self.results_dir),
         )
 
