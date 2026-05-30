@@ -136,6 +136,14 @@ class IdeaLake:
             self.conn.execute("INSERT INTO id_sequence (next_id) VALUES (1)")
             self.conn.commit()
         self._migrate_if_needed()
+        # Trigger consumption ledger (resolves c1005 / DEC-009). Owned by
+        # orze.engine.trigger_ledger but the table is materialised here
+        # so it exists from first connect, before any consumer runs.
+        try:
+            from orze.engine.trigger_ledger import init_schema as _init_trig
+            _init_trig(self.conn)
+        except Exception as e:
+            logger.warning("trigger_ledger schema init failed: %s", e)
 
     def _migrate_if_needed(self):
         """Migrate from old fixed-column schema to generic JSON blobs."""
