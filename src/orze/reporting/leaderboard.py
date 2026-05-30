@@ -1007,6 +1007,37 @@ class NotificationProcessor:
                 pass
         return view_leaderboards
 
+    def _recover_overrides(self, idea_id, cfg):
+        """Recover an idea's config OVERRIDES from disk when the in-memory
+        idea record is unavailable (archived/stub rows).
+
+        Reads ``resolved_config.yaml`` (full merged config) and subtracts the
+        project base config, leaving the keys/values the idea actually
+        overrode — the SAME canonical key-set the ingest-time dedup hashes.
+        Returns ``None`` when ``resolved_config.yaml`` is absent so the caller
+        can log explicitly instead of silently skipping.
+        """
+        from pathlib import Path as _Path
+        rp = self.results_dir / idea_id / "resolved_config.yaml"
+        if not rp.exists():
+            return None
+        try:
+            rcfg = yaml.safe_load(rp.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            return None
+        base = {}
+        base_path = cfg.get("base_config")
+        if base_path:
+            bp = _Path(base_path)
+            if bp.exists():
+                try:
+                    base = yaml.safe_load(bp.read_text(encoding="utf-8")) or {}
+                except (OSError, yaml.YAMLError):
+                    base = {}
+        # Overrides = keys whose resolved value differs from the base config.
+        return {k: v for k, v in rcfg.items()
+                if k not in base or base.get(k) != v}
+
     def _notify_finished(self, idea_id, gpu, cfg, primary, row_lookup,
                          rank_lookup, leaderboard, view_lbs, ideas,
                          save_config_hash_fn):
@@ -1046,10 +1077,27 @@ class NotificationProcessor:
 
         if status == "COMPLETED":
             try:
-                rp = self.results_dir / idea_id / "resolved_config.yaml"
-                if rp.exists():
-                    rcfg = yaml.safe_load(rp.read_text(encoding="utf-8")) or {}
-                    save_config_hash_fn(idea_id, rcfg)
+                # Config dedup hash MUST be over the same canonical key-set
+                # that ingest checks (engine/phases.py: _config_override_hash
+                # over idea["config"], i.e. user OVERRIDES only). Previously
+                # this hashed the FULL resolved_config.yaml — a different,
+                # much larger key-set — so the stored hash never matched the
+                # ingest-time override hash and dedup NEVER fired. We now hash
+                # the idea's overrides so the two sides agree.
+                overrides = ideas.get(idea_id, {}).get("config")
+                if overrides is None:
+                    # Fallback for archived/stub idea records that don't carry
+                    # the config in memory: recover overrides from the idea's
+                    # resolved_config.yaml minus the base config, so we still
+                    # register the SAME override-keyed hash (no silent skip).
+                    overrides = self._recover_overrides(idea_id, cfg)
+                if overrides is None:
+                    logger.warning(
+                        "Config dedup hash NOT stored for %s: could not "
+                        "resolve config overrides (no in-memory config and "
+                        "no resolved_config.yaml).", idea_id)
+                else:
+                    save_config_hash_fn(idea_id, overrides)
             except Exception as exc:
                 logger.debug("Config hash save failed for %s: %s",
                              idea_id, exc)
