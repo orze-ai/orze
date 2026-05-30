@@ -254,6 +254,16 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                         from orze.engine.failure_analysis import write_failure_analysis
                         write_failure_analysis(
                             results_dir / ep.idea_id, "eval_failure", reason)
+                        # Durably fail the idea, SYMMETRICALLY with the
+                        # sealed-violation path above: write the eval_output
+                        # marker so the backlog scanner (engine/phases.py
+                        # ~line 631: metrics.json present + eval_output absent
+                        # => re-queue) does NOT re-queue this idea forever.
+                        # Invalid metrics are deterministic for a given
+                        # checkpoint, so re-evaluating never resolves them.
+                        _write_eval_failure_marker(
+                            results_dir, ep.idea_id, eval_output,
+                            f"Metric validation failed: {reason}")
                 except Exception:
                     pass
         else:
