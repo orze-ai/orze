@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.3.7 — config-dedup cache fix + eval invalid-metrics requeue fix
+
+### Fixed
+- **Config-dedup cache was silently empty, so duplicate configs retrained from scratch.** Three compounding bugs, all fixed with TDD; the cache now populates and ingest-dedup actually fires (duplicate configs are skipped instead of re-run — reclaiming GPU-days; e.g. the 4.92 % bit-identical sibling pattern).
+  - **Ingest/completion hashed different key-sets.** Ingest hashed `idea['config']` (overrides) while completion hashed the full resolved config, so stored hashes never matched ingest lookups (`src/orze/reporting/leaderboard.py`).
+  - **Completion-save omitted `cfg`.** The reporter's `save_config_hash_fn` wrote the legacy `results/_config_hashes.json` instead of the cfg-aware `.orze/state/config_hashes.json` that ingest reads. Now routes through `_save_config_hash` (`src/orze/engine/orchestrator.py`).
+  - **`rebuild_hashes` + `_recover_overrides` read `resolved_config.yaml`, which exists in 0 of the real idea dirs.** They now read `idea_config.yaml` (the real on-disk overrides, which hash identically to the ingest config — verified 1134/1143 ≈ 99.2 % of ideas), falling back to `resolved_config.yaml` for back-compat (`src/orze/core/integrity.py`, `src/orze/reporting/leaderboard.py`).
+- **Eval invalid-metrics caused an infinite re-queue loop.** The metric-invalid path wrote `failure_analysis.json` but not the `eval_output` marker, so the backlog scanner re-queued the idea every cycle forever. Now durably fails the idea, symmetric with the sealed-violation path (`src/orze/engine/evaluator.py`).
+
+NOTE: requires a daemon restart to activate (editable install; the running daemon holds the old code).
+
 ## 4.3.3 — Sweep blocklist for soup bundles + nested-config & validator fixes
 
 ### Fixed
