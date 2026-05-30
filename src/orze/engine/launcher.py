@@ -802,27 +802,46 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
     return tp
 
 
+def _resolve_pause_flag_path(cfg: dict, results_dir: Path) -> Path:
+    """Resolve the single canonical pause-flag path.
+
+    Precedence:
+    1. ``launcher.paused_flag_path`` in orze.yaml (absolute or relative to
+       ``results_dir``).
+    2. ``<results_dir>/_launcher_paused.flag`` (default).
+
+    Always returns an absolute, fully-resolved path so that cwd shifts cannot
+    flip the result between cycles (root cause of c1135).
+    """
+    override = cfg.get("launcher", {}).get("paused_flag_path")
+    results_path = Path(results_dir)
+    if override:
+        candidate = Path(override)
+        if not candidate.is_absolute():
+            candidate = results_path / candidate
+    else:
+        candidate = results_path / "_launcher_paused.flag"
+    return candidate.resolve()
+
+
 def _is_launcher_paused(cfg: dict, results_dir: Path) -> bool:
     """Return True if queue consumption should be suspended this cycle.
 
-    Four sentinel paths are checked in order (first match wins):
-    - orze.yaml: launcher.paused: true
-    - results/_launcher_paused.flag        (canonical path)
-    - <project_root>/_launcher_paused.flag (one level above results_dir)
-    - ./_launcher_paused.flag              (cwd sentinel; accepted when cwd != results_dir.parent)
+    Sources, in order:
+    - ``launcher.paused: true`` in orze.yaml (config-level kill switch)
+    - presence of the canonical pause-flag file (see ``_resolve_pause_flag_path``)
+
+    Every call emits ``[PAUSE_CHECK] path=<...> present=<bool> config_paused=<bool>``
+    so operators can confirm which sentinel a daemon is watching.
     """
-    if cfg.get("launcher", {}).get("paused", False):
-        return True
-    results_path = Path(results_dir)
-    for candidate in (
-        results_path / "_launcher_paused.flag",
-        results_path.parent / "_launcher_paused.flag",
-        Path.cwd() / "_launcher_paused.flag",
-    ):
-        if candidate.exists():
-            logger.info("Launcher paused: flag found at %s", candidate)
-            return True
-    return False
+    config_paused = bool(cfg.get("launcher", {}).get("paused", False))
+    flag_path = _resolve_pause_flag_path(cfg, results_dir)
+    flag_present = flag_path.exists()
+    logger.info(
+        "[PAUSE_CHECK] path=%s present=%s config_paused=%s",
+        flag_path, flag_present, config_paused,
+    )
+    return config_paused or flag_present
 
 
 def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProcess:

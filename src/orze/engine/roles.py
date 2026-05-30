@@ -199,18 +199,21 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                 _consecutive_soft_failures.pop(role_name, None)
                 outcome = OUTCOME_OK
             else:
-                ideas_modified = _ideas_were_modified(ideas_file, rp)
-                if ideas_modified:
-                    logger.info("%s cycle %d completed", role_name, rp.cycle_num)
+                credits = _ideas_modified_credits(ideas_file, rp)
+                if credits["modified"]:
+                    logger.info(
+                        "%s cycle %d completed [SOFT_FAILURE_CHECK] %s",
+                        role_name, rp.cycle_num, _fmt_credits(credits))
                     _consecutive_soft_failures.pop(role_name, None)
                     outcome = OUTCOME_OK
                 else:
                     count = _consecutive_soft_failures.get(role_name, 0) + 1
                     _consecutive_soft_failures[role_name] = count
-                    logger.warning("%s cycle %d exited 0 but ideas.md was not modified "
-                                   "(soft failure %d/%d)",
-                                   role_name, rp.cycle_num, count,
-                                   _SOFT_FAILURE_ERROR_THRESHOLD)
+                    logger.warning(
+                        "%s cycle %d exited 0 but ideas.md was not modified "
+                        "[SOFT_FAILURE_REASON] %s (soft failure %d/%d)",
+                        role_name, rp.cycle_num, _fmt_credits(credits),
+                        count, _SOFT_FAILURE_ERROR_THRESHOLD)
                     if count >= _SOFT_FAILURE_ERROR_THRESHOLD:
                         logger.error("%s has %d consecutive soft failures "
                                      "(exit 0, no output) — role may be misconfigured",
@@ -237,46 +240,113 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
     return finished
 
 
-def _ideas_were_modified(ideas_file: str, rp: "RoleProcess") -> bool:
-    """Check if ideas.md was modified by the role (size or idea count changed).
+def _ideas_modified_credits(ideas_file: str,
+                            rp: "RoleProcess") -> Dict[str, object]:
+    """Evaluate all three soft-failure credit signals and return them.
 
-    Three credit signals, in order:
+    Returns a dict with keys:
+      modified (bool)            — final verdict, True if any credit fired
+      credit  (str)              — which credit decided it: "consumed",
+                                   "mtime", "size", "count",
+                                   "no_pre_snapshot", "none", "missing",
+                                   or "stat_error"
+      consumed (int)             — ideas_consumed_during_run counter
+      mtime_delta (float|None)   — current_mtime - ideas_md_mtime_pre,
+                                   or None if pre_mtime unset / stat failed
+      size_pre (int)             — ideas_pre_size at role start
+      size_post (int|None)       — current size, or None if missing/stat error
+      count_pre (int)            — ideas_pre_count at role start
+      count_post (int|None)      — current idea count, or None if not read
 
-    1. `ideas_consumed_during_run > 0`: this daemon's consumption phase
-       credited the role mid-run — same-daemon case.
-    2. ideas.md mtime > `ideas_md_mtime_pre`: ideas.md was touched on
-       the shared filesystem during the role's lifetime. Catches the
-       cross-daemon case where a DIFFERENT daemon wiped ideas.md (and
-       so only bumped its own active_roles' counters).
-    3. Post-exit size/count differs from pre-snapshot: fallback for
-       roles whose output never got consumed.
+    Forensics: c1196 (silent-skip family 6) could not be diagnosed because
+    only the final bool was visible. Every credit is now logged at the call
+    site so cross-cycle analysis can distinguish "consumed by same daemon"
+    from "wiped by another daemon" from "actually no output".
     """
-    if getattr(rp, "ideas_consumed_during_run", 0) > 0:
-        return True
+    credits: Dict[str, object] = {
+        "modified": False,
+        "credit": "none",
+        "consumed": int(getattr(rp, "ideas_consumed_during_run", 0)),
+        "mtime_delta": None,
+        "size_pre": int(getattr(rp, "ideas_pre_size", 0)),
+        "size_post": None,
+        "count_pre": int(getattr(rp, "ideas_pre_count", 0)),
+        "count_post": None,
+    }
+
+    if credits["consumed"] > 0:
+        credits["modified"] = True
+        credits["credit"] = "consumed"
+        return credits
+
     ideas_path = Path(ideas_file)
     if not ideas_path.exists():
-        return False
-    pre_mtime = getattr(rp, "ideas_md_mtime_pre", 0.0)
+        credits["credit"] = "missing"
+        return credits
+
+    pre_mtime = float(getattr(rp, "ideas_md_mtime_pre", 0.0))
+    current_mtime = None
+    current_size = None
     try:
-        current_mtime = ideas_path.stat().st_mtime
-        if pre_mtime > 0 and current_mtime > pre_mtime:
-            return True
+        st = ideas_path.stat()
+        current_mtime = st.st_mtime
+        current_size = st.st_size
+        credits["size_post"] = int(current_size)
     except OSError:
-        pass
-    if rp.ideas_pre_size == 0:
+        credits["credit"] = "stat_error"
+        return credits
+
+    if pre_mtime > 0 and current_mtime is not None:
+        credits["mtime_delta"] = current_mtime - pre_mtime
+        if current_mtime > pre_mtime:
+            credits["modified"] = True
+            credits["credit"] = "mtime"
+            return credits
+
+    if credits["size_pre"] == 0:
         # No pre-snapshot; can't tell — assume modified to avoid false positives
-        return True
+        credits["modified"] = True
+        credits["credit"] = "no_pre_snapshot"
+        return credits
+
+    if current_size != credits["size_pre"]:
+        credits["modified"] = True
+        credits["credit"] = "size"
+        return credits
+
+    # Size same — check idea count
     try:
-        current_size = ideas_path.stat().st_size
-        if current_size != rp.ideas_pre_size:
-            return True
-        # Size same — check idea count
         current_text = ideas_path.read_text(encoding="utf-8")
         current_count = len(re.findall(r"^## idea-[a-z0-9]+:", current_text,
                                        re.MULTILINE))
-        return current_count != rp.ideas_pre_count
+        credits["count_post"] = int(current_count)
+        if current_count != credits["count_pre"]:
+            credits["modified"] = True
+            credits["credit"] = "count"
     except OSError:
-        return False
+        credits["credit"] = "stat_error"
+    return credits
+
+
+def _fmt_credits(c: Dict[str, object]) -> str:
+    """Compact one-line rendering of credit signals for log scraping."""
+    md = c.get("mtime_delta")
+    md_s = f"{md:+.3f}" if isinstance(md, (int, float)) else "n/a"
+    return (
+        f"credit={c['credit']} consumed={c['consumed']} "
+        f"mtime_delta={md_s} "
+        f"size={c['size_pre']}->{c['size_post']} "
+        f"count={c['count_pre']}->{c['count_post']}"
+    )
+
+
+def _ideas_were_modified(ideas_file: str, rp: "RoleProcess") -> bool:
+    """Back-compat shim: returns just the bool verdict.
+
+    Prefer ``_ideas_modified_credits`` at call sites that want to log the
+    individual signals.
+    """
+    return bool(_ideas_modified_credits(ideas_file, rp)["modified"])
 
 
 def _prune_corrupt_archive(archive_dir: Path, basename: str,
