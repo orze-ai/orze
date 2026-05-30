@@ -777,6 +777,10 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
     if gpu is not None and int(gpu) >= 0:
         env["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
+    # Final sanity-check that the claimed GPU is still free at Popen
+    # time (c1136). Raises GpuUnavailableError if not.
+    _verify_gpu_free(gpu, int(cfg.get("launcher_min_free_vram_mib", 1000)))
+
     log_fh = open(log_path, "a")
     log_fh.write(f"\n[posthoc_runner] kind={kind} gpu={gpu}\n")
     log_fh.flush()
@@ -800,6 +804,49 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
     )
     tp.is_posthoc = True
     return tp
+
+
+class GpuUnavailableError(RuntimeError):
+    """Raised when the claimed GPU lacks free VRAM at Popen time.
+
+    Distinct from generic launch errors so phases.py can requeue the
+    idea without invoking the executor-fix path — this is a resource
+    issue, not a code bug.
+    """
+
+
+def _verify_gpu_free(gpu, min_free_mib: int) -> None:
+    """Sanity-check that ``gpu`` has at least ``min_free_mib`` free VRAM
+    immediately before spawning the subprocess.
+
+    Closes c1136 / smart_dispatch class: the scheduler's 5s-cached VRAM
+    view can permit a launch that the live GPU cannot host, leading to
+    multiple shards landing on one GPU and OOM-crashing.
+
+    Fail-open on nvidia-smi errors so a transient query hiccup never
+    blocks a healthy launch.
+    """
+    if gpu is None or int(gpu) < 0 or min_free_mib <= 0:
+        return
+    try:
+        from orze.engine.gpu_slots import _query_all_gpu_usage
+        usage = _query_all_gpu_usage()
+    except Exception:
+        return  # fail-open on query failure
+    if not usage:
+        return  # nvidia-smi unavailable — fail-open
+    entry = usage.get(int(gpu))
+    if entry is None:
+        raise GpuUnavailableError(
+            f"GPU {gpu} not visible to nvidia-smi at launch time"
+        )
+    used, total = entry
+    free = total - used
+    if free < min_free_mib:
+        raise GpuUnavailableError(
+            f"GPU {gpu} has {free} MiB free, need >= {min_free_mib} MiB "
+            f"(used={used}, total={total})"
+        )
 
 
 def _resolve_pause_flag_path(cfg: dict, results_dir: Path) -> Path:
@@ -974,6 +1021,11 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
     env["CUDA_VISIBLE_DEVICES"] = str(gpu)
     if use_wrapper:
         _apply_data_boundary_env(env, db_cfg, results_dir / idea_id)
+
+    # Final sanity-check that the claimed GPU is still free at Popen
+    # time (c1136). Raises GpuUnavailableError if not — handled in
+    # phases.py as a requeue, not a code-fix retry.
+    _verify_gpu_free(gpu, int(cfg.get("launcher_min_free_vram_mib", 1000)))
 
     # Keep file handle open for subprocess lifetime
     log_fh = open(log_path, "w", encoding="utf-8")
