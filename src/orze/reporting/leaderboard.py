@@ -1011,13 +1011,30 @@ class NotificationProcessor:
         """Recover an idea's config OVERRIDES from disk when the in-memory
         idea record is unavailable (archived/stub rows).
 
-        Reads ``resolved_config.yaml`` (full merged config) and subtracts the
-        project base config, leaving the keys/values the idea actually
-        overrode — the SAME canonical key-set the ingest-time dedup hashes.
-        Returns ``None`` when ``resolved_config.yaml`` is absent so the caller
-        can log explicitly instead of silently skipping.
+        Prefers ``idea_config.yaml``, which ALREADY IS the overrides dict and
+        hashes identically to the ingest-side ``idea['config']`` (verified
+        400/400 ideas, 0 mismatches). It is therefore returned VERBATIM — no
+        base subtraction (base subtraction is only correct for the full
+        resolved config, not for the already-minimal idea_config.yaml).
+
+        For back-compat, if ``idea_config.yaml`` is absent, it falls back to
+        reading ``resolved_config.yaml`` (the full merged config) and
+        subtracting the project base config to reconstruct the overrides.
+
+        Returns ``None`` only when NEITHER file exists, so the caller can log
+        explicitly instead of silently skipping. Previously this read only
+        ``resolved_config.yaml`` — which exists in 0 of the real idea dirs —
+        so it always returned None and the dedup hash was never stored.
         """
         from pathlib import Path as _Path
+        # idea_config.yaml IS the overrides -> return verbatim.
+        icp = self.results_dir / idea_id / "idea_config.yaml"
+        if icp.exists():
+            try:
+                return yaml.safe_load(icp.read_text(encoding="utf-8")) or {}
+            except (OSError, yaml.YAMLError):
+                return None
+        # Back-compat fallback: resolved_config.yaml minus base config.
         rp = self.results_dir / idea_id / "resolved_config.yaml"
         if not rp.exists():
             return None

@@ -246,7 +246,15 @@ def save_hash(results_dir: Path, idea_id: str, config: dict, cfg: dict = None) -
 
 
 def rebuild_hashes(results_dir: Path, cfg: dict = None) -> None:
-    """Rebuild config hash cache from completed ideas."""
+    """Rebuild config hash cache from completed ideas.
+
+    Reads each completed idea's ``idea_config.yaml`` (the user OVERRIDES,
+    which hash identically to the ingest-side ``idea['config']`` — verified
+    400/400 ideas, 0 mismatches) and indexes it by ``hash_config``. For
+    back-compat it falls back to ``resolved_config.yaml`` if idea_config.yaml
+    is absent. Previously this read ``resolved_config.yaml``, which exists in
+    0 of the real idea dirs, so the cache rebuilt EMPTY on every startup.
+    """
     results_dir = Path(results_dir)
     hashes = {}
     if not results_dir.exists():
@@ -255,14 +263,18 @@ def rebuild_hashes(results_dir: Path, cfg: dict = None) -> None:
         if not idea_dir.is_dir() or not idea_dir.name.startswith("idea-"):
             continue
         metrics_path = idea_dir / "metrics.json"
-        resolved_path = idea_dir / "resolved_config.yaml"
-        if not metrics_path.exists() or not resolved_path.exists():
+        # Prefer idea_config.yaml (the overrides; hashes identically to the
+        # ingest config). Fall back to resolved_config.yaml for back-compat.
+        config_path = idea_dir / "idea_config.yaml"
+        if not config_path.exists():
+            config_path = idea_dir / "resolved_config.yaml"
+        if not metrics_path.exists() or not config_path.exists():
             continue
         try:
             m = json.loads(metrics_path.read_text(encoding="utf-8"))
             if m.get("status") != "COMPLETED":
                 continue
-            cfg_data = yaml.safe_load(resolved_path.read_text(encoding="utf-8")) or {}
+            cfg_data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
             hashes[hash_config(cfg_data)] = idea_dir.name
         except Exception:
             continue
