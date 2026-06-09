@@ -1,5 +1,22 @@
 # Changelog
 
+## 4.3.8 — DeepSeek backend for the LLM-CLI shim
+
+### Added
+- **`deepseek` backend + `orze-deepseek` shim entry point.** Drives the Claude
+  Code CLI (`claude`) against DeepSeek's Anthropic-compatible endpoint
+  (`https://api.deepseek.com/anthropic`), so any `mode: claude` role can run on
+  DeepSeek — keeping the full agentic tool-use loop at ~10–50× lower token cost.
+  A role opts in with `claude_bin: orze-deepseek` + `model: deepseek-v4-pro`
+  (or `deepseek-v4-flash`); the DeepSeek key is read from `DEEPSEEK_API_KEY` and
+  injected as the Anthropic auth token, so the real `ANTHROPIC_API_KEY` is never
+  used (verified: billing goes to DeepSeek even when both keys are present).
+  Override the endpoint with `ORZE_DEEPSEEK_BASE_URL`.
+  - `BackendSpec` gains generic base-URL redirection fields (`base_url`,
+    `base_url_var`, `auth_token_vars`, `default_model_env`); `_child_env` injects
+    them. Existing backends (claude/gemini/codex/kimi) are unchanged — the
+    redirect only fires when `base_url` is set.
+
 ## 4.3.7 — config-dedup cache fix + eval invalid-metrics requeue fix
 
 ### Fixed

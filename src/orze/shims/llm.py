@@ -114,6 +114,24 @@ class BackendSpec:
     subscription_auth_failure_patterns: Tuple[str, ...] = (
         _AUTH_FAILURE_SIGNALS_DEFAULT
     )
+    # --- Base-URL redirection (OpenAI-/Anthropic-compatible providers) ---
+    # When ``base_url`` is set, the backend wraps a host CLI (typically
+    # ``claude``) but points it at a third-party provider that speaks the
+    # same wire protocol. The child env gets ``base_url_var`` set to
+    # ``base_url``, and the provider key (read from ``api_key_var``) is
+    # copied into every var in ``auth_token_vars`` so the host CLI
+    # authenticates against the provider rather than its native vendor.
+    # This is how ``orze-deepseek`` drives the Claude Code CLI against
+    # DeepSeek's Anthropic-compatible endpoint. Empty ``base_url`` (the
+    # default) leaves all native-vendor behavior untouched.
+    base_url: Optional[str] = None
+    base_url_var: str = "ANTHROPIC_BASE_URL"
+    auth_token_vars: Tuple[str, ...] = field(default_factory=tuple)
+    # Optional default model env vars injected when the host CLI would
+    # otherwise fall back to a native-vendor model name the provider
+    # rejects (e.g. Claude Code's background "small fast model").
+    # Mapping of env-var-name -> model-id. Only set when missing.
+    default_model_env: Tuple[Tuple[str, str], ...] = field(default_factory=tuple)
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +186,34 @@ BACKENDS: dict = {
             "insufficient_quota",
         ),
     ),
+    # DeepSeek via its Anthropic-compatible endpoint. Wraps the *Claude
+    # Code* CLI (``claude``) but redirects it at DeepSeek so existing
+    # ``mode: claude`` roles keep their full agentic tool-use loop
+    # (Read/Write/Edit/Bash/WebSearch) at ~10-50x lower token cost.
+    # The role sets ``claude_bin: orze-deepseek`` + ``model: deepseek-chat``
+    # (or ``deepseek-v4-pro`` for the reasoning model). The DeepSeek key is
+    # read from ``DEEPSEEK_API_KEY`` (orze auto-loads .env) and injected as
+    # the Anthropic auth token. No subscription path — pure API.
+    # Override the endpoint with ORZE_DEEPSEEK_BASE_URL if DeepSeek changes
+    # the path. Verified 2026-06-09 against claude 2.1.170 + deepseek-v4.
+    "deepseek": BackendSpec(
+        binary="claude",
+        api_key_var="DEEPSEEK_API_KEY",
+        allow_subscription_mode=False,
+        quota_signals=(
+            "insufficient balance",
+            "insufficient_quota",
+            "rate limit",
+            "rate_limit",
+            "429",
+        ),
+        base_url="https://api.deepseek.com/anthropic",
+        base_url_var="ANTHROPIC_BASE_URL",
+        auth_token_vars=("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+        default_model_env=(
+            ("ANTHROPIC_SMALL_FAST_MODEL", "deepseek-chat"),
+        ),
+    ),
 }
 
 
@@ -191,12 +237,33 @@ def _shim_only_vars(backend_name: str) -> Tuple[str, ...]:
 def _child_env(base_env: dict, spec: BackendSpec, backend_name: str,
                include_api_key: bool) -> dict:
     """Return a child env with the API key optionally stripped, and the
-    shim's own config vars always removed."""
+    shim's own config vars always removed.
+
+    For base-URL-redirected backends (``spec.base_url`` set, e.g.
+    ``deepseek``), also point the host CLI at the third-party provider:
+    inject ``base_url_var`` and copy the provider key into every
+    ``auth_token_vars`` entry so the wrapped CLI authenticates against the
+    provider instead of its native vendor. The redirect always happens
+    regardless of ``include_api_key`` — the provider key is the only way
+    the CLI can authenticate at all in this mode.
+    """
     shim_vars = set(_shim_only_vars(backend_name))
-    return {
+    env = {
         k: v for k, v in base_env.items()
         if k not in shim_vars and (include_api_key or k != spec.api_key_var)
     }
+    if spec.base_url:
+        # Allow per-host override of the endpoint without a code change.
+        base_url = base_env.get(
+            f"ORZE_{backend_name.upper()}_BASE_URL") or spec.base_url
+        env[spec.base_url_var] = base_url
+        provider_key = base_env.get(spec.api_key_var, "")
+        if provider_key:
+            for var in spec.auth_token_vars:
+                env[var] = provider_key
+        for var, model_id in spec.default_model_env:
+            env.setdefault(var, model_id)
+    return env
 
 
 def _run_once(argv: List[str], env: dict) -> Tuple[int, str]:

@@ -113,6 +113,18 @@ def test_main_full_priority_subscription_then_api_then_gemini(monkeypatch):
         # gemini succeeds
         return 0, "ok"
 
+    # The default claude path runs the FIRST (subscription) attempt through
+    # _run_with_early_auth_kill (Round-2 A1), not _run_once. Mock it too so the
+    # subscription attempt is recorded as step 1 and returns the quota signal
+    # without exec'ing the real `claude` binary. (killed_for_auth=False — this
+    # is a quota cap, not an auth failure.)
+    def fake_early_auth(argv, env, spec, backend_name):
+        bin_name = os.path.basename(argv[0])
+        attempts.append((bin_name, "ANTHROPIC_API_KEY" in env,
+                         "GEMINI_API_KEY" in env))
+        return 1, "reached your specified api usage limits", False
+
+    monkeypatch.setattr(llm, "_run_with_early_auth_kill", fake_early_auth)
     monkeypatch.setattr(llm, "_run_once", fake_run_once)
     rc = llm.main([])
 
