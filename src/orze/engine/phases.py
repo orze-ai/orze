@@ -33,7 +33,7 @@ from orze.engine.failure import (
 )
 from orze.engine.launcher import (
     launch, _get_checkpoint_dir, _write_failure, _is_launcher_paused,
-    GpuUnavailableError,
+    _resolve_train_script, GpuUnavailableError,
 )
 from orze.engine.process import run_pre_script
 from orze.engine.scheduler import claim, get_unclaimed, _count_statuses
@@ -1053,6 +1053,7 @@ class OrzePhaseMixin:
                         if _sops:
                             idea_cfg = flat_cfg if flat_cfg else ideas.get(idea_id, {}).get("config", {})
                             ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
+                            ts = _resolve_train_script(ts, cfg)
                             if ts and idea_cfg:
                                 is_valid, err_msg = _sops.validate_idea(
                                     ts, idea_cfg, cfg.get("python", sys.executable))

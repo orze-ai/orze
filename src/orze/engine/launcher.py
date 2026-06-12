@@ -61,6 +61,30 @@ logger = logging.getLogger("orze")
 _recent_completions: list = []
 
 
+def _resolve_train_script(ts: str, cfg: dict) -> str:
+    """Resolve a per-idea train_script override to an existing path.
+
+    Ideas (and portfolios) sometimes set a bare basename like
+    'train_orze_adapter.py' while the canonical script lives at
+    'vjepa2/train_orze_adapter.py'. A strict Path(ts).exists() check from
+    repo root then rejects the idea with "train_script not found", blocking
+    the whole portfolio. If the literal path is missing but its basename
+    matches the canonical cfg train_script (or a sweep_allowlist entry) that
+    DOES exist, resolve to that real path. Returns ts unchanged when it
+    already exists or no match is found.
+    """
+    if not ts or Path(ts).exists():
+        return ts
+    name = Path(ts).name
+    candidates = [cfg.get("train_script", "")]
+    candidates += list(cfg.get("sweep_allowlist", []) or [])
+    for cand in candidates:
+        if cand and Path(cand).name == name and Path(cand).exists():
+            logger.info("Resolved train_script '%s' -> '%s'", ts, cand)
+            return cand
+    return ts
+
+
 def _get_checkpoint_dir(cfg: dict) -> Optional[Path]:
     """Extract --checkpoint-dir from train_extra_args."""
     args = cfg.get("train_extra_args") or []
@@ -952,7 +976,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
             with open(idea_cfg_path) as _f:
                 idea_cfg = yaml.safe_load(_f) or {}
             if idea_cfg.get("train_script"):
-                train_script = idea_cfg["train_script"]
+                train_script = _resolve_train_script(
+                    idea_cfg["train_script"], cfg)
                 logger.info("Per-idea train_script override: %s -> %s",
                             idea_id, train_script)
         except Exception:

@@ -1,5 +1,27 @@
 # Changelog
 
+## 4.3.9 — launcher train_script resolution + results/ contract normalization
+
+### Fixed
+- **Per-idea `train_script` overrides with a bare basename no longer reject the
+  idea.** Ideas (and auto-generated portfolio sub-runs) sometimes carry
+  `train_script: train_orze_adapter.py` while the canonical script lives at
+  `vjepa2/train_orze_adapter.py`; the strict existence check from repo root
+  failed the launch with "train_script not found", blocking whole portfolios.
+  The launcher now resolves a missing path against the configured
+  `train_script` and `sweep_allowlist` entries by basename
+  (`_resolve_train_script`, `src/orze/engine/launcher.py`).
+- **`./results/` vs `results_dir` split-brain.** RULES files, SOP prompts and
+  agent-authored scripts address experiment state as `./results/` (the
+  historical default), but `results_dir` is configurable. On a project with
+  `results_dir: orze_results` this produced two diverging directories — agent
+  notes written to both, and `_trigger_<role>` files dropped where no consumer
+  looks (observed: a professor-authored engineer trigger rotting unconsumed).
+  Startup now maintains a project-root `results` symlink pointing at the real
+  `results_dir` (no-op when they already coincide; warns instead of touching
+  anything if a real `results/` directory coexists)
+  (`src/orze/engine/lifecycle.py::startup_checks`).
+
 ## 4.3.8 — DeepSeek backend for the LLM-CLI shim
 
 ### Added

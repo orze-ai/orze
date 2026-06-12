@@ -54,6 +54,33 @@ def startup_checks(results_dir: Path, cfg: dict,
             f"writable. Check mount status.")
     logger.info("Filesystem check OK: %s", results_dir)
 
+    # 1.5 Normalize the "results/" contract: RULES files, SOP prompts and
+    # agent-authored scripts address experiment state as ./results/ (the
+    # historical default), but results_dir is configurable. When the two
+    # diverge, agents split-brain their notes across both directories and
+    # drop trigger files where no consumer looks. Keep a project-root
+    # "results" symlink pointing at the real results_dir so both paths
+    # resolve to the same directory.
+    try:
+        link = Path("results")
+        target = results_dir.resolve()
+        if link.resolve() != target:
+            if link.is_symlink():
+                link.unlink()
+                link.symlink_to(target)
+                logger.info("Re-pointed results symlink -> %s", target)
+            elif not link.exists():
+                link.symlink_to(target)
+                logger.info("Linked results -> %s", target)
+            else:
+                logger.warning(
+                    "Both ./results/ and results_dir=%s exist — SOP-authored "
+                    "files in results/ will not be seen by orze. Merge "
+                    "results/ into %s and replace it with a symlink.",
+                    results_dir, results_dir)
+    except OSError as e:
+        logger.warning("results symlink normalization failed: %s", e)
+
     # 2. Clean up stale locks from our own hostname
     cleanup_stale_locks(results_dir, hostname)
 
