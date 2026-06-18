@@ -1,5 +1,39 @@
 # Changelog
 
+## 4.4.0 — engine genericness (task-agnostic, drop-in for any domain)
+
+Removes the last places where the generic `orze` engine named domain/ASR
+concepts in code, so it is genuinely drop-in for non-speech projects. All
+project-specific knowledge now lives in the project's `orze.yaml` /
+`orze_substrate`, never in the engine.
+
+### Changed
+- **`_NESTED_CONFIG_WHITELIST` (`engine/launcher.py`) is now a small generic
+  set** — `ema, augmentation, augmentations, data, training, model,
+  data_boundaries, executor_fix, report`. Project/domain nested keys
+  (`data_mix`, `per_dataset_*`, `soup`, `audio_cleanup`,
+  `length_aware_decoding`, `reverb_augmentation`, `ctc_aux`, `editor`,
+  `decoding`, `contextual_biasing`, `merge_helper`, `adapter_svd_truncation`)
+  are no longer hardcoded in the engine; they come only from the project's
+  `orze.yaml nested_config_whitelist`, which **is** hot-reloaded
+  (`orchestrator._HOT_RELOAD_KEYS`), so the original "hardcode because
+  hot-reload doesn't cover it" justification was obsolete.
+  - **Migration:** projects relying on the engine's hardcoded keys must now
+    declare them in their own `orze.yaml nested_config_whitelist` (this repo's
+    `orze.yaml` already lists them — no action needed here).
+- **Idea perturbation skip-keys are config-driven** (`engine/auto_ideas.py`).
+  Dropped the ASR/Higgs path names `whisper_path` / `boson_multimodal_path`
+  from the built-in `_SKIP`; projects extend the skip set via
+  `cfg["perturb_skip_keys"]`. The `primary_metric` default changed from the
+  ASR-specific `"avg_wer"` to generic `"score"`.
+- **Approach-family enum de-duplicated** into one module-level
+  `_VALID_APPROACH_FAMILIES` constant (`engine/phases.py`).
+
+Behavior-preserving for this project. Full suite: 280 passed / 17 failed (all
+17 failures pre-existing and unrelated — ImportError / ModuleNotFound /
+dir-layout / dead-pid env issues). See `ORZE_GENERICNESS_AUDIT.md` for the full
+task-agnosticism audit (findings H1/H2/S1–S6; H1/H2/S2 landed here).
+
 ## 4.3.9 — launcher train_script resolution + results/ contract normalization
 
 ### Fixed
