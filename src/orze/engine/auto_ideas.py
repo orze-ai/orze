@@ -32,7 +32,7 @@ def _get_best_config(results_dir: Path, cfg: dict) -> Optional[dict]:
     because the raw value is larger. Reuses orze.core.medal."""
     from orze.core.medal import medal_rank
     report_cfg = cfg.get("report", {})
-    primary = report_cfg.get("primary_metric", "avg_wer")
+    primary = report_cfg.get("primary_metric", "score")
     sort_asc = report_cfg.get("sort", "descending") == "ascending"
 
     best_key = None  # (medal_rank, primary_val_signed)
@@ -48,6 +48,14 @@ def _get_best_config(results_dir: Path, cfg: dict) -> Optional[dict]:
         try:
             m = json.loads(mf.read_text())
             if m.get("status") != "COMPLETED":
+                continue
+            # prof cyc-920: never seed a new idea from a proxy-only config.
+            # Require an OFFICIAL full-scale eval (metrics.json
+            # ``official_macro_wer`` set, or an
+            # ``official_batched_full/SCORES.json`` artifact). Rows with only
+            # the banned in-train 8x500 avg_wer proxy are skipped.
+            if m.get("official_macro_wer") is None and not (
+                    d / "official_batched_full" / "SCORES.json").exists():
                 continue
             val = m.get(primary)
             if val is None or not isinstance(val, (int, float)):
@@ -75,10 +83,10 @@ _PERTURBABLE = {
     "batch_size", "max_samples",
 }
 
-# Keys to never perturb
+# Keys to never perturb (paths, prompts, identifiers). Projects can extend this
+# via cfg["perturb_skip_keys"]; the engine names no domain-specific paths here.
 _SKIP = {
-    "model_path", "whisper_path", "boson_multimodal_path",
-    "eval_data_dir", "lora_path", "train_data",
+    "model_path", "eval_data_dir", "lora_path", "train_data",
     "user_prompt", "system_prompt", "text_normalizer",
     "_idea_id", "_primary_val",
 }
@@ -127,9 +135,10 @@ def generate_variations(results_dir: Path, cfg: dict,
     parent_val = best.pop("_primary_val", "?")
 
     # Find perturbable keys
+    skip_keys = set(_SKIP) | {str(k) for k in (cfg.get("perturb_skip_keys") or [])}
     variations = []
     for key, value in best.items():
-        if key in _SKIP:
+        if key in skip_keys:
             continue
         if key not in _PERTURBABLE and not isinstance(value, (int, float)):
             continue

@@ -452,50 +452,23 @@ def _watchdog_check(tp) -> bool:
 # explicitly accept these as nested sub-configs; everything else must be
 # argparse-style scalar kwargs.
 _NESTED_CONFIG_WHITELIST = {
+    # Common ML training sub-configs that trainers accept as nested dicts.
     "ema",
     "augmentation",
     "augmentations",
-    "data_boundaries",   # orze framework-managed
-    "executor_fix",      # orze framework-managed
-    "report",            # orze framework-managed
-    # cycle-346 (professor): hard-code keys that were previously only in
-    # orze.yaml's nested_config_whitelist. The cfg-driven extra_whitelist
-    # path requires an orze.cli restart after orze.yaml edits; hard-coding
-    # them here makes the validator robust to stale-cfg situations and
-    # prevents legitimate `soup` / `data_mix` / `length_aware_decoding`
-    # ideas from being silently rejected for ~weeks at a time. See
-    # results/_retrospection.txt cycle-343..346 for the failure history.
-    "data_mix",
-    "per_dataset_max_samples",
-    "per_dataset_prompts",
-    "per_dataset_eval_sample_strategy",
-    "per_dataset_enable_thinking",
-    "soup",
-    "audio_cleanup",
-    "length_aware_decoding",
-    "reverb_augmentation",
-    "ctc_aux",
-    "editor",
-    # cycle-098 (professor direct-edit, deadline from cycle-095..097):
-    # 16,102 queued ideas were blocked by schema-validator on these four
-    # nested keys. Engineer trigger pending 13 cycles (085→098); the
-    # _engineer_blocker.txt sentinel never appeared, so professor lands
-    # the patch directly per the cycle-095 commitment. Semantic gates
-    # (decode_constraints, lock_model_to_higgs_v3_8b, eval_tasks subset
-    # rejection) still apply downstream — this only widens the SCHEMA
-    # validator, not the semantic policy.
     "data",
     "training",
     "model",
-    "decoding",
-    # engineer cycle-287: contextual_biasing (trie-based decode-time
-    # shallow fusion), merge_helper, and adapter_svd_truncation were in
-    # orze.yaml nested_config_whitelist but not here. The daemon hot-reload
-    # does not cover nested_config_whitelist, so a stale in-memory cfg
-    # silently blocked all 5 P0 trie-bias ideas with schema_invalid errors.
-    "contextual_biasing",
-    "merge_helper",
-    "adapter_svd_truncation",
+    # orze framework-managed nested blocks.
+    "data_boundaries",   # orze framework-managed
+    "executor_fix",      # orze framework-managed
+    "report",            # orze framework-managed
+    # NOTE: project/domain-specific nested keys (e.g. data_mix, per_dataset_*,
+    # decoding-method blocks, augmentation pipelines) MUST be declared in the
+    # project's orze.yaml `nested_config_whitelist` — they arrive here via the
+    # `extra_whitelist` argument and are hot-reloaded
+    # (orchestrator._HOT_RELOAD_KEYS includes "nested_config_whitelist"). The
+    # engine must stay task-agnostic and never name a domain-specific key here.
 }
 
 
@@ -716,6 +689,21 @@ def validate_idea_against_method_validators(
         if not isinstance(rules, list):
             continue
         for rule in rules:
+            # Rule-level unblock_when lets one validator file block several
+            # independent method flags while allowing each family to reopen
+            # when its implementation artifact lands.
+            ruw = rule.get("unblock_when") if isinstance(rule, dict) else None
+            if isinstance(ruw, dict):
+                ap = ruw.get("artifact_exists")
+                if isinstance(ap, str) and ap:
+                    try:
+                        cands = [Path(ap)]
+                        if not Path(ap).is_absolute():
+                            cands.append(Path(validators_dir).parent.parent / ap)
+                        if any(c.exists() for c in cands):
+                            continue
+                    except Exception:
+                        pass
             err = _eval_validator_rule(rule, idea_cfg)
             if err:
                 return f"validator[{spec.get('name', vf.stem)}]: {err}"
