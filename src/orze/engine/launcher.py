@@ -689,21 +689,6 @@ def validate_idea_against_method_validators(
         if not isinstance(rules, list):
             continue
         for rule in rules:
-            # Rule-level unblock_when lets one validator file block several
-            # independent method flags while allowing each family to reopen
-            # when its implementation artifact lands.
-            ruw = rule.get("unblock_when") if isinstance(rule, dict) else None
-            if isinstance(ruw, dict):
-                ap = ruw.get("artifact_exists")
-                if isinstance(ap, str) and ap:
-                    try:
-                        cands = [Path(ap)]
-                        if not Path(ap).is_absolute():
-                            cands.append(Path(validators_dir).parent.parent / ap)
-                        if any(c.exists() for c in cands):
-                            continue
-                    except Exception:
-                        pass
             err = _eval_validator_rule(rule, idea_cfg)
             if err:
                 return f"validator[{spec.get('name', vf.stem)}]: {err}"

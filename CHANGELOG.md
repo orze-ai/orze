@@ -1,5 +1,19 @@
 # Changelog
 
+## 4.4.1 — fix broken import in 4.4.0 (phases.py)
+
+### Fixed
+- **4.4.0 shipped a broken `orze/engine/phases.py`**: it imported
+  `_has_official_eval` from `orze.reporting.leaderboard`, but that symbol is not
+  defined in the released `leaderboard.py`, so a clean install of 4.4.0 crashed
+  on `import orze.engine.phases` with `ImportError: cannot import name
+  '_has_official_eval'`. The 4.4.0 commit inadvertently captured unrelated
+  in-progress edits that were sitting in the same engine files. 4.4.1 rebuilds
+  the three engine files as **v4.3.9 + only the intended genericness changes**
+  (H1 whitelist, H2 skip-keys/primary_metric, S2 approach-family dedup), with no
+  stray dependencies. Verified by a clean-tree wheel build + fresh install:
+  `import orze.engine.phases` and the `orze` CLI both load. **4.4.0 is yanked.**
+
 ## 4.4.0 — engine genericness (task-agnostic, drop-in for any domain)
 
 Removes the last places where the generic `orze` engine named domain/ASR

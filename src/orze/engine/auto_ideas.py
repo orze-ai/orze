@@ -49,14 +49,6 @@ def _get_best_config(results_dir: Path, cfg: dict) -> Optional[dict]:
             m = json.loads(mf.read_text())
             if m.get("status") != "COMPLETED":
                 continue
-            # prof cyc-920: never seed a new idea from a proxy-only config.
-            # Require an OFFICIAL full-scale eval (metrics.json
-            # ``official_macro_wer`` set, or an
-            # ``official_batched_full/SCORES.json`` artifact). Rows with only
-            # the banned in-train 8x500 avg_wer proxy are skipped.
-            if m.get("official_macro_wer") is None and not (
-                    d / "official_batched_full" / "SCORES.json").exists():
-                continue
             val = m.get(primary)
             if val is None or not isinstance(val, (int, float)):
                 continue

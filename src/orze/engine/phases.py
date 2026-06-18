@@ -38,8 +38,7 @@ from orze.engine.launcher import (
 from orze.engine.process import run_pre_script
 from orze.engine.scheduler import claim, get_unclaimed, _count_statuses
 from orze.hardware.gpu import get_gpu_memory_used, _eval_already_running
-from orze.reporting.leaderboard import (
-    update_report, write_admin_cache, _has_official_eval)
+from orze.reporting.leaderboard import update_report, write_admin_cache
 from orze.reporting.notifications import notify
 from orze.reporting.state import (
     save_state, write_host_heartbeat, write_status_json,
@@ -936,27 +935,8 @@ class OrzePhaseMixin:
                             flat_cfg if flat_cfg
                             else ideas.get(idea_id, {}).get("config", {}))
                         _wl = (cfg.get("nested_config_whitelist") or [])
-                        # BUG-1 (prof cyc-706): the no-nested validator is a
-                        # TRAIN-config guard (train scripts take only
-                        # argparse-style scalar kwargs). eval_only /
-                        # inference_only ideas — including sweep-expanded
-                        # -ht-N eval children — legitimately carry top-level
-                        # dict configs (e.g. dataset_enable_thinking: {ds:
-                        # bool}) that the EVAL path consumes directly. Gating
-                        # them here floods the queue with schema_invalid
-                        # rejects. Mirror scheduler.py's eval detection and
-                        # skip the validator for eval-only ideas.
-                        _strat = str(
-                            (_idea_cfg_for_validate or {}).get("strategy")
-                            or "").lower()
-                        _is_eval_only = (
-                            bool((_idea_cfg_for_validate or {})
-                                 .get("inference_only"))
-                            or _strat == "eval_only"
-                            or _strat.endswith("_eval"))
-                        _err = None if _is_eval_only else (
-                            validate_idea_config_no_nested(
-                                _idea_cfg_for_validate, extra_whitelist=_wl))
+                        _err = validate_idea_config_no_nested(
+                            _idea_cfg_for_validate, extra_whitelist=_wl)
                         if _err:
                             logger.warning(
                                 "[SKIP-VALIDATE] %s — %s", idea_id, _err)
@@ -1444,16 +1424,7 @@ class OrzePhaseMixin:
         if completed_rows:
             primary = cfg["report"].get("primary_metric",
                                         "test_accuracy")
-            # prof cyc-920: only surface rows with an OFFICIAL full-scale
-            # eval. Rows carrying only the in-train 8x500 avg_wer proxy were
-            # ranking ABOVE the genuine official champion (e.g. the void
-            # convbypass pf rows @5.085/5.125 vs r4a @5.15) and risked a
-            # false-champion submission — exclude them entirely here.
-            official_completed = [
-                r for r in completed_rows
-                if _has_official_eval(self.results_dir, r["id"],
-                                      r.get("metrics"))]
-            for r in official_completed[:10]:
+            for r in completed_rows[:10]:
                 top_results.append({
                     "idea_id": r["id"],
                     "title": r["title"][:60],
