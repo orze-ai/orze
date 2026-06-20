@@ -168,6 +168,15 @@ def generate_variations(results_dir: Path, cfg: dict,
         direction = "+" if new_val > old_val else "-"
         title = f"Variation: {key}={new_val} ({direction} from {old_val}, parent: {parent_id})"
 
+        # Every variation must carry a rationale (the evolution contract): state
+        # the concrete change vs the parent and why it is worth testing.
+        rationale = (
+            f"Perturb `{key}` from {old_val} to {new_val} ({direction}) on the "
+            f"current best config ({parent_id}, primary={parent_val}). Tests the "
+            f"sensitivity of the result to `{key}`; a single-parameter change keeps "
+            f"the effect attributable."
+        )
+
         # Remove non-config keys
         clean_cfg = {k: v for k, v in var_cfg.items()
                      if not k.startswith("_")}
@@ -176,6 +185,7 @@ def generate_variations(results_dir: Path, cfg: dict,
         lines.append(f"- **Priority**: low")
         lines.append(f"- **Approach Family**: optimization")
         lines.append(f"- **Parent**: {parent_id}")
+        lines.append(f"- **Hypothesis**: {rationale}")
         lines.append(f"```yaml")
         lines.append(yaml.dump(clean_cfg, default_flow_style=False).rstrip())
         lines.append(f"```")

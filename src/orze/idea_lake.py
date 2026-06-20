@@ -247,6 +247,17 @@ class IdeaLake:
             raise ValueError(
                 f"idea kind={kind!r} not in {sorted(ALLOWED_KINDS)}"
             )
+        # Evolution contract (soft): a child that declares a parent should also
+        # record a rationale (the hypothesis behind the change). We do not reject
+        # it — we log the violation so the gap is visible and the search-path
+        # visualizer can flag it — but every evolution edge is expected to be
+        # justified.
+        _real_parent = parent and str(parent).lower() not in ("", "none")
+        if _real_parent and not (hypothesis and hypothesis.strip()):
+            logger.warning(
+                "idea %s declares parent=%s but has no rationale/hypothesis "
+                "(unjustified evolution edge)", idea_id, parent
+            )
         # Extract numeric ID for indexed sorting (supports both numeric and hex IDs)
         id_num = None
         match = re.search(r"idea-([a-z0-9]+)", idea_id)

@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Award,
   Bell,
+  GitBranch,
   ListOrdered,
   Play,
   Server,
@@ -24,6 +25,7 @@ const OverviewTab = lazy(() => import('./OverviewTab'));
 const NodesTab = lazy(() => import('./NodesTab'));
 const RunsTab = lazy(() => import('./RunsTab'));
 const LeaderboardTab = lazy(() => import('./LeaderboardTab'));
+const ResearchTreeTab = lazy(() => import('./ResearchTreeTab'));
 const AlertsTab = lazy(() => import('./AlertsTab'));
 const SettingsTab = lazy(() => import('./SettingsTab'));
 
@@ -53,6 +55,7 @@ export default function OrzeAdminPanel() {
     { key: 'runs', label: 'Runs', icon: Play },
     { key: 'queue', label: 'Queue', icon: ListOrdered },
     { key: 'leaderboard', label: 'Leaderboard', icon: Award },
+    { key: 'research-tree', label: 'Research Tree', icon: GitBranch },
     { key: 'alerts', label: 'Alerts', icon: Bell },
     { key: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -149,6 +152,7 @@ export default function OrzeAdminPanel() {
           {tab === 'runs' && <RunsTab />}
           {tab === 'queue' && <QueueTabView />}
           {tab === 'leaderboard' && <LeaderboardTab />}
+          {tab === 'research-tree' && <ResearchTreeTab />}
           {tab === 'alerts' && <AlertsTab />}
           {tab === 'settings' && <SettingsTab />}
         </Suspense>
