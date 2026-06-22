@@ -215,7 +215,11 @@ def _tree_cpu_jiffies(root_pid: int) -> int:
             with open(f"/proc/{pid}/stat") as f:
                 parts = f.read().split()
             total += int(parts[13]) + int(parts[14])
-        except (FileNotFoundError, IndexError, ValueError):
+        except (OSError, IndexError, ValueError):
+            # Reading /proc for a transient pid is inherently racy: the process
+            # can exit between being listed and stat'd, raising ProcessLookupError
+            # (ESRCH) or FileNotFoundError (ENOENT) — both OSError. A vanished pid
+            # contributes 0 jiffies; never let it propagate (it once killed run()).
             continue
         try:
             with open(f"/proc/{pid}/task/{pid}/children") as f:
@@ -250,8 +254,8 @@ def _detect_zombie(tp) -> bool:
             if dt > 30 and dcpu > 10:  # any meaningful CPU in last 30s
                 tp._zombie_count = 0
                 return False
-    except (FileNotFoundError, IndexError, ValueError):
-        return False  # can't check, assume alive
+    except (OSError, IndexError, ValueError):
+        return False  # can't check (incl. racy /proc ProcessLookupError) — assume alive
 
     # 2. Check GPU memory (nvidia-smi for this PID and children)
     try:
