@@ -120,3 +120,32 @@ def test_real_sleep_subprocess_marked_stuck(tmp_path, monkeypatch):
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
+
+
+def test_tree_cpu_jiffies_survives_vanished_pid(monkeypatch):
+    """Regression (daemon crash 2026-06-20): a pid that exits mid-read makes
+    /proc raise ProcessLookupError (ESRCH) — a sibling of FileNotFoundError under
+    OSError, NOT caught by the old (FileNotFoundError, ...) handler. It must
+    contribute 0 jiffies, never propagate."""
+    import builtins
+    real_open = builtins.open
+
+    def boom(path, *a, **k):
+        if isinstance(path, str) and path.startswith("/proc/"):
+            raise ProcessLookupError(3, "No such process")
+        return real_open(path, *a, **k)
+
+    monkeypatch.setattr(builtins, "open", boom)
+    assert L._tree_cpu_jiffies(1183080) == 0  # no exception raised
+
+
+def test_detect_zombie_survives_proc_lookup_error(tmp_path, monkeypatch):
+    """Regression: even if the CPU-tree probe raises ProcessLookupError, the
+    zombie check degrades to 'assume alive' (False) instead of killing run()."""
+    tp = _mk_tp(tmp_path)
+
+    def raise_esrch(pid):
+        raise ProcessLookupError(3, "No such process")
+
+    monkeypatch.setattr(L, "_tree_cpu_jiffies", raise_esrch)
+    assert L._detect_zombie(tp) is False
