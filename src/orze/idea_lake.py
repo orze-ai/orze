@@ -370,6 +370,21 @@ class IdeaLake:
         row = _retry_on_busy(_do_count)
         return row[0]
 
+    def child_counts(self) -> Dict[str, int]:
+        """Return {parent_id: number_of_children} over all parented ideas.
+
+        Used by the free research loop to cap a single parent's fan-out so
+        search branches broadly and deepens winning lineages instead of
+        spraying every variation off one champion hub (research efficiency)."""
+        def _do_counts():
+            return self.conn.execute(
+                "SELECT parent, COUNT(*) FROM ideas "
+                "WHERE parent IS NOT NULL AND parent != '' "
+                "AND lower(parent) != 'none' GROUP BY parent"
+            ).fetchall()
+        rows = _retry_on_busy(_do_counts)
+        return {r[0]: r[1] for r in rows}
+
     def get_all_ids(self, status: Optional[str] = None) -> Set[str]:
         """Return set of all idea IDs in the lake, optionally filtered by status."""
         query = "SELECT idea_id FROM ideas"

@@ -1463,6 +1463,23 @@ class OrzePhaseMixin:
         except Exception as e:
             logger.warning("Admin cache write failed: %s", e)
 
+        # 9c. Evo Score (research efficiency) — orze's top-level metric. Compute
+        # once per loop so it is logged and trended over time. Guarded: never
+        # let metric computation break the reporting loop.
+        try:
+            lake_db = cfg.get("idea_lake_db") or (
+                Path(cfg.get("ideas_file", "ideas.md")).parent / "idea_lake.db")
+            if lake_db and Path(lake_db).exists():
+                from orze.reporting.search_path import build_from_lake
+                re_block = build_from_lake(str(lake_db), cfg).get(
+                    "research_efficiency")
+                if re_block:
+                    logger.info(
+                        "Evo Score (research efficiency): %.1f grade %s",
+                        re_block.get("score", 0.0), re_block.get("grade", "?"))
+        except Exception as e:
+            logger.debug("Evo Score computation skipped: %s", e)
+
         # 10. Save state
         save_state(self.results_dir, self._build_state_dict())
 
