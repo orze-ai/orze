@@ -102,3 +102,26 @@ export function useQueue(page: number, statusFilter: string, search: string) {
 export function useConfig() {
   return usePolling<Record<string, any>>('/api/config', 30000, {});
 }
+
+const EMPTY_SEARCH_PATH = {
+  metric: { name: 'metric', lower_is_better: true },
+  nodes: [], edges: [], problems: [], coverage: {},
+  stats: { n_total: 0, n_rendered: 0 },
+};
+
+export function useSearchPath() {
+  return usePolling<import('./types').SearchPathResponse>(
+    '/api/search_path', 30000, EMPTY_SEARCH_PATH as any);
+}
+
+const EMPTY_RESEARCH_EFFICIENCY = {
+  score: null, grade: '—', components: {}, depth_yield: [],
+  exploration_exploitation: { explore: 0, exploit: 0, exploit_share: 0 },
+  concentration: { top1_share: 0, top5_share: 0, max_fanout: 0, gini: 0 },
+  failure_rate: 0, yield_rate: 0,
+};
+
+export function useResearchEfficiency() {
+  return usePolling<import('./types').ResearchEfficiencyResponse>(
+    '/api/research_efficiency', 30000, EMPTY_RESEARCH_EFFICIENCY as any);
+}

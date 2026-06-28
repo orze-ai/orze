@@ -182,4 +182,118 @@ export interface IdeaDetail {
   claim?: { claimed_by: string; claimed_at: string; gpu: number };
 }
 
-export type Tab = 'overview' | 'nodes' | 'runs' | 'queue' | 'leaderboard' | 'alerts' | 'settings';
+export type Tab = 'overview' | 'nodes' | 'runs' | 'queue' | 'leaderboard' | 'research-tree' | 'alerts' | 'settings';
+
+export interface SearchPathDelta {
+  key: string;
+  parent: string | number | boolean | null;
+  child: string | number | boolean | null;
+}
+
+export interface SearchPathNode {
+  id: string;
+  title: string;
+  parent: string | null;
+  category: string;
+  approach_family: string;
+  status: string;
+  priority?: string;
+  metric: number | null;
+  score_pct: number | null;
+  depth: number;
+  n_children: number;
+  subtree_size: number;
+  subtree_depth?: number;
+  delta_vs_parent: number | null;
+  improved: boolean;
+  evolution_type?: string;
+  parent_delta?: SearchPathDelta[];
+  delta_size?: number;
+  rationale?: string | null;
+  contract_ok?: boolean | null;
+  contract_violations?: string[];
+  training_time?: number | null;
+  x: number;
+  y: number;
+  problems: string[];
+}
+
+export interface SearchPathProblem {
+  kind: 'under_researched' | 'over_researched' | 'failed_cluster' | 'missing_coverage'
+      | 'flat_hub' | 'pseudo_evolution' | 'unjustified_branch' | string;
+  severity: 'high' | 'medium' | 'low' | string;
+  reason: string;
+  suggestion: string;
+  node_id: string | null;
+  region: string | null;
+}
+
+export interface ResearchEfficiencyComponent {
+  value: number;
+  score: number;
+  weight: number;
+}
+
+export interface DepthYieldRow {
+  depth: number;
+  label: string;
+  n: number;
+  scored: number;
+  scored_frac: number;
+  best_metric: number | null;
+}
+
+export interface ResearchEfficiency {
+  score: number | null;
+  grade: string;
+  components: Record<string, ResearchEfficiencyComponent>;
+  weights_sum?: number;
+  exploration_exploitation: { explore: number; exploit: number; exploit_share: number };
+  concentration: { top1_share: number; top5_share: number; max_fanout: number; gini: number };
+  failure_rate: number;
+  yield_rate: number;
+  depth_yield: DepthYieldRow[];
+}
+
+export interface ResearchEfficiencyResponse extends ResearchEfficiency {
+  metric?: { name: string; lower_is_better: boolean };
+  n_total?: number;
+  n_scored?: number;
+  genuine_evolution_rate?: number | null;
+  error?: string;
+  _loading?: boolean;
+}
+
+export interface SearchPathResponse {
+  metric: { name: string; lower_is_better: boolean };
+  nodes: SearchPathNode[];
+  edges: { source: string; target: string }[];
+  problems: SearchPathProblem[];
+  coverage: Record<string, Record<string, number>>;
+  stats: {
+    n_total: number;
+    n_in_tree?: number;
+    n_rendered: number;
+    n_scored?: number;
+    n_roots?: number;
+    max_depth?: number;
+    mean_depth?: number;
+    status_counts?: Record<string, number>;
+    refinement_success_rate?: number | null;
+    refinement_pairs?: number;
+    evolution_rate?: number | null;
+    intermediate_nodes?: number;
+    n_edges?: number;
+    judged_edges?: number;
+    undiffable_edges?: number;
+    genuine_evolution_rate?: number | null;
+    contract_ok_edges?: number;
+    zero_delta_edges?: number;
+    no_rationale_edges?: number;
+    evolution_types?: Record<string, number>;
+    truncated?: boolean;
+    problem_counts?: Record<string, number>;
+    error?: string;
+  };
+  research_efficiency?: ResearchEfficiency;
+}

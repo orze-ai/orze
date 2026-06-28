@@ -503,6 +503,59 @@ async def get_config():
     return _strip_sensitive(_cfg)
 
 
+def _lake_db_path() -> Path:
+    return Path(_cfg.get("idea_lake_db") or Path(_ideas_file()).parent / "idea_lake.db")
+
+
+@app.get("/api/search_path")
+async def get_search_path():
+    """Research search-path graph: genealogy forest + problem annotations.
+
+    Builds a tree/graph of every idea branch tried, annotated so under-/over-
+    researched, failed, and missing regions are easy to spot. Task-agnostic:
+    metric + direction come from the project's report config.
+    """
+    def _build():
+        from orze.reporting.search_path import build_from_lake
+        db = _lake_db_path()
+        if not db.exists():
+            return {
+                "nodes": [], "edges": [], "problems": [], "coverage": {},
+                "stats": {"n_total": 0, "n_rendered": 0, "error": "idea_lake.db not found"},
+                "metric": {"name": _cfg.get("report", {}).get("primary_metric", "metric"),
+                           "lower_is_better": True},
+            }
+        return build_from_lake(str(db), _cfg)
+
+    return _cached("search_path", 30.0, _build)
+
+
+@app.get("/api/research_efficiency")
+async def get_research_efficiency():
+    """orze's top-level *research-efficiency* metric (0-100 score + grade).
+
+    A meta-metric for how well the engine *researches* — yield of scored results
+    per idea, refinement success, depth utilisation (compounding vs flat), hub
+    diversity, and reliability — distinct from compute/GPU efficiency and from
+    the project's task metric. Derived from the same genealogy as /api/search_path.
+    """
+    def _build():
+        from orze.reporting.search_path import build_from_lake
+        db = _lake_db_path()
+        if not db.exists():
+            return {"score": None, "grade": "—", "error": "idea_lake.db not found"}
+        full = build_from_lake(str(db), _cfg)
+        out = dict(full.get("research_efficiency") or {})
+        out["metric"] = full.get("metric")
+        s = full.get("stats") or {}
+        out["n_total"] = s.get("n_total")
+        out["n_scored"] = s.get("n_scored")
+        out["genuine_evolution_rate"] = s.get("genuine_evolution_rate")
+        return out
+
+    return _cached("research_efficiency", 30.0, _build)
+
+
 @app.post("/api/ideas")
 async def post_idea(request: Request):
     """Append a new idea to ideas.md."""

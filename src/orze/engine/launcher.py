@@ -215,7 +215,11 @@ def _tree_cpu_jiffies(root_pid: int) -> int:
             with open(f"/proc/{pid}/stat") as f:
                 parts = f.read().split()
             total += int(parts[13]) + int(parts[14])
-        except (FileNotFoundError, IndexError, ValueError):
+        except (OSError, IndexError, ValueError):
+            # Reading /proc for a transient pid is inherently racy: the process
+            # can exit between being listed and stat'd, raising ProcessLookupError
+            # (ESRCH) or FileNotFoundError (ENOENT) — both OSError. A vanished pid
+            # contributes 0 jiffies; never let it propagate (it once killed run()).
             continue
         try:
             with open(f"/proc/{pid}/task/{pid}/children") as f:
@@ -250,8 +254,8 @@ def _detect_zombie(tp) -> bool:
             if dt > 30 and dcpu > 10:  # any meaningful CPU in last 30s
                 tp._zombie_count = 0
                 return False
-    except (FileNotFoundError, IndexError, ValueError):
-        return False  # can't check, assume alive
+    except (OSError, IndexError, ValueError):
+        return False  # can't check (incl. racy /proc ProcessLookupError) — assume alive
 
     # 2. Check GPU memory (nvidia-smi for this PID and children)
     try:
@@ -688,10 +692,32 @@ def validate_idea_against_method_validators(
         rules = spec.get("rules") or []
         if not isinstance(rules, list):
             continue
+        _vname = str(spec.get("name", vf.stem))
         for rule in rules:
+            # Inversion guard (infra tripwire). A block/pause/gate-family
+            # validator whose rule REQUIRES a single method-specific field to
+            # be PRESENT on every idea is almost always an authoring inversion
+            # of `not_exists`: instead of blocking the one refuted method it
+            # rejects the ENTIRE queue (every idea that does not wire that
+            # field). This has repeatedly mass-blocked the queue and tripped
+            # fix-escalation when an LLM author re-emits the validator with
+            # `exists` instead of `not_exists`. Skip the rule and warn rather
+            # than starve the launcher. `field_any` exists-rules are untouched
+            # (they are an explicit "one of these must be set" contract).
+            if (isinstance(rule, dict)
+                    and _vname.startswith(("block_", "pause_", "gate_"))
+                    and rule.get("field")
+                    and str(rule.get("operator", "")).lower()
+                        in ("exists", "present")):
+                logger.warning(
+                    "[VALIDATOR-INVERSION-GUARD] %s: skipping `%s exists` rule "
+                    "(a block-family validator must use not_exists to target a "
+                    "method; an exists rule mass-rejects the whole queue)",
+                    _vname, rule.get("field"))
+                continue
             err = _eval_validator_rule(rule, idea_cfg)
             if err:
-                return f"validator[{spec.get('name', vf.stem)}]: {err}"
+                return f"validator[{_vname}]: {err}"
     return None
 
 

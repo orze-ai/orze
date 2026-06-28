@@ -247,6 +247,17 @@ class IdeaLake:
             raise ValueError(
                 f"idea kind={kind!r} not in {sorted(ALLOWED_KINDS)}"
             )
+        # Evolution contract (soft): a child that declares a parent should also
+        # record a rationale (the hypothesis behind the change). We do not reject
+        # it — we log the violation so the gap is visible and the search-path
+        # visualizer can flag it — but every evolution edge is expected to be
+        # justified.
+        _real_parent = parent and str(parent).lower() not in ("", "none")
+        if _real_parent and not (hypothesis and hypothesis.strip()):
+            logger.warning(
+                "idea %s declares parent=%s but has no rationale/hypothesis "
+                "(unjustified evolution edge)", idea_id, parent
+            )
         # Extract numeric ID for indexed sorting (supports both numeric and hex IDs)
         id_num = None
         match = re.search(r"idea-([a-z0-9]+)", idea_id)
@@ -358,6 +369,21 @@ class IdeaLake:
             return self.conn.execute("SELECT COUNT(*) FROM ideas").fetchone()
         row = _retry_on_busy(_do_count)
         return row[0]
+
+    def child_counts(self) -> Dict[str, int]:
+        """Return {parent_id: number_of_children} over all parented ideas.
+
+        Used by the free research loop to cap a single parent's fan-out so
+        search branches broadly and deepens winning lineages instead of
+        spraying every variation off one champion hub (research efficiency)."""
+        def _do_counts():
+            return self.conn.execute(
+                "SELECT parent, COUNT(*) FROM ideas "
+                "WHERE parent IS NOT NULL AND parent != '' "
+                "AND lower(parent) != 'none' GROUP BY parent"
+            ).fetchall()
+        rows = _retry_on_busy(_do_counts)
+        return {r[0]: r[1] for r in rows}
 
     def get_all_ids(self, status: Optional[str] = None) -> Set[str]:
         """Return set of all idea IDs in the lake, optionally filtered by status."""

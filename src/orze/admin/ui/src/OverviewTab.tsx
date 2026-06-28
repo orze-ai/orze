@@ -1,12 +1,13 @@
 import { useRef, useEffect } from 'react';
-import { Cpu, HardDrive, Thermometer, Layers, TrendingUp, AlertTriangle, Play } from 'lucide-react';
-import { useStatus, useNodes, useRuns } from './hooks';
+import { Cpu, HardDrive, Thermometer, Layers, TrendingUp, AlertTriangle, Play, Gauge } from 'lucide-react';
+import { useStatus, useNodes, useRuns, useResearchEfficiency } from './hooks';
 import { Badge, Card, IconKpi, LoadingState, statusColor, fmtRunName, fmtTime, IdeaLink } from './components';
 
 export default function OverviewTab() {
   const status = useStatus();
   const nodes = useNodes();
   const runs = useRuns();
+  const eff = useResearchEfficiency();
 
   const gpuSparkRef = useRef<number[]>([]);
   const queueSparkRef = useRef<number[]>([]);
@@ -39,7 +40,17 @@ export default function OverviewTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
+        <IconKpi
+          icon={Gauge}
+          label="Evo Score"
+          value={eff.score == null ? '—' : `${Math.round(eff.score)} (${eff.grade})`}
+          sub={
+            eff.score == null
+              ? 'research efficiency'
+              : `yield ${(eff.yield_rate * 100).toFixed(1)}% · fail ${(eff.failure_rate * 100).toFixed(0)}%`
+          }
+        />
         <IconKpi icon={Cpu} label="GPU Util" value={`${gpuAvg}%`} spark={gpuSparkRef.current} />
         <IconKpi icon={HardDrive} label="VRAM" value={`${memAvg}%`} />
         <IconKpi icon={Thermometer} label="Temp Peak" value={`${tempMax}C`} />

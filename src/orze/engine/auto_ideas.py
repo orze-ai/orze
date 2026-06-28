@@ -23,23 +23,33 @@ import yaml
 logger = logging.getLogger("orze")
 
 
-def _get_best_config(results_dir: Path, cfg: dict) -> Optional[dict]:
+def _get_best_config(results_dir: Path, cfg: dict,
+                     child_counts: Optional[Dict[str, int]] = None,
+                     fanout_cap: int = 0) -> Optional[dict]:
     """Find the best completed experiment and return its config.
 
     Selection is medal-tier first (gold > silver > bronze > above_median > ...),
     then by raw primary metric in the configured sort direction. This avoids
     picking a wrong-direction RMSE (e.g. 12.5) over a 1.0 accuracy gold just
-    because the raw value is larger. Reuses orze.core.medal."""
+    because the raw value is larger. Reuses orze.core.medal.
+
+    When ``fanout_cap`` > 0, candidates whose existing child-count already
+    meets the cap are skipped, so the free loop stops piling every variation
+    onto one champion hub and instead branches to other winners / deepens
+    lineages — the single biggest lever on research efficiency (Evo Score)."""
     from orze.core.medal import medal_rank
     report_cfg = cfg.get("report", {})
     primary = report_cfg.get("primary_metric", "score")
     sort_asc = report_cfg.get("sort", "descending") == "ascending"
+    child_counts = child_counts or {}
 
     best_key = None  # (medal_rank, primary_val_signed)
     best_cfg = None
 
     for d in results_dir.iterdir():
         if not d.is_dir() or not d.name.startswith("idea-"):
+            continue
+        if fanout_cap and child_counts.get(d.name, 0) >= fanout_cap:
             continue
         mf = d / "metrics.json"
         cf = d / "idea_config.yaml"
@@ -119,9 +129,24 @@ def _perturbations(key: str, value) -> List:
 def generate_variations(results_dir: Path, cfg: dict,
                         lake=None, max_ideas: int = 5) -> int:
     """Generate parameter variation ideas from the best experiment."""
-    best = _get_best_config(results_dir, cfg)
+    # Fan-out cap: don't keep perturbing an already-saturated parent. Skipping
+    # saturated hubs spreads search across winners and deepens lineages, which
+    # is the highest-leverage fix for research efficiency (Evo Score). 0/absent
+    # disables. Co-located with the Evo Score config under report.search_path.
+    fanout_cap = int(
+        ((cfg.get("report", {}) or {}).get("search_path", {}) or {})
+        .get("fanout_cap", 12) or 0
+    )
+    child_counts = lake.child_counts() if (lake and fanout_cap) else {}
+    best = _get_best_config(results_dir, cfg,
+                            child_counts=child_counts, fanout_cap=fanout_cap)
     if best is None:
-        return 0
+        # Every candidate is capped out (or none completed). Fall back to the
+        # uncapped best so the loop still makes progress.
+        if fanout_cap:
+            best = _get_best_config(results_dir, cfg)
+        if best is None:
+            return 0
 
     parent_id = best.pop("_idea_id", "?")
     parent_val = best.pop("_primary_val", "?")
@@ -168,6 +193,15 @@ def generate_variations(results_dir: Path, cfg: dict,
         direction = "+" if new_val > old_val else "-"
         title = f"Variation: {key}={new_val} ({direction} from {old_val}, parent: {parent_id})"
 
+        # Every variation must carry a rationale (the evolution contract): state
+        # the concrete change vs the parent and why it is worth testing.
+        rationale = (
+            f"Perturb `{key}` from {old_val} to {new_val} ({direction}) on the "
+            f"current best config ({parent_id}, primary={parent_val}). Tests the "
+            f"sensitivity of the result to `{key}`; a single-parameter change keeps "
+            f"the effect attributable."
+        )
+
         # Remove non-config keys
         clean_cfg = {k: v for k, v in var_cfg.items()
                      if not k.startswith("_")}
@@ -176,6 +210,7 @@ def generate_variations(results_dir: Path, cfg: dict,
         lines.append(f"- **Priority**: low")
         lines.append(f"- **Approach Family**: optimization")
         lines.append(f"- **Parent**: {parent_id}")
+        lines.append(f"- **Hypothesis**: {rationale}")
         lines.append(f"```yaml")
         lines.append(yaml.dump(clean_cfg, default_flow_style=False).rstrip())
         lines.append(f"```")
