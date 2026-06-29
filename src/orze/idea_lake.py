@@ -71,14 +71,10 @@ CREATE TABLE IF NOT EXISTS id_sequence (
 CREATE TABLE IF NOT EXISTS idea_state (
     idea_id TEXT PRIMARY KEY,
     current_state TEXT NOT NULL DEFAULT 'QUEUED',
-    sop_type TEXT DEFAULT 'training',
-    updated_by_host TEXT,
-    updated_by_pid INTEGER,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_idea_state_current ON idea_state(current_state);
-CREATE INDEX IF NOT EXISTS idx_idea_state_sop_type ON idea_state(sop_type);
 
 CREATE TABLE IF NOT EXISTS idea_transitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

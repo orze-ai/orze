@@ -35,7 +35,15 @@ def migrate_v45(conn):
         # Ensure explicit transaction (DDL should not autocommit)
         cursor.execute("BEGIN IMMEDIATE")
 
-        # Add sop_type column to idea_state (if needed)
+        # Add missing columns to idea_state (v4.5 uses updated_by_* instead of claimed_*)
+        if "updated_by_host" not in idea_state_cols:
+            cursor.execute("ALTER TABLE idea_state ADD COLUMN updated_by_host TEXT")
+            logger.info("  Added updated_by_host column to idea_state")
+
+        if "updated_by_pid" not in idea_state_cols:
+            cursor.execute("ALTER TABLE idea_state ADD COLUMN updated_by_pid INTEGER")
+            logger.info("  Added updated_by_pid column to idea_state")
+
         if "sop_type" not in idea_state_cols:
             cursor.execute("ALTER TABLE idea_state ADD COLUMN sop_type TEXT DEFAULT 'training'")
             logger.info("  Added sop_type column to idea_state")
