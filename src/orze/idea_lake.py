@@ -837,7 +837,7 @@ class IdeaLake:
                 VALID_TRANSITIONS = {
                     "QUEUED": {"CLAIMED"},
                     "CLAIMED": {"IN_PROGRESS", "QUEUED"},
-                    "IN_PROGRESS": {"COMPLETE", "FAILED"},
+                    "IN_PROGRESS": {"COMPLETE", "FAILED", "QUEUED"},
                     "COMPLETE": {"ARCHIVED"},
                     "FAILED": {"QUEUED"},
                     "ARCHIVED": set(),
