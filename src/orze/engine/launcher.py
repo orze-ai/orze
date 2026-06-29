@@ -1116,13 +1116,13 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
 
     now = time.time()
 
-    # Record FSM transition: CLAIMED → TRAINING
+    # Record FSM transition: CLAIMED → IN_PROGRESS (v4.5: generic for all SOP types)
     if lake:
         try:
             lake.record_state_transition(
                 idea_id,
                 from_state="CLAIMED",
-                to_state="TRAINING",
+                to_state="IN_PROGRESS",
                 reason=f"training_launched on gpu {gpu}",
                 host=socket.gethostname(),
                 pid=os.getpid(),
@@ -1148,12 +1148,12 @@ def _write_failure(idea_dir: Path, reason: str, lake=None, idea_id=None):
     }
     atomic_write(idea_dir / "metrics.json", json.dumps(metrics, indent=2))
 
-    # Record FSM transition: TRAINING → FAILED
+    # Record FSM transition: IN_PROGRESS → FAILED (v4.5: generic for all SOP types)
     if lake and idea_id:
         try:
             lake.record_state_transition(
                 idea_id,
-                from_state="TRAINING",
+                from_state="IN_PROGRESS",
                 to_state="FAILED",
                 reason=reason,
                 host=socket.gethostname(),

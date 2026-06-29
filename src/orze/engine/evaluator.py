@@ -144,19 +144,9 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
             log_fh.close()
             raise
 
-        # Record FSM transition: TRAINING → EVALUATING
-        if lake:
-            try:
-                lake.record_state_transition(
-                    idea_id,
-                    from_state="TRAINING",
-                    to_state="EVALUATING",
-                    reason=f"eval_launched on gpu {gpu}",
-                    host=socket.gethostname(),
-                    pid=os.getpid(),
-                )
-            except Exception as e:
-                logger.warning("FSM transition failed (non-blocking): %s", e)
+        # v4.5: No explicit FSM transition for eval launch.
+        # Training + eval both occur within IN_PROGRESS state.
+        # Only final COMPLETE/FAILED is recorded (below).
 
         return EvalProcess(
             idea_id=idea_id, gpu=gpu, process=proc,
@@ -222,12 +212,12 @@ def _write_eval_failure_marker(results_dir: Path, idea_id: str,
     }, indent=2))
     logger.info("Wrote eval failure marker for %s", idea_id)
 
-    # Record FSM transition: EVALUATING → FAILED
+    # Record FSM transition: IN_PROGRESS → FAILED (v4.5: generic for all SOP types)
     if lake:
         try:
             lake.record_state_transition(
                 idea_id,
-                from_state="EVALUATING",
+                from_state="IN_PROGRESS",
                 to_state="FAILED",
                 reason=reason[:100],
                 host=socket.gethostname(),
@@ -325,14 +315,14 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                 results_dir, ep.idea_id, eval_output,
                 f"Exit code {ret}: {eval_tail[-300:] if eval_tail else 'no output'}", lake=lake)
 
-        # Record FSM transition: EVALUATING → COMPLETE (if successful)
+        # Record FSM transition: IN_PROGRESS → COMPLETE (v4.5: generic for all SOP types)
         if eval_success and lake:
             try:
                 lake.record_state_transition(
                     ep.idea_id,
-                    from_state="EVALUATING",
+                    from_state="IN_PROGRESS",
                     to_state="COMPLETE",
-                    reason=f"eval completed on gpu {gpu}",
+                    reason=f"training_and_eval completed on gpu {gpu}",
                     host=socket.gethostname(),
                     pid=os.getpid(),
                 )

@@ -224,6 +224,13 @@ class IdeaLake:
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_kind ON ideas(kind)")
             self.conn.commit()
 
+        # v4.5: Genericize FSM (orthogonal to SOP type)
+        try:
+            from orze.migrations.v45_genericize_fsm import migrate_v45
+            migrate_v45(self.conn)
+        except Exception as e:
+            logger.warning("v4.5 FSM migration failed: %s (will retry next init)", e)
+
     def insert(
         self,
         idea_id: str,
@@ -780,7 +787,18 @@ class IdeaLake:
                                 reason: Optional[str] = None,
                                 host: Optional[str] = None,
                                 pid: Optional[int] = None) -> None:
-        """Atomically record an FSM state transition with audit trail."""
+        """Atomically record an FSM state transition with audit trail.
+
+        v4.5+: Generic FSM orthogonal to SOP type.
+        Valid transitions regardless of workflow:
+          QUEUED → CLAIMED (scheduler claims work)
+          CLAIMED → IN_PROGRESS (launcher starts work)
+          IN_PROGRESS → COMPLETE (work succeeds)
+          IN_PROGRESS → FAILED (work fails)
+          COMPLETE → ARCHIVED (idea retired)
+          FAILED → QUEUED (retry)
+          CLAIMED → QUEUED (stale recovery)
+        """
         import socket as _socket
         host = host or _socket.gethostname()
         pid = pid or os.getpid()
@@ -788,12 +806,11 @@ class IdeaLake:
         def _do_transition():
             self.conn.execute("BEGIN IMMEDIATE")
             try:
-                # Validate transition
+                # Generic FSM validation (SOP-orthogonal)
                 VALID_TRANSITIONS = {
                     "QUEUED": {"CLAIMED"},
-                    "CLAIMED": {"TRAINING", "QUEUED"},
-                    "TRAINING": {"EVALUATING", "FAILED", "QUEUED"},
-                    "EVALUATING": {"COMPLETE", "FAILED"},
+                    "CLAIMED": {"IN_PROGRESS", "QUEUED"},
+                    "IN_PROGRESS": {"COMPLETE", "FAILED"},
                     "COMPLETE": {"ARCHIVED"},
                     "FAILED": {"QUEUED"},
                     "ARCHIVED": set(),
