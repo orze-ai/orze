@@ -15,29 +15,37 @@ logger = logging.getLogger("orze.migrations")
 
 
 def migrate_v45(conn):
-    """Apply v4.5 FSM genericization."""
+    """Apply v4.5 FSM genericization atomically."""
     cursor = conn.cursor()
 
     try:
-        # Check if sop_type column exists
+        # Check if sop_type column exists in BOTH tables (comprehensive idempotency check)
         cursor.execute("PRAGMA table_info(idea_state)")
-        columns = {row[1] for row in cursor.fetchall()}
+        idea_state_cols = {row[1] for row in cursor.fetchall()}
 
-        if "sop_type" in columns:
-            logger.info("v4.5 migration already applied")
+        cursor.execute("PRAGMA table_info(idea_transitions)")
+        idea_transitions_cols = {row[1] for row in cursor.fetchall()}
+
+        if "sop_type" in idea_state_cols and "sop_type" in idea_transitions_cols:
+            logger.info("v4.5 migration already applied (both tables have sop_type)")
             return
 
         logger.info("Applying v4.5 FSM genericization migration...")
 
-        # Add sop_type column to idea_state
-        cursor.execute("ALTER TABLE idea_state ADD COLUMN sop_type TEXT DEFAULT 'training'")
-        logger.info("  Added sop_type column to idea_state")
+        # Ensure explicit transaction (DDL should not autocommit)
+        cursor.execute("BEGIN IMMEDIATE")
 
-        # Add sop_type column to idea_transitions
-        cursor.execute(
-            "ALTER TABLE idea_transitions ADD COLUMN sop_type TEXT DEFAULT 'training'"
-        )
-        logger.info("  Added sop_type column to idea_transitions")
+        # Add sop_type column to idea_state (if needed)
+        if "sop_type" not in idea_state_cols:
+            cursor.execute("ALTER TABLE idea_state ADD COLUMN sop_type TEXT DEFAULT 'training'")
+            logger.info("  Added sop_type column to idea_state")
+
+        # Add sop_type column to idea_transitions (if needed)
+        if "sop_type" not in idea_transitions_cols:
+            cursor.execute(
+                "ALTER TABLE idea_transitions ADD COLUMN sop_type TEXT DEFAULT 'training'"
+            )
+            logger.info("  Added sop_type column to idea_transitions")
 
         # Migrate TRAINING → IN_PROGRESS in idea_state
         cursor.execute(

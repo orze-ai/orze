@@ -14,6 +14,7 @@ Usage:
 import datetime
 import json
 import logging
+import os
 import re
 import sqlite3
 import time
@@ -66,6 +67,34 @@ CREATE INDEX IF NOT EXISTS idx_status ON ideas(status);
 CREATE TABLE IF NOT EXISTS id_sequence (
     next_id INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS idea_state (
+    idea_id TEXT PRIMARY KEY,
+    current_state TEXT NOT NULL DEFAULT 'QUEUED',
+    sop_type TEXT DEFAULT 'training',
+    updated_by_host TEXT,
+    updated_by_pid INTEGER,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_idea_state_current ON idea_state(current_state);
+CREATE INDEX IF NOT EXISTS idx_idea_state_sop_type ON idea_state(sop_type);
+
+CREATE TABLE IF NOT EXISTS idea_transitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    idea_id TEXT NOT NULL,
+    from_state TEXT NOT NULL,
+    to_state TEXT NOT NULL,
+    sop_type TEXT DEFAULT 'training',
+    reason TEXT,
+    host TEXT,
+    pid INTEGER,
+    ts TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_idea_transitions_idea_id ON idea_transitions(idea_id);
+CREATE INDEX IF NOT EXISTS idx_idea_transitions_to_state ON idea_transitions(to_state);
+CREATE INDEX IF NOT EXISTS idx_idea_transitions_ts ON idea_transitions(ts);
 """
 
 # Legacy fixed-metric columns from pre-1.5 schema.
@@ -825,14 +854,14 @@ class IdeaLake:
                 # Update or insert state
                 self.conn.execute(
                     "INSERT OR IGNORE INTO idea_state "
-                    "(idea_id, current_state, claimed_by_host, claimed_by_pid, claimed_at) "
+                    "(idea_id, current_state, updated_by_host, updated_by_pid, updated_at) "
                     "VALUES (?, ?, ?, ?, datetime('now'))",
                     (idea_id, to_state, host, pid)
                 )
                 self.conn.execute(
-                    "UPDATE idea_state SET current_state = ?, updated_at = datetime('now') "
+                    "UPDATE idea_state SET current_state = ?, updated_by_host = ?, updated_by_pid = ?, updated_at = datetime('now') "
                     "WHERE idea_id = ?",
-                    (to_state, idea_id)
+                    (to_state, host, pid, idea_id)
                 )
 
                 # Record transition
@@ -881,9 +910,9 @@ class IdeaLake:
         """Detect ideas stuck in CLAIMED state beyond timeout."""
         def _do_detect():
             return self.conn.execute(
-                "SELECT idea_id, current_state, claimed_at FROM idea_state "
+                "SELECT idea_id, current_state, updated_at FROM idea_state "
                 "WHERE current_state = 'CLAIMED' "
-                "AND datetime(claimed_at, '+' || ? || ' hours') < datetime('now')",
+                "AND datetime(updated_at, '+' || ? || ' hours') < datetime('now')",
                 (timeout_hours,)
             ).fetchall()
         rows = _retry_on_busy(_do_detect)
