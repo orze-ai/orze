@@ -1474,10 +1474,33 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 except Exception as e:
                     logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                   tp.idea_id, e)
+            # CRITICAL: Always record FSM transition for failed jobs, regardless of metrics.json status.
+            # Training processes may write metrics.json before crashing, so we can't skip FSM
+            # recording just because metrics.json exists. The FSM transition must be recorded
+            # for every failure to maintain complete audit trail.
             if not metrics_path.exists():
                 _write_failure(results_dir / tp.idea_id,
                                f"Process exited with code {ret}",
                                lake=lake, idea_id=tp.idea_id, cfg=cfg)
+            else:
+                # metrics.json exists but we still need to record the FSM transition
+                # (don't overwrite metrics.json, just record FSM state change)
+                if lake and tp.idea_id:
+                    try:
+                        current_state = lake.get_fsm_state(tp.idea_id)
+                        if current_state:
+                            lake.record_state_transition(
+                                tp.idea_id,
+                                from_state=current_state,
+                                to_state="FAILED",
+                                reason=reason,
+                                host=socket.gethostname(),
+                                pid=os.getpid(),
+                                sop_type=(cfg or {}).get("sop", "training"),
+                            )
+                    except Exception as e:
+                        logger.warning("FSM transition failed (non-blocking): %s", e)
+
             write_failure_analysis(results_dir / tp.idea_id, classify_failure(reason, ret or -1, "training"), reason)
             _record_failure(failure_counts, tp.idea_id)
 
