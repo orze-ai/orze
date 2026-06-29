@@ -1126,6 +1126,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
                 reason=f"training_launched on gpu {gpu}",
                 host=socket.gethostname(),
                 pid=os.getpid(),
+                sop_type=cfg.get("sop", "training"),
             )
         except Exception as e:
             logger.warning("FSM transition failed (non-blocking): %s", e)
@@ -1158,6 +1159,7 @@ def _write_failure(idea_dir: Path, reason: str, lake=None, idea_id=None):
                 reason=reason,
                 host=socket.gethostname(),
                 pid=os.getpid(),
+                sop_type=cfg.get("sop", "training"),
             )
         except Exception as e:
             logger.warning("FSM transition failed (non-blocking): %s", e)

@@ -115,6 +115,7 @@ def launch_analysis(
                     reason="analysis_launched",
                     host=socket.gethostname(),
                     pid=os.getpid(),
+                    sop_type=cfg.get("sop", "analysis"),
                 )
             except Exception as e:
                 logger.warning("FSM transition failed (non-blocking): %s", e)
@@ -190,6 +191,7 @@ def check_active_analysis(
                             reason="analysis completed",
                             host=socket.gethostname(),
                             pid=os.getpid(),
+                            sop_type=cfg.get("sop", "analysis"),
                         )
                     except Exception as e:
                         logger.warning("FSM transition failed (non-blocking): %s", e)
@@ -247,6 +249,7 @@ def _write_analysis_failure_marker(
                 reason=reason[:100],
                 host=socket.gethostname(),
                 pid=os.getpid(),
+                sop_type=cfg.get("sop", "analysis"),
             )
         except Exception as e:
             logger.warning("FSM transition failed (non-blocking): %s", e)

@@ -222,6 +222,7 @@ def _write_eval_failure_marker(results_dir: Path, idea_id: str,
                 reason=reason[:100],
                 host=socket.gethostname(),
                 pid=os.getpid(),
+                sop_type=cfg.get("sop", "training"),
             )
         except Exception as e:
             logger.warning("FSM transition failed (non-blocking): %s", e)
@@ -325,6 +326,7 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                     reason=f"training_and_eval completed on gpu {gpu}",
                     host=socket.gethostname(),
                     pid=os.getpid(),
+                    sop_type=cfg.get("sop", "training"),
                 )
             except Exception as e:
                 logger.warning("FSM transition failed (non-blocking): %s", e)

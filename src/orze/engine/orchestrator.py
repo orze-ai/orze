@@ -938,6 +938,13 @@ class Orze(OrzePhaseMixin):
                 except Exception:
                     pass
 
+            # 2b''. FSM dead-PID reaper (every 10 iterations ≈ 5 min, v4.5)
+            if self.lake and self.iteration % 10 == 0:
+                try:
+                    self.lake.reap_dead_claims(max_age_minutes=15)
+                except Exception as e:
+                    logger.debug("FSM dead-PID reaper failed: %s", e)
+
             # 2b'. F7: every 30 min, mark 'running' rows whose training
             # process has died as 'failed' with reason orphaned_pid.
             if self.iteration % 60 == 0:

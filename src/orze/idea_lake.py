@@ -811,7 +811,8 @@ class IdeaLake:
     def record_state_transition(self, idea_id: str, from_state: str, to_state: str,
                                 reason: Optional[str] = None,
                                 host: Optional[str] = None,
-                                pid: Optional[int] = None) -> None:
+                                pid: Optional[int] = None,
+                                sop_type: Optional[str] = None) -> None:
         """Atomically record an FSM state transition with audit trail.
 
         v4.5+: Generic FSM orthogonal to SOP type.
@@ -827,6 +828,7 @@ class IdeaLake:
         import socket as _socket
         host = host or _socket.gethostname()
         pid = pid or os.getpid()
+        sop_type = sop_type or "training"
 
         def _do_transition():
             self.conn.execute("BEGIN IMMEDIATE")
@@ -850,22 +852,22 @@ class IdeaLake:
                 # Update or insert state
                 self.conn.execute(
                     "INSERT OR IGNORE INTO idea_state "
-                    "(idea_id, current_state, updated_by_host, updated_by_pid, updated_at) "
-                    "VALUES (?, ?, ?, ?, datetime('now'))",
-                    (idea_id, to_state, host, pid)
+                    "(idea_id, current_state, updated_by_host, updated_by_pid, sop_type, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                    (idea_id, to_state, host, pid, sop_type)
                 )
                 self.conn.execute(
-                    "UPDATE idea_state SET current_state = ?, updated_by_host = ?, updated_by_pid = ?, updated_at = datetime('now') "
+                    "UPDATE idea_state SET current_state = ?, updated_by_host = ?, updated_by_pid = ?, sop_type = ?, updated_at = datetime('now') "
                     "WHERE idea_id = ?",
-                    (to_state, host, pid, idea_id)
+                    (to_state, host, pid, sop_type, idea_id)
                 )
 
                 # Record transition
                 self.conn.execute(
                     "INSERT INTO idea_transitions "
-                    "(idea_id, from_state, to_state, reason, host, pid) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (idea_id, from_state, to_state, reason or "", host, pid)
+                    "(idea_id, from_state, to_state, reason, host, pid, sop_type) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (idea_id, from_state, to_state, reason or "", host, pid, sop_type)
                 )
 
                 self.conn.commit()
@@ -913,6 +915,54 @@ class IdeaLake:
             ).fetchall()
         rows = _retry_on_busy(_do_detect)
         return [(r[0], r[1], r[2]) for r in rows]
+
+    def reap_dead_claims(self, max_age_minutes: int = 15) -> int:
+        """Requeue ideas with dead PIDs in CLAIMED/IN_PROGRESS.
+
+        Returns count of ideas requeued.
+        """
+        def _is_pid_alive(pid):
+            if not pid or pid <= 0:
+                return False
+            try:
+                os.kill(pid, 0)
+                return True
+            except (OSError, ProcessLookupError):
+                return False
+
+        def _do_reap():
+            # Find ideas in CLAIMED or IN_PROGRESS older than max_age_minutes
+            rows = self.conn.execute(
+                "SELECT idea_id, current_state, updated_by_pid FROM idea_state "
+                "WHERE current_state IN ('CLAIMED', 'IN_PROGRESS') "
+                "AND datetime(updated_at, '+' || ? || ' minutes') < datetime('now')",
+                (max_age_minutes,)
+            ).fetchall()
+            return [(r[0], r[1], r[2]) for r in rows]
+
+        stale = _retry_on_busy(_do_reap)
+        if not stale:
+            return 0
+
+        requeued = 0
+        for idea_id, current_state, pid in stale:
+            if not _is_pid_alive(pid):
+                try:
+                    self.record_state_transition(
+                        idea_id,
+                        from_state=current_state,
+                        to_state="QUEUED",
+                        reason=f"reap_dead_pid_{pid}",
+                        host="reaper",
+                        pid=None,
+                    )
+                    requeued += 1
+                except Exception as e:
+                    logger.warning("Failed to reap idea %s (pid %s): %s", idea_id, pid, e)
+
+        if requeued > 0:
+            logger.info("Reaped %d ideas with dead PIDs", requeued)
+        return requeued
 
     def _recover_fsm_from_crash(self):
         """Detect and recover ideas stuck in CLAIMED >6h."""
