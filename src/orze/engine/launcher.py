@@ -1149,18 +1149,32 @@ def _write_failure(idea_dir: Path, reason: str, lake=None, idea_id=None, cfg=Non
     }
     atomic_write(idea_dir / "metrics.json", json.dumps(metrics, indent=2))
 
-    # Record FSM transition: IN_PROGRESS → FAILED (v4.5: generic for all SOP types)
+    # Record FSM transition: current_state → FAILED (v4.5: determine actual state)
     if lake and idea_id:
         try:
-            lake.record_state_transition(
-                idea_id,
-                from_state="IN_PROGRESS",
-                to_state="FAILED",
-                reason=reason,
-                host=socket.gethostname(),
-                pid=os.getpid(),
-                sop_type=(cfg or {}).get("sop", "training"),
-            )
+            # Query the actual current state from the FSM
+            current_state = lake.get_fsm_state(idea_id)
+            if current_state:
+                lake.record_state_transition(
+                    idea_id,
+                    from_state=current_state,
+                    to_state="FAILED",
+                    reason=reason,
+                    host=socket.gethostname(),
+                    pid=os.getpid(),
+                    sop_type=(cfg or {}).get("sop", "training"),
+                )
+            else:
+                # No state found, default to IN_PROGRESS for backward compatibility
+                lake.record_state_transition(
+                    idea_id,
+                    from_state="IN_PROGRESS",
+                    to_state="FAILED",
+                    reason=reason,
+                    host=socket.gethostname(),
+                    pid=os.getpid(),
+                    sop_type=(cfg or {}).get("sop", "training"),
+                )
         except Exception as e:
             logger.warning("FSM transition failed (non-blocking): %s", e)
 
