@@ -1004,7 +1004,7 @@ class Orze(OrzePhaseMixin):
             if self.active:
                 finished = check_active(self.active, self.results_dir,
                                         cfg, self.failure_counts,
-                                        self.fix_counts)
+                                        self.fix_counts, lake=self.lake)
 
             # 3-auto. After a SUCCESSFUL job finishes, check if GPU mode
             # should upgrade from exclusive to VRAM packing.
@@ -1059,7 +1059,7 @@ class Orze(OrzePhaseMixin):
             eval_finished = []
             if self.active_evals:
                 eval_finished = check_active_evals(
-                    self.active_evals, self.results_dir, cfg)
+                    self.active_evals, self.results_dir, cfg, lake=self.lake)
 
             # 3b. Run post-scripts for evals that just completed
             for idea_id, gpu in eval_finished:
@@ -1124,7 +1124,7 @@ class Orze(OrzePhaseMixin):
                         once_finished = check_active(
                             self.active, self.results_dir,
                             cfg, self.failure_counts,
-                            self.fix_counts)
+                            self.fix_counts, lake=self.lake)
                         for idea_id, gpu in once_finished:
                             m_path = self.results_dir / idea_id / "metrics.json"
                             if m_path.exists():
@@ -1132,7 +1132,7 @@ class Orze(OrzePhaseMixin):
                                     m = json.loads(m_path.read_text(encoding="utf-8"))
                                     if m.get("status") == "COMPLETED":
                                         run_eval(idea_id, gpu,
-                                                 self.results_dir, cfg)
+                                                 self.results_dir, cfg, lake=self.lake)
                                         run_post_scripts(idea_id, gpu,
                                                          self.results_dir, cfg)
                                 except (json.JSONDecodeError, OSError, UnicodeDecodeError):
@@ -1145,7 +1145,7 @@ class Orze(OrzePhaseMixin):
                     while self.active_evals:
                         time.sleep(5)
                         ef = check_active_evals(
-                            self.active_evals, self.results_dir, cfg)
+                            self.active_evals, self.results_dir, cfg, lake=self.lake)
                         for idea_id, gpu in ef:
                             run_post_scripts(
                                 idea_id, gpu, self.results_dir, cfg)

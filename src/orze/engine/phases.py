@@ -562,7 +562,7 @@ class OrzePhaseMixin:
                                 use_gpu = free_for_eval[0]
                                 ep = launch_eval(
                                     idea_id, use_gpu,
-                                    self.results_dir, cfg)
+                                    self.results_dir, cfg, lake=self.lake)
                                 if ep is not None:
                                     self.active_evals[use_gpu] = ep
                                 else:
@@ -603,7 +603,7 @@ class OrzePhaseMixin:
             if free_for_eval:
                 use_gpu = free_for_eval[0]
                 ep = launch_eval(
-                    p_idea, use_gpu, self.results_dir, cfg)
+                    p_idea, use_gpu, self.results_dir, cfg, lake=self.lake)
                 if ep is not None:
                     self.active_evals[use_gpu] = ep
                 else:
@@ -677,7 +677,7 @@ class OrzePhaseMixin:
                         continue
                     use_gpu = free_for_eval.pop(0)
                     ep = launch_eval(
-                        iid, use_gpu, self.results_dir, cfg)
+                        iid, use_gpu, self.results_dir, cfg, lake=self.lake)
                     if ep is not None:
                         self.active_evals[use_gpu] = ep
                         launched_backlog += 1
@@ -1107,7 +1107,7 @@ class OrzePhaseMixin:
                                 idea_id, gpu,
                                 ideas[idea_id]["title"][:50])
                     try:
-                        tp = launch(idea_id, gpu, self.results_dir, cfg)
+                        tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)
                     except GpuUnavailableError as e:
                         # Resource issue, not a code bug: do NOT invoke
                         # the executor-fix path and do NOT count this
@@ -1130,7 +1130,7 @@ class OrzePhaseMixin:
                                 self.results_dir / idea_id)
                             try:
                                 tp = launch(idea_id, gpu,
-                                            self.results_dir, cfg)
+                                            self.results_dir, cfg, lake=self.lake)
                             except Exception as e2:
                                 logger.error(
                                     "[FIX-RETRY] %s relaunch failed: %s",
@@ -1218,7 +1218,7 @@ class OrzePhaseMixin:
                         yaml.dump({k: v for k, v in _fp_cfg.items() if v is not None},
                                   default_flow_style=False))
                     try:
-                        _fp_tp = launch(_fp_id, _fp_gpu, self.results_dir, cfg)
+                        _fp_tp = launch(_fp_id, _fp_gpu, self.results_dir, cfg, lake=self.lake)
                         self.slot_mgr.force_assign(_fp_tp, _fp_gpu)
                         _fp_dispatched = True
                     except Exception as _fp_err:
