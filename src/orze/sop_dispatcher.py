@@ -22,13 +22,13 @@ _BUILTIN_SOPS = {
         "checker_module": "orze.engine.launcher",
         "checker_function": "check_active",
     },
-    # Placeholder for analysis SOP (will be implemented in Step 2)
-    # "analysis": {
-    #     "launcher_module": "orze.engine.analysis",
-    #     "launcher_function": "launch_analysis",
-    #     "checker_module": "orze.engine.analysis",
-    #     "checker_function": "check_active_analysis",
-    # },
+    "analysis": {
+        "description": "Data/model analysis workflow (compute-only, no training)",
+        "launcher_module": "orze.engine.analysis",
+        "launcher_function": "launch_analysis",
+        "checker_module": "orze.engine.analysis",
+        "checker_function": "check_active_analysis",
+    },
 }
 
 
