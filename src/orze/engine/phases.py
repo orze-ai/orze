@@ -927,13 +927,15 @@ class OrzePhaseMixin:
                             else:
                                 _write_failure(
                                     self.results_dir / idea_id,
-                                    "Pre-script failed after fix")
+                                    "Pre-script failed after fix",
+                                    lake=self.lake, idea_id=idea_id, cfg=cfg)
                                 _record_failure(
                                     self.failure_counts, idea_id)
                                 continue
                         else:
                             _write_failure(
-                                self.results_dir / idea_id, error_msg)
+                                self.results_dir / idea_id, error_msg,
+                                lake=self.lake, idea_id=idea_id, cfg=cfg)
                             _record_failure(
                                 self.failure_counts, idea_id)
                             continue
@@ -967,7 +969,8 @@ class OrzePhaseMixin:
                                 pass
                             _write_failure(
                                 self.results_dir / idea_id,
-                                f"schema_invalid: {_err}")
+                                f"schema_invalid: {_err}",
+                                lake=self.lake, idea_id=idea_id, cfg=cfg)
                             if self.lake:
                                 try:
                                     self.lake.set_status(idea_id, "skipped")
@@ -1050,7 +1053,8 @@ class OrzePhaseMixin:
                                 pass
                             _write_failure(
                                 self.results_dir / idea_id,
-                                f"method_validator_rejected: {_mv_err}")
+                                f"method_validator_rejected: {_mv_err}",
+                                lake=self.lake, idea_id=idea_id, cfg=cfg)
                             if self.lake:
                                 try:
                                     self.lake.set_status(idea_id, "skipped")
@@ -1081,7 +1085,8 @@ class OrzePhaseMixin:
                                                    idea_id, err_msg)
                                     _write_failure(
                                         self.results_dir / idea_id,
-                                        f"Config validation failed: {err_msg}")
+                                        f"Config validation failed: {err_msg}",
+                                        lake=self.lake, idea_id=idea_id, cfg=cfg)
                                     if self.lake:
                                         self.lake.set_status(idea_id, "skipped")
                                     # Trigger engineer once per (script, missing_key_set).
@@ -1152,13 +1157,15 @@ class OrzePhaseMixin:
                                     idea_id, e2)
                                 _write_failure(
                                     self.results_dir / idea_id,
-                                    f"Launch error after fix: {e2}")
+                                    f"Launch error after fix: {e2}",
+                                    lake=self.lake, idea_id=idea_id, cfg=cfg)
                                 _record_failure(
                                     self.failure_counts, idea_id)
                                 continue
                         else:
                             _write_failure(self.results_dir / idea_id,
-                                           error_msg)
+                                           error_msg,
+                                           lake=self.lake, idea_id=idea_id, cfg=cfg)
                             _record_failure(self.failure_counts, idea_id)
                             continue
                     try:
@@ -1238,7 +1245,8 @@ class OrzePhaseMixin:
                         _fp_dispatched = True
                     except Exception as _fp_err:
                         logger.error("force_pack launch failed %s: %s", _fp_id, _fp_err)
-                        _write_failure(self.results_dir / _fp_id, f"force_pack: {_fp_err}")
+                        _write_failure(self.results_dir / _fp_id, f"force_pack: {_fp_err}",
+                                       lake=self.lake, idea_id=_fp_id, cfg=cfg)
                         _record_failure(self.failure_counts, _fp_id)
                     break
             if not _fp_dispatched:
