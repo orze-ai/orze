@@ -58,6 +58,8 @@ PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 CRITICAL_IDEAS = [
     "idea-68a41b", "idea-95dcfd", "idea-d6cce4",
     "idea-433e99", "idea-785fcc", "idea-61bc3c",
+    # Cycle 2126 direct-fire: focal loss + OPD experiments (prof trigger)
+    "idea-99cafe", "idea-f70be9", "idea-64983e", "idea-ced871",
 ]
 
 # Flag file that re-enables lr=2e-5 launches when present.
@@ -86,7 +88,25 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
     for idea_id in ideas:
         if skipped and idea_id in skipped:
             continue
-        if not (results_dir / idea_id).exists():
+        idea_dir = results_dir / idea_id
+        # Stale-dir recovery (cycle-2175 engineer P3):
+        # portfolio expansion or a prior partial claim can create the
+        # results dir (with idea_config.yaml) without claim.json or
+        # metrics.json.  These dirs block dispatch because the old
+        # `not exists()` gate treated any existing dir as "claimed".
+        # Now: dirs without claim.json *and* without metrics.json are
+        # stale — treat them as unclaimed so the next dispatch cycle
+        # can pick them up.  claim() has a matching fix.
+        stale_dir = (
+            idea_dir.exists()
+            and not (idea_dir / "claim.json").exists()
+            and not (idea_dir / "metrics.json").exists()
+        )
+        if stale_dir:
+            logger.warning(
+                "Treating %s as unclaimed: stale dir (no claim, no metrics)",
+                idea_id)
+        if not idea_dir.exists() or stale_dir:
             # Validate strategy file exists before counting as queued
             idea_config = ideas[idea_id].get("config", {})
             strategy_name = idea_config.get("strategy")
@@ -152,6 +172,14 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
         for iid in non_critical:
             cfg = ideas.get(iid, {}).get("config") or {}
             if _is_lr_2e5(cfg):
+                # Cycle 2127 engineer: focal loss ideas use lr=2e-5 but
+                # are NOT flat-minimum (focal loss changes the loss
+                # landscape).  Let them bypass the lr=2e-5 gate when
+                # focal_loss_gamma > 0.
+                fg = cfg.get("focal_loss_gamma")
+                if isinstance(fg, (int, float)) and fg > 0:
+                    non_critical_filtered.append(iid)
+                    continue
                 skipped_lr2e5 += 1
                 continue
             non_critical_filtered.append(iid)
@@ -206,7 +234,16 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
                     return False  # another host owns this, don't steal
             except (json.JSONDecodeError, OSError):
                 pass
-        return False
+            # Dir has a claim.json (ours or corrupt).  Other host check
+            # above already handled the cross-host case.  If the claim is
+            # ours (or unreadable), refuse to double-claim.
+            return False
+        # Stale-dir recovery (cycle-2175 engineer P3):
+        # Dir exists but no claim.json and no metrics.json — portfolio
+        # expansion or a prior partial claim created the dir.  Fall
+        # through to write claim.json and claim the slot.
+        if (idea_dir / "metrics.json").exists():
+            return False  # completed/failed idea, not claimable
 
     claim_info = {
         "claimed_by": socket.gethostname(),
@@ -219,6 +256,15 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
     if lake:
         try:
             lake.set_status(idea_id, "running")
+            # Record FSM transition: QUEUED → CLAIMED
+            lake.record_state_transition(
+                idea_id,
+                from_state="QUEUED",
+                to_state="CLAIMED",
+                reason=f"claimed by {socket.gethostname()} on gpu {gpu}",
+                host=socket.gethostname(),
+                pid=os.getpid(),
+            )
         except Exception:
             pass  # filesystem is the primary lock, DB is best-effort
 

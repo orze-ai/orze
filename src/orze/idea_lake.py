@@ -776,5 +776,121 @@ class IdeaLake:
         self.conn.commit()
         logger.info("Successfully updated %d config summaries.", count)
 
+    def record_state_transition(self, idea_id: str, from_state: str, to_state: str,
+                                reason: Optional[str] = None,
+                                host: Optional[str] = None,
+                                pid: Optional[int] = None) -> None:
+        """Atomically record an FSM state transition with audit trail."""
+        import socket as _socket
+        host = host or _socket.gethostname()
+        pid = pid or os.getpid()
+
+        def _do_transition():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                # Validate transition
+                VALID_TRANSITIONS = {
+                    "QUEUED": {"CLAIMED"},
+                    "CLAIMED": {"TRAINING", "QUEUED"},
+                    "TRAINING": {"EVALUATING", "FAILED", "QUEUED"},
+                    "EVALUATING": {"COMPLETE", "FAILED"},
+                    "COMPLETE": {"ARCHIVED"},
+                    "FAILED": {"QUEUED"},
+                    "ARCHIVED": set(),
+                }
+                if to_state not in VALID_TRANSITIONS.get(from_state, set()):
+                    logger.warning(
+                        "Invalid FSM transition: %s %s → %s",
+                        idea_id, from_state, to_state)
+                    self.conn.rollback()
+                    return
+
+                # Update or insert state
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO idea_state "
+                    "(idea_id, current_state, claimed_by_host, claimed_by_pid, claimed_at) "
+                    "VALUES (?, ?, ?, ?, datetime('now'))",
+                    (idea_id, to_state, host, pid)
+                )
+                self.conn.execute(
+                    "UPDATE idea_state SET current_state = ?, updated_at = datetime('now') "
+                    "WHERE idea_id = ?",
+                    (to_state, idea_id)
+                )
+
+                # Record transition
+                self.conn.execute(
+                    "INSERT INTO idea_transitions "
+                    "(idea_id, from_state, to_state, reason, host, pid) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (idea_id, from_state, to_state, reason or "", host, pid)
+                )
+
+                self.conn.commit()
+                logger.info(
+                    "[LIFECYCLE_TRANSITION] idea=%s %s → %s reason=\"%s\"",
+                    idea_id, from_state, to_state, reason or "")
+            except Exception as e:
+                logger.warning("FSM transition error for %s: %s", idea_id, e)
+                try:
+                    self.conn.rollback()
+                except Exception:
+                    pass
+
+        _retry_on_busy(_do_transition)
+
+    def get_fsm_state(self, idea_id: str) -> str:
+        """Get current FSM state for an idea."""
+        def _do_get():
+            return self.conn.execute(
+                "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                (idea_id,)
+            ).fetchone()
+        row = _retry_on_busy(_do_get)
+        return row[0] if row else "UNKNOWN"
+
+    def get_fsm_history(self, idea_id: str) -> List[Dict[str, any]]:
+        """Get complete audit trail for an idea."""
+        def _do_history():
+            return self.conn.execute(
+                "SELECT from_state, to_state, reason, host, pid, ts "
+                "FROM idea_transitions WHERE idea_id = ? ORDER BY id ASC",
+                (idea_id,)
+            ).fetchall()
+        rows = _retry_on_busy(_do_history)
+        return [dict(row) for row in rows]
+
+    def detect_stale_claims(self, timeout_hours: int = 6) -> List[tuple]:
+        """Detect ideas stuck in CLAIMED state beyond timeout."""
+        def _do_detect():
+            return self.conn.execute(
+                "SELECT idea_id, current_state, claimed_at FROM idea_state "
+                "WHERE current_state = 'CLAIMED' "
+                "AND datetime(claimed_at, '+' || ? || ' hours') < datetime('now')",
+                (timeout_hours,)
+            ).fetchall()
+        rows = _retry_on_busy(_do_detect)
+        return [(r[0], r[1], r[2]) for r in rows]
+
+    def _recover_fsm_from_crash(self):
+        """Detect and recover ideas stuck in CLAIMED >6h."""
+        stale = self.detect_stale_claims(timeout_hours=6)
+        if not stale:
+            return
+
+        logger.info("FSM crash recovery: found %d stale claims, resetting to QUEUED", len(stale))
+        for idea_id, _, _ in stale:
+            try:
+                self.record_state_transition(
+                    idea_id,
+                    from_state="CLAIMED",
+                    to_state="QUEUED",
+                    reason="crash_recovery_timeout_6h",
+                    host="recovery",
+                    pid=None,
+                )
+            except Exception as e:
+                logger.warning("Failed to recover idea %s: %s", idea_id, e)
+
     def close(self):
         self.conn.close()

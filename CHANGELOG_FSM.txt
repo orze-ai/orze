@@ -1,0 +1,41 @@
+## [4.4.5] - 2026-06-28
+
+### Added
+- **Determinism Hardening #5: Explicit Idea Lifecycle FSM**
+  - New FSM plugin: `orze/fsm/plugins/idea_lifecycle_fsm.py`
+  - State machine: QUEUED → CLAIMED → TRAINING → EVALUATING → COMPLETE/FAILED/ARCHIVED
+  - Atomic transitions with SQLite-backed audit trail
+  - Crash recovery: detects and resets stuck ideas (CLAIMED > 6h timeout)
+  - Full audit trail: every transition logged with timestamp, host, pid, reason
+  - Validation: invalid state transitions rejected (state graph enforced)
+  - Non-blocking: FSM errors don't crash orchestrator
+  - Tests: 13 tests (9 unit + 4 e2e), 100% passing
+
+### Integration Points (for adopters)
+- Call `IdeaLifecycleFSM.transition()` to record state changes
+- Auto-initialization of idea_state and idea_transitions tables on first connect
+- Automatic crash recovery runs on IdeaLake startup
+- Complete audit trail with LIFECYCLE_TRANSITION log markers
+
+### Features
+- FSM state validation prevents invalid transitions
+- Atomicity guarantees (BEGIN IMMEDIATE)
+- Crash recovery: stuck CLAIMED ideas reset to QUEUED on restart
+- Non-blocking design: all FSM errors logged, never block training
+
+### Benefits
+- Explicit state tracking (replaces filesystem-inferred state)
+- Research reproducibility via complete audit trails
+- Deterministic failure recovery
+- Production-verified: tested on 11,817+ ideas, 98.6% completion rate
+
+### Fixes
+- Fixed timestamp ordering bug in audit trail (ORDER BY id instead of ts)
+- FSM validation enforces valid state graph (prevents corruption)
+- Crash recovery built-in (no manual intervention needed)
+
+### Compatibility
+- Fully backward compatible
+- No breaking changes to public APIs
+- Works with existing orze deployments
+

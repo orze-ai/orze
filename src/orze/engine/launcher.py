@@ -982,6 +982,54 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
         except Exception:
             pass  # fall back to global train_script
 
+    # -----------------------------------------------------------------------
+    # RANK-64 FLAT-MINIMUM GUARD (cycle-1182 professor trigger)
+    # Reject any idea with lora_rank < 128 BEFORE GPU launch. The 54-expt
+    # flat minimum at rank-64 is proven (all bit-identical 4.92% smoke WER).
+    # Validators are silently bypassed by the launcher
+    # (project_validator_bypass_300.md), so this guard is the primary defense.
+    # Smoke tests (idea-smoke-*) and SMELL_SKIP_RANK_GUARD=1 override.
+    # -----------------------------------------------------------------------
+    _rank_guard_skip = (
+        os.environ.get("SMELL_SKIP_RANK_GUARD") == "1"
+        or str(idea_id).startswith("idea-smoke-")
+    )
+    if not _rank_guard_skip and idea_cfg_path.exists():
+        try:
+            import yaml as _rg_yaml
+            with open(idea_cfg_path) as _rgf:
+                _rg_cfg = _rg_yaml.safe_load(_rgf) or {}
+            _rg_rank = int(_rg_cfg.get("lora_rank", 64))  # default 64 matches argparse (rank-guard bypass fix, cycle-2172)
+            _rg_is_training = (
+                _rg_cfg.get("training_proposal", False)
+                or bool(_rg_cfg.get("data_mix"))
+                or _rg_cfg.get("ewc_enabled", False)
+                or _rg_cfg.get("opd_enabled", False)
+                or _rg_cfg.get("efmlora_enabled", False)
+            )
+            if 0 < _rg_rank < 128 and _rg_is_training:
+                _rg_msg = (
+                    f"Rank < 128 is the flat-minimum dead zone. "
+                    f"Use lora_rank: 128 or set SMELL_SKIP_RANK_GUARD=1 "
+                    f"for smoke tests."
+                )
+                logger.warning(
+                    "RANK-GUARD REJECTED idea=%s rank=%d: %s",
+                    idea_id, _rg_rank, _rg_msg)
+                _rg_mark = results_dir / idea_id / "_rank_guard_rejected.txt"
+                try:
+                    _rg_mark.parent.mkdir(parents=True, exist_ok=True)
+                    _rg_mark.write_text(
+                        f"rank_guard: {_rg_msg} (rank={_rg_rank})\n")
+                except OSError:
+                    pass
+                raise RuntimeError(f"rank_guard_{_rg_msg}")
+        except RuntimeError:
+            raise
+        except Exception as _rg_e:
+            logger.warning(
+                "Rank guard soft-failed for idea=%s: %s", idea_id, _rg_e)
+
     # Data boundary guardrails. Two layered defenses, activated when
     # data_boundaries is configured:
     #   1. Kernel isolation (primary): unshare -U -m bash -c "mount --bind
