@@ -916,6 +916,56 @@ class IdeaLake:
         rows = _retry_on_busy(_do_detect)
         return [(r[0], r[1], r[2]) for r in rows]
 
+    def catch_up_missing_terminals(self, results_dir) -> int:
+        """Find ideas in IN_PROGRESS with completed metrics.json and record COMPLETE transitions.
+
+        Handles case where training completed but FSM transition was never recorded
+        (e.g., when eval_script was not configured).
+
+        Returns count of transitions recorded.
+        """
+        from pathlib import Path
+        import json
+
+        def _do_catch_up():
+            rows = self.conn.execute(
+                "SELECT idea_id FROM idea_state WHERE current_state = 'IN_PROGRESS'"
+            ).fetchall()
+            return [r[0] for r in rows]
+
+        in_progress_ids = _retry_on_busy(_do_catch_up)
+        if not in_progress_ids:
+            return 0
+
+        results_dir = Path(results_dir)
+        recorded = 0
+
+        for idea_id in in_progress_ids:
+            metrics_path = results_dir / idea_id / "metrics.json"
+            if metrics_path.exists():
+                try:
+                    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+                    if metrics.get("status") == "COMPLETED":
+                        try:
+                            self.record_state_transition(
+                                idea_id,
+                                from_state="IN_PROGRESS",
+                                to_state="COMPLETE",
+                                reason="catch_up_training_completed",
+                                host="catch_up",
+                                pid=None,
+                                sop_type="training",
+                            )
+                            recorded += 1
+                        except Exception:
+                            pass
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+        if recorded > 0:
+            logger.info("Catch-up: recorded %d missing COMPLETE transitions", recorded)
+        return recorded
+
     def reap_dead_claims(self, max_age_minutes: int = 15) -> int:
         """Requeue ideas with dead PIDs in CLAIMED/IN_PROGRESS.
 

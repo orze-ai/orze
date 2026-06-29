@@ -945,6 +945,13 @@ class Orze(OrzePhaseMixin):
                 except Exception as e:
                     logger.debug("FSM dead-PID reaper failed: %s", e)
 
+            # 2b'''. FSM catch-up for missing terminal transitions (every 20 iterations ≈ 10 min)
+            if self.lake and self.iteration % 20 == 0:
+                try:
+                    self.lake.catch_up_missing_terminals(self.results_dir)
+                except Exception as e:
+                    logger.debug("FSM catch-up failed: %s", e)
+
             # 2b'. F7: every 30 min, mark 'running' rows whose training
             # process has died as 'failed' with reason orphaned_pid.
             if self.iteration % 60 == 0:
