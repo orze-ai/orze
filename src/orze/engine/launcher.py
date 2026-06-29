@@ -45,6 +45,7 @@ import datetime
 import json
 import logging
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -914,13 +915,16 @@ def _is_launcher_paused(cfg: dict, results_dir: Path) -> bool:
     return config_paused or flag_present
 
 
-def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProcess:
+def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> TrainingProcess:
     """Launch a training subprocess on the given GPU.
 
     F12: If the idea's YAML specifies ``kind`` other than 'train' (or the
     idea_lake row has such a kind), dispatch to posthoc_runner instead of
     the training script. The 'train' path below is preserved byte-exact
     for back-compat.
+
+    Args:
+        lake: IdeaLake instance for FSM transition recording (optional)
     """
     log_path = results_dir / idea_id / "train_output.log"
 
@@ -1111,6 +1115,21 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
         raise
 
     now = time.time()
+
+    # Record FSM transition: CLAIMED → TRAINING
+    if lake:
+        try:
+            lake.record_state_transition(
+                idea_id,
+                from_state="CLAIMED",
+                to_state="TRAINING",
+                reason=f"training_launched on gpu {gpu}",
+                host=socket.gethostname(),
+                pid=os.getpid(),
+            )
+        except Exception as e:
+            logger.warning("FSM transition failed (non-blocking): %s", e)
+
     return TrainingProcess(
         idea_id=idea_id, gpu=gpu, process=proc,
         start_time=now, log_path=log_path,
@@ -1120,8 +1139,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict) -> TrainingProc
     )
 
 
-def _write_failure(idea_dir: Path, reason: str):
-    """Write a failure metrics.json atomically."""
+def _write_failure(idea_dir: Path, reason: str, lake=None, idea_id=None):
+    """Write a failure metrics.json atomically and record FSM transition."""
     metrics = {
         "status": "FAILED",
         "error": reason,
@@ -1129,16 +1148,33 @@ def _write_failure(idea_dir: Path, reason: str):
     }
     atomic_write(idea_dir / "metrics.json", json.dumps(metrics, indent=2))
 
+    # Record FSM transition: TRAINING → FAILED
+    if lake and idea_id:
+        try:
+            lake.record_state_transition(
+                idea_id,
+                from_state="TRAINING",
+                to_state="FAILED",
+                reason=reason,
+                host=socket.gethostname(),
+                pid=os.getpid(),
+            )
+        except Exception as e:
+            logger.warning("FSM transition failed (non-blocking): %s", e)
+
 
 def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                  cfg: dict, failure_counts: dict,
-                 fix_counts: Optional[dict] = None) -> list:
+                 fix_counts: Optional[dict] = None, lake=None) -> list:
     """Check running processes. Reap completed/timed-out/stalled/OOM.
     Returns list of (idea_id, gpu) tuples for finished ideas.
 
     When fix_counts is provided and max_fix_attempts > 0, failed ideas
     are sent to the executor LLM for diagnosis before recording failure.
     If the LLM applies a fix, the idea is re-launched on the same GPU.
+
+    Args:
+        lake: IdeaLake instance for FSM transition recording (optional)
     """
     from orze.engine.health import check_stalled, detect_fatal_in_log, _adaptive_stall_minutes
     from orze.engine.failure import _record_failure, _try_executor_fix, _reset_idea_for_retry
@@ -1191,7 +1227,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     except Exception as e:
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
-                _write_failure(results_dir / tp.idea_id, error_msg)
+                _write_failure(results_dir / tp.idea_id, error_msg, lake=lake, idea_id=tp.idea_id)
                 write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, -1, "training"), error_msg)
                 _record_failure(failure_counts, tp.idea_id)
                 del active[gpu]
@@ -1218,7 +1254,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     except Exception as e:
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
-                _write_failure(results_dir / tp.idea_id, error_msg)
+                _write_failure(results_dir / tp.idea_id, error_msg, lake=lake, idea_id=tp.idea_id)
                 write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, -1, "training"), error_msg)
                 _record_failure(failure_counts, tp.idea_id)
                 del active[gpu]
@@ -1248,7 +1284,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                         except Exception as e:
                             logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                           tp.idea_id, e)
-                    _write_failure(results_dir / tp.idea_id, error_msg)
+                    _write_failure(results_dir / tp.idea_id, error_msg, lake=lake, idea_id=tp.idea_id)
                     write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, -1, "training"), error_msg)
                     _record_failure(failure_counts, tp.idea_id)
                     del active[gpu]
@@ -1273,7 +1309,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     _kill_pg(tp.process, _sig.SIGKILL)
                 tp.close_log()
                 error_msg = "stuck_no_progress"
-                _write_failure(results_dir / tp.idea_id, error_msg)
+                _write_failure(results_dir / tp.idea_id, error_msg, lake=lake, idea_id=tp.idea_id)
                 write_failure_analysis(
                     results_dir / tp.idea_id,
                     classify_failure(error_msg, -1, "training"),
@@ -1312,7 +1348,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     except Exception as e:
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
-                _write_failure(results_dir / tp.idea_id, error_msg)
+                _write_failure(results_dir / tp.idea_id, error_msg, lake=lake, idea_id=tp.idea_id)
                 write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, -1, "training"), error_msg)
                 _record_failure(failure_counts, tp.idea_id)
                 del active[gpu]
@@ -1325,7 +1361,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 _terminate_and_reap(tp.process)
                 tp.close_log()
                 kill_file.unlink(missing_ok=True)
-                _write_failure(results_dir / tp.idea_id, "Killed by admin")
+                _write_failure(results_dir / tp.idea_id, "Killed by admin", lake=lake, idea_id=tp.idea_id)
                 write_failure_analysis(results_dir / tp.idea_id, "crash", "Killed by admin")
                 del active[gpu]
                 finished.append((tp.idea_id, gpu))

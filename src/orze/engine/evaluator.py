@@ -32,6 +32,7 @@ CALLING SPEC:
         side effects: runs each post-script sequentially (blocking), skips if output file exists,
                       skips entirely if training status != COMPLETED
 """
+import socket
 import datetime
 import json
 import logging
@@ -74,8 +75,12 @@ def _record_eval_audit(idea_dir: Path, action: str, reason: str,
 
 
 def launch_eval(idea_id: str, gpu: int, results_dir: Path,
-                cfg: dict) -> Optional[EvalProcess]:
-    """Launch a non-blocking eval subprocess. Returns EvalProcess or None."""
+                cfg: dict, lake=None) -> Optional[EvalProcess]:
+    """Launch a non-blocking eval subprocess. Returns EvalProcess or None.
+
+    Args:
+        lake: IdeaLake instance for FSM transition recording (optional)
+    """
     eval_script = cfg.get("eval_script")
     if not eval_script:
         return None
@@ -138,6 +143,21 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         except Exception:
             log_fh.close()
             raise
+
+        # Record FSM transition: TRAINING → EVALUATING
+        if lake:
+            try:
+                lake.record_state_transition(
+                    idea_id,
+                    from_state="TRAINING",
+                    to_state="EVALUATING",
+                    reason=f"eval_launched on gpu {gpu}",
+                    host=socket.gethostname(),
+                    pid=os.getpid(),
+                )
+            except Exception as e:
+                logger.warning("FSM transition failed (non-blocking): %s", e)
+
         return EvalProcess(
             idea_id=idea_id, gpu=gpu, process=proc,
             start_time=time.time(), log_path=log_path,
@@ -178,12 +198,15 @@ def run_eval(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
 
 
 def _write_eval_failure_marker(results_dir: Path, idea_id: str,
-                               eval_output: str, reason: str) -> None:
+                               eval_output: str, reason: str, lake=None) -> None:
     """Safety net: write failure marker if eval process died without one.
 
     The marker file is the eval_output itself so the backlog scanner
     won't re-queue this idea.  The eval script is responsible for
     writing domain-specific reports; this is a generic fallback.
+
+    Args:
+        lake: IdeaLake instance for FSM transition recording (optional)
     """
     report_path = results_dir / idea_id / eval_output
     if report_path.exists():
@@ -195,10 +218,28 @@ def _write_eval_failure_marker(results_dir: Path, idea_id: str,
     }, indent=2))
     logger.info("Wrote eval failure marker for %s", idea_id)
 
+    # Record FSM transition: EVALUATING → FAILED
+    if lake:
+        try:
+            lake.record_state_transition(
+                idea_id,
+                from_state="EVALUATING",
+                to_state="FAILED",
+                reason=reason[:100],
+                host=socket.gethostname(),
+                pid=os.getpid(),
+            )
+        except Exception as e:
+            logger.warning("FSM transition failed (non-blocking): %s", e)
+
 
 def check_active_evals(active_evals: Dict[int, EvalProcess],
-                       results_dir: Path, cfg: dict) -> list:
-    """Check running eval processes. Returns list of (idea_id, gpu) for finished evals."""
+                       results_dir: Path, cfg: dict, lake=None) -> list:
+    """Check running eval processes. Returns list of (idea_id, gpu) for finished evals.
+
+    Args:
+        lake: IdeaLake instance for FSM transition recording (optional)
+    """
     eval_output = cfg.get("eval_output") or "eval_report.json"
     finished = []
     for gpu in list(active_evals.keys()):
