@@ -14,6 +14,7 @@ CALLING SPEC:
 
 import json
 import logging
+import os
 import re
 import shutil
 import socket
@@ -566,6 +567,20 @@ class OrzePhaseMixin:
                                 if ep is not None:
                                     self.active_evals[use_gpu] = ep
                                 else:
+                                    # No eval_script configured → record terminal transition
+                                    if self.lake:
+                                        try:
+                                            self.lake.record_state_transition(
+                                                idea_id,
+                                                from_state="IN_PROGRESS",
+                                                to_state="COMPLETE",
+                                                reason="training_completed_no_eval",
+                                                host=socket.gethostname(),
+                                                pid=os.getpid(),
+                                                sop_type=cfg.get("sop", "training"),
+                                            )
+                                        except Exception:
+                                            pass  # non-blocking
                                     eval_finished.append(
                                         (idea_id, use_gpu))
                             else:
