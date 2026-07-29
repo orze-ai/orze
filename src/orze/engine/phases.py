@@ -757,7 +757,19 @@ class OrzePhaseMixin:
         # Limit concurrent sweep variants per base idea
         max_sweep_concurrent = cfg.get("sweep", {}).get(
             "max_concurrent", 3)
+        # AGGREGATE (cross-base) sweep fan-out cap — engineer cyc-3148
+        # (prof cyc-2783/2784 ASK). The per-base max_concurrent above does
+        # NOT bound the CROSS-BASE total, so ~12 base ideas each fanning
+        # into 2-8 sub-runs produced the recurring micro-sweep flood
+        # (4830 queued, 517>512 process throttle, idle GPUs). This caps the
+        # TOTAL concurrent sweep SUB-RUNS across ALL base ideas.
+        # 0 / absent == DISABLED (behavior unchanged) so any project whose
+        # orze.yaml omits the key — e.g. the sibling scheduler that shares
+        # this module — is completely unaffected. Set sweep.max_total_concurrent
+        # in orze.yaml to enable; takes effect on scheduler restart.
+        max_total_sweep = cfg.get("sweep", {}).get("max_total_concurrent", 0)
         sweep_counts: Dict[str, int] = {}
+        total_sweep_running = 0
         for tp in self.active.values():
             base = tp.idea_id
             if "-ht-" in base:
@@ -765,6 +777,8 @@ class OrzePhaseMixin:
             elif "~" in base:
                 base = base.split("~", 1)[0]
             sweep_counts[base] = sweep_counts.get(base, 0) + 1
+            if base != tp.idea_id:
+                total_sweep_running += 1
 
         # Emergency GC: if disk is low and GC is configured, try to free space now
         if not disk_ok:
@@ -824,6 +838,12 @@ class OrzePhaseMixin:
                     if base_id != idea_id:
                         if sweep_counts.get(base_id, 0) >= max_sweep_concurrent:
                             continue
+                        # Aggregate cross-base cap: when the global concurrent
+                        # sweep-subrun count is at the cap, skip further
+                        # sweep-expanded ideas and prefer non-sweep / eval
+                        # queue entries (engineer cyc-3148).
+                        if max_total_sweep and total_sweep_running >= max_total_sweep:
+                            continue
                     if not claim(idea_id, self.results_dir, gpu,
                                  lake=self.lake):
                         continue
@@ -858,34 +878,38 @@ class OrzePhaseMixin:
                     # orze_substrate v2: exec-hash pre-launch dedup.
                     # Skip launches whose proposed config matches a hash
                     # already produced by a prior completed idea.
-                    try:
-                        from orze_substrate.exec_hash import check as _exec_check
-                        _eh, _first, _wer = _exec_check(idea_cfg)
-                        if _first and _first != idea_id:
-                            logger.info(
-                                "[exec-dedup] skipping %s — exec_hash=%s "
-                                "already produced by %s (avg_wer=%s)",
-                                idea_id, _eh, _first, _wer)
-                            _dup_metrics = {
-                                "status": "SKIPPED_DUPLICATE",
-                                "duplicate_of": _first,
-                                "exec_hash": _eh,
-                                "duplicate_avg_wer": _wer,
-                                "skip_reason": "exec_hash matches prior completed idea",
-                            }
-                            try:
-                                (self.results_dir / idea_id / "metrics.json"
-                                 ).write_text(json.dumps(_dup_metrics, indent=2))
-                            except Exception:
-                                pass
-                            if self.lake is not None:
+                    # force_launch: skip guard when force_launch=True
+                    # (e.g. OPD champion children with prior FAILED run at avg_wer=999)
+                    _force_launch = idea_cfg.get("force_launch") if isinstance(idea_cfg, dict) else False
+                    if not _force_launch:
+                        try:
+                            from orze_substrate.exec_hash import check as _exec_check
+                            _eh, _first, _wer = _exec_check(idea_cfg)
+                            if _first and _first != idea_id:
+                                logger.info(
+                                    "[exec-dedup] skipping %s — exec_hash=%s "
+                                    "already produced by %s (avg_wer=%s)",
+                                    idea_id, _eh, _first, _wer)
+                                _dup_metrics = {
+                                    "status": "SKIPPED_DUPLICATE",
+                                    "duplicate_of": _first,
+                                    "exec_hash": _eh,
+                                    "duplicate_avg_wer": _wer,
+                                    "skip_reason": "exec_hash matches prior completed idea",
+                                }
                                 try:
-                                    self.lake.set_status(idea_id, "skipped")
+                                    (self.results_dir / idea_id / "metrics.json"
+                                     ).write_text(json.dumps(_dup_metrics, indent=2))
                                 except Exception:
                                     pass
-                            continue
-                    except Exception as _eh_err:
-                        logger.debug("exec_hash pre-check failed: %r", _eh_err)
+                                if self.lake is not None:
+                                    try:
+                                        self.lake.set_status(idea_id, "skipped")
+                                    except Exception:
+                                        pass
+                                continue
+                        except Exception as _eh_err:
+                            logger.debug("exec_hash pre-check failed: %r", _eh_err)
                     flat_cfg = {}
                     if idea_cfg:
                         for k, v in idea_cfg.items():
@@ -951,71 +975,79 @@ class OrzePhaseMixin:
                         _idea_cfg_for_validate = (
                             flat_cfg if flat_cfg
                             else ideas.get(idea_id, {}).get("config", {}))
-                        _wl = (cfg.get("nested_config_whitelist") or [])
-                        _err = validate_idea_config_no_nested(
-                            _idea_cfg_for_validate, extra_whitelist=_wl)
-                        if _err:
-                            logger.warning(
-                                "[SKIP-VALIDATE] %s — %s", idea_id, _err)
-                            try:
-                                from orze.engine.launcher import (
-                                    log_validator_rejection,
-                                )
-                                log_validator_rejection(
-                                    self.results_dir, idea_id,
-                                    "nested_config_not_allowed", _err,
-                                    _idea_cfg_for_validate)
-                            except Exception:
-                                pass
-                            _write_failure(
-                                self.results_dir / idea_id,
-                                f"schema_invalid: {_err}",
-                                lake=self.lake, idea_id=idea_id, cfg=cfg)
-                            if self.lake:
+                        # force_launch: skip ALL validators when force_launch=True
+                        # (engineer cyc-4779 PRIORITY 1 guardrail fix). F5
+                        # nested-config validator must honour force_launch the
+                        # same way F5b does — otherwise force_launch ideas are
+                        # rejected before train.py can process the override.
+                        _fl_nested = _idea_cfg_for_validate
+                        if not (isinstance(_fl_nested, dict)
+                                and _fl_nested.get("force_launch")):
+                            _wl = (cfg.get("nested_config_whitelist") or [])
+                            _err = validate_idea_config_no_nested(
+                                _idea_cfg_for_validate, extra_whitelist=_wl)
+                            if _err:
+                                logger.warning(
+                                    "[SKIP-VALIDATE] %s — %s", idea_id, _err)
                                 try:
-                                    self.lake.set_status(idea_id, "skipped")
-                                except Exception:
-                                    pass
-                                try:
-                                    from orze.engine.failure import (
-                                        _mark_lake_failure,
+                                    from orze.engine.launcher import (
+                                        log_validator_rejection,
                                     )
-                                    # status stays 'skipped' below — but
-                                    # also stamp failure_reason for audit.
-                                    import sqlite3 as _sql
-                                    import json as _json
-                                    db_path = (cfg.get("idea_lake_db")
-                                               or str(self.results_dir
-                                                      / "idea_lake.db"))
-                                    if Path(db_path).exists():
-                                        c = _sql.connect(db_path, timeout=5)
-                                        try:
-                                            row = c.execute(
-                                                "SELECT eval_metrics FROM "
-                                                "ideas WHERE idea_id=?",
-                                                (idea_id,)).fetchone()
-                                            em = {}
-                                            if row and row[0]:
-                                                try:
-                                                    em = _json.loads(row[0])
-                                                    if not isinstance(em, dict):
-                                                        em = {}
-                                                except Exception:
-                                                    em = {}
-                                            em["failure_reason"] = (
-                                                "schema_invalid:"
-                                                "nested_config_not_allowed")
-                                            c.execute(
-                                                "UPDATE ideas SET "
-                                                "eval_metrics=? "
-                                                "WHERE idea_id=?",
-                                                (_json.dumps(em), idea_id))
-                                            c.commit()
-                                        finally:
-                                            c.close()
+                                    log_validator_rejection(
+                                        self.results_dir, idea_id,
+                                        "nested_config_not_allowed", _err,
+                                        _idea_cfg_for_validate)
                                 except Exception:
                                     pass
-                            continue
+                                _write_failure(
+                                    self.results_dir / idea_id,
+                                    f"schema_invalid: {_err}",
+                                    lake=self.lake, idea_id=idea_id, cfg=cfg)
+                                if self.lake:
+                                    try:
+                                        self.lake.set_status(idea_id, "skipped")
+                                    except Exception:
+                                        pass
+                                    try:
+                                        from orze.engine.failure import (
+                                            _mark_lake_failure,
+                                        )
+                                        # status stays 'skipped' below — but
+                                        # also stamp failure_reason for audit.
+                                        import sqlite3 as _sql
+                                        import json as _json
+                                        db_path = (cfg.get("idea_lake_db")
+                                                   or str(self.results_dir
+                                                          / "idea_lake.db"))
+                                        if Path(db_path).exists():
+                                            c = _sql.connect(db_path, timeout=5)
+                                            try:
+                                                row = c.execute(
+                                                    "SELECT eval_metrics FROM "
+                                                    "ideas WHERE idea_id=?",
+                                                    (idea_id,)).fetchone()
+                                                em = {}
+                                                if row and row[0]:
+                                                    try:
+                                                        em = _json.loads(row[0])
+                                                        if not isinstance(em, dict):
+                                                            em = {}
+                                                    except Exception:
+                                                        em = {}
+                                                em["failure_reason"] = (
+                                                    "schema_invalid:"
+                                                    "nested_config_not_allowed")
+                                                c.execute(
+                                                    "UPDATE ideas SET "
+                                                    "eval_metrics=? "
+                                                    "WHERE idea_id=?",
+                                                    (_json.dumps(em), idea_id))
+                                                c.commit()
+                                            finally:
+                                                c.close()
+                                    except Exception:
+                                        pass
+                                continue
                     except Exception:
                         pass
 
@@ -1027,49 +1059,55 @@ class OrzePhaseMixin:
                     # bit-identical baseline WERs). 8 cycles of escalation
                     # to engineer pending; professor lands directly per
                     # cycle-095 commitment.
-                    try:
-                        from orze.engine.launcher import (
-                            validate_idea_against_method_validators,
-                        )
-                        _idea_cfg_for_mv = (
-                            flat_cfg if flat_cfg
-                            else ideas.get(idea_id, {}).get("config", {}))
-                        _vdir = (self.results_dir / "_validators")
-                        _mv_err = validate_idea_against_method_validators(
-                            _idea_cfg_for_mv, _vdir)
-                        if _mv_err:
-                            logger.warning(
-                                "[SKIP-METHOD-VALIDATOR] %s — %s",
-                                idea_id, _mv_err)
-                            try:
-                                from orze.engine.launcher import (
-                                    log_validator_rejection,
-                                )
-                                log_validator_rejection(
-                                    self.results_dir, idea_id,
-                                    "method_validator", _mv_err,
-                                    _idea_cfg_for_mv)
-                            except Exception:
-                                pass
-                            _write_failure(
-                                self.results_dir / idea_id,
-                                f"method_validator_rejected: {_mv_err}",
-                                lake=self.lake, idea_id=idea_id, cfg=cfg)
-                            if self.lake:
+                    # force_launch: skip ALL validators when force_launch=True
+                    _fl_cfg = flat_cfg if flat_cfg else ideas.get(idea_id, {}).get("config", {})
+                    if not (isinstance(_fl_cfg, dict) and _fl_cfg.get("force_launch")):
+                        try:
+                            from orze.engine.launcher import (
+                                validate_idea_against_method_validators,
+                            )
+                            _idea_cfg_for_mv = _fl_cfg
+                            _vdir = (self.results_dir / "_validators")
+                            _mv_err = validate_idea_against_method_validators(
+                                _idea_cfg_for_mv, _vdir)
+                            if _mv_err:
+                                logger.warning(
+                                    "[SKIP-METHOD-VALIDATOR] %s — %s",
+                                    idea_id, _mv_err)
                                 try:
-                                    self.lake.set_status(idea_id, "skipped")
+                                    from orze.engine.launcher import (
+                                        log_validator_rejection,
+                                    )
+                                    log_validator_rejection(
+                                        self.results_dir, idea_id,
+                                        "method_validator", _mv_err,
+                                        _idea_cfg_for_mv)
                                 except Exception:
                                     pass
-                            _record_failure(
-                                self.failure_counts, idea_id)
-                            continue
-                    except Exception:
-                        pass
+                                _write_failure(
+                                    self.results_dir / idea_id,
+                                    f"method_validator_rejected: {_mv_err}",
+                                    lake=self.lake, idea_id=idea_id, cfg=cfg)
+                                if self.lake:
+                                    try:
+                                        self.lake.set_status(idea_id, "skipped")
+                                    except Exception:
+                                        pass
+                                _record_failure(
+                                    self.failure_counts, idea_id)
+                                continue
+                        except Exception:
+                            pass
 
                     # SOP: validate idea config right before launch (catches all sources)
                     # Use flat_cfg (malformed-key-cleaned) if available, else raw config.
                     # flat_cfg is built at lines 518-535 above, which fixes LLM-generated
                     # collapsed keys like "epochs: 40" → {"epochs": 40}.
+                    # force_launch: skip ALL validators when force_launch=True
+                    # (engineer cyc-4781 P0 guardrail fix). SOP validator must honour
+                    # force_launch the same way F5/F5b do — otherwise force_launch ideas
+                    # with unrecognized config keys (e.g. OPD children) are rejected
+                    # before train.py can process the override.
                     try:
                         from orze.extensions import get_extension
                         _sops = get_extension("sops")
@@ -1077,7 +1115,12 @@ class OrzePhaseMixin:
                             idea_cfg = flat_cfg if flat_cfg else ideas.get(idea_id, {}).get("config", {})
                             ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
                             ts = _resolve_train_script(ts, cfg)
-                            if ts and idea_cfg:
+                            # force_launch: skip SOP validator when force_launch=True
+                            # (engineer cyc-4781 P0 guardrail fix). Must honour
+                            # force_launch the same way F5/F5b do — OPD children
+                            # with unrecognized config keys must reach train.py.
+                            _fl_sop = isinstance(idea_cfg, dict) and idea_cfg.get("force_launch")
+                            if ts and idea_cfg and not _fl_sop:
                                 is_valid, err_msg = _sops.validate_idea(
                                     ts, idea_cfg, cfg.get("python", sys.executable))
                                 if not is_valid:
@@ -1198,6 +1241,7 @@ class OrzePhaseMixin:
 
                     if base_id != idea_id:
                         sweep_counts[base_id] = sweep_counts.get(base_id, 0) + 1
+                        total_sweep_running += 1
                     launched = True
                     launch_count += 1
                     break

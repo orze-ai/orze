@@ -510,16 +510,68 @@ def validate_idea_config_no_nested(
 # Reads results/_validators/*.yaml and rejects ideas that violate any
 # error-severity rule. Supports the operator set documented in
 # PROFESSOR_RULES.md plus the `field_any` (list of fields) extension
-# used by require_nontrivial_training_op_101.yaml. Cycle-095 committed
+# used by require_nontrivial_training_op_101.yaml. Operator set:
+#   equals, not_equals, in, not_in, contains, not_contains,
+#   exists, not_exists, gt, gte, lt, lte.
+# (contains/not_contains = substring/membership test on the field value;
+#  added cyc-4766 — previously absent, making all contains/not_contains
+#  validator rules silent no-ops. See GOAL.md cyc-3989 flag.) Cycle-095 committed
 # professor would land this directly if the engineer trigger pended
 # >5 cycles; cycle-115 confirmed pending=6, so this is that landing.
 
-def _eval_validator_rule(rule: dict, idea_cfg: dict) -> Optional[str]:
-    """Return None if rule passes, otherwise an error string."""
+def _eval_validator_rule(rule: dict, idea_cfg: dict,
+                         _in_any_of: bool = False) -> Optional[str]:
+    """Return None if rule passes, otherwise an error string.
+
+    `_in_any_of` is set when evaluating a sub-clause of an any_of exemption
+    list; it makes an ABSENT field fail a positive assertion instead of being
+    skipped. See the comment at the value-comparison branch. Callers outside
+    this module should not pass it.
+    """
     if not isinstance(rule, dict):
         return None
     op = str(rule.get("operator", "")).lower()
     explanation = str(rule.get("explanation", "")).strip()
+
+    # `any_of: [subrule, ...]` / `all_of: [subrule, ...]` combinators.
+    # Added cyc-5869 (professor E12). Previously ABSENT: a combinator rule has
+    # no top-level `field`, so it fell through to `if not field: return None`
+    # and SILENTLY PASSED. That made every validator whose blocking logic lives
+    # inside an any_of a launch-time no-op — 38 of them in the 1.7B project,
+    # including no_gs_dose_above_data_ceiling_cyc829, the champion-replica
+    # guards and the step/rank budget caps. First diagnosed cyc-4241; not landed
+    # then because this submodule is shared. Re-checked cyc-5869: the sibling
+    # project (/ceph/workspace/erik/auto-research) has 24 validators and ZERO
+    # use any_of/all_of, so this change is a no-op there.
+    #
+    # Semantics (matching _libs/pre_eval_gate.py, the pre-eval path that has
+    # implemented this correctly since cyc-2017): a subrule returns None when it
+    # PASSES and an error string when it FAILS.
+    #   any_of  -> passes iff >= 1 subrule passes. This is the EXEMPTION pattern
+    #              ("block X unless inference_only / eval_only / mirror-enabled").
+    #   all_of  -> passes iff ALL subrules pass.
+    # An empty/malformed list passes (fail-open, as everywhere else here).
+    if "any_of" in rule:
+        subs = rule.get("any_of") or []
+        if not isinstance(subs, list) or not subs:
+            return None
+        errs = [_eval_validator_rule(s, idea_cfg, _in_any_of=True)
+                for s in subs]
+        if all(e is not None for e in errs):
+            return explanation or ("none of any_of satisfied: "
+                                   + "; ".join(e for e in errs if e))
+        return None
+    if "all_of" in rule:
+        subs = rule.get("all_of") or []
+        if not isinstance(subs, list):
+            return None
+        for s in subs:
+            # Propagate: an all_of nested inside an any_of is still an
+            # exemption clause ("exempt if ALL of these hold").
+            e = _eval_validator_rule(s, idea_cfg, _in_any_of=_in_any_of)
+            if e is not None:
+                return explanation or e
+        return None
 
     # `field_any: [a, b, ...]` + `operator: exists` — pass iff at
     # least one of the listed fields is present (and non-null) in the
@@ -544,6 +596,15 @@ def _eval_validator_rule(rule: dict, idea_cfg: dict) -> Optional[str]:
 
     field = rule.get("field")
     if not field:
+        # Silent-pass tripwire (cyc-5869). A rule with no `field`, no
+        # `field_any` and no any_of/all_of is one this engine cannot evaluate,
+        # so it passes — which is exactly how the any_of no-op hid for 1000+
+        # cycles. Fail-open is still the right default (a parser bug must never
+        # starve the launcher), but it must be LOUD.
+        logger.warning(
+            "[VALIDATOR-UNKNOWN-RULE] rule has no field/field_any/any_of/all_of "
+            "and was SILENTLY PASSED — it is enforcing nothing. keys=%s",
+            sorted(rule.keys()))
         return None
     # Dot-notation traversal: "a.b.c" → idea_cfg["a"]["b"]["c"]. Without this,
     # any validator using nested-field paths (e.g. length_aware_decoding.enabled)
@@ -568,8 +629,31 @@ def _eval_validator_rule(rule: dict, idea_cfg: dict) -> Optional[str]:
     expected = rule.get("value")
     # For value-comparison operators, absence means "use champion
     # default" — rule doesn't apply. Only exists/not_exists care.
+    #
+    # EXCEPT inside an any_of exemption list (_in_any_of, cyc-5869). There the
+    # clause means "you are EXEMPT IF <field> is <value>", and an absent field
+    # cannot satisfy a POSITIVE assertion — you did not opt in. Skipping made
+    # every such clause vacuously true, which kept the whole any_of passing and
+    # left validators inert even after combinator support landed:
+    # no_gs_dose_above_data_ceiling_cyc829 has `inference_only equals true` and
+    # `training.gigaspeech_mirror equals true` as its exemptions, and ordinary
+    # ideas carry neither key — so it never blocked a single over-ceiling dose.
+    #
+    # NEGATIVE operators (not_equals / not_in / not_contains) are the opposite
+    # role: they are SCOPING GUARDS ("this seal does not apply to you"), and an
+    # absent field genuinely does satisfy them — `el2n_select not_equals true`
+    # is true for every idea that does no EL2N selection at all. Those stay
+    # lenient. Measured cyc-5869 over the 300 most recent idea_configs: strict
+    # on negatives too would newly block 151/300 (50%) including all three live
+    # GigaSpeech ladder arms; positives-only blocks 54/300, entirely the
+    # intended dead-axis + require-E22 families, and leaves the ladder passing.
     if op in ("equals", "not_equals", "in", "not_in",
+              "contains", "not_contains",
               "gt", "gte", "lt", "lte"):
+        if not present and _in_any_of and op in (
+                "equals", "in", "contains", "gt", "gte", "lt", "lte"):
+            return (explanation
+                    or f"{field} absent — exemption clause not satisfied")
         if not present:
             return None
     if op == "equals":
@@ -584,6 +668,12 @@ def _eval_validator_rule(rule: dict, idea_cfg: dict) -> Optional[str]:
     elif op == "not_in":
         if val in (expected or []):
             return explanation or f"{field}={val!r} must not be in {expected!r}"
+    elif op == "contains":
+        if expected not in (val or ""):
+            return explanation or f"{field}={val!r} must contain {expected!r}"
+    elif op == "not_contains":
+        if expected in (val or ""):
+            return explanation or f"{field}={val!r} must not contain {expected!r}"
     elif op == "exists":
         if not present or val in (None, "", [], {}):
             return explanation or f"{field} must be present"
@@ -935,27 +1025,30 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     # launch time. Validators added/strengthened after enqueue must reject
     # orphan ideas before they consume a GPU. Train-kind only; posthoc has
     # its own schema and these validators don't apply.
+    # force_launch: skip ALL validators when force_launch=True — used by
+    # OPD champion children that must compound depth despite prior failures.
     if idea_cfg_path.exists():
         try:
             import yaml as _yaml
             with open(idea_cfg_path) as _qrf:
                 _qr_idea_cfg = _yaml.safe_load(_qrf) or {}
-            _validators_dir = Path(results_dir) / "_validators"
-            if _validators_dir.is_dir():
-                _qr_err = validate_idea_against_method_validators(
-                    _qr_idea_cfg, _validators_dir)
-                if _qr_err:
-                    _qr_mark = results_dir / idea_id / "_schema_invalid.txt"
-                    try:
-                        _qr_mark.parent.mkdir(parents=True, exist_ok=True)
-                        _qr_mark.write_text(
-                            f"queue_revalidation: {_qr_err}\n")
-                    except OSError:
-                        pass
-                    logger.warning(
-                        "QUEUE-REVALIDATION REJECTED idea=%s: %s",
-                        idea_id, _qr_err)
-                    raise RuntimeError(f"queue_revalidation_{_qr_err}")
+            if not _qr_idea_cfg.get("force_launch"):
+                _validators_dir = Path(results_dir) / "_validators"
+                if _validators_dir.is_dir():
+                    _qr_err = validate_idea_against_method_validators(
+                        _qr_idea_cfg, _validators_dir)
+                    if _qr_err:
+                        _qr_mark = results_dir / idea_id / "_schema_invalid.txt"
+                        try:
+                            _qr_mark.parent.mkdir(parents=True, exist_ok=True)
+                            _qr_mark.write_text(
+                                f"queue_revalidation: {_qr_err}\n")
+                        except OSError:
+                            pass
+                        logger.warning(
+                            "QUEUE-REVALIDATION REJECTED idea=%s: %s",
+                            idea_id, _qr_err)
+                        raise RuntimeError(f"queue_revalidation_{_qr_err}")
         except RuntimeError:
             raise
         except Exception as _qr_e:  # pragma: no cover
@@ -987,11 +1080,19 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             pass  # fall back to global train_script
 
     # -----------------------------------------------------------------------
-    # RANK-64 FLAT-MINIMUM GUARD (cycle-1182 professor trigger)
-    # Reject any idea with lora_rank < 128 BEFORE GPU launch. The 54-expt
-    # flat minimum at rank-64 is proven (all bit-identical 4.92% smoke WER).
-    # Validators are silently bypassed by the launcher
-    # (project_validator_bypass_300.md), so this guard is the primary defense.
+    # LORA-RANK BUDGET GUARD (cycle-2769 professor fix — INVERTED cycle-1182)
+    # Reject any training idea with lora_rank > 32 BEFORE GPU launch. This now
+    # ALIGNS with validator `lora_rank_le32_param_budget_cyc710` (rank>32 is
+    # strictly dominated under the min-params objective).
+    #
+    # WHY INVERTED: the old cycle-1182 guard rejected rank < 128, which is
+    # DISJOINT from the rank<=32 validator (guard ∩ validator = ∅). It rejected
+    # the full_scale-verified champion r4a (rank=16) itself and deadlocked the
+    # entire pipeline (98/171 launches failed on rank_guard, 0 productive runs
+    # in ~4h on 2026-07-02). The "rank-64 flat 4.92%" claim it cited is
+    # contradicted by the rank-8/16/32 result history (r4a + pf-7e65ac cluster,
+    # 5.15-5.26%, all below rank 32). Validators DO run at launch now, so this
+    # guard is a redundant-but-aligned backstop, not the primary defense.
     # Smoke tests (idea-smoke-*) and SMELL_SKIP_RANK_GUARD=1 override.
     # -----------------------------------------------------------------------
     _rank_guard_skip = (
@@ -1003,7 +1104,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             import yaml as _rg_yaml
             with open(idea_cfg_path) as _rgf:
                 _rg_cfg = _rg_yaml.safe_load(_rgf) or {}
-            _rg_rank = int(_rg_cfg.get("lora_rank", 64))  # default 64 matches argparse (rank-guard bypass fix, cycle-2172)
+            _rg_rank = int(_rg_cfg.get("lora_rank", 16))  # default 16 matches champion r4a (cycle-2769)
             _rg_is_training = (
                 _rg_cfg.get("training_proposal", False)
                 or bool(_rg_cfg.get("data_mix"))
@@ -1011,11 +1112,11 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
                 or _rg_cfg.get("opd_enabled", False)
                 or _rg_cfg.get("efmlora_enabled", False)
             )
-            if 0 < _rg_rank < 128 and _rg_is_training:
+            if _rg_rank > 32 and _rg_is_training:
                 _rg_msg = (
-                    f"Rank < 128 is the flat-minimum dead zone. "
-                    f"Use lora_rank: 128 or set SMELL_SKIP_RANK_GUARD=1 "
-                    f"for smoke tests."
+                    f"lora_rank>32 is dominated under min-params objective "
+                    f"(validator lora_rank_le32_param_budget_cyc710). "
+                    f"Use lora_rank<=32 or set SMELL_SKIP_RANK_GUARD=1."
                 )
                 logger.warning(
                     "RANK-GUARD REJECTED idea=%s rank=%d: %s",
