@@ -168,8 +168,13 @@ class GpuSlotManager:
                  max_jobs_per_gpu: int = 20,
                  max_load_per_cpu: float = 2.0,
                  min_free_ram_gb: float = 16.0,
-                 slots_per_gpu: int = 1):  # legacy compat, maps to max_jobs
+                 slots_per_gpu: int = 1,  # legacy compat, maps to max_jobs
+                 reserved_gpus: Optional[List[int]] = None):
         self.gpu_ids = list(gpu_ids)
+        # GPUs withheld from scheduling entirely (e.g. handed to another
+        # workload). Hot-reload syncs this from gpu_scheduling.reserved_gpus,
+        # so reservations can be added/dropped without a daemon restart.
+        self.reserved_gpus: List[int] = list(reserved_gpus or [])
         if mode not in ("exclusive", "vram"):
             logger.warning("Unknown gpu_scheduling.mode '%s' — defaulting to 'exclusive'", mode)
             mode = "exclusive"
@@ -347,7 +352,7 @@ class GpuSlotManager:
 
     def free_gpu_ids(self, exclude: Optional[Set[int]] = None) -> List[int]:
         """GPUs with VRAM capacity, sorted most-free-memory first."""
-        exc = exclude or set()
+        exc = set(exclude or set()) | set(self.reserved_gpus)
         candidates = []
         for g in self.gpu_ids:
             if g in exc or not self._gpu_has_capacity(g):
@@ -364,7 +369,7 @@ class GpuSlotManager:
         Ignores the exclusive job-count cap; VRAM precheck in train.py is the safety gate."""
         if self.mode != "exclusive":
             return []
-        exc = exclude or set()
+        exc = set(exclude or set()) | set(self.reserved_gpus)
         threshold = min_free_vram_mib + 5000
         gpu_usage = _query_all_gpu_usage()
         candidates = []

@@ -121,6 +121,7 @@ class Orze(OrzePhaseMixin):
             max_load_per_cpu=sched_cfg.get("max_load_per_cpu", 2.0),
             min_free_ram_gb=sched_cfg.get("min_free_ram_gb", 16.0),
             slots_per_gpu=sched_cfg.get("slots_per_gpu", 1),  # legacy compat
+            reserved_gpus=sched_cfg.get("reserved_gpus"),
         )
         self.active = self.slot_mgr  # dict-compatible drop-in
         self.active_evals: Dict[int, EvalProcess] = {}
@@ -547,6 +548,7 @@ class Orze(OrzePhaseMixin):
                             ("min_free_ram_gb", "min_free_ram_gb"),
                             ("max_vram_pct", "max_vram_pct"),
                             ("min_free_vram_mib", "min_free_vram_mib"),
+                            ("reserved_gpus", "reserved_gpus"),
                         ]:
                             if cfg_key in sched:
                                 setattr(self.slot_mgr, attr, sched[cfg_key])
@@ -559,6 +561,7 @@ class Orze(OrzePhaseMixin):
                     ("min_free_ram_gb", "min_free_ram_gb"),
                     ("max_vram_pct", "max_vram_pct"),
                     ("min_free_vram_mib", "min_free_vram_mib"),
+                    ("reserved_gpus", "reserved_gpus"),
                 ]:
                     if cfg_key in sched:
                         setattr(self.slot_mgr, attr, sched[cfg_key])
