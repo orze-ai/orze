@@ -94,7 +94,7 @@ class TestTrainTemplate:
 
     def test_template_syntax(self):
         """The template is valid Python."""
-        from orze.cli import BASELINE_TRAIN_PY
+        from orze.cli_demo import BASELINE_TRAIN_PY
         ast.parse(BASELINE_TRAIN_PY)
 
     def test_template_runs(self, write_train_script):
@@ -194,6 +194,14 @@ class TestTrainTemplate:
 class TestUninstall:
     """Tests for the uninstall flow."""
 
+    @pytest.fixture(autouse=True)
+    def _isolate_package_manager(self, monkeypatch):
+        monkeypatch.setattr("time.sleep", lambda _seconds: None)
+        monkeypatch.setattr(
+            "orze.cli_setup.subprocess.run",
+            lambda *args, **kwargs: mock.Mock(returncode=0),
+        )
+
     def test_uninstall_preserves_metrics(self, tmp_project):
         """Uninstall keeps metrics.json in idea directories."""
         proj = tmp_project
@@ -202,13 +210,13 @@ class TestUninstall:
         (idea_dir / "metrics.json").write_text('{"status": "COMPLETED"}')
         (idea_dir / "runtime_junk.log").write_text("junk")
 
-        from orze.cli import _do_uninstall
+        from orze.cli_setup import do_uninstall
         cfg = {
             "results_dir": str(proj / "results"),
             "_config_path": str(proj / "orze.yaml"),
             "ideas_file": str(proj / "ideas.md"),
         }
-        _do_uninstall(cfg)
+        do_uninstall(cfg)
 
         assert (idea_dir / "metrics.json").exists()
         assert not (idea_dir / "runtime_junk.log").exists()
@@ -221,13 +229,13 @@ class TestUninstall:
         for name in ["best_model.pt", "model.pth", "checkpoint.pt"]:
             (idea_dir / name).write_text("model data")
 
-        from orze.cli import _do_uninstall
+        from orze.cli_setup import do_uninstall
         cfg = {
             "results_dir": str(proj / "results"),
             "_config_path": str(proj / "orze.yaml"),
             "ideas_file": str(proj / "ideas.md"),
         }
-        _do_uninstall(cfg)
+        do_uninstall(cfg)
 
         for name in ["best_model.pt", "model.pth", "checkpoint.pt"]:
             assert (idea_dir / name).exists(), f"Missing after uninstall: {name}"
@@ -237,13 +245,13 @@ class TestUninstall:
         proj = tmp_project
         (proj / "train.py").write_text("# train\n")
 
-        from orze.cli import _do_uninstall
+        from orze.cli_setup import do_uninstall
         cfg = {
             "results_dir": str(proj / "results"),
             "_config_path": str(proj / "orze.yaml"),
             "ideas_file": str(proj / "ideas.md"),
         }
-        _do_uninstall(cfg)
+        do_uninstall(cfg)
 
         assert (proj / "train.py").exists()
         assert (proj / "ideas.md").exists()
@@ -252,13 +260,13 @@ class TestUninstall:
         """Uninstall removes orze.yaml config file."""
         proj = tmp_project
 
-        from orze.cli import _do_uninstall
+        from orze.cli_setup import do_uninstall
         cfg = {
             "results_dir": str(proj / "results"),
             "_config_path": str(proj / "orze.yaml"),
             "ideas_file": str(proj / "ideas.md"),
         }
-        _do_uninstall(cfg)
+        do_uninstall(cfg)
 
         assert not (proj / "orze.yaml").exists()
 
@@ -269,13 +277,13 @@ class TestUninstall:
         venv.mkdir()
         (venv / "sentinel").write_text("x")
 
-        from orze.cli import _do_uninstall
+        from orze.cli_setup import do_uninstall
         cfg = {
             "results_dir": str(proj / "results"),
             "_config_path": str(proj / "orze.yaml"),
             "ideas_file": str(proj / "ideas.md"),
         }
-        _do_uninstall(cfg)
+        do_uninstall(cfg)
 
         assert not venv.exists()
 
@@ -289,7 +297,7 @@ class TestConfig:
 
     def _import_helpers(self):
         """Import deep_merge and load_idea_config from the template source."""
-        from orze.cli import BASELINE_TRAIN_PY
+        from orze.cli_demo import BASELINE_TRAIN_PY
         ns = {}
         exec(compile(BASELINE_TRAIN_PY, "<train.py>", "exec"), ns)
         return ns["deep_merge"], ns["load_idea_config"]
@@ -362,16 +370,11 @@ class TestVenv:
 
     def test_healthy_venv_not_recreated(self, tmp_path):
         """If venv/ exists and is healthy, --init leaves it alone."""
-        # First, create a real venv
-        subprocess.run(
-            [sys.executable, "-m", "venv", str(tmp_path / "venv")],
-            check=True, timeout=60,
-        )
-        subprocess.run(
-            [str(tmp_path / "venv" / "bin" / "python3"), "-m", "pip",
-             "install", "--quiet", "pyyaml"],
-            check=True, timeout=120,
-        )
+        # A symlink to the running interpreter is a healthy, dependency-complete
+        # stand-in and does not require ensurepip or network access.
+        bin_dir = tmp_path / "venv" / "bin"
+        bin_dir.mkdir(parents=True)
+        (bin_dir / "python3").symlink_to(sys.executable)
         # Record mtime of python3 binary
         py_bin = tmp_path / "venv" / "bin" / "python3"
         original_stat = py_bin.stat()

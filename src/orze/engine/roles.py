@@ -39,6 +39,7 @@ from typing import Dict
 
 from orze.engine.process import RoleProcess, _terminate_and_reap
 from orze.core.fs import _fs_unlock
+from orze.core.ideas import count_idea_headings
 
 logger = logging.getLogger("orze")
 
@@ -317,8 +318,7 @@ def _ideas_modified_credits(ideas_file: str,
     # Size same — check idea count
     try:
         current_text = ideas_path.read_text(encoding="utf-8")
-        current_count = len(re.findall(r"^## idea-[a-z0-9]+:", current_text,
-                                       re.MULTILINE))
+        current_count = count_idea_headings(current_text)
         credits["count_post"] = int(current_count)
         if current_count != credits["count_pre"]:
             credits["modified"] = True
@@ -473,8 +473,7 @@ def _check_ideas_integrity(ideas_file: str, rp: "RoleProcess"):
     # File shrunk — check idea count to confirm corruption
     try:
         current_text = ideas_path.read_text(encoding="utf-8")
-        current_count = len(re.findall(r"^## idea-[a-z0-9]+:", current_text,
-                                       re.MULTILINE))
+        current_count = count_idea_headings(current_text)
     except OSError:
         current_count = 0
 
@@ -497,8 +496,7 @@ def _check_ideas_integrity(ideas_file: str, rp: "RoleProcess"):
     if backup_path.exists():
         try:
             backup_text = backup_path.read_text(encoding="utf-8")
-            backup_count = len(re.findall(r"^## idea-[a-z0-9]+:", backup_text,
-                                          re.MULTILINE))
+            backup_count = count_idea_headings(backup_text)
         except OSError:
             backup_count = 0
 

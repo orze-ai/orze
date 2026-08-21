@@ -45,11 +45,115 @@ import os
 import signal
 import subprocess
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from pathlib import Path
 
 logger = logging.getLogger("orze")
+
+
+def capture_process_identity(pid: int) -> dict:
+    """Capture stable Linux process identity fields for crash recovery."""
+    stat_text = Path(f"/proc/{int(pid)}/stat").read_text(encoding="utf-8")
+    # The comm field is parenthesized and may contain spaces. Fields after
+    # the final ')' start at process-state (field 3); starttime is field 22.
+    rest = stat_text.rsplit(")", 1)[1].strip().split()
+    return {
+        "pid": int(pid),
+        "pgid": os.getpgid(int(pid)),
+        "start_ticks": int(rest[19]),
+    }
+
+
+def process_is_running(pid: int, start_ticks: Optional[int] = None) -> bool:
+    """True only for the same, non-zombie process recorded at launch."""
+    try:
+        identity = capture_process_identity(int(pid))
+        stat_text = Path(f"/proc/{int(pid)}/stat").read_text(encoding="utf-8")
+        state = stat_text.rsplit(")", 1)[1].strip().split()[0]
+    except (OSError, ValueError, ProcessLookupError):
+        return False
+    if start_ticks is not None and identity["start_ticks"] != int(start_ticks):
+        return False
+    return state != "Z"
+
+
+def process_group_members(pgid: int) -> list:
+    """Return non-zombie PIDs currently belonging to a Linux process group."""
+    members = []
+    try:
+        proc_entries = Path("/proc").iterdir()
+    except OSError:
+        return members
+    for entry in proc_entries:
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat_text = (entry / "stat").read_text(encoding="utf-8")
+            rest = stat_text.rsplit(")", 1)[1].strip().split()
+            state = rest[0]
+            member_pgid = int(rest[2])
+        except (OSError, ValueError, IndexError):
+            continue
+        if member_pgid == int(pgid) and state != "Z":
+            members.append(int(entry.name))
+    return sorted(members)
+
+
+def terminate_recorded_process_group(pid: int, pgid: int, start_ticks: int,
+                                     idea_id: str, timeout: float = 3.0) -> bool:
+    """Terminate a durably identified orphan process group.
+
+    Refuses to signal on PID reuse, command mismatch, PGID mismatch, or if the
+    recorded group is this orchestrator's group. Returns only after the
+    recorded process is absent or a zombie (therefore no longer executing).
+    """
+    pid = int(pid)
+    pgid = int(pgid)
+    members = process_group_members(pgid)
+    if not members:
+        return True
+    try:
+        current = capture_process_identity(pid)
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ")
+    except (OSError, ValueError, ProcessLookupError):
+        return not process_group_members(pgid)
+    expected = idea_id.encode("utf-8")
+    if (current["start_ticks"] != int(start_ticks)
+            or current["pgid"] != pgid or pgid == os.getpgrp()
+            or expected not in cmdline or b"--idea-id" not in cmdline):
+        logger.error(
+            "Refusing orphan termination for %s: recorded pid/pgid identity no longer matches",
+            idea_id,
+        )
+        return False
+
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        return True
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not process_group_members(pgid):
+            return True
+        time.sleep(0.05)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        return True
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not process_group_members(pgid):
+            return True
+        time.sleep(0.05)
+    remaining = process_group_members(pgid)
+    if remaining:
+        logger.error(
+            "Orphan process group %d for %s still has live members after SIGKILL: %s",
+            pgid, idea_id, remaining,
+        )
+    return not remaining
 
 
 def _kill_pg(proc: subprocess.Popen, sig=signal.SIGTERM):

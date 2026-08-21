@@ -49,33 +49,10 @@ import sys
 from typing import Dict, List, Optional
 from pathlib import Path
 from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
+from orze.engine.process import capture_process_identity
 
 logger = logging.getLogger("orze")
 PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-
-# Engineer cycle 1121: hardcoded critical lr=1e-4 ideas that must launch
-# before any lr=2e-5 flat-minimum ideas (16,993 queued = ~425 GPU-days waste).
-CRITICAL_IDEAS = [
-    "idea-68a41b", "idea-95dcfd", "idea-d6cce4",
-    "idea-433e99", "idea-785fcc", "idea-61bc3c",
-    # Cycle 2126 direct-fire: focal loss + OPD experiments (prof trigger)
-    "idea-99cafe", "idea-f70be9", "idea-64983e", "idea-ced871",
-]
-
-# Flag file that re-enables lr=2e-5 launches when present.
-_LR2E5_UNBLOCK = Path("results/_flat_minimum_broken.flag")
-
-
-def _is_lr_2e5(idea_cfg: dict) -> bool:
-    """Return True if the idea config specifies lr=2e-5 (flat-minimum dead zone)."""
-    lr = idea_cfg.get("lr")
-    if lr is None:
-        return False
-    try:
-        return abs(float(lr) - 2e-5) < 1e-10
-    except (TypeError, ValueError):
-        return False
-
 
 def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
                   skipped: Optional[set] = None,
@@ -159,38 +136,6 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
 
     unclaimed.sort(key=sort_key)
 
-    # --- Engineer cycle 1121: priority bump + lr=2e-5 skip ---
-    # 6 critical lr=1e-4 ideas are GPU-blocked behind 16,993 queued lr=2e-5
-    # flat-minimum ideas (all produce identical 4.92% probe WER).
-    critical_pending = [iid for iid in unclaimed if iid in set(CRITICAL_IDEAS)]
-    lr2e5_blocked = not _LR2E5_UNBLOCK.exists()
-    if critical_pending or lr2e5_blocked:
-        critical_set = set(CRITICAL_IDEAS)
-        non_critical = [iid for iid in unclaimed if iid not in critical_set]
-        non_critical_filtered = []
-        skipped_lr2e5 = 0
-        for iid in non_critical:
-            cfg = ideas.get(iid, {}).get("config") or {}
-            if _is_lr_2e5(cfg):
-                # Cycle 2127 engineer: focal loss ideas use lr=2e-5 but
-                # are NOT flat-minimum (focal loss changes the loss
-                # landscape).  Let them bypass the lr=2e-5 gate when
-                # focal_loss_gamma > 0.
-                fg = cfg.get("focal_loss_gamma")
-                if isinstance(fg, (int, float)) and fg > 0:
-                    non_critical_filtered.append(iid)
-                    continue
-                skipped_lr2e5 += 1
-                continue
-            non_critical_filtered.append(iid)
-        if skipped_lr2e5:
-            logger.info(
-                "[PRIORITY-BUMP] %d critical lr=1e-4 ideas pending, "
-                "lr=2e-5 unblock=%s — skipping %d lr=2e-5 flat-minimum ideas",
-                len(critical_pending), not lr2e5_blocked, skipped_lr2e5)
-        unclaimed = critical_pending + non_critical_filtered
-    # --- end cycle 1121 priority bump ---
-
     return unclaimed
 
 
@@ -251,6 +196,13 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
         "pid": os.getpid(),
         "gpu": gpu,
     }
+    try:
+        claim_info["owner_start_ticks"] = capture_process_identity(
+            os.getpid())["start_ticks"]
+    except (OSError, ValueError, ProcessLookupError):
+        # Recovery still handles legacy claims conservatively; a normal Linux
+        # launch should always make this identity available.
+        pass
     atomic_write(idea_dir / "claim.json", json.dumps(claim_info, indent=2))
 
     if lake:
@@ -438,6 +390,7 @@ def run_cleanup(results_dir: Path, cfg: dict):
                 results_dir=results_dir,
                 checkpoints_dir=Path(gc_cfg["checkpoints_dir"]),
                 primary_metric=report_cfg.get("primary_metric", ""),
+                sort_order=report_cfg.get("sort", "descending"),
                 lake_db_path=lake_path if lake_path.exists() else None,
                 keep_top=gc_cfg.get("keep_top", 50),
                 keep_recent=gc_cfg.get("keep_recent", 20),

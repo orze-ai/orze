@@ -208,12 +208,9 @@ def _recent_role_cycle_logs(orze_dir: Path, role_name: str,
     return files[:limit]
 
 
-def _last_meaningful_age_min(orze_dir: Optional[Path],
-                             role_name: str) -> Optional[float]:
-    """Round-2 C2: return minutes since the most recent cycle log that's
-    larger than the meaningful-bytes threshold, or None if no such log
-    exists. Helps catch "role hasn't produced real output in N hours"
-    even when there's no failure recorded."""
+def _last_meaningful_time(orze_dir: Optional[Path],
+                          role_name: str) -> Optional[float]:
+    """Return the mtime of the newest meaningful role-cycle log."""
     if orze_dir is None:
         return None
     log_dir = orze_dir / "logs" / role_name
@@ -233,6 +230,15 @@ def _last_meaningful_age_min(orze_dir: Optional[Path],
                     best = st.st_mtime
     except OSError:
         return None
+    if best is None:
+        return None
+    return best
+
+
+def _last_meaningful_age_min(orze_dir: Optional[Path],
+                             role_name: str) -> Optional[float]:
+    """Return minutes since the newest meaningful role-cycle log."""
+    best = _last_meaningful_time(orze_dir, role_name)
     if best is None:
         return None
     return round((time.time() - best) / 60, 1)
@@ -350,11 +356,16 @@ def derive_role_health(role_name: str, role_state: dict,
                 except OSError:
                     pass
 
+    last_meaningful = _last_meaningful_time(orze_dir, role_name)
     return {
         "status": status,
+        "last_run_time": last_run or None,
         "last_run_age_min": last_run_age_min,
-        "last_meaningful_age_min": _last_meaningful_age_min(
-            orze_dir, role_name),
+        "last_meaningful_time": last_meaningful,
+        "last_meaningful_age_min": (
+            round((now - last_meaningful) / 60, 1)
+            if last_meaningful is not None else None
+        ),
         "consecutive_failures": cf,
         "cooldown_override_s": co,
     }
@@ -508,9 +519,13 @@ def load_state(results_dir: Path) -> dict:
     if path.exists():
         try:
             state = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-            logger.warning("Corrupt state file, starting fresh")
-            return {"iteration": 0, "failure_counts": {}, "roles": {}}
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+            # Starting fresh here resets persisted research-cycle budgets and
+            # can silently authorize extra agent work.  Fail closed and make
+            # the operator explicitly recover or remove the corrupt file.
+            raise RuntimeError(
+                f"Cannot load orchestrator state {path}: {exc}"
+            ) from exc
 
         # Migrate legacy flat research state into roles dict
         if "roles" not in state and "research_cycles" in state:
@@ -530,4 +545,3 @@ def save_state(results_dir: Path, state: dict):
     hostname = socket.gethostname()
     atomic_write(results_dir / f".orze_state_{hostname}.json",
                  json.dumps(state, indent=2))
-

@@ -99,28 +99,29 @@ class UpgradeManager:
         else:
             self._pending_upgrade = None
 
-    def check_sentinel(self):
+    def check_sentinel(self) -> bool:
         """Check if another node wrote .orze_upgrade sentinel.
 
         If the target version is newer, trigger upgrade immediately.
         """
         sentinel = self._results_dir / ".orze_upgrade"
         if not sentinel.exists():
-            return
+            return False
         try:
             target = sentinel.read_text(encoding="utf-8").strip()
         except Exception:
-            return
+            return False
 
         if parse_version(target) <= parse_version(__version__):
             try:
                 sentinel.unlink(missing_ok=True)
             except OSError:
                 pass
-            return
+            return False
 
         logger.info("Auto-upgrade: sentinel found — another node upgraded to v%s, restarting...", target)
         self._pending_upgrade = target
+        return True
 
     def do_upgrade(self, kill_and_save_fn, remove_pid_fn):
         """Install pending upgrade, kill everything, and restart via os.execv.

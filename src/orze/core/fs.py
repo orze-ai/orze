@@ -62,25 +62,34 @@ def _fs_lock(lock_dir: Path, stale_seconds: float = 600) -> bool:
         try:
             meta_path = lock_dir / "lock.json"
             if meta_path.exists():
-                meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                lock_age = time.time() - meta.get("time", 0)
-                lock_host = meta.get("host", "")
-                lock_pid = meta.get("pid", 0)
-
-                pid_dead = (lock_host == socket.gethostname()
-                            and lock_pid
-                            and not _is_pid_alive(lock_host, lock_pid))
-                age_stale = lock_age > stale_seconds
-
-                if not (age_stale or pid_dead):
-                    return False
-
-                if pid_dead:
-                    logger.warning("Breaking dead-pid lock: %s (host=%s pid=%d)",
-                                   lock_dir, lock_host, lock_pid)
+                try:
+                    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                    dir_age = time.time() - lock_dir.stat().st_mtime
+                    if dir_age < 30:
+                        return False
+                    logger.warning(
+                        "Breaking lock with unreadable metadata: %s (age %.0fs)",
+                        lock_dir, dir_age)
                 else:
-                    logger.warning("Breaking stale lock: %s (age %.0fs)",
-                                   lock_dir, lock_age)
+                    lock_age = time.time() - meta.get("time", 0)
+                    lock_host = meta.get("host", "")
+                    lock_pid = meta.get("pid", 0)
+
+                    pid_dead = (lock_host == socket.gethostname()
+                                and lock_pid
+                                and not _is_pid_alive(lock_host, lock_pid))
+                    age_stale = lock_age > stale_seconds
+
+                    if not (age_stale or pid_dead):
+                        return False
+
+                    if pid_dead:
+                        logger.warning("Breaking dead-pid lock: %s (host=%s pid=%d)",
+                                       lock_dir, lock_host, lock_pid)
+                    else:
+                        logger.warning("Breaking stale lock: %s (age %.0fs)",
+                                       lock_dir, lock_age)
             else:
                 # Orphaned lock dir with no lock.json — treat as stale
                 # unless very recently created (< 30s grace period)

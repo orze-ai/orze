@@ -5,10 +5,18 @@ import textwrap
 from pathlib import Path
 
 from orze.engine.failure import (
+    _build_executor_fix_cmd,
     _is_argparse_schema_invalid,
     _try_executor_fix,
     _mark_lake_failure,
 )
+
+
+def test_executor_fix_is_bounded_without_implicit_permission_bypass():
+    cmd = _build_executor_fix_cmd("claude", "prompt", "sonnet", {})
+    assert "--dangerously-skip-permissions" not in cmd
+    assert cmd[cmd.index("--max-turns") + 1] == "20"
+    assert "Bash" in cmd[cmd.index("--allowedTools") + 1].split(",")
 
 
 def test_classifier_positive():

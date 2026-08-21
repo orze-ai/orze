@@ -64,6 +64,37 @@ _CMP_OPS = {
     "$gte": lambda a, b: a >= b,
 }
 
+_REPORT_UPDATED_TOKEN = "__ORZE_UPDATED_AT__"
+
+
+def _atomic_write_if_changed(path: Path, content: str) -> bool:
+    """Atomically write only when the bytes would change."""
+    try:
+        if path.read_text(encoding="utf-8") == content:
+            return False
+    except (OSError, UnicodeDecodeError):
+        pass
+    atomic_write(path, content)
+    return True
+
+
+def _write_report_if_changed(path: Path, template: str, updated_at: str) -> bool:
+    """Keep the prior Updated timestamp when report semantics are unchanged."""
+    try:
+        previous = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        previous = ""
+    normalized = re.sub(
+        r"(?m)^(\*\*Updated:\*\* ).*?( \| \*\*Host:\*\*)",
+        rf"\g<1>{_REPORT_UPDATED_TOKEN}\g<2>",
+        previous,
+        count=1,
+    )
+    if normalized == template:
+        return False
+    atomic_write(path, template.replace(_REPORT_UPDATED_TOKEN, updated_at, 1))
+    return True
+
 
 def _matches_view_filter(results_dir: Path, idea_id: str, view_filter: dict) -> bool:
     """Check if an idea's resolved_config matches all view filter conditions.
@@ -151,8 +182,30 @@ def _read_metric_value(results_dir: Path, idea_id: str, col: dict):
     return None
 
 
+_diversity_cache_signature = None
+_diversity_cache_markdown = ""
+
+
+def _diversity_signature(results_dir: Path, completed_ids: list) -> tuple:
+    """Cheap invalidation for immutable completed-run configs."""
+    entries = []
+    for idea_id in sorted(completed_ids):
+        path = results_dir / idea_id / "resolved_config.yaml"
+        try:
+            stat = path.stat()
+            entries.append((idea_id, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size))
+        except OSError:
+            entries.append((idea_id, 0, 0, 0))
+    return (str(results_dir.resolve()), tuple(entries))
+
+
 def _analyze_config_diversity(results_dir: Path, completed_ids: list, max_dims: int = 15) -> str:
     """Analyze resolved config diversity. Returns markdown table string."""
+    global _diversity_cache_signature, _diversity_cache_markdown
+    signature = (_diversity_signature(results_dir, completed_ids), max_dims)
+    if signature == _diversity_cache_signature:
+        return _diversity_cache_markdown
+
     try:
         import yaml as _yaml
     except ImportError:
@@ -186,7 +239,10 @@ def _analyze_config_diversity(results_dir: Path, completed_ids: list, max_dims: 
             continue
 
     if not key_values:
-        return ""
+        result = ""
+        _diversity_cache_signature = signature
+        _diversity_cache_markdown = result
+        return result
 
     # Analyze each dimension
     dim_stats = []
@@ -214,7 +270,10 @@ def _analyze_config_diversity(results_dir: Path, completed_ids: list, max_dims: 
             })
 
     if not dim_stats:
-        return ""
+        result = ""
+        _diversity_cache_signature = signature
+        _diversity_cache_markdown = result
+        return result
 
     # Sort by n_unique ascending (least diverse first)
     dim_stats.sort(key=lambda x: x["n_unique"])
@@ -236,7 +295,10 @@ def _analyze_config_diversity(results_dir: Path, completed_ids: list, max_dims: 
             f"| {all_vals_str} |"
         )
     lines.append("")
-    return "\n".join(lines)
+    result = "\n".join(lines)
+    _diversity_cache_signature = signature
+    _diversity_cache_markdown = result
+    return result
 
 
 def update_report(results_dir: Path, ideas: Dict[str, dict],
@@ -298,9 +360,11 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
 
     # Include archived ideas from cached index
     all_ideas = dict(ideas)
+    lake_index = {}
     if lake:
         # DB is source of truth for full idea set (archived + hot)
-        db_ids = lake.get_all_ids()
+        lake_index = lake.get_metadata_index()
+        db_ids = set(lake_index)
         # In memory ideas (hot) take precedence for config, but DB knows about everyone
         for aid in db_ids:
             if aid not in all_ideas:
@@ -328,22 +392,38 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         idea_info = all_ideas.get(idea_id, {"title": idea_id})
         curr_idea_title = idea_info["title"]
         
-        if lake and curr_idea_title == "...":
+        db_idea = lake_index.get(idea_id)
+        if db_idea and curr_idea_title == "...":
             # Lazy fetch title from DB for archived ideas
-            db_idea = lake.get(idea_id)
-            if db_idea:
-                curr_idea_title = db_idea["title"]
-                all_ideas[idea_id]["title"] = curr_idea_title
+            curr_idea_title = db_idea["title"]
+            all_ideas[idea_id]["title"] = curr_idea_title
+
+        # When no metrics exist, the lake is the lifecycle authority. Without
+        # this mapping every archived, skipped, failed, or completed DB row
+        # whose result directory was cleaned up is falsely reported as queued.
+        lake_status = str((db_idea or {}).get("status", "")).lower()
+        status_without_metrics = {
+            "queued": "QUEUED",
+            "running": "IN_PROGRESS",
+            "failed": "FAILED",
+            "partial": "FAILED",
+            "dead": "FAILED",
+            "skipped": "SKIPPED",
+            "archived": "ARCHIVED",
+            "completed": "ARCHIVED",
+        }.get(lake_status)
 
         if not idea_dir.exists():
             rows.append({"id": idea_id, "title": curr_idea_title,
-                         "status": "QUEUED", "values": {}})
+                         "status": status_without_metrics or "QUEUED",
+                         "values": {}})
             continue
 
         metrics_path = idea_dir / "metrics.json"
         if not metrics_path.exists():
             rows.append({"id": idea_id, "title": curr_idea_title,
-                         "status": "IN_PROGRESS", "values": {}})
+                         "status": status_without_metrics or "IN_PROGRESS",
+                         "values": {}})
             continue
 
         # Check cache: invalidate if metrics.json OR any source file changed
@@ -408,6 +488,15 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         for c in (report_cfg.get("columns") or []):
             if isinstance(c, dict) and c.get("key"):
                 col_keys.append(c["key"])
+        # For ASR reports, aggregate/timing columns such as ``avg_wer`` and
+        # ``training_time`` are not dataset measurements.  Prefer the explicit
+        # per-dataset ``wer_*`` columns when present; retain the generic column
+        # behavior for projects using a different metric naming convention.
+        wer_col_keys = [
+            key for key in col_keys
+            if key.startswith("wer_") and key != primary_metric
+        ]
+        dataset_col_keys = wer_col_keys or col_keys
         filtered = []
         for r in rows:
             if r["status"] != "COMPLETED":
@@ -416,7 +505,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             metrics = r.get("metrics") or {}
             values = r.get("values") or {}
             ds_count = sum(
-                1 for k in col_keys
+                1 for k in dataset_col_keys
                 if (
                     isinstance(values.get(k), (int, float))
                     or (isinstance(metrics.get(k), (int, float)))
@@ -433,19 +522,35 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 filtered.append(r)
         rows = filtered
 
-    counts = {}
-    for r in rows:
-        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    if lake:
+        # Pipeline status describes executable experiments, not every archived
+        # idea ever seen. Skipped ideas never consumed a run and archived ideas
+        # are catalog entries, so neither belongs in this four-state total.
+        counts = {
+            "COMPLETED": len(lake.get_all_ids(status="completed")),
+            "FAILED": sum(
+                len(lake.get_all_ids(status=status))
+                for status in ("failed", "partial", "dead")
+            ),
+            "IN_PROGRESS": len(lake.get_all_ids(status="running")),
+            "QUEUED": len(lake.get_all_ids(status="queued")),
+        }
+    else:
+        counts = {}
+        for r in rows:
+            counts[r["status"]] = counts.get(r["status"], 0) + 1
+
+    pipeline_total = sum(counts.values())
 
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     lines = [
         f"# {report_title}",
-        f"**Updated:** {now} | **Host:** {socket.gethostname()}",
+        f"**Updated:** {_REPORT_UPDATED_TOKEN} | **Host:** {socket.gethostname()}",
         "",
         "## Pipeline Status",
         "| Total | Completed | Failed | In Progress | Queued |",
         "|-------|-----------|--------|-------------|--------|",
-        f"| {len(rows)} | {counts.get('COMPLETED', 0)} "
+        f"| {pipeline_total} | {counts.get('COMPLETED', 0)} "
         f"| {counts.get('FAILED', 0)} "
         f"| {counts.get('IN_PROGRESS', 0)} | {counts.get('QUEUED', 0)} |",
         "",
@@ -635,10 +740,14 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 "-------------|-----------|")
             for rname in sorted(rh):
                 h = rh[rname]
-                lr = h.get("last_run_age_min")
-                lr_s = "never" if lr is None else f"{lr} min ago"
-                lm = h.get("last_meaningful_age_min")
-                lm_s = "—" if lm is None else f"{lm} min ago"
+                lr = h.get("last_run_time")
+                lr_s = ("never" if lr is None else
+                        datetime.datetime.fromtimestamp(
+                            lr, datetime.timezone.utc).strftime("%Y-%m-%d %H:%MZ"))
+                lm = h.get("last_meaningful_time")
+                lm_s = ("—" if lm is None else
+                        datetime.datetime.fromtimestamp(
+                            lm, datetime.timezone.utc).strftime("%Y-%m-%d %H:%MZ"))
                 co = h.get("cooldown_override_s") or 0
                 if co >= 3600:
                     co_s = f"{co/3600:.1f}h"
@@ -654,7 +763,6 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             lines.append("")
 
     report_path = results_dir / "report.md"
-    atomic_write(report_path, "\n".join(lines))
 
     # Write leaderboard cache for admin panel (avoids expensive rescan)
     lb_entries = []
@@ -668,8 +776,10 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             "eval_metrics": r["values"],
         })
     lb_path = results_dir / "_leaderboard.json"
-    atomic_write(lb_path, json.dumps({"top": lb_entries, "metric": primary_metric},
-                                     default=str))
+    _atomic_write_if_changed(
+        lb_path,
+        json.dumps({"top": lb_entries, "metric": primary_metric}, default=str),
+    )
 
     # --- Filtered view leaderboards ---
     views = report_cfg.get("views") or []
@@ -699,10 +809,9 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 "eval_metrics": r["values"],
             })
         view_lb_path = results_dir / f"_leaderboard_{vname}.json"
-        atomic_write(view_lb_path, json.dumps(
+        _atomic_write_if_changed(view_lb_path, json.dumps(
             {"top": view_entries, "metric": primary_metric, "view": vname,
-             "title": vtitle},
-            default=str))
+             "title": vtitle}, default=str))
 
         # Append view section to report.md
         lines.append(f"## {vtitle}")
@@ -740,17 +849,16 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             lines.append("*No matching models.*")
         lines.append("")
 
-    # Re-write report.md with view sections appended
-    if views:
-        atomic_write(report_path, "\n".join(lines))
+    report_changed = _write_report_if_changed(report_path, "\n".join(lines), now)
 
     # Write views index for admin API (always write, even if empty, to clear stale views)
-    atomic_write(results_dir / "_leaderboard_views.json",
-                 json.dumps({"views": view_names}))
+    _atomic_write_if_changed(results_dir / "_leaderboard_views.json",
+                             json.dumps({"views": view_names}))
 
-    logger.info("Report updated: %d completed, %d queued, %d failed",
-                counts.get("COMPLETED", 0), counts.get("QUEUED", 0),
-                counts.get("FAILED", 0))
+    if report_changed:
+        logger.info("Report updated: %d completed, %d queued, %d failed",
+                    counts.get("COMPLETED", 0), counts.get("QUEUED", 0),
+                    counts.get("FAILED", 0))
 
     return completed
 

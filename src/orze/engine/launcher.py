@@ -52,7 +52,10 @@ import time
 from pathlib import Path
 from typing import Dict, Optional
 
-from orze.engine.process import TrainingProcess, _new_process_group, _terminate_and_reap
+from orze.engine.process import (
+    TrainingProcess, _new_process_group, _terminate_and_reap,
+    capture_process_identity,
+)
 from orze.core.fs import atomic_write, tail_file
 from orze.reporting.notifications import notify
 
@@ -477,6 +480,47 @@ _NESTED_CONFIG_WHITELIST = {
 }
 
 
+def normalize_nested_config(
+    idea_cfg: dict,
+    normalization_map: Optional[dict] = None,
+) -> tuple[dict, list[str]]:
+    """Apply only project-declared repairs to known nested config shapes.
+
+    Supported rules are ``flatten_prefix`` (``lora.rank`` → ``lora_rank``)
+    and ``rename:<key>``. Explicit destination keys always win. Unknown rules
+    are ignored so the subsequent validator still fails closed.
+    """
+    if not isinstance(idea_cfg, dict) or not normalization_map:
+        return idea_cfg, []
+    normalized = dict(idea_cfg)
+    changes: list[str] = []
+    for source, rule in normalization_map.items():
+        value = normalized.get(source)
+        if not isinstance(value, dict):
+            continue
+        if rule == "flatten_prefix":
+            for child, child_value in value.items():
+                destination = f"{source}_{child}"
+                if destination not in normalized:
+                    normalized[destination] = child_value
+                    changes.append(f"{source}.{child} -> {destination}")
+            normalized.pop(source, None)
+        elif isinstance(rule, str) and rule.startswith("rename:"):
+            destination = rule.split(":", 1)[1].strip()
+            if not destination:
+                continue
+            existing = normalized.get(destination)
+            if isinstance(existing, dict):
+                merged = dict(value)
+                merged.update(existing)
+                normalized[destination] = merged
+            elif destination not in normalized:
+                normalized[destination] = value
+            normalized.pop(source, None)
+            changes.append(f"{source} -> {destination}")
+    return normalized, changes
+
+
 def validate_idea_config_no_nested(
     idea_cfg: dict,
     extra_whitelist: Optional[list] = None,
@@ -509,7 +553,8 @@ def validate_idea_config_no_nested(
 # --------------------------------------------------------------------- #
 # Reads results/_validators/*.yaml and rejects ideas that violate any
 # error-severity rule. Supports the operator set documented in
-# PROFESSOR_RULES.md plus the `field_any` (list of fields) extension
+# PROFESSOR_RULES.md plus the `field_any` (list of fields) and `field_sum`
+# (numeric wildcard aggregate) extensions
 # used by require_nontrivial_training_op_101.yaml. Operator set:
 #   equals, not_equals, in, not_in, contains, not_contains,
 #   exists, not_exists, gt, gte, lt, lte.
@@ -541,7 +586,7 @@ def _eval_validator_rule(rule: dict, idea_cfg: dict,
     # including no_gs_dose_above_data_ceiling_cyc829, the champion-replica
     # guards and the step/rank budget caps. First diagnosed cyc-4241; not landed
     # then because this submodule is shared. Re-checked cyc-5869: the sibling
-    # project (/ceph/workspace/erik/auto-research) has 24 validators and ZERO
+    # project (/hot-data/fsx/erik/auto-research) has 24 validators and ZERO
     # use any_of/all_of, so this change is a no-op there.
     #
     # Semantics (matching _libs/pre_eval_gate.py, the pre-eval path that has
@@ -571,6 +616,53 @@ def _eval_validator_rule(rule: dict, idea_cfg: dict,
             e = _eval_validator_rule(s, idea_cfg, _in_any_of=_in_any_of)
             if e is not None:
                 return explanation or e
+        return None
+
+    # `field_sum: training.datasets.*.samples` — sum numeric leaves selected
+    # by a dotted path with `*`. This lets launch-time compute-budget guards
+    # reject an oversized data mix before a trainer process spends GPU time.
+    # If no numeric leaf matches, retry without a trailing key below `*` to
+    # support both accepted dataset spellings:
+    #   {ami: {samples: 1000}} and {ami: 1000}.
+    if "field_sum" in rule:
+        def _walk_sum(parts):
+            current = [idea_cfg]
+            for part in parts:
+                next_values = []
+                for value in current:
+                    if not isinstance(value, dict):
+                        continue
+                    if part == "*":
+                        next_values.extend(value.values())
+                    elif part in value:
+                        next_values.append(value[part])
+                current = next_values
+            return [
+                value for value in current
+                if isinstance(value, (int, float)) and not isinstance(value, bool)
+            ]
+
+        parts = str(rule.get("field_sum", "")).split(".")
+        values = _walk_sum(parts)
+        if not values and len(parts) >= 2 and parts[-2] == "*":
+            values = _walk_sum(parts[:-1])
+        if not values:
+            return None
+        total = sum(values)
+        try:
+            expected = float(rule.get("value"))
+        except (TypeError, ValueError):
+            return None
+        failed = (
+            (op in ("lte", "le") and total > expected)
+            or (op == "lt" and total >= expected)
+            or (op in ("gte", "ge") and total < expected)
+            or (op == "gt" and total <= expected)
+        )
+        if failed:
+            return (explanation
+                    or f"sum({rule.get('field_sum')})={total:g} "
+                       f"violates {op} {expected:g}")
         return None
 
     # `field_any: [a, b, ...]` + `operator: exists` — pass iff at
@@ -698,6 +790,7 @@ def log_validator_rejection(
     validator: str,
     rejection: str,
     idea_cfg: Optional[dict] = None,
+    stage: str = "launch",
 ) -> None:
     """Append a rejection record to results/_validator_rejections.jsonl.
 
@@ -723,6 +816,7 @@ def log_validator_rejection(
             "idea_id": idea_id,
             "validator": validator,
             "rejection": rejection,
+            "stage": stage,
             "config_summary": summary,
         }
         path = Path(results_dir) / "_validator_rejections.jsonl"
@@ -1204,6 +1298,12 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     # phases.py as a requeue, not a code-fix retry.
     _verify_gpu_free(gpu, int(cfg.get("launcher_min_free_vram_mib", 1000)))
 
+    claim_path = results_dir / idea_id / "claim.json"
+    if lake is not None and not claim_path.exists():
+        raise RuntimeError(
+            f"Lifecycle-managed launch requires an existing claim for {idea_id}"
+        )
+
     # Keep file handle open for subprocess lifetime
     log_fh = open(log_path, "w", encoding="utf-8")
     try:
@@ -1217,20 +1317,40 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
 
     now = time.time()
 
-    # Record FSM transition: CLAIMED → IN_PROGRESS (v4.5: generic for all SOP types)
-    if lake:
-        try:
-            lake.record_state_transition(
+    # Persist the actual trainer identity before advertising IN_PROGRESS.
+    # The trainer deliberately owns a separate process group, so recording
+    # only the orchestrator PID makes crash recovery unsafe (it can relaunch
+    # while the original trainer still writes effects).
+    try:
+        if claim_path.exists():
+            identity = capture_process_identity(proc.pid)
+            claim_data = json.loads(claim_path.read_text(encoding="utf-8"))
+            claim_data.update({
+                "trainer_pid": identity["pid"],
+                "trainer_pgid": identity["pgid"],
+                "trainer_start_ticks": identity["start_ticks"],
+                "trainer_started_at": now,
+            })
+            atomic_write(claim_path, json.dumps(claim_data, indent=2))
+
+        # Record FSM transition: CLAIMED → IN_PROGRESS using the process
+        # whose effects recovery must mediate.
+        if lake and not lake.record_state_transition(
                 idea_id,
                 from_state="CLAIMED",
                 to_state="IN_PROGRESS",
                 reason=f"training_launched on gpu {gpu}",
                 host=socket.gethostname(),
-                pid=os.getpid(),
+                pid=proc.pid,
                 sop_type=cfg.get("sop", "training"),
+        ):
+            raise RuntimeError(
+                f"Could not persist IN_PROGRESS transition for {idea_id}"
             )
-        except Exception as e:
-            logger.warning("FSM transition failed (non-blocking): %s", e)
+    except Exception:
+        _terminate_and_reap(proc, idea_id, timeout=3)
+        log_fh.close()
+        raise
 
     return TrainingProcess(
         idea_id=idea_id, gpu=gpu, process=proc,
@@ -1495,11 +1615,21 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
         metrics_path = results_dir / tp.idea_id / "metrics.json"
 
         if ret == 0 and metrics_path.exists():
+            metrics_error = ""
             try:
                 metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-                metrics = {"status": "UNKNOWN"}
-            status = metrics.get("status", "COMPLETED")
+                if not isinstance(metrics, dict):
+                    metrics_error = "metrics.json must contain a JSON object"
+                    metrics = {}
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+                metrics_error = f"metrics.json is unreadable: {exc}"
+                metrics = {}
+            status = metrics.get("status")
+            if status not in ("COMPLETED", "FAILED"):
+                metrics_error = metrics_error or (
+                    "metrics.json must declare status COMPLETED or FAILED"
+                )
+                status = "INVALID"
             logger.info("[%s] %s on GPU %s in %.1fm",
                         status, tp.idea_id, gpu, elapsed / 60)
 
@@ -1516,7 +1646,26 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 anomaly = check_identical_results(_recent_completions, primary)
                 if anomaly:
                     logger.warning("[ANOMALY] %s", anomaly)
-            if status == "FAILED":
+            if metrics_error:
+                invalid_path = metrics_path.with_name(
+                    f"metrics.invalid.{time.time_ns()}.json")
+                try:
+                    os.replace(metrics_path, invalid_path)
+                except OSError:
+                    invalid_path = None
+                reason = metrics_error
+                if invalid_path is not None:
+                    reason += f"; original preserved as {invalid_path.name}"
+                _write_failure(
+                    results_dir / tp.idea_id, reason,
+                    lake=lake, idea_id=tp.idea_id, cfg=cfg,
+                )
+                write_failure_analysis(
+                    results_dir / tp.idea_id,
+                    classify_failure(reason, 0, "training"), reason,
+                )
+                _record_failure(failure_counts, tp.idea_id)
+            elif status == "FAILED":
                 error_msg = metrics.get("error", "Training script reported FAILED")
                 # VRAM precheck failure is environmental (GPU busy), not a code bug.
                 # Re-queue so the idea retries when VRAM is available; don't burn fix budget.
@@ -1552,6 +1701,30 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 else:
                     write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, ret or -1, "training"), error_msg)
                     _record_failure(failure_counts, tp.idea_id)
+            elif status == "COMPLETED" and lake is not None and not cfg.get("eval_script"):
+                # With no separate evaluation phase, successful training is
+                # the terminal lifecycle event.  Persist it immediately;
+                # periodic catch-up is only a crash-recovery fallback.
+                current_state = lake.get_fsm_state(tp.idea_id)
+                persisted = current_state == "COMPLETE"
+                if current_state == "IN_PROGRESS":
+                    persisted = lake.record_state_transition(
+                        tp.idea_id,
+                        from_state="IN_PROGRESS",
+                        to_state="COMPLETE",
+                        reason="training_completed",
+                        host=socket.gethostname(),
+                        pid=os.getpid(),
+                        sop_type=(cfg or {}).get("sop", "training"),
+                    )
+                    # Catch-up or another host may win after the read above.
+                    if not persisted:
+                        persisted = lake.get_fsm_state(tp.idea_id) == "COMPLETE"
+                if not persisted:
+                    raise RuntimeError(
+                        f"Could not persist terminal lifecycle for {tp.idea_id}; "
+                        f"current state is {lake.get_fsm_state(tp.idea_id)}"
+                    )
         else:
             reason = f"exit code {ret}"
             try:

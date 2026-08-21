@@ -49,7 +49,7 @@ def tmp_project(tmp_path):
 @pytest.fixture
 def write_train_script(tmp_project):
     """Write the baseline train.py into the tmp_project."""
-    from orze.cli import BASELINE_TRAIN_PY
+    from orze.cli_demo import BASELINE_TRAIN_PY
 
     (tmp_project / "train.py").write_text(BASELINE_TRAIN_PY.strip() + "\n")
     return tmp_project

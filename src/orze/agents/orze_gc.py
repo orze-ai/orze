@@ -41,7 +41,8 @@ logger = logging.getLogger("orze.gc")
 
 
 def get_top_idea_ids(results_dir: Path, primary_metric: str,
-                     lake_db_path: Optional[Path], keep_top: int) -> Set[str]:
+                     lake_db_path: Optional[Path], keep_top: int,
+                     sort_order: str = "descending") -> Set[str]:
     """Collect idea IDs that should be kept (top performers).
 
     Sources (merged):
@@ -70,11 +71,13 @@ def get_top_idea_ids(results_dir: Path, primary_metric: str,
             candidates = [primary_metric]
             if "_adjusted_" in primary_metric:
                 candidates.append(primary_metric.replace("_adjusted_", "_"))
+            direction = "ASC" if sort_order == "ascending" else "DESC"
             for metric in candidates:
                 rows = conn.execute(
                     "SELECT idea_id FROM ideas "
-                    "WHERE json_extract(eval_metrics, ?) IS NOT NULL "
-                    "ORDER BY json_extract(eval_metrics, ?) DESC LIMIT ?",
+                    "WHERE json_valid(eval_metrics) "
+                    "AND json_extract(eval_metrics, ?) IS NOT NULL "
+                    f"ORDER BY json_extract(eval_metrics, ?) {direction} LIMIT ?",
                     (f"$.{metric}", f"$.{metric}", keep_top),
                 ).fetchall()
                 if rows:
@@ -343,6 +346,7 @@ def run_gc(
     gc_results_enabled: bool = False,
     archive_dir: Optional[Path] = None,
     extra_keep_ids: Optional[Set[str]] = None,
+    sort_order: str = "descending",
 ) -> Dict[str, Any]:
     """Run garbage collection. Returns stats dict."""
     logger.info("=" * 50)
@@ -363,7 +367,7 @@ def run_gc(
 
     # Build the keep set
     keep_ids = get_top_idea_ids(results_dir, primary_metric,
-                                lake_db_path, keep_top)
+                                lake_db_path, keep_top, sort_order)
     logger.info("Top performers: %d ideas", len(keep_ids))
 
     recent_ids = get_recent_idea_ids(results_dir, keep_recent)
@@ -504,13 +508,20 @@ Examples:
     else:
         archive_dir = None
 
-    lake_db_path = Path(args.lake_db) if args.lake_db else \
-        Path(cfg.get("idea_lake_db") or (results_dir / "idea_lake.db"))
+    if args.lake_db:
+        lake_db_path = Path(args.lake_db)
+    elif cfg.get("idea_lake_db"):
+        lake_db_path = Path(cfg["idea_lake_db"])
+        if not lake_db_path.is_absolute():
+            lake_db_path = config_path.parent / lake_db_path
+    else:
+        lake_db_path = config_path.parent / ".orze" / "idea_lake.db"
 
     stats = run_gc(
         results_dir=results_dir,
         checkpoints_dir=checkpoints_dir,
         primary_metric=primary_metric,
+        sort_order=report_cfg.get("sort", "descending"),
         lake_db_path=lake_db_path,
         keep_top=keep_top,
         keep_recent=keep_recent,

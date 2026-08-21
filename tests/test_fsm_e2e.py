@@ -10,15 +10,11 @@ Simulates a real training workflow:
 NO mocks. REAL FSM transitions through actual code paths.
 """
 
-import json
 import os
-import subprocess
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -50,7 +46,7 @@ class TestFSME2E(unittest.TestCase):
             pass
 
     def test_full_training_lifecycle(self):
-        """Test QUEUED → CLAIMED → TRAINING → EVALUATING → COMPLETE."""
+        """Test the generic QUEUED → CLAIMED → IN_PROGRESS → COMPLETE lifecycle."""
         idea_id = "idea-e2e-001"
         lake = IdeaLake(self.db_path)
 
@@ -67,47 +63,29 @@ class TestFSME2E(unittest.TestCase):
         self.assertEqual(history[0]['to_state'], 'CLAIMED')
         print(f"  ✓ State: {state}")
 
-        # ========== STEP 2: TRAINING (CLAIMED → TRAINING) ==========
-        print(f"[TRAINING] {idea_id}")
+        # ========== STEP 2: EXECUTION (CLAIMED → IN_PROGRESS) ==========
+        print(f"[IN_PROGRESS] {idea_id}")
         lake.record_state_transition(
             idea_id,
             from_state="CLAIMED",
-            to_state="TRAINING",
+            to_state="IN_PROGRESS",
             reason="training_launched",
             host=os.uname()[1],
             pid=os.getpid(),
         )
 
         state = lake.get_fsm_state(idea_id)
-        self.assertEqual(state, "TRAINING")
+        self.assertEqual(state, "IN_PROGRESS")
         history = lake.get_fsm_history(idea_id)
         self.assertEqual(len(history), 2)
-        self.assertEqual(history[1]['to_state'], 'TRAINING')
+        self.assertEqual(history[1]['to_state'], 'IN_PROGRESS')
         print(f"  ✓ State: {state}")
 
-        # ========== STEP 3: EVALUATION (TRAINING → EVALUATING) ==========
-        print(f"[EVALUATING] {idea_id}")
-        lake.record_state_transition(
-            idea_id,
-            from_state="TRAINING",
-            to_state="EVALUATING",
-            reason="eval_launched",
-            host=os.uname()[1],
-            pid=os.getpid(),
-        )
-
-        state = lake.get_fsm_state(idea_id)
-        self.assertEqual(state, "EVALUATING")
-        history = lake.get_fsm_history(idea_id)
-        self.assertEqual(len(history), 3)
-        self.assertEqual(history[2]['to_state'], 'EVALUATING')
-        print(f"  ✓ State: {state}")
-
-        # ========== STEP 4: COMPLETION (EVALUATING → COMPLETE) ==========
+        # ========== STEP 3: COMPLETION (IN_PROGRESS → COMPLETE) ==========
         print(f"[COMPLETE] {idea_id}")
         lake.record_state_transition(
             idea_id,
-            from_state="EVALUATING",
+            from_state="IN_PROGRESS",
             to_state="COMPLETE",
             reason="eval_succeeded",
             host=os.uname()[1],
@@ -117,8 +95,8 @@ class TestFSME2E(unittest.TestCase):
         state = lake.get_fsm_state(idea_id)
         self.assertEqual(state, "COMPLETE")
         history = lake.get_fsm_history(idea_id)
-        self.assertEqual(len(history), 4)
-        self.assertEqual(history[3]['to_state'], 'COMPLETE')
+        self.assertEqual(len(history), 3)
+        self.assertEqual(history[2]['to_state'], 'COMPLETE')
         print(f"  ✓ State: {state}")
 
         # ========== VERIFICATION ==========
@@ -129,7 +107,7 @@ class TestFSME2E(unittest.TestCase):
         lake.conn.close()
 
     def test_failure_path(self):
-        """Test TRAINING → FAILED path."""
+        """Test IN_PROGRESS → FAILED path."""
         idea_id = "idea-e2e-fail-001"
         lake = IdeaLake(self.db_path)
 
@@ -139,14 +117,14 @@ class TestFSME2E(unittest.TestCase):
 
         # Start training
         lake.record_state_transition(
-            idea_id, "CLAIMED", "TRAINING", "training_launched"
+            idea_id, "CLAIMED", "IN_PROGRESS", "training_launched"
         )
-        self.assertEqual(lake.get_fsm_state(idea_id), "TRAINING")
+        self.assertEqual(lake.get_fsm_state(idea_id), "IN_PROGRESS")
 
         # Fail
         print(f"\n[FAILURE] {idea_id}")
         lake.record_state_transition(
-            idea_id, "TRAINING", "FAILED", "Out of memory",
+            idea_id, "IN_PROGRESS", "FAILED", "Out of memory",
             host=os.uname()[1], pid=os.getpid()
         )
         self.assertEqual(lake.get_fsm_state(idea_id), "FAILED")
@@ -167,9 +145,8 @@ class TestFSME2E(unittest.TestCase):
         # Make transitions with full context
         transitions = [
             ("QUEUED", "CLAIMED", "claimed by scheduler", "host1", 1001),
-            ("CLAIMED", "TRAINING", "training on gpu 0", "host1", 1002),
-            ("TRAINING", "EVALUATING", "eval on gpu 0", "host1", 1003),
-            ("EVALUATING", "COMPLETE", "eval succeeded", "host1", 1004),
+            ("CLAIMED", "IN_PROGRESS", "experiment on gpu 0", "host1", 1002),
+            ("IN_PROGRESS", "COMPLETE", "evaluation succeeded", "host1", 1003),
         ]
 
         for from_st, to_st, reason, host, pid in transitions:
@@ -201,7 +178,7 @@ class TestFSME2E(unittest.TestCase):
         lake = IdeaLake(self.db_path)
 
         # Make many transitions
-        states = ["QUEUED", "CLAIMED", "TRAINING", "EVALUATING", "COMPLETE"]
+        states = ["QUEUED", "CLAIMED", "IN_PROGRESS", "COMPLETE"]
         for i in range(len(states) - 1):
             lake.record_state_transition(
                 idea_id, states[i], states[i+1], f"step_{i}"
@@ -214,7 +191,7 @@ class TestFSME2E(unittest.TestCase):
 
         # Verify history is consistent
         history = lake.get_fsm_history(idea_id)
-        self.assertEqual(len(history), 4)
+        self.assertEqual(len(history), 3)
 
         print(f"\n✅ State consistency verified: {idea_id}")
 

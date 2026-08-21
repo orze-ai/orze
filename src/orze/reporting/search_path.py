@@ -328,7 +328,12 @@ def build_search_path(
     goodness: Dict[str, Optional[float]] = {}
     raw_metric: Dict[str, Optional[float]] = {}
     for iid, r in by_id.items():
-        m = metric_of(r)
+        # A failed/skipped proposal may retain copied or partial eval_metrics.
+        # Those numbers are useful forensic data, not a trusted result.  Keep
+        # status optional for direct callers, but when present enforce the
+        # module's scored-status contract before ranking or comparing edges.
+        status = str(r.get("status") or "").lower()
+        m = metric_of(r) if not status or status in _SCORED_STATUSES else None
         raw_metric[iid] = m
         goodness[iid] = _goodness(m, lower_is_better)
 

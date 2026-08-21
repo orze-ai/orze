@@ -429,6 +429,22 @@ class IdeaLake:
         rows = _retry_on_busy(_do_all_ids)
         return {r[0] for r in rows}
 
+    def get_metadata_index(self) -> Dict[str, Dict[str, Any]]:
+        """Return lightweight lifecycle metadata keyed by idea ID."""
+        def _do_metadata_index():
+            return self.conn.execute(
+                "SELECT idea_id, title, status FROM ideas"
+            ).fetchall()
+        rows = _retry_on_busy(_do_metadata_index)
+        return {
+            row["idea_id"]: {
+                "idea_id": row["idea_id"],
+                "title": row["title"],
+                "status": row["status"],
+            }
+            for row in rows
+        }
+
     def get_queue(self, limit: int = 1000) -> List[Dict[str, Any]]:
         """Return unclaimed ideas, sorted by priority then ID."""
         def _do_get_queue():
@@ -558,6 +574,15 @@ class IdeaLake:
                 # still be training this idea.
                 import socket as _socket
                 claim_path = idea_dir / "claim.json"
+                # Crash recovery intentionally releases claim.json while
+                # retaining recovery.json, the prior claim, logs, and attempt
+                # ledger. Preserve that evidence; scheduler.claim() can reuse
+                # a directory with no live claim and no terminal metrics.
+                if ((idea_dir / "recovery.json").exists()
+                        or any(idea_dir.glob("claim.recovered.*.json"))):
+                    logger.info(
+                        "Preserving recovered retry directory for %s", idea_id)
+                    continue
                 if claim_path.exists():
                     try:
                         claim = json.loads(claim_path.read_text(encoding="utf-8"))
@@ -812,13 +837,14 @@ class IdeaLake:
                                 reason: Optional[str] = None,
                                 host: Optional[str] = None,
                                 pid: Optional[int] = None,
-                                sop_type: Optional[str] = None) -> None:
+                                sop_type: Optional[str] = None) -> bool:
         """Atomically record an FSM state transition with audit trail.
 
         v4.5+: Generic FSM orthogonal to SOP type.
         Valid transitions regardless of workflow:
           QUEUED → CLAIMED (scheduler claims work)
           CLAIMED → IN_PROGRESS (launcher starts work)
+          CLAIMED → FAILED (pre-launch validation or setup fails)
           IN_PROGRESS → COMPLETE (work succeeds)
           IN_PROGRESS → FAILED (work fails)
           COMPLETE → ARCHIVED (idea retired)
@@ -836,7 +862,7 @@ class IdeaLake:
                 # Generic FSM validation (SOP-orthogonal)
                 VALID_TRANSITIONS = {
                     "QUEUED": {"CLAIMED"},
-                    "CLAIMED": {"IN_PROGRESS", "QUEUED"},
+                    "CLAIMED": {"IN_PROGRESS", "FAILED", "QUEUED"},
                     "IN_PROGRESS": {"COMPLETE", "FAILED", "QUEUED"},
                     "COMPLETE": {"ARCHIVED"},
                     "FAILED": {"QUEUED"},
@@ -847,20 +873,38 @@ class IdeaLake:
                         "Invalid FSM transition: %s %s → %s",
                         idea_id, from_state, to_state)
                     self.conn.rollback()
-                    return
+                    return False
 
-                # Update or insert state
-                self.conn.execute(
-                    "INSERT OR IGNORE INTO idea_state "
-                    "(idea_id, current_state, updated_by_host, updated_by_pid, sop_type, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, datetime('now'))",
-                    (idea_id, to_state, host, pid, sop_type)
-                )
-                self.conn.execute(
-                    "UPDATE idea_state SET current_state = ?, updated_by_host = ?, updated_by_pid = ?, sop_type = ?, updated_at = datetime('now') "
-                    "WHERE idea_id = ?",
-                    (to_state, host, pid, sop_type, idea_id)
-                )
+                row = self.conn.execute(
+                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                    (idea_id,),
+                ).fetchone()
+                actual_state = row[0] if row else "QUEUED"
+                if actual_state != from_state:
+                    logger.warning(
+                        "Stale FSM transition rejected: %s expected=%s actual=%s to=%s",
+                        idea_id, from_state, actual_state, to_state,
+                    )
+                    self.conn.rollback()
+                    return False
+
+                if row:
+                    cursor = self.conn.execute(
+                        "UPDATE idea_state SET current_state = ?, updated_by_host = ?, "
+                        "updated_by_pid = ?, sop_type = ?, updated_at = datetime('now') "
+                        "WHERE idea_id = ? AND current_state = ?",
+                        (to_state, host, pid, sop_type, idea_id, from_state),
+                    )
+                    if cursor.rowcount != 1:
+                        self.conn.rollback()
+                        return False
+                else:
+                    self.conn.execute(
+                        "INSERT INTO idea_state "
+                        "(idea_id, current_state, updated_by_host, updated_by_pid, sop_type, updated_at) "
+                        "VALUES (?, ?, ?, ?, ?, datetime('now'))",
+                        (idea_id, to_state, host, pid, sop_type),
+                    )
 
                 # Record transition
                 self.conn.execute(
@@ -870,18 +914,33 @@ class IdeaLake:
                     (idea_id, from_state, to_state, reason or "", host, pid, sop_type)
                 )
 
+                # Keep queue status and the audited FSM terminal in the same
+                # transaction.  A crash must not leave a completed experiment
+                # advertised as still running.
+                terminal_status = {
+                    "COMPLETE": "completed",
+                    "FAILED": "failed",
+                }.get(to_state)
+                if terminal_status:
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                        (terminal_status, idea_id),
+                    )
+
                 self.conn.commit()
                 logger.info(
                     "[LIFECYCLE_TRANSITION] idea=%s %s → %s reason=\"%s\"",
                     idea_id, from_state, to_state, reason or "")
+                return True
             except Exception as e:
-                logger.warning("FSM transition error for %s: %s", idea_id, e)
                 try:
                     self.conn.rollback()
                 except Exception:
                     pass
+                logger.error("FSM transition error for %s: %s", idea_id, e)
+                raise
 
-        _retry_on_busy(_do_transition)
+        return bool(_retry_on_busy(_do_transition))
 
     def get_fsm_state(self, idea_id: str) -> str:
         """Get current FSM state for an idea."""

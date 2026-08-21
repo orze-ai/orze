@@ -82,7 +82,7 @@ def test_orze_path_all_kinds(tmp_path):
         ("logs", tmp_path / ".orze" / "logs" / "test.log"),
         ("receipts", tmp_path / ".orze" / "receipts" / "rec.json"),
         ("locks", tmp_path / ".orze" / "locks" / "lock"),
-        ("triggers", tmp_path / ".orze" / "triggers" / "_trigger_x"),
+        ("triggers", tmp_path / "orze_results" / "_trigger_x"),
         ("mcp", tmp_path / ".orze" / "mcp" / "file.json"),
         ("state", tmp_path / ".orze" / "state" / "state.json"),
         ("heartbeats", tmp_path / ".orze" / "heartbeats" / "hb.json"),

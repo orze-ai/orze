@@ -115,6 +115,41 @@ def _load_verified(results_dir: Path, report_cfg: dict):
 logger = logging.getLogger("orze")
 
 
+def _evo_score_signature(lake_db: Path, cfg: dict):
+    """Return the inputs that can change the Evo Score.
+
+    SQLite may keep recent commits in ``-wal``, so the database file alone is
+    not a sufficient change detector.  Report settings also affect metric
+    direction and search-path thresholds.
+    """
+    files = []
+    for path in (lake_db, Path(f"{lake_db}-wal")):
+        try:
+            st = path.stat()
+            files.append((st.st_mtime_ns, st.st_size))
+        except OSError:
+            files.append(None)
+    report_sig = json.dumps(cfg.get("report", {}) or {}, sort_keys=True,
+                            default=str, separators=(",", ":"))
+    return tuple(files), report_sig
+
+
+def _log_evo_score_if_changed(owner, lake_db: Path, cfg: dict) -> bool:
+    """Build and log the expensive search graph only when its inputs change."""
+    signature = _evo_score_signature(lake_db, cfg)
+    if getattr(owner, "_evo_score_signature", None) == signature:
+        return False
+
+    from orze.reporting.search_path import build_from_lake
+    re_block = build_from_lake(str(lake_db), cfg).get("research_efficiency")
+    owner._evo_score_signature = signature
+    if re_block:
+        logger.info(
+            "Evo Score (research efficiency): %.1f grade %s",
+            re_block.get("score", 0.0), re_block.get("grade", "?"))
+    return True
+
+
 def _run_elo_tournament_for_ingested(lake, ingested_ids, substrate_cfg):
     """Run one Elo tournament round on freshly ingested ideas.
 
@@ -801,6 +836,7 @@ class OrzePhaseMixin:
                         results_dir=self.results_dir,
                         checkpoints_dir=Path(gc_cfg["checkpoints_dir"]) if gc_cfg.get("checkpoints_dir") else None,
                         primary_metric=report_cfg.get("primary_metric", ""),
+                        sort_order=report_cfg.get("sort", "descending"),
                         lake_db_path=lake_path if lake_path.exists() else None,
                         keep_top=gc_cfg.get("keep_top", 50),
                         keep_recent=gc_cfg.get("keep_recent", 20),
@@ -926,6 +962,14 @@ class OrzePhaseMixin:
                                 pass
                             else:
                                 flat_cfg[k] = v
+                        from orze.engine.launcher import normalize_nested_config
+                        flat_cfg, normalization_changes = normalize_nested_config(
+                            flat_cfg, cfg.get("nested_config_normalize"))
+                        if normalization_changes:
+                            logger.info(
+                                "Normalized config for %s: %s",
+                                idea_id, "; ".join(normalization_changes),
+                            )
                         atomic_write(
                             self.results_dir / idea_id / "idea_config.yaml",
                             yaml.dump(flat_cfg,
@@ -1471,6 +1515,14 @@ class OrzePhaseMixin:
                     len(_hk_out["closed"]), len(_hk_out["promoted"]),
                     int(_prof_cyc))
                 self._last_housekeep = _hk_now
+        except ModuleNotFoundError as _hk_e:
+            if _hk_e.name == "orze_substrate":
+                # The substrate is optional.  Avoid retrying and warning on
+                # every cycle when it is not installed.
+                self._last_housekeep = _hk_now
+                logger.debug("housekeeper unavailable: orze_substrate not installed")
+            else:  # pragma: no cover - defensive for substrate dependencies
+                logger.warning("housekeeper sweep failed: %s", _hk_e)
         except Exception as _hk_e:  # pragma: no cover - never break loop
             logger.warning("housekeeper sweep failed: %s", _hk_e)
 
@@ -1537,16 +1589,9 @@ class OrzePhaseMixin:
             lake_db = cfg.get("idea_lake_db") or (
                 Path(cfg.get("ideas_file", "ideas.md")).parent / "idea_lake.db")
             if lake_db and Path(lake_db).exists():
-                from orze.reporting.search_path import build_from_lake
-                re_block = build_from_lake(str(lake_db), cfg).get(
-                    "research_efficiency")
-                if re_block:
-                    logger.info(
-                        "Evo Score (research efficiency): %.1f grade %s",
-                        re_block.get("score", 0.0), re_block.get("grade", "?"))
+                _log_evo_score_if_changed(self, Path(lake_db), cfg)
         except Exception as e:
             logger.debug("Evo Score computation skipped: %s", e)
 
         # 10. Save state
         save_state(self.results_dir, self._build_state_dict())
-

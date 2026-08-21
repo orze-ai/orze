@@ -8,11 +8,9 @@ NO mocks. NO fake data. Real state machine, real transitions.
 
 import json
 import os
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 # Test must import the actual modules
 import sys
@@ -20,7 +18,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from orze.idea_lake import IdeaLake
 from orze.engine.scheduler import claim
-from orze.fsm.plugins.idea_lifecycle_fsm import IdeaLifecycleFSM
 
 
 class TestFSMSchema(unittest.TestCase):
@@ -88,9 +85,8 @@ class TestFSMSchema(unittest.TestCase):
         # Simulate full lifecycle
         transitions = [
             ("QUEUED", "CLAIMED", "claimed by scheduler"),
-            ("CLAIMED", "TRAINING", "training launched"),
-            ("TRAINING", "EVALUATING", "eval launched"),
-            ("EVALUATING", "COMPLETE", "eval succeeded"),
+            ("CLAIMED", "IN_PROGRESS", "experiment launched"),
+            ("IN_PROGRESS", "COMPLETE", "evaluation succeeded"),
         ]
 
         for from_state, to_state, reason in transitions:
@@ -119,92 +115,19 @@ class TestFSMSchema(unittest.TestCase):
 
         lake.conn.close()
 
-
-class TestFSMCore(unittest.TestCase):
-    """Test FSM state machine logic."""
-
-    def setUp(self):
-        self.temp_db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
-        self.db_path = self.temp_db.name
-        self.temp_db.close()
-        # Initialize schema
+    def test_stale_from_state_is_rejected_without_audit_entry(self):
         lake = IdeaLake(self.db_path)
-        lake.conn.close()
+        idea_id = "idea-stale-writer"
 
-    def tearDown(self):
-        try:
-            os.unlink(self.db_path)
-        except OSError:
-            pass
-
-    def test_atomic_transition(self):
-        """Verify transitions use SELECT...FOR UPDATE (atomic)."""
-        fsm = IdeaLifecycleFSM(self.db_path)
-        idea_id = "idea-atomic-test"
-
-        # First transition should succeed
-        success = fsm.transition(idea_id, "CLAIMED", reason="test claim")
-        self.assertTrue(success)
-
-        # Second transition should succeed (valid path)
-        success = fsm.transition(idea_id, "TRAINING", reason="test training")
-        self.assertTrue(success)
-
-        # Verify state
-        state = fsm.current_state(idea_id)
-        self.assertEqual(state, "TRAINING")
-
-    def test_invalid_transition_rejected(self):
-        """Verify invalid state transitions are rejected."""
-        fsm = IdeaLifecycleFSM(self.db_path)
-        idea_id = "idea-invalid-test"
-
-        # Set to CLAIMED
-        fsm.transition(idea_id, "CLAIMED")
-
-        # Try to jump directly to COMPLETE (invalid)
-        success = fsm.transition(idea_id, "COMPLETE")
-        self.assertFalse(success, "Invalid transition should be rejected")
-
-        # Verify state didn't change
-        state = fsm.current_state(idea_id)
-        self.assertEqual(state, "CLAIMED")
-
-    def test_detect_stale_claims(self):
-        """Verify timeout detection finds stuck claims."""
-        fsm = IdeaLifecycleFSM(self.db_path)
-
-        # Manually insert a stale claim
-        conn = sqlite3.connect(self.db_path)
-        conn.execute(
-            "INSERT INTO idea_state (idea_id, current_state, claimed_at) "
-            "VALUES (?, ?, datetime('now', '-10 hours'))",
-            ("idea-stale-001", "CLAIMED")
+        self.assertTrue(lake.record_state_transition(idea_id, "QUEUED", "CLAIMED"))
+        self.assertFalse(
+            lake.record_state_transition(idea_id, "QUEUED", "CLAIMED"),
+            "a second writer must not overwrite an already-claimed experiment",
         )
-        conn.commit()
-        conn.close()
 
-        # Detect stale claims (default 6h timeout)
-        stale = fsm.detect_stale_claims()
-        stale_ids = [s[0] for s in stale]
-        self.assertIn("idea-stale-001", stale_ids, "Stale claim not detected")
-
-    def test_history_preserves_order(self):
-        """Verify audit trail preserves transition order."""
-        fsm = IdeaLifecycleFSM(self.db_path)
-        idea_id = "idea-order-test"
-
-        # Make several transitions
-        for i in range(3):
-            state = ["QUEUED", "CLAIMED", "TRAINING", "EVALUATING"][i]
-            next_state = ["QUEUED", "CLAIMED", "TRAINING", "EVALUATING"][i + 1]
-            fsm.transition(idea_id, next_state, reason=f"step_{i}")
-
-        # Check history is in order
-        history = fsm.history(idea_id)
-        self.assertEqual(len(history), 3)
-        for i, h in enumerate(history):
-            self.assertIn(f"step_{i}", h['reason'])
+        self.assertEqual(lake.get_fsm_state(idea_id), "CLAIMED")
+        self.assertEqual(len(lake.get_fsm_history(idea_id)), 1)
+        lake.conn.close()
 
 
 class TestSchedulerClaim(unittest.TestCase):

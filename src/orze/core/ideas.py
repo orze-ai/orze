@@ -14,6 +14,14 @@ import re
 import yaml
 import logging
 
+IDEA_ID_PATTERN = r"idea-[a-z0-9][a-z0-9-]*"
+IDEA_HEADING_RE = re.compile(rf"^## ({IDEA_ID_PATTERN}):", re.MULTILINE)
+
+
+def count_idea_headings(text: str) -> int:
+    """Count canonical idea headings, including hyphenated IDs."""
+    return sum(1 for _ in IDEA_HEADING_RE.finditer(text))
+
 # Patterns that indicate LLM prompt injection artifacts, not real experiments
 _PI_PATTERNS = re.compile(
     r"PI_DIRECTIVE|SYSTEM_PROMPT|JAILBREAK|IGNORE_PREVIOUS|"
@@ -65,7 +73,7 @@ def _overlay_sidecar_ideas(ideas_md_path: str, ideas: dict) -> dict:
     if not ideas_d.is_dir():
         return ideas
     result = dict(ideas)
-    sp = re.compile(r"^## (idea-[a-z0-9][a-z0-9-]*):\s*(.+?)$", re.MULTILINE)
+    sp = re.compile(rf"^## ({IDEA_ID_PATTERN}):\s*(.+?)$", re.MULTILINE)
     for sidecar in sorted(ideas_d.glob("*.md")):
         try:
             st = sidecar.read_text(encoding="utf-8")
@@ -128,7 +136,7 @@ def parse_ideas(path: str) -> Dict[str, dict]:
             return _overlay_sidecar_ideas(path, _parse_ideas_cache["result"])
         return {}
     ideas = {}
-    pattern = re.compile(r"^## (idea-[a-z0-9][a-z0-9-]*):\s*(.+?)$", re.MULTILINE)
+    pattern = re.compile(rf"^## ({IDEA_ID_PATTERN}):\s*(.+?)$", re.MULTILINE)
     matches = list(pattern.finditer(text))
 
     for i, m in enumerate(matches):
@@ -255,5 +263,4 @@ def expand_sweeps(ideas: Dict[str, dict],
             }
 
     return expanded
-
 

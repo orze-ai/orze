@@ -108,11 +108,21 @@ def test_rejection_log_writes_row(tmp_path):
     rec = rows[0]
     assert rec["idea_id"] == "idea-deadbeef"
     assert rec["validator"] == "block_x"
+    assert rec["stage"] == "launch"
     assert "block_x" in rec["rejection"]
     assert rec["config_summary"]["continuation_parent"] == "idea-02e83b"
     # Stray keys are not included in the summary.
     assert "irrelevant_key" not in rec["config_summary"]
     assert rec["ts"].endswith("Z")
+
+
+def test_rejection_log_records_prequeue_stage(tmp_path):
+    log_validator_rejection(
+        tmp_path, "idea-prequeue", "method_validator",
+        "validator[block_x]: refused", {}, stage="prequeue")
+    rec = json.loads(
+        (tmp_path / "_validator_rejections.jsonl").read_text().strip())
+    assert rec["stage"] == "prequeue"
 
 
 def test_rejection_log_append_does_not_truncate(tmp_path):

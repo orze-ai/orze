@@ -10,10 +10,10 @@ The plateau-breaking skill ``axiom_removal`` is gated on
 long run), the plateau counter never advances and the breaker never
 fires.
 
-This module rebuilds both fields from the authoritative
-``idea_lake.db``:
+This module rebuilds both fields from authoritative terminal result artifacts,
+falling back to ``idea_lake.db`` when artifacts are unavailable:
 
-    best_idea_id = argmax_metric(completed ideas)
+    best_idea_id = best eligible completed idea under report.sort
     completions_since_best = count(completed ideas with archived_at >= best.archived_at) - 1
 
 The primary metric is taken from ``cfg.report.primary_metric`` and
@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import socket
 from pathlib import Path
 from typing import Optional, Tuple
@@ -44,7 +45,51 @@ from orze.reporting.state import load_state, save_state
 logger = logging.getLogger("orze")
 
 
-def rebuild_best_from_lake(lake, primary_metric: str
+def _report_dataset_keys(report_cfg: dict) -> list[str]:
+    keys = [
+        col["key"] for col in (report_cfg.get("columns") or [])
+        if isinstance(col, dict) and col.get("key")
+    ]
+    primary = report_cfg.get("primary_metric")
+    wer_keys = [
+        key for key in keys
+        if key.startswith("wer_") and key != primary
+    ]
+    return wer_keys or keys
+
+
+def _eligible_metric(metrics: dict, primary_metric: str,
+                     min_datasets: int, dataset_keys: list[str]) -> Optional[float]:
+    if not isinstance(metrics, dict):
+        return None
+    value = metrics.get(primary_metric)
+    if (not isinstance(value, (int, float)) or isinstance(value, bool)
+            or not math.isfinite(float(value))):
+        return None
+    if min_datasets > 0:
+        count = sum(
+            1 for key in dataset_keys
+            if isinstance(metrics.get(key), (int, float))
+            and not isinstance(metrics.get(key), bool)
+            and math.isfinite(float(metrics[key]))
+        )
+        if count == 0:
+            count = sum(
+                1 for key, item in metrics.items()
+                if key.startswith("wer_")
+                and isinstance(item, (int, float))
+                and not isinstance(item, bool)
+                and math.isfinite(float(item))
+            )
+        if count < min_datasets:
+            return None
+    return float(value)
+
+
+def rebuild_best_from_lake(lake, primary_metric: str,
+                           sort_order: str = "descending",
+                           min_datasets: int = 0,
+                           dataset_keys: Optional[list[str]] = None,
                            ) -> Tuple[Optional[str], int]:
     """Return (best_idea_id, completions_since_best) from the lake.
 
@@ -54,20 +99,28 @@ def rebuild_best_from_lake(lake, primary_metric: str
     """
     if lake is None or getattr(lake, "conn", None) is None:
         return None, 0
-    # Highest primary metric among completed ideas.
-    cur = lake.conn.execute(
-        "SELECT idea_id, archived_at, "
-        "json_extract(eval_metrics, ?) AS val "
-        "FROM ideas "
-        "WHERE status = 'completed' "
-        "AND json_extract(eval_metrics, ?) IS NOT NULL "
-        "ORDER BY val DESC, archived_at ASC LIMIT 1",
-        (f"$.{primary_metric}", f"$.{primary_metric}"),
-    ).fetchone()
-    if cur is None:
+    rows = lake.conn.execute(
+        "SELECT idea_id, archived_at, eval_metrics FROM ideas "
+        "WHERE status = 'completed' AND eval_metrics IS NOT NULL"
+    ).fetchall()
+    candidates = []
+    for row in rows:
+        raw = row[2] if isinstance(row, tuple) else row["eval_metrics"]
+        try:
+            metrics = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            continue
+        value = _eligible_metric(
+            metrics, primary_metric, min_datasets, dataset_keys or [])
+        if value is not None:
+            idea_id = row[0] if isinstance(row, tuple) else row["idea_id"]
+            archived = row[1] if isinstance(row, tuple) else row["archived_at"]
+            candidates.append((idea_id, archived, value))
+    if not candidates:
         return None, 0
-    best_id = cur[0] if isinstance(cur, tuple) else cur["idea_id"]
-    best_archived = cur[1] if isinstance(cur, tuple) else cur["archived_at"]
+    reverse = sort_order == "descending"
+    candidates.sort(key=lambda item: item[2], reverse=reverse)
+    best_id, best_archived, _ = candidates[0]
     if best_archived is None:
         since = 0
     else:
@@ -81,10 +134,12 @@ def rebuild_best_from_lake(lake, primary_metric: str
 
 
 def rebuild_best_from_results_dir(results_dir: Path | str,
-                                  primary_metric: str
+                                  primary_metric: str,
+                                  sort_order: str = "descending",
+                                  min_datasets: int = 0,
+                                  dataset_keys: Optional[list[str]] = None,
                                   ) -> Tuple[Optional[str], int]:
-    """Fallback: scan ``<results>/idea-*/metrics.json`` when the lake
-    has no ``eval_metrics`` populated.
+    """Scan authoritative ``<results>/idea-*/metrics.json`` artifacts.
 
     Returns (best_id, completions_since_best). ``since_best`` counts
     completed ideas newer than ``best`` (by metrics.json mtime).
@@ -112,18 +167,21 @@ def rebuild_best_from_results_dir(results_dir: Path | str,
         status = data.get("status")
         if status and status != "COMPLETED":
             continue
-        val = None
-        for candidate in (data.get("metrics", {}).get(primary_metric)
-                          if isinstance(data.get("metrics"), dict) else None,
-                          data.get(primary_metric)):
-            if isinstance(candidate, (int, float)):
-                val = float(candidate)
-                break
+        nested = data.get("metrics") if isinstance(data.get("metrics"), dict) else {}
+        metrics = dict(nested)
+        metrics.update(data)
+        val = _eligible_metric(
+            metrics, primary_metric, min_datasets, dataset_keys or [])
         if val is None:
             continue
         mtime = mpath.stat().st_mtime
         completed.append((idea_dir.name, val, mtime))
-        if best_val is None or val > best_val:
+        is_better = (
+            best_val is None
+            or (sort_order == "ascending" and val < best_val)
+            or (sort_order != "ascending" and val > best_val)
+        )
+        if is_better:
             best_val = val
             best_id = idea_dir.name
             best_mtime = mtime
@@ -151,26 +209,36 @@ def rebuild_state_file(results_dir: Path, cfg: dict,
     """
     from orze.idea_lake import IdeaLake
 
-    primary = cfg.get("report", {}).get("primary_metric", "test_accuracy")
+    report_cfg = cfg.get("report", {})
+    primary = report_cfg.get("primary_metric", "test_accuracy")
+    sort_order = report_cfg.get("sort", "descending")
+    min_datasets = int(report_cfg.get("min_datasets", 0) or 0)
+    dataset_keys = _report_dataset_keys(report_cfg)
 
-    own_lake = False
-    if lake is None:
-        db_path = cfg.get("idea_lake_db") or str(Path(results_dir) / "idea_lake.db")
-        lake = IdeaLake(db_path)
-        own_lake = True
-    try:
-        best_id, since = rebuild_best_from_lake(lake, primary)
-    finally:
-        if own_lake:
-            try:
-                lake.close()
-            except Exception:
-                pass
+    # Prefer terminal artifacts. Historical lake rows can contain normalized
+    # fractions while metrics.json/report columns use percentages; ranking the
+    # mixed units can manufacture a false champion.
+    best_id, since = rebuild_best_from_results_dir(
+        results_dir, primary, sort_order, min_datasets, dataset_keys)
 
-    # Lake had no eval_metrics populated — fall back to per-idea
-    # metrics.json scan (authoritative source, but slower).
+    # Artifact scan had no eligible metric — use lake-only archives as a
+    # compatibility fallback.
     if best_id is None:
-        best_id, since = rebuild_best_from_results_dir(results_dir, primary)
+        own_lake = False
+        if lake is None:
+            db_path = (cfg.get("idea_lake_db")
+                       or str(Path(results_dir) / "idea_lake.db"))
+            lake = IdeaLake(db_path)
+            own_lake = True
+        try:
+            best_id, since = rebuild_best_from_lake(
+                lake, primary, sort_order, min_datasets, dataset_keys)
+        finally:
+            if own_lake:
+                try:
+                    lake.close()
+                except Exception:
+                    pass
 
     state = load_state(Path(results_dir))
     existing_best = state.get("best_idea_id")

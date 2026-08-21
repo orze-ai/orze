@@ -497,6 +497,23 @@ def _validate_config(cfg: dict) -> tuple:
     if cfg.get("eval_script") and not cfg.get("eval_output"):
         errors.append("eval_script is set but eval_output is missing")
 
+    # Report columns are consumed as mappings by the leaderboard. Reject
+    # shorthand strings during --check instead of crashing after compute has
+    # already been spent on a completed experiment.
+    report_cfg = cfg.get("report", {})
+    if not isinstance(report_cfg, dict):
+        errors.append("report: must be a mapping")
+    else:
+        columns = report_cfg.get("columns", [])
+        if not isinstance(columns, list):
+            errors.append("report.columns: must be a list of mappings")
+        else:
+            for index, column in enumerate(columns):
+                if not isinstance(column, dict) or not column.get("key"):
+                    errors.append(
+                        f"report.columns[{index}]: must be a mapping with a non-empty 'key'"
+                    )
+
     # train_script must exist
     ts = cfg.get("train_script")
     if ts and not Path(ts).exists():
@@ -548,6 +565,9 @@ def _validate_config(cfg: dict) -> tuple:
                         "Add gc: {enabled: true, checkpoints_dir: ...} to enable.")
 
     ncfg = cfg.get("notifications", {})
+    if not isinstance(ncfg, dict):
+        errors.append("notifications: must be a mapping")
+        ncfg = {}
     if not ncfg.get("enabled"):
         warnings.append("Notifications disabled")
     else:
@@ -595,8 +615,12 @@ def _validate_config(cfg: dict) -> tuple:
         # (sweep_allowlist; emitted by template, consumed by future
         # sweep_stray hardening — keep allowlisted so users can
         # configure ahead of time without warnings).
-        "nested_config_whitelist", "metric_harvest", "sweep_allowlist",
-        "telemetry",
+        "nested_config_whitelist", "nested_config_normalize",
+        "metric_harvest", "sweep_allowlist",
+        "telemetry", "research_budget",
+        # Runtime-consumed framework controls.  Keep these recognised so
+        # valid production configs do not emit typo warnings at startup.
+        "role_stall_minutes", "executor_fix",
     }
     known_keys = set(DEFAULT_CONFIG.keys()) | _KNOWN_EXTRAS
     for key in cfg:
@@ -757,4 +781,3 @@ def orze_path(cfg: dict, kind: str, name: str = "") -> Path:
     if name:
         return base / name
     return base
-

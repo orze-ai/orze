@@ -391,3 +391,21 @@ class TestResearchEfficiency:
         d = build_search_path(rows, metric_of=_metric_of, lower_is_better=False)
         re = d["research_efficiency"]
         assert "score" in re and "depth_yield" in re and "components" in re
+
+    def test_failed_and_skipped_metrics_are_not_scored(self):
+        rows = [
+            {"idea_id": "root", "parent": None, "status": "completed",
+             "eval_metrics": {"score": 1.0}},
+            {"idea_id": "failed", "parent": "root", "status": "failed",
+             "eval_metrics": {"score": 99.0}},
+            {"idea_id": "skipped", "parent": "root", "status": "skipped",
+             "eval_metrics": {"score": 98.0}},
+        ]
+        d = build_search_path(rows, metric_of=_metric_of, lower_is_better=False)
+        nodes = {n["id"]: n for n in d["nodes"]}
+
+        assert d["stats"]["n_scored"] == 1
+        assert d["stats"]["refinement_pairs"] == 0
+        assert nodes["root"]["metric"] == 1.0
+        assert nodes["failed"]["metric"] is None
+        assert nodes["skipped"]["metric"] is None

@@ -17,7 +17,8 @@ CALLING SPEC:
         Spawn a Claude CLI process to diagnose and patch the failing idea's
         scripts/configs. Returns True if a fix was applied (idea should be
         retried). cfg keys used: max_fix_attempts, ideas_file, train_script,
-        executor_fix.{claude_bin, model, timeout}.
+        executor_fix.{claude_bin, model, timeout, max_turns,
+        dangerously_skip_permissions}.
 """
 import logging
 import os
@@ -119,6 +120,25 @@ def _mark_lake_failure(idea_id: str, cfg: dict,
             conn.close()
     except Exception:
         pass
+
+
+def _build_executor_fix_cmd(claude_bin: str, prompt: str, model: str,
+                            fix_cfg: dict) -> list[str]:
+    """Build a bounded repair command without implicit permission bypass."""
+    max_turns = int(fix_cfg.get("max_turns", 20))
+    if max_turns < 1:
+        raise ValueError("executor_fix.max_turns must be at least 1")
+    cmd = [
+        claude_bin, "-p", prompt,
+        "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash",
+        "--output-format", "text",
+        "--model", model,
+        "--max-turns", str(max_turns),
+    ]
+    if fix_cfg.get("dangerously_skip_permissions", False):
+        logger.warning("Executor fix explicitly disables Claude permission checks")
+        cmd.append("--dangerously-skip-permissions")
+    return cmd
 
 
 def _try_executor_fix(idea_id: str, error_text: str, results_dir: Path,
@@ -268,12 +288,7 @@ so the experiment can succeed on retry.
         model = fix_cfg.get("model") or "sonnet"
         fix_timeout = fix_cfg.get("timeout", 300)
 
-        cmd = [
-            claude_bin, "-p", prompt,
-            "--dangerously-skip-permissions",
-            "--output-format", "text",
-            "--model", model,
-        ]
+        cmd = _build_executor_fix_cmd(claude_bin, prompt, model, fix_cfg)
 
         result = subprocess.run(
             cmd, capture_output=True, text=True,

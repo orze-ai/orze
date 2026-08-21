@@ -53,7 +53,7 @@ def test_default_whitelist_minimal():
     """Document the whitelist — keep it small and intentional."""
     assert "ema" in _NESTED_CONFIG_WHITELIST
     assert "augmentation" in _NESTED_CONFIG_WHITELIST
-    # Should NOT include common nested-config keys we explicitly want to reject:
+    assert "data" in _NESTED_CONFIG_WHITELIST
+    assert "model" in _NESTED_CONFIG_WHITELIST
+    # Domain-specific wrappers still require an explicit project declaration.
     assert "backbone" not in _NESTED_CONFIG_WHITELIST
-    assert "data" not in _NESTED_CONFIG_WHITELIST
-    assert "model" not in _NESTED_CONFIG_WHITELIST

@@ -124,6 +124,8 @@ Examples:
                         help="(deprecated — use 'orze init [path]') Initialize a new project")
     parser.add_argument("--admin", action="store_true",
                         help="Launch admin panel instead of farm loop")
+    parser.add_argument("--no-admin", action="store_true",
+                        help="Do not start the background admin panel")
     parser.add_argument("--upgrade", action="store_true",
                         help="Upgrade orze to the latest version from PyPI")
     parser.add_argument("--reinstall", action="store_true",

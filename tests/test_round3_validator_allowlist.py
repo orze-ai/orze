@@ -108,6 +108,8 @@ def test_known_extras_covers_template_specials():
         "nested_config_whitelist": ["model"],
         "metric_harvest": {"columns": []},
         "sweep_allowlist": ["train.py"],
+        "role_stall_minutes": 20,
+        "executor_fix": {"model": "sonnet"},
     }
     _errors, warnings = validate_config(sample)
     for k in sample:

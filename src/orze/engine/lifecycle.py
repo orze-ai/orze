@@ -23,7 +23,10 @@ import time
 from pathlib import Path
 
 from orze import __version__
-from orze.engine.process import _kill_pg
+from orze.engine.process import (
+    _kill_pg, process_is_running, process_group_members,
+    terminate_recorded_process_group,
+)
 from orze.engine.health import fs_startup_check, cleanup_stale_locks, HealthMonitor
 from orze.engine.upgrade_cleanup import check_and_clean as upgrade_check_and_clean
 from orze.reporting.state import save_state
@@ -148,30 +151,196 @@ def reconcile_stale_running(cfg: dict) -> None:
             "SELECT idea_id FROM ideas WHERE status = 'running'")
         all_running = [row[0] for row in cur.fetchall()]
 
-        mine = []
+        recoveries = []
         others = []
+        live_legacy = _running_idea_pids()
+
+        def _metrics_target(idea_id):
+            metrics_path = results_dir / idea_id / "metrics.json"
+            if not metrics_path.exists():
+                return "QUEUED"
+            try:
+                metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                return None
+            target = {
+                "COMPLETED": "COMPLETE",
+                "FAILED": "FAILED",
+            }.get(metrics.get("status"))
+            # This function is only consulted after the recorded owner and
+            # trainer are proven dead.  A partial metrics file can therefore
+            # no longer become terminal; retrying it would also overwrite the
+            # interrupted run's evidence.  Preserve it as a failed attempt.
+            return target or "FAILED"
+
         for idea_id in all_running:
             claim_path = results_dir / idea_id / "claim.json"
             if claim_path.exists():
                 try:
                     claim = json.loads(claim_path.read_text(encoding="utf-8"))
-                    if claim.get("claimed_by") == hostname:
-                        mine.append(idea_id)
-                    else:
+                    if claim.get("claimed_by") != hostname:
                         others.append(idea_id)
-                except (json.JSONDecodeError, OSError):
-                    mine.append(idea_id)  # can't read claim → assume ours
-            else:
-                mine.append(idea_id)  # no claim.json → stale, reset
+                        continue
+                    claim_pid = int(claim.get("pid") or 0)
+                    owner_start = claim.get("owner_start_ticks")
+                    pid_alive = claim_pid > 0 and process_is_running(
+                        claim_pid,
+                        int(owner_start) if owner_start is not None else None,
+                    )
+                    if pid_alive:
+                        others.append(idea_id)
+                        continue
 
-        if mine:
-            placeholders = ",".join("?" for _ in mine)
-            conn.execute(
-                f"UPDATE ideas SET status = 'queued' WHERE idea_id IN ({placeholders})",
-                mine)
+                    trainer_pid = claim.get("trainer_pid")
+                    trainer_pgid = claim.get("trainer_pgid")
+                    trainer_start = claim.get("trainer_start_ticks")
+                    termination_attempted = False
+                    terminated = True
+                    if all(v is not None for v in (
+                            trainer_pid, trainer_pgid, trainer_start)):
+                        termination_attempted = process_is_running(
+                            int(trainer_pid), int(trainer_start))
+                        terminated = terminate_recorded_process_group(
+                            int(trainer_pid), int(trainer_pgid),
+                            int(trainer_start), idea_id,
+                        )
+                    elif idea_id in live_legacy:
+                        # Legacy claims lack enough stable process identity to
+                        # terminate safely. Keep the lock rather than risk PID
+                        # reuse or duplicate execution.
+                        logger.error(
+                            "Cannot recover %s: live legacy trainer has no durable identity",
+                            idea_id,
+                        )
+                        others.append(idea_id)
+                        continue
+
+                    if not terminated:
+                        logger.error(
+                            "Cannot recover %s: orphan trainer could not be proven terminated",
+                            idea_id,
+                        )
+                        others.append(idea_id)
+                        continue
+
+                    target = _metrics_target(idea_id)
+                    if target is None:
+                        logger.error(
+                            "Cannot recover %s: metrics exist but are invalid/non-terminal",
+                            idea_id,
+                        )
+                        others.append(idea_id)
+                        continue
+                    metrics_status = {
+                        "COMPLETE": "COMPLETED",
+                        "FAILED": "FAILED",
+                    }.get(target)
+                    atomic_write(
+                        results_dir / idea_id / "recovery.json",
+                        json.dumps({
+                            "idea_id": idea_id,
+                            "owner_pid": claim_pid,
+                            "trainer_pid": trainer_pid,
+                            "trainer_pgid": trainer_pgid,
+                            "trainer_start_ticks": trainer_start,
+                            "termination_attempted": termination_attempted,
+                            "trainer_proven_stopped": terminated,
+                            "metrics_status_after_stop": metrics_status,
+                            "target_state": target,
+                            "recovered_at_epoch": time.time(),
+                            "recovered_at": datetime.datetime.now().isoformat(),
+                        }, indent=2),
+                    )
+                    recovered_claim = claim_path.with_name(
+                        f"claim.recovered.{int(time.time())}.json")
+                    os.replace(claim_path, recovered_claim)
+                    recoveries.append((idea_id, target))
+                except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+                    logger.error(
+                        "Cannot safely recover claim for %s: %s", idea_id, exc)
+                    others.append(idea_id)
+            else:
+                recovery_path = results_dir / idea_id / "recovery.json"
+                if recovery_path.exists():
+                    try:
+                        recovery = json.loads(
+                            recovery_path.read_text(encoding="utf-8"))
+                        recovery_pgid = recovery.get("trainer_pgid")
+                        target = recovery.get("target_state")
+                        if (recovery.get("trainer_proven_stopped") is not True
+                                or target not in ("QUEUED", "COMPLETE", "FAILED")
+                                or (recovery_pgid is not None
+                                    and process_group_members(int(recovery_pgid)))):
+                            raise ValueError("recovery WAL does not prove a stopped trainer")
+                        recoveries.append((idea_id, target))
+                        continue
+                    except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+                        logger.error(
+                            "Cannot consume recovery WAL for %s: %s", idea_id, exc)
+                        others.append(idea_id)
+                        continue
+                if idea_id in live_legacy:
+                    logger.error(
+                        "Cannot recover %s without claim: a matching trainer is live",
+                        idea_id,
+                    )
+                    others.append(idea_id)
+                    continue
+                target = _metrics_target(idea_id)
+                if target is None:
+                    logger.error(
+                        "Cannot recover %s without claim: metrics are invalid/non-terminal",
+                        idea_id,
+                    )
+                    others.append(idea_id)
+                    continue
+                recoveries.append((idea_id, target))
+
+        if recoveries:
+            conn.execute("BEGIN IMMEDIATE")
+            for idea_id, target_state in recoveries:
+                row = conn.execute(
+                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                    (idea_id,),
+                ).fetchone()
+                current_state = row[0] if row else None
+                if current_state in ("CLAIMED", "IN_PROGRESS"):
+                    reason = (
+                        "startup_recover_completed_output"
+                        if target_state == "COMPLETE"
+                        else "startup_recover_failed_output"
+                        if target_state == "FAILED"
+                        else "startup_recover_orphan_terminated"
+                    )
+                    conn.execute(
+                        "UPDATE idea_state SET current_state=?, "
+                        "updated_by_host=?, updated_by_pid=?, "
+                        "updated_at=datetime('now') WHERE idea_id=?",
+                        (target_state, hostname, os.getpid(), idea_id),
+                    )
+                    conn.execute(
+                        "INSERT INTO idea_transitions "
+                        "(idea_id, from_state, to_state, reason, host, pid, sop_type) "
+                        "VALUES (?, ?, ?, ?, ?, ?, 'training')",
+                        (idea_id, current_state, target_state, reason,
+                         hostname, os.getpid()),
+                    )
+                queue_status = {
+                    "COMPLETE": "completed",
+                    "FAILED": "failed",
+                    "QUEUED": "queued",
+                }[target_state]
+                conn.execute(
+                    "UPDATE ideas SET status=? WHERE idea_id=?",
+                    (queue_status, idea_id),
+                )
             conn.commit()
-            logger.info("Reconciled %d stale 'running' ideas (this host) -> queued: %s",
-                        len(mine), ", ".join(mine[:10]))
+            logger.info(
+                "Reconciled %d stale local ideas: %s",
+                len(recoveries), ", ".join(
+                    f"{idea_id}->{target.lower()}"
+                    for idea_id, target in recoveries[:10]),
+            )
         if others:
             logger.info("Kept %d 'running' ideas owned by other hosts: %s",
                         len(others), ", ".join(others[:10]))
@@ -264,14 +433,15 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
     try:
         conn = sqlite3.connect(str(lake_path), timeout=5)
         cur = conn.execute(
-            "SELECT idea_id, eval_metrics FROM ideas "
+            "SELECT idea_id, eval_metrics, status FROM ideas "
             "WHERE status = 'running' "
             "OR (status = 'failed' "
             "AND eval_metrics LIKE '%\"failure_reason\": \"orphaned_pid\"%')")
         rows = cur.fetchall()
-        for idea_id, em_raw in rows:
+        for idea_id, em_raw, row_status in rows:
             idea_dir = results_dir / idea_id
             claim_path = idea_dir / "claim.json"
+            recovering_orphan = row_status == "failed"
 
             # ---- Ownership check (multi-host safety) ----
             if claim_path.exists():
@@ -281,7 +451,7 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                         continue
                 except (_json.JSONDecodeError, OSError):
                     pass
-            else:
+            elif not recovering_orphan:
                 # No claim.json — dispatch never started on any host.
                 # Re-queue rather than orphan-mark (engineer fix #1).
                 conn.execute(
@@ -339,6 +509,12 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                     n_completed += 1
                     break
             else:
+                # Already-terminal orphan rows are included only so a late
+                # metrics/submission flush can upgrade them to completed.
+                # Do not count them as newly orphaned again, and never requeue
+                # them merely because their stale claim file was cleaned up.
+                if recovering_orphan:
+                    continue
                 try:
                     em = _json.loads(em_raw) if em_raw else {}
                     if not isinstance(em, dict):

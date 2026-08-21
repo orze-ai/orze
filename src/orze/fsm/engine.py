@@ -27,7 +27,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from orze.core.fs import atomic_write
+
 logger = logging.getLogger("fsm")
+
+
+class FSMStateError(RuntimeError):
+    """The durable FSM state cannot be trusted."""
+
+
+class FSMActionError(RuntimeError):
+    """An FSM action failed; the transition must not be committed."""
 
 # --- JSONL Activity Log ---
 
@@ -165,12 +175,24 @@ class FSM:
         return cls(name, states, initial, results_dir, vars_defaults)
 
     def load(self) -> dict:
-        """Load persisted state."""
+        """Load persisted state, failing closed if it is corrupt."""
         if self.state_file.exists():
             try:
-                return json.loads(self.state_file.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+                data = json.loads(self.state_file.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise FSMStateError(
+                    f"Cannot load durable state for FSM {self.name!r}: {self.state_file}"
+                ) from exc
+            if not isinstance(data, dict):
+                raise FSMStateError(
+                    f"Durable state for FSM {self.name!r} is not a JSON object"
+                )
+            current = data.get("current")
+            if current not in self.states:
+                raise FSMStateError(
+                    f"Durable state for FSM {self.name!r} names unknown state {current!r}"
+                )
+            return data
         return {
             "current": self.initial,
             "vars": dict(self.vars_defaults),
@@ -179,8 +201,19 @@ class FSM:
         }
 
     def save(self, data: dict) -> None:
-        self.state_file.write_text(
-            json.dumps(data, indent=2, default=str), encoding="utf-8")
+        """Atomically persist and verify state before reporting success."""
+        payload = json.dumps(data, indent=2, default=str)
+        atomic_write(self.state_file, payload)
+        try:
+            persisted = json.loads(self.state_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise FSMStateError(
+                f"Could not verify durable state for FSM {self.name!r}"
+            ) from exc
+        if persisted != json.loads(payload):
+            raise FSMStateError(
+                f"Durable state verification failed for FSM {self.name!r}"
+            )
 
     def step(self) -> Optional[str]:
         """Run one FSM tick. Returns new state name if transitioned, None otherwise."""
@@ -209,16 +242,6 @@ class FSM:
             if reason is not None:
                 ctx.reason = reason
 
-                _log_event({
-                    "event": "transition",
-                    "fsm": self.name,
-                    "from": current,
-                    "to": transition.to,
-                    "reason": reason,
-                    "guards": transition.guards,
-                    "actions": transition.actions,
-                })
-
                 # on_exit actions
                 for action_name in node.on_exit:
                     self._run_action(action_name, ctx)
@@ -246,6 +269,15 @@ class FSM:
                         self._run_action(action_name, ctx)
 
                 self.save(data)
+                _log_event({
+                    "event": "transition",
+                    "fsm": self.name,
+                    "from": current,
+                    "to": transition.to,
+                    "reason": reason,
+                    "guards": transition.guards,
+                    "actions": transition.actions,
+                })
                 return transition.to
 
         # No transition fired — log heartbeat periodically
@@ -320,6 +352,9 @@ class FSM:
                 "error": str(e),
                 "ok": False,
             })
+            raise FSMActionError(
+                f"FSM {self.name!r} action {action_name!r} failed"
+            ) from e
 
     def status(self) -> dict:
         """Return current state summary for display."""

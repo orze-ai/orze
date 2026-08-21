@@ -65,14 +65,14 @@ orze is a **complete, production-ready tool**. orze-pro adds **autopilot** — s
 | **How ideas are generated** | **Smart Suggestions** — rule-based: detects regressions, generates scale sweeps, perturbations | **Research Agents** — LLM-driven: reads all results, forms hypotheses, designs novel experiments |
 | **How failures are handled** | You read the failure log | Auto-fix: LLM diagnoses and patches the error |
 | **How plateaus are handled** | Smart Suggestions tries parameter variations | Code Evolution: LLM modifies your train script |
-| **Does research stop?** | **Never** — Smart Suggestions keeps GPUs busy | **Never** — agents run indefinitely |
+| **Does research stop?** | Continuous by default; stop via CLI or queue policy | Continuous by default; finite campaigns use `research_budget.max_agent_cycles` |
 | **Requires API key?** | No | Yes (Gemini/OpenAI/Anthropic) |
 
 ### Compatibility
 
 | orze | orze-pro | Notes |
 |------|----------|-------|
-| 4.1.x | 0.8.x | Current release |
+| 4.6.x | 0.13.x | Current release |
 
 ## Quick Start
 

@@ -22,7 +22,7 @@ from pathlib import Path
 # pattern like `orze.*orze\.yaml` also matches the *caller* shell whose
 # cmdline is literally `orze start -c orze.yaml`, producing a phantom
 # "already running" error on the very first `orze start` from bash.
-_ORZE_PAT = r"[o]rze\.cli.*orze\.yaml"
+_ORZE_PAT = r"^[^ ]+ -m [o]rze\.cli( |$).*orze\.yaml( |$)"
 
 # Child process script names to kill on stop.
 _CHILD_PAT = (

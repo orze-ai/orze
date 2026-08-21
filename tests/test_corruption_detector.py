@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from orze.engine import roles
+from orze.core.ideas import count_idea_headings
 
 
 def _make_rp(ideas_path: Path, pre_size: int, pre_count: int):
@@ -17,6 +18,11 @@ def _make_rp(ideas_path: Path, pre_size: int, pre_count: int):
         ideas_md_mtime_pre=0.0,
         writes_ideas_file=True,
     )
+
+
+def test_idea_heading_count_accepts_hyphenated_ids():
+    text = "## idea-plain: one\n## idea-parent-child-2: two\n"
+    assert count_idea_headings(text) == 2
 
 
 def test_shrink_after_ingest_is_not_corruption(tmp_path, caplog):

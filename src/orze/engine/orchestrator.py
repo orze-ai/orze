@@ -242,20 +242,35 @@ class Orze(OrzePhaseMixin):
         self._upgrade_mgr = UpgradeManager(self.results_dir, cfg)
         self._reporter = NotificationProcessor(self.results_dir, cfg, lake=self.lake)
         self._reporter.load_state(state)
-        # F4: rebuild best_idea_id / completions_since_best from lake if
-        # state lost them (e.g. upgrade reset). Idempotent fill-only.
+        # Reconcile champion state from the same sort and completeness contract
+        # as the report. Persisted state can become stale when report policy
+        # changes (for example, excluding partial-dataset metrics).
         try:
-            from orze.engine.rebuild_state import rebuild_best_from_lake
-            if state.get("best_idea_id") is None and self.lake is not None:
-                primary = cfg.get("report", {}).get("primary_metric",
-                                                    "test_accuracy")
-                best_id, since = rebuild_best_from_lake(self.lake, primary)
+            from orze.engine.rebuild_state import (
+                _report_dataset_keys, rebuild_best_from_lake,
+                rebuild_best_from_results_dir,
+            )
+            if self.lake is not None:
+                report_cfg = cfg.get("report", {})
+                primary = report_cfg.get("primary_metric", "test_accuracy")
+                args = (
+                    primary,
+                    report_cfg.get("sort", "descending"),
+                    int(report_cfg.get("min_datasets", 0) or 0),
+                    _report_dataset_keys(report_cfg),
+                )
+                best_id, since = rebuild_best_from_results_dir(
+                    self.results_dir, *args)
+                if best_id is None:
+                    best_id, since = rebuild_best_from_lake(
+                        self.lake, *args)
                 if best_id is not None:
+                    previous = self._reporter._best_idea_id
                     self._reporter._best_idea_id = best_id
                     self._reporter._completions_since_best = since
-                    logger.info("Rebuilt best_idea_id=%s "
-                                "completions_since_best=%d from idea_lake "
-                                "(metric=%s)", best_id, since, primary)
+                    logger.info("Reconciled best_idea_id=%s (previous=%s) "
+                                "completions_since_best=%d from results/lake "
+                                "(metric=%s)", best_id, previous, since, primary)
         except Exception as e:
             logger.debug("rebuild_best_from_lake failed on startup: %s", e)
 
@@ -480,7 +495,7 @@ class Orze(OrzePhaseMixin):
         "poll", "roles", "max_idea_failures", "max_fix_attempts",
         "notifications", "plateau_threshold", "orphan_timeout_hours",
         "gpu_mem_threshold", "gpu_scheduling", "min_disk_gb", "post_scripts",
-        "nested_config_whitelist",
+        "nested_config_whitelist", "nested_config_normalize",
     }
 
     def _hot_reload_config(self):
@@ -665,10 +680,10 @@ class Orze(OrzePhaseMixin):
         where automatic restart is safe — pip is already done, we just
         need to exec the new binary.
         """
-        self._upgrade_mgr.check_sentinel()
-        if self._upgrade_mgr.pending:
-            self._pending_upgrade = self._upgrade_mgr.pending
-            self._do_auto_upgrade()
+        if not self._upgrade_mgr.check_sentinel():
+            return
+        self._pending_upgrade = self._upgrade_mgr.pending
+        self._do_auto_upgrade()
 
     def _do_auto_upgrade(self):
         """Restart to pick up an already-installed upgrade (sentinel-triggered only)."""
@@ -1169,11 +1184,39 @@ class Orze(OrzePhaseMixin):
                             all_once_finished.append((idea_id, gpu))
                 if all_once_finished:
                     ideas = parse_ideas(cfg["ideas_file"])
-                    once_rows = update_report(self.results_dir, ideas, cfg)
+                    once_rows = update_report(
+                        self.results_dir, ideas, cfg, lake=self.lake)
                     once_counts = _count_statuses(ideas, self.results_dir, lake=self.lake)
                     self._process_notifications(
                         all_once_finished, once_rows or [], ideas,
                         once_counts)
+                    # The ordinary status snapshot was written before --once
+                    # waited for its launched job.  Publish a terminal
+                    # heartbeat/status after reaping so machine readers do
+                    # not observe a completed run as still active.
+                    final_free = list(self.gpu_ids)
+                    write_host_heartbeat(
+                        self.results_dir, socket.gethostname(),
+                        self.active, final_free)
+                    primary = cfg["report"].get(
+                        "primary_metric", "test_accuracy")
+                    top_results = [
+                        {
+                            "idea_id": row["id"],
+                            "title": row["title"][:60],
+                            primary: row.get("primary_val"),
+                        }
+                        for row in (once_rows or [])[:10]
+                    ]
+                    write_status_json(
+                        self.results_dir, self.iteration, self.active,
+                        final_free, once_counts.get("QUEUED", 0),
+                        once_counts.get("COMPLETED", 0),
+                        once_counts.get("FAILED", 0),
+                        once_counts.get("SKIPPED", 0), top_results, cfg,
+                        role_states=self.role_states,
+                        notification_health=self.notification_health,
+                    )
                     save_state(self.results_dir, self._build_state_dict())
                 logger.info("Done.")
                 break
