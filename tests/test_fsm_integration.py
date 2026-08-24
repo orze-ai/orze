@@ -48,6 +48,8 @@ class TestFSMSchema(unittest.TestCase):
 
         self.assertIn('idea_state', tables, "idea_state table missing")
         self.assertIn('idea_transitions', tables, "idea_transitions table missing")
+        self.assertIn('schema_migrations', tables,
+                      "schema_migrations table missing")
         lake.conn.close()
 
     def test_record_state_transition(self):
@@ -129,6 +131,80 @@ class TestFSMSchema(unittest.TestCase):
         self.assertEqual(len(lake.get_fsm_history(idea_id)), 1)
         lake.conn.close()
 
+    def test_inserted_queue_row_has_matching_fsm_state(self):
+        lake = IdeaLake(self.db_path)
+        lake.insert("idea-queued", "queued", "{}", "", status="queued")
+
+        self.assertEqual(lake.get_fsm_state("idea-queued"), "QUEUED")
+        self.assertEqual(
+            [row["idea_id"] for row in lake.get_queue()], ["idea-queued"])
+        lake.conn.close()
+
+    def test_skip_is_atomic_and_idempotent(self):
+        lake = IdeaLake(self.db_path)
+        lake.insert("idea-skip", "skip", "{}", "", status="queued")
+
+        self.assertTrue(lake.set_status("idea-skip", "skipped"))
+        self.assertEqual(lake.get_fsm_state("idea-skip"), "SKIPPED")
+        self.assertEqual(lake.get("idea-skip")["status"], "skipped")
+        self.assertEqual(len(lake.get_fsm_history("idea-skip")), 1)
+        self.assertEqual(lake.get_queue(), [])
+
+        self.assertTrue(lake.set_status("idea-skip", "skipped"))
+        self.assertEqual(
+            len(lake.get_fsm_history("idea-skip")), 1,
+            "repeating a status must not append transition spam",
+        )
+        lake.conn.close()
+
+    def test_claim_transition_hides_legacy_queue_row(self):
+        lake = IdeaLake(self.db_path)
+        lake.insert("idea-claim-sync", "claim", "{}", "", status="queued")
+
+        self.assertTrue(lake.record_state_transition(
+            "idea-claim-sync", "QUEUED", "CLAIMED"))
+        self.assertEqual(lake.get("idea-claim-sync")["status"], "running")
+        self.assertEqual(lake.get_queue(), [])
+        lake.conn.close()
+
+    def test_requeue_backfills_missing_fsm_row_without_fake_transition(self):
+        lake = IdeaLake(self.db_path)
+        lake.insert("idea-legacy-queue", "queue", "{}", "", status="queued")
+        lake.conn.execute(
+            "DELETE FROM idea_state WHERE idea_id='idea-legacy-queue'")
+        lake.conn.commit()
+
+        self.assertTrue(lake.set_status("idea-legacy-queue", "queued"))
+        self.assertEqual(lake.get_fsm_state("idea-legacy-queue"), "QUEUED")
+        self.assertEqual(lake.get_fsm_history("idea-legacy-queue"), [])
+        lake.conn.close()
+
+    def test_startup_reconciles_legacy_terminal_writes(self):
+        lake = IdeaLake(self.db_path)
+        lake.insert("idea-old-skip", "skip", "{}", "", status="queued")
+        lake.insert("idea-old-complete", "complete", "{}", "", status="queued")
+        lake.conn.execute(
+            "UPDATE ideas SET status='skipped' WHERE idea_id='idea-old-skip'")
+        lake.conn.execute(
+            "UPDATE ideas SET status='completed' "
+            "WHERE idea_id='idea-old-complete'")
+        # Simulate a database produced before lifecycle_columns_v1 existed.
+        lake.conn.execute(
+            "DELETE FROM schema_migrations "
+            "WHERE name='lifecycle_columns_v1'")
+        lake.conn.commit()
+        lake.conn.close()
+
+        lake = IdeaLake(self.db_path)
+        self.assertEqual(lake.get_fsm_state("idea-old-skip"), "SKIPPED")
+        self.assertEqual(lake.get_fsm_state("idea-old-complete"), "COMPLETE")
+        self.assertEqual(lake.get_queue(), [])
+        self.assertEqual(lake.get_fsm_history("idea-old-skip"), [])
+        self.assertIsNotNone(lake.conn.execute(
+            "SELECT 1 FROM schema_migrations "
+            "WHERE name='lifecycle_columns_v1'").fetchone())
+        lake.conn.close()
+
 
 class TestSchedulerClaim(unittest.TestCase):
     """Test scheduler.claim() integration with FSM."""
@@ -183,6 +259,18 @@ class TestSchedulerClaim(unittest.TestCase):
         success2 = claim(idea_id, self.results_dir, gpu=1, lake=lake)
         self.assertFalse(success2, "Second claim should fail")
 
+        lake.conn.close()
+
+    def test_rejected_fsm_claim_removes_filesystem_claim(self):
+        lake = IdeaLake(self.db_path)
+        idea_id = "idea-stale-queue-claim"
+        lake.insert(idea_id, "test", "{}", "", status="queued")
+        self.assertTrue(lake.record_state_transition(
+            idea_id, "QUEUED", "CLAIMED"))
+
+        self.assertFalse(claim(idea_id, self.results_dir, gpu=0, lake=lake))
+        self.assertFalse((self.results_dir / idea_id / "claim.json").exists())
+        self.assertEqual(lake.get_fsm_state(idea_id), "CLAIMED")
         lake.conn.close()
 
 

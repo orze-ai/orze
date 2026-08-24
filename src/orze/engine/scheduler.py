@@ -207,9 +207,8 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
 
     if lake:
         try:
-            lake.set_status(idea_id, "running")
             # Record FSM transition: QUEUED → CLAIMED
-            lake.record_state_transition(
+            persisted = lake.record_state_transition(
                 idea_id,
                 from_state="QUEUED",
                 to_state="CLAIMED",
@@ -217,8 +216,18 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
                 host=socket.gethostname(),
                 pid=os.getpid(),
             )
-        except Exception:
-            pass  # filesystem is the primary lock, DB is best-effort
+            if not persisted:
+                raise RuntimeError("FSM claim was rejected")
+        except Exception as exc:
+            # The filesystem lock and the audited queue must agree. Leaving
+            # claim.json behind after a rejected DB claim strands the idea and
+            # makes a later scheduler believe another worker owns it.
+            try:
+                (idea_dir / "claim.json").unlink(missing_ok=True)
+            except OSError:
+                pass
+            logger.warning("Claim rollback for %s: %s", idea_id, exc)
+            return False
 
     return True
 

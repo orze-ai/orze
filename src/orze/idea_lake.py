@@ -91,6 +91,11 @@ CREATE TABLE IF NOT EXISTS idea_transitions (
 CREATE INDEX IF NOT EXISTS idx_idea_transitions_idea_id ON idea_transitions(idea_id);
 CREATE INDEX IF NOT EXISTS idx_idea_transitions_to_state ON idea_transitions(to_state);
 CREATE INDEX IF NOT EXISTS idx_idea_transitions_ts ON idea_transitions(ts);
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    name TEXT PRIMARY KEY,
+    applied_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 # Legacy fixed-metric columns from pre-1.5 schema.
@@ -111,6 +116,46 @@ ALLOWED_KINDS = {
     "agg_search",      # sweep aggregations/calibrators on a bundle
     "bundle_combine",  # combine N views of ONE ckpt
     "audit",           # F14: champion-promotion audit
+}
+
+
+# ``ideas.status`` predates the audited FSM and is still consumed by reports
+# and older integrations. Keep the two representations in one transaction;
+# otherwise a crash or a legacy ``set_status`` caller can advertise work as
+# queued after it has already been claimed or rejected.
+STATE_TO_STATUS = {
+    "QUEUED": "queued",
+    "CLAIMED": "running",
+    "IN_PROGRESS": "running",
+    "COMPLETE": "completed",
+    "FAILED": "failed",
+    "SKIPPED": "skipped",
+    "ARCHIVED": "archived",
+}
+
+STATUS_TO_STATE = {
+    "queued": "QUEUED",
+    "pending": "QUEUED",
+    "claimed": "CLAIMED",
+    "running": "IN_PROGRESS",
+    "training": "IN_PROGRESS",
+    "evaluating": "IN_PROGRESS",
+    "completed": "COMPLETE",
+    "partial": "COMPLETE",
+    "failed": "FAILED",
+    "dead": "FAILED",
+    "skipped": "SKIPPED",
+    "archived": "ARCHIVED",
+}
+
+VALID_STATE_TRANSITIONS = {
+    "QUEUED": {"CLAIMED", "SKIPPED"},
+    "CLAIMED": {"IN_PROGRESS", "FAILED", "QUEUED", "SKIPPED"},
+    "IN_PROGRESS": {"COMPLETE", "FAILED", "QUEUED"},
+    "COMPLETE": {"ARCHIVED"},
+    "FAILED": {"QUEUED", "SKIPPED"},
+    "SKIPPED": {"QUEUED", "ARCHIVED"},
+    "ARCHIVED": set(),
 }
 
 
@@ -256,6 +301,91 @@ class IdeaLake:
         except Exception as e:
             logger.warning("v4.5 FSM migration failed: %s (will retry next init)", e)
 
+        self._reconcile_lifecycle_columns()
+
+    def _reconcile_lifecycle_columns(self) -> None:
+        """Idempotently repair legacy/FSM lifecycle divergence.
+
+        Older Orze releases wrote ``ideas.status`` and ``idea_state`` through
+        independent paths. Preserve an active FSM claim, but import terminal
+        legacy decisions and backfill rows that predate the FSM. Finally make
+        the legacy column reflect audited non-queued FSM states. This is a
+        bounded startup migration; repeated opens produce no new transitions.
+        """
+        migration_name = "lifecycle_columns_v1"
+        if self.conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE name = ?",
+            (migration_name,),
+        ).fetchone():
+            return
+
+        def _do_reconcile():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                # A second process may have completed the migration while this
+                # connection waited for the write lock.
+                if self.conn.execute(
+                    "SELECT 1 FROM schema_migrations WHERE name = ?",
+                    (migration_name,),
+                ).fetchone():
+                    self.conn.rollback()
+                    return
+
+                # Rows created before the FSM get a state derived from their
+                # legacy status. Unknown statuses remain legacy-only rather
+                # than being invented into the audited lifecycle.
+                for status, state in STATUS_TO_STATE.items():
+                    self.conn.execute(
+                        "INSERT OR IGNORE INTO idea_state (idea_id, current_state) "
+                        "SELECT idea_id, ? FROM ideas WHERE lower(status) = ?",
+                        (state, status),
+                    )
+
+                # Historical admission and terminal writes updated only the
+                # legacy column. Import them when the FSM still says QUEUED;
+                # SKIPPED also supersedes FAILED because launch validation in
+                # older versions wrote a failure marker before classifying the
+                # zero-compute rejection as skipped.
+                repairs = (
+                    ("SKIPPED", ("skipped",), ("QUEUED", "FAILED")),
+                    ("COMPLETE", ("completed", "partial"),
+                     ("QUEUED", "IN_PROGRESS")),
+                    ("FAILED", ("failed", "dead"), ("QUEUED",)),
+                )
+                for target, statuses, sources in repairs:
+                    status_marks = ",".join("?" for _ in statuses)
+                    state_marks = ",".join("?" for _ in sources)
+                    self.conn.execute(
+                        f"UPDATE idea_state SET current_state = ?, "
+                        "updated_at = datetime('now') "
+                        f"WHERE current_state IN ({state_marks}) AND idea_id IN ("
+                        "SELECT idea_id FROM ideas "
+                        f"WHERE lower(status) IN ({status_marks}))",
+                        (target, *sources, *statuses),
+                    )
+
+                # FSM ownership wins for active work and for terminal states
+                # when the legacy row still claims the idea is dispatchable.
+                for state, status in STATE_TO_STATUS.items():
+                    if state == "QUEUED":
+                        continue
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ? WHERE idea_id IN ("
+                        "SELECT idea_id FROM idea_state WHERE current_state = ?) "
+                        "AND lower(status) IN ('queued', 'pending', 'running')",
+                        (status, state),
+                    )
+                self.conn.execute(
+                    "INSERT INTO schema_migrations (name) VALUES (?)",
+                    (migration_name,),
+                )
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        _retry_on_busy(_do_reconcile)
+
     def insert(
         self,
         idea_id: str,
@@ -348,6 +478,18 @@ class IdeaLake:
                     kind,
                 ),
             )
+            # New proposals enter through the queue. Imported running or
+            # terminal rows may be followed by explicit history replay (the
+            # startup recovery contract), so leave those without an implicit
+            # transition and let the idempotent startup reconciler backfill
+            # them on the next open.
+            initial_state = STATUS_TO_STATE.get(str(status).lower())
+            if initial_state == "QUEUED":
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO idea_state (idea_id, current_state) "
+                    "VALUES (?, ?)",
+                    (idea_id, initial_state),
+                )
             self.conn.commit()
         _retry_on_busy(_do_insert)
 
@@ -376,15 +518,98 @@ class IdeaLake:
                     pass
         return d
 
-    def set_status(self, idea_id: str, status: str):
-        """Update just the status of an idea. No-op if idea doesn't exist."""
+    def set_status(self, idea_id: str, status: str) -> bool:
+        """Update legacy status and audited state atomically.
+
+        Known lifecycle statuses follow the same transition contract as
+        :meth:`record_state_transition`. Repeating an already-applied status is
+        idempotent and does not append another audit event. Unknown statuses
+        retain the historical legacy-only behavior for compatibility.
+        """
         def _do():
-            self.conn.execute(
-                "UPDATE ideas SET status = ? WHERE idea_id = ?",
-                (status, idea_id),
-            )
-            self.conn.commit()
-        _retry_on_busy(_do)
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                idea = self.conn.execute(
+                    "SELECT 1 FROM ideas WHERE idea_id = ?", (idea_id,),
+                ).fetchone()
+                if idea is None:
+                    self.conn.rollback()
+                    return False
+
+                target = STATUS_TO_STATE.get(str(status).lower())
+                if target is None:
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                        (status, idea_id),
+                    )
+                    self.conn.commit()
+                    return True
+
+                row = self.conn.execute(
+                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                    (idea_id,),
+                ).fetchone()
+                current = row[0] if row else "QUEUED"
+                if current == target:
+                    if row is None:
+                        self.conn.execute(
+                            "INSERT INTO idea_state "
+                            "(idea_id, current_state, updated_by_host, "
+                            "updated_by_pid) "
+                            "VALUES (?, ?, 'legacy_status', ?)",
+                            (idea_id, target, os.getpid()),
+                        )
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                        (status, idea_id),
+                    )
+                    self.conn.commit()
+                    return True
+
+                if target not in VALID_STATE_TRANSITIONS.get(current, set()):
+                    logger.warning(
+                        "Invalid lifecycle status update: %s %s -> %s (%s)",
+                        idea_id, current, target, status,
+                    )
+                    self.conn.rollback()
+                    return False
+
+                if row:
+                    cursor = self.conn.execute(
+                        "UPDATE idea_state SET current_state = ?, "
+                        "updated_by_host = 'legacy_status', "
+                        "updated_by_pid = ?, updated_at = datetime('now') "
+                        "WHERE idea_id = ? AND current_state = ?",
+                        (target, os.getpid(), idea_id, current),
+                    )
+                    if cursor.rowcount != 1:
+                        self.conn.rollback()
+                        return False
+                else:
+                    self.conn.execute(
+                        "INSERT INTO idea_state "
+                        "(idea_id, current_state, updated_by_host, updated_by_pid) "
+                        "VALUES (?, ?, 'legacy_status', ?)",
+                        (idea_id, target, os.getpid()),
+                    )
+
+                self.conn.execute(
+                    "INSERT INTO idea_transitions "
+                    "(idea_id, from_state, to_state, reason, host, pid, sop_type) "
+                    "VALUES (?, ?, ?, ?, 'legacy_status', ?, 'training')",
+                    (idea_id, current, target,
+                     f"set_status:{str(status).lower()}", os.getpid()),
+                )
+                self.conn.execute(
+                    "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                    (status, idea_id),
+                )
+                self.conn.commit()
+                return True
+            except Exception:
+                self.conn.rollback()
+                raise
+        return bool(_retry_on_busy(_do))
 
     def has(self, idea_id: str) -> bool:
         # SQLITE_BUSY exposure: same as get(). Wrap the read so a transient
@@ -446,21 +671,23 @@ class IdeaLake:
         }
 
     def get_queue(self, limit: int = 1000) -> List[Dict[str, Any]]:
-        """Return unclaimed ideas, sorted by priority then ID."""
+        """Return ideas that both lifecycle representations say are queued."""
         def _do_get_queue():
             return self.conn.execute(
-                """SELECT idea_id, title, priority, config, created_at
-                   FROM ideas
-                   WHERE status = 'queued' OR status = 'pending'
+                """SELECT i.idea_id, i.title, i.priority, i.config, i.created_at
+                   FROM ideas AS i
+                   LEFT JOIN idea_state AS s ON s.idea_id = i.idea_id
+                   WHERE (i.status = 'queued' OR i.status = 'pending')
+                     AND COALESCE(s.current_state, 'QUEUED') = 'QUEUED'
                    ORDER BY
-                     CASE priority
+                     CASE i.priority
                        WHEN 'critical' THEN 0
                        WHEN 'high' THEN 1
                        WHEN 'medium' THEN 2
                        WHEN 'low' THEN 3
                        ELSE 2
                      END,
-                     id_num ASC
+                     i.id_num ASC
                    LIMIT ?""",
                 (limit,)
             ).fetchall()
@@ -843,13 +1070,16 @@ class IdeaLake:
         v4.5+: Generic FSM orthogonal to SOP type.
         Valid transitions regardless of workflow:
           QUEUED → CLAIMED (scheduler claims work)
+          QUEUED → SKIPPED (admission rejects work before compute)
           CLAIMED → IN_PROGRESS (launcher starts work)
           CLAIMED → FAILED (pre-launch validation or setup fails)
           IN_PROGRESS → COMPLETE (work succeeds)
           IN_PROGRESS → FAILED (work fails)
           COMPLETE → ARCHIVED (idea retired)
           FAILED → QUEUED (retry)
+          FAILED → SKIPPED (classify a zero-compute validation failure)
           CLAIMED → QUEUED (stale recovery)
+          SKIPPED → QUEUED (explicit re-admission)
         """
         import socket as _socket
         host = host or _socket.gethostname()
@@ -860,15 +1090,7 @@ class IdeaLake:
             self.conn.execute("BEGIN IMMEDIATE")
             try:
                 # Generic FSM validation (SOP-orthogonal)
-                VALID_TRANSITIONS = {
-                    "QUEUED": {"CLAIMED"},
-                    "CLAIMED": {"IN_PROGRESS", "FAILED", "QUEUED"},
-                    "IN_PROGRESS": {"COMPLETE", "FAILED", "QUEUED"},
-                    "COMPLETE": {"ARCHIVED"},
-                    "FAILED": {"QUEUED"},
-                    "ARCHIVED": set(),
-                }
-                if to_state not in VALID_TRANSITIONS.get(from_state, set()):
+                if to_state not in VALID_STATE_TRANSITIONS.get(from_state, set()):
                     logger.warning(
                         "Invalid FSM transition: %s %s → %s",
                         idea_id, from_state, to_state)
@@ -914,17 +1136,15 @@ class IdeaLake:
                     (idea_id, from_state, to_state, reason or "", host, pid, sop_type)
                 )
 
-                # Keep queue status and the audited FSM terminal in the same
-                # transaction.  A crash must not leave a completed experiment
-                # advertised as still running.
-                terminal_status = {
-                    "COMPLETE": "completed",
-                    "FAILED": "failed",
-                }.get(to_state)
-                if terminal_status:
+                # Keep the compatibility status and the audited FSM in the
+                # same transaction for every lifecycle state, not only the
+                # terminals. Dispatch can therefore never see a claimed run
+                # as queued after this commit.
+                legacy_status = STATE_TO_STATUS.get(to_state)
+                if legacy_status:
                     self.conn.execute(
                         "UPDATE ideas SET status = ? WHERE idea_id = ?",
-                        (terminal_status, idea_id),
+                        (legacy_status, idea_id),
                     )
 
                 self.conn.commit()
