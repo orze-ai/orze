@@ -74,12 +74,17 @@ def load_sealed_manifest(results_dir: Path) -> Dict[str, str]:
 
 def verify_sealed_files(file_list: List[str],
                         manifest: Dict[str, str]) -> List[str]:
-    if not manifest:
-        return []
+    """Return every sealed path that cannot be verified exactly.
+
+    Verification is deliberately fail-closed: an absent manifest or a path
+    missing from the manifest is itself a violation.  Otherwise a missing or
+    unreadable file could silently bypass the integrity boundary.
+    """
     changed = []
     for fpath in file_list:
         expected = manifest.get(fpath)
         if expected is None:
+            changed.append(fpath)
             continue
         p = Path(fpath)
         if not p.exists():

@@ -751,34 +751,36 @@ class OrzePhaseMixin:
         # from the last alert. Re-alerts on further changes; resets when
         # files revert to manifest.
         sealed_files = cfg.get("sealed_files", [])
+        sealed_blocked = False
         if sealed_files:
             manifest = load_sealed_manifest(self.results_dir)
-            if manifest:
-                changed = verify_sealed_files(sealed_files, manifest)
-                if changed:
-                    # Build a stable signature: (filename, current-hash)
-                    # tuples sorted, so we re-alert if the file changes
-                    # again but stay silent on identical state.
-                    try:
-                        from orze.core.integrity import compute_sealed_hashes
-                        cur_hashes = compute_sealed_hashes(changed)
-                        sig = tuple(sorted(cur_hashes.items()))
-                    except Exception:
-                        sig = tuple(sorted(changed))
-                    last_sig = getattr(self, "_sealed_alert_sig", None)
-                    if sig != last_sig:
-                        logger.error(
-                            "Sealed file integrity check FAILED: %d file(s) changed: %s",
-                            len(changed), ", ".join(changed))
-                        notify("sealed_file_changed", {
-                            "changed_files": changed,
-                            "message": (f"{len(changed)} sealed file(s) changed since startup. "
-                                        "Training will proceed but results may be inconsistent."),
-                        }, cfg)
-                        self._sealed_alert_sig = sig
-                else:
-                    # Files reverted — clear so future drift re-alerts.
-                    self._sealed_alert_sig = None
+            changed = verify_sealed_files(sealed_files, manifest)
+            if changed:
+                sealed_blocked = True
+                # Build a stable signature: (filename, current-hash)
+                # tuples sorted, so we re-alert if the file changes
+                # again but stay silent on identical state.
+                try:
+                    from orze.core.integrity import compute_sealed_hashes
+                    cur_hashes = compute_sealed_hashes(changed)
+                    sig = tuple(sorted((path, cur_hashes.get(path, "MISSING"))
+                                       for path in changed))
+                except Exception:
+                    sig = tuple(sorted(changed))
+                last_sig = getattr(self, "_sealed_alert_sig", None)
+                if sig != last_sig:
+                    logger.error(
+                        "Sealed file integrity check FAILED: %d file(s) changed: %s",
+                        len(changed), ", ".join(changed))
+                    notify("sealed_file_changed", {
+                        "changed_files": changed,
+                        "message": (f"{len(changed)} sealed file(s) failed integrity "
+                                    "verification. New training dispatch is blocked."),
+                    }, cfg)
+                    self._sealed_alert_sig = sig
+            else:
+                # Files reverted — clear so future drift re-alerts.
+                self._sealed_alert_sig = None
 
         eval_gpus = set(self.active_evals.keys())
         if hasattr(self, 'slot_mgr'):
@@ -788,6 +790,10 @@ class OrzePhaseMixin:
             free = [g for g in self.gpu_ids if g not in busy_gpus
                     and (get_gpu_memory_used(g) or 0)
                     <= cfg.get("gpu_mem_threshold", 2000)]
+
+        if sealed_blocked:
+            logger.warning("training dispatch blocked by sealed-file violation")
+            return free
 
         # Limit concurrent sweep variants per base idea
         max_sweep_concurrent = cfg.get("sweep", {}).get(

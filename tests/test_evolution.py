@@ -98,6 +98,13 @@ class TestSealed:
         f.write_text("print(99)")
         assert verify_sealed_files([str(f)], hashes) == [str(f)]
 
+    def test_verify_fails_closed_without_manifest_entry(self, tmp_path):
+        from orze.engine.sealed import verify_sealed_files
+        f = tmp_path / "eval.py"
+        f.write_text("print(42)")
+        assert verify_sealed_files([str(f)], {}) == [str(f)]
+        assert verify_sealed_files([str(f)], {"another.py": "0" * 64}) == [str(f)]
+
     def test_manifest_roundtrip(self, tmp_path):
         from orze.engine.sealed import write_sealed_manifest, load_sealed_manifest
         hashes = {"a.py": "abc123"}

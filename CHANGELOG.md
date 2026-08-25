@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Integrity
+- **Preregistered immutable inputs and fail-closed sealing.** Projects can pin
+  exact SHA-256 values with `sealed_hashes`; pinned paths are automatically
+  sealed, including against drift that predates process startup. Missing,
+  unreadable, untracked, or changed sealed inputs now block new training
+  dispatch instead of emitting a warning and continuing.
+
 ## 4.4.1 — fix broken import in 4.4.0 (phases.py)
 
 ### Fixed

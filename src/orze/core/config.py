@@ -429,6 +429,21 @@ def load_project_config(path: Optional[str] = None) -> dict:
             logger.info("auto_seal_eval: sealed %d eval script(s): %s",
                         len(auto_added), ", ".join(auto_added))
 
+    # A plain sealed_files entry snapshots whatever happens to exist at
+    # startup.  sealed_hashes additionally pins a preregistered SHA-256 so
+    # drift that happened before startup is caught as well.  Pinned paths are
+    # automatically included in every existing sealed-file check.
+    pinned = cfg.get("sealed_hashes") or {}
+    if isinstance(pinned, dict):
+        sealed = list(cfg.get("sealed_files") or [])
+        existing = set(sealed)
+        for fpath in pinned:
+            if fpath not in existing:
+                sealed.append(fpath)
+                existing.add(fpath)
+        if sealed:
+            cfg["sealed_files"] = sealed
+
     return cfg
 
 
@@ -496,6 +511,20 @@ def _validate_config(cfg: dict) -> tuple:
     # Validate eval config consistency
     if cfg.get("eval_script") and not cfg.get("eval_output"):
         errors.append("eval_script is set but eval_output is missing")
+
+    pinned = cfg.get("sealed_hashes")
+    if pinned is not None:
+        if not isinstance(pinned, dict):
+            errors.append("sealed_hashes: must be a mapping of path to SHA-256")
+        else:
+            for fpath, digest in pinned.items():
+                if not isinstance(fpath, str) or not fpath:
+                    errors.append("sealed_hashes: every path must be a non-empty string")
+                if (not isinstance(digest, str)
+                        or re.fullmatch(r"[0-9a-fA-F]{64}", digest) is None):
+                    errors.append(
+                        f"sealed_hashes.{fpath}: expected a 64-character SHA-256"
+                    )
 
     # Report columns are consumed as mappings by the leaderboard. Reject
     # shorthand strings during --check instead of crashing after compute has
@@ -602,6 +631,7 @@ def _validate_config(cfg: dict) -> tuple:
     # warnings on every fresh `orze setup` install.
     _KNOWN_EXTRAS = {
         "_config_path", "research", "gc", "metric_validation", "sealed_files",
+        "sealed_hashes",
         "min_expected_results", "goal_file", "gpu_scheduling", "roles",
         "notifications", "evolution", "retrospection", "cleanup",
         "train_extra_args", "train_extra_env", "pre_script", "pre_args",

@@ -868,8 +868,14 @@ class Orze(OrzePhaseMixin):
         if sealed_files:
             from orze.engine.sealed import compute_sealed_hashes, write_sealed_manifest
             hashes = compute_sealed_hashes(sealed_files)
-            if hashes:
-                write_sealed_manifest(self.results_dir, hashes)
+            # Explicit pins replace startup observations.  This detects source
+            # drift that predates the current Orze process, rather than blessing
+            # the already-drifted content as the new baseline.
+            hashes.update({
+                str(path): str(digest).lower()
+                for path, digest in (cfg.get("sealed_hashes") or {}).items()
+            })
+            write_sealed_manifest(self.results_dir, hashes)
 
         while self.running:
             self.iteration += 1
