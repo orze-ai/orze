@@ -1,0 +1,131 @@
+"""The installed service and watchdog must have exactly one restart owner."""
+
+from types import SimpleNamespace
+
+import pytest
+
+from orze.service import install
+from orze.service import watchdog
+
+
+def _completed(returncode=0, stdout="", stderr=""):
+    return SimpleNamespace(
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def test_systemd_unit_delegates_restarts_to_sentinel_aware_watchdog(
+        tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return _completed()
+
+    monkeypatch.setattr(install, "_SYSTEMD_DIR", tmp_path)
+    monkeypatch.setattr(install.subprocess, "run", fake_run)
+    install._install_systemd({
+        "python": "/opt/orze/bin/python",
+        "workdir": "/srv/project",
+        "log_file": "/srv/project/results/orze.log",
+        "config_file": "/srv/project/orze.yaml",
+    })
+
+    service = (tmp_path / "orze.service").read_text(encoding="utf-8")
+    timer = (tmp_path / "orze-watchdog.timer").read_text(encoding="utf-8")
+    assert "Restart=no" in service
+    assert "Restart=always" not in service
+    assert "OnUnitActiveSec=300" in timer
+    assert any(
+        args == ["systemctl", "--user", "enable", "--now",
+                 "orze-watchdog.timer"]
+        for args, _ in calls
+    )
+
+
+def test_systemd_watchdog_restarts_the_tracked_main_unit(monkeypatch):
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[:4] == ["systemctl", "--user", "show", "orze.service"]:
+            return _completed(stdout="4321\n")
+        return _completed()
+
+    def detached_launch_is_a_bug(*args, **kwargs):
+        raise AssertionError("systemd watchdog must not spawn a detached daemon")
+
+    monkeypatch.setattr(watchdog.subprocess, "run", fake_run)
+    monkeypatch.setattr(watchdog.subprocess, "Popen", detached_launch_is_a_bug)
+
+    pid = watchdog._launch_orze({"method": "systemd"})
+
+    assert pid == 4321
+    assert calls == [
+        ["systemctl", "--user", "reset-failed", "orze.service"],
+        ["systemctl", "--user", "start", "orze.service"],
+        ["systemctl", "--user", "show", "orze.service",
+         "--property=MainPID", "--value"],
+    ]
+
+
+def test_systemd_watchdog_reports_start_failure(monkeypatch):
+    def fake_run(args, **kwargs):
+        if args[:4] == ["systemctl", "--user", "start", "orze.service"]:
+            return _completed(returncode=1, stderr="preflight rejected startup\n")
+        return _completed()
+
+    monkeypatch.setattr(watchdog.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="preflight rejected startup"):
+        watchdog._launch_orze({"method": "systemd"})
+
+
+def test_disable_latch_prevents_systemd_restart(tmp_path, monkeypatch):
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / ".orze_disabled").write_text("operator stop\n", encoding="utf-8")
+    log_file = tmp_path / "watchdog.log"
+
+    def launch_is_a_bug(_svc_cfg):
+        raise AssertionError("disabled service must not be restarted")
+
+    monkeypatch.setattr(watchdog, "_launch_orze", launch_is_a_bug)
+
+    watchdog.check_and_restart({
+        "method": "systemd",
+        "results_dir": str(results),
+        "stall_threshold": 60,
+        "log_file": str(log_file),
+    })
+
+    text = log_file.read_text(encoding="utf-8")
+    assert "Skipping restart: disabled (.orze_disabled exists)" in text
+
+
+def test_crontab_watchdog_keeps_detached_launch(monkeypatch, tmp_path):
+    log_file = tmp_path / "orze.log"
+    launched = []
+
+    def fake_popen(args, **kwargs):
+        launched.append((args, kwargs))
+        return SimpleNamespace(pid=9876)
+
+    monkeypatch.setattr(watchdog.subprocess, "Popen", fake_popen)
+
+    pid = watchdog._launch_orze({
+        "method": "crontab",
+        "python": "/opt/orze/bin/python",
+        "config_file": "/srv/project/orze.yaml",
+        "workdir": "/srv/project",
+        "log_file": str(log_file),
+    })
+
+    assert pid == 9876
+    assert launched[0][0] == [
+        "/opt/orze/bin/python", "-m", "orze.cli", "-c",
+        "/srv/project/orze.yaml",
+    ]
+    assert launched[0][1]["start_new_session"] is True

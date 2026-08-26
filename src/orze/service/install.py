@@ -118,8 +118,10 @@ After=network.target
 Type=simple
 WorkingDirectory={workdir}
 ExecStart={python} -m orze.cli -c {config_file}
-Restart=always
-RestartSec=30
+# The sentinel-aware watchdog timer below is the sole restart owner.  A second
+# unconditional supervisor here would restart deliberate stops and permanent
+# startup failures in a tight loop, bypassing the watchdog's latch checks.
+Restart=no
 StandardOutput=append:{log_file}
 StandardError=append:{log_file}
 

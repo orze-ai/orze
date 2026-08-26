@@ -148,7 +148,45 @@ def _is_orze_running():
 
 
 def _launch_orze(svc_cfg):
-    """Launch orze as a detached process."""
+    """Launch Orze through the configured service owner.
+
+    A systemd installation must remain owned and observable by systemd.  The
+    watchdog timer is the only component that decides *whether* to restart;
+    once it has checked the stop sentinels, it asks the main unit to start.
+    Crontab installations retain the detached-process behavior.
+    """
+    if svc_cfg.get("method") == "systemd":
+        # A previous crash may leave the unit failed or start-rate-limited.
+        # Clearing that bookkeeping is safe here because check_and_restart()
+        # has already checked both persistent stop sentinels twice.
+        subprocess.run(
+            ["systemctl", "--user", "reset-failed", "orze.service"],
+            capture_output=True, text=True, timeout=10,
+        )
+        started = subprocess.run(
+            ["systemctl", "--user", "start", "orze.service"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if started.returncode != 0:
+            detail = (started.stderr or started.stdout or "unknown error").strip()
+            raise RuntimeError(f"systemd failed to start orze.service: {detail}")
+
+        shown = subprocess.run(
+            ["systemctl", "--user", "show", "orze.service",
+             "--property=MainPID", "--value"],
+            capture_output=True, text=True, timeout=10,
+        )
+        try:
+            pid = int(shown.stdout.strip()) if shown.returncode == 0 else 0
+        except ValueError:
+            pid = 0
+        if pid <= 0:
+            detail = (shown.stderr or shown.stdout or "MainPID unavailable").strip()
+            raise RuntimeError(
+                f"systemd started orze.service without a live MainPID: {detail}"
+            )
+        return pid
+
     python = svc_cfg["python"]
     config_file = svc_cfg["config_file"]
     workdir = svc_cfg.get("workdir", ".")

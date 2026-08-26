@@ -208,6 +208,11 @@ orze service uninstall               # remove
 
 The watchdog runs every minute (crontab) or every 5 minutes (systemd). It restarts orze on crash/stall and manages Docker containers defined in `orze.yaml`:
 
+For systemd installations, the watchdog timer is the sole restart decision
+owner. The main service does not unconditionally restart itself, so
+`.orze_disabled` and `.orze_stop_all` remain authoritative during deliberate
+stops and persistent startup failures cannot become restart storms.
+
 ```yaml
 containers:
   paperdog:

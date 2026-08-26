@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+- **Systemd stop/restart storms.** The installed main service now uses
+  `Restart=no`; the sentinel-aware watchdog timer is the sole restart decision
+  owner. For systemd installations the watchdog restarts `orze.service`
+  through systemd instead of spawning an untracked detached daemon. Deliberate
+  stop/disable latches and persistent startup failures therefore no longer
+  fight an unconditional second supervisor.
+
 ### Integrity
 - **Preregistered immutable inputs and fail-closed sealing.** Projects can pin
   exact SHA-256 values with `sealed_hashes`; pinned paths are automatically
