@@ -211,6 +211,14 @@ DEFAULT_CONFIG = {
     "pre_script": None,
     "pre_args": [],
     "pre_timeout": 3600,
+    "artifact_preflight": {
+        "enabled": False,
+        "script": None,
+        "args": [],
+        "timeout": 300,
+        "network": "inherit",
+        "retry_interval": 300,
+    },
     "eval_script": None,
     "eval_args": [],
     "eval_timeout": 3600,
@@ -511,6 +519,65 @@ def _validate_config(cfg: dict) -> tuple:
     # Validate eval config consistency
     if cfg.get("eval_script") and not cfg.get("eval_output"):
         errors.append("eval_script is set but eval_output is missing")
+
+    # Resolve datasets/models before allocating a training process. The
+    # resolver is deliberately explicit because silently inheriting offline
+    # flags caused repeated launches that could never fetch missing metadata.
+    artifact_preflight = cfg.get(
+        "artifact_preflight", DEFAULT_CONFIG["artifact_preflight"])
+    if not isinstance(artifact_preflight, dict):
+        errors.append("artifact_preflight: must be a mapping")
+    else:
+        enabled = artifact_preflight.get("enabled", False)
+        if not isinstance(enabled, bool):
+            errors.append("artifact_preflight.enabled: must be true or false")
+        script = artifact_preflight.get("script")
+        if enabled and (not isinstance(script, str) or not script.strip()):
+            errors.append(
+                "artifact_preflight.script: required when preflight is enabled"
+            )
+        elif enabled:
+            project_root = Path(cfg.get("_project_root", "."))
+            script_path = Path(script)
+            if not script_path.is_absolute():
+                script_path = project_root / script_path
+            if not script_path.is_file():
+                errors.append(
+                    f"artifact_preflight.script not found: {script_path}"
+                )
+        args = artifact_preflight.get("args", [])
+        if not isinstance(args, list):
+            errors.append("artifact_preflight.args: must be a list")
+        policy = artifact_preflight.get("network", "inherit")
+        if policy not in ("inherit", "required", "offline"):
+            errors.append(
+                "artifact_preflight.network: must be 'inherit', 'required', "
+                "or 'offline'"
+            )
+        for key in ("timeout", "retry_interval"):
+            value = artifact_preflight.get(key, 300)
+            if (isinstance(value, bool)
+                    or not isinstance(value, (int, float)) or value < 0):
+                errors.append(
+                    f"artifact_preflight.{key}: must be a non-negative number"
+                )
+        if policy == "required":
+            extra_env = cfg.get("train_extra_env") or {}
+            if isinstance(extra_env, dict):
+                offline_keys = [
+                    key for key in (
+                        "HF_HUB_OFFLINE", "HF_DATASETS_OFFLINE",
+                        "TRANSFORMERS_OFFLINE",
+                    )
+                    if str(extra_env.get(key, "")).strip().lower()
+                    in {"1", "true", "yes", "on"}
+                ]
+                if offline_keys:
+                    errors.append(
+                        "artifact_preflight.network is 'required' but "
+                        "train_extra_env enables offline mode via: "
+                        + ", ".join(offline_keys)
+                    )
 
     pinned = cfg.get("sealed_hashes")
     if pinned is not None:

@@ -495,6 +495,7 @@ class Orze(OrzePhaseMixin):
         "poll", "roles", "max_idea_failures", "max_fix_attempts",
         "notifications", "plateau_threshold", "orphan_timeout_hours",
         "gpu_mem_threshold", "gpu_scheduling", "min_disk_gb", "post_scripts",
+        "artifact_preflight",
         "nested_config_whitelist", "nested_config_normalize",
     }
 

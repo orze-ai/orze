@@ -984,6 +984,19 @@ metric_harvest:
 nested_config_whitelist: [model, training, loss, data]
 sweep_allowlist: [{train_script}]
 
+# --- ZERO-GPU ARTIFACT PREFLIGHT ---
+# Enable this with a project script that resolves/verifies every dataset and
+# model artifact needed by an idea. The script runs before launch with GPU
+# visibility hidden; `network: required` fails closed when offline flags are
+# set instead of repeatedly launching jobs that cannot fetch missing metadata.
+artifact_preflight:
+  enabled: false
+  script: scripts/resolve_artifacts.py
+  args: ["--config", "{{config}}"]
+  timeout: 300
+  network: inherit             # inherit | required | offline
+  retry_interval: 300
+
 # --- GC (results cleanup) ---
 gc:
   enabled: true

@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **Missing artifacts now fail before GPU allocation.** Projects can configure
+  a bounded `artifact_preflight` resolver with an explicit network policy.
+  Orze hides accelerator devices, kills surviving process-group descendants
+  on timeout, stores only hashes (not resolver output) in an audit receipt,
+  and globally backs off dispatch after a failure so one unavailable dataset
+  or model cannot rapidly burn through the queued ideas.
+- **Timed-out helper descendants no longer survive their parent.** Process
+  cleanup now checks the dedicated process group after its leader exits and
+  force-kills any remaining non-zombie descendants.
 - **Stale status snapshots no longer masquerade as live activity.** New
   `status.json` files declare their write epoch and validity window. The admin
   API and MCP status tool dynamically mark expired snapshots and suppress

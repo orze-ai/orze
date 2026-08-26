@@ -36,7 +36,7 @@ from orze.engine.launcher import (
     launch, _get_checkpoint_dir, _write_failure, _is_launcher_paused,
     _resolve_train_script, GpuUnavailableError,
 )
-from orze.engine.process import run_pre_script
+from orze.engine.process import run_artifact_preflight, run_pre_script
 from orze.engine.scheduler import claim, get_unclaimed, _count_statuses
 from orze.hardware.gpu import get_gpu_memory_used, _eval_already_running
 from orze.reporting.leaderboard import update_report, write_admin_cache
@@ -795,6 +795,17 @@ class OrzePhaseMixin:
             logger.warning("training dispatch blocked by sealed-file violation")
             return free
 
+        preflight_cfg = cfg.get("artifact_preflight") or {}
+        if preflight_cfg.get("enabled", False):
+            blocked_until = getattr(
+                self, "_artifact_preflight_blocked_until", 0.0)
+            if blocked_until > time.time():
+                remaining = max(0, int(blocked_until - time.time()))
+                logger.info(
+                    "artifact preflight backoff active — dispatch paused for "
+                    "%d more second(s)", remaining)
+                return free
+
         # Limit concurrent sweep variants per base idea
         max_sweep_concurrent = cfg.get("sweep", {}).get(
             "max_concurrent", 3)
@@ -986,33 +997,6 @@ class OrzePhaseMixin:
                             self.results_dir / idea_id / "sweep_config.yaml",
                             yaml.dump(idea_cfg,
                                       default_flow_style=False))
-                    if not run_pre_script(idea_id, gpu, cfg):
-                        logger.warning(
-                            "Pre-script failed for %s, marking FAILED",
-                            idea_id)
-                        error_msg = "Pre-script failed"
-                        if _try_executor_fix(idea_id, error_msg,
-                                             self.results_dir, cfg,
-                                             self.fix_counts):
-                            _reset_idea_for_retry(
-                                self.results_dir / idea_id)
-                            if run_pre_script(idea_id, gpu, cfg):
-                                pass  # fixed — fall through to launch
-                            else:
-                                _write_failure(
-                                    self.results_dir / idea_id,
-                                    "Pre-script failed after fix",
-                                    lake=self.lake, idea_id=idea_id, cfg=cfg)
-                                _record_failure(
-                                    self.failure_counts, idea_id)
-                                continue
-                        else:
-                            _write_failure(
-                                self.results_dir / idea_id, error_msg,
-                                lake=self.lake, idea_id=idea_id, cfg=cfg)
-                            _record_failure(
-                                self.failure_counts, idea_id)
-                            continue
                     # F5: launch-time nested-config validator. Reject
                     # YAML-nested configs (backbone: {...}, data: {...})
                     # because train scripts only accept argparse-style
@@ -1215,6 +1199,64 @@ class OrzePhaseMixin:
                                     continue
                     except Exception:
                         pass
+
+                    # Resolve and verify dataset/model artifacts before the
+                    # training launcher can allocate GPU memory. This runs
+                    # after all zero-compute idea validators so invalid ideas
+                    # cannot trigger downloads. A failure stops this entire
+                    # dispatch tick and activates a global backoff, preventing
+                    # one unavailable dependency from burning through every
+                    # queued idea.
+                    if not run_artifact_preflight(
+                            idea_id, self.results_dir, cfg):
+                        retry_interval = float(
+                            preflight_cfg.get("retry_interval", 300))
+                        self._artifact_preflight_blocked_until = (
+                            time.time() + retry_interval)
+                        reason = (
+                            "Artifact preflight failed; training was not "
+                            "launched"
+                        )
+                        logger.warning(
+                            "%s for %s — dispatch paused for %.1f second(s)",
+                            reason, idea_id, retry_interval)
+                        _write_failure(
+                            self.results_dir / idea_id, reason,
+                            lake=self.lake, idea_id=idea_id, cfg=cfg)
+                        _record_failure(self.failure_counts, idea_id)
+                        return free
+                    self._artifact_preflight_blocked_until = 0.0
+
+                    # Project setup runs only after every static validator and
+                    # the zero-GPU artifact resolver have passed. This avoids
+                    # spending setup work on rejected or unlaunchable ideas.
+                    if not run_pre_script(idea_id, gpu, cfg):
+                        logger.warning(
+                            "Pre-script failed for %s, marking FAILED",
+                            idea_id)
+                        error_msg = "Pre-script failed"
+                        if _try_executor_fix(idea_id, error_msg,
+                                             self.results_dir, cfg,
+                                             self.fix_counts):
+                            _reset_idea_for_retry(
+                                self.results_dir / idea_id)
+                            if run_pre_script(idea_id, gpu, cfg):
+                                pass  # fixed — fall through to launch
+                            else:
+                                _write_failure(
+                                    self.results_dir / idea_id,
+                                    "Pre-script failed after fix",
+                                    lake=self.lake, idea_id=idea_id, cfg=cfg)
+                                _record_failure(
+                                    self.failure_counts, idea_id)
+                                continue
+                        else:
+                            _write_failure(
+                                self.results_dir / idea_id, error_msg,
+                                lake=self.lake, idea_id=idea_id, cfg=cfg)
+                            _record_failure(
+                                self.failure_counts, idea_id)
+                            continue
 
                     logger.info("Launching %s on GPU %s: %s",
                                 idea_id, gpu,

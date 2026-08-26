@@ -29,7 +29,8 @@ CALLING SPEC:
         proc: subprocess.Popen
         label: str — for log messages
         timeout: float — seconds to wait after SIGTERM before SIGKILL
-        side effects: SIGTERM -> wait -> SIGKILL if needed; logs warnings on force kill
+        side effects: SIGTERM -> wait -> SIGKILL surviving process-group
+                      descendants; logs warnings on force kill
 
     _new_process_group() -> None
         preexec_fn for subprocess.Popen; calls os.setpgrp() to create a new process group
@@ -40,11 +41,20 @@ CALLING SPEC:
         cfg: dict — uses 'pre_script', 'pre_args', 'pre_timeout', 'python', 'train_extra_env'
         returns: True if no pre_script configured or script exited 0, False on failure/timeout
         side effects: runs blocking subprocess
+
+    run_artifact_preflight(idea_id, results_dir, cfg) -> bool
+        returns: True if disabled or resolver exited 0, False otherwise
+        side effects: runs a zero-GPU resolver and writes a hash-only receipt
 """
+import datetime
+import hashlib
+import json
 import os
 import signal
 import subprocess
 import logging
+import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -171,19 +181,246 @@ def _kill_pg(proc: subprocess.Popen, sig=signal.SIGTERM):
 
 
 def _terminate_and_reap(proc: subprocess.Popen, label: str = "",
-                        timeout: float = 10):
-    """SIGTERM the process group, wait, then SIGKILL if needed."""
-    _kill_pg(proc, signal.SIGTERM)
+                        timeout: float = 10, pgid: Optional[int] = None):
+    """Terminate a process and every descendant in its dedicated group."""
+    if pgid is None:
+        try:
+            pgid = os.getpgid(proc.pid)
+        except (ProcessLookupError, PermissionError, OSError):
+            pgid = None
+    if pgid == os.getpgrp():
+        logger.error("Refusing to terminate our own process group for %s",
+                     label or "process")
+        pgid = None
+
+    if pgid is not None:
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    else:
+        try:
+            proc.terminate()
+        except (ProcessLookupError, OSError):
+            pass
     try:
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         logger.warning("Force killing %s (PID %d)", label or "process", proc.pid)
-        _kill_pg(proc, signal.SIGKILL)
+        if pgid is not None:
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+        else:
+            try:
+                proc.kill()
+            except (ProcessLookupError, OSError):
+                pass
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             logger.error("Failed to reap %s (PID %d) after SIGKILL",
                          label or "process", proc.pid)
+
+    # The group leader can exit on SIGTERM while a descendant ignores it.
+    # Waiting only for ``proc`` then leaks that descendant indefinitely.
+    if pgid is not None:
+        remaining = process_group_members(pgid)
+        if remaining:
+            logger.warning("Force killing %d surviving descendant(s) of %s: %s",
+                           len(remaining), label or "process", remaining)
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+            deadline = time.time() + 5
+            while time.time() < deadline and process_group_members(pgid):
+                time.sleep(0.05)
+            remaining = process_group_members(pgid)
+            if remaining:
+                logger.error("Failed to reap process group %d for %s: %s",
+                             pgid, label or "process", remaining)
+
+
+_OFFLINE_ENV_KEYS = (
+    "HF_HUB_OFFLINE", "HF_DATASETS_OFFLINE", "TRANSFORMERS_OFFLINE",
+)
+
+
+def _truthy_env(value: object) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _sha256_file(path: Path) -> Optional[str]:
+    try:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+    except OSError:
+        return None
+
+
+def _drain_and_hash(stream, digest) -> None:
+    """Drain a subprocess pipe at constant memory while hashing its bytes."""
+    try:
+        for block in iter(lambda: stream.read(64 * 1024), b""):
+            digest.update(block)
+    finally:
+        stream.close()
+
+
+def run_artifact_preflight(idea_id: str, results_dir: Path, cfg: dict) -> bool:
+    """Run a bounded dataset/model resolver with accelerators hidden.
+
+    The configured script owns domain-specific resolution. Orze enforces the
+    execution contract: no visible accelerator, explicit metadata-network
+    policy, process-group timeout, and a non-secret audit receipt.
+    """
+    spec = cfg.get("artifact_preflight") or {}
+    if not isinstance(spec, dict) or not spec.get("enabled", False):
+        return True
+
+    started = time.time()
+    results_dir = Path(results_dir)
+    idea_dir = results_dir / idea_id
+    idea_dir.mkdir(parents=True, exist_ok=True)
+    receipt_path = idea_dir / "artifact_preflight.json"
+    policy = str(spec.get("network", "inherit")).strip().lower()
+    script_text = str(spec.get("script") or "")
+    project_root = Path(cfg.get("_project_root", "."))
+    script_path = Path(script_text)
+    if not script_path.is_absolute():
+        script_path = project_root / script_path
+    config_path = idea_dir / "idea_config.yaml"
+    if not config_path.exists():
+        config_path = Path(cfg.get("base_config", "configs/base.yaml"))
+        if not config_path.is_absolute():
+            config_path = project_root / config_path
+
+    receipt = {
+        "schema_version": 1,
+        "idea_id": idea_id,
+        "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "network_policy": policy,
+        "gpu_visibility": "hidden",
+        "script": script_text,
+        "script_sha256": _sha256_file(script_path),
+        "config_sha256": _sha256_file(config_path),
+    }
+
+    def finish(status: str, **fields) -> bool:
+        receipt.update(fields)
+        receipt["status"] = status
+        receipt["finished_at"] = datetime.datetime.now(
+            datetime.timezone.utc).isoformat()
+        receipt["duration_seconds"] = round(time.time() - started, 3)
+        from orze.core.fs import atomic_write
+        atomic_write(receipt_path, json.dumps(receipt, indent=2) + "\n")
+        return status == "passed"
+
+    if policy not in {"inherit", "required", "offline"}:
+        return finish("configuration_error", reason="invalid_network_policy")
+    if not script_text or not script_path.is_file():
+        return finish("configuration_error", reason="script_missing")
+
+    extra_env = cfg.get("train_extra_env") or {}
+    if not isinstance(extra_env, dict):
+        return finish("configuration_error", reason="train_extra_env_not_mapping")
+    env = os.environ.copy()
+    for key, value in extra_env.items():
+        env[key] = str(value)
+    offline_conflicts = [key for key in _OFFLINE_ENV_KEYS
+                         if _truthy_env(env.get(key, ""))]
+    if policy == "required" and offline_conflicts:
+        return finish(
+            "configuration_error",
+            reason="network_required_but_offline_flags_set",
+            conflicting_env_keys=offline_conflicts,
+        )
+    if policy == "offline":
+        for key in _OFFLINE_ENV_KEYS:
+            env[key] = "1"
+
+    env.update({
+        "CUDA_VISIBLE_DEVICES": "",
+        "NVIDIA_VISIBLE_DEVICES": "none",
+        "HIP_VISIBLE_DEVICES": "",
+        "ROCR_VISIBLE_DEVICES": "",
+        "ORZE_ARTIFACT_PREFLIGHT": "1",
+        "ORZE_ARTIFACT_NETWORK_POLICY": policy,
+        "ORZE_IDEA_ID": idea_id,
+        "ORZE_RESULTS_DIR": str(results_dir),
+        "ORZE_IDEA_CONFIG": str(config_path),
+    })
+
+    from orze.engine.launcher import _format_args
+    values = {
+        "idea_id": idea_id,
+        "results_dir": str(results_dir),
+        "config": str(config_path),
+        "project_root": str(project_root),
+    }
+    interpreter = spec.get("interpreter", cfg.get("python", sys.executable))
+    cmd = ([str(interpreter)] if interpreter else []) + [str(script_path)]
+    cmd.extend(_format_args(spec.get("args") or [], values))
+    timeout = float(spec.get("timeout", 300))
+
+    logger.info("Running zero-GPU artifact preflight for %s (%s network)",
+                idea_id, policy)
+    proc = None
+    stdout_digest = hashlib.sha256()
+    stderr_digest = hashlib.sha256()
+    drain_threads = []
+    try:
+        proc = subprocess.Popen(
+            cmd, env=env, cwd=str(project_root),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        for stream, digest in (
+                (proc.stdout, stdout_digest),
+                (proc.stderr, stderr_digest)):
+            thread = threading.Thread(
+                target=_drain_and_hash, args=(stream, digest), daemon=True)
+            thread.start()
+            drain_threads.append(thread)
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        assert proc is not None
+        _terminate_and_reap(proc, f"artifact preflight {idea_id}",
+                            timeout=1, pgid=proc.pid)
+        for thread in drain_threads:
+            thread.join()
+        return finish(
+            "timed_out", timeout_seconds=timeout,
+            stdout_sha256=stdout_digest.hexdigest(),
+            stderr_sha256=stderr_digest.hexdigest(),
+        )
+    except Exception as exc:
+        if proc is not None:
+            _terminate_and_reap(proc, f"artifact preflight {idea_id}",
+                                timeout=1, pgid=proc.pid)
+        for thread in drain_threads:
+            thread.join()
+        return finish("execution_error", reason=type(exc).__name__)
+
+    for thread in drain_threads:
+        thread.join()
+
+    fields = {
+        "exit_code": proc.returncode,
+        "stdout_sha256": stdout_digest.hexdigest(),
+        "stderr_sha256": stderr_digest.hexdigest(),
+    }
+    if proc.returncode != 0:
+        logger.warning("Artifact preflight failed for %s (exit %d)",
+                       idea_id, proc.returncode)
+        return finish("failed", **fields)
+    logger.info("Artifact preflight passed for %s", idea_id)
+    return finish("passed", **fields)
 
 
 # ---------------------------------------------------------------------------
