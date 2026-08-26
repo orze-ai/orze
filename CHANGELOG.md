@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Fixed
+- **Stale status snapshots no longer masquerade as live activity.** New
+  `status.json` files declare their write epoch and validity window. The admin
+  API and MCP status tool dynamically mark expired snapshots and suppress
+  their frozen active-run list while preserving historical results.
 - **Systemd stop/restart storms.** The installed main service now uses
   `Restart=no`; the sentinel-aware watchdog timer is the sole restart decision
   owner. For systemd installations the watchdog restarts `orze.service`

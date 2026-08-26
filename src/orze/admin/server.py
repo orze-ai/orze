@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from orze.core.fs import atomic_write
 from orze.core.config import load_project_config, orze_path
 from orze.core.ideas import parse_ideas
+from orze.reporting.state import annotate_status_freshness
 
 
 
@@ -200,12 +201,12 @@ def _tail_lines(path: Path, n: int = 200) -> str:
 
 @app.get("/api/status")
 async def get_status():
-    """Read results/status.json and return as-is."""
+    """Read results/status.json and annotate whether its writer is current."""
     path = _results_dir() / "status.json"
     data = _read_json(path)
     if data is None:
         raise HTTPException(404, "status.json not found or unreadable")
-    return data
+    return annotate_status_freshness(data)
 
 
 def _read_admin_cache() -> Optional[dict]:
@@ -236,7 +237,12 @@ async def get_runs(limit: int = 50):
     Only scans recent idea dirs (by mtime) to avoid slow scans of 20k+ dirs.
     """
     status_data = _read_json(_results_dir() / "status.json")
-    raw_active = status_data.get("active", []) if status_data else []
+    status_data = (annotate_status_freshness(status_data)
+                   if status_data else None)
+    # A stopped writer leaves its last active list frozen on disk. Historical
+    # results remain useful, but stale jobs must not be presented as running.
+    raw_active = (status_data.get("active", [])
+                  if status_data and not status_data["snapshot_stale"] else [])
 
     # Enrich active runs with human-readable titles from ideas.md
     ideas = _cached("parsed_ideas", 10.0, lambda: parse_ideas(_ideas_file()))
@@ -282,6 +288,12 @@ async def get_runs(limit: int = 50):
         "active": active,
         "top_results": top_results,
         "recent": recent,
+        "status_snapshot_stale": (
+            status_data.get("snapshot_stale") if status_data else None
+        ),
+        "status_snapshot_age_seconds": (
+            status_data.get("snapshot_age_seconds") if status_data else None
+        ),
     }
 
 

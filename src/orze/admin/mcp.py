@@ -27,6 +27,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from orze.core.config import orze_path
+from orze.reporting.state import annotate_status_freshness
 
 logger = logging.getLogger("orze.mcp")
 
@@ -130,16 +131,21 @@ def _tool_status(args: dict, cfg: dict) -> str:
     status = _read_json(results_dir / "status.json")
     if not status:
         return "No status.json found. Is orze running?"
+    status = annotate_status_freshness(status)
+    active = [] if status["snapshot_stale"] else status.get("active", [])
     # Compact summary
     return json.dumps({
         "iteration": status.get("iteration"),
-        "active": status.get("active", []),
+        "active": active,
         "free_gpus": status.get("free_gpus", []),
         "queue_depth": status.get("queue_depth"),
         "completed": status.get("completed"),
         "failed": status.get("failed"),
         "top_results": status.get("top_results", [])[:5],
         "timestamp": status.get("timestamp"),
+        "snapshot_state": status.get("snapshot_state"),
+        "snapshot_age_seconds": status.get("snapshot_age_seconds"),
+        "snapshot_stale": status.get("snapshot_stale"),
     }, indent=2)
 
 

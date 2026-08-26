@@ -34,6 +34,7 @@ CALLING SPEC:
 import os
 import json
 import logging
+import math
 import socket
 import time
 import datetime
@@ -48,6 +49,97 @@ from orze.hardware.gpu import _query_gpu_details
 TrainingProcess = Any  # type alias to avoid circular import
 
 logger = logging.getLogger("orze")
+
+# status.json is written once per orchestrator loop, rather than by the
+# minute-level host heartbeat. Five minutes avoids false alarms for the
+# default 30-second poll while still making a dead daemon visible promptly.
+_STATUS_SNAPSHOT_MIN_TTL_SECONDS = 300
+
+
+def _status_snapshot_ttl_seconds(cfg: dict) -> int:
+    """Return a conservative validity window for one status.json snapshot."""
+    try:
+        poll = float(cfg.get("poll", 30))
+    except (TypeError, ValueError):
+        poll = 30.0
+    if not math.isfinite(poll) or poll < 0:
+        poll = 30.0
+    return int(max(_STATUS_SNAPSHOT_MIN_TTL_SECONDS, 2 * poll + 60))
+
+
+def _status_snapshot_epoch(status: dict) -> Optional[float]:
+    """Resolve the writer epoch, including legacy timestamp-only snapshots."""
+    value = status.get("snapshot_epoch")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        value = float(value)
+        if math.isfinite(value) and value > 0:
+            return value
+
+    timestamp = status.get("timestamp")
+    if not isinstance(timestamp, str) or not timestamp.strip():
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(
+            timestamp.strip().replace("Z", "+00:00")
+        )
+        value = parsed.timestamp()
+    except (ValueError, OverflowError, OSError):
+        return None
+    return value if math.isfinite(value) and value > 0 else None
+
+
+def annotate_status_freshness(status: dict, now: Optional[float] = None,
+                              default_ttl_seconds: float =
+                              _STATUS_SNAPSHOT_MIN_TTL_SECONDS) -> dict:
+    """Return a copy of a status snapshot annotated with current freshness.
+
+    Legacy snapshots are aged from their ISO ``timestamp``. Missing or
+    malformed time metadata fails closed: consumers must not advertise frozen
+    jobs as active when they cannot establish that the writer is alive.
+    """
+    annotated = dict(status)
+    epoch = _status_snapshot_epoch(status)
+    try:
+        now_epoch = float(time.time() if now is None else now)
+    except (TypeError, ValueError):
+        now_epoch = time.time()
+
+    ttl_value = status.get("snapshot_ttl_seconds", default_ttl_seconds)
+    try:
+        ttl = float(ttl_value)
+    except (TypeError, ValueError):
+        ttl = float(default_ttl_seconds)
+    if not math.isfinite(ttl) or ttl <= 0:
+        ttl = float(default_ttl_seconds)
+
+    if epoch is None:
+        annotated.update({
+            "snapshot_age_seconds": None,
+            "snapshot_stale": True,
+            "snapshot_state": "UNKNOWN",
+            "snapshot_freshness_reason": "missing_or_invalid_timestamp",
+        })
+        return annotated
+
+    valid_until_value = status.get("snapshot_valid_until_epoch")
+    try:
+        valid_until = float(valid_until_value)
+    except (TypeError, ValueError):
+        valid_until = epoch + ttl
+    if not math.isfinite(valid_until) or valid_until < epoch:
+        valid_until = epoch + ttl
+
+    age = max(0.0, now_epoch - epoch)
+    stale = now_epoch > valid_until
+    annotated.update({
+        "snapshot_epoch": epoch,
+        "snapshot_ttl_seconds": int(ttl) if ttl.is_integer() else ttl,
+        "snapshot_valid_until_epoch": valid_until,
+        "snapshot_age_seconds": round(age, 1),
+        "snapshot_stale": stale,
+        "snapshot_state": "STALE" if stale else "CURRENT",
+    })
+    return annotated
 
 
 def _parse_version(v: str) -> Tuple[int, ...]:
@@ -467,8 +559,12 @@ def write_status_json(results_dir: Path, iteration: int,
     role_health = build_role_health_block(cfg, role_states, orze_dir)
 
     hostname = socket.gethostname()
+    snapshot_ttl_seconds = _status_snapshot_ttl_seconds(cfg)
     status = {
         "timestamp": datetime.datetime.now().isoformat(),
+        "snapshot_epoch": now,
+        "snapshot_ttl_seconds": snapshot_ttl_seconds,
+        "snapshot_valid_until_epoch": now + snapshot_ttl_seconds,
         "host": hostname,
         "iteration": iteration,
         "active": all_active,
