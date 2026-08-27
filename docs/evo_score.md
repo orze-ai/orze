@@ -15,6 +15,21 @@ It is computed live by `compute_research_efficiency()` in
 `orze/reporting/search_path.py` and served at `GET /api/research_efficiency`
 (also embedded in `/api/search_path`).
 
+“Scored” is fail-closed evidence qualification, not the presence of any numeric
+field. Only `completed` rows are eligible. The resolver accepts the configured
+primary metric or the exact dot-path explicitly declared by that primary report
+column; it never falls back to generic `avg_wer`, `wer`, `score`, or accuracy
+keys. IdeaLake is treated as an index, not result evidence: the current
+non-symlinked `metrics.json` must independently declare `COMPLETED`, configured
+source files must be readable without path redirection, values must be finite
+and non-boolean, metric validation must pass, and `report.min_datasets` coverage
+is shared with the leaderboard report. When `report.benchmark_contract` is
+enabled, the current per-idea nonce, exposure-ledger link, evaluator and
+benchmark identity, single-model/single-pass receipt, exact required-metric
+coverage, and macro aggregate must additionally validate. The API returns
+`evidence_qualification` beside the score with stable accepted/rejected counts
+and no artifact contents.
+
 ## How it is computed
 
 Evo Score is a weighted blend of five components, each normalized to `0..1`
@@ -49,7 +64,13 @@ The panel additionally reports the **explore-vs-exploit** split, **hub
 concentration** (top-1 / top-5 share, Gini), and a **depth-yield curve** (do
 deeper lineages actually produce scored results?).
 
-## Current state of the live run — 16 / F
+## Historical pre-qualification snapshot — 16 / F
+
+The table below is the 2026-era snapshot captured before completed-only,
+exact-primary, provenance-gated evidence qualification was added. It must not be
+presented as the current score; the live project must be recomputed after the
+reviewed runtime is deployed. In particular, historical partial rows or proxy
+fallback fields may reduce the newly qualified yield.
 
 | Component | Value | Normalized score |
 |---|---|---|

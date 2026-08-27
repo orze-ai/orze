@@ -18,8 +18,10 @@ from orze.core.benchmark_contract import (
     validate_benchmark_receipt,
 )
 from orze.reporting.leaderboard import update_report
+from orze.reporting.search_path import build_from_lake
 from orze.reporting.state import write_status_json
 from orze.engine import evaluator as evaluator_module
+from orze.idea_lake import IdeaLake
 
 
 def _sha(path: Path) -> str:
@@ -155,6 +157,44 @@ def test_fresh_receipt_proves_exact_single_model_result(tmp_path):
     ok, reason = validate_benchmark_receipt(idea_dir, cfg)
     assert ok is False
     assert reason == "benchmark_receipt_component_count_mismatch"
+
+
+def test_evo_score_counts_only_current_contract_verified_evidence(tmp_path):
+    cfg = _config(tmp_path)
+    results = tmp_path / "results"
+    cfg["_env_ORZE_RESULTS_DIR"] = str(results)
+    db_path = tmp_path / "ideas.db"
+    metrics = {
+        "status": "COMPLETED",
+        "metric_a": 2.0,
+        "metric_b": 4.0,
+        "avg_score": 3.0,
+    }
+    lake = IdeaLake(str(db_path))
+    for idea_id in ("idea-valid", "idea-unproven"):
+        idea_dir = results / idea_id
+        idea_dir.mkdir(parents=True)
+        (idea_dir / "metrics.json").write_text(
+            json.dumps(metrics), encoding="utf-8")
+        lake.insert(
+            idea_id, idea_id, "{}", "", eval_metrics=metrics,
+            status="completed",
+        )
+    lake.close()
+
+    valid_dir = results / "idea-valid"
+    env = prepare_benchmark_evaluation(valid_dir, cfg)
+    _write_receipt(
+        valid_dir, cfg, env["ORZE_BENCHMARK_EVALUATION_NONCE"])
+
+    evidence = build_from_lake(str(db_path), cfg)
+    qualification = evidence["evidence_qualification"]
+    assert evidence["stats"]["n_scored"] == 1
+    assert qualification["mode"] == "benchmark_contract"
+    assert qualification["accepted"] == 1
+    assert qualification["rejected"] == {"benchmark_provenance_missing": 1}
+    assert evidence["research_efficiency"][
+        "evidence_qualification"] == qualification
 
 
 def test_preexisting_receipt_is_rejected_before_evaluation(tmp_path):

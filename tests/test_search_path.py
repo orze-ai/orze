@@ -7,11 +7,14 @@ driven metric resolver.
 
 from orze.reporting.search_path import (
     Thresholds,
+    build_from_lake,
     build_search_path,
+    make_evidence_metric_resolver,
     make_metric_resolver,
     _config_delta,
     _classify_evolution,
 )
+from orze.idea_lake import IdeaLake
 
 
 def _metric_of(row):
@@ -203,6 +206,109 @@ class TestResolver:
         metric_of, lower, name = make_metric_resolver(cfg)
         assert lower is False
         assert metric_of({"eval_metrics": {"score": 0.9}}) == 0.9
+
+    def test_missing_primary_never_falls_back_to_unrelated_proxy(self):
+        cfg = {
+            "report": {
+                "primary_metric": "official_default_average",
+                "sort": "ascending",
+            },
+        }
+        metric_of, _, _ = make_metric_resolver(cfg)
+        assert metric_of({"eval_metrics": {
+            "avg_wer": 5.0,
+            "wer": 4.0,
+            "score": 99.0,
+            "test_accuracy": 1.0,
+        }}) is None
+
+    def test_nonfinite_and_boolean_primary_metrics_are_not_evidence(self):
+        metric_of, _, _ = make_metric_resolver({
+            "report": {"primary_metric": "score"},
+        })
+        assert metric_of({"eval_metrics": {"score": float("inf")}}) is None
+        assert metric_of({"eval_metrics": {"score": True}}) is None
+
+    def test_declared_dotted_primary_supports_flat_or_nested_storage(self):
+        metric_of, _, _ = make_metric_resolver({
+            "report": {"primary_metric": "private.default"},
+        })
+        assert metric_of({"eval_metrics": {"private.default": 3.0}}) == 3.0
+        assert metric_of({"eval_metrics": {"private": {"default": 4.0}}}) == 4.0
+
+    def test_evidence_resolver_enforces_configured_dataset_coverage(self,
+                                                                    tmp_path):
+        results = tmp_path / "results"
+        idea_dir = results / "idea-partial-coverage"
+        idea_dir.mkdir(parents=True)
+        cfg = {
+            "_env_ORZE_RESULTS_DIR": str(results),
+            "report": {
+                "primary_metric": "avg_wer",
+                "min_datasets": 2,
+                "columns": [
+                    {"key": "avg_wer"},
+                    {"key": "wer_a"},
+                    {"key": "wer_b"},
+                ],
+            },
+        }
+        metric_of, _, _, qualification = make_evidence_metric_resolver(
+            "unused.db", cfg)
+        row = {
+            "idea_id": "idea-partial-coverage",
+            "eval_metrics": {"avg_wer": 3.0, "wer_a": 2.0},
+        }
+        (idea_dir / "metrics.json").write_text(
+            '{"status":"COMPLETED","avg_wer":3.0,"wer_a":2.0}',
+            encoding="utf-8",
+        )
+        assert metric_of(row) is None
+        assert qualification["accepted"] == 0
+        assert qualification["rejected"] == {
+            "metric_coverage_below_min:1/2": 1,
+        }
+
+        row["eval_metrics"]["wer_b"] = 4.0
+        (idea_dir / "metrics.json").write_text(
+            '{"status":"COMPLETED","avg_wer":3.0,"wer_a":2.0,"wer_b":4.0}',
+            encoding="utf-8",
+        )
+        assert metric_of(row) == 3.0
+        assert qualification["accepted"] == 1
+        assert qualification["rejected"] == {}
+
+    def test_lake_metric_without_current_completed_artifact_is_not_scored(
+            self, tmp_path):
+        results = tmp_path / "results"
+        valid_dir = results / "idea-valid"
+        missing_dir = results / "idea-missing"
+        valid_dir.mkdir(parents=True)
+        missing_dir.mkdir(parents=True)
+        (valid_dir / "metrics.json").write_text(
+            '{"status":"COMPLETED","score":1.0}', encoding="utf-8")
+        db_path = tmp_path / "ideas.db"
+        lake = IdeaLake(str(db_path))
+        for idea_id in ("idea-valid", "idea-missing"):
+            lake.insert(
+                idea_id, idea_id, "{}", "",
+                eval_metrics={"score": 1.0}, status="completed",
+            )
+        lake.close()
+        cfg = {
+            "_env_ORZE_RESULTS_DIR": str(results),
+            "report": {
+                "primary_metric": "score",
+                "columns": [{"key": "score"}],
+            },
+        }
+
+        output = build_from_lake(str(db_path), cfg)
+        assert output["stats"]["n_scored"] == 1
+        assert output["evidence_qualification"]["accepted"] == 1
+        assert output["evidence_qualification"]["rejected"] == {
+            "local_metrics_missing": 1,
+        }
 
 class TestConfigDelta:
     def test_single_key_change(self):
@@ -409,3 +515,16 @@ class TestResearchEfficiency:
         assert nodes["root"]["metric"] == 1.0
         assert nodes["failed"]["metric"] is None
         assert nodes["skipped"]["metric"] is None
+
+    def test_partial_metrics_are_not_scored(self):
+        rows = [
+            {"idea_id": "root", "parent": None, "status": "completed",
+             "eval_metrics": {"score": 1.0}},
+            {"idea_id": "partial", "parent": "root", "status": "partial",
+             "eval_metrics": {"score": 999.0}},
+        ]
+        d = build_search_path(rows, metric_of=_metric_of,
+                              lower_is_better=False)
+        nodes = {node["id"]: node for node in d["nodes"]}
+        assert d["stats"]["n_scored"] == 1
+        assert nodes["partial"]["metric"] is None

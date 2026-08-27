@@ -554,19 +554,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     # don't use the wer_* convention.
     min_ds = report_cfg.get("min_datasets", 0)
     if min_ds > 0 and benchmark_contract is None:
-        col_keys = []
-        for c in (report_cfg.get("columns") or []):
-            if isinstance(c, dict) and c.get("key"):
-                col_keys.append(c["key"])
-        # For ASR reports, aggregate/timing columns such as ``avg_wer`` and
-        # ``training_time`` are not dataset measurements.  Prefer the explicit
-        # per-dataset ``wer_*`` columns when present; retain the generic column
-        # behavior for projects using a different metric naming convention.
-        wer_col_keys = [
-            key for key in col_keys
-            if key.startswith("wer_") and key != primary_metric
-        ]
-        dataset_col_keys = wer_col_keys or col_keys
+        from orze.reporting.evidence import minimum_dataset_coverage
         filtered = []
         for r in rows:
             if r["status"] != "COMPLETED":
@@ -574,21 +562,9 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 continue
             metrics = r.get("metrics") or {}
             values = r.get("values") or {}
-            ds_count = sum(
-                1 for k in dataset_col_keys
-                if (
-                    isinstance(values.get(k), (int, float))
-                    or (isinstance(metrics.get(k), (int, float)))
-                )
-            )
-            # Back-compat: also accept the legacy wer_* heuristic so
-            # projects that depend on it keep working without re-config.
-            if ds_count == 0:
-                ds_count = sum(
-                    1 for k, v in metrics.items()
-                    if k.startswith("wer_") and isinstance(v, (int, float))
-                )
-            if ds_count >= min_ds:
+            coverage_ok, _, _ = minimum_dataset_coverage(
+                report_cfg, values=values, metrics=metrics)
+            if coverage_ok:
                 filtered.append(r)
         rows = filtered
 

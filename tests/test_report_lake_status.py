@@ -100,6 +100,7 @@ def test_min_datasets_counts_dataset_wer_not_aggregate_or_time(tmp_path):
     ideas = {
         "idea-partial": {"title": "partial"},
         "idea-complete": {"title": "complete"},
+        "idea-nonfinite": {"title": "nonfinite"},
     }
     partial = {
         "status": "COMPLETED", "avg_wer": 1.0, "training_time": 100,
@@ -109,8 +110,14 @@ def test_min_datasets_counts_dataset_wer_not_aggregate_or_time(tmp_path):
         "status": "COMPLETED", "avg_wer": 2.0, "training_time": 100,
         **{key: 2.0 for key in keys},
     }
+    nonfinite = {
+        "status": "COMPLETED", "avg_wer": 0.0, "training_time": 100,
+        **{key: (True if i % 2 else float("inf"))
+           for i, key in enumerate(keys)},
+    }
     for idea_id, metrics in (("idea-partial", partial),
-                             ("idea-complete", complete)):
+                             ("idea-complete", complete),
+                             ("idea-nonfinite", nonfinite)):
         idea_dir = tmp_path / idea_id
         idea_dir.mkdir()
         (idea_dir / "metrics.json").write_text(json.dumps(metrics))
@@ -121,3 +128,4 @@ def test_min_datasets_counts_dataset_wer_not_aggregate_or_time(tmp_path):
     report = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "idea-complete" in report
     assert "idea-partial" not in report
+    assert "idea-nonfinite" not in report

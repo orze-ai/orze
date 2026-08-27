@@ -29,10 +29,11 @@ import math
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, asdict
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 # Statuses treated as "this idea actually ran and produced a result we trust".
-_SCORED_STATUSES = {"completed", "partial"}
+_SCORED_STATUSES = {"completed"}
 # Statuses that represent wasted / broken compute.
 _FAILED_STATUSES = {"failed", "error"}
 
@@ -859,36 +860,202 @@ def make_metric_resolver(cfg: Optional[dict]):
     primary = report.get("primary_metric", "score")
     lower_is_better = str(report.get("sort", "descending")).lower().startswith("asc")
 
-    # Candidate keys to probe inside eval_metrics, most specific first.
+    # Candidate keys to probe inside eval_metrics, most specific first.  These
+    # are exact aliases declared by the configured primary column; unrelated
+    # generic fallbacks can turn a missing target (for example a private/default
+    # benchmark aggregate) into a different proxy metric without disclosure.
     keys: List[str] = [primary]
     for col in report.get("columns", []) or []:
         if col.get("key") == primary:
             src = col.get("source", "")
             if ":" in src:
                 keys.append(src.split(":", 1)[1])  # e.g. "avg_wer"
-    keys += ["avg_wer", "wer", "score", "test_accuracy"]  # last-resort fallbacks
+    keys = list(dict.fromkeys(keys))
 
     def metric_of(row: dict) -> Optional[float]:
         em = row.get("eval_metrics") or {}
         if not isinstance(em, dict):
             return None
         for k in keys:
-            v = em.get(k)
-            if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v)):
+            if k in em:
+                value = em[k]
+            else:
+                value = em
+                for part in str(k).split("."):
+                    if not isinstance(value, dict) or part not in value:
+                        value = None
+                        break
+                    value = value[part]
+            v = value
+            if (not isinstance(v, bool) and isinstance(v, (int, float))
+                    and math.isfinite(float(v))):
                 return float(v)
         return None
 
     return metric_of, lower_is_better, primary
 
 
+def _configured_results_dir(db_path: str, cfg: Optional[dict]) -> Optional[Path]:
+    """Resolve the result root needed to validate current result evidence."""
+    cfg = cfg or {}
+    value = cfg.get("_env_ORZE_RESULTS_DIR") or cfg.get("results_dir")
+    if not value:
+        return None
+    path = Path(str(value))
+    if not path.is_absolute():
+        path = Path(cfg.get("_project_root") or Path(db_path).parent) / path
+    return path.resolve()
+
+
+def make_evidence_metric_resolver(
+    db_path: str,
+    cfg: Optional[dict],
+):
+    """Return a metric resolver plus mutable evidence-qualification summary.
+
+    With a benchmark contract, IdeaLake metrics alone are never comparable.
+    Each completed row must still have current nonce/exposure/evaluator/model
+    provenance and the exact required metric coverage in its idea directory.
+    The summary deliberately records stable reason codes rather than metric or
+    artifact contents.
+    """
+    base_metric, lower_is_better, primary = make_metric_resolver(cfg)
+    report = ((cfg or {}).get("report") or {})
+    contract = report.get("benchmark_contract")
+    summary = {
+        "mode": "verified_local_artifact",
+        "primary_metric": primary,
+        "fallback_metrics_allowed": False,
+        "accepted": 0,
+        "rejected": {},
+    }
+    accepted = set()
+    rejected = {}
+    rejection_counts: Dict[str, int] = defaultdict(int)
+
+    def refresh_summary():
+        summary["accepted"] = len(accepted)
+        summary["rejected"] = dict(sorted(
+            (reason, count) for reason, count in rejection_counts.items()
+            if count > 0
+        ))
+
+    def reject(idea_id: str, reason: str):
+        accepted.discard(idea_id)
+        previous = rejected.get(idea_id)
+        if previous != reason:
+            if previous is not None:
+                rejection_counts[previous] -= 1
+            rejected[idea_id] = reason
+            rejection_counts[reason] += 1
+        refresh_summary()
+        return None
+
+    def accept(idea_id: str):
+        previous = rejected.pop(idea_id, None)
+        if previous is not None:
+            rejection_counts[previous] -= 1
+        accepted.add(idea_id)
+        refresh_summary()
+
+    if not isinstance(contract, dict):
+        local_results_dir = _configured_results_dir(db_path, cfg)
+
+        def exact_metric(row):
+            idea_id = str(row.get("idea_id") or "")
+            if (not idea_id or Path(idea_id).parts != (idea_id,)
+                    or idea_id in (".", "..")):
+                return reject(idea_id, "idea_id_invalid")
+            if local_results_dir is None:
+                return reject(idea_id, "local_results_dir_missing")
+            idea_dir = local_results_dir / idea_id
+            if idea_dir.is_symlink():
+                return reject(idea_id, "local_idea_dir_symlink")
+            from orze.reporting.evidence import load_local_report_evidence
+            metrics, values, evidence_reason = load_local_report_evidence(
+                idea_dir, report)
+            if evidence_reason != "local_evidence_loaded":
+                return reject(idea_id, evidence_reason)
+            try:
+                from orze.core.integrity import validate_metrics
+                valid, _ = validate_metrics(metrics, cfg or {})
+            except Exception:
+                valid = False
+            if not valid:
+                return reject(idea_id, "local_metric_validation_failed")
+            value = base_metric({"eval_metrics": values})
+            if value is None:
+                return reject(idea_id, "primary_metric_missing_or_nonfinite")
+            from orze.reporting.evidence import minimum_dataset_coverage
+            coverage_ok, observed, required = minimum_dataset_coverage(
+                report, values=values, metrics=metrics)
+            if not coverage_ok:
+                return reject(
+                    idea_id,
+                    f"metric_coverage_below_min:{observed}/{required}",
+                )
+            accept(idea_id)
+            return value
+
+        return exact_metric, lower_is_better, primary, summary
+
+    summary.update({
+        "mode": "benchmark_contract",
+        "benchmark_id": contract.get("benchmark_id"),
+        "benchmark_view": contract.get("view"),
+        "evidence_scope": contract.get("evidence_scope"),
+        "selection_mode": contract.get("selection_mode"),
+    })
+    results_dir = _configured_results_dir(db_path, cfg)
+
+    def benchmark_metric(row):
+        idea_id = str(row.get("idea_id") or "")
+        if (not idea_id or Path(idea_id).parts != (idea_id,)
+                or idea_id in (".", "..")):
+            return reject(idea_id, "idea_id_invalid")
+        if results_dir is None:
+            return reject(idea_id, "benchmark_results_dir_missing")
+        idea_dir = results_dir / idea_id
+        if idea_dir.is_symlink():
+            return reject(idea_id, "benchmark_idea_dir_symlink")
+        try:
+            from orze.core.benchmark_contract import (
+                load_benchmark_values, validate_benchmark_receipt,
+            )
+            values = load_benchmark_values(idea_dir, cfg or {})
+            valid, reason = validate_benchmark_receipt(
+                idea_dir, cfg or {}, values=values)
+        except Exception as exc:
+            return reject(
+                idea_id,
+                f"benchmark_validation_error:{type(exc).__name__}",
+            )
+        if not valid:
+            return reject(idea_id, reason)
+        value = values.get(primary)
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))):
+            return reject(idea_id, "benchmark_primary_metric_invalid")
+        accept(idea_id)
+        return float(value)
+
+    return benchmark_metric, lower_is_better, primary, summary
+
+
 def build_from_lake(db_path: str, cfg: Optional[dict] = None,
                     thresholds: Optional[Thresholds] = None) -> Dict[str, Any]:
     rows = load_rows_from_lake(db_path)
-    metric_of, lib, name = make_metric_resolver(cfg)
-    return build_search_path(
+    metric_of, lib, name, qualification = make_evidence_metric_resolver(
+        db_path, cfg)
+    output = build_search_path(
         rows, metric_of=metric_of, lower_is_better=lib, metric_name=name,
         thresholds=thresholds or Thresholds.from_config(cfg),
     )
+    # Keep the qualification next to the score so a high-level consumer cannot
+    # present "yield" without also presenting what counted as evidence.
+    output["evidence_qualification"] = qualification
+    output["research_efficiency"]["evidence_qualification"] = qualification
+    return output
 
 
 def _main() -> None:
@@ -905,6 +1072,11 @@ def _main() -> None:
             import yaml
             with open(args.config) as f:
                 cfg = yaml.safe_load(f)
+            if isinstance(cfg, dict):
+                cfg.setdefault(
+                    "_project_root",
+                    str(Path(args.config).resolve().parent),
+                )
         except Exception as e:  # noqa: BLE001
             print(f"warning: could not load config {args.config}: {e}")
 
