@@ -42,8 +42,9 @@ For a defensible leakage boundary:
 3. Set `training_network: deny` after the artifact resolver has pinned and
    cached legitimate training inputs.
 4. Pin training-data manifests and audit them for sample/speaker/source overlap
-   with the evaluation manifest. Filesystem isolation cannot discover an
-   undeclared alias, hard link, copied sample, or semantic duplicate.
+   with the evaluation manifest using the keyed-fingerprint
+   [data-separation contract](data-separation.md). Filesystem isolation cannot
+   discover an undeclared alias, hard link, copied sample, or semantic duplicate.
 5. Treat benchmark receipts as local evidence. They do not prove the data
    history of an externally pretrained model or an official leaderboard rank.
 

@@ -51,6 +51,7 @@ def compute_execution_identity(
     train_extra_args: list,
     train_extra_env: dict,
     data_boundaries: dict,
+    data_separation: Optional[dict] = None,
 ) -> str:
     """Hash semantic launch inputs without returning or persisting them.
 
@@ -76,6 +77,12 @@ def compute_execution_identity(
         },
         "data_boundaries": data_boundaries,
     }
+    if (isinstance(data_separation, dict)
+            and data_separation.get("enabled") is True):
+        # Enabling a new data contract intentionally creates a distinct
+        # execution identity; disabled projects retain their prior identity.
+        payload["schema_version"] = 2
+        payload["data_separation"] = data_separation
     try:
         encoded = json.dumps(
             payload, sort_keys=True, separators=(",", ":"),

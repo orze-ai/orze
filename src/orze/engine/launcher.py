@@ -1519,6 +1519,13 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             idea_id, results_dir, cfg):
         raise LaunchIntegrityError(
             "artifact_preflight_receipt_missing_or_stale")
+    from orze.core.data_separation import (
+        DataSeparationError, ensure_data_separation,
+    )
+    try:
+        ensure_data_separation(cfg)
+    except DataSeparationError as exc:
+        raise LaunchIntegrityError(str(exc)) from exc
     if kernel_boundary:
         _probe_kernel_boundary(deny_network=training_network == "deny")
         # The actual namespace setup repeats every mandatory operation after
@@ -1544,6 +1551,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             train_extra_args=list(cfg.get("train_extra_args") or []),
             train_extra_env=dict(cfg.get("train_extra_env") or {}),
             data_boundaries=dict(db_cfg),
+            data_separation=dict(cfg.get("data_separation") or {}),
         )
         reserve_execution_identity(
             results_dir, cfg, execution_identity, idea_id, attempt_id)

@@ -282,6 +282,23 @@ DEFAULT_CONFIG = {
         # namespace. ``inherit`` is not sufficient for a no-leakage claim.
         "training_network": "inherit",
     },
+    # Optional keyed-fingerprint manifest audit. This proves only the declared
+    # manifests are within the configured overlap bounds; see
+    # docs/data-separation.md.
+    "data_separation": {
+        "enabled": False,
+        "train_manifest": None,
+        "train_manifest_sha256": None,
+        "evaluation_manifest": None,
+        "evaluation_manifest_sha256": None,
+        "fingerprint_namespace_sha256": None,
+        "normalization_contract_sha256": None,
+        "fields": ["sample"],
+        "max_overlap": {"sample": 0},
+        "max_records": 10_000_000,
+        "max_bytes": 2 * 1024 * 1024 * 1024,
+        "max_line_bytes": 4096,
+    },
     # Auto-seal eval scripts. When true, any file matching eval_*.py or
     # eval_*.sh in the project root is added to sealed_files at config
     # load time, preventing silent mutation by LLM agents.
@@ -806,6 +823,9 @@ def _validate_config(cfg: dict) -> tuple:
             errors.append(
                 "data_boundaries.training_network: expected 'inherit' or 'deny'"
             )
+
+    from orze.core.data_separation import validate_data_separation_config
+    errors.extend(validate_data_separation_config(cfg))
 
     # Report columns are consumed as mappings by the leaderboard. Reject
     # shorthand strings during --check instead of crashing after compute has

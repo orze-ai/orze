@@ -158,7 +158,8 @@ ssh node2 "cd /nfs/project && orze start"
 - **HP Sweep** — `lr: [1e-4, 3e-4]` auto-expands into all combinations
 - **Failure Protection** — Stops automatically when failure rates spike
 - **Fail-closed Data Boundaries** — Kernel-isolated held-out paths and optional
-  training-network denial ([configuration and limits](docs/data-boundaries.md))
+  training-network denial plus keyed-fingerprint manifest separation
+  ([configuration and limits](docs/data-boundaries.md))
 - **Cross-Experiment Analysis** — Detects regressions, tradeoffs, and suggests actions
 - **Rich Notifications** — GPU VRAM, per-dataset breakdown, verified results, target/gap tracking
 - **Admin Panel** — Real-time web dashboard at `http://localhost:8787`

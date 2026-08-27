@@ -1000,6 +1000,29 @@ artifact_preflight:
   network: inherit             # inherit | required | offline
   retry_interval: 300
 
+# --- TRAIN/EVALUATION DATA SEPARATION ---
+# A no-leakage claim requires separate train/eval processes, complete held-out
+# path declarations, denied training networking, and pinned keyed-fingerprint
+# manifests. See docs/data-boundaries.md and docs/data-separation.md.
+data_boundaries:
+  forbidden_in_training: []
+  watch_paths: []               # Python audit only; never proof of isolation
+  training_network: inherit     # set deny after legitimate inputs are cached
+
+data_separation:
+  enabled: false
+  train_manifest: null
+  train_manifest_sha256: null
+  evaluation_manifest: null
+  evaluation_manifest_sha256: null
+  fingerprint_namespace_sha256: null
+  normalization_contract_sha256: null
+  fields: [sample]
+  max_overlap: {{sample: 0}}
+  max_records: 10000000
+  max_bytes: 2147483648
+  max_line_bytes: 4096
+
 # --- AGENT TOOL BOUNDARY ---
 # Managed Claude roles run Bash inside an OS sandbox that fails closed when
 # unavailable. Root-wide recursive scans, detached/background processes, and
