@@ -281,6 +281,9 @@ DEFAULT_CONFIG = {
     # rejects composite work before it can enter the experiment queue.
     "research_policy": {
         "model_form": "unrestricted",
+        "require_batch_decision_contract": False,
+        "max_decision_batch": 8,
+        "min_decision_effect": 0.0,
     },
     # Enforce OS sandboxing and deterministic tool-call denials for managed
     # Claude roles. Older/unsupported sandbox runtimes fail closed.

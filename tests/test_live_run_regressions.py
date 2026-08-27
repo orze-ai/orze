@@ -129,6 +129,26 @@ def test_config_check_rejects_invalid_research_policy(policy):
     assert any(error.startswith("research_policy") for error in errors)
 
 
+@pytest.mark.parametrize(
+    "policy,error",
+    [
+        ({"require_batch_decision_contract": "yes"},
+         "research_policy.require_batch_decision_contract"),
+        ({"max_decision_batch": 0},
+         "research_policy.max_decision_batch"),
+        ({"max_decision_batch": True},
+         "research_policy.max_decision_batch"),
+        ({"min_decision_effect": True},
+         "research_policy.min_decision_effect"),
+        ({"min_decision_effect": float("nan")},
+         "research_policy.min_decision_effect"),
+    ],
+)
+def test_config_check_rejects_invalid_decision_policy(policy, error):
+    errors, _ = _validate_config({"research_policy": policy})
+    assert any(item.startswith(error) for item in errors)
+
+
 def test_config_check_reports_boolean_notifications(tmp_path, monkeypatch):
     train = tmp_path / "train.py"
     train.write_text("# idea_config.yaml\n")

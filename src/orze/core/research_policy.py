@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Mapping, Optional
 
@@ -42,6 +43,8 @@ _COMPOSITE_VALUE_TOKENS = frozenset({
     "voter",
     "voting",
 })
+_DECISION_COMPARATORS = frozenset({"lt", "lte", "gt", "gte"})
+_FAILURE_ACTIONS = frozenset({"redirect_family", "stop_branch"})
 _SAFE_NAME_RE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 
 
@@ -81,6 +84,25 @@ def validate_research_policy_config(cfg: Mapping) -> list[str]:
             errors.append(
                 f"{prefix}.{field}: must be a list of unique safe names"
             )
+    required = policy.get("require_batch_decision_contract", False)
+    if not isinstance(required, bool):
+        errors.append(
+            f"{prefix}.require_batch_decision_contract: must be true or false"
+        )
+    maximum = policy.get("max_decision_batch", 8)
+    if (isinstance(maximum, bool) or not isinstance(maximum, int)
+            or not 1 <= maximum <= 64):
+        errors.append(
+            f"{prefix}.max_decision_batch: must be an integer from 1 to 64"
+        )
+    minimum_effect = policy.get("min_decision_effect", 0.0)
+    if (isinstance(minimum_effect, bool)
+            or not isinstance(minimum_effect, (int, float))
+            or not math.isfinite(float(minimum_effect))
+            or float(minimum_effect) < 0.0):
+        errors.append(
+            f"{prefix}.min_decision_effect: must be a finite non-negative number"
+        )
     return errors
 
 
@@ -98,6 +120,116 @@ def single_model_required(cfg: Mapping) -> bool:
         and contract.get("model_form") == SINGLE_MODEL_FORM
     )
     return explicit or benchmark
+
+
+def batch_decision_contract_required(cfg: Mapping) -> bool:
+    """Return whether autonomous batches need a prospective decision rule."""
+    policy = cfg.get("research_policy")
+    return (
+        isinstance(policy, dict)
+        and policy.get("require_batch_decision_contract") is True
+    )
+
+
+def _bounded_statement(value) -> bool:
+    return (
+        isinstance(value, str)
+        and 20 <= len(value.strip()) <= 500
+        and not any(ord(character) < 32 for character in value)
+    )
+
+
+def validate_batch_decision_contract(
+    contract,
+    cfg: Mapping,
+    *,
+    idea_count: int,
+    qualified_best=None,
+) -> Optional[str]:
+    """Validate a prospective, batch-bound experiment decision contract."""
+    if not batch_decision_contract_required(cfg):
+        return None
+    if not isinstance(contract, dict):
+        return "batch_decision_contract_missing"
+    if set(contract) != {
+        "uncertainty",
+        "metric",
+        "baseline",
+        "comparator",
+        "threshold",
+        "on_failure",
+        "max_experiments",
+    }:
+        return "batch_decision_contract_fields_invalid"
+    if not _bounded_statement(contract.get("uncertainty")):
+        return "batch_decision_contract_uncertainty_invalid"
+
+    report = cfg.get("report")
+    if not isinstance(report, dict):
+        return "batch_decision_contract_report_invalid"
+    metric = report.get("primary_metric")
+    if (not isinstance(metric, str) or not metric
+            or contract.get("metric") != metric):
+        return "batch_decision_contract_metric_mismatch"
+    comparator = contract.get("comparator")
+    if comparator not in _DECISION_COMPARATORS:
+        return "batch_decision_contract_comparator_invalid"
+    sort_order = report.get("sort", "descending")
+    expected = {"lt", "lte"} if sort_order == "ascending" else {"gt", "gte"}
+    if sort_order not in ("ascending", "descending"):
+        return "batch_decision_contract_sort_invalid"
+    if comparator not in expected:
+        return "batch_decision_contract_direction_mismatch"
+    baseline = contract.get("baseline")
+    if qualified_best is None:
+        if baseline is not None:
+            return "batch_decision_contract_baseline_mismatch"
+    else:
+        if (isinstance(qualified_best, bool)
+                or not isinstance(qualified_best, (int, float))
+                or not math.isfinite(float(qualified_best))):
+            return "batch_decision_contract_authoritative_baseline_invalid"
+        if (isinstance(baseline, bool)
+                or not isinstance(baseline, (int, float))
+                or not math.isfinite(float(baseline))
+                or not math.isclose(
+                    float(baseline), float(qualified_best),
+                    rel_tol=0.0, abs_tol=1.0e-12)):
+            return "batch_decision_contract_baseline_mismatch"
+    threshold = contract.get("threshold")
+    if (isinstance(threshold, bool)
+            or not isinstance(threshold, (int, float))
+            or not math.isfinite(float(threshold))):
+        return "batch_decision_contract_threshold_invalid"
+    if qualified_best is not None:
+        minimum_effect = (cfg.get("research_policy") or {}).get(
+            "min_decision_effect", 0.0)
+        if (isinstance(minimum_effect, bool)
+                or not isinstance(minimum_effect, (int, float))
+                or not math.isfinite(float(minimum_effect))
+                or float(minimum_effect) < 0.0):
+            return "batch_decision_contract_minimum_effect_invalid"
+        if sort_order == "ascending":
+            effect = float(qualified_best) - float(threshold)
+        else:
+            effect = float(threshold) - float(qualified_best)
+        if (effect <= 0.0
+                or effect + 1.0e-12 < float(minimum_effect)):
+            return "batch_decision_contract_effect_too_small"
+    if contract.get("on_failure") not in _FAILURE_ACTIONS:
+        return "batch_decision_contract_failure_action_invalid"
+
+    maximum = (cfg.get("research_policy") or {}).get(
+        "max_decision_batch", 8)
+    experiments = contract.get("max_experiments")
+    if (isinstance(experiments, bool) or not isinstance(experiments, int)
+            or isinstance(maximum, bool) or not isinstance(maximum, int)
+            or not 1 <= experiments <= maximum):
+        return "batch_decision_contract_budget_invalid"
+    if (isinstance(idea_count, bool) or not isinstance(idea_count, int)
+            or idea_count < 1 or experiments != idea_count):
+        return "batch_decision_contract_count_mismatch"
+    return None
 
 
 def _is_populated(value) -> bool:

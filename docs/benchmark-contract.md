@@ -79,6 +79,9 @@ inference pass, declare the corresponding proposal-time contract as well:
 research_policy:
   model_form: single_model_single_pass
   forbidden_approach_families: [ensemble]
+  require_batch_decision_contract: true
+  max_decision_batch: 3
+  min_decision_effect: 0.02
 ```
 
 This rejects ensemble-family proposals and populated inference-composition keys
@@ -95,6 +98,21 @@ An enabled benchmark contract whose `model_form` is
 it makes the constraint visible before the longer benchmark block and provides
 the project-specific family/key extensions. Setting it to `unrestricted` cannot
 weaken a single-model benchmark contract.
+
+The optional batch decision contract prevents an autonomous producer from
+turning an unbounded “try ideas” loop into queue entries. Before it emits a
+batch, it must bind the exact configured primary metric, current qualified
+baseline, direction-correct finite threshold, experiment count, and either a
+`stop_branch` or `redirect_family` failure action. The threshold must improve
+on the authoritative baseline by at least `min_decision_effect`; a stale,
+invented, already-achieved, or noise-sized target fails before queue insertion.
+Accepted contracts are content-bound to their idea IDs under
+`.orze/policy/decision_contracts/` and become `admitted` only after the atomic
+queue append succeeds. This is a local experiment decision rule, not an
+official-rank target or evidence that private benchmark columns were measured.
+If the qualified lifecycle/evidence authority cannot be loaded, batch admission
+stops before an LLM call; that failure is not treated as a first campaign with
+an empty baseline.
 
 ## Evidence scope and exposure budgets
 
