@@ -68,6 +68,34 @@ def test_config_check_rejects_report_column_shorthand(tmp_path, monkeypatch):
     assert any("report.columns[0]" in error for error in errors)
 
 
+@pytest.mark.parametrize(
+    "target", [True, "1.0", float("nan"), float("inf"), float("-inf")]
+)
+def test_config_check_rejects_nonfinite_or_nonnumeric_target(
+        tmp_path, monkeypatch, target):
+    train = tmp_path / "train.py"
+    train.write_text("# idea_config.yaml\n")
+    monkeypatch.chdir(tmp_path)
+    errors, _ = _validate_config({
+        "train_script": "train.py",
+        "report": {"target": target},
+    })
+    assert "report.target: must be a finite number or null" in errors
+
+
+@pytest.mark.parametrize("target", [None, 0, -1.5, 2.0])
+def test_config_check_accepts_finite_or_absent_target(
+        tmp_path, monkeypatch, target):
+    train = tmp_path / "train.py"
+    train.write_text("# idea_config.yaml\n")
+    monkeypatch.chdir(tmp_path)
+    errors, _ = _validate_config({
+        "train_script": "train.py",
+        "report": {"target": target},
+    })
+    assert not any(error.startswith("report.target:") for error in errors)
+
+
 def test_config_check_reports_boolean_notifications(tmp_path, monkeypatch):
     train = tmp_path / "train.py"
     train.write_text("# idea_config.yaml\n")

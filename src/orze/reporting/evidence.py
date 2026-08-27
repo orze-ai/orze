@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Mapping
@@ -262,16 +263,15 @@ def qualify_local_report_evidence(
     return metrics, values, float(value), "local_evidence_verified"
 
 
-def authoritative_completed_idea_ids(
-    db_path: Path,
-) -> tuple[set[str], str]:
-    """Load lifecycle-complete idea IDs from the authoritative lake read-only.
+_SAFE_FAMILY_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
 
-    A metrics artifact is result evidence, not lifecycle authority. Consumers
-    that steer research must require both the audited FSM state and the legacy
-    status mirror to agree on completion. Missing, redirected, hard-linked, or
-    incompatible databases fail closed and never get created by inspection.
-    """
+
+def _authoritative_completed_rows(
+    db_path: Path,
+    *,
+    include_family: bool,
+) -> tuple[list[tuple], str]:
+    """Read agreed lifecycle-complete rows under the shared DB policy."""
     path = Path(db_path)
     try:
         absolute = path.absolute()
@@ -283,11 +283,11 @@ def authoritative_completed_idea_ids(
                 redirected = True
                 break
         if redirected:
-            return set(), "authoritative_lifecycle_database_redirected"
+            return [], "authoritative_lifecycle_database_redirected"
         if not path.is_file():
-            return set(), "authoritative_lifecycle_database_unavailable"
+            return [], "authoritative_lifecycle_database_unavailable"
         if path.stat().st_nlink != 1:
-            return set(), "authoritative_lifecycle_database_redirected"
+            return [], "authoritative_lifecycle_database_redirected"
         connection = sqlite3.connect(
             absolute.as_uri() + "?mode=ro",
             uri=True,
@@ -302,11 +302,15 @@ def authoritative_completed_idea_ids(
             try:
                 policy = inspect_shared_database_policy(connection)
             except SQLitePolicyError:
-                return set(), "authoritative_lifecycle_database_invalid"
+                return [], "authoritative_lifecycle_database_invalid"
             if not policy["compliant"]:
-                return set(), "authoritative_lifecycle_database_policy_invalid"
+                return [], "authoritative_lifecycle_database_policy_invalid"
+            select = (
+                "i.idea_id, i.approach_family"
+                if include_family else "i.idea_id"
+            )
             rows = connection.execute(
-                "SELECT i.idea_id FROM ideas AS i "
+                f"SELECT {select} FROM ideas AS i "
                 "JOIN idea_state AS s ON s.idea_id = i.idea_id "
                 "WHERE lower(i.status) = 'completed' "
                 "AND s.current_state = 'COMPLETE'"
@@ -314,7 +318,24 @@ def authoritative_completed_idea_ids(
         finally:
             connection.close()
     except (OSError, sqlite3.Error):
-        return set(), "authoritative_lifecycle_database_invalid"
+        return [], "authoritative_lifecycle_database_invalid"
+    return rows, "authoritative_lifecycle_loaded"
+
+
+def authoritative_completed_idea_ids(
+    db_path: Path,
+) -> tuple[set[str], str]:
+    """Load lifecycle-complete idea IDs from the authoritative lake read-only.
+
+    A metrics artifact is result evidence, not lifecycle authority. Consumers
+    that steer research must require both the audited FSM state and the legacy
+    status mirror to agree on completion. Missing, redirected, hard-linked, or
+    incompatible databases fail closed and never get created by inspection.
+    """
+    rows, reason = _authoritative_completed_rows(
+        db_path, include_family=False)
+    if reason != "authoritative_lifecycle_loaded":
+        return set(), reason
 
     completed = {
         str(row[0])
@@ -323,7 +344,29 @@ def authoritative_completed_idea_ids(
         and row[0] not in ("", ".", "..")
         and Path(row[0]).parts == (row[0],)
     }
-    return completed, "authoritative_lifecycle_loaded"
+    return completed, reason
+
+
+def authoritative_completed_idea_families(
+    db_path: Path,
+) -> tuple[dict[str, str], str]:
+    """Load closed, content-safe family labels for lifecycle-complete IDs."""
+    rows, reason = _authoritative_completed_rows(
+        db_path, include_family=True)
+    if reason != "authoritative_lifecycle_loaded":
+        return {}, reason
+    families = {}
+    for row in rows:
+        if (not row or not isinstance(row[0], str)
+                or row[0] in ("", ".", "..")
+                or Path(row[0]).parts != (row[0],)):
+            continue
+        raw_family = row[1] if len(row) > 1 else None
+        family = str(raw_family or "other").strip().lower()
+        if _SAFE_FAMILY_RE.fullmatch(family) is None:
+            family = "other"
+        families[row[0]] = family
+    return families, reason
 
 
 def qualify_authoritative_report_evidence(

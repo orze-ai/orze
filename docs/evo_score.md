@@ -54,6 +54,11 @@ agree on completion. An artifact-only `COMPLETED` claim, conflicting lifecycle,
 tainted result, invalid local evidence, or missing benchmark receipt therefore
 cannot spend a research plateau budget.
 
+Projects may declare a finite primary-metric goal as `report.target`. The value
+uses `report.sort` direction (`<=` for ascending, `>=` for descending); booleans,
+strings, NaN, and infinities fail configuration validation. Orze itself does not
+infer a target or translate a local metric target into an official rank.
+
 The research-role digest uses the same resolver. It never ranks harvested or
 raw `metrics.json` values directly: current completion, exact configured
 sources, metric validation, dataset coverage, and any enabled benchmark receipt

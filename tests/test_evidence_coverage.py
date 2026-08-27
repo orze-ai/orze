@@ -4,6 +4,7 @@ import sqlite3
 import pytest
 
 from orze.reporting.evidence import (
+    authoritative_completed_idea_families,
     authoritative_completed_idea_ids,
     count_dataset_metrics,
     dataset_metric_keys,
@@ -159,11 +160,18 @@ def test_local_evidence_rejects_redirected_idea_directory(tmp_path):
 
 def _lifecycle_db(path, rows):
     connection = sqlite3.connect(path)
-    connection.execute("CREATE TABLE ideas (idea_id TEXT, status TEXT)")
+    connection.execute(
+        "CREATE TABLE ideas "
+        "(idea_id TEXT, status TEXT, approach_family TEXT)")
     connection.execute(
         "CREATE TABLE idea_state (idea_id TEXT, current_state TEXT)")
-    for idea_id, status, state in rows:
-        connection.execute("INSERT INTO ideas VALUES (?, ?)", (idea_id, status))
+    for row in rows:
+        idea_id, status, state = row[:3]
+        family = row[3] if len(row) > 3 else None
+        connection.execute(
+            "INSERT INTO ideas VALUES (?, ?, ?)",
+            (idea_id, status, family),
+        )
         connection.execute(
             "INSERT INTO idea_state VALUES (?, ?)", (idea_id, state))
     connection.commit()
@@ -183,6 +191,23 @@ def test_authoritative_completion_requires_both_lifecycle_views(tmp_path):
 
     assert reason == "authoritative_lifecycle_loaded"
     assert completed == {"idea-good"}
+
+
+def test_authoritative_families_are_lifecycle_bound_and_content_safe(tmp_path):
+    db_path = tmp_path / "idea_lake.db"
+    _lifecycle_db(db_path, [
+        ("idea-architecture", "completed", "COMPLETE", "Architecture"),
+        ("idea-unknown", "completed", "COMPLETE", "bad\nlog"),
+        ("idea-failed", "failed", "FAILED", "data"),
+    ])
+
+    families, reason = authoritative_completed_idea_families(db_path)
+
+    assert reason == "authoritative_lifecycle_loaded"
+    assert families == {
+        "idea-architecture": "architecture",
+        "idea-unknown": "other",
+    }
 
 
 def test_authoritative_lifecycle_rejects_wal_without_mutating_it(tmp_path):

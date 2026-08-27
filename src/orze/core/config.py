@@ -253,6 +253,8 @@ DEFAULT_CONFIG = {
         "title": "Orze Report",
         "primary_metric": "test_accuracy",
         "sort": "descending",
+        # Optional finite primary-metric goal used by target-aware stopping.
+        "target": None,
         "columns": [
             {"key": "test_accuracy", "label": "Accuracy", "fmt": ".4f"},
             {"key": "test_loss", "label": "Loss", "fmt": ".4f"},
@@ -911,6 +913,12 @@ def _validate_config(cfg: dict) -> tuple:
     if not isinstance(report_cfg, dict):
         errors.append("report: must be a mapping")
     else:
+        target = report_cfg.get("target")
+        if (target is not None and (
+                isinstance(target, bool)
+                or not isinstance(target, (int, float))
+                or not math.isfinite(float(target)))):
+            errors.append("report.target: must be a finite number or null")
         columns = report_cfg.get("columns", [])
         if not isinstance(columns, list):
             errors.append("report.columns: must be a list of mappings")
