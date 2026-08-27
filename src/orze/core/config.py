@@ -668,17 +668,11 @@ def _validate_config(cfg: dict) -> tuple:
                     "non-negative integer GPU IDs")
             else:
                 normalized_gpu_lists[key] = set(values)
-        allowed = normalized_gpu_lists.get("allowed_gpus", set())
-        reserved_outside = (
-            normalized_gpu_lists.get("reserved_gpus", set()) - allowed
-            if allowed else set()
-        )
-        if reserved_outside:
-            errors.append(
-                "gpu_scheduling.reserved_gpus outside allowed_gpus: "
-                + ", ".join(
-                    str(value) for value in sorted(reserved_outside))
-            )
+        # ``allowed_gpus`` is a hard positive scope and ``reserved_gpus`` is
+        # an independent negative scope.  Redundantly reserving a device that
+        # is already outside the allowlist is safe and makes operator intent
+        # explicit; rejecting that combination prevents exact least-privilege
+        # configurations such as allow 4-7 while reserving 0-3.
         min_free = gpu_cfg.get("min_free_vram_mib", 1000)
         if (isinstance(min_free, bool) or not isinstance(min_free, int)
                 or min_free < 0):

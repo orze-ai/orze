@@ -286,7 +286,6 @@ def test_launch_vram_threshold_uses_nested_scheduler_policy():
 @pytest.mark.parametrize("gpu_cfg", [
     {"allowed_gpus": [4, 4]},
     {"allowed_gpus": [4, True]},
-    {"allowed_gpus": [4], "reserved_gpus": [5]},
     {"min_free_vram_mib": -1},
 ])
 def test_config_validation_rejects_ambiguous_gpu_policy(
@@ -298,6 +297,20 @@ def test_config_validation_rejects_ambiguous_gpu_policy(
         "train_script": "train.py", "gpu_scheduling": gpu_cfg,
     })
     assert any("gpu_scheduling" in error for error in errors)
+
+
+def test_redundant_reservations_outside_allowlist_are_valid_and_denied():
+    cfg = {
+        "gpu_scheduling": {
+            "allowed_gpus": [4, 5, 6, 7],
+            "reserved_gpus": [0, 1, 2, 3],
+        },
+    }
+    errors, _ = _validate_config(cfg)
+    assert not any("gpu_scheduling" in error for error in errors)
+    _assert_gpu_authorized(4, cfg)
+    with pytest.raises(LaunchIntegrityError, match="outside_managed_scope"):
+        _assert_gpu_authorized(0, cfg)
 
 
 def test_eval_masks_to_one_authorized_gpu_and_uses_local_device_zero(
