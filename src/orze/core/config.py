@@ -32,6 +32,8 @@ from typing import Optional
 from pathlib import Path
 import yaml
 
+from orze.core.research_policy import validate_research_policy_config
+
 logger = logging.getLogger("orze")
 
 import sys
@@ -275,6 +277,11 @@ DEFAULT_CONFIG = {
     "orphan_timeout_hours": 6,  # reclaim stale claims after 6 hours
     "plateau_threshold": 50,    # fire plateau notification after N completions w/o improvement
     "roles": {},
+    # Optional autonomous-proposal contract. ``single_model_single_pass``
+    # rejects composite work before it can enter the experiment queue.
+    "research_policy": {
+        "model_form": "unrestricted",
+    },
     # Enforce OS sandboxing and deterministic tool-call denials for managed
     # Claude roles. Older/unsupported sandbox runtimes fail closed.
     "agent_tool_policy": {
@@ -531,6 +538,12 @@ def _validate_config(cfg: dict) -> tuple:
             if not isinstance(rcfg, dict):
                 errors.append(f"roles.{rname}: expected dict, got {type(rcfg).__name__}")
                 continue
+            enabled = rcfg.get("enabled", True)
+            if not isinstance(enabled, bool):
+                errors.append(f"roles.{rname}.enabled: must be true or false")
+                continue
+            if not enabled:
+                continue
             mode = rcfg.get("mode", "script")
             if mode not in ("script", "claude", "research"):
                 errors.append(f"roles.{rname}.mode: '{mode}' is invalid "
@@ -595,6 +608,7 @@ def _validate_config(cfg: dict) -> tuple:
         )
         for role_name, role_cfg in roles.items():
             if (not isinstance(role_cfg, dict)
+                    or role_cfg.get("enabled", True) is not True
                     or role_cfg.get("mode") != "claude"):
                 continue
             if role_cfg.get("dangerously_skip_permissions", False):
@@ -932,6 +946,8 @@ def _validate_config(cfg: dict) -> tuple:
             validate_benchmark_contract_config,
         )
         errors.extend(validate_benchmark_contract_config(cfg))
+
+    errors.extend(validate_research_policy_config(cfg))
 
     # train_script must exist
     ts = cfg.get("train_script")

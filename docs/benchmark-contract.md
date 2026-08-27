@@ -72,6 +72,30 @@ local evaluator cannot satisfy this particular default-view contract. For a
 public-only reproduction, declare the exact public view and manifest instead;
 its scope is still `local_reproduction`, never an official rank.
 
+For autonomous projects that must emit exactly one self-contained model and one
+inference pass, declare the corresponding proposal-time contract as well:
+
+```yaml
+research_policy:
+  model_form: single_model_single_pass
+  forbidden_approach_families: [ensemble]
+```
+
+This rejects ensemble-family proposals and populated inference-composition keys
+before queue admission and rechecks them at final launch. It intentionally does
+not reject training-time LoRA, EMA, SWA, distillation, or checkpoint merging by
+name: those techniques are eligible only if evaluation still receives one
+self-contained artifact satisfying the benchmark receipt. Additional
+project-specific composition keys may be listed under
+`research_policy.forbidden_config_keys`.
+
+An enabled benchmark contract whose `model_form` is
+`single_model_single_pass` activates the same built-in admission rule even when
+`research_policy` is omitted. Declaring `research_policy` is still recommended:
+it makes the constraint visible before the longer benchmark block and provides
+the project-specific family/key extensions. Setting it to `unrestricted` cannot
+weaken a single-model benchmark contract.
+
 ## Evidence scope and exposure budgets
 
 Every contract chooses one evidence scope:

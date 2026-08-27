@@ -13,6 +13,7 @@ from orze.engine.launcher import (
     launch,
 )
 from orze.core.config import _validate_config
+from orze.core.research_policy import validate_idea_against_research_policy
 from orze.engine.evaluator import launch_eval
 
 
@@ -98,6 +99,103 @@ def test_forbidden_override_search_does_not_match_values():
     assert find_forbidden_launch_override({
         "note": "force_launch", "nested": [{"safe": True}],
     }) is None
+
+
+@pytest.mark.parametrize(
+    "idea_cfg,expected",
+    [
+        ({"ensemble_components": ["a", "b"]}, "ensemble_components"),
+        ({"decode": {"ensemble_weights": [0.5, 0.5]}},
+         "ensemble_weights"),
+        ({"inference_model_paths": ["a", "b"]},
+         "inference_model_paths"),
+        ({"strategy": "logit_ensemble"}, "strategy"),
+        ({"decoder_method": "rover_consensus"}, "decoder_method"),
+    ],
+)
+def test_single_model_policy_rejects_composition_keys(idea_cfg, expected):
+    error = validate_idea_against_research_policy(
+        idea_cfg,
+        {"research_policy": {"model_form": "single_model_single_pass"}},
+    )
+    assert error == f"research_policy_composite_forbidden:config.{expected}"
+
+
+def test_single_model_policy_allows_training_that_emits_one_artifact():
+    assert validate_idea_against_research_policy(
+        {
+            "lora_path": "parent/checkpoint",
+            "ema_enabled": True,
+            "swa_enabled": True,
+            "distillation_teacher": "teacher",
+        },
+        {"research_policy": {"model_form": "single_model_single_pass"}},
+        approach_family="architecture",
+    ) is None
+
+
+def test_single_model_policy_rejects_ensemble_family():
+    assert validate_idea_against_research_policy(
+        {},
+        {"research_policy": {"model_form": "single_model_single_pass"}},
+        approach_family="ensemble",
+    ) == "research_policy_approach_family_forbidden:ensemble"
+
+
+def test_benchmark_contract_automatically_activates_single_model_admission():
+    assert validate_idea_against_research_policy(
+        {"ensemble_models": ["model-a", "model-b"]},
+        {
+            "report": {"benchmark_contract": {
+                "model_form": "single_model_single_pass",
+            }},
+        },
+    ) == (
+        "research_policy_composite_forbidden:config.ensemble_models"
+    )
+
+
+def test_unrestricted_research_policy_cannot_weaken_benchmark_contract():
+    assert validate_idea_against_research_policy(
+        {},
+        {
+            "research_policy": {"model_form": "unrestricted"},
+            "report": {"benchmark_contract": {
+                "model_form": "single_model_single_pass",
+            }},
+        },
+        approach_family="ensemble",
+    ) == "research_policy_approach_family_forbidden:ensemble"
+
+
+def test_empty_family_extension_cannot_allow_ensemble():
+    assert validate_idea_against_research_policy(
+        {},
+        {"research_policy": {
+            "model_form": "single_model_single_pass",
+            "forbidden_approach_families": [],
+        }},
+        approach_family="ensemble",
+    ) == "research_policy_approach_family_forbidden:ensemble"
+
+
+def test_direct_launch_rechecks_single_model_policy_before_gpu_telemetry(
+        launch_case, monkeypatch):
+    results, idea_dir, cfg = launch_case
+    cfg["research_policy"] = {"model_form": "single_model_single_pass"}
+    (idea_dir / "idea_config.yaml").write_text(yaml.safe_dump({
+        "ensemble_models": ["model-a", "model-b"],
+    }), encoding="utf-8")
+    gpu_checked = []
+    monkeypatch.setattr(
+        "orze.engine.launcher._verify_gpu_free",
+        lambda *args, **kwargs: gpu_checked.append(True),
+    )
+
+    with pytest.raises(
+            LaunchIntegrityError, match="research_policy_composite_forbidden"):
+        launch("idea-test", 4, results, cfg)
+    assert gpu_checked == []
 
 
 def test_recursive_config_is_rejected_without_recursing_forever():

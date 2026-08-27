@@ -96,6 +96,39 @@ def test_config_check_accepts_finite_or_absent_target(
     assert not any(error.startswith("report.target:") for error in errors)
 
 
+@pytest.mark.parametrize("enabled", [None, "false", 0, 1])
+def test_config_check_rejects_nonboolean_role_enabled(enabled):
+    errors, _ = _validate_config({
+        "roles": {"optional": {"enabled": enabled}},
+    })
+    assert "roles.optional.enabled: must be true or false" in errors
+
+
+def test_disabled_role_does_not_require_runtime_fields():
+    errors, _ = _validate_config({
+        "roles": {"optional": {"enabled": False}},
+    })
+    assert not any(error.startswith("roles.optional.") for error in errors)
+
+
+@pytest.mark.parametrize(
+    "policy",
+    [
+        "single_model_single_pass",
+        {"model_form": "standalone"},
+        {"model_form": "single_model_single_pass",
+         "forbidden_config_keys": ["bad key"]},
+        {"model_form": "single_model_single_pass",
+         "forbidden_approach_families": ["ensemble", "ensemble"]},
+        {"model_form": "single_model_single_pass",
+         "forbidden_approach_families": ["ensemble", "Ensemble"]},
+    ],
+)
+def test_config_check_rejects_invalid_research_policy(policy):
+    errors, _ = _validate_config({"research_policy": policy})
+    assert any(error.startswith("research_policy") for error in errors)
+
+
 def test_config_check_reports_boolean_notifications(tmp_path, monkeypatch):
     train = tmp_path / "train.py"
     train.write_text("# idea_config.yaml\n")

@@ -67,6 +67,7 @@ from orze.engine.execution_identity import (
     release_execution_identity, reserve_execution_identity,
 )
 from orze.core.fs import atomic_write, tail_file
+from orze.core.research_policy import validate_idea_against_research_policy
 from orze.reporting.notifications import notify
 
 logger = logging.getLogger("orze")
@@ -1401,6 +1402,15 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             if forbidden_path:
                 raise LaunchIntegrityError(
                     f"forbidden_launch_override:{forbidden_path}")
+            approach_family = None
+            if lake is not None:
+                lake_row = lake.get(idea_id)
+                if isinstance(lake_row, dict):
+                    approach_family = lake_row.get("approach_family")
+            policy_error = validate_idea_against_research_policy(
+                _qr_idea_cfg, cfg, approach_family=approach_family)
+            if policy_error:
+                raise LaunchIntegrityError(policy_error)
             _validators_dir = Path(results_dir) / "_validators"
             if _validators_dir.is_dir():
                 _qr_err = validate_idea_against_method_validators(
