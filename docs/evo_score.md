@@ -64,6 +64,38 @@ stable category and approach families to the presence of a structural key.
 Metrics/configs and the leaderboard index are bounded, non-redirected inputs;
 the index can nominate a candidate but cannot supply evidence or a value.
 
+The generated operator leaderboard uses this same local qualification contract.
+Only an explicitly `COMPLETED` row with a current non-redirected idea directory,
+metrics artifact, exact configured sources, finite non-boolean primary value,
+resolved-value metric validation, and configured dataset coverage can enter the
+local ordering. When IdeaLake is available, its audited FSM is independently
+authoritative for candidacy: a completed artifact cannot override a failed DB
+state, and a DB-completed row with contradictory artifacts is counted as an
+evidence rejection. Lifecycle transitions are part of cache validity. A stray
+evaluator output cannot override failed lifecycle state.
+Task-specific guesses such as treating every fast zero as vacuous are not built
+into generic Orze; projects express those bounds through `metric_validation` and
+coverage policy.
+
+Both local and benchmark report caches are keyed by streaming evidence-content
+SHA-256, the full qualification policy, and an explicit cache schema. Cache rows
+also carry a canonical digest, so corruption or independent row edits force
+reconstruction from current artifacts. Same-size or backdated evidence rewrites,
+source deletion, policy changes, and malformed or redirected cache files cannot
+preserve a stale rank. Reports and JSON/view caches include accepted/rejected
+qualification counts and stable reason totals. Rejected completed rows remain
+auditable in a bounded unranked section, while lifecycle pipeline counts remain
+unchanged.
+
+For unchanged non-official local evidence, the report first compares device,
+inode, mode, size, nanosecond mtime, and ctime so it need not reread every result
+on every periodic tick. Any ordinary content edit, replacement, deletion, or
+redirect changes that identity and forces content hashing; benchmark-contract
+evidence is content-hashed on every pass regardless of metadata. This trust
+boundary is appropriate only for the explicitly local ordering—a privileged
+operator who can rewrite filesystem history can also rewrite every local
+artifact, so public claims still require preserved external evidence.
+
 ## How it is computed
 
 Evo Score is a weighted blend of five components, each normalized to `0..1`

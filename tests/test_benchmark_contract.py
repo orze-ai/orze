@@ -13,6 +13,7 @@ from orze.core.benchmark_contract import (
     PROVENANCE_FILE,
     benchmark_exposure_ledger_path,
     benchmark_exposure_summary,
+    load_benchmark_values,
     prepare_benchmark_evaluation,
     validate_benchmark_contract_config,
     validate_benchmark_receipt,
@@ -158,6 +159,46 @@ def test_fresh_receipt_proves_exact_single_model_result(tmp_path):
     ok, reason = validate_benchmark_receipt(idea_dir, cfg)
     assert ok is False
     assert reason == "benchmark_receipt_component_count_mismatch"
+
+
+@pytest.mark.parametrize(
+    "artifact, expected",
+    [
+        (PROVENANCE_FILE, "benchmark_provenance_symlink_forbidden"),
+        ("benchmark_receipt.json", "benchmark_receipt_symlink_forbidden"),
+    ],
+)
+def test_benchmark_receipt_validation_rejects_redirected_evidence(
+        tmp_path, artifact, expected):
+    cfg = _config(tmp_path)
+    idea_dir = tmp_path / "results" / "idea-redirected"
+    idea_dir.mkdir(parents=True)
+    env = prepare_benchmark_evaluation(idea_dir, cfg)
+    _write_receipt(
+        idea_dir, cfg, env["ORZE_BENCHMARK_EVALUATION_NONCE"])
+    artifact_path = idea_dir / artifact
+    outside = tmp_path / f"outside-{artifact}"
+    artifact_path.replace(outside)
+    artifact_path.symlink_to(outside)
+
+    assert validate_benchmark_receipt(idea_dir, cfg) == (False, expected)
+
+
+def test_benchmark_value_loader_does_not_follow_source_symlink(tmp_path):
+    cfg = _config(tmp_path)
+    cfg["report"]["columns"][1]["source"] = "external.json:metric_a"
+    idea_dir = tmp_path / "results" / "idea-redirected-source"
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "metrics.json").write_text(json.dumps({
+        "status": "COMPLETED",
+        "avg_score": 3.0,
+        "metric_b": 4.0,
+    }), encoding="utf-8")
+    outside = tmp_path / "outside-source.json"
+    outside.write_text(json.dumps({"metric_a": 2.0}), encoding="utf-8")
+    (idea_dir / "external.json").symlink_to(outside)
+
+    assert load_benchmark_values(idea_dir, cfg)["metric_a"] is None
 
 
 def test_evo_score_counts_only_current_contract_verified_evidence(tmp_path):

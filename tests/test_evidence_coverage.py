@@ -134,3 +134,17 @@ def test_local_evidence_requires_completed_nonredirected_artifacts(tmp_path):
     (idea_dir / "external.json").symlink_to(outside)
     assert load_local_report_evidence(idea_dir, report)[2] == (
         "local_metric_source_path_invalid")
+
+
+def test_local_evidence_rejects_redirected_idea_directory(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "metrics.json").write_text(
+        '{"status":"COMPLETED","score":1.0}', encoding="utf-8")
+    redirected = tmp_path / "idea-redirected"
+    redirected.symlink_to(outside, target_is_directory=True)
+
+    assert load_local_report_evidence(
+        redirected,
+        {"primary_metric": "score", "columns": [{"key": "score"}]},
+    )[2] == "local_idea_dir_symlink"

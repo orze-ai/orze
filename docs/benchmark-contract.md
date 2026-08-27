@@ -155,6 +155,14 @@ keys, dataset/scorer drift, an invalid shared-decoding identity, non-finite
 metrics, an incorrect macro mean, or missing/corrupt exposure evidence fails
 evaluation and keeps the row out of every local ranking.
 
+The idea directory, metrics, configured metric sources, provenance, and receipt
+must be ordinary non-redirected paths. Orze checks every path component and does
+not follow symlinks while loading values or validating a receipt. The generated
+leaderboard then applies the same completed-artifact, resolved-value validation,
+finite-primary, and dataset-coverage rules used for non-contract local evidence
+before it checks benchmark provenance. Its content-addressed cache cannot turn a
+previously valid receipt or source into a stale rank after evidence changes.
+
 This contract makes honest claims mechanically easier, but it does not turn a
 local run into maintainer verification. An official rank must come from the
 external leaderboard itself and is deliberately outside Orze's report schema.

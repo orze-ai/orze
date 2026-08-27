@@ -23,17 +23,21 @@ CALLING SPEC:
         {id, title, value}), metric_name, machines (list of {host,
         gpus_busy, gpus_total, utilization}).
 """
-import os
+import datetime
+import hashlib
 import json
 import logging
+import math
+import os
 import re
-import time
 import socket
 import shutil
-import datetime
-import yaml
-from typing import Dict, Optional
+import time
+from collections import Counter
 from pathlib import Path
+from typing import Dict, Optional
+
+import yaml
 from orze.core.fs import deep_get, atomic_write
 from orze.core.ideas import expand_sweeps
 from orze.core.config import DEFAULT_CONFIG, orze_path
@@ -73,6 +77,50 @@ _CMP_OPS = {
 }
 
 _REPORT_UPDATED_TOKEN = "__ORZE_UPDATED_AT__"
+_RESULT_CACHE_SCHEMA_VERSION = 3
+
+
+def _evidence_content_hash(paths) -> str:
+    """Hash evidence at constant memory without following leaf symlinks."""
+    digest = hashlib.sha256()
+    for path in sorted(set(map(Path, paths)), key=lambda item: str(item)):
+        digest.update(str(path).encode("utf-8"))
+        if path.is_symlink():
+            digest.update(b"<symlink>")
+            continue
+        try:
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        except OSError:
+            digest.update(b"<missing-or-unreadable>")
+    return digest.hexdigest()
+
+
+def _evidence_metadata_signature(paths) -> str:
+    """Hash change-resistant local metadata without reading file contents."""
+    digest = hashlib.sha256()
+    for path in sorted(set(map(Path, paths)), key=lambda item: str(item)):
+        digest.update(str(path).encode("utf-8"))
+        try:
+            stat = os.lstat(path)
+            digest.update(json.dumps([
+                stat.st_dev,
+                stat.st_ino,
+                stat.st_mode,
+                stat.st_size,
+                stat.st_mtime_ns,
+                stat.st_ctime_ns,
+            ], separators=(",", ":")).encode("utf-8"))
+        except OSError:
+            digest.update(b"<missing-or-unreadable>")
+    return digest.hexdigest()
+
+
+def _cache_row_hash(row) -> str:
+    return hashlib.sha256(json.dumps(
+        row, sort_keys=True, default=str, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
 
 
 def _atomic_write_if_changed(path: Path, content: str) -> bool:
@@ -160,34 +208,6 @@ def _resolve_primary_metric(cfg: dict, eval_file: str, eval_data: dict):
                     return deep_get(eval_data, json_path)
     # Fallback: try metrics.{primary} directly
     return deep_get(eval_data, f"metrics.{primary}")
-
-
-def _read_metric_value(results_dir: Path, idea_id: str, col: dict):
-    """Read a metric value for a column. Supports 'source' field."""
-    key = col.get("key")
-    source = col.get("source", "")
-    if not key:
-        return None
-
-    if source and ":" in source:
-        filename, dotpath = source.split(":", 1)
-        filepath = results_dir / idea_id / filename
-        if filepath.exists():
-            try:
-                data = json.loads(filepath.read_text(encoding="utf-8"))
-                return deep_get(data, dotpath)
-            except (json.JSONDecodeError, KeyError, OSError, UnicodeDecodeError):
-                return None
-        return None
-
-    metrics_path = results_dir / idea_id / "metrics.json"
-    if metrics_path.exists():
-        try:
-            data = json.loads(metrics_path.read_text(encoding="utf-8"))
-            return deep_get(data, key) if "." in key else data.get(key)
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-            return None
-    return None
 
 
 _diversity_cache_signature = None
@@ -325,9 +345,19 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         columns = mh_columns
     else:
         columns = user_columns or mh_columns or DEFAULT_CONFIG["report"]["columns"]
-    import hashlib as _hl
-    _col_hash = _hl.md5(json.dumps(
-        {"columns": columns, "benchmark_contract": benchmark_contract},
+    evidence_cfg = dict(cfg)
+    evidence_report = dict(report_cfg)
+    evidence_report["columns"] = columns
+    evidence_cfg["report"] = evidence_report
+    _col_hash = hashlib.sha256(json.dumps(
+        {
+            "columns": columns,
+            "primary_metric": primary_metric,
+            "min_datasets": report_cfg.get("min_datasets", 0),
+            "metric_validation": cfg.get("metric_validation", {}),
+            "benchmark_contract": benchmark_contract,
+            "cache_schema_version": _RESULT_CACHE_SCHEMA_VERSION,
+        },
         sort_keys=True, default=str,
     ).encode()).hexdigest()
     title = report_cfg.get("title") or "Orze Report"
@@ -335,10 +365,13 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     _sentinel = float("-inf") if reverse else float("inf")
 
     def _safe_float(v):
+        if isinstance(v, bool):
+            return _sentinel
         try:
-            return float(v)
+            value = float(v)
         except (ValueError, TypeError):
             return _sentinel
+        return value if math.isfinite(value) else _sentinel
 
     # Tie-breaker: use secondary_metric from config, else just primary
     secondary_metric = report_cfg.get("secondary_metric")
@@ -361,11 +394,21 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     # --- Load results cache ---
     cache_path = results_dir / "_results_cache.json"
     cache = {}
-    if cache_path.exists():
+    try:
+        cache_readable = (
+            not cache_path.is_symlink()
+            and cache_path.is_file()
+            and cache_path.stat().st_size <= 128 * 1024 * 1024
+        )
+    except OSError:
+        cache_readable = False
+    if cache_readable:
         try:
             cache = json.loads(cache_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            pass
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            cache = {}
+        if not isinstance(cache, dict):
+            cache = {}
 
     rows = []
     def _id_sort_key(x):
@@ -399,6 +442,11 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
 
     updated_cache = False
     for idea_id in sorted(all_ideas.keys(), key=_id_sort_key):
+        if (not isinstance(idea_id, str)
+                or Path(idea_id).parts != (idea_id,)
+                or idea_id in (".", "..")):
+            logger.warning("report skipped invalid idea identity")
+            continue
         idea_dir = results_dir / idea_id
         
         # Determine base title/data (from memory or DB)
@@ -416,6 +464,15 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         # whose result directory was cleaned up is falsely reported as queued.
         lake_status = str((db_idea or {}).get("status", "")).lower()
         audited_state = (db_idea or {}).get("fsm_state")
+        if db_idea:
+            lifecycle_completed = (
+                audited_state == "COMPLETE" if audited_state
+                else lake_status == "completed"
+            )
+            lifecycle_signature = f"{audited_state or ''}:{lake_status}"
+        else:
+            lifecycle_completed = None
+            lifecycle_signature = "artifact-only"
         audited_without_metrics = {
             "QUEUED": "QUEUED",
             "CLAIMED": "IN_PROGRESS",
@@ -437,37 +494,47 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             "completed": "ARCHIVED",
         }.get(lake_status)
 
+        if idea_dir.is_symlink():
+            rows.append({
+                "id": idea_id,
+                "title": curr_idea_title,
+                "status": status_without_metrics or "ARCHIVED",
+                "values": {},
+                "lifecycle_completed": bool(lifecycle_completed),
+                "evidence_qualified": False,
+                "evidence_reason": "local_idea_dir_symlink",
+            })
+            continue
         if not idea_dir.exists():
             rows.append({"id": idea_id, "title": curr_idea_title,
                          "status": status_without_metrics or "QUEUED",
-                         "values": {}})
+                         "values": {},
+                         "lifecycle_completed": bool(lifecycle_completed),
+                         "evidence_qualified": False,
+                         "evidence_reason": "local_metrics_missing"})
             continue
 
         metrics_path = idea_dir / "metrics.json"
         if not metrics_path.exists():
             rows.append({"id": idea_id, "title": curr_idea_title,
                          "status": status_without_metrics or "IN_PROGRESS",
-                         "values": {}})
+                         "values": {},
+                         "lifecycle_completed": bool(lifecycle_completed),
+                         "evidence_qualified": False,
+                         "evidence_reason": "local_metrics_missing"})
             continue
 
-        # Check cache: invalidate if metrics.json OR any source file changed
-        mtime = metrics_path.stat().st_mtime
-        evidence_paths = [metrics_path]
-        # Also track mtime of external source files (e.g. fedex_test_report.json)
-        for col in columns:
-            src = col.get("source", "")
-            if src and ":" in src:
-                src_file = idea_dir / src.split(":", 1)[0]
-                if src_file.exists():
-                    mtime = max(mtime, src_file.stat().st_mtime)
-                    evidence_paths.append(src_file)
+        # Evidence bytes, not timestamps, determine cache validity. This also
+        # means a stale cache can nominate no value after a same-size/backdated
+        # rewrite. Unsafe configured source paths are never added to the read
+        # set and will fail qualification below.
+        from orze.reporting.evidence import local_report_evidence_paths
+        evidence_paths = local_report_evidence_paths(idea_dir, evidence_report)
         if benchmark_contract:
             for evidence_name in (
                 benchmark_contract["receipt"], PROVENANCE_FILE,
             ):
                 evidence_path = idea_dir / evidence_name
-                if evidence_path.exists():
-                    mtime = max(mtime, evidence_path.stat().st_mtime)
                 evidence_paths.append(evidence_path)
             try:
                 evidence_paths.extend(
@@ -478,95 +545,87 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 # reason. Keep rendering the unrankable report instead of
                 # turning invalid control-path evidence into a report crash.
                 pass
-        evidence_hash = None
-        if benchmark_contract:
-            # Integrity-sensitive evidence is keyed by bytes, not mtimes. A
-            # copied or deliberately backdated file must never reuse a prior
-            # contract verdict from the report cache.
-            evidence_digest = _hl.sha256()
-            for evidence_path in sorted(
-                    set(evidence_paths), key=lambda path: str(path)):
-                evidence_digest.update(str(evidence_path).encode("utf-8"))
-                try:
-                    evidence_digest.update(evidence_path.read_bytes())
-                except OSError:
-                    evidence_digest.update(b"<missing>")
-            evidence_hash = evidence_digest.hexdigest()
+        evidence_metadata = _evidence_metadata_signature(evidence_paths)
         cached = cache.get(idea_id)
-        if (cached and cached.get("mtime") == mtime
+        cached_row = cached.get("row") if isinstance(cached, dict) else None
+        cache_identity_ok = (
+            isinstance(cached_row, dict)
+                and cached.get("cache_schema_version")
+                == _RESULT_CACHE_SCHEMA_VERSION
                 and cached.get("col_hash") == _col_hash
-                and (benchmark_contract is None
-                     or cached.get("evidence_hash") == evidence_hash)):
-            rows.append(cached["row"])
+                and cached.get("lifecycle_signature") == lifecycle_signature
+                and cached.get("row_hash") == _cache_row_hash(cached_row)
+        )
+        # Local evidence is explicitly non-official. On an unchanged ordinary
+        # file identity, nanosecond mtime + ctime avoid re-reading tens of
+        # thousands of artifacts. Benchmark-contract evidence is always
+        # content-hashed, even when metadata is unchanged.
+        if (cache_identity_ok and not benchmark_contract
+                and cached.get("evidence_metadata") == evidence_metadata):
+            rows.append(cached_row)
+            continue
+        evidence_hash = _evidence_content_hash(evidence_paths)
+        if (cache_identity_ok
+                and cached.get("evidence_hash") == evidence_hash):
+            if cached.get("evidence_metadata") != evidence_metadata:
+                cached["evidence_metadata"] = evidence_metadata
+                updated_cache = True
+            rows.append(cached_row)
             continue
 
-        # Cache miss or stale: read and parse
-        try:
-            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-            metrics = {"status": "FAILED", "error": "corrupt metrics.json"}
-
-        values = {}
-        for col in columns:
-            key = col.get("key")
-            if not key:
-                continue
-            values[key] = _read_metric_value(results_dir, idea_id, col)
-
-        primary_val = values.get(primary_metric)
-        # SYSTEMATIC FIX: No deceptive fallbacks. Only use verified report values.
-        # If the external report is missing or zero, we show 0.0 or None.
-        
-        contract_ok, contract_reason = validate_benchmark_receipt(
-            idea_dir, cfg, values=values,
+        # Cache miss or evidence drift: one shared fail-closed qualification
+        # path supplies current metrics, exact source values, finite primary,
+        # metric validation, and configured dataset coverage.
+        from orze.reporting.evidence import qualify_local_report_evidence
+        metrics, values, primary_val, evidence_reason = (
+            qualify_local_report_evidence(idea_dir, evidence_cfg)
         )
+        local_ok = evidence_reason == "local_evidence_verified"
+        if not metrics:
+            metrics = {"status": "FAILED", "error": "corrupt metrics.json"}
+        if benchmark_contract and local_ok:
+            contract_ok, contract_reason = validate_benchmark_receipt(
+                idea_dir, cfg, values=values,
+            )
+        elif benchmark_contract:
+            contract_ok, contract_reason = False, evidence_reason
+        else:
+            contract_ok, contract_reason = True, "benchmark_contract_disabled"
+        evidence_ok = contract_ok if benchmark_contract else local_ok
+        final_reason = contract_reason if benchmark_contract else evidence_reason
         row_data = {
             "id": idea_id, "title": curr_idea_title,
             "status": metrics.get("status", "UNKNOWN"),
+            "lifecycle_completed": (
+                bool(lifecycle_completed) if lifecycle_completed is not None
+                else metrics.get("status") == "COMPLETED"
+            ),
             "values": values,
             "primary_val": primary_val,
             "metrics": metrics,
+            "evidence_qualified": evidence_ok,
+            "evidence_reason": final_reason,
             "benchmark_contract_ok": contract_ok,
             "benchmark_contract_reason": contract_reason,
         }
         rows.append(row_data)
         cache[idea_id] = {
-            "mtime": mtime,
+            "cache_schema_version": _RESULT_CACHE_SCHEMA_VERSION,
             "col_hash": _col_hash,
             "evidence_hash": evidence_hash,
+            "evidence_metadata": evidence_metadata,
+            "lifecycle_signature": lifecycle_signature,
+            "row_hash": _cache_row_hash(row_data),
             "row": row_data,
         }
         updated_cache = True
 
     if updated_cache:
         try:
-            atomic_write(cache_path, json.dumps(cache))
+            if not cache_path.is_symlink():
+                atomic_write(cache_path, json.dumps(cache))
         except OSError:
             pass
-
-    # Filter out experiments with too few per-dataset metrics.
-    # Round-2 C3: previously this counted only ``wer_*`` keys, ignoring
-    # report columns whose values are pulled from ``source:`` paths
-    # rather than the flat ``metrics.json`` namespace. We now count any
-    # column declared in ``report.columns`` whose value resolved to a
-    # finite number — that's the same notion of "did we get a real
-    # per-dataset metric for this row" but works for projects that
-    # don't use the wer_* convention.
-    min_ds = report_cfg.get("min_datasets", 0)
-    if min_ds > 0 and benchmark_contract is None:
-        from orze.reporting.evidence import minimum_dataset_coverage
-        filtered = []
-        for r in rows:
-            if r["status"] != "COMPLETED":
-                filtered.append(r)
-                continue
-            metrics = r.get("metrics") or {}
-            values = r.get("values") or {}
-            coverage_ok, _, _ = minimum_dataset_coverage(
-                report_cfg, values=values, metrics=metrics)
-            if coverage_ok:
-                filtered.append(r)
-        rows = filtered
 
     if lake:
         # Pipeline status describes executable experiments, not every archived
@@ -651,33 +710,61 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         "",
     ])
 
-    eval_output = cfg.get("eval_output", "eval_report.json")
-    completed = [r for r in rows if r["status"] == "COMPLETED"
-                 or (r.get("primary_val") is not None
-                     and (results_dir / r["id"] / eval_output).exists())]
-    contract_exclusions = []
+    # A downstream eval file never overrides lifecycle state. Every ranked row
+    # must be explicitly completed and pass the selected evidence contract.
+    completed_candidates = [
+        row for row in rows if row.get("lifecycle_completed") is True
+    ]
+    evidence_exclusions = [
+        row for row in completed_candidates
+        if not row.get("evidence_qualified", False)
+    ]
+    completed = [
+        row for row in completed_candidates
+        if row.get("evidence_qualified", False)
+    ]
+    rejection_counts = dict(sorted(Counter(
+        str(row.get("evidence_reason") or "evidence_reason_missing")
+        for row in evidence_exclusions
+    ).items()))
+    qualification_summary = {
+        "mode": (
+            "benchmark_contract" if benchmark_contract
+            else "verified_local_artifact"
+        ),
+        "primary_metric": primary_metric,
+        "fallback_metrics_allowed": False,
+        "accepted": len(completed),
+        "rejected": rejection_counts,
+        "leaderboard_rank_comparable": False,
+    }
     if benchmark_contract:
-        contract_exclusions = [
-            r for r in completed if not r.get("benchmark_contract_ok", False)
-        ]
-        completed = [
-            r for r in completed if r.get("benchmark_contract_ok", False)
-        ]
+        qualification_summary.update({
+            "benchmark_id": benchmark_contract.get("benchmark_id"),
+            "benchmark_view": benchmark_contract.get("view"),
+            "evidence_scope": benchmark_contract.get("evidence_scope"),
+            "selection_mode": benchmark_contract.get("selection_mode"),
+        })
 
-    # Exclude experiments that completed trivially without producing
-    # meaningful results (e.g. all eval datasets missing, script exited
-    # immediately). Without this filter, a 0-valued primary metric from
-    # a vacuous run can top an ascending-sorted leaderboard.
-    def _has_real_result(r):
-        m = r.get("metrics", {})
-        pv = _safe_float(r.get("primary_val"))
-        t = m.get("training_time", 999)
-        # Skip if primary metric is exactly 0 and run finished in < 30s
-        if pv == 0.0 and t < 30:
-            return False
-        return True
+    qualification_lines = [
+        "## Evidence Qualification",
+        "",
+        f"- Mode: `{qualification_summary['mode']}`",
+        f"- Accepted completed rows: {qualification_summary['accepted']}",
+        f"- Rejected completed rows: {sum(rejection_counts.values())}",
+        "- Metric fallback: disabled",
+        "- Rank scope: **local evidence ordering; not an official leaderboard rank**",
+    ]
+    if rejection_counts:
+        qualification_lines.append(
+            "- Rejection reasons: " + ", ".join(
+                f"`{reason}`={count}"
+                for reason, count in rejection_counts.items()
+            )
+        )
+    qualification_lines.extend(["", "## Results", ""])
+    lines[-2:] = qualification_lines
 
-    completed = [r for r in completed if _has_real_result(r)]
     completed.sort(key=_get_tiebreaker_sort_key, reverse=reverse)
 
     # --- Sweep grouping: split into standalone + sweep groups ---
@@ -739,18 +826,29 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             lines.append(row)
         lines.append("")
 
-    if contract_exclusions:
+    if evidence_exclusions:
+        exclusion_title = (
+            "Benchmark Contract Not Proven" if benchmark_contract
+            else "Local Evidence Not Qualified"
+        )
         lines.extend([
-            "## Unranked: Benchmark Contract Not Proven",
+            f"## Unranked: {exclusion_title}",
             "",
             "These completed runs remain visible for audit but cannot enter "
-            "the local benchmark-comparable ordering.",
+            "the local evidence ordering.",
             "",
         ])
-        for row in contract_exclusions:
+        ordered_exclusions = sorted(
+            evidence_exclusions, key=lambda row: row["id"])
+        for row in ordered_exclusions[:100]:
             lines.append(
                 f"- **{row['id']}** — "
-                f"`{row.get('benchmark_contract_reason', 'unknown')}`"
+                f"`{row.get('evidence_reason', 'unknown')}`"
+            )
+        if len(ordered_exclusions) > 100:
+            lines.append(
+                f"- ... {len(ordered_exclusions) - 100} additional rejected "
+                "completed rows (see aggregate reasons above)"
             )
         lines.append("")
 
@@ -900,6 +998,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             "rank_scope": "local",
             "benchmark_contract": benchmark_contract,
             "benchmark_exposure": exposure_summary,
+            "evidence_qualification": qualification_summary,
         }, default=str),
     )
 
@@ -935,7 +1034,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             {"top": view_entries, "metric": primary_metric, "view": vname,
              "title": vtitle, "rank_scope": "local",
              "benchmark_contract": benchmark_contract,
-             "benchmark_exposure": exposure_summary}, default=str))
+             "benchmark_exposure": exposure_summary,
+             "evidence_qualification": qualification_summary}, default=str))
 
         # Append view section to report.md
         lines.append(f"## {vtitle}")

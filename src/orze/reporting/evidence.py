@@ -169,6 +169,8 @@ def load_local_report_evidence(
     returns stable reason codes and never includes artifact content in errors.
     """
     idea_dir = Path(idea_dir)
+    if idea_dir.is_symlink():
+        return {}, {}, "local_idea_dir_symlink"
     metrics_path = idea_dir / "metrics.json"
     if metrics_path.is_symlink():
         return {}, {}, "local_metrics_symlink"
@@ -208,3 +210,61 @@ def load_local_report_evidence(
     if isinstance(primary, str) and primary and primary not in values:
         values[primary] = _deep_value(metrics, primary)
     return metrics, values, "local_evidence_loaded"
+
+
+def qualify_local_report_evidence(
+    idea_dir: Path,
+    cfg: Mapping,
+) -> tuple[dict, dict, float | None, str]:
+    """Qualify one local result against the complete report policy.
+
+    Returns ``(metrics, values, primary_value, reason)``. The reason is a
+    stable token suitable for aggregate reporting; validation messages and
+    artifact contents never cross this boundary.
+    """
+    report = cfg.get("report") or {}
+    metrics, values, reason = load_local_report_evidence(idea_dir, report)
+    if reason != "local_evidence_loaded":
+        return metrics, values, None, reason
+    try:
+        from orze.core.integrity import validate_metrics
+        resolved_metrics = dict(metrics)
+        resolved_metrics.update(values)
+        resolved_metrics["status"] = "COMPLETED"
+        valid, _ = validate_metrics(resolved_metrics, dict(cfg))
+    except Exception:
+        valid = False
+    if not valid:
+        return metrics, values, None, "local_metric_validation_failed"
+    primary = report.get("primary_metric", "score")
+    value = values.get(primary) if isinstance(primary, str) else None
+    if not _finite_number(value):
+        return metrics, values, None, "primary_metric_missing_or_nonfinite"
+    coverage_ok, observed, required = minimum_dataset_coverage(
+        report, values=values, metrics=metrics)
+    if not coverage_ok:
+        return (
+            metrics,
+            values,
+            None,
+            f"metric_coverage_below_min:{observed}/{required}",
+        )
+    return metrics, values, float(value), "local_evidence_verified"
+
+
+def local_report_evidence_paths(idea_dir: Path,
+                                report_cfg: Mapping) -> list[Path]:
+    """Return only safe paths that can affect local report qualification."""
+    idea_dir = Path(idea_dir)
+    paths = [idea_dir / "metrics.json"]
+    for column in report_cfg.get("columns") or []:
+        if not isinstance(column, dict):
+            continue
+        source = column.get("source", "")
+        if not source or ":" not in str(source):
+            continue
+        filename = str(source).split(":", 1)[0]
+        path = _safe_source_path(idea_dir, filename)
+        if path is not None and path not in paths:
+            paths.append(path)
+    return paths

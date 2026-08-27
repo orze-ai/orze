@@ -127,5 +127,80 @@ def test_min_datasets_counts_dataset_wer_not_aggregate_or_time(tmp_path):
     assert [row["id"] for row in completed] == ["idea-complete"]
     report = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "idea-complete" in report
-    assert "idea-partial" not in report
-    assert "idea-nonfinite" not in report
+    ranked = report.split("## Unranked:", 1)[0]
+    assert "idea-partial" not in ranked
+    assert "idea-nonfinite" not in ranked
+    assert "idea-partial" in report
+    assert "metric_coverage_below_min:7/8" in report
+
+
+def test_audited_lifecycle_controls_ranking_candidacy(tmp_path):
+    lake = IdeaLake(str(tmp_path / "ideas.db"))
+    lake.insert("idea-db-failed", "failed", "{}", "", status="failed")
+    lake.insert("idea-db-complete", "complete", "{}", "", status="completed")
+    for idea_id, metrics in (
+        ("idea-db-failed", {"status": "COMPLETED", "score": 100.0}),
+        ("idea-db-complete", {"status": "FAILED", "score": 200.0}),
+    ):
+        idea_dir = tmp_path / idea_id
+        idea_dir.mkdir()
+        (idea_dir / "metrics.json").write_text(
+            json.dumps(metrics), encoding="utf-8")
+    cfg = {
+        "report": {
+            "title": "Audited ranking",
+            "primary_metric": "score",
+            "sort": "descending",
+            "columns": [{"key": "score"}],
+        },
+    }
+
+    completed = update_report(tmp_path, {}, cfg, lake=lake)
+    leaderboard = json.loads(
+        (tmp_path / "_leaderboard.json").read_text(encoding="utf-8"))
+    report = (tmp_path / "report.md").read_text(encoding="utf-8")
+
+    assert completed == []
+    assert leaderboard["top"] == []
+    assert leaderboard["evidence_qualification"]["accepted"] == 0
+    assert leaderboard["evidence_qualification"]["rejected"] == {
+        "local_metrics_not_completed": 1,
+    }
+    assert "| 2 | 1 | 1 | 0 | 0 |" in report
+    assert "idea-db-failed" not in report.split("## Unranked:", 1)[0]
+    assert "idea-db-complete" in report.split("## Unranked:", 1)[1]
+    lake.close()
+
+
+def test_report_cache_invalidates_on_lifecycle_transition(tmp_path):
+    lake = IdeaLake(str(tmp_path / "ideas.db"))
+    idea_id = "idea-transitioned"
+    lake.insert(idea_id, "transitioned", "{}", "", status="failed")
+    idea_dir = tmp_path / idea_id
+    idea_dir.mkdir()
+    (idea_dir / "metrics.json").write_text(
+        json.dumps({"status": "COMPLETED", "score": 1.0}),
+        encoding="utf-8",
+    )
+    cfg = {
+        "report": {
+            "primary_metric": "score",
+            "sort": "descending",
+            "columns": [{"key": "score"}],
+        },
+    }
+
+    assert update_report(tmp_path, {}, cfg, lake=lake) == []
+    for from_state, to_state in (
+        ("FAILED", "QUEUED"),
+        ("QUEUED", "CLAIMED"),
+        ("CLAIMED", "IN_PROGRESS"),
+        ("IN_PROGRESS", "COMPLETE"),
+    ):
+        assert lake.record_state_transition(
+            idea_id, from_state, to_state, reason="test_transition") is True
+
+    completed = update_report(tmp_path, {}, cfg, lake=lake)
+
+    assert [row["id"] for row in completed] == [idea_id]
+    lake.close()

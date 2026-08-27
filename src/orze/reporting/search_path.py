@@ -1026,7 +1026,7 @@ def make_evidence_metric_resolver(
     The summary deliberately records stable reason codes rather than metric or
     artifact contents.
     """
-    base_metric, lower_is_better, primary = make_metric_resolver(cfg)
+    _, lower_is_better, primary = make_metric_resolver(cfg)
     report = ((cfg or {}).get("report") or {})
     contract = report.get("benchmark_contract")
     summary = {
@@ -1078,29 +1078,11 @@ def make_evidence_metric_resolver(
             idea_dir = local_results_dir / idea_id
             if idea_dir.is_symlink():
                 return reject(idea_id, "local_idea_dir_symlink")
-            from orze.reporting.evidence import load_local_report_evidence
-            metrics, values, evidence_reason = load_local_report_evidence(
-                idea_dir, report)
-            if evidence_reason != "local_evidence_loaded":
+            from orze.reporting.evidence import qualify_local_report_evidence
+            _, _, value, evidence_reason = qualify_local_report_evidence(
+                idea_dir, cfg or {})
+            if evidence_reason != "local_evidence_verified":
                 return reject(idea_id, evidence_reason)
-            try:
-                from orze.core.integrity import validate_metrics
-                valid, _ = validate_metrics(metrics, cfg or {})
-            except Exception:
-                valid = False
-            if not valid:
-                return reject(idea_id, "local_metric_validation_failed")
-            value = base_metric({"eval_metrics": values})
-            if value is None:
-                return reject(idea_id, "primary_metric_missing_or_nonfinite")
-            from orze.reporting.evidence import minimum_dataset_coverage
-            coverage_ok, observed, required = minimum_dataset_coverage(
-                report, values=values, metrics=metrics)
-            if not coverage_ok:
-                return reject(
-                    idea_id,
-                    f"metric_coverage_below_min:{observed}/{required}",
-                )
             accept(idea_id)
             return value
 
@@ -1126,10 +1108,12 @@ def make_evidence_metric_resolver(
         if idea_dir.is_symlink():
             return reject(idea_id, "benchmark_idea_dir_symlink")
         try:
-            from orze.core.benchmark_contract import (
-                load_benchmark_values, validate_benchmark_receipt,
-            )
-            values = load_benchmark_values(idea_dir, cfg or {})
+            from orze.reporting.evidence import qualify_local_report_evidence
+            _, values, value, evidence_reason = qualify_local_report_evidence(
+                idea_dir, cfg or {})
+            if evidence_reason != "local_evidence_verified":
+                return reject(idea_id, evidence_reason)
+            from orze.core.benchmark_contract import validate_benchmark_receipt
             valid, reason = validate_benchmark_receipt(
                 idea_dir, cfg or {}, values=values)
         except Exception as exc:
@@ -1139,7 +1123,6 @@ def make_evidence_metric_resolver(
             )
         if not valid:
             return reject(idea_id, reason)
-        value = values.get(primary)
         if (isinstance(value, bool) or not isinstance(value, (int, float))
                 or not math.isfinite(float(value))):
             return reject(idea_id, "benchmark_primary_metric_invalid")

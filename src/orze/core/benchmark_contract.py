@@ -60,6 +60,21 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _idea_evidence_path(idea_dir: Path, relative_name: str) -> Optional[Path]:
+    """Resolve an idea-local evidence path without following any symlink."""
+    base = Path(idea_dir)
+    relative = Path(str(relative_name))
+    if (base.is_symlink() or relative.is_absolute() or relative == Path(".")
+            or ".." in relative.parts):
+        return None
+    current = base
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            return None
+    return current
+
+
 def validate_benchmark_contract_config(cfg: Mapping) -> list[str]:
     """Return configuration errors for ``report.benchmark_contract``."""
     report = cfg.get("report") or {}
@@ -668,7 +683,13 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
             "benchmark_confirmation_policy_invalid"
         )
 
-    receipt_path = Path(idea_dir) / contract["receipt"]
+    receipt_path = _idea_evidence_path(
+        Path(idea_dir), str(contract["receipt"]))
+    provenance_path = _idea_evidence_path(Path(idea_dir), PROVENANCE_FILE)
+    if receipt_path is None or provenance_path is None:
+        raise BenchmarkContractError(
+            "benchmark evidence path redirected before evaluation"
+        )
     if receipt_path.exists():
         raise BenchmarkContractError(
             f"benchmark receipt existed before evaluation: {receipt_path}"
@@ -706,7 +727,7 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
         "pid": os.getpid(),
     }
     atomic_write(
-        Path(idea_dir) / PROVENANCE_FILE,
+        provenance_path,
         json.dumps(provenance, sort_keys=True, indent=2) + "\n",
     )
     return {
@@ -721,8 +742,10 @@ def load_benchmark_values(idea_dir: Path, cfg: Mapping) -> dict:
     """Load configured report values without fallback or inferred aliases."""
     values = {}
     metrics = {}
-    metrics_path = Path(idea_dir) / "metrics.json"
+    metrics_path = _idea_evidence_path(Path(idea_dir), "metrics.json")
     try:
+        if metrics_path is None:
+            raise OSError("redirected metrics path")
         metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         metrics = {}
@@ -736,9 +759,12 @@ def load_benchmark_values(idea_dir: Path, cfg: Mapping) -> dict:
         source = column.get("source", "")
         if source and ":" in source:
             filename, dotpath = source.split(":", 1)
+            source_path = _idea_evidence_path(Path(idea_dir), filename)
             try:
+                if source_path is None:
+                    raise OSError("redirected metric source")
                 document = json.loads(
-                    (Path(idea_dir) / filename).read_text(encoding="utf-8")
+                    source_path.read_text(encoding="utf-8")
                 )
                 values[key] = deep_get(document, dotpath)
             except (json.JSONDecodeError, OSError, UnicodeDecodeError):
@@ -758,16 +784,25 @@ def validate_benchmark_receipt(
     if contract is None:
         return True, "benchmark_contract_disabled"
 
+    if Path(idea_dir).is_symlink():
+        return False, "benchmark_idea_dir_symlink_forbidden"
+    provenance_path = _idea_evidence_path(Path(idea_dir), PROVENANCE_FILE)
+    if provenance_path is None:
+        return False, "benchmark_provenance_symlink_forbidden"
+
     try:
         provenance = json.loads(
-            (Path(idea_dir) / PROVENANCE_FILE).read_text(encoding="utf-8")
+            provenance_path.read_text(encoding="utf-8")
         )
     except FileNotFoundError:
         return False, "benchmark_provenance_missing"
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return False, "benchmark_provenance_invalid"
 
-    receipt_path = Path(idea_dir) / contract["receipt"]
+    receipt_path = _idea_evidence_path(
+        Path(idea_dir), str(contract["receipt"]))
+    if receipt_path is None:
+        return False, "benchmark_receipt_symlink_forbidden"
     try:
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
