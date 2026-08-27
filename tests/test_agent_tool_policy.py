@@ -9,6 +9,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 from orze.core.config import _validate_config
 from orze.engine.process import (
     RoleProcess,
@@ -56,6 +58,27 @@ def test_config_rejects_managed_role_policy_bypass():
 
     assert any("dangerously_skip_permissions" in error for error in errors)
     assert any("claude_args" in error for error in errors)
+
+
+def test_config_rejects_executor_policy_bypass_even_when_false():
+    errors, _ = _validate_config({
+        "max_fix_attempts": 1,
+        "agent_tool_policy": {"enabled": True},
+        "executor_fix": {"dangerously_skip_permissions": False},
+    })
+
+    assert any("executor_fix.dangerously_skip_permissions" in error
+               for error in errors)
+
+
+def test_config_rejects_executor_when_managed_policy_is_disabled():
+    errors, _ = _validate_config({
+        "max_fix_attempts": 1,
+        "agent_tool_policy": {"enabled": False},
+    })
+
+    assert any("executor fixes require enabled agent_tool_policy" in error
+               for error in errors)
 
 
 def test_file_tools_are_limited_to_workspace_and_resolved_symlinks(tmp_path):
@@ -150,6 +173,16 @@ def test_generated_settings_fail_closed_and_reallow_only_runtime_roots(tmp_path)
     hook = settings["hooks"]["PreToolUse"][0]
     assert hook["matcher"] == "Bash|Read|Write|Edit|Glob|Grep"
     assert "tool_policy.py" in hook["hooks"][0]["command"]
+
+
+def test_policy_cannot_authorize_root_or_audit_outside_project(tmp_path):
+    with pytest.raises(ValueError, match="filesystem root"):
+        build_claude_policy_settings(Path("/"), tmp_path / "audit.jsonl")
+
+    project = tmp_path / "project"
+    project.mkdir()
+    with pytest.raises(ValueError, match="audit log must stay in project"):
+        build_claude_policy_settings(project, tmp_path / "outside.jsonl")
 
 
 def test_generated_hook_command_denies_without_pythonpath(tmp_path):

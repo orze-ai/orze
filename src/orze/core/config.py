@@ -560,6 +560,38 @@ def _validate_config(cfg: dict) -> tuple:
                         "enabled agent_tool_policy: " + ", ".join(conflicts)
                     )
 
+    executor_fix = cfg.get("executor_fix", {})
+    if not isinstance(executor_fix, dict):
+        errors.append("executor_fix: must be a mapping")
+    else:
+        if "dangerously_skip_permissions" in executor_fix:
+            errors.append(
+                "executor_fix.dangerously_skip_permissions: forbidden")
+        try:
+            executor_turns = int(executor_fix.get("max_turns", 20))
+            if executor_turns < 1:
+                errors.append("executor_fix.max_turns: must be at least 1")
+        except (TypeError, ValueError):
+            errors.append("executor_fix.max_turns: must be an integer")
+        try:
+            executor_timeout = float(executor_fix.get("timeout", 300))
+            if executor_timeout <= 0:
+                errors.append("executor_fix.timeout: must be positive")
+        except (TypeError, ValueError):
+            errors.append("executor_fix.timeout: must be numeric")
+
+    try:
+        executor_enabled = int(cfg.get("max_fix_attempts", 0)) > 0
+    except (TypeError, ValueError):
+        executor_enabled = False
+    if executor_enabled and (
+        not isinstance(agent_policy, dict)
+        or agent_policy.get("enabled", True) is not True
+    ):
+        errors.append(
+            "max_fix_attempts: executor fixes require enabled "
+            "agent_tool_policy")
+
     # Validate numeric fields
     for key in ("timeout", "poll", "eval_timeout", "stall_minutes",
                 "max_idea_failures", "max_fix_attempts", "min_disk_gb",

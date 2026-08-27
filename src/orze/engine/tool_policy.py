@@ -164,6 +164,10 @@ def build_claude_policy_settings(project_root: Path, audit_log: Path,
     """Build strict Claude Code settings for an Orze-managed role."""
     project_root = Path(project_root).resolve(strict=False)
     audit_log = Path(audit_log).resolve(strict=False)
+    if project_root.parent == project_root:
+        raise ValueError("agent tool policy cannot authorize filesystem root")
+    if not _inside(audit_log, [project_root]):
+        raise ValueError("agent tool policy audit log must stay in project")
     # Invoke this exact reviewed file with the base interpreter. ``python -m``
     # from writable role scratch would allow a shadow ``orze`` package to
     # replace the policy; a project-local venv interpreter is writable by the

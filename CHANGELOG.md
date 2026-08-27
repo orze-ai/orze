@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Fixed
+- **Executor-fix agents now share the managed tool boundary.** Automated
+  Claude repair calls must use the fail-closed OS sandbox and deterministic
+  workspace hook, suppress ambient settings, reject the permission-bypass key
+  even when false, and refuse a root-wide workspace or outside-project audit
+  path. Timeouts reap the dedicated process group plus descendants that escaped
+  it, and a retry is accepted only after a zero exit and explicit `FIX_APPLIED`
+  attestation. Enabling executor fixes while disabling the managed policy is a
+  configuration error.
 - **Generic launch no longer hard-codes one campaign's LoRA rank policy.** The
   launcher removed its Boson-specific `lora_rank <= 32` backstop and the
   `SMELL_SKIP_RANK_GUARD` environment escape. Architecture and parameter-budget

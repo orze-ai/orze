@@ -17,9 +17,9 @@ CALLING SPEC:
         Spawn a Claude CLI process to diagnose and patch the failing idea's
         scripts/configs. Returns True if a fix was applied (idea should be
         retried). cfg keys used: max_fix_attempts, ideas_file, train_script,
-        executor_fix.{claude_bin, model, timeout, max_turns,
-        dangerously_skip_permissions}.
+        executor_fix.{claude_bin, model, timeout, max_turns}.
 """
+import json
 import logging
 import os
 import subprocess
@@ -138,11 +138,19 @@ def _mark_lake_failure(idea_id: str, cfg: dict,
 
 
 def _build_executor_fix_cmd(claude_bin: str, prompt: str, model: str,
-                            fix_cfg: dict) -> list[str]:
-    """Build a bounded repair command without implicit permission bypass."""
+                            fix_cfg: dict, *, project_root: Path,
+                            audit_log: Path) -> list[str]:
+    """Build a bounded repair command under the managed tool policy."""
+    if not isinstance(fix_cfg, dict):
+        raise ValueError("executor_fix must be a mapping")
+    if "dangerously_skip_permissions" in fix_cfg:
+        raise ValueError(
+            "executor_fix.dangerously_skip_permissions is forbidden")
     max_turns = int(fix_cfg.get("max_turns", 20))
     if max_turns < 1:
         raise ValueError("executor_fix.max_turns must be at least 1")
+    from orze.engine.tool_policy import build_claude_policy_settings
+    settings = build_claude_policy_settings(project_root, audit_log)
     cmd = [
         claude_bin, "-p", prompt,
         "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash",
@@ -150,10 +158,45 @@ def _build_executor_fix_cmd(claude_bin: str, prompt: str, model: str,
         "--model", model,
         "--max-turns", str(max_turns),
     ]
-    if fix_cfg.get("dangerously_skip_permissions", False):
-        logger.warning("Executor fix explicitly disables Claude permission checks")
-        cmd.append("--dangerously-skip-permissions")
+    # Append the policy last and suppress ambient settings. User or project
+    # settings therefore cannot broaden the sandbox after Orze constructs it.
+    cmd.extend([
+        "--setting-sources", "",
+        "--add-dir", str(Path(project_root).resolve()),
+        "--settings", json.dumps(settings, separators=(",", ":")),
+    ])
     return cmd
+
+
+def _run_bounded_executor(cmd: list[str], *, timeout: float, env: dict,
+                          cwd: Path) -> subprocess.CompletedProcess:
+    """Run one fixer and reap its entire descendant tree on timeout."""
+    if timeout <= 0:
+        raise ValueError("executor_fix.timeout must be positive")
+    from orze.engine.process import _terminate_and_reap
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        cwd=str(cwd),
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _terminate_and_reap(
+            proc, "executor fix", timeout=min(3.0, max(0.2, timeout)),
+            pgid=proc.pid,
+        )
+        raise
+    finally:
+        if proc.poll() is None:
+            _terminate_and_reap(
+                proc, "executor fix", timeout=1.0, pgid=proc.pid)
+    return subprocess.CompletedProcess(
+        cmd, proc.returncode, stdout=stdout, stderr=stderr)
 
 
 def _try_executor_fix(idea_id: str, error_text: str, results_dir: Path,
@@ -284,6 +327,8 @@ so the experiment can succeed on retry.
 - Keep fixes minimal and targeted \u2014 don't refactor, just fix the specific error
 - If the error is unfixable (e.g., corrupt data, impossible config), say "UNFIXABLE: <reason>"
   and exit without changes
+- Only after you have actually changed and syntax-checked a project file, end
+  your response with a separate line exactly equal to "FIX_APPLIED".
 """
 
     logger.info("[FIX] %s — spawning LLM fix (attempt %d/%d): %s",
@@ -299,16 +344,26 @@ so the experiment can succeed on retry.
         env.pop("CLAUDE_CODE_ENTRYPOINT", None)
 
         fix_cfg = cfg.get("executor_fix", {})
+        policy_cfg = cfg.get("agent_tool_policy", {"enabled": True})
+        if (not isinstance(policy_cfg, dict)
+                or policy_cfg.get("enabled", True) is not True):
+            logger.error(
+                "[FIX] refusing executor fix without enabled agent_tool_policy")
+            return False
         claude_bin = fix_cfg.get("claude_bin") or "claude"
         model = fix_cfg.get("model") or "sonnet"
-        fix_timeout = fix_cfg.get("timeout", 300)
+        fix_timeout = float(fix_cfg.get("timeout", 300))
+        project_root = Path(
+            cfg.get("_project_root") or results_dir.parent).resolve()
+        audit_log = results_dir / "_executor_tool_policy.jsonl"
 
-        cmd = _build_executor_fix_cmd(claude_bin, prompt, model, fix_cfg)
+        cmd = _build_executor_fix_cmd(
+            claude_bin, prompt, model, fix_cfg,
+            project_root=project_root, audit_log=audit_log,
+        )
 
-        result = subprocess.run(
-            cmd, capture_output=True, text=True,
-            timeout=fix_timeout, env=env,
-            cwd=str(results_dir.parent),
+        result = _run_bounded_executor(
+            cmd, timeout=fix_timeout, env=env, cwd=project_root,
         )
 
         # LLM actually ran — count this attempt
@@ -322,9 +377,21 @@ so the experiment can succeed on retry.
             encoding="utf-8",
         )
 
+        if result.returncode != 0:
+            logger.warning(
+                "[FIX] %s — Claude exited %d without an accepted fix",
+                idea_id, result.returncode)
+            return False
+
         if "UNFIXABLE" in response.upper():
             logger.info("[FIX] %s — LLM says unfixable: %s",
                          idea_id, response[:200])
+            return False
+
+        if not any(line.strip() == "FIX_APPLIED"
+                   for line in response.splitlines()):
+            logger.warning(
+                "[FIX] %s — response did not attest an applied fix", idea_id)
             return False
 
         # Verify sealed files weren't touched by the fix
