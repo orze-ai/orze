@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import socket
@@ -18,9 +19,30 @@ import sys
 import time
 from pathlib import Path
 
+from orze.service.failure_loop import record_failure, record_resolution
+
 logger = logging.getLogger("orze.watchdog")
 
 SERVICE_CONFIG_PATH = Path.home() / ".orze_service.json"
+
+
+class WatchdogLaunchError(RuntimeError):
+    """Categorical launch failure whose printable form contains no raw output."""
+
+    def __init__(self, code, identity_parts=None, display_parts=None):
+        raw_code = str(code)
+        self.code = (
+            raw_code
+            if re.fullmatch(r"[a-z0-9_]{1,64}", raw_code)
+            else "unclassified_failure"
+        )
+        self.identity_parts = tuple(identity_parts or ())
+        safe_parts = [
+            str(part) for part in (display_parts or ())
+            if re.fullmatch(r"[a-z0-9_]{1,64}", str(part))
+        ]
+        suffix = f" ({','.join(safe_parts)})" if safe_parts else ""
+        super().__init__(f"watchdog launch failed: {self.code}{suffix}")
 
 
 def load_service_config(path=None):
@@ -158,11 +180,13 @@ def _launch_orze(svc_cfg):
     from orze.service.runtime_contract import audit_runtime_contract
     contract = audit_runtime_contract(svc_cfg)
     if not contract.get("startup_allowed"):
-        reasons = ",".join(contract.get("errors") or [])
+        reasons = tuple(sorted(str(item) for item in (contract.get("errors") or [])))
         if contract.get("active_latches"):
-            reasons = reasons or "stop_latch_present"
-        raise RuntimeError(
-            f"runtime contract rejected service start: {reasons or 'unknown'}"
+            reasons = tuple(sorted((*reasons, "stop_latch_present")))
+        raise WatchdogLaunchError(
+            "runtime_contract_rejected",
+            reasons or ("unknown_contract_error",),
+            display_parts=reasons or ("unknown_contract_error",),
         )
     if svc_cfg.get("method") == "systemd":
         # A previous crash may leave the unit failed or start-rate-limited.
@@ -177,8 +201,7 @@ def _launch_orze(svc_cfg):
             capture_output=True, text=True, timeout=15,
         )
         if started.returncode != 0:
-            detail = (started.stderr or started.stdout or "unknown error").strip()
-            raise RuntimeError(f"systemd failed to start orze.service: {detail}")
+            raise WatchdogLaunchError("systemd_start_failed")
 
         shown = subprocess.run(
             ["systemctl", "--user", "show", "orze.service",
@@ -190,10 +213,7 @@ def _launch_orze(svc_cfg):
         except ValueError:
             pid = 0
         if pid <= 0:
-            detail = (shown.stderr or shown.stdout or "MainPID unavailable").strip()
-            raise RuntimeError(
-                f"systemd started orze.service without a live MainPID: {detail}"
-            )
+            raise WatchdogLaunchError("systemd_mainpid_missing")
         return pid
 
     python = svc_cfg["python"]
@@ -224,6 +244,43 @@ def _write_restart_marker(results_dir, hostname, reason, prev_pid=None):
         "iso": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
     marker.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _resolve_failure_loop(results_dir, hostname, resolution_code):
+    """Best-effort closure of a prior failure loop; never affects liveness."""
+    try:
+        record_resolution(Path(results_dir), hostname, resolution_code)
+    except Exception as exc:
+        logger.error(
+            "Unable to close watchdog failure state (%s)", type(exc).__name__
+        )
+
+
+def _notify_failure_loop(svc_cfg, event):
+    """Attempt a content-safe operator notification for an escalated loop."""
+    config_file = svc_cfg.get("config_file")
+    if not config_file:
+        return
+    try:
+        from orze.core.config import load_project_config
+        from orze.reporting.notifications import notify
+
+        cfg = load_project_config(config_file)
+        notify(
+            "watchdog_failure_loop",
+            {
+                "host": event["host"],
+                "failure_code": event["failure_code"],
+                "consecutive_count": event["consecutive_count"],
+                "fingerprint": event["fingerprint"][:12],
+                "first_seen_epoch": event["first_seen_epoch"],
+            },
+            cfg,
+        )
+    except Exception as exc:
+        logger.error(
+            "Watchdog failure-loop notification failed (%s)", type(exc).__name__
+        )
 
 
 def _has_docker():
@@ -356,6 +413,7 @@ def check_and_restart(svc_cfg):
     # Check sentinels first — don't restart if disabled/stopped
     skip, reason = _should_restart(results_dir)
     if skip:
+        _resolve_failure_loop(results_dir, hostname, "operator_stop_active")
         _log(f"Skipping restart: {reason}")
         return
 
@@ -371,6 +429,7 @@ def check_and_restart(svc_cfg):
             _write_restart_marker(results_dir, hostname, f"stale heartbeat ({age:.0f}s)", pid)
         else:
             # All good, nothing to do
+            _resolve_failure_loop(results_dir, hostname, "service_healthy")
             return
     elif pid and not _is_pid_alive(pid):
         _log(f"Orze PID {pid} not alive.")
@@ -378,23 +437,69 @@ def check_and_restart(svc_cfg):
     else:
         # No PID file — check if somehow running anyway
         if _is_orze_running():
+            _resolve_failure_loop(results_dir, hostname, "service_found")
             _log("No PID file but orze process found. Skipping.")
             return
         _write_restart_marker(results_dir, hostname, "no PID file found", None)
 
     # Double-check: no orze.cli already running (race condition guard)
     if _is_orze_running():
+        _resolve_failure_loop(results_dir, hostname, "service_found")
         _log("orze already running (pgrep). Skipping launch.")
         return
 
     # Re-check sentinels (may have changed during stall kill)
     skip, reason = _should_restart(results_dir)
     if skip:
+        _resolve_failure_loop(results_dir, hostname, "operator_stop_active")
         _log(f"Skipping restart after kill: {reason}")
         return
 
-    new_pid = _launch_orze(svc_cfg)
-    _log(f"Restarted orze (new PID {new_pid})")
+    try:
+        new_pid = _launch_orze(svc_cfg)
+    except WatchdogLaunchError as exc:
+        failure = exc
+    except Exception as exc:
+        # Do not persist or print exception text: subprocess errors may contain
+        # command lines, paths, environment values, or remote response bodies.
+        failure = WatchdogLaunchError(
+            "launch_exception", (type(exc).__name__,)
+        )
+    else:
+        _resolve_failure_loop(results_dir, hostname, "restart_succeeded")
+        _log(f"Restarted orze (new PID {new_pid})")
+        return
+
+    try:
+        event = record_failure(
+            Path(results_dir),
+            hostname,
+            failure.code,
+            (svc_cfg.get("method", "unknown"), *failure.identity_parts),
+            alert_cooldown_seconds=svc_cfg.get(
+                "restart_alert_cooldown_seconds", 6 * 3600
+            ),
+        )
+        _log(
+            "Restart failed "
+            f"code={event['failure_code']} "
+            f"consecutive={event['consecutive_count']} "
+            f"fingerprint={event['fingerprint'][:12]}"
+        )
+        if event["alert_due"]:
+            _log(
+                "ALERT repeated watchdog launch failure "
+                f"code={event['failure_code']} "
+                f"consecutive={event['consecutive_count']} "
+                f"fingerprint={event['fingerprint'][:12]}"
+            )
+            _notify_failure_loop(svc_cfg, event)
+    except Exception as tracker_exc:
+        _log(
+            "Restart failure accounting unavailable "
+            f"code={failure.code} tracker_error={type(tracker_exc).__name__}"
+        )
+    raise failure from None
 
 
 def main():
@@ -411,7 +516,14 @@ def main():
         print("Run 'orze service install -c orze.yaml' first.", file=sys.stderr)
         sys.exit(1)
 
-    check_and_restart(svc_cfg)
+    try:
+        check_and_restart(svc_cfg)
+    except WatchdogLaunchError as exc:
+        logger.error("%s", exc)
+        sys.exit(1)
+    except Exception as exc:
+        logger.error("Watchdog check failed (%s)", type(exc).__name__)
+        sys.exit(1)
     check_containers(svc_cfg)
 
 

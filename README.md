@@ -223,6 +223,13 @@ systemd start, Orze checks those hashes plus the effective unit properties
 (including drop-ins) and fails closed on runtime drift or an active stop latch.
 Reinstall the service intentionally after a reviewed package upgrade.
 
+The watchdog also records repeated launch failures in a per-host, mode-0600
+state file under `results_dir`. The second consecutive failure with the same
+categorical reason emits a rate-limited `watchdog_failure_loop` alert; a changed
+reason or restored service health resets the sequence. The receipt and alert
+contain only a stable reason code, count, and SHA-256 fingerprint—not subprocess
+output, command lines, paths, environment values, or notification secrets.
+
 Direct/manual launches can opt into the same exact interpreter and package-tree
 identity check with a `controller_runtime` block in `orze.yaml`. Run
 `orze service capture-runtime` from the reviewed executable to print a

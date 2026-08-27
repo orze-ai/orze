@@ -150,7 +150,8 @@ def test_systemd_watchdog_reports_start_failure(monkeypatch):
                      "active_latches": []},
     )
 
-    with pytest.raises(RuntimeError, match="preflight rejected startup"):
+    with pytest.raises(
+            watchdog.WatchdogLaunchError, match="systemd_start_failed"):
         watchdog._launch_orze({"method": "systemd"})
 
 

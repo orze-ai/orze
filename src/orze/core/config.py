@@ -323,8 +323,9 @@ DEFAULT_CONFIG = {
     "auto_seal_eval": True,
     "notifications": {
         "enabled": False,
-        "on": ["completed", "failed", "new_best", "watchdog_restart", "plateau",
-               "needs_intervention", "role_circuit_breaker", "role_degraded"],
+        "on": ["completed", "failed", "new_best", "watchdog_restart",
+               "watchdog_failure_loop", "plateau", "needs_intervention",
+               "role_circuit_breaker", "role_degraded"],
         "channels": [],
     },
     "retrospection": {

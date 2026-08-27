@@ -5,7 +5,8 @@ CALLING SPEC:
         Send notifications for an event to all configured channels. Never
         raises. event is one of: completed, failed, new_best, report,
         started, shutdown, heartbeat, milestone, disk_warning, stall,
-        role_summary, upgrading, watchdog_restart, plateau, needs_intervention.
+        role_summary, upgrading, watchdog_restart, watchdog_failure_loop,
+        plateau, needs_intervention.
         data is event-specific (e.g. idea_id, title, metric_value, rank,
         leaderboard). cfg must contain 'notifications' key with 'enabled',
         'on' (event filter list), and 'channels' (list of channel configs
@@ -37,6 +38,7 @@ import datetime
 import html as html_mod
 import json
 import logging
+import math
 import re
 import socket
 import urllib.request
@@ -52,6 +54,47 @@ from orze import __version__
 from orze.reporting.leaderboard import _format_report_text
 
 logger = logging.getLogger("orze")
+
+
+def _safe_watchdog_failure_data(data: dict) -> dict:
+    """Return the closed, content-safe payload allowed off-host."""
+    host_raw = str(data.get("host", socket.gethostname()))
+    host = "".join(
+        ch if ch.isalnum() or ch in "._-" else "_" for ch in host_raw
+    )[:128] or "unknown"
+    code_raw = str(data.get("failure_code", ""))
+    code = (
+        code_raw if re.fullmatch(r"[a-z0-9_]{1,64}", code_raw)
+        else "unclassified_failure"
+    )
+    count_raw = data.get("consecutive_count")
+    count = (
+        count_raw
+        if isinstance(count_raw, int) and not isinstance(count_raw, bool)
+        and 0 <= count_raw <= 2**63 - 1
+        else "?"
+    )
+    fingerprint_raw = str(data.get("fingerprint", ""))
+    fingerprint = (
+        fingerprint_raw[:12]
+        if re.fullmatch(r"[0-9a-f]{12,64}", fingerprint_raw)
+        else "unknown"
+    )
+    result = {
+        "host": host,
+        "failure_code": code,
+        "consecutive_count": count,
+        "fingerprint": fingerprint,
+    }
+    first_seen = data.get("first_seen_epoch")
+    if (
+        isinstance(first_seen, (int, float))
+        and not isinstance(first_seen, bool)
+        and math.isfinite(float(first_seen))
+        and float(first_seen) >= 0
+    ):
+        result["first_seen_epoch"] = float(first_seen)
+    return result
 
 
 def _evidence_context(data: dict, escape_fn=str) -> str:
@@ -400,6 +443,16 @@ def _format_slack(event: str, data: dict) -> dict:
         host = data.get("host", socket.gethostname())
         reason = data.get("reason", "unknown")
         return {"text": f":dog: *Watchdog restarted orze* on `{host}` (reason: {reason})"}
+    if event == "watchdog_failure_loop":
+        data = _safe_watchdog_failure_data(data)
+        host = str(data.get("host", socket.gethostname()))[:128]
+        code = str(data.get("failure_code", "unknown"))[:64]
+        count = data.get("consecutive_count", "?")
+        fingerprint = str(data.get("fingerprint", "unknown"))[:12]
+        return {"text": (
+            f":rotating_light: *Repeated Orze startup failure* on `{host}`\n"
+            f"code=`{code}` consecutive={count} fingerprint=`{fingerprint}`"
+        )}
     if event == "plateau":
         return {"text": f":warning: *Plateau detected*: {data.get('message', 'No improvement')}"}
     if event == "needs_intervention":
@@ -494,6 +547,16 @@ def _format_discord(event: str, data: dict) -> dict:
         host = data.get("host", socket.gethostname())
         reason = data.get("reason", "unknown")
         return {"content": f"\U0001f415 **Watchdog restarted orze** on `{host}` (reason: {reason})"}
+    if event == "watchdog_failure_loop":
+        data = _safe_watchdog_failure_data(data)
+        host = str(data.get("host", socket.gethostname()))[:128]
+        code = str(data.get("failure_code", "unknown"))[:64]
+        count = data.get("consecutive_count", "?")
+        fingerprint = str(data.get("fingerprint", "unknown"))[:12]
+        return {"content": (
+            f"\U0001f6a8 **Repeated Orze startup failure** on `{host}`\n"
+            f"code=`{code}` consecutive={count} fingerprint=`{fingerprint}`"
+        )}
     if event == "plateau":
         return {"content": f"\u26a0\ufe0f **Plateau detected**: {data.get('message', 'No improvement')}"}
     if event == "needs_intervention":
@@ -767,6 +830,19 @@ def _format_telegram(event: str, data: dict, channel_cfg: dict) -> tuple:
                 f"<code>{host}</code> (reason: {reason})")
         return url, {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
 
+    if event == "watchdog_failure_loop":
+        data = _safe_watchdog_failure_data(data)
+        host = esc(str(data.get("host", socket.gethostname()))[:128])
+        code = esc(str(data.get("failure_code", "unknown"))[:64])
+        count = esc(str(data.get("consecutive_count", "?"))[:32])
+        fingerprint = esc(str(data.get("fingerprint", "unknown"))[:12])
+        text = (
+            f"\U0001f6a8 <b>Repeated Orze startup failure</b> on "
+            f"<code>{host}</code>\ncode=<code>{code}</code> "
+            f"consecutive={count} fingerprint=<code>{fingerprint}</code>"
+        )
+        return url, {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+
     if event == "plateau":
         msg = esc(str(data.get("message", "No improvement")))
         text = f"\u26a0\ufe0f <b>Plateau detected</b>: {msg}"
@@ -852,6 +928,9 @@ def notify(event: str, data: dict, cfg: dict):
         if not ncfg.get("enabled", False):
             return
 
+        if event == "watchdog_failure_loop":
+            data = _safe_watchdog_failure_data(data)
+
         logger.info("Sending notification for event: %s", event)
 
         # Health alerts always pass through, regardless of any role-summary
@@ -892,7 +971,7 @@ def notify(event: str, data: dict, cfg: dict):
         # Lifecycle/system events always delivered (not filtered)
         lifecycle = {"started", "shutdown", "heartbeat", "milestone",
                      "disk_warning", "stall", "role_summary", "upgrading",
-                     "watchdog_restart"}
+                     "watchdog_restart", "watchdog_failure_loop"}
 
         for idx, ch in enumerate(ncfg.get("channels") or []):
             ch_on = ch.get("on") or global_on

@@ -11,6 +11,7 @@ from orze.service.watchdog import (
     SERVICE_CONFIG_PATH, load_service_config,
     _read_pid, _is_pid_alive, _is_heartbeat_stale,
 )
+from orze.service.failure_loop import read_failure_state
 
 
 def _ok(msg):
@@ -111,8 +112,30 @@ def show_status():
         print(f"    {_ok('orze.service active') if svc_active else _no('orze.service not active')}")
         print(f"    {_ok('orze-watchdog.timer active') if timer_active else _no('orze-watchdog.timer not active')}")
 
-    # 4. Orze process
+    # Durable launch-loop state. This view contains only closed reason codes,
+    # counts, epochs, and a hash prefix; raw subprocess output is never read or
+    # rendered here.
+    print(f"\n  \033[1mStartup failure loop:\033[0m")
     results_dir = svc_cfg.get("results_dir", "orze_results")
+    try:
+        failure_state = read_failure_state(Path(results_dir), hostname)
+        if failure_state is None:
+            print(f"    {_ok('No recorded startup failure loop')}")
+        elif not failure_state.get("valid"):
+            print(f"    {_no('Failure-loop state is invalid')}")
+        elif failure_state.get("active"):
+            code = failure_state.get("failure_code", "unknown")
+            count = failure_state.get("consecutive_count", "?")
+            fingerprint = str(failure_state.get("fingerprint", "unknown"))[:12]
+            print(f"    {_no(f'Active: {code} (consecutive {count})')}")
+            print(f"    Fingerprint: {fingerprint}")
+        else:
+            code = failure_state.get("resolution_code", "resolved")
+            print(f"    {_ok(f'Last loop resolved: {code}')}")
+    except Exception as exc:
+        print(f"    {_no(f'Failure-loop state unavailable: {type(exc).__name__}')}")
+
+    # 4. Orze process
     print(f"\n  \033[1mOrze process:\033[0m")
     pid = _read_pid(results_dir, hostname)
     if pid:
