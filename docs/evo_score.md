@@ -66,6 +66,14 @@ Evo Score = 100 × Σ(componentᵢ.score × weightᵢ) / Σ(weightᵢ)     # Σw
 All weights, the yield target, and grade cutoffs are configurable under
 `report.search_path` (`eff_w_*`, `eff_yield_target`, …).
 
+Depth utilization, diversity, hub concentration, and the explore-vs-exploit
+split use only genealogy edges whose child and parent are terminal attempts
+(`completed`, `failed`, `error`, `partial`, or `dead`). The full proposal tree
+is still reported as a planning diagnostic, but queued, running, skipped, or
+archived proposals cannot earn structural score credit. A run with no executed
+genealogy edges receives zero diversity credit rather than a perfect score. The
+API's `structure_accounting` makes this score-bearing population explicit.
+
 Reliability excludes queued, running, skipped, archived, unknown, and other
 non-attempt rows from its denominator. They are not successful executions merely
 because they did not fail. With no terminal attempts, reliability contributes

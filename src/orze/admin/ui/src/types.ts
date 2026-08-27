@@ -280,6 +280,17 @@ export interface ResearchEfficiency {
     unclassified_penalty: number;
     classified: number;
   };
+  structure_accounting?: {
+    scope: 'terminal_attempts';
+    attempt_nodes: number;
+    attempt_edges: number;
+    attempt_leaves: number;
+    attempt_intermediate: number;
+    attempt_branching_nodes: number;
+    attempt_judged_edges: number;
+    attempt_contract_ok_edges: number;
+    attempt_undiffable_edges: number;
+  };
   yield_rate: number;
   depth_yield: DepthYieldRow[];
   evidence_qualification?: EvidenceQualification;
@@ -314,11 +325,13 @@ export interface SearchPathResponse {
     refinement_success_rate?: number | null;
     refinement_pairs?: number;
     evolution_rate?: number | null;
+    attempt_evolution_rate?: number | null;
     intermediate_nodes?: number;
     n_edges?: number;
     judged_edges?: number;
     undiffable_edges?: number;
     genuine_evolution_rate?: number | null;
+    attempt_genuine_evolution_rate?: number | null;
     contract_ok_edges?: number;
     zero_delta_edges?: number;
     no_rationale_edges?: number;

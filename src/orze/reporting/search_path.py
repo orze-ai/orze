@@ -280,7 +280,8 @@ def compute_research_efficiency(
     top1_share = top1 / n_edges if n_edges else 0.0
     sorted_fan = sorted(fanout, reverse=True)
     top5_share = (sum(sorted_fan[:5]) / n_edges) if n_edges else 0.0
-    diversity = 1.0 - top1_share
+    # With no executed genealogy edge there is no evidence of diversity.
+    diversity = 1.0 - top1_share if n_edges else 0.0
 
     comps = {
         "yield": {"value": round(yield_rate, 4), "score": round(yield_score, 4),
@@ -731,6 +732,36 @@ def build_search_path(
     for r in by_id.values():
         status_counts[(r.get("status") or "unknown").lower()] += 1
 
+    # Score-bearing structure is restricted to terminal attempts. Proposal-only
+    # genealogy remains useful for planning diagnostics, but queued/skipped or
+    # archived synthetic trees are not evidence that the search actually
+    # compounded or diversified.
+    attempt_statuses = _SUCCESSFUL_TERMINAL_STATUSES | _FAILED_STATUSES
+    attempt_ids = {
+        iid for iid, row in by_id.items()
+        if str(row.get("status") or "").lower() in attempt_statuses
+    }
+    attempt_parent_of = {
+        child: parent for child, parent in parent_of.items()
+        if child in attempt_ids and parent in attempt_ids
+    }
+    attempt_children: Dict[str, List[str]] = defaultdict(list)
+    for child, parent in attempt_parent_of.items():
+        attempt_children[parent].append(child)
+    attempt_intermediate = sum(
+        1 for child in attempt_parent_of if attempt_children.get(child)
+    )
+    attempt_evolution_rate = (
+        round(attempt_intermediate / len(attempt_parent_of), 4)
+        if attempt_parent_of else None
+    )
+    attempt_leaves = sum(
+        1 for iid in attempt_ids if not attempt_children.get(iid)
+    )
+    attempt_fanout = [
+        len(kids) for kids in attempt_children.values() if kids
+    ]
+
     # refinement success rate over scored parent/child pairs
     pc_pairs = improved_pairs = 0
     for c, p in parent_of.items():
@@ -770,6 +801,20 @@ def build_search_path(
     # Rate is over edges we could actually judge (configs present on both sides).
     genuine_evolution_rate = round(n_contract_ok / n_judged, 4) if n_judged else None
 
+    attempt_judged = attempt_contract_ok = attempt_undiffable = 0
+    for iid in attempt_parent_of:
+        evidence = evo.get(iid)
+        if not evidence or evidence["contract_ok"] is None:
+            attempt_undiffable += 1
+            continue
+        attempt_judged += 1
+        if evidence["contract_ok"]:
+            attempt_contract_ok += 1
+    attempt_genuine_evolution_rate = (
+        round(attempt_contract_ok / attempt_judged, 4)
+        if attempt_judged else None
+    )
+
     # depth-yield curve: does searching *deeper* actually produce scored results?
     # Buckets depths >= 10 into a single "10+" row to keep the payload small.
     dy: Dict[Any, dict] = {}
@@ -790,20 +835,29 @@ def build_search_path(
         row["scored_frac"] = round(row["scored"] / row["n"], 4) if row["n"] else 0.0
         depth_yield.append(row)
 
-    n_leaves = sum(1 for n in nodes if n["n_children"] == 0)
-    fanout = [n["n_children"] for n in nodes if n["n_children"] > 0]
     research_efficiency = compute_research_efficiency(
         n_total=len(by_id),
         n_scored=n_scored,
         status_counts={k: v for k, v in status_counts.items()},
-        fanout=fanout,
-        n_leaves=n_leaves,
-        n_intermediate=intermediate,
+        fanout=attempt_fanout,
+        n_leaves=attempt_leaves,
+        n_intermediate=attempt_intermediate,
         refinement_success_rate=(round(improved_pairs / pc_pairs, 4) if pc_pairs else None),
-        evolution_rate=evolution_rate,
+        evolution_rate=attempt_evolution_rate,
         depth_yield=depth_yield,
         th=th,
     )
+    research_efficiency["structure_accounting"] = {
+        "scope": "terminal_attempts",
+        "attempt_nodes": len(attempt_ids),
+        "attempt_edges": len(attempt_parent_of),
+        "attempt_leaves": attempt_leaves,
+        "attempt_intermediate": attempt_intermediate,
+        "attempt_branching_nodes": len(attempt_children),
+        "attempt_judged_edges": attempt_judged,
+        "attempt_contract_ok_edges": attempt_contract_ok,
+        "attempt_undiffable_edges": attempt_undiffable,
+    }
 
     return {
         "metric": {"name": metric_name, "lower_is_better": lower_is_better},
@@ -824,11 +878,13 @@ def build_search_path(
                 round(improved_pairs / pc_pairs, 4) if pc_pairs else None,
             "refinement_pairs": pc_pairs,
             "evolution_rate": evolution_rate,
+            "attempt_evolution_rate": attempt_evolution_rate,
             "intermediate_nodes": intermediate,
             "n_edges": n_edges,
             "judged_edges": n_judged,
             "undiffable_edges": n_undiffable,
             "genuine_evolution_rate": genuine_evolution_rate,
+            "attempt_genuine_evolution_rate": attempt_genuine_evolution_rate,
             "contract_ok_edges": n_contract_ok,
             "zero_delta_edges": n_zero_delta,
             "no_rationale_edges": n_no_rationale,

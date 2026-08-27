@@ -260,7 +260,7 @@ function ResearchTreeInner() {
         <Pill label="Branches" value={s.n_roots ?? roots.length} sub="root lineages" />
         <Pill label="Max depth" value={s.max_depth ?? 0} sub={`mean ${s.mean_depth ?? 0}`} />
         <Pill
-          label="Evolution"
+          label="Proposal evolution"
           value={
             s.evolution_rate === null || s.evolution_rate === undefined
               ? '—'
@@ -269,7 +269,7 @@ function ResearchTreeInner() {
           sub={`${s.intermediate_nodes ?? 0} evolved`}
         />
         <Pill
-          label="Genuine evo"
+          label="Proposal genuine"
           value={
             s.genuine_evolution_rate === null || s.genuine_evolution_rate === undefined
               ? '—'
@@ -587,6 +587,11 @@ function EfficiencyPanel({ eff, metricName }: { eff: ResearchEfficiency; metricN
         <Gauge size={15} className="text-emerald-400" />
         <span className="text-sm font-semibold">Internal Evo Score</span>
         <span className="text-[11px] text-gray-500">research efficiency only — never an official leaderboard rank</span>
+        {eff.structure_accounting && (
+          <span className="ml-auto text-[10px] text-gray-600">
+            structure: {eff.structure_accounting.attempt_nodes} terminal attempts · {eff.structure_accounting.attempt_edges} executed edges
+          </span>
+        )}
       </div>
       <div className="grid gap-4 p-4 lg:grid-cols-[160px_1fr_1fr]">
         {/* score + grade */}

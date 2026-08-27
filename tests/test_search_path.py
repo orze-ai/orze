@@ -530,6 +530,11 @@ class TestResearchEfficiency:
         assert abs(e["concentration"]["top1_share"] - 0.8) < 1e-6
         assert e["concentration"]["max_fanout"] == 8
 
+    def test_zero_executed_edges_earn_zero_diversity(self):
+        e = self._eff(fanout=[])
+        assert e["components"]["diversity"]["value"] == 0.0
+        assert e["concentration"]["top1_share"] == 0.0
+
     def test_exploit_share(self):
         e = self._eff(n_leaves=75, n_intermediate=25)
         assert abs(e["exploration_exploitation"]["exploit_share"] - 0.25) < 1e-6
@@ -554,6 +559,53 @@ class TestResearchEfficiency:
         d = build_search_path(rows, metric_of=_metric_of, lower_is_better=False)
         re = d["research_efficiency"]
         assert "score" in re and "depth_yield" in re and "components" in re
+
+    def test_unexecuted_genealogy_cannot_inflate_structural_components(self):
+        attempted = [
+            {"idea_id": "root", "parent": None, "status": "completed",
+             "config": {"x": 0}, "eval_metrics": {"score": 1.0}},
+            {"idea_id": "child", "parent": "root", "status": "failed",
+             "config": {"x": 1}, "hypothesis": "try x=1"},
+        ]
+        base = build_search_path(
+            attempted, metric_of=_metric_of, lower_is_better=False)
+        synthetic = list(attempted)
+        parent = "root"
+        for index in range(20):
+            idea_id = f"queued-{index}"
+            synthetic.append({
+                "idea_id": idea_id,
+                "parent": parent,
+                "status": "queued",
+                "config": {"x": index + 2},
+                "hypothesis": "synthetic proposal",
+            })
+            parent = idea_id
+        expanded = build_search_path(
+            synthetic, metric_of=_metric_of, lower_is_better=False)
+
+        for component in ("depth_utilization", "diversity"):
+            assert expanded["research_efficiency"]["components"][component] == (
+                base["research_efficiency"]["components"][component])
+        assert expanded["research_efficiency"]["exploration_exploitation"] == (
+            base["research_efficiency"]["exploration_exploitation"])
+        assert expanded["research_efficiency"]["concentration"] == (
+            base["research_efficiency"]["concentration"])
+        assert expanded["research_efficiency"]["structure_accounting"] == (
+            base["research_efficiency"]["structure_accounting"])
+        assert base["research_efficiency"]["structure_accounting"] == {
+            "scope": "terminal_attempts",
+            "attempt_nodes": 2,
+            "attempt_edges": 1,
+            "attempt_leaves": 1,
+            "attempt_intermediate": 0,
+            "attempt_branching_nodes": 1,
+            "attempt_judged_edges": 1,
+            "attempt_contract_ok_edges": 1,
+            "attempt_undiffable_edges": 0,
+        }
+        assert expanded["stats"]["evolution_rate"] != (
+            expanded["stats"]["attempt_evolution_rate"])
 
     def test_failed_and_skipped_metrics_are_not_scored(self):
         rows = [
