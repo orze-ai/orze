@@ -1,6 +1,7 @@
 """Installed service policy and runtime identity must fail closed on drift."""
 
 import json
+import py_compile
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -290,6 +291,26 @@ def test_runtime_hash_excludes_dev_dependencies_but_includes_served_ui(
     assert original_count == dependency_count == asset_count == 2
     assert dependency_hash == original_hash
     assert asset_hash != original_hash
+
+
+def test_runtime_hash_includes_importable_sourceless_bytecode(tmp_path):
+    root = tmp_path / "orze"
+    root.mkdir()
+    (root / "__init__.py").write_text("", encoding="utf-8")
+    source = root / "runtime_payload.py"
+    source.write_text("VALUE = 173\n", encoding="utf-8")
+    bytecode = root / "runtime_payload.pyc"
+    py_compile.compile(str(source), cfile=str(bytecode), doraise=True)
+    source.unlink()
+
+    original_hash, original_count = _hash_package_tree(root)
+    payload = bytearray(bytecode.read_bytes())
+    payload[-1] ^= 1
+    bytecode.write_bytes(payload)
+    changed_hash, changed_count = _hash_package_tree(root)
+
+    assert original_count == changed_count == 2
+    assert changed_hash != original_hash
 
 
 def test_matching_direct_controller_runtime_is_accepted(tmp_path):

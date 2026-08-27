@@ -22,7 +22,6 @@ _STOP_SENTINELS = (".orze_disabled", ".orze_stop_all", ".orze_shutdown")
 # Including node_modules made every launch re-attestation read thousands of
 # irrelevant files and tied a runtime identity to local frontend tooling.
 _IGNORED_PARTS = {"__pycache__", "node_modules"}
-_IGNORED_SUFFIXES = {".pyc", ".pyo"}
 _RUNTIME_ENVIRONMENT_KEYS = {
     "BASH_ENV",
     "ENV",
@@ -49,8 +48,6 @@ def _hash_package_tree(root: Path) -> tuple[str, int]:
             continue
         relative = path.relative_to(root)
         if any(part in _IGNORED_PARTS for part in relative.parts):
-            continue
-        if path.suffix in _IGNORED_SUFFIXES:
             continue
         resolved = path.resolve(strict=True)
         try:
