@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Fixed
+- **GPU scope and launch telemetry are enforced at the final boundary.** Each
+  daemon invocation records its exact managed physical GPU IDs, optionally
+  narrowed by `gpu_scheduling.allowed_gpus`; direct training, posthoc, eval,
+  and post-script launches reject out-of-scope or reserved devices. Enabled
+  pre-launch VRAM checks now fail closed when telemetry is unavailable instead
+  of launching blind. Evaluators expose only the selected physical GPU as local
+  device 0 (`{gpu}`), with `{physical_gpu}` available for host-index tooling.
 - **Idea data can no longer disable launch integrity checks.** The public
   `force_launch` escape hatch is rejected at any nesting depth, including when
   set to false, and no longer bypasses deduplication, schema, method, or SOP

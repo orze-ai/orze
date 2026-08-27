@@ -3,7 +3,7 @@
 CALLING SPEC:
     launch_eval(idea_id, gpu, results_dir, cfg) -> EvalProcess | None
         idea_id: str — experiment identifier
-        gpu: int — CUDA device index (NOT set as CUDA_VISIBLE_DEVICES; eval script uses --gpu)
+        gpu: int — physical CUDA device; child sees it as local device 0
         results_dir: Path — parent dir for experiment results
         cfg: dict — requires 'eval_script'; optional 'eval_args', 'eval_timeout', 'eval_output',
                      'python', 'train_extra_env'
@@ -44,7 +44,10 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from orze.engine.process import EvalProcess, _new_process_group, _terminate_and_reap
-from orze.engine.launcher import _format_args
+from orze.engine.launcher import (
+    _assert_gpu_authorized, _assert_launch_authorized, _format_args,
+    _launch_min_free_vram, _verify_gpu_free,
+)
 from orze.core.fs import tail_file
 
 logger = logging.getLogger("orze")
@@ -121,8 +124,14 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     eval_args = cfg.get("eval_args") or []
     eval_timeout = cfg.get("eval_timeout", 3600)
 
+    _assert_launch_authorized(idea_id, results_dir, cfg)
+    _assert_gpu_authorized(gpu, cfg)
+    _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
+
     cmd = [python, eval_script]
-    cmd.extend(_format_args(eval_args, {"idea_id": idea_id, "gpu": gpu}))
+    cmd.extend(_format_args(eval_args, {
+        "idea_id": idea_id, "gpu": 0, "physical_gpu": gpu,
+    }))
 
     log_path = results_dir / idea_id / "eval_output.log"
     logger.info("Launching eval for %s on GPU %s", idea_id, gpu)
@@ -131,9 +140,10 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         env = os.environ.copy()
         for k, v in (cfg.get("train_extra_env") or {}).items():
             env[k] = str(v)
-        # Don't set CUDA_VISIBLE_DEVICES — the eval script uses --gpu
-        # to select the device via torch.cuda.set_device().
-        env.pop("CUDA_VISIBLE_DEVICES", None)
+        # Expose only the authorized physical device. Within the child it is
+        # local CUDA device 0; {physical_gpu} remains available for non-CUDA
+        # tooling that needs the host index.
+        env["CUDA_VISIBLE_DEVICES"] = str(gpu)
         log_fh = open(log_path, "w", encoding="utf-8")
         try:
             proc = subprocess.Popen(
@@ -387,12 +397,17 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
                 )
                 continue
 
+        _assert_launch_authorized(idea_id, results_dir, cfg)
+        _assert_gpu_authorized(gpu, cfg)
+        _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
         args = ps.get("args") or []
         timeout = ps.get("timeout", 3600)
         name = ps.get("name", f"post-script-{i}")
 
         cmd = [python, script]
-        cmd.extend(_format_args(args, {"idea_id": idea_id, "gpu": gpu}))
+        cmd.extend(_format_args(args, {
+            "idea_id": idea_id, "gpu": 0, "physical_gpu": gpu,
+        }))
 
         log_path = results_dir / idea_id / f"{name}.log"
         logger.info("Running %s for %s", name, idea_id)

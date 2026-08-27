@@ -7,9 +7,13 @@ import yaml
 
 from orze.engine.launcher import (
     LaunchIntegrityError,
+    _assert_gpu_authorized,
+    _launch_min_free_vram,
     find_forbidden_launch_override,
     launch,
 )
+from orze.core.config import _validate_config
+from orze.engine.evaluator import launch_eval
 
 
 @pytest.fixture
@@ -139,3 +143,150 @@ def test_malformed_launcher_policy_pauses_fail_closed(launch_case):
     cfg["launcher"] = "not-a-mapping"
     with pytest.raises(LaunchIntegrityError, match="pause_policy"):
         launch("idea-test", 4, results, cfg)
+
+
+def test_configured_gpu_scope_blocks_other_physical_devices():
+    cfg = {"gpu_scheduling": {"allowed_gpus": [4, 5, 6, 7]}}
+    _assert_gpu_authorized(4, cfg)
+    _assert_gpu_authorized(7, cfg)
+    with pytest.raises(LaunchIntegrityError, match="outside_managed_scope:0"):
+        _assert_gpu_authorized(0, cfg)
+
+
+def test_direct_launch_enforces_gpu_scope_before_telemetry(
+        launch_case, monkeypatch):
+    results, _, cfg = launch_case
+    cfg["gpu_scheduling"] = {"allowed_gpus": [4, 5, 6, 7]}
+    gpu_checked = []
+    monkeypatch.setattr(
+        "orze.engine.launcher._verify_gpu_free",
+        lambda *args, **kwargs: gpu_checked.append(True),
+    )
+    with pytest.raises(LaunchIntegrityError, match="outside_managed_scope:0"):
+        launch("idea-test", 0, results, cfg)
+    assert gpu_checked == []
+
+
+def test_daemon_invocation_scope_narrows_configured_allowlist():
+    cfg = {
+        "_managed_gpu_ids": [4, 5],
+        "gpu_scheduling": {"allowed_gpus": [4, 5, 6, 7]},
+    }
+    _assert_gpu_authorized(5, cfg)
+    with pytest.raises(LaunchIntegrityError, match="outside_managed_scope:6"):
+        _assert_gpu_authorized(6, cfg)
+
+
+def test_configured_allowlist_cannot_be_widened_by_internal_scope():
+    cfg = {
+        "_managed_gpu_ids": [0, 4],
+        "gpu_scheduling": {"allowed_gpus": [4, 5, 6, 7]},
+    }
+    with pytest.raises(LaunchIntegrityError, match="outside_managed_scope:0"):
+        _assert_gpu_authorized(0, cfg)
+
+
+def test_empty_daemon_scope_authorizes_no_gpu():
+    with pytest.raises(LaunchIntegrityError, match="outside_managed_scope:4"):
+        _assert_gpu_authorized(4, {"_managed_gpu_ids": []})
+
+
+@pytest.mark.parametrize("scope", [["4"], [True], [4, 4], "4,5"])
+def test_runtime_gpu_scope_requires_typed_unique_ids(scope):
+    with pytest.raises(LaunchIntegrityError, match="managed_gpu_scope_invalid"):
+        _assert_gpu_authorized(4, {"_managed_gpu_ids": scope})
+
+
+def test_reserved_gpu_cannot_be_launched_directly():
+    cfg = {
+        "_managed_gpu_ids": [4, 5, 6, 7],
+        "gpu_scheduling": {"reserved_gpus": [6]},
+    }
+    with pytest.raises(LaunchIntegrityError, match="gpu_is_reserved:6"):
+        _assert_gpu_authorized(6, cfg)
+
+
+@pytest.mark.parametrize("gpu", [True, -1, "4", None])
+def test_invalid_gpu_identity_is_rejected(gpu):
+    with pytest.raises(LaunchIntegrityError, match="gpu_id_invalid"):
+        _assert_gpu_authorized(gpu, {})
+
+
+def test_launch_vram_threshold_uses_nested_scheduler_policy():
+    assert _launch_min_free_vram({
+        "gpu_scheduling": {"min_free_vram_mib": 4321},
+    }) == 4321
+    assert _launch_min_free_vram({
+        "launcher_min_free_vram_mib": 1234,
+        "gpu_scheduling": {"min_free_vram_mib": 4321},
+    }) == 1234
+
+
+@pytest.mark.parametrize("gpu_cfg", [
+    {"allowed_gpus": [4, 4]},
+    {"allowed_gpus": [4, True]},
+    {"allowed_gpus": [4], "reserved_gpus": [5]},
+    {"min_free_vram_mib": -1},
+])
+def test_config_validation_rejects_ambiguous_gpu_policy(
+        tmp_path, monkeypatch, gpu_cfg):
+    train = tmp_path / "train.py"
+    train.write_text("# idea_config.yaml\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    errors, _ = _validate_config({
+        "train_script": "train.py", "gpu_scheduling": gpu_cfg,
+    })
+    assert any("gpu_scheduling" in error for error in errors)
+
+
+def test_eval_masks_to_one_authorized_gpu_and_uses_local_device_zero(
+        launch_case, monkeypatch):
+    results, idea_dir, cfg = launch_case
+    (idea_dir / "metrics.json").write_text(
+        '{"status":"COMPLETED"}', encoding="utf-8")
+    cfg.update({
+        "eval_script": "/usr/bin/true",
+        "eval_args": [
+            "--gpu", "{gpu}", "--physical-gpu", "{physical_gpu}"],
+        "gpu_scheduling": {"allowed_gpus": [4, 5, 6, 7]},
+    })
+    observed = {}
+
+    class RunningProcess:
+        pid = 12345
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(
+        "orze.engine.evaluator._verify_gpu_free", lambda *args: None)
+
+    def popen(cmd, **kwargs):
+        observed["cmd"] = cmd
+        observed["env"] = kwargs["env"]
+        return RunningProcess()
+
+    monkeypatch.setattr("orze.engine.evaluator.subprocess.Popen", popen)
+    ep = launch_eval("idea-test", 4, results, cfg)
+    assert observed["cmd"][-4:] == [
+        "--gpu", "0", "--physical-gpu", "4"]
+    assert observed["env"]["CUDA_VISIBLE_DEVICES"] == "4"
+    ep.close_log()
+
+
+def test_eval_rejects_out_of_scope_gpu_before_telemetry(
+        launch_case, monkeypatch):
+    results, idea_dir, cfg = launch_case
+    (idea_dir / "metrics.json").write_text(
+        '{"status":"COMPLETED"}', encoding="utf-8")
+    cfg.update({
+        "eval_script": "/usr/bin/true",
+        "gpu_scheduling": {"allowed_gpus": [4, 5, 6, 7]},
+    })
+    checked = []
+    monkeypatch.setattr(
+        "orze.engine.evaluator._verify_gpu_free",
+        lambda *args: checked.append(True))
+    with pytest.raises(LaunchIntegrityError, match="outside_managed_scope:0"):
+        launch_eval("idea-test", 0, results, cfg)
+    assert checked == []

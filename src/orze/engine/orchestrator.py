@@ -97,7 +97,29 @@ _roles_unavailable_warned = False
 
 class Orze(OrzePhaseMixin):
     def __init__(self, gpu_ids: List[int], cfg: dict, once: bool = False):
-        self.gpu_ids = gpu_ids
+        if (not isinstance(gpu_ids, list)
+                or any(isinstance(gpu, bool) or not isinstance(gpu, int)
+                       or gpu < 0 for gpu in gpu_ids)
+                or len(gpu_ids) != len(set(gpu_ids))):
+            raise ValueError(
+                "gpu_ids must be unique non-negative physical GPU IDs")
+        scheduling = cfg.get("gpu_scheduling") or {}
+        if not isinstance(scheduling, dict):
+            raise ValueError("gpu_scheduling must be a mapping")
+        configured_scope = scheduling.get("allowed_gpus") or []
+        if (not isinstance(configured_scope, list)
+                or any(isinstance(gpu, bool) or not isinstance(gpu, int)
+                       or gpu < 0 for gpu in configured_scope)):
+            raise ValueError(
+                "gpu_scheduling.allowed_gpus must contain physical GPU IDs")
+        if configured_scope and not set(gpu_ids).issubset(configured_scope):
+            outside = sorted(set(gpu_ids) - set(configured_scope))
+            raise ValueError(
+                f"requested GPUs outside gpu_scheduling.allowed_gpus: {outside}")
+        self.gpu_ids = list(gpu_ids)
+        # Every lifecycle-managed launch rechecks this exact invocation scope.
+        # This is runtime-only metadata; it is not written into trainer config.
+        cfg["_managed_gpu_ids"] = list(gpu_ids)
         self.cfg = cfg
         self.once = once
         self.results_dir = Path(cfg["results_dir"])

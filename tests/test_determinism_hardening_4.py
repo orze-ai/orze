@@ -43,10 +43,11 @@ def test_verify_gpu_free_raises_when_gpu_not_reported():
             _verify_gpu_free(3, min_free_mib=2000)
 
 
-def test_verify_gpu_free_fails_open_on_nvidia_smi_failure():
-    """Transient nvidia-smi error must NOT block a healthy launch."""
+def test_verify_gpu_free_fails_closed_on_nvidia_smi_failure():
+    """Missing telemetry must not authorize a blind GPU launch."""
     with patch("orze.engine.gpu_slots._query_all_gpu_usage", return_value={}):
-        _verify_gpu_free(0, min_free_mib=2000)  # no raise
+        with pytest.raises(GpuUnavailableError, match="telemetry unavailable"):
+            _verify_gpu_free(0, min_free_mib=2000)
 
 
 def test_verify_gpu_free_noop_when_threshold_zero():

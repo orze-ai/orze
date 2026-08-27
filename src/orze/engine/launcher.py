@@ -990,7 +990,7 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
 
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not.
-    _verify_gpu_free(gpu, int(cfg.get("launcher_min_free_vram_mib", 1000)))
+    _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
 
     log_fh = open(log_path, "a")
     log_fh.write(f"\n[posthoc_runner] kind={kind} gpu={gpu}\n")
@@ -1075,18 +1075,21 @@ def _verify_gpu_free(gpu, min_free_mib: int) -> None:
     view can permit a launch that the live GPU cannot host, leading to
     multiple shards landing on one GPU and OOM-crashing.
 
-    Fail-open on nvidia-smi errors so a transient query hiccup never
-    blocks a healthy launch.
+    When the check is enabled, unavailable telemetry fails closed: launching
+    blind can violate reservations or turn one monitoring fault into an OOM
+    retry storm. Set the threshold to zero only to disable this check explicitly.
     """
     if gpu is None or int(gpu) < 0 or min_free_mib <= 0:
         return
     try:
         from orze.engine.gpu_slots import _query_all_gpu_usage
         usage = _query_all_gpu_usage()
-    except Exception:
-        return  # fail-open on query failure
+    except Exception as exc:
+        raise GpuUnavailableError(
+            "GPU telemetry unavailable at launch time") from exc
     if not usage:
-        return  # nvidia-smi unavailable — fail-open
+        raise GpuUnavailableError(
+            "GPU telemetry unavailable at launch time")
     entry = usage.get(int(gpu))
     if entry is None:
         raise GpuUnavailableError(
@@ -1176,6 +1179,47 @@ def _assert_launch_authorized(idea_id: str, results_dir: Path,
         raise LaunchIntegrityError("launch_blocked_by_pause_policy")
 
 
+def _assert_gpu_authorized(gpu: int, cfg: dict) -> None:
+    """Require a valid, managed, non-reserved physical GPU ID."""
+    if isinstance(gpu, bool) or not isinstance(gpu, int) or gpu < 0:
+        raise LaunchIntegrityError("gpu_id_invalid")
+    scheduling = cfg.get("gpu_scheduling", {})
+    if not isinstance(scheduling, dict):
+        raise LaunchIntegrityError("gpu_scheduling_policy_invalid")
+
+    def validated_ids(raw, label: str) -> Optional[set]:
+        if raw is None:
+            return None
+        if (not isinstance(raw, list)
+                or any(isinstance(value, bool)
+                       or not isinstance(value, int)
+                       or value < 0 for value in raw)
+                or len(raw) != len(set(raw))):
+            raise LaunchIntegrityError(f"{label}_invalid")
+        return set(raw)
+
+    managed = cfg.get("_managed_gpu_ids")
+    configured = scheduling.get("allowed_gpus")
+    managed_ids = validated_ids(managed, "managed_gpu_scope")
+    configured_ids = validated_ids(configured, "gpu_allowlist")
+    if ((managed_ids is not None and gpu not in managed_ids)
+            or (configured_ids and gpu not in configured_ids)):
+        raise LaunchIntegrityError(
+            f"gpu_outside_managed_scope:{gpu}")
+    reserved_ids = validated_ids(
+        scheduling.get("reserved_gpus") or [], "reserved_gpu_list")
+    if gpu in reserved_ids:
+        raise LaunchIntegrityError(f"gpu_is_reserved:{gpu}")
+
+
+def _launch_min_free_vram(cfg: dict) -> int:
+    scheduling = cfg.get("gpu_scheduling") or {}
+    return int(cfg.get(
+        "launcher_min_free_vram_mib",
+        scheduling.get("min_free_vram_mib", 1000),
+    ))
+
+
 def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> TrainingProcess:
     """Launch a training subprocess on the given GPU.
 
@@ -1189,6 +1233,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     """
     results_dir = Path(results_dir)
     _assert_launch_authorized(idea_id, results_dir, cfg)
+    _assert_gpu_authorized(gpu, cfg)
     log_path = results_dir / idea_id / "train_output.log"
 
     # F12: detect non-train ideas and dispatch to posthoc_runner.
@@ -1385,7 +1430,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not — handled in
     # phases.py as a requeue, not a code-fix retry.
-    _verify_gpu_free(gpu, int(cfg.get("launcher_min_free_vram_mib", 1000)))
+    _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
 
     claim_path = results_dir / idea_id / "claim.json"
     if lake is not None and not claim_path.exists():

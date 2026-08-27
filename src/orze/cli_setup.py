@@ -966,6 +966,9 @@ min_disk_gb: 5
 # --- GPU SCHEDULING ---
 gpu_scheduling:
   mode: exclusive
+  # Optional hard physical-GPU boundary, e.g. [4, 5, 6, 7]. `--gpus`
+  # narrows the managed set further for each daemon invocation.
+  allowed_gpus: []
 
 # --- REPORT ---
 report:
@@ -1133,7 +1136,9 @@ python: {python_for_yaml}
 
 # --- EVALUATION (optional) ---
 # eval_script: evaluate_dataset.py
-# eval_args: [--split, test]
+# The evaluator sees one CUDA device: {{gpu}} is local device 0;
+# {{physical_gpu}} is the selected host index for non-CUDA tooling.
+# eval_args: [--split, test, --gpu, "{{gpu}}"]
 # eval_timeout: 3600
 # eval_output: eval_report.json
 

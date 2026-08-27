@@ -207,6 +207,7 @@ DEFAULT_CONFIG = {
         "max_vram_pct": 90,        # stop filling GPU at this VRAM %
         "min_free_vram_mib": 1000, # require this much free VRAM
         "max_jobs_per_gpu": 1,     # safety cap (1 = backward compat)
+        "allowed_gpus": [],         # optional hard physical-GPU allowlist
     },
     "pre_script": None,
     "pre_args": [],
@@ -566,6 +567,41 @@ def _validate_config(cfg: dict) -> tuple:
         val = cfg.get(key)
         if val is not None and (not isinstance(val, (int, float)) or val < 0):
             errors.append(f"{key}: must be a non-negative number, got {val!r}")
+
+    gpu_cfg = cfg.get("gpu_scheduling", DEFAULT_CONFIG["gpu_scheduling"])
+    if not isinstance(gpu_cfg, dict):
+        errors.append("gpu_scheduling: must be a mapping")
+    else:
+        normalized_gpu_lists = {}
+        for key in ("allowed_gpus", "reserved_gpus"):
+            values = gpu_cfg.get(key, []) or []
+            if (not isinstance(values, list)
+                    or any(isinstance(value, bool)
+                           or not isinstance(value, int)
+                           or value < 0 for value in values)
+                    or len(values) != len(set(values))):
+                errors.append(
+                    f"gpu_scheduling.{key}: must be a list of unique "
+                    "non-negative integer GPU IDs")
+            else:
+                normalized_gpu_lists[key] = set(values)
+        allowed = normalized_gpu_lists.get("allowed_gpus", set())
+        reserved_outside = (
+            normalized_gpu_lists.get("reserved_gpus", set()) - allowed
+            if allowed else set()
+        )
+        if reserved_outside:
+            errors.append(
+                "gpu_scheduling.reserved_gpus outside allowed_gpus: "
+                + ", ".join(
+                    str(value) for value in sorted(reserved_outside))
+            )
+        min_free = gpu_cfg.get("min_free_vram_mib", 1000)
+        if (isinstance(min_free, bool) or not isinstance(min_free, int)
+                or min_free < 0):
+            errors.append(
+                "gpu_scheduling.min_free_vram_mib: must be a "
+                "non-negative integer")
 
     # Validate eval config consistency
     if cfg.get("eval_script") and not cfg.get("eval_output"):
