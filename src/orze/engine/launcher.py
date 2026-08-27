@@ -1300,62 +1300,6 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         except Exception:
             pass  # fall back to global train_script
 
-    # -----------------------------------------------------------------------
-    # LORA-RANK BUDGET GUARD (cycle-2769 professor fix — INVERTED cycle-1182)
-    # Reject any training idea with lora_rank > 32 BEFORE GPU launch. This now
-    # ALIGNS with validator `lora_rank_le32_param_budget_cyc710` (rank>32 is
-    # strictly dominated under the min-params objective).
-    #
-    # WHY INVERTED: the old cycle-1182 guard rejected rank < 128, which is
-    # DISJOINT from the rank<=32 validator (guard ∩ validator = ∅). It rejected
-    # the full_scale-verified champion r4a (rank=16) itself and deadlocked the
-    # entire pipeline (98/171 launches failed on rank_guard, 0 productive runs
-    # in ~4h on 2026-07-02). The "rank-64 flat 4.92%" claim it cited is
-    # contradicted by the rank-8/16/32 result history (r4a + pf-7e65ac cluster,
-    # 5.15-5.26%, all below rank 32). Validators DO run at launch now, so this
-    # guard is a redundant-but-aligned backstop, not the primary defense.
-    # Smoke tests (idea-smoke-*) and SMELL_SKIP_RANK_GUARD=1 override.
-    # -----------------------------------------------------------------------
-    _rank_guard_skip = (
-        os.environ.get("SMELL_SKIP_RANK_GUARD") == "1"
-        or str(idea_id).startswith("idea-smoke-")
-    )
-    if not _rank_guard_skip and idea_cfg_path.exists():
-        try:
-            import yaml as _rg_yaml
-            with open(idea_cfg_path) as _rgf:
-                _rg_cfg = _rg_yaml.safe_load(_rgf) or {}
-            _rg_rank = int(_rg_cfg.get("lora_rank", 16))  # default 16 matches champion r4a (cycle-2769)
-            _rg_is_training = (
-                _rg_cfg.get("training_proposal", False)
-                or bool(_rg_cfg.get("data_mix"))
-                or _rg_cfg.get("ewc_enabled", False)
-                or _rg_cfg.get("opd_enabled", False)
-                or _rg_cfg.get("efmlora_enabled", False)
-            )
-            if _rg_rank > 32 and _rg_is_training:
-                _rg_msg = (
-                    f"lora_rank>32 is dominated under min-params objective "
-                    f"(validator lora_rank_le32_param_budget_cyc710). "
-                    f"Use lora_rank<=32 or set SMELL_SKIP_RANK_GUARD=1."
-                )
-                logger.warning(
-                    "RANK-GUARD REJECTED idea=%s rank=%d: %s",
-                    idea_id, _rg_rank, _rg_msg)
-                _rg_mark = results_dir / idea_id / "_rank_guard_rejected.txt"
-                try:
-                    _rg_mark.parent.mkdir(parents=True, exist_ok=True)
-                    _rg_mark.write_text(
-                        f"rank_guard: {_rg_msg} (rank={_rg_rank})\n")
-                except OSError:
-                    pass
-                raise RuntimeError(f"rank_guard_{_rg_msg}")
-        except RuntimeError:
-            raise
-        except Exception as _rg_e:
-            logger.warning(
-                "Rank guard soft-failed for idea=%s: %s", idea_id, _rg_e)
-
     # Data boundary guardrails. Two layered defenses, activated when
     # data_boundaries is configured:
     #   1. Kernel isolation (primary): unshare -U -m bash -c "mount --bind

@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Fixed
+- **Generic launch no longer hard-codes one campaign's LoRA rank policy.** The
+  launcher removed its Boson-specific `lora_rank <= 32` backstop and the
+  `SMELL_SKIP_RANK_GUARD` environment escape. Architecture and parameter-budget
+  constraints now live exclusively in explicit project method validators,
+  which are rechecked before GPU telemetry and cannot be bypassed by idea data.
+  Orze therefore does not silently exclude larger ranks, non-LoRA methods, or
+  alternative backbones from otherwise authorized projects.
 - **Queue truth now comes from one audited lifecycle.** Imported active and
   terminal rows immediately receive a matching FSM state, legacy PARTIAL rows
   are auditably migrated to FAILED, startup/dead-process/VRAM/failure recovery

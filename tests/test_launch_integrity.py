@@ -131,6 +131,67 @@ def test_malformed_idea_config_fails_closed_before_gpu_check(
     assert gpu_checked == []
 
 
+def test_generic_launcher_does_not_impose_a_model_rank_policy(
+        launch_case, monkeypatch):
+    results, idea_dir, cfg = launch_case
+    (idea_dir / "idea_config.yaml").write_text(yaml.safe_dump({
+        "training_proposal": True,
+        "lora_rank": 4096,
+    }), encoding="utf-8")
+    observed = {}
+
+    class RunningProcess:
+        pid = 12345
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(
+        "orze.engine.launcher._verify_gpu_free", lambda *args: None)
+
+    def popen(cmd, **kwargs):
+        observed["cmd"] = cmd
+        return RunningProcess()
+
+    monkeypatch.setattr("orze.engine.launcher.subprocess.Popen", popen)
+
+    tp = launch("idea-test", 4, results, cfg)
+
+    assert observed["cmd"]
+    assert not (idea_dir / "_rank_guard_rejected.txt").exists()
+    tp.close_log()
+
+
+def test_project_validator_is_the_rank_policy_boundary(
+        launch_case, monkeypatch):
+    results, idea_dir, cfg = launch_case
+    (idea_dir / "idea_config.yaml").write_text(yaml.safe_dump({
+        "training_proposal": True,
+        "lora_rank": 64,
+    }), encoding="utf-8")
+    validators = results / "_validators"
+    validators.mkdir()
+    (validators / "project_rank_budget.yaml").write_text(yaml.safe_dump({
+        "name": "project_rank_budget",
+        "severity": "error",
+        "rules": [{
+            "field": "lora_rank",
+            "operator": "lte",
+            "value": 32,
+        }],
+    }), encoding="utf-8")
+    gpu_checked = []
+    monkeypatch.setattr(
+        "orze.engine.launcher._verify_gpu_free",
+        lambda *args: gpu_checked.append(True),
+    )
+
+    with pytest.raises(RuntimeError, match="queue_revalidation_validator"):
+        launch("idea-test", 4, results, cfg)
+
+    assert gpu_checked == []
+
+
 def test_broken_symlink_stop_latch_still_blocks_launch(launch_case):
     results, _, cfg = launch_case
     (results / ".orze_disabled").symlink_to(results / "missing-target")
