@@ -28,6 +28,7 @@ from orze.engine.process import (
     terminate_recorded_process_group,
 )
 from orze.engine.health import fs_startup_check, cleanup_stale_locks, HealthMonitor
+from orze.engine.resume import write_interruption_receipt
 from orze.engine.upgrade_cleanup import check_and_clean as upgrade_check_and_clean
 from orze.reporting.state import save_state
 from orze.reporting.notifications import notify
@@ -687,6 +688,8 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                   detach them). Used by `orze --stop` to fully stop everything.
     """
     logger.info("Shutting down gracefully (kill_all=%s)...", kill_all)
+    training_count = len(active)
+    eval_count = len(active_evals)
 
     # 0. Write "shutting_down" heartbeat so other nodes know our state
     try:
@@ -728,6 +731,18 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                 except subprocess.TimeoutExpired:
                     pass
             proc.close_log()
+            if label == "training":
+                try:
+                    write_interruption_receipt(
+                        proc, results_dir, cfg, reason="orze_stop",
+                        terminating_signal="SIGTERM",
+                        return_code=proc.process.poll(),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Could not persist interruption receipt for %s: %s",
+                        proc.idea_id, type(exc).__name__,
+                    )
             if hasattr(proc, 'lock_dir') and proc.lock_dir:
                 _fs_unlock(proc.lock_dir)
     else:
@@ -800,7 +815,14 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
 
     logger.info("Shutdown complete. State saved at iteration %d. "
                 "%d training and %d eval process(es) detached.",
-                iteration, len(active), len(active_evals))
+                iteration, training_count if not kill_all else 0,
+                eval_count if not kill_all else 0)
+
+    # Detached children must no longer be visible to atexit_cleanup, whose
+    # last-resort contract is to kill every process still tracked here.
+    active_roles.clear()
+    active.clear()
+    active_evals.clear()
 
 
 def atexit_cleanup(active: dict, active_evals: dict,

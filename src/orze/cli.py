@@ -162,6 +162,17 @@ Examples:
     stop_parser.add_argument("--timeout", type=int, default=60,
                              help="Timeout for child processes (default: 60)")
 
+    # resume — explicit, hash-validated checkpoint re-admission
+    resume_parser = subparsers.add_parser(
+        "resume", help="Re-admit one interrupted trainer checkpoint")
+    resume_parser.add_argument("idea_id", help="Interrupted idea ID")
+    resume_parser.add_argument(
+        "--resume-from", required=True, dest="resume_from",
+        help="Exact checkpoint path attested by interruption.json",
+    )
+    resume_parser.add_argument("-c", "--config-file", type=str, default=None,
+                               help="Path to orze.yaml")
+
     # start
     start_parser = subparsers.add_parser(
         "start", help="Start orze as a background daemon")
@@ -723,6 +734,25 @@ Examples:
             print("(state file already had best_idea_id; "
                   "pass --overwrite to force)")
         return
+
+    if command == "resume":
+        from orze.engine.resume import admit_resume, ResumeValidationError
+        cfg = load_project_config(args.config_file)
+        results_dir = Path(cfg.get("results_dir", "orze_results"))
+        if not results_dir.is_absolute():
+            results_dir = Path.cwd() / results_dir
+        try:
+            admit_resume(
+                args.idea_id, results_dir, cfg, args.resume_from)
+        except ResumeValidationError as exc:
+            print(f"ERROR: resume rejected: {exc}")
+            return 2
+        print(
+            f"Resume admitted for {args.idea_id}; checkpoint and all declared "
+            f"inputs will be revalidated again before GPU launch."
+        )
+        print(f"Request: {results_dir / args.idea_id / 'resume_request.json'}")
+        return 0
 
     if command == "stop":
         from orze.lifecycle import do_stop

@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **Interrupted trainers now have an explicit, fail-closed resume contract.**
+  Trainers may cooperatively publish a completed checkpoint and progress
+  manifest. Orze records hashes for the checkpoint, idea config, exact train
+  script, and project-declared immutable model/data inputs; `orze resume`
+  revalidates them at admission and again before checking GPU availability.
+  Resume is disabled by default, never guesses a checkpoint, and preserves
+  prior claims and metrics as interruption evidence. Graceful detach also
+  removes children from the atexit kill set, fixing a path that could kill
+  work immediately after reporting it as detached.
 - **Managed agent tools are bounded against host-wide escape.** Claude roles
   now receive fail-closed OS sandbox settings and a deterministic pre-tool
   policy that rejects root-wide recursive scans, detached/background commands,

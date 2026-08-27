@@ -63,9 +63,10 @@ def get_unclaimed(ideas: Dict[str, dict], results_dir: Path,
     so they don't clog the queue forever."""
     unclaimed = []
     for idea_id in ideas:
-        if skipped and idea_id in skipped:
-            continue
         idea_dir = results_dir / idea_id
+        resume_requested = (idea_dir / "resume_request.json").is_file()
+        if skipped and idea_id in skipped and not resume_requested:
+            continue
         # Stale-dir recovery (cycle-2175 engineer P3):
         # portfolio expansion or a prior partial claim can create the
         # results dir (with idea_config.yaml) without claim.json or

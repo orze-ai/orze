@@ -1004,6 +1004,21 @@ artifact_preflight:
 agent_tool_policy:
   enabled: true
 
+# --- COOPERATIVE CHECKPOINT RESUME ---
+# Disabled until the trainer writes a progress.json declaring a complete
+# checkpoint, last_completed_step, and resume_eligible=true. Re-admission is
+# explicit (`orze resume IDEA --resume-from PATH`) and every hash is rechecked
+# before GPU allocation. List pinned model/dataset manifests when enabling.
+resume:
+  enabled: false
+  progress_file: progress.json
+  args: ["--resume-from", "{{checkpoint}}"]
+  checkpoint_roots: []
+  immutable_inputs: []
+  input_roots: []
+  max_files: 10000
+  max_bytes: 0
+
 # --- GC (results cleanup) ---
 gc:
   enabled: true

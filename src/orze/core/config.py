@@ -219,6 +219,16 @@ DEFAULT_CONFIG = {
         "network": "inherit",
         "retry_interval": 300,
     },
+    "resume": {
+        "enabled": False,
+        "progress_file": "progress.json",
+        "args": ["--resume-from", "{checkpoint}"],
+        "checkpoint_roots": [],
+        "immutable_inputs": [],
+        "input_roots": [],
+        "max_files": 10000,
+        "max_bytes": 0,
+    },
     "eval_script": None,
     "eval_args": [],
     "eval_timeout": 3600,
@@ -619,6 +629,46 @@ def _validate_config(cfg: dict) -> tuple:
                         "train_extra_env enables offline mode via: "
                         + ", ".join(offline_keys)
                     )
+
+    resume_cfg = cfg.get("resume", DEFAULT_CONFIG["resume"])
+    if not isinstance(resume_cfg, dict):
+        errors.append("resume: must be a mapping")
+    else:
+        resume_enabled = resume_cfg.get("enabled", False)
+        if not isinstance(resume_enabled, bool):
+            errors.append("resume.enabled: must be true or false")
+        progress_file = resume_cfg.get("progress_file", "progress.json")
+        if (not isinstance(progress_file, str) or not progress_file
+                or Path(progress_file).is_absolute()
+                or ".." in Path(progress_file).parts):
+            errors.append(
+                "resume.progress_file: must be a relative path inside the idea directory"
+            )
+        resume_args = resume_cfg.get(
+            "args", ["--resume-from", "{checkpoint}"])
+        if (not isinstance(resume_args, list)
+                or not all(isinstance(arg, str) for arg in resume_args)
+                or not any("{checkpoint}" in str(arg)
+                           for arg in resume_args)):
+            errors.append(
+                "resume.args: must be a list containing {checkpoint}"
+            )
+        for key in ("checkpoint_roots", "immutable_inputs", "input_roots"):
+            paths = resume_cfg.get(key, [])
+            if (not isinstance(paths, list)
+                    or not all(isinstance(path, str) and path
+                               for path in paths)):
+                errors.append(f"resume.{key}: must be a list")
+        if resume_enabled and not resume_cfg.get("immutable_inputs"):
+            errors.append(
+                "resume.immutable_inputs: at least one pinned model/dataset "
+                "input is required when resume is enabled"
+            )
+        for key, default in (("max_files", 10000), ("max_bytes", 0)):
+            value = resume_cfg.get(key, default)
+            if (isinstance(value, bool) or not isinstance(value, int)
+                    or value < 0):
+                errors.append(f"resume.{key}: must be a non-negative integer")
 
     pinned = cfg.get("sealed_hashes")
     if pinned is not None:

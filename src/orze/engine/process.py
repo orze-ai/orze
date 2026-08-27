@@ -523,6 +523,8 @@ class TrainingProcess:
     start_time: float
     log_path: Path
     timeout: float
+    train_script: Optional[str] = None
+    config_path: Optional[str] = None
     _log_fh: Any = field(default=None, repr=False)
     _last_log_size: int = field(default=0, repr=False)
     _last_log_check: float = field(default=0.0, repr=False)

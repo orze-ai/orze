@@ -56,6 +56,9 @@ from orze.engine.process import (
     TrainingProcess, _new_process_group, _terminate_and_reap,
     capture_process_identity,
 )
+from orze.engine.resume import (
+    mark_resume_launched, prepare_resume_launch, write_interruption_receipt,
+)
 from orze.core.fs import atomic_write, tail_file
 from orze.reporting.notifications import notify
 
@@ -1268,6 +1271,13 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     for arg in (cfg.get("train_extra_args") or []):
         base_cmd.append(str(arg))
 
+    # A resume request is explicit and hash-bound. Revalidate it before the
+    # final GPU availability check so corrupted or changed evidence consumes
+    # no accelerator time.
+    resume_context = prepare_resume_launch(idea_id, results_dir, cfg)
+    if resume_context:
+        base_cmd.extend(resume_context["args"])
+
     # Wrap with namespace isolation if forbidden paths are configured and
     # unshare is available. Falls back to the in-process patch otherwise.
     if forbidden and _has_unshare():
@@ -1347,6 +1357,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             raise RuntimeError(
                 f"Could not persist IN_PROGRESS transition for {idea_id}"
             )
+        if resume_context:
+            mark_resume_launched(resume_context, claim_path)
     except Exception:
         _terminate_and_reap(proc, idea_id, timeout=3)
         log_fh.close()
@@ -1356,6 +1368,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         idea_id=idea_id, gpu=gpu, process=proc,
         start_time=now, log_path=log_path,
         timeout=cfg.get("timeout", 3600),
+        train_script=str(train_script), config_path=str(config_path),
         _log_fh=log_fh, _last_log_size=0,
         _last_log_check=now, _stall_since=0.0,
     )
@@ -1398,6 +1411,23 @@ def _write_failure(idea_dir: Path, reason: str, lake=None, idea_id=None, cfg=Non
                 )
         except Exception as e:
             logger.warning("FSM transition failed (non-blocking): %s", e)
+
+
+def _terminate_training(tp: TrainingProcess, results_dir: Path, cfg: dict,
+                        reason: str) -> None:
+    """Terminate one trainer and persist an auditable interruption receipt."""
+    _terminate_and_reap(tp.process, tp.idea_id)
+    tp.close_log()
+    try:
+        write_interruption_receipt(
+            tp, results_dir, cfg, reason=reason,
+            terminating_signal="SIGTERM", return_code=tp.process.poll(),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Could not persist interruption receipt for %s: %s",
+            tp.idea_id, type(exc).__name__,
+        )
 
 
 def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
@@ -1449,8 +1479,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                                tp.idea_id, elapsed / 60)
                 notify("stall", {"idea_id": tp.idea_id, "gpu": gpu,
                                  "reason": f"Timeout after {elapsed / 60:.0f}m"}, cfg)
-                _terminate_and_reap(tp.process, tp.idea_id)
-                tp.close_log()
+                _terminate_training(tp, results_dir, cfg, "timeout")
                 error_msg = "Timed out"
                 if _try_executor_fix(tp.idea_id, error_msg,
                                      results_dir, cfg, fix_counts):
@@ -1476,8 +1505,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                                tp.idea_id, stall_minutes)
                 notify("stall", {"idea_id": tp.idea_id, "gpu": gpu,
                                  "reason": f"Stalled ({stall_minutes}m no output)"}, cfg)
-                _terminate_and_reap(tp.process, tp.idea_id)
-                tp.close_log()
+                _terminate_training(tp, results_dir, cfg, "stall")
                 error_msg = f"Stalled (no output for {stall_minutes}m)"
                 if _try_executor_fix(tp.idea_id, error_msg,
                                      results_dir, cfg, fix_counts):
@@ -1506,8 +1534,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                                    tp.idea_id, elapsed)
                     notify("stall", {"idea_id": tp.idea_id, "gpu": gpu,
                                      "reason": "Zombie process (no CPU/GPU activity)"}, cfg)
-                    _terminate_and_reap(tp.process, tp.idea_id)
-                    tp.close_log()
+                    _terminate_training(tp, results_dir, cfg, "zombie")
                     error_msg = "Process stuck (zombie: no CPU/GPU activity)"
                     if _try_executor_fix(tp.idea_id, error_msg,
                                          results_dir, cfg, fix_counts):
@@ -1536,15 +1563,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     tp.idea_id, WATCHDOG_CONSECUTIVE)
                 notify("stall", {"idea_id": tp.idea_id, "gpu": gpu,
                                  "reason": "Watchdog: stuck_no_progress"}, cfg)
-                _terminate_and_reap(tp.process, tp.idea_id)
-                # Give SIGKILL after 30s if still alive.
-                try:
-                    tp.process.wait(timeout=30)
-                except subprocess.TimeoutExpired:
-                    import signal as _sig
-                    from orze.engine.process import _kill_pg
-                    _kill_pg(tp.process, _sig.SIGKILL)
-                tp.close_log()
+                _terminate_training(tp, results_dir, cfg, "watchdog")
                 error_msg = "stuck_no_progress"
                 _write_failure(results_dir / tp.idea_id, error_msg, lake=lake, idea_id=tp.idea_id, cfg=cfg)
                 write_failure_analysis(
@@ -1570,8 +1589,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                                tp.idea_id, fatal[:200])
                 notify("stall", {"idea_id": tp.idea_id, "gpu": gpu,
                                  "reason": f"Fatal error (hung): {fatal[:100]}"}, cfg)
-                _terminate_and_reap(tp.process, tp.idea_id)
-                tp.close_log()
+                _terminate_training(tp, results_dir, cfg, "fatal_log")
                 error_msg = f"Process hung after fatal error:\n{fatal[:500]}"
                 if _try_executor_fix(tp.idea_id, error_msg,
                                      results_dir, cfg, fix_counts):
@@ -1595,8 +1613,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
             kill_file = results_dir / tp.idea_id / ".kill"
             if kill_file.exists():
                 logger.info("Admin kill signal for %s — terminating", tp.idea_id)
-                _terminate_and_reap(tp.process)
-                tp.close_log()
+                _terminate_training(tp, results_dir, cfg, "admin_kill")
                 kill_file.unlink(missing_ok=True)
                 _write_failure(results_dir / tp.idea_id, "Killed by admin", lake=lake, idea_id=tp.idea_id, cfg=cfg)
                 write_failure_analysis(results_dir / tp.idea_id, "crash", "Killed by admin")
