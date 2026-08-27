@@ -997,6 +997,13 @@ artifact_preflight:
   network: inherit             # inherit | required | offline
   retry_interval: 300
 
+# --- AGENT TOOL BOUNDARY ---
+# Managed Claude roles run Bash inside an OS sandbox that fails closed when
+# unavailable. Root-wide recursive scans, detached/background processes, and
+# built-in file-tool access outside this project are denied before execution.
+agent_tool_policy:
+  enabled: true
+
 # --- GC (results cleanup) ---
 gc:
   enabled: true

@@ -111,6 +111,61 @@ def process_group_members(pgid: int) -> list:
     return sorted(members)
 
 
+def process_descendant_identities(root_pid: int) -> list[dict]:
+    """Snapshot every non-zombie descendant, including escaped groups.
+
+    Process groups are not an ancestry boundary: a shell can call ``setsid``
+    and survive a later ``killpg`` of its role parent. Capturing stable
+    ``(pid, start_ticks)`` identities before termination lets the reaper kill
+    those already-existing escapees without risking a reused PID.
+    """
+    rows: dict[int, dict] = {}
+    try:
+        entries = Path("/proc").iterdir()
+    except OSError:
+        return []
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat_text = (entry / "stat").read_text(encoding="utf-8")
+            rest = stat_text.rsplit(")", 1)[1].strip().split()
+            state = rest[0]
+            pid = int(entry.name)
+            rows[pid] = {
+                "pid": pid,
+                "ppid": int(rest[1]),
+                "pgid": int(rest[2]),
+                "start_ticks": int(rest[19]),
+                "state": state,
+            }
+        except (OSError, ValueError, IndexError):
+            continue
+
+    descendants = []
+    frontier = {int(root_pid)}
+    while frontier:
+        children = [row for row in rows.values()
+                    if row["ppid"] in frontier and row["state"] != "Z"]
+        if not children:
+            break
+        descendants.extend(children)
+        frontier = {row["pid"] for row in children}
+    return sorted(descendants, key=lambda row: row["pid"])
+
+
+def _signal_tracked_processes(identities: list[dict], sig: int) -> None:
+    """Signal exact process identities, refusing PID-reuse collisions."""
+    for identity in reversed(identities):
+        pid = int(identity["pid"])
+        if not process_is_running(pid, identity.get("start_ticks")):
+            continue
+        try:
+            os.kill(pid, sig)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+
+
 def terminate_recorded_process_group(pid: int, pgid: int, start_ticks: int,
                                      idea_id: str, timeout: float = 3.0) -> bool:
     """Terminate a durably identified orphan process group.
@@ -183,6 +238,7 @@ def _kill_pg(proc: subprocess.Popen, sig=signal.SIGTERM):
 def _terminate_and_reap(proc: subprocess.Popen, label: str = "",
                         timeout: float = 10, pgid: Optional[int] = None):
     """Terminate a process and every descendant in its dedicated group."""
+    escaped_descendants = process_descendant_identities(proc.pid)
     if pgid is None:
         try:
             pgid = os.getpgid(proc.pid)
@@ -193,6 +249,10 @@ def _terminate_and_reap(proc: subprocess.Popen, label: str = "",
                      label or "process")
         pgid = None
 
+    # Signal captured descendants first. A child that created a separate
+    # process group/session is not reached by killpg(pgid); the exact identity
+    # check prevents signaling a different process after PID reuse.
+    _signal_tracked_processes(escaped_descendants, signal.SIGTERM)
     if pgid is not None:
         try:
             os.killpg(pgid, signal.SIGTERM)
@@ -241,6 +301,34 @@ def _terminate_and_reap(proc: subprocess.Popen, label: str = "",
             if remaining:
                 logger.error("Failed to reap process group %d for %s: %s",
                              pgid, label or "process", remaining)
+
+    escaped_remaining = [
+        identity for identity in escaped_descendants
+        if process_is_running(identity["pid"], identity.get("start_ticks"))
+    ]
+    if escaped_remaining:
+        logger.warning(
+            "Force killing %d escaped descendant(s) of %s: %s",
+            len(escaped_remaining), label or "process",
+            [identity["pid"] for identity in escaped_remaining],
+        )
+        _signal_tracked_processes(escaped_remaining, signal.SIGKILL)
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            escaped_remaining = [
+                identity for identity in escaped_remaining
+                if process_is_running(
+                    identity["pid"], identity.get("start_ticks"))
+            ]
+            if not escaped_remaining:
+                break
+            time.sleep(0.05)
+        if escaped_remaining:
+            logger.error(
+                "Failed to reap escaped descendant(s) of %s: %s",
+                label or "process",
+                [identity["pid"] for identity in escaped_remaining],
+            )
 
 
 _OFFLINE_ENV_KEYS = (

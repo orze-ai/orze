@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Fixed
+- **Managed agent tools are bounded against host-wide escape.** Claude roles
+  now receive fail-closed OS sandbox settings and a deterministic pre-tool
+  policy that rejects root-wide recursive scans, detached/background commands,
+  and built-in file operations outside the project. The sandbox permits only
+  the project plus explicit read-only runtime roots. Denials store only an
+  input hash and stable reason. Process cleanup also snapshots and terminates
+  descendants that escaped into a separate process group/session.
 - **Missing artifacts now fail before GPU allocation.** Projects can configure
   a bounded `artifact_preflight` resolver with an explicit network policy.
   Orze hides accelerator devices, kills surviving process-group descendants

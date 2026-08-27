@@ -496,6 +496,7 @@ class Orze(OrzePhaseMixin):
         "notifications", "plateau_threshold", "orphan_timeout_hours",
         "gpu_mem_threshold", "gpu_scheduling", "min_disk_gb", "post_scripts",
         "artifact_preflight",
+        "agent_tool_policy",
         "nested_config_whitelist", "nested_config_normalize",
     }
 

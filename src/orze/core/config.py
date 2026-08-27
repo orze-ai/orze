@@ -249,6 +249,11 @@ DEFAULT_CONFIG = {
     "orphan_timeout_hours": 6,  # reclaim stale claims after 6 hours
     "plateau_threshold": 50,    # fire plateau notification after N completions w/o improvement
     "roles": {},
+    # Enforce OS sandboxing and deterministic tool-call denials for managed
+    # Claude roles. Older/unsupported sandbox runtimes fail closed.
+    "agent_tool_policy": {
+        "enabled": True,
+    },
     "auto_upgrade": True,
     "sweep_stray": True,        # sweep stray files to .orze/stray/ by default
     # Data boundary guardrails. When any prefix is declared here, orze
@@ -507,6 +512,42 @@ def _validate_config(cfg: dict) -> tuple:
             if mode == "research" and not rcfg.get("backend"):
                 errors.append(f"roles.{rname}: mode 'research' requires 'backend' "
                               f"(gemini, openai, anthropic, ollama, custom)")
+
+    agent_policy = cfg.get(
+        "agent_tool_policy", DEFAULT_CONFIG["agent_tool_policy"])
+    if not isinstance(agent_policy, dict):
+        errors.append("agent_tool_policy: must be a mapping")
+    elif not isinstance(agent_policy.get("enabled", True), bool):
+        errors.append("agent_tool_policy.enabled: must be true or false")
+    elif agent_policy.get("enabled", True) and isinstance(roles, dict):
+        protected_options = (
+            "--add-dir", "--allow-dangerously-skip-permissions",
+            "--dangerously-skip-permissions", "--permission-mode",
+            "--setting-sources", "--settings",
+        )
+        for role_name, role_cfg in roles.items():
+            if (not isinstance(role_cfg, dict)
+                    or role_cfg.get("mode") != "claude"):
+                continue
+            if role_cfg.get("dangerously_skip_permissions", False):
+                errors.append(
+                    f"roles.{role_name}.dangerously_skip_permissions: "
+                    "conflicts with enabled agent_tool_policy"
+                )
+            raw_args = role_cfg.get("claude_args") or []
+            args = [raw_args] if isinstance(raw_args, str) else raw_args
+            if isinstance(args, list):
+                conflicts = [
+                    str(arg) for arg in args
+                    if any(str(arg) == option
+                           or str(arg).startswith(option + "=")
+                           for option in protected_options)
+                ]
+                if conflicts:
+                    errors.append(
+                        f"roles.{role_name}.claude_args: cannot override "
+                        "enabled agent_tool_policy: " + ", ".join(conflicts)
+                    )
 
     # Validate numeric fields
     for key in ("timeout", "poll", "eval_timeout", "stall_minutes",
