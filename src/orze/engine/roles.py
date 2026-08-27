@@ -37,7 +37,12 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Dict
 
-from orze.engine.process import RoleProcess, _terminate_and_reap
+from orze.engine.process import (
+    RoleProcess,
+    _terminate_and_reap,
+    process_tree_cpu_ticks,
+    progress_paths_fingerprint,
+)
 from orze.core.fs import _fs_unlock
 from orze.core.ideas import count_idea_headings
 
@@ -74,8 +79,28 @@ _RATE_LIMIT_SIGNATURES = (
 )
 
 
+def _effective_stall_minutes(rp: "RoleProcess", stall_minutes: int) -> float:
+    override = getattr(rp, "stall_minutes_override", None)
+    return float(override if override is not None else stall_minutes)
+
+
+def _ensure_default_progress_paths(rp: "RoleProcess", ideas_file: str) -> None:
+    """Monitor the canonical research output without Pro-specific wiring."""
+    if not getattr(rp, "writes_ideas_file", True):
+        return
+    path = Path(ideas_file).resolve(strict=False)
+    existing = tuple(getattr(rp, "progress_paths", ()))
+    if path in existing:
+        return
+    rp.progress_paths = (*existing, path)
+    # Adding a signal source is configuration, not evidence of progress.
+    # Baseline it immediately so only a later metadata change resets the timer.
+    rp._last_progress_fingerprint = progress_paths_fingerprint(
+        rp.progress_paths)
+
+
 def _is_role_stalled(rp: "RoleProcess", stall_minutes: int) -> bool:
-    """True if rp's log file hasn't grown for ``stall_minutes``.
+    """True if no observable progress occurred for ``stall_minutes``.
 
     Mutates rp's `_last_log_size` and `_stall_since` fields across calls
     so the caller (check_active_roles polling loop) doesn't need to
@@ -89,9 +114,7 @@ def _is_role_stalled(rp: "RoleProcess", stall_minutes: int) -> bool:
     early as soon as the child writes its first stdout byte —
     ``current_size > 0`` is the signal.
     """
-    effective = (rp.stall_minutes_override
-                 if getattr(rp, "stall_minutes_override", None) is not None
-                 else stall_minutes)
+    effective = _effective_stall_minutes(rp, stall_minutes)
     if effective <= 0:
         return False
     now = time.time()
@@ -106,8 +129,30 @@ def _is_role_stalled(rp: "RoleProcess", stall_minutes: int) -> bool:
     if warmup > 0 and current_size == 0:
         if (now - rp.start_time) < warmup:
             return False
-    if current_size > rp._last_log_size:
-        rp._last_log_size = current_size
+    progress_kinds = []
+    if current_size != rp._last_log_size:
+        progress_kinds.append("log")
+    rp._last_log_size = current_size
+
+    pid = getattr(rp.process, "pid", None)
+    cpu_ticks = process_tree_cpu_ticks(pid) if type(pid) is int else None
+    previous_cpu = getattr(rp, "_last_cpu_ticks", None)
+    if cpu_ticks is not None and previous_cpu is not None and cpu_ticks != previous_cpu:
+        progress_kinds.append("cpu")
+    if cpu_ticks is not None:
+        rp._last_cpu_ticks = cpu_ticks
+
+    fingerprint = progress_paths_fingerprint(
+        getattr(rp, "progress_paths", ()))
+    previous_fingerprint = getattr(rp, "_last_progress_fingerprint", None)
+    if (fingerprint is not None and previous_fingerprint is not None
+            and fingerprint != previous_fingerprint):
+        progress_kinds.append("artifact")
+    if fingerprint is not None:
+        rp._last_progress_fingerprint = fingerprint
+
+    if progress_kinds:
+        rp._last_progress_kinds = tuple(progress_kinds)
         rp._stall_since = 0.0
         return False
     if rp._stall_since == 0.0:
@@ -167,6 +212,7 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
 
         if ret is None:
             # Still running — check wall-clock timeout first, then stall.
+            _ensure_default_progress_paths(rp, ideas_file)
             if elapsed > rp.timeout:
                 logger.warning("[ROLE TIMEOUT] %s after %.0fm — killing",
                                role_name, elapsed / 60)
@@ -176,8 +222,13 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                 del active_roles[role_name]
                 finished.append((role_name, OUTCOME_TIMEOUT))
             elif _is_role_stalled(rp, role_stall_minutes):
-                logger.warning("[ROLE STALL] %s — no log output for %dm, "
-                               "killing", role_name, role_stall_minutes)
+                effective = _effective_stall_minutes(
+                    rp, role_stall_minutes)
+                logger.warning(
+                    "[ROLE STALL] %s — no log, process-tree CPU, or "
+                    "declared-output progress for %g minutes; killing",
+                    role_name, effective,
+                )
                 _terminate_and_reap(rp.process, f"role {role_name}")
                 rp.close_log()
                 _fs_unlock(rp.lock_dir)

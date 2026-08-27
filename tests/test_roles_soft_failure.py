@@ -278,6 +278,76 @@ def test_role_stall_does_not_kill_active_role(tmp_path, caplog):
     assert rp._stall_since == 0.0  # reset on progress
 
 
+def test_silent_process_tree_cpu_progress_resets_stall(
+        tmp_path, monkeypatch):
+    running = _make_running_proc()
+    running.pid = 12345
+    rp = _make_rp(
+        "engineer", writes_ideas_file=False, tmp_path=tmp_path,
+        process=running, start_time=time.time() - 60, timeout=1200.0,
+    )
+    rp._last_cpu_ticks = 100
+    rp._stall_since = time.time() - 400
+    monkeypatch.setattr(roles_mod, "process_tree_cpu_ticks", lambda pid: 101)
+    active = {"engineer": rp}
+
+    assert roles_mod.check_active_roles(
+        active, ideas_file=str(tmp_path / "ideas.md"),
+        role_stall_minutes=5,
+    ) == []
+    assert "engineer" in active
+    assert rp._stall_since == 0.0
+    assert rp._last_progress_kinds == ("cpu",)
+
+
+def test_declared_output_metadata_progress_resets_stall(
+        tmp_path, monkeypatch):
+    running = _make_running_proc()
+    artifact = tmp_path / "decision.md"
+    artifact.write_text("before", encoding="utf-8")
+    rp = _make_rp(
+        "professor", writes_ideas_file=False, tmp_path=tmp_path,
+        process=running, start_time=time.time() - 60, timeout=1200.0,
+    )
+    rp.progress_paths = (artifact,)
+    rp._last_progress_fingerprint = roles_mod.progress_paths_fingerprint(
+        rp.progress_paths)
+    rp._stall_since = time.time() - 400
+    artifact.write_text("after-progress", encoding="utf-8")
+    monkeypatch.setattr(roles_mod, "process_tree_cpu_ticks", lambda pid: None)
+    active = {"professor": rp}
+
+    assert roles_mod.check_active_roles(
+        active, ideas_file=str(tmp_path / "ideas.md"),
+        role_stall_minutes=5,
+    ) == []
+    assert "professor" in active
+    assert rp._stall_since == 0.0
+    assert rp._last_progress_kinds == ("artifact",)
+
+
+def test_research_ideas_file_is_monitored_without_integration_wiring(
+        tmp_path, monkeypatch):
+    running = _make_running_proc()
+    ideas = tmp_path / "ideas.md"
+    ideas.write_text("before", encoding="utf-8")
+    rp = _make_rp(
+        "research", writes_ideas_file=True, tmp_path=tmp_path,
+        process=running, start_time=time.time() - 60, timeout=1200.0,
+    )
+    roles_mod._ensure_default_progress_paths(rp, str(ideas))
+    rp._stall_since = time.time() - 400
+    ideas.write_text("after-progress", encoding="utf-8")
+    monkeypatch.setattr(roles_mod, "process_tree_cpu_ticks", lambda pid: None)
+    active = {"research": rp}
+
+    assert roles_mod.check_active_roles(
+        active, ideas_file=str(ideas), role_stall_minutes=5,
+    ) == []
+    assert rp._stall_since == 0.0
+    assert rp._last_progress_kinds == ("artifact",)
+
+
 def test_unchanged_mtime_still_soft_failures(tmp_path, caplog):
     """Guard: if ideas.md mtime hasn't advanced past ideas_md_mtime_pre
     and no other signal fired, we still want the soft-failure outcome.

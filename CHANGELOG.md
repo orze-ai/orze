@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **Managed-agent stalls now use composite, content-free progress.** The
+  five-minute default watchdog resets on role-log growth, Linux process-tree
+  CPU movement, or metadata changes to declared outputs; research roles monitor
+  `ideas.md` without edition-specific wiring. If none moves for the configured
+  interval, Orze emits `[ROLE STALL]`, terminates and reaps the whole descendant
+  tree, and retains the backward-compatible timeout outcome. Per-role warmup and
+  stall settings now reject booleans, negative values, NaN, and infinity. No
+  command, prompt, environment value, output content, or artifact content is
+  read into the progress signal.
 - **Benchmark reuse is now explicitly scoped and budgeted.** Contracted
   evaluations declare `development_proxy` or `local_reproduction` evidence and
   `adaptive` or `confirmation` selection. An append-only, lock-protected ledger

@@ -156,6 +156,74 @@ def process_descendant_identities(root_pid: int) -> list[dict]:
     return sorted(descendants, key=lambda row: row["pid"])
 
 
+def process_tree_cpu_ticks(root_pid: int) -> Optional[int]:
+    """Return cumulative live-tree CPU ticks, or ``None`` if unavailable.
+
+    Linux ``/proc`` utime/stime plus waited-child cutime/cstime provide a
+    content-free activity signal. Including the root and every current
+    descendant catches useful silent computation without reading commands,
+    prompts, output, or environment values.
+    """
+    if (isinstance(root_pid, bool)
+            or not isinstance(root_pid, int) or root_pid < 1):
+        return None
+    rows: dict[int, dict] = {}
+    try:
+        entries = Path("/proc").iterdir()
+    except OSError:
+        return None
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat_text = (entry / "stat").read_text(encoding="utf-8")
+            rest = stat_text.rsplit(")", 1)[1].strip().split()
+            pid = int(entry.name)
+            rows[pid] = {
+                "ppid": int(rest[1]),
+                "ticks": sum(int(rest[index]) for index in range(11, 15)),
+            }
+        except (OSError, ValueError, IndexError):
+            continue
+    if root_pid not in rows:
+        return None
+    members = {root_pid}
+    frontier = {root_pid}
+    while frontier:
+        children = {
+            pid for pid, row in rows.items()
+            if row["ppid"] in frontier and pid not in members
+        }
+        members.update(children)
+        frontier = children
+    return sum(rows[pid]["ticks"] for pid in members)
+
+
+def progress_paths_fingerprint(paths) -> Optional[str]:
+    """Hash only lstat metadata for declared role outputs.
+
+    No file contents are read or persisted. A path creation, replacement,
+    size change, or mtime change is enough to count as artifact progress.
+    """
+    normalized = sorted({str(Path(path)) for path in (paths or ())})
+    if not normalized:
+        return None
+    digest = hashlib.sha256()
+    for value in normalized:
+        digest.update(value.encode("utf-8", errors="surrogateescape"))
+        digest.update(b"\0")
+        try:
+            stat = Path(value).lstat()
+        except OSError:
+            digest.update(b"missing\0")
+            continue
+        digest.update(
+            f"{stat.st_mode}:{stat.st_size}:{stat.st_mtime_ns}".encode("ascii")
+        )
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def _signal_tracked_processes(identities: list[dict], sig: int) -> None:
     """Signal exact process identities, refusing PID-reuse collisions."""
     for identity in reversed(identities):
@@ -681,13 +749,21 @@ class RoleProcess:
     # used. Roles with `<role>.stall_minutes:` set this at launch so
     # check_active_roles can enforce a per-role timer instead of the
     # global one.
-    stall_minutes_override: Optional[int] = None
+    stall_minutes_override: Optional[float] = None
     # Round-2 B3: warmup tolerance — the stall timer doesn't begin
     # counting until either (a) the first stdout byte is observed, or
     # (b) ``stall_warmup_seconds`` has elapsed since process spawn,
     # whichever is sooner. This protects LLM-mode roles whose first
     # 30-90s is model init / skill composition with no stdout yet.
     stall_warmup_seconds: float = 60.0
+    # Declared output paths are monitored by metadata only. Together with
+    # process-tree CPU ticks and log growth, this makes the no-progress
+    # watchdog distinguish a genuine stall from silent useful work.
+    progress_paths: tuple[Path, ...] = field(default_factory=tuple)
+    _last_cpu_ticks: Optional[int] = field(default=None, repr=False)
+    _last_progress_fingerprint: Optional[str] = field(default=None, repr=False)
+    _last_progress_kinds: tuple[str, ...] = field(
+        default_factory=tuple, repr=False)
     # True for research-type roles whose job is to append to ideas.md.
     # False for strategy roles (professor, data_analyst, thinker,
     # engineer, code_evolution) that modify other files — skipping the

@@ -25,6 +25,7 @@ CALLING SPEC:
 """
 import os
 import re
+import math
 import logging
 import copy
 from typing import Optional
@@ -257,6 +258,7 @@ DEFAULT_CONFIG = {
         "benchmark_contract": None,
     },
     "stall_minutes": 0,         # 0 = disabled
+    "role_stall_minutes": 5,    # composite agent no-progress watchdog
     "max_idea_failures": 0,     # 0 = disabled (never skip)
     "max_fix_attempts": 0,      # 0 = disabled; executor LLM fix attempts per idea
     "min_disk_gb": 0,           # 0 = disabled
@@ -526,6 +528,17 @@ def _validate_config(cfg: dict) -> tuple:
             if mode == "research" and not rcfg.get("backend"):
                 errors.append(f"roles.{rname}: mode 'research' requires 'backend' "
                               f"(gemini, openai, anthropic, ollama, custom)")
+            for field_name in ("stall_minutes", "stall_warmup_seconds"):
+                value = rcfg.get(field_name)
+                if (value is not None and (
+                        isinstance(value, bool)
+                        or not isinstance(value, (int, float))
+                        or not math.isfinite(float(value))
+                        or value < 0)):
+                    errors.append(
+                        f"roles.{rname}.{field_name}: must be a "
+                        "non-negative number"
+                    )
 
     agent_policy = cfg.get(
         "agent_tool_policy", DEFAULT_CONFIG["agent_tool_policy"])
@@ -597,10 +610,15 @@ def _validate_config(cfg: dict) -> tuple:
 
     # Validate numeric fields
     for key in ("timeout", "poll", "eval_timeout", "stall_minutes",
+                "role_stall_minutes",
                 "max_idea_failures", "max_fix_attempts", "min_disk_gb",
                 "orphan_timeout_hours"):
         val = cfg.get(key)
-        if val is not None and (not isinstance(val, (int, float)) or val < 0):
+        if val is not None and (
+                isinstance(val, bool)
+                or not isinstance(val, (int, float))
+                or not math.isfinite(float(val))
+                or val < 0):
             errors.append(f"{key}: must be a non-negative number, got {val!r}")
 
     gpu_cfg = cfg.get("gpu_scheduling", DEFAULT_CONFIG["gpu_scheduling"])
