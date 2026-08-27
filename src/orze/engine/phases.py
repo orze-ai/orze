@@ -12,6 +12,7 @@ CALLING SPEC:
     Each method accesses orchestrator state via self.
 """
 
+import hashlib
 import json
 import logging
 import math
@@ -19,6 +20,8 @@ import os
 import re
 import shutil
 import socket
+import sqlite3
+import stat as stat_module
 import sys
 import time
 from pathlib import Path
@@ -125,12 +128,137 @@ def _load_verified(results_dir: Path, report_cfg: dict):
 logger = logging.getLogger("orze")
 
 
+def _evidence_relative_paths(report: dict) -> tuple[Path, ...]:
+    """Return safe, declared per-idea files that affect score qualification."""
+    paths = {Path("metrics.json")}
+    for column in report.get("columns") or []:
+        if not isinstance(column, dict):
+            continue
+        source = str(column.get("source") or "")
+        if ":" not in source:
+            continue
+        filename = source.split(":", 1)[0]
+        relative = Path(filename)
+        if (relative.is_absolute() or relative == Path(".")
+                or ".." in relative.parts):
+            continue
+        paths.add(relative)
+    contract = report.get("benchmark_contract")
+    if isinstance(contract, dict):
+        from orze.core.benchmark_contract import PROVENANCE_FILE
+        paths.add(Path(PROVENANCE_FILE))
+        receipt = Path(str(contract.get("receipt") or ""))
+        if (not receipt.is_absolute() and receipt != Path(".")
+                and ".." not in receipt.parts):
+            paths.add(receipt)
+    return tuple(sorted(paths, key=str))
+
+
+def _update_path_evidence(digest, label: str, path: Path) -> None:
+    """Hash path identity and regular-file bytes without following symlinks."""
+    digest.update(label.encode("utf-8", errors="surrogateescape"))
+    digest.update(b"\0")
+    try:
+        file_stat = path.lstat()
+    except FileNotFoundError:
+        digest.update(b"missing\0")
+    except OSError as exc:
+        digest.update(f"error:{type(exc).__name__}\0".encode("ascii"))
+    else:
+        digest.update(
+            (f"{file_stat.st_mode}:{file_stat.st_ino}:{file_stat.st_size}:"
+             f"{file_stat.st_mtime_ns}:{file_stat.st_ctime_ns}\0").encode(
+                 "ascii")
+        )
+        if stat_module.S_ISREG(file_stat.st_mode):
+            try:
+                flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                descriptor = os.open(path, flags)
+                with os.fdopen(descriptor, "rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                digest.update(b"\0")
+            except OSError as exc:
+                digest.update(
+                    f"content-error:{type(exc).__name__}\0".encode("ascii"))
+
+
+def _evo_evidence_signature(lake_db: Path, cfg: dict) -> str:
+    """Digest every current artifact that can qualify a score.
+
+    Content is streamed into SHA-256 and is never retained or logged. This
+    catches same-size rewrites even on filesystems whose timestamps do not tick
+    between writes. The digest is constant-memory and scans completed ideas
+    only.
+    """
+    digest = hashlib.sha256()
+    report = cfg.get("report", {}) or {}
+    try:
+        from orze.reporting.search_path import _configured_results_dir
+        results_dir = _configured_results_dir(str(lake_db), cfg)
+    except Exception as exc:
+        results_dir = None
+        digest.update(f"results-error:{type(exc).__name__}\0".encode("ascii"))
+    if results_dir is None:
+        digest.update(b"results-missing\0")
+        return digest.hexdigest()
+    digest.update(str(results_dir).encode("utf-8", errors="surrogateescape"))
+    digest.update(b"\0")
+
+    relative_paths = _evidence_relative_paths(report)
+    try:
+        uri = Path(lake_db).resolve().as_uri() + "?mode=ro"
+        conn = sqlite3.connect(uri, uri=True)
+        try:
+            rows = conn.execute(
+                "SELECT idea_id FROM ideas "
+                "WHERE status = 'completed' ORDER BY idea_id"
+            )
+            for (raw_idea_id,) in rows:
+                idea_id = str(raw_idea_id or "")
+                digest.update(idea_id.encode(
+                    "utf-8", errors="surrogateescape"))
+                digest.update(b"\0")
+                if (not idea_id or Path(idea_id).parts != (idea_id,)
+                        or idea_id in (".", "..")):
+                    digest.update(b"invalid-idea-id\0")
+                    continue
+                idea_dir = results_dir / idea_id
+                _update_path_evidence(digest, f"{idea_id}/", idea_dir)
+                for relative in relative_paths:
+                    current = idea_dir
+                    for part in relative.parts:
+                        current = current / part
+                        _update_path_evidence(
+                            digest, f"{idea_id}/{current.relative_to(idea_dir)}",
+                            current,
+                        )
+        finally:
+            conn.close()
+    except Exception as exc:
+        digest.update(f"lake-error:{type(exc).__name__}\0".encode("ascii"))
+
+    if isinstance(report.get("benchmark_contract"), dict):
+        try:
+            from orze.core.benchmark_contract import (
+                benchmark_exposure_evidence_paths,
+            )
+            ledger_paths = benchmark_exposure_evidence_paths(results_dir, cfg)
+        except Exception as exc:
+            digest.update(
+                f"ledger-error:{type(exc).__name__}\0".encode("ascii"))
+        else:
+            for path in ledger_paths:
+                _update_path_evidence(digest, f"ledger:{path}", path)
+    return digest.hexdigest()
+
+
 def _evo_score_signature(lake_db: Path, cfg: dict):
     """Return the inputs that can change the Evo Score.
 
     SQLite may keep recent commits in ``-wal``, so the database file alone is
-    not a sufficient change detector.  Report settings also affect metric
-    direction and search-path thresholds.
+    not a sufficient change detector. Current result/provenance artifacts and
+    qualification configuration also affect which rows are scoreable.
     """
     files = []
     for path in (lake_db, Path(f"{lake_db}-wal")):
@@ -139,9 +267,16 @@ def _evo_score_signature(lake_db: Path, cfg: dict):
             files.append((st.st_mtime_ns, st.st_size))
         except OSError:
             files.append(None)
-    report_sig = json.dumps(cfg.get("report", {}) or {}, sort_keys=True,
-                            default=str, separators=(",", ":"))
-    return tuple(files), report_sig
+    qualification_cfg_sig = json.dumps({
+        "report": cfg.get("report", {}) or {},
+        "metric_validation": cfg.get("metric_validation", {}) or {},
+        "results_dir": cfg.get("results_dir"),
+        "_env_ORZE_RESULTS_DIR": cfg.get("_env_ORZE_RESULTS_DIR"),
+        "_project_root": cfg.get("_project_root"),
+        "_orze_dir": cfg.get("_orze_dir"),
+    }, sort_keys=True, default=str, separators=(",", ":"))
+    evidence_sig = _evo_evidence_signature(lake_db, cfg)
+    return tuple(files), qualification_cfg_sig, evidence_sig
 
 
 def _log_evo_score_if_changed(owner, lake_db: Path, cfg: dict) -> bool:

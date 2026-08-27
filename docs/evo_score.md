@@ -38,6 +38,14 @@ and counts. The presentation contract always declares
 not a model's official leaderboard result, even when the underlying local
 measurements satisfy a benchmark contract.
 
+The engine's change detector covers the IdeaLake database and WAL, every
+qualification-affecting configuration field, and a streaming SHA-256 digest of
+the declared evidence files for completed ideas plus benchmark exposure
+ledgers. Artifact deletion, repair, same-size replacement, provenance changes,
+and validation-policy changes therefore invalidate the cached log value even
+without a database write. File contents are neither retained nor logged; the
+scan is constant-memory and never follows an unsafe idea or source path.
+
 ## How it is computed
 
 Evo Score is a weighted blend of five components, each normalized to `0..1`
