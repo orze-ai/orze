@@ -934,6 +934,12 @@ Examples:
             return 0
 
         conn = sqlite3.connect(str(db_path))
+        from orze.core.sqlite_policy import apply_shared_database_policy
+        try:
+            apply_shared_database_policy(conn)
+        except Exception:
+            conn.close()
+            raise
         c = conn.cursor()
 
         if args.all:

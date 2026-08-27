@@ -66,7 +66,8 @@ def get_top_idea_ids(results_dir: Path, primary_metric: str,
     # 2. Idea Lake (broader history)
     if lake_db_path and lake_db_path.exists() and primary_metric:
         try:
-            conn = sqlite3.connect(str(lake_db_path), timeout=10)
+            uri = lake_db_path.resolve().as_uri() + "?mode=ro"
+            conn = sqlite3.connect(uri, uri=True, timeout=10)
             # Try primary_metric, then fallback without "adjusted_"
             candidates = [primary_metric]
             if "_adjusted_" in primary_metric:

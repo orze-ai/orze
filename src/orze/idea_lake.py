@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional, Set
 
 import yaml
 
+from orze.core.sqlite_policy import apply_shared_database_policy
+
 logger = logging.getLogger("idea_lake")
 
 
@@ -198,11 +200,16 @@ class IdeaLake:
         self.db_path = str(db_path)
         self.conn = sqlite3.connect(self.db_path, timeout=30)
         self.conn.row_factory = sqlite3.Row
-        # DELETE journal mode is safe on network filesystems (Lustre/NFS).
-        # WAL mode requires shared-memory (mmap) which Lustre does not support.
-        self.conn.execute("PRAGMA journal_mode=DELETE")
-        self.conn.execute("PRAGMA busy_timeout=60000")
-        self._ensure_schema()
+        # Multi-host Orze supports only verified rollback journaling. WAL needs
+        # shared-memory VFS semantics and is not supported on shared/network
+        # filesystems such as CephFS, Lustre, NFS, or EFS.
+        try:
+            apply_shared_database_policy(self.conn)
+            self.conn.execute("PRAGMA busy_timeout=60000")
+            self._ensure_schema()
+        except Exception:
+            self.conn.close()
+            raise
 
     def _ensure_schema(self):
         self.conn.executescript(_SCHEMA_SQL)

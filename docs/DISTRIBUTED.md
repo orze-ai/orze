@@ -87,6 +87,24 @@ Research Agent → ideas.md (append) → Orchestrator ingests to SQLite → Wipe
   3. `os.replace()` to final path (atomic on POSIX)
   4. `fsync()` the parent directory (Lustre safety)
 
+### SQLite on shared storage
+
+Orze's Idea Lake uses SQLite rollback journaling with a fail-closed connection
+policy: `journal_mode=DELETE`, `synchronous=FULL`, and
+`locking_mode=NORMAL`. Every framework-owned write connection verifies the
+values SQLite actually accepted before use. WAL is unsupported for a shared
+multi-host Idea Lake because it requires shared-memory wal-index semantics and
+adds a second persistent database component that must remain paired with the
+main file.
+
+This policy mitigates risk; it does not turn an arbitrary network filesystem
+into local storage. SQLite itself recommends a client/server database when the
+database engine and file are separated by a network, and warns that network
+locking and sync behavior varies by implementation. Sites must validate their
+CephFS/Lustre/NFS/EFS locking and durability behavior. If that cannot be
+established, keep the Idea Lake on host-local storage or move it behind a
+client/server database rather than enabling WAL.
+
 ## Scaling Limits
 
 | Machines | Status | Notes |

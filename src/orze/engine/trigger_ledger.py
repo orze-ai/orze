@@ -46,6 +46,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
 
+from orze.core.sqlite_policy import apply_shared_database_policy
+
 logger = logging.getLogger("orze")
 
 
@@ -83,10 +85,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
 def _open_short_lived(db_path: Union[str, Path]) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path), timeout=30)
-    # DELETE journal mode is required on Lustre/NFS where WAL's shared
-    # mmap is unsupported. Mirrors orze.idea_lake.IdeaLake.__init__.
-    conn.execute("PRAGMA journal_mode=DELETE")
-    conn.execute("PRAGMA busy_timeout=60000")
+    try:
+        apply_shared_database_policy(conn)
+        conn.execute("PRAGMA busy_timeout=60000")
+    except Exception:
+        conn.close()
+        raise
     return conn
 
 
