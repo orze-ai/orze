@@ -28,7 +28,10 @@ import yaml
 from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
 from orze.core.ideas import parse_ideas, expand_sweeps
 from orze.engine.config_dedup import hash_config, load_hashes, save_hash
-from orze.engine.evaluator import launch_eval, check_active_evals, run_eval, run_post_scripts
+from orze.engine.evaluator import (
+    check_active_evals, is_training_complete_for_downstream, launch_eval,
+    run_eval, run_post_scripts,
+)
 from orze.engine.failure import (
     _record_failure, get_skipped_ideas, _try_executor_fix, _reset_idea_for_retry,
 )
@@ -693,17 +696,13 @@ class OrzePhaseMixin:
                     # Only eval ideas we have configs for
                     if iid not in known_ideas:
                         continue
-                    try:
-                        m = json.loads(
-                            mpath.read_text(encoding="utf-8"))
-                        if m.get("status") == "COMPLETED" or has_ckpt:
-                            try:
-                                num = int(iid.split("-", 1)[1])
-                            except (IndexError, ValueError):
-                                num = 0
-                            backlog.append((num, iid))
-                    except (json.JSONDecodeError, OSError):
-                        pass
+                    eligible, _ = is_training_complete_for_downstream(d)
+                    if eligible:
+                        try:
+                            num = int(iid.split("-", 1)[1])
+                        except (IndexError, ValueError):
+                            num = 0
+                        backlog.append((num, iid))
             if backlog:
                 backlog.sort(reverse=True)
                 if hasattr(self, 'slot_mgr'):

@@ -53,6 +53,22 @@ from orze.core.fs import tail_file
 logger = logging.getLogger("orze")
 
 
+def is_training_complete_for_downstream(idea_dir: Path) -> tuple[bool, str]:
+    """Return whether immutable training output is eligible for eval/postwork."""
+    metrics_path = Path(idea_dir) / "metrics.json"
+    if not metrics_path.is_file():
+        return False, "training_metrics_missing"
+    try:
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return False, "training_metrics_invalid"
+    if not isinstance(metrics, dict):
+        return False, "training_metrics_invalid"
+    if metrics.get("status") != "COMPLETED":
+        return False, "training_not_completed"
+    return True, "training_completed"
+
+
 def _record_eval_audit(idea_dir: Path, action: str, reason: str,
                        **extra) -> None:
     """Append one JSONL line to ``<idea_dir>/_eval_audit.jsonl``.
@@ -101,23 +117,15 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         )
         return None
 
-    metrics_path = results_dir / idea_id / "metrics.json"
-    checkpoint_name = cfg.get("eval_checkpoint", "best_model.pt")
-    has_checkpoint = (results_dir / idea_id / checkpoint_name).exists()
-    if metrics_path.exists():
-        try:
-            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-            status = metrics.get("status", "")
-            if status == "COMPLETED":
-                pass  # always eligible
-            elif has_checkpoint:
-                pass  # timed out or failed but has a valid checkpoint
-            else:
-                return None
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-            if not has_checkpoint:
-                return None
-    elif not has_checkpoint:
+    idea_dir = results_dir / idea_id
+    eligible, eligibility_reason = is_training_complete_for_downstream(
+        idea_dir)
+    if not eligible:
+        logger.warning(
+            "[EVAL_SKIP] idea=%s reason=%s", idea_id, eligibility_reason)
+        _record_eval_audit(
+            idea_dir, "skip", eligibility_reason,
+        )
         return None
 
     python = cfg.get("python", sys.executable)
@@ -354,19 +362,14 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
     if not post_scripts:
         return
 
-    # Check training produced a checkpoint (completed OR timed out with valid ckpt)
-    metrics_path = results_dir / idea_id / "metrics.json"
-    checkpoint_name = cfg.get("eval_checkpoint", "best_model.pt")
-    has_checkpoint = (results_dir / idea_id / checkpoint_name).exists()
-    if metrics_path.exists():
-        try:
-            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-            if metrics.get("status") != "COMPLETED" and not has_checkpoint:
-                return
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-            if not has_checkpoint:
-                return
-    elif not has_checkpoint:
+    idea_dir = results_dir / idea_id
+    eligible, eligibility_reason = is_training_complete_for_downstream(
+        idea_dir)
+    if not eligible:
+        logger.warning(
+            "[POST_SCRIPT_SKIP] idea=%s reason=%s",
+            idea_id, eligibility_reason)
+        _record_eval_audit(idea_dir, "skip", eligibility_reason)
         return
 
     python = cfg.get("python", sys.executable)

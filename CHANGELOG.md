@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Fixed
+- **Partial or failed checkpoints no longer enter evaluation implicitly.** A
+  checkpoint file beside missing, corrupt, `FAILED`, `PARTIAL`, or running
+  metrics can no longer override lifecycle state. Evaluation, backlog scans,
+  and post-scripts now share one completed-only admission rule and record a
+  stable audit reason when work is skipped. Interrupted runs must use the
+  attested resume path and finish training before becoming comparable.
 - **GPU scope and launch telemetry are enforced at the final boundary.** Each
   daemon invocation records its exact managed physical GPU IDs, optionally
   narrowed by `gpu_scheduling.allowed_gpus`; direct training, posthoc, eval,
