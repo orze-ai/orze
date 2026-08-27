@@ -685,7 +685,8 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                       active: dict, active_evals: dict, active_roles: dict,
                       iteration: int, state_dict: dict, lake,
                       hostname: str, instance_uuid: str,
-                      kill_all: bool = False) -> None:
+                      kill_all: bool = False, *, managed: bool = False,
+                      pid_file_path: Path | None = None) -> None:
     """Terminate roles, detach or kill training/eval, save state, clean up.
 
     Args:
@@ -707,10 +708,12 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     eval_count = len(active_evals)
 
     # 0. Write "shutting_down" heartbeat so other nodes know our state
-    try:
-        write_shutdown_heartbeat(results_dir, hostname, instance_uuid, active)
-    except Exception:
-        pass
+    if not managed:
+        try:
+            write_shutdown_heartbeat(
+                results_dir, hostname, instance_uuid, active)
+        except Exception:
+            pass
 
     if kill_all:
         # Kill ALL child processes: training, eval, and roles
@@ -783,28 +786,31 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                 _fs_unlock(rp.lock_dir)
 
     # 3. Write shutdown sentinel (tells the watchdog not to restart us)
-    sentinel = results_dir / ".orze_shutdown"
-    try:
-        sentinel.write_text(
-            f"pid={os.getpid()} iteration={iteration} "
-            f"time={datetime.datetime.now().isoformat()}\n",
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
+    if not managed:
+        sentinel = results_dir / ".orze_shutdown"
+        try:
+            sentinel.write_text(
+                f"pid={os.getpid()} iteration={iteration} "
+                f"time={datetime.datetime.now().isoformat()}\n",
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
 
     # 4. Save state for restart recovery
-    save_state(results_dir, state_dict)
+    if not managed:
+        save_state(results_dir, state_dict)
 
     # 5. Notify (best effort)
-    try:
-        notify("shutdown", {
-            "host": hostname,
-            "message": (f"Graceful shutdown after iteration "
-                        f"{iteration}"),
-        }, cfg)
-    except Exception:
-        pass
+    if not managed:
+        try:
+            notify("shutdown", {
+                "host": hostname,
+                "message": (f"Graceful shutdown after iteration "
+                            f"{iteration}"),
+            }, cfg)
+        except Exception:
+            pass
 
     # 6. Close IdeaLake (flushes WAL on shared filesystems)
     if lake:
@@ -814,12 +820,21 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
             pass
 
     # 7. Clean up PID file
-    remove_pid_file(results_dir / f".orze.pid.{hostname}", results_dir)
+    if managed:
+        try:
+            if pid_file_path is not None:
+                pid_file_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+    else:
+        remove_pid_file(results_dir / f".orze.pid.{hostname}", results_dir)
 
-    logger.info("Shutdown complete. State saved at iteration %d. "
-                "%d training and %d eval process(es) detached.",
-                iteration, training_count if not kill_all else 0,
-                eval_count if not kill_all else 0)
+    logger.info(
+        "Shutdown complete%s after iteration %d. %d training and %d eval "
+        "process(es) detached.",
+        " (managed; campaign state unchanged)" if managed else "; state saved",
+        iteration, training_count if not kill_all else 0,
+        eval_count if not kill_all else 0)
 
     # Detached children must no longer be visible to atexit_cleanup, whose
     # last-resort contract is to kill every process still tracked here.

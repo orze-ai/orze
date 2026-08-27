@@ -249,7 +249,7 @@ class Orze(OrzePhaseMixin):
                 any(d.is_dir() and d.name.startswith("idea-")
                     for d in res_dir.iterdir())
                 if res_dir.exists() else False)
-            if has_results:
+            if has_results and not cfg.get("_managed_idea_id"):
                 logger.error("Idea Lake init FAILED with existing results — "
                              "archival disabled: %s", exc)
                 notify("idea_lake_failure", {
@@ -273,7 +273,7 @@ class Orze(OrzePhaseMixin):
                 _report_dataset_keys, rebuild_best_from_lake,
                 rebuild_best_from_results_dir,
             )
-            if self.lake is not None:
+            if self.lake is not None and not cfg.get("_managed_idea_id"):
                 report_cfg = cfg.get("report", {})
                 primary = report_cfg.get("primary_metric", "test_accuracy")
                 args = (
@@ -390,10 +390,13 @@ class Orze(OrzePhaseMixin):
         self._stop_event.set()  # wake from poll sleep instantly
 
     def _graceful_shutdown(self, kill_all=False):
+        managed = bool(self.cfg.get("_managed_idea_id"))
         graceful_shutdown(
             self.results_dir, self.cfg, self.active, self.active_evals,
             self.active_roles, self.iteration, self._build_state_dict(),
-            self.lake, self._hostname, self._instance_uuid, kill_all=kill_all)
+            self.lake, self._hostname, self._instance_uuid,
+            kill_all=(True if managed else kill_all), managed=managed,
+            pid_file_path=getattr(self, "_pid_file", None))
 
     def _write_shutdown_heartbeat(self):
         write_shutdown_heartbeat(self.results_dir, self._hostname,
@@ -654,10 +657,25 @@ class Orze(OrzePhaseMixin):
         kill_orphans(self.results_dir, self.cfg)
 
     def _write_pid_file(self):
-        self._pid_file = write_pid_file(self.results_dir)
+        managed_idea = self.cfg.get("_managed_idea_id")
+        if managed_idea:
+            self._pid_file = (
+                self.results_dir
+                / f".orze.managed.{managed_idea}.{os.getpid()}.pid")
+            atomic_write(self._pid_file, str(os.getpid()))
+        else:
+            self._pid_file = write_pid_file(self.results_dir)
 
     def _remove_pid_file(self):
-        remove_pid_file(getattr(self, '_pid_file', None), self.results_dir)
+        if self.cfg.get("_managed_idea_id"):
+            try:
+                pid_file = getattr(self, "_pid_file", None)
+                if pid_file is not None:
+                    pid_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+        else:
+            remove_pid_file(getattr(self, '_pid_file', None), self.results_dir)
 
     def _check_stop_all(self):
         """Check for filesystem-based stop signal (.orze_stop_all)."""
@@ -750,6 +768,7 @@ class Orze(OrzePhaseMixin):
 
     def run(self):
         cfg = self.cfg
+        managed_idea = cfg.get("_managed_idea_id")
         self._write_pid_file()
 
         # Log pro status
@@ -771,20 +790,33 @@ class Orze(OrzePhaseMixin):
                     "Install orze-pro for autonomous research agents.",
                     ", ".join(roles.keys()))
 
-        self._startup_checks()
-        self._kill_orphans()
+        if managed_idea:
+            # A one-idea run must not perform daemon-wide recovery, stale-lock
+            # cleanup, symlink normalization, or upgrade cleanup.
+            from orze.engine.health import HealthMonitor
+            self._health_monitor = HealthMonitor(self.results_dir)
+        else:
+            self._startup_checks()
+            self._kill_orphans()
         # Check persistent disable flag (never auto-deleted)
         if self._check_disabled():
             logger.error("Exiting — Orze is disabled")
+            if self.lake:
+                try:
+                    self.lake.close()
+                except Exception:
+                    pass
+            self._remove_pid_file()
             return
         # Clear any stale shutdown sentinels from a previous run
-        for sentinel_name in [".orze_shutdown", ".orze_stop_all"]:
-            sentinel = self.results_dir / sentinel_name
-            if sentinel.exists():
-                sentinel.unlink(missing_ok=True)
+        if not managed_idea:
+            for sentinel_name in [".orze_shutdown", ".orze_stop_all"]:
+                sentinel = self.results_dir / sentinel_name
+                if sentinel.exists():
+                    sentinel.unlink(missing_ok=True)
         # Clear upgrade sentinel if we're already at the target version
         upgrade_sentinel = self.results_dir / ".orze_upgrade"
-        if upgrade_sentinel.exists():
+        if upgrade_sentinel.exists() and not managed_idea:
             try:
                 target = upgrade_sentinel.read_text(encoding="utf-8").strip()
                 def _ver(s):
@@ -822,11 +854,12 @@ class Orze(OrzePhaseMixin):
         # Lifecycle notification: started
         n_roles = len([r for r in (cfg.get("roles") or {}).values()
                        if isinstance(r, dict)])
-        notify("started", {
-            "host": socket.gethostname(),
-            "message": (f"v{__version__} | {len(self.gpu_ids)} GPUs | "
-                        f"{n_roles} roles | pid {os.getpid()}"),
-        }, cfg)
+        if not managed_idea:
+            notify("started", {
+                "host": socket.gethostname(),
+                "message": (f"v{__version__} | {len(self.gpu_ids)} GPUs | "
+                            f"{n_roles} roles | pid {os.getpid()}"),
+            }, cfg)
 
         # Boot-time delivery canary. Closes the meta-audit blind spot
         # that notification delivery was trust-based — a misconfigured
@@ -837,7 +870,8 @@ class Orze(OrzePhaseMixin):
         # is true (default true) any delivery failure exits the daemon
         # nonzero so systemd / loop-restart picks it up.
         ncfg = cfg.get("notifications") or {}
-        self.notification_health = startup_canary(cfg)
+        self.notification_health = (
+            {} if managed_idea else startup_canary(cfg))
         if (ncfg.get("enabled") and ncfg.get("startup_canary", True)
                 and self.notification_health):
             failed = [lbl for lbl, st in self.notification_health.items()
@@ -854,21 +888,23 @@ class Orze(OrzePhaseMixin):
                     f"startup_canary failed for: {', '.join(failed)}")
 
         # Initialize milestone from current state (avoid spurious on restart)
-        try:
-            init_ideas = parse_ideas(cfg["ideas_file"])
-            init_counts = _count_statuses(init_ideas, self.results_dir, lake=self.lake)
-            milestone_every = (cfg.get("notifications") or {}).get(
-                "milestone_every", 100)
-            if milestone_every > 0:
-                self._last_milestone = (
-                    init_counts.get("COMPLETED", 0) // milestone_every
-                ) * milestone_every
-                self._hb_completed_count = init_counts.get("COMPLETED", 0)
-        except Exception:
-            pass
+        if not managed_idea:
+            try:
+                init_ideas = parse_ideas(cfg["ideas_file"])
+                init_counts = _count_statuses(
+                    init_ideas, self.results_dir, lake=self.lake)
+                milestone_every = (cfg.get("notifications") or {}).get(
+                    "milestone_every", 100)
+                if milestone_every > 0:
+                    self._last_milestone = (
+                        init_counts.get("COMPLETED", 0) // milestone_every
+                    ) * milestone_every
+                    self._hb_completed_count = init_counts.get("COMPLETED", 0)
+            except Exception:
+                pass
 
         # Full reconcile at startup: clear ALL stale queued ideas at once
-        if self.lake:
+        if self.lake and not managed_idea:
             try:
                 n = self.lake.reconcile_statuses(str(self.results_dir))
                 if n:
@@ -877,17 +913,18 @@ class Orze(OrzePhaseMixin):
                 logger.warning("Startup reconcile failed: %s", e)
 
         # Rebuild config dedup hash cache from completed ideas
-        try:
-            self._rebuild_config_hashes()
-        except Exception as e:
-            logger.error("Config hash cache rebuild failed: %s", e)
-            notify("config_hash_failure", {"error": str(e)}, self.cfg)
+        if not managed_idea:
+            try:
+                self._rebuild_config_hashes()
+            except Exception as e:
+                logger.error("Config hash cache rebuild failed: %s", e)
+                notify("config_hash_failure", {"error": str(e)}, self.cfg)
 
         # Initialize code change detector (removed in v4.0)
 
         # Compute sealed file manifest for metric integrity
         sealed_files = cfg.get("sealed_files", [])
-        if sealed_files:
+        if sealed_files and not managed_idea:
             from orze.engine.sealed import compute_sealed_hashes, write_sealed_manifest
             hashes = compute_sealed_hashes(sealed_files)
             # Explicit pins replace startup observations.  This detects source
@@ -905,29 +942,33 @@ class Orze(OrzePhaseMixin):
             logger.info("--- Iteration %d [%s] ---", self.iteration, ts)
 
             # Hot-reload config every 10 iterations (~5 min)
-            if self.iteration % 10 == 0:
+            if not managed_idea and self.iteration % 10 == 0:
                 self._hot_reload_config()
 
             # 0a. Early heartbeat — keeps nodes UI alive even when
             #     iterations are slow (large results_dir scans).
-            try:
-                busy = self.slot_mgr.gpu_ids_in_use() | set(self.active_evals.keys())
-                free_early = [g for g in self.gpu_ids if g not in busy]
-                write_host_heartbeat(self.results_dir,
-                                     socket.gethostname(),
-                                     self.active, free_early)
-            except Exception:
-                pass
+            if not managed_idea:
+                try:
+                    busy = (self.slot_mgr.gpu_ids_in_use()
+                            | set(self.active_evals.keys()))
+                    free_early = [g for g in self.gpu_ids if g not in busy]
+                    write_host_heartbeat(
+                        self.results_dir, socket.gethostname(),
+                        self.active, free_early)
+                except Exception:
+                    pass
 
             # 0b. Auto-upgrade check (rate-limited PyPI + sentinel from other nodes)
-            self._check_auto_upgrade()
-            self._check_upgrade_sentinel()
+            if not managed_idea:
+                self._check_auto_upgrade()
+                self._check_upgrade_sentinel()
 
             # 0c. Version compatibility check (updates _incompatible_hosts)
-            try:
-                self._check_cluster_versions()
-            except Exception:
-                pass
+            if not managed_idea:
+                try:
+                    self._check_cluster_versions()
+                except Exception:
+                    pass
 
             # 0d. Filesystem health check — pause if FS is not writable
             if not self._health_monitor.check_before_write():
@@ -942,11 +983,12 @@ class Orze(OrzePhaseMixin):
             # `orze admin reset-role-state --all-hosts`. Each host clears
             # its own per-host state file once per marker; the marker
             # self-deletes after every host has claimed it.
-            try:
-                from orze.admin.reset_role_state import consume_marker_on_this_host
-                consume_marker_on_this_host(self.results_dir)
-            except Exception as _e:  # pragma: no cover — non-fatal hook
-                logger.debug("reset-role-state marker hook failed: %s", _e)
+            if not managed_idea:
+                try:
+                    from orze.admin.reset_role_state import consume_marker_on_this_host
+                    consume_marker_on_this_host(self.results_dir)
+                except Exception as _e:  # pragma: no cover — non-fatal hook
+                    logger.debug("reset-role-state marker hook failed: %s", _e)
 
             # 1. Check disk space (only gates launches, never skips reaping)
             disk_ok = check_disk_space(self.results_dir,
@@ -959,7 +1001,8 @@ class Orze(OrzePhaseMixin):
             # 2. Periodic maintenance (orphans + GC, locked for multi-machine)
             cleanup_cfg = cfg.get("cleanup") or {}
             cleanup_interval = cleanup_cfg.get("interval", 100)
-            if cleanup_interval > 0 and self.iteration % cleanup_interval == 0:
+            if (not managed_idea and cleanup_interval > 0
+                    and self.iteration % cleanup_interval == 0):
                 cleanup_lock = self.results_dir / "_cleanup_lock"
                 if _fs_lock(cleanup_lock, stale_seconds=300):
                     try:
@@ -978,21 +1021,23 @@ class Orze(OrzePhaseMixin):
                     logger.debug("Cleanup lock held by another host, skipping")
 
             # 2b. Periodic orphan cleanup (every 10 iterations ≈ 5 min)
-            if self.iteration % 10 == 0:
+            if not managed_idea and self.iteration % 10 == 0:
                 try:
                     self._kill_orphans()
                 except Exception:
                     pass
 
             # 2b''. FSM dead-PID reaper (every 10 iterations ≈ 5 min, v4.5)
-            if self.lake and self.iteration % 10 == 0:
+            if (not managed_idea and self.lake
+                    and self.iteration % 10 == 0):
                 try:
                     self.lake.reap_dead_claims(max_age_minutes=15)
                 except Exception as e:
                     logger.debug("FSM dead-PID reaper failed: %s", e)
 
             # 2b'''. FSM catch-up for missing terminal transitions (every 20 iterations ≈ 10 min)
-            if self.lake and self.iteration % 20 == 0:
+            if (not managed_idea and self.lake
+                    and self.iteration % 20 == 0):
                 try:
                     self.lake.catch_up_missing_terminals(self.results_dir)
                 except Exception as e:
@@ -1000,7 +1045,7 @@ class Orze(OrzePhaseMixin):
 
             # 2b'. F7: every 30 min, mark 'running' rows whose training
             # process has died as 'failed' with reason orphaned_pid.
-            if self.iteration % 60 == 0:
+            if not managed_idea and self.iteration % 60 == 0:
                 try:
                     reconcile_running_dead_pids(cfg)
                 except Exception as e:
@@ -1015,7 +1060,7 @@ class Orze(OrzePhaseMixin):
             # orze-pro's pattern_inference can learn patterns via LLM
             # and cache them keyed by train_script mtime — one call per
             # new script, free thereafter.
-            if self.iteration % 20 == 0:
+            if not managed_idea and self.iteration % 20 == 0:
                 try:
                     from orze.engine.metric_harvester import harvest_running_ideas
                     mh_cfg = cfg.get("metric_harvest") or {}
@@ -1089,7 +1134,7 @@ class Orze(OrzePhaseMixin):
 
                 if success_gpu is not None:
                     try:
-                        usage = _query_all_gpu_usage()
+                        usage = _query_all_gpu_usage(self.gpu_ids)
                         if usage:
                             gpu_id = int(str(success_gpu).split(":")[0]) if ":" in str(success_gpu) else success_gpu
                             if gpu_id in usage:
@@ -1133,27 +1178,34 @@ class Orze(OrzePhaseMixin):
             # are handled in _check_upgrade_sentinel() above.
 
             # 4. Run agent roles (research, documenter, etc.)
-            try:
-                self._run_all_roles()
-            except Exception as e:
-                logger.error("Error in _run_all_roles: %s — continuing", e)
-                notify("role_management_error", {"error": str(e)}, cfg)
+            if not managed_idea:
+                try:
+                    self._run_all_roles()
+                except Exception as e:
+                    logger.error("Error in _run_all_roles: %s — continuing", e)
+                    notify("role_management_error", {"error": str(e)}, cfg)
 
             if not self.running:
                 break
 
             # 4b. Mid-iteration heartbeat — keeps nodes alive during long iterations
-            try:
-                busy = self.slot_mgr.gpu_ids_in_use() | set(self.active_evals.keys())
-                free_mid = [g for g in self.gpu_ids if g not in busy]
-                write_host_heartbeat(self.results_dir,
-                                     socket.gethostname(),
-                                     self.active, free_mid)
-            except Exception:
-                pass
+            if not managed_idea:
+                try:
+                    busy = (self.slot_mgr.gpu_ids_in_use()
+                            | set(self.active_evals.keys()))
+                    free_mid = [g for g in self.gpu_ids if g not in busy]
+                    write_host_heartbeat(
+                        self.results_dir, socket.gethostname(),
+                        self.active, free_mid)
+                except Exception:
+                    pass
 
             # 5. Sync ideas + expand sweeps + build unclaimed queue
-            ideas, unclaimed, skipped, raw_ideas = self._sync_ideas(cfg)
+            if managed_idea:
+                ideas, unclaimed, skipped, raw_ideas = (
+                    self._sync_managed_idea(cfg, managed_idea))
+            else:
+                ideas, unclaimed, skipped, raw_ideas = self._sync_ideas(cfg)
 
             # 6. Launch evals (finished training, pending, backlog)
             eval_finished, backlog = self._launch_evals(
@@ -1163,16 +1215,22 @@ class Orze(OrzePhaseMixin):
             free = self._launch_training(unclaimed, disk_ok, ideas)
 
             # 8. Update report
-            completed_rows = update_report(self.results_dir, ideas, cfg,
-                                           lake=self.lake,
-                                           role_states=self.role_states)
+            if managed_idea:
+                completed_rows = []
+            else:
+                completed_rows = update_report(
+                    self.results_dir, ideas, cfg, lake=self.lake,
+                    role_states=self.role_states)
 
-            # 9-10. Report, notify, heartbeat, status.json, save state
-            write_host_heartbeat(self.results_dir, socket.gethostname(), self.active, free)
-            counts = _count_statuses(ideas, self.results_dir, lake=self.lake)
-            self._report_and_notify(
-                completed_rows, ideas, counts, eval_finished,
-                free, unclaimed, skipped, disk_ok, backlog)
+                # 9-10. Daemon-wide reporting and notification are deliberately
+                # absent from an exact one-idea invocation.
+                write_host_heartbeat(
+                    self.results_dir, socket.gethostname(), self.active, free)
+                counts = _count_statuses(
+                    ideas, self.results_dir, lake=self.lake)
+                self._report_and_notify(
+                    completed_rows, ideas, counts, eval_finished,
+                    free, unclaimed, skipped, disk_ok, backlog)
 
             if self.once:
                 all_once_finished = []
@@ -1181,6 +1239,10 @@ class Orze(OrzePhaseMixin):
                     logger.info("--once mode: waiting for active training...")
                     while self.active:
                         time.sleep(5)
+                        if (self._check_stop_all()
+                                or self._check_disabled()
+                                or not self.running):
+                            break
                         once_finished = check_active(
                             self.active, self.results_dir,
                             cfg, self.failure_counts,
@@ -1191,10 +1253,22 @@ class Orze(OrzePhaseMixin):
                                 try:
                                     m = json.loads(m_path.read_text(encoding="utf-8"))
                                     if m.get("status") == "COMPLETED":
-                                        run_eval(idea_id, gpu,
-                                                 self.results_dir, cfg, lake=self.lake)
-                                        run_post_scripts(idea_id, gpu,
-                                                         self.results_dir, cfg)
+                                        if managed_idea:
+                                            immediate, _ = self._launch_evals(
+                                                [(idea_id, gpu)], [],
+                                                {idea_id: {}})
+                                            if immediate:
+                                                run_post_scripts(
+                                                    idea_id, gpu,
+                                                    self.results_dir, cfg)
+                                        else:
+                                            run_eval(
+                                                idea_id, gpu,
+                                                self.results_dir, cfg,
+                                                lake=self.lake)
+                                            run_post_scripts(
+                                                idea_id, gpu,
+                                                self.results_dir, cfg)
                                 except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                                     pass
                             all_once_finished.append((idea_id, gpu))
@@ -1204,13 +1278,17 @@ class Orze(OrzePhaseMixin):
                                 len(self.active_evals))
                     while self.active_evals:
                         time.sleep(5)
+                        if (self._check_stop_all()
+                                or self._check_disabled()
+                                or not self.running):
+                            break
                         ef = check_active_evals(
                             self.active_evals, self.results_dir, cfg, lake=self.lake)
                         for idea_id, gpu in ef:
                             run_post_scripts(
                                 idea_id, gpu, self.results_dir, cfg)
                             all_once_finished.append((idea_id, gpu))
-                if all_once_finished:
+                if all_once_finished and not managed_idea:
                     ideas = parse_ideas(cfg["ideas_file"])
                     once_rows = update_report(
                         self.results_dir, ideas, cfg, lake=self.lake)
@@ -1270,10 +1348,12 @@ class Orze(OrzePhaseMixin):
         # Main loop exited (signal received or --once finished)
         if self.active or self.active_evals or self.active_roles:
             self._graceful_shutdown(
-                kill_all=getattr(self, '_stop_kill_all', False))
+                kill_all=(True if managed_idea else getattr(
+                    self, '_stop_kill_all', False)))
         else:
             # Nothing running, just save state and clean up
-            save_state(self.results_dir, self._build_state_dict())
+            if not managed_idea:
+                save_state(self.results_dir, self._build_state_dict())
             if self.lake:
                 try:
                     self.lake.close()

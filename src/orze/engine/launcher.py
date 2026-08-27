@@ -1232,7 +1232,7 @@ def _verify_gpu_free(gpu, min_free_mib: int) -> None:
         return
     try:
         from orze.engine.gpu_slots import _query_all_gpu_usage
-        usage = _query_all_gpu_usage()
+        usage = _query_all_gpu_usage([int(gpu)])
     except Exception as exc:
         raise GpuUnavailableError(
             "GPU telemetry unavailable at launch time") from exc

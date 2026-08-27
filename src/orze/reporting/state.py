@@ -163,6 +163,11 @@ def write_host_heartbeat(results_dir: Path, hostname: str,
     """Write per-host heartbeat file with active processes and free GPUs."""
     pid = os.getpid()
     now = time.time()
+    scoped_gpus = set(free_gpus)
+    for tp in active.values():
+        gpu = getattr(tp, "gpu", None)
+        if isinstance(gpu, int) and gpu >= 0:
+            scoped_gpus.add(gpu)
     heartbeat = {
         "host": hostname,
         "pid": pid,
@@ -178,7 +183,7 @@ def write_host_heartbeat(results_dir: Path, hostname: str,
             for tp in active.values()
         ],
         "free_gpus": free_gpus,
-        "gpu_info": _query_gpu_details(),
+        "gpu_info": _query_gpu_details(sorted(scoped_gpus)),
         "os": f"{platform.system()} {platform.release()}",
     }
     atomic_write(_heartbeats_dir(results_dir) / f"{hostname}_{pid}.json",

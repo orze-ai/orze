@@ -33,19 +33,32 @@ _vram_cache: Dict[int, Tuple[float, int, int]] = {}
 _CACHE_TTL = 5.0  # seconds
 
 
-def _query_all_gpu_usage() -> Dict[int, Tuple[int, int]]:
-    """Query (used_mib, total_mib) for ALL GPUs in one nvidia-smi call."""
+def _query_all_gpu_usage(
+    gpu_ids: Optional[List[int]] = None,
+) -> Dict[int, Tuple[int, int]]:
+    """Query VRAM for only the requested physical GPUs when scoped."""
     try:
+        command = [
+            "nvidia-smi", "--query-gpu=index,memory.used,memory.total",
+            "--format=csv,noheader,nounits",
+        ]
+        if gpu_ids is not None:
+            scoped = sorted(set(gpu_ids))
+            if not scoped:
+                return {}
+            command.append("--id=" + ",".join(str(gpu) for gpu in scoped))
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=index,memory.used,memory.total",
-             "--format=csv,noheader,nounits"],
+            command,
             capture_output=True, text=True, timeout=5,
         )
+        allowed = set(gpu_ids) if gpu_ids is not None else None
         out = {}
         for line in result.stdout.strip().splitlines():
             parts = [p.strip() for p in line.split(",")]
             if len(parts) >= 3:
-                out[int(parts[0])] = (int(parts[1]), int(parts[2]))
+                gpu = int(parts[0])
+                if allowed is None or gpu in allowed:
+                    out[gpu] = (int(parts[1]), int(parts[2]))
         return out
     except Exception:
         return {}
@@ -57,8 +70,8 @@ def _get_gpu_usage(gpu_id: int) -> Optional[Tuple[int, int]]:
     cached = _vram_cache.get(gpu_id)
     if cached and (now - cached[0]) < _CACHE_TTL:
         return cached[1], cached[2]
-    # Refresh all GPUs in one call
-    for gid, (used, total) in _query_all_gpu_usage().items():
+    # A one-GPU request must not inventory other physical devices.
+    for gid, (used, total) in _query_all_gpu_usage([gpu_id]).items():
         _vram_cache[gid] = (now, used, total)
     entry = _vram_cache.get(gpu_id)
     return (entry[1], entry[2]) if entry else None
@@ -371,7 +384,7 @@ class GpuSlotManager:
             return []
         exc = set(exclude or set()) | set(self.reserved_gpus)
         threshold = min_free_vram_mib + 5000
-        gpu_usage = _query_all_gpu_usage()
+        gpu_usage = _query_all_gpu_usage(self.gpu_ids)
         candidates = []
         for g in self.gpu_ids:
             if g in exc:

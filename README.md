@@ -95,6 +95,7 @@ orze --check                  # validate config, files, GPUs, API keys
 orze --uninstall              # full cleanup, preserves research results
 
 # Operations
+orze run-idea IDEA --gpu N    # run one admitted queue item on one physical GPU
 orze upgrade                  # reinstall from source + restart daemon
 orze admin migrate            # migrate legacy layout to .orze/
 orze service install          # auto-restart on crash (systemd)
@@ -239,6 +240,15 @@ drift only in contract-aware Orze
 versions; it cannot prevent an older, pre-contract executable from ignoring an
 unknown key. Use the managed systemd service and its independent `ExecStartPre`
 check when downgrade resistance is required.
+
+`orze run-idea IDEA --gpu N` is the fail-closed manual campaign path. It
+requires an exact runtime pin, an authoritative `QUEUED` lake row, a current
+decision-admission receipt, and an allowed physical GPU. It honors every stop
+and pause latch, runs no research roles or auto-fix agents, does not reconcile
+or report unrelated queue entries, and restricts GPU telemetry and child CUDA
+visibility to that one device. Exit status zero additionally requires a
+`COMPLETE` lifecycle plus configured evaluation, post-script, benchmark, and
+model-lineage evidence. It is not a ranking claim.
 
 ```yaml
 containers:

@@ -469,6 +469,39 @@ def _run_reflection_for_ingested(lake, ingested_ids, substrate_cfg, results_dir)
 class OrzePhaseMixin:
     """Phase methods for the main orchestration loop."""
 
+    def _sync_managed_idea(self, cfg, idea_id):
+        """Load one already-admitted queue row without touching other ideas."""
+        from orze.core.managed_run import prepare_managed_idea_run
+
+        gpu = cfg.get("_managed_idea_gpu")
+        prepare_managed_idea_run(cfg, idea_id, gpu)
+        if self.lake is None:
+            raise RuntimeError("managed_run_idea_lake_authority_required")
+        row = self.lake.get(idea_id)
+        if not isinstance(row, dict):
+            raise RuntimeError("managed_run_authoritative_lifecycle_rows_missing")
+        try:
+            idea_cfg = yaml.safe_load(row.get("config") or "{}") or {}
+        except yaml.YAMLError as exc:
+            raise RuntimeError("managed_run_idea_config_invalid") from exc
+        if not isinstance(idea_cfg, dict):
+            raise RuntimeError("managed_run_idea_config_invalid")
+        idea = {
+            "title": str(row.get("title") or idea_id),
+            "priority": str(row.get("priority") or "medium"),
+            "config": idea_cfg,
+            "raw": "",
+        }
+        ideas = {idea_id: idea}
+        skipped = get_skipped_ideas(
+            self.failure_counts, cfg.get("max_idea_failures", 0))
+        unclaimed = get_unclaimed(
+            ideas, self.results_dir, skipped, lake=self.lake)
+        if unclaimed != [idea_id]:
+            raise RuntimeError("managed_run_idea_not_launchable")
+        logger.info("Managed one-idea queue: %s", idea_id)
+        return ideas, unclaimed, skipped, {}
+
     def _sync_ideas(self, cfg):
         """Phase: sync ideas from ideas.md to lake, expand sweeps, build unclaimed queue."""
         raw_ideas = parse_ideas(cfg["ideas_file"])
@@ -769,6 +802,11 @@ class OrzePhaseMixin:
     def _launch_evals(self, finished, eval_finished, ideas):
         """Phase: launch evals for finished training, pending evals, and backlog."""
         cfg = self.cfg
+        managed_idea = cfg.get("_managed_idea_id")
+        if managed_idea:
+            finished = [item for item in finished if item[0] == managed_idea]
+            eval_finished = [
+                item for item in eval_finished if item[0] == managed_idea]
         max_evals = cfg.get("max_concurrent_evals",
                              len(self.gpu_ids))
         for idea_id, gpu in finished:
@@ -832,6 +870,9 @@ class OrzePhaseMixin:
         # 6a. Launch pending evals from previous iterations
         still_pending = []
         for p_idea, p_gpu in self.pending_evals:
+            if managed_idea and p_idea != managed_idea:
+                still_pending.append((p_idea, p_gpu))
+                continue
             if len(self.active_evals) >= max_evals:
                 still_pending.append((p_idea, p_gpu))
                 continue
@@ -871,6 +912,8 @@ class OrzePhaseMixin:
                 if not d.is_dir() or not d.name.startswith("idea-"):
                     continue
                 iid = d.name
+                if managed_idea and iid != managed_idea:
+                    continue
                 if iid in pending_ids or iid in active_eval_ids:
                     continue
                 mpath = d / "metrics.json"
@@ -931,6 +974,7 @@ class OrzePhaseMixin:
     def _launch_training(self, unclaimed, disk_ok, ideas):
         """Phase: launch training on free GPUs, enforce sweep limits, circuit breaker."""
         cfg = self.cfg
+        managed_idea = cfg.get("_managed_idea_id")
 
         # Verify sealed file integrity before launching any training.
         # The training loop runs this phase every iteration (~30s); if a
@@ -961,11 +1005,14 @@ class OrzePhaseMixin:
                     logger.error(
                         "Sealed file integrity check FAILED: %d file(s) changed: %s",
                         len(changed), ", ".join(changed))
-                    notify("sealed_file_changed", {
-                        "changed_files": changed,
-                        "message": (f"{len(changed)} sealed file(s) failed integrity "
-                                    "verification. New training dispatch is blocked."),
-                    }, cfg)
+                    if not managed_idea:
+                        notify("sealed_file_changed", {
+                            "changed_files": changed,
+                            "message": (
+                                f"{len(changed)} sealed file(s) failed "
+                                "integrity verification. New training "
+                                "dispatch is blocked."),
+                        }, cfg)
                     self._sealed_alert_sig = sig
             else:
                 # Files reverted — clear so future drift re-alerts.
@@ -1022,7 +1069,7 @@ class OrzePhaseMixin:
                 total_sweep_running += 1
 
         # Emergency GC: if disk is low and GC is configured, try to free space now
-        if not disk_ok:
+        if not disk_ok and not managed_idea:
             gc_cfg = cfg.get("gc", {})
             if gc_cfg.get("enabled"):
                 try:
@@ -1456,7 +1503,10 @@ class OrzePhaseMixin:
                                     if _sig not in self._impl_triggered:
                                         self._impl_triggered.add(_sig)
                                         _sop_t2 = get_extension("sop_tier2")
-                                        if _sop_t2 and hasattr(_sop_t2, 'trigger_implementation'):
+                                        if (not managed_idea and _sop_t2
+                                                and hasattr(
+                                                    _sop_t2,
+                                                    'trigger_implementation')):
                                             methods = _sop_t2.load_method_specs(self.results_dir)
                                             _sop_t2.trigger_implementation(
                                                 {"train_script": ts, "name": ts},
@@ -1679,7 +1729,8 @@ class OrzePhaseMixin:
 
         # Circuit Breaker: if too many ideas exceeded max retries, stop the farm
         max_fail = cfg.get("max_idea_failures", 0)
-        if max_fail > 0 and len(self.failure_counts) > 5:
+        if (not managed_idea and max_fail > 0
+                and len(self.failure_counts) > 5):
             exhausted = [fid for fid, count in self.failure_counts.items()
                          if count >= max_fail]
             if len(exhausted) > 10:
@@ -1747,7 +1798,7 @@ class OrzePhaseMixin:
                 # GPU info from nvidia-smi
                 try:
                     from orze.hardware.gpu import _query_gpu_details
-                    hb_gpu_info = _query_gpu_details()
+                    hb_gpu_info = _query_gpu_details(self.gpu_ids)
                 except Exception:
                     hb_gpu_info = []
 

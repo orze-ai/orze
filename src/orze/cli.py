@@ -185,6 +185,23 @@ Examples:
     resume_parser.add_argument("-c", "--config-file", type=str, default=None,
                                help="Path to orze.yaml")
 
+    # run-idea — one exact queued idea through the ordinary hardened pipeline
+    run_idea_parser = subparsers.add_parser(
+        "run-idea",
+        help="Run one exact queued idea on one physical GPU",
+    )
+    run_idea_parser.add_argument("idea_id", help="Exact queued idea ID")
+    run_idea_parser.add_argument(
+        "--gpu", type=int, required=True,
+        help="One physical GPU ID (must satisfy the project allowlist)",
+    )
+    run_idea_parser.add_argument("-c", "--config-file", type=str, default=None,
+                                 help="Path to orze.yaml")
+    run_idea_parser.add_argument(
+        "--timeout", type=int, default=None,
+        help="Max training time for this idea",
+    )
+
     # start
     start_parser = subparsers.add_parser(
         "start", help="Start orze as a background daemon")
@@ -769,6 +786,58 @@ Examples:
             f"inputs will be revalidated again before GPU launch."
         )
         print(f"Request: {results_dir / args.idea_id / 'resume_request.json'}")
+        return 0
+
+    if command == "run-idea":
+        from orze.core.managed_run import (
+            ManagedRunError,
+            prepare_managed_idea_run,
+            verify_managed_idea_outcome,
+        )
+        cfg = load_project_config(args.config_file)
+        if args.timeout is not None:
+            cfg["timeout"] = args.timeout
+        try:
+            report = prepare_managed_idea_run(cfg, args.idea_id, args.gpu)
+        except ManagedRunError as exc:
+            print(f"ERROR: managed idea run rejected: {exc}")
+            return 2
+        # Runtime-only selectors: they are never written into trainer config.
+        cfg["_managed_idea_id"] = args.idea_id
+        cfg["_managed_idea_gpu"] = args.gpu
+        cfg["auto_upgrade"] = False
+        cfg["max_fix_attempts"] = 0
+        cfg["notifications"] = {
+            **(cfg.get("notifications") or {}),
+            "enabled": False,
+        }
+        from orze.engine.orchestrator import Orze
+        print(
+            f"Managed run admitted: {report['idea_id']} on physical GPU "
+            f"{report['gpu']}"
+        )
+        runner = Orze([args.gpu], cfg, once=True)
+        try:
+            runner.run()
+        except Exception as exc:
+            try:
+                runner._graceful_shutdown(kill_all=True)
+            except Exception:
+                runner._remove_pid_file()
+            print(
+                "ERROR: managed idea run aborted: "
+                f"{type(exc).__name__}"
+            )
+            return 1
+        try:
+            outcome = verify_managed_idea_outcome(cfg, args.idea_id)
+        except ManagedRunError as exc:
+            print(f"ERROR: managed idea run did not complete: {exc}")
+            return 1
+        print(
+            f"Managed run completed: {outcome['idea_id']} "
+            f"lifecycle={outcome['lifecycle_state']}"
+        )
         return 0
 
     if command == "stop":

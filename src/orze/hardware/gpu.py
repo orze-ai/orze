@@ -79,19 +79,29 @@ def get_free_gpus(gpu_ids: List[int], active: dict,
     return free
 
 
-def _query_gpu_details() -> List[dict]:
-    """Query nvidia-smi for per-GPU stats (memory, util, temp)."""
+def _query_gpu_details(gpu_ids: Optional[List[int]] = None) -> List[dict]:
+    """Query per-GPU stats, restricted to ``gpu_ids`` when supplied."""
     try:
+        command = [
+            "nvidia-smi",
+            "--query-gpu=index,name,memory.used,memory.total,utilization.gpu,temperature.gpu",
+            "--format=csv,noheader,nounits",
+        ]
+        if gpu_ids is not None:
+            scoped = sorted(set(gpu_ids))
+            if not scoped:
+                return []
+            command.append("--id=" + ",".join(str(gpu) for gpu in scoped))
         result = subprocess.run(
-            ["nvidia-smi",
-             "--query-gpu=index,name,memory.used,memory.total,utilization.gpu,temperature.gpu",
-             "--format=csv,noheader,nounits"],
+            command,
             capture_output=True, text=True, timeout=10,
         )
+        allowed = set(gpu_ids) if gpu_ids is not None else None
         gpus = []
         for line in result.stdout.strip().splitlines():
             parts = [p.strip() for p in line.split(",")]
-            if len(parts) >= 6:
+            if len(parts) >= 6 and (
+                    allowed is None or int(parts[0]) in allowed):
                 gpus.append({
                     "index": int(parts[0]),
                     "name": parts[1],
