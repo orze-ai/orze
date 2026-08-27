@@ -260,8 +260,57 @@ def _exposure_identity(contract: Mapping) -> dict:
     }
 
 
-def _read_exposure_ledger(results_dir: Path) -> list[dict]:
-    path = Path(results_dir) / EXPOSURE_LEDGER_FILE
+def benchmark_exposure_ledger_path(cfg: Mapping) -> Path:
+    """Return the one project-scoped exposure ledger path.
+
+    The location is derived rather than configurable so changing a campaign's
+    results directory cannot silently create fresh benchmark history.
+    """
+    project_root = Path(cfg.get("_project_root") or ".").resolve()
+    expected_orze_dir = project_root / ".orze"
+    configured_orze_dir = Path(
+        cfg.get("_orze_dir") or expected_orze_dir
+    ).resolve()
+    if configured_orze_dir != expected_orze_dir:
+        raise BenchmarkContractError(
+            "benchmark_exposure_control_directory_drift"
+        )
+    if expected_orze_dir.is_symlink():
+        raise BenchmarkContractError(
+            "benchmark_exposure_control_directory_symlink_forbidden"
+        )
+    return expected_orze_dir / EXPOSURE_LEDGER_FILE
+
+
+def _legacy_exposure_ledger_paths(
+        results_dir: Path, cfg: Mapping) -> list[Path]:
+    """Find ledgers written by the brief result-local v1 implementation."""
+    project_path = benchmark_exposure_ledger_path(cfg)
+    project_root = project_path.parent.parent
+    candidates = {Path(results_dir) / EXPOSURE_LEDGER_FILE}
+    try:
+        candidates.update(project_root.glob(f"*/{EXPOSURE_LEDGER_FILE}"))
+    except OSError as exc:
+        raise BenchmarkContractError(
+            "benchmark_exposure_project_directory_unreadable"
+        ) from exc
+    return sorted(
+        (path for path in candidates
+         if path != project_path and (path.exists() or path.is_symlink())),
+        key=lambda path: str(path),
+    )
+
+
+def benchmark_exposure_evidence_paths(
+        results_dir: Path, cfg: Mapping) -> list[Path]:
+    """Return every current or legacy ledger that affects report integrity."""
+    return [
+        benchmark_exposure_ledger_path(cfg),
+        *_legacy_exposure_ledger_paths(results_dir, cfg),
+    ]
+
+
+def _read_exposure_ledger_path(path: Path) -> list[dict]:
     if path.is_symlink():
         raise BenchmarkContractError(
             "benchmark_exposure_ledger_symlink_forbidden"
@@ -309,6 +358,93 @@ def _read_exposure_ledger(results_dir: Path) -> list[dict]:
             "benchmark_exposure_ledger_duplicate_record"
         )
     return records
+
+
+def _write_initial_project_ledger(path: Path, content: bytes) -> None:
+    """Create the project ledger once when migrating result-local history."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.parent.is_symlink():
+        raise BenchmarkContractError(
+            "benchmark_exposure_control_directory_symlink_forbidden"
+        )
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(str(path), flags, 0o600)
+    except FileExistsError:
+        return
+    except OSError as exc:
+        raise BenchmarkContractError(
+            "benchmark_exposure_ledger_unwritable"
+        ) from exc
+    try:
+        written = 0
+        while written < len(content):
+            count = os.write(fd, content[written:])
+            if count <= 0:
+                raise BenchmarkContractError(
+                    "benchmark_exposure_ledger_short_write"
+                )
+            written += count
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    parent_fd = os.open(str(path.parent), os.O_RDONLY)
+    try:
+        os.fsync(parent_fd)
+    finally:
+        os.close(parent_fd)
+
+
+def _read_exposure_records(
+        results_dir: Path, cfg: Mapping, *, migrate: bool = False) -> list[dict]:
+    """Read one project history and fail closed on divergent legacy copies."""
+    project_path = benchmark_exposure_ledger_path(cfg)
+    project_records = _read_exposure_ledger_path(project_path)
+    legacy_paths = _legacy_exposure_ledger_paths(results_dir, cfg)
+    legacy_records = [
+        (path, _read_exposure_ledger_path(path)) for path in legacy_paths
+    ]
+
+    if project_path.exists():
+        project_hashes = [record["record_sha256"] for record in project_records]
+        for _, records in legacy_records:
+            hashes = [record["record_sha256"] for record in records]
+            if hashes != project_hashes[:len(hashes)]:
+                raise BenchmarkContractError(
+                    "benchmark_exposure_legacy_ledger_conflict"
+                )
+        return project_records
+
+    nonempty = [(path, records) for path, records in legacy_records if records]
+    if not nonempty:
+        return []
+    reference_hashes = [
+        record["record_sha256"] for record in nonempty[0][1]
+    ]
+    if any(
+        [record["record_sha256"] for record in records] != reference_hashes
+        for _, records in nonempty[1:]
+    ):
+        raise BenchmarkContractError(
+            "benchmark_exposure_legacy_ledger_conflict"
+        )
+    if migrate:
+        try:
+            content = nonempty[0][0].read_bytes()
+        except OSError as exc:
+            raise BenchmarkContractError(
+                "benchmark_exposure_ledger_unreadable"
+            ) from exc
+        _write_initial_project_ledger(project_path, content)
+        migrated = _read_exposure_ledger_path(project_path)
+        if ([record["record_sha256"] for record in migrated]
+                != reference_hashes):
+            raise BenchmarkContractError(
+                "benchmark_exposure_legacy_migration_mismatch"
+            )
+        return migrated
+    return nonempty[0][1]
 
 
 def _matching_exposures(records: list[dict], contract: Mapping) -> list[dict]:
@@ -405,13 +541,16 @@ def _audit_exposure_provenance_links(
 
 def _reserve_benchmark_exposure(
     idea_dir: Path,
+    cfg: Mapping,
     contract: Mapping,
     evaluator_sha256: str,
     nonce: str,
 ) -> tuple[int, str]:
     """Atomically reserve one benchmark look before the evaluator starts."""
     results_dir = Path(idea_dir).parent
-    lock_dir = results_dir / EXPOSURE_LOCK_DIR
+    ledger_path = benchmark_exposure_ledger_path(cfg)
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_dir = ledger_path.parent / EXPOSURE_LOCK_DIR
     if lock_dir.is_symlink():
         raise BenchmarkContractError(
             "benchmark_exposure_lock_symlink_forbidden"
@@ -419,7 +558,7 @@ def _reserve_benchmark_exposure(
     if not _fs_lock(lock_dir, stale_seconds=300):
         raise BenchmarkContractError("benchmark_exposure_ledger_locked")
     try:
-        records = _read_exposure_ledger(results_dir)
+        records = _read_exposure_records(results_dir, cfg, migrate=True)
         matching = _validated_matching_exposures(records, contract)
         _audit_exposure_provenance_links(results_dir, records, contract)
         prior = int(contract["prior_exposures"])
@@ -444,7 +583,6 @@ def _reserve_benchmark_exposure(
         canonical = json.dumps(record, sort_keys=True, separators=(",", ":"))
         record_sha256 = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         record["record_sha256"] = record_sha256
-        ledger_path = results_dir / EXPOSURE_LEDGER_FILE
         existed = ledger_path.exists()
         flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
         flags |= getattr(os, "O_NOFOLLOW", 0)
@@ -468,7 +606,7 @@ def _reserve_benchmark_exposure(
         finally:
             os.close(fd)
         if not existed:
-            parent_fd = os.open(str(results_dir), os.O_RDONLY)
+            parent_fd = os.open(str(ledger_path.parent), os.O_RDONLY)
             try:
                 os.fsync(parent_fd)
             finally:
@@ -484,7 +622,7 @@ def benchmark_exposure_summary(results_dir: Path, cfg: Mapping) -> dict:
     if contract is None:
         return {"enabled": False}
     try:
-        all_records = _read_exposure_ledger(Path(results_dir))
+        all_records = _read_exposure_records(Path(results_dir), cfg)
         records = _validated_matching_exposures(all_records, contract)
         _audit_exposure_provenance_links(
             Path(results_dir), all_records, contract,
@@ -547,7 +685,7 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
 
     nonce = secrets.token_hex(32)
     exposure_ordinal, exposure_record_sha256 = _reserve_benchmark_exposure(
-        Path(idea_dir), contract, actual_digest, nonce,
+        Path(idea_dir), cfg, contract, actual_digest, nonce,
     )
     provenance = {
         "schema_version": SCHEMA_VERSION,
@@ -672,7 +810,7 @@ def validate_benchmark_receipt(
             or receipt.get("exposure_record_sha256") != record_sha256):
         return False, "benchmark_receipt_exposure_record_mismatch"
     try:
-        ledger_records = _read_exposure_ledger(Path(idea_dir).parent)
+        ledger_records = _read_exposure_records(Path(idea_dir).parent, cfg)
         _validated_matching_exposures(ledger_records, contract)
         _audit_exposure_provenance_links(
             Path(idea_dir).parent, ledger_records, contract,

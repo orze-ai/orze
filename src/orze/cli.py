@@ -228,9 +228,9 @@ Examples:
     reset_parser.add_argument("--all", action="store_true",
                               help="Purge ALL non-completed ideas (queued + failed + partial)")
     reset_parser.add_argument("--full", action="store_true",
-                              help="Snapshot .orze/ to .orze.bak-<ts>/ and wipe entire .orze/ directory")
+                              help="Snapshot and reset .orze/ while preserving benchmark exposure history")
     reset_parser.add_argument("--scratch", action="store_true",
-                              help="Wipe .orze/ but preserve idea_lake.db (for fresh start with history)")
+                              help="Wipe .orze/ but preserve idea lake and benchmark exposure history")
     reset_parser.add_argument("-y", "--yes", action="store_true",
                               help="Skip confirmation prompt")
     reset_parser.add_argument("--force", action="store_true",
@@ -791,6 +791,35 @@ Examples:
         orze_dir = Path(cfg.get("_orze_dir", ".orze"))
         results_dir = Path(cfg.get("results_dir", "orze_results"))
         project_root = Path(cfg.get("_project_root", "."))
+        from orze.core.benchmark_contract import (
+            EXPOSURE_LEDGER_FILE,
+            BenchmarkContractError,
+            benchmark_exposure_ledger_path,
+        )
+        try:
+            exposure_path = benchmark_exposure_ledger_path(cfg)
+        except BenchmarkContractError as exc:
+            print(f"ERROR: reset rejected: {exc}")
+            return 2
+        if exposure_path.is_symlink():
+            print("ERROR: reset rejected: benchmark exposure ledger is a symlink")
+            return 2
+
+        def preserve_exposure_history():
+            if not exposure_path.exists():
+                return None
+            with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".benchmark-exposures") as handle:
+                temporary = Path(handle.name)
+            shutil.copy2(exposure_path, temporary)
+            return temporary
+
+        def restore_exposure_history(temporary):
+            if temporary is None:
+                return
+            orze_dir.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(temporary), str(orze_dir / EXPOSURE_LEDGER_FILE))
+            os.chmod(orze_dir / EXPOSURE_LEDGER_FILE, 0o600)
         
         # New behavior: db lives in .orze/ now (after migration)
         db_path = orze_dir / "idea_lake.db"
@@ -817,7 +846,7 @@ Examples:
                     pass
         
         if args.full:
-            # --full: snapshot .orze/ to .orze.bak-<ts>/, then wipe .orze/
+            # --full: reset operational state but never erase benchmark looks.
             if not orze_dir.exists():
                 print("No .orze/ directory to reset.")
                 return 0
@@ -841,10 +870,12 @@ Examples:
             for old_bak in sorted(glob_module.glob(str(project_root / ".orze.bak-*")))[:-1]:
                 shutil.rmtree(old_bak, ignore_errors=True)
                 print(f"Removed old backup: {old_bak}")
-            
+
+            exposure_tmp = preserve_exposure_history()
             # Wipe .orze/
             shutil.rmtree(orze_dir)
-            print(f"Wiped .orze/ ({file_count} files)")
+            restore_exposure_history(exposure_tmp)
+            print(f"Reset .orze/ ({file_count} files); preserved benchmark exposure history")
             print("\nReset complete. Run 'orze init' to reinitialize.")
             return 0
         
@@ -860,12 +891,13 @@ Examples:
                     print("Aborted.")
                     return 0
             
-            # Save idea_lake.db to temp
+            # Save durable history to temp.
             db_tmp = None
             if db_path.exists():
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tf:
                     db_tmp = Path(tf.name)
                 shutil.copy2(db_path, db_tmp)
+            exposure_tmp = preserve_exposure_history()
             
             # Wipe .orze/
             shutil.rmtree(orze_dir)
@@ -876,8 +908,9 @@ Examples:
                 orze_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(db_tmp), str(db_path))
                 print(f"Restored idea_lake.db")
-            
-            print("\nReset complete. .orze/ cleared, idea lake preserved.")
+            restore_exposure_history(exposure_tmp)
+
+            print("\nReset complete. Idea lake and benchmark exposure history preserved.")
             return 0
         
         # Legacy behavior: partial wipes of idea lake DB

@@ -38,8 +38,9 @@ from orze.core.fs import deep_get, atomic_write
 from orze.core.ideas import expand_sweeps
 from orze.core.config import DEFAULT_CONFIG, orze_path
 from orze.core.benchmark_contract import (
-    EXPOSURE_LEDGER_FILE,
+    BenchmarkContractError,
     PROVENANCE_FILE,
+    benchmark_exposure_evidence_paths,
     benchmark_exposure_summary,
     get_benchmark_contract,
     validate_benchmark_receipt,
@@ -468,7 +469,15 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 if evidence_path.exists():
                     mtime = max(mtime, evidence_path.stat().st_mtime)
                 evidence_paths.append(evidence_path)
-            evidence_paths.append(results_dir / EXPOSURE_LEDGER_FILE)
+            try:
+                evidence_paths.extend(
+                    benchmark_exposure_evidence_paths(results_dir, cfg)
+                )
+            except BenchmarkContractError:
+                # The exposure summary already carries the stable fail-closed
+                # reason. Keep rendering the unrankable report instead of
+                # turning invalid control-path evidence into a report crash.
+                pass
         evidence_hash = None
         if benchmark_contract:
             # Integrity-sensitive evidence is keyed by bytes, not mtimes. A

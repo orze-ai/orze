@@ -91,7 +91,12 @@ prior looks. Under-reporting prior exposure is a false attestation; Orze cannot
 discover historical access that was never recorded.
 
 Immediately before evaluator launch, Orze reserves an ordinal in
-`results/_benchmark_exposures.jsonl` under a filesystem lock. The append-only
+`.orze/_benchmark_exposures.jsonl` under a filesystem lock. This path is fixed
+at project scope rather than the configured results directory, so rotating from
+one campaign-results root to another cannot create fresh history. Ledgers from
+the earlier result-local implementation are discovered, checked for conflicts,
+and migrated before another reservation. Both `orze reset --scratch` and
+`orze reset --full` preserve the project ledger. The append-only
 record binds benchmark identity, scope, selection mode, idea, sealed evaluator,
 and a hash of the fresh nonce. A failed launch conservatively consumes the
 reservation. The sealed dataset-manifest digest is the accounting identity, so
@@ -102,8 +107,10 @@ validation.
 This is fail-closed local accounting, not an externally anchored audit log. A
 user with write access can replace the ledger and all linked provenance, and
 Orze cannot discover unrecorded historical access or overlap hidden behind a
-different manifest. For public claims, preserve and publish the ledger and
-artifacts or use an independent/WORM-backed evaluation service.
+different manifest. Copying the whole project without its `.orze` state also
+requires declaring the copied history in `prior_exposures`. For public claims,
+preserve and publish the ledger and artifacts or use an independent/WORM-backed
+evaluation service.
 
 ## Evaluator receipt
 

@@ -11,6 +11,7 @@ from orze.core.benchmark_contract import (
     EXPOSURE_LEDGER_FILE,
     EXPOSURE_LOCK_DIR,
     PROVENANCE_FILE,
+    benchmark_exposure_ledger_path,
     benchmark_exposure_summary,
     prepare_benchmark_evaluation,
     validate_benchmark_contract_config,
@@ -94,6 +95,10 @@ def _write_receipt(idea_dir: Path, cfg: dict, nonce: str) -> None:
     }), encoding="utf-8")
 
 
+def _ledger(cfg: dict) -> Path:
+    return benchmark_exposure_ledger_path(cfg)
+
+
 def test_valid_contract_pins_exact_evaluator_and_report_columns(tmp_path):
     assert validate_benchmark_contract_config(_config(tmp_path)) == []
 
@@ -161,7 +166,7 @@ def test_preexisting_receipt_is_rejected_before_evaluation(tmp_path):
     with pytest.raises(BenchmarkContractError, match="existed before evaluation"):
         prepare_benchmark_evaluation(idea_dir, cfg)
     assert not (idea_dir / PROVENANCE_FILE).exists()
-    assert not (idea_dir.parent / EXPOSURE_LEDGER_FILE).exists()
+    assert not _ledger(cfg).exists()
 
 
 def test_wrong_coverage_or_aggregate_is_unrankable(tmp_path):
@@ -357,7 +362,7 @@ def test_concurrent_budget_reservations_cannot_oversubscribe(tmp_path):
         "benchmark_exposure_ledger_locked",
         "benchmark_exposure_budget_exhausted:1/1",
     }
-    ledger = ideas[0].parent / EXPOSURE_LEDGER_FILE
+    ledger = _ledger(cfg)
     assert len(ledger.read_text(encoding="utf-8").splitlines()) == 1
 
 
@@ -368,7 +373,7 @@ def test_corrupt_or_tampered_exposure_ledger_invalidates_receipt(tmp_path):
     env = prepare_benchmark_evaluation(idea_dir, cfg)
     _write_receipt(
         idea_dir, cfg, env["ORZE_BENCHMARK_EVALUATION_NONCE"])
-    ledger = idea_dir.parent / EXPOSURE_LEDGER_FILE
+    ledger = _ledger(cfg)
 
     ledger.write_text("not-json\n", encoding="utf-8")
     ok, reason = validate_benchmark_receipt(idea_dir, cfg)
@@ -383,7 +388,7 @@ def test_exposure_record_content_hash_is_verified(tmp_path):
     env = prepare_benchmark_evaluation(idea_dir, cfg)
     _write_receipt(
         idea_dir, cfg, env["ORZE_BENCHMARK_EVALUATION_NONCE"])
-    ledger = idea_dir.parent / EXPOSURE_LEDGER_FILE
+    ledger = _ledger(cfg)
     record = json.loads(ledger.read_text(encoding="utf-8"))
     record["pid"] += 1
     ledger.write_text(json.dumps(record) + "\n", encoding="utf-8")
@@ -400,7 +405,7 @@ def test_deleted_exposure_record_is_detected_from_provenance(tmp_path):
     env = prepare_benchmark_evaluation(idea_dir, cfg)
     _write_receipt(
         idea_dir, cfg, env["ORZE_BENCHMARK_EVALUATION_NONCE"])
-    (idea_dir.parent / EXPOSURE_LEDGER_FILE).unlink()
+    _ledger(cfg).unlink()
 
     ok, reason = validate_benchmark_receipt(idea_dir, cfg)
     assert ok is False
@@ -454,19 +459,140 @@ def test_same_dataset_history_cannot_be_reset_by_relabeling(
     assert summary["reason"] == "benchmark_exposure_policy_drift"
 
 
-@pytest.mark.parametrize("target_name, expected", [
-    (EXPOSURE_LEDGER_FILE, "benchmark_exposure_ledger_symlink_forbidden"),
-    (EXPOSURE_LOCK_DIR, "benchmark_exposure_lock_symlink_forbidden"),
+def test_confirmation_budget_survives_results_directory_change(tmp_path):
+    cfg = _config(tmp_path)
+    cfg["report"]["benchmark_contract"].update({
+        "selection_mode": "confirmation",
+        "prior_exposures": 0,
+        "max_evaluations": 1,
+    })
+    first = tmp_path / "results-first" / "idea-first"
+    second = tmp_path / "results-second" / "idea-second"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+
+    prepare_benchmark_evaluation(first, cfg)
+    assert _ledger(cfg).parent == tmp_path / ".orze"
+    assert _ledger(cfg).exists()
+    assert not (first.parent / EXPOSURE_LEDGER_FILE).exists()
+
+    with pytest.raises(
+            BenchmarkContractError,
+            match="benchmark_exposure_budget_exhausted:1/1"):
+        prepare_benchmark_evaluation(second, cfg)
+    summary = benchmark_exposure_summary(second.parent, cfg)
+    assert summary["total_exposures"] == 1
+    assert summary["remaining"] == 0
+
+
+def test_result_local_ledger_is_migrated_before_cross_root_reservation(
+        tmp_path):
+    cfg = _config(tmp_path)
+    cfg["report"]["benchmark_contract"].update({
+        "selection_mode": "confirmation",
+        "prior_exposures": 0,
+        "max_evaluations": 1,
+    })
+    first = tmp_path / "results-old" / "idea-first"
+    second = tmp_path / "results-new" / "idea-second"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+    prepare_benchmark_evaluation(first, cfg)
+
+    project_ledger = _ledger(cfg)
+    legacy_ledger = first.parent / EXPOSURE_LEDGER_FILE
+    original = project_ledger.read_bytes()
+    project_ledger.replace(legacy_ledger)
+    assert not project_ledger.exists()
+    assert benchmark_exposure_summary(second.parent, cfg)[
+        "total_exposures"] == 1
+
+    with pytest.raises(
+            BenchmarkContractError,
+            match="benchmark_exposure_budget_exhausted:1/1"):
+        prepare_benchmark_evaluation(second, cfg)
+    assert project_ledger.read_bytes() == original
+    assert legacy_ledger.read_bytes() == original
+
+
+def test_divergent_result_local_history_fails_closed(tmp_path):
+    cfg = _config(tmp_path)
+    idea_dir = tmp_path / "results" / "idea-project-history"
+    idea_dir.mkdir(parents=True)
+    prepare_benchmark_evaluation(idea_dir, cfg)
+    record = json.loads(_ledger(cfg).read_text(encoding="utf-8"))
+    record["idea_id"] = "conflicting-history"
+    canonical = dict(record)
+    canonical.pop("record_sha256")
+    record["record_sha256"] = hashlib.sha256(json.dumps(
+        canonical, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+    legacy = idea_dir.parent / EXPOSURE_LEDGER_FILE
+    legacy.write_text(json.dumps(record, sort_keys=True) + "\n", encoding="utf-8")
+
+    summary = benchmark_exposure_summary(idea_dir.parent, cfg)
+    assert summary["valid"] is False
+    assert summary["reason"] == "benchmark_exposure_legacy_ledger_conflict"
+    next_idea = idea_dir.parent / "idea-after-conflict"
+    next_idea.mkdir()
+    with pytest.raises(
+            BenchmarkContractError,
+            match="benchmark_exposure_legacy_ledger_conflict"):
+        prepare_benchmark_evaluation(next_idea, cfg)
+
+
+def test_exposure_control_directory_cannot_be_redirected(tmp_path):
+    cfg = _config(tmp_path)
+    cfg["_orze_dir"] = str(tmp_path / "fresh-history")
+    idea_dir = tmp_path / "results" / "idea-redirect"
+    idea_dir.mkdir(parents=True)
+
+    with pytest.raises(
+            BenchmarkContractError,
+            match="benchmark_exposure_control_directory_drift"):
+        prepare_benchmark_evaluation(idea_dir, cfg)
+
+
+def test_invalid_exposure_control_path_renders_unrankable_report(tmp_path):
+    cfg = _config(tmp_path)
+    cfg["_orze_dir"] = str(tmp_path / "fresh-history")
+    results = tmp_path / "results"
+    idea_dir = results / "idea-invalid-control"
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "metrics.json").write_text(json.dumps({
+        "status": "COMPLETED",
+        "avg_score": 3.0,
+        "metric_a": 2.0,
+        "metric_b": 4.0,
+    }), encoding="utf-8")
+
+    assert update_report(
+        results, {"idea-invalid-control": {"title": "Invalid"}}, cfg,
+    ) == []
+    report = (results / "report.md").read_text(encoding="utf-8")
+    assert "unrankable: exposure evidence is invalid" in report
+    assert "benchmark_exposure_control_directory_drift" in report
+
+
+@pytest.mark.parametrize("target_kind, expected", [
+    ("ledger", "benchmark_exposure_ledger_symlink_forbidden"),
+    ("lock", "benchmark_exposure_lock_symlink_forbidden"),
 ])
 def test_exposure_control_paths_reject_symlinks(
-        tmp_path, target_name, expected):
+        tmp_path, target_kind, expected):
     cfg = _config(tmp_path)
     results = tmp_path / "results"
     idea_dir = results / "idea-symlink"
     idea_dir.mkdir(parents=True)
     outside = tmp_path / "outside"
     outside.write_text("do not touch", encoding="utf-8")
-    (results / target_name).symlink_to(outside)
+    ledger = _ledger(cfg)
+    ledger.parent.mkdir(parents=True)
+    target = (
+        ledger if target_kind == "ledger"
+        else ledger.parent / EXPOSURE_LOCK_DIR
+    )
+    target.symlink_to(outside)
 
     with pytest.raises(BenchmarkContractError, match=expected):
         prepare_benchmark_evaluation(idea_dir, cfg)
