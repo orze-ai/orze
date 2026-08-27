@@ -733,7 +733,8 @@ class Orze(OrzePhaseMixin):
             ep.close_log()
         for role_name, rp in list(self.active_roles.items()):
             rp.close_log()
-            _fs_unlock(rp.lock_dir)
+            if not (rp.lock_dir / "role-process.json").exists():
+                _fs_unlock(rp.lock_dir)
         try:
             save_state(self.results_dir, self._build_state_dict())
         except Exception as e:

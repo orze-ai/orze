@@ -213,6 +213,19 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
         # after starting a detached child, ancestry disappears as soon as the
         # child is reparented; the stable identity remains safe to reap.
         refresh_role_process_descendants(rp)
+        if rp._receipt_error:
+            logger.error(
+                "%s role identity receipt could not be refreshed; killing",
+                role_name)
+            reaped = terminate_role_process(
+                rp, f"unattested role {role_name}",
+                reaper=_terminate_and_reap)
+            rp.close_log()
+            if reaped:
+                _fs_unlock(rp.lock_dir)
+            del active_roles[role_name]
+            finished.append((role_name, OUTCOME_ERROR))
+            continue
         ret = rp.process.poll()
         elapsed = time.time() - rp.start_time
 
@@ -222,10 +235,11 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
             if elapsed > rp.timeout:
                 logger.warning("[ROLE TIMEOUT] %s after %.0fm — killing",
                                role_name, elapsed / 60)
-                terminate_role_process(
+                reaped = terminate_role_process(
                     rp, f"role {role_name}", reaper=_terminate_and_reap)
                 rp.close_log()
-                _fs_unlock(rp.lock_dir)
+                if reaped:
+                    _fs_unlock(rp.lock_dir)
                 del active_roles[role_name]
                 finished.append((role_name, OUTCOME_TIMEOUT))
             elif _is_role_stalled(rp, role_stall_minutes):
@@ -236,10 +250,11 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                     "declared-output progress for %g minutes; killing",
                     role_name, effective,
                 )
-                terminate_role_process(
+                reaped = terminate_role_process(
                     rp, f"role {role_name}", reaper=_terminate_and_reap)
                 rp.close_log()
-                _fs_unlock(rp.lock_dir)
+                if reaped:
+                    _fs_unlock(rp.lock_dir)
                 del active_roles[role_name]
                 finished.append((role_name, OUTCOME_TIMEOUT))
             continue
@@ -250,7 +265,8 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
         reaped = terminate_role_process(
             rp, f"completed role {role_name}", reaper=_terminate_and_reap)
         rp.close_log()
-        _fs_unlock(rp.lock_dir)
+        if reaped:
+            _fs_unlock(rp.lock_dir)
         outcome: Outcome
         if not reaped:
             logger.error(

@@ -34,6 +34,16 @@ identities are pruned on every poll rather than accumulating across a long
 campaign. A zero-exit role is classified as an error if its tracked descendants
 cannot be proven stopped.
 
+For abrupt controller death, the role lock contains an atomic private receipt
+with the controller, root, and observed descendant stable identities plus a
+SHA-256 hash of a per-launch nonce. The raw nonce remains only in the managed
+role environment. On the next local startup, Orze verifies each exact live
+identity and its inherited nonce through `/proc` before signaling it. Receipts
+from other hosts are untouched; malformed, redirected, oversized,
+nonce-mismatched, or still-controller-owned receipts block local startup and
+authorize no signal. A stale-lock takeover cannot discard an unresolved role
+receipt.
+
 The warmup suppresses the watchdog before a role has emitted its first log byte.
 The absolute timeout remains authoritative even while progress continues.
 

@@ -25,7 +25,8 @@ from pathlib import Path
 from orze import __version__
 from orze.engine.process import (
     _kill_pg, process_is_running, process_group_members,
-    terminate_recorded_process_group, terminate_role_process,
+    reconcile_orphaned_role_receipts, terminate_recorded_process_group,
+    terminate_role_process,
 )
 from orze.engine.health import fs_startup_check, cleanup_stale_locks, HealthMonitor
 from orze.engine.resume import write_interruption_receipt
@@ -85,7 +86,22 @@ def startup_checks(results_dir: Path, cfg: dict,
     except OSError as e:
         logger.warning("results symlink normalization failed: %s", e)
 
-    # 2. Clean up stale locks from our own hostname
+    # 2. Reconcile nonce-bound managed roles before stale lock cleanup.
+    role_recovery = reconcile_orphaned_role_receipts(
+        Path(cfg.get("_orze_dir", ".orze")), hostname)
+    if role_recovery["errors"]:
+        raise SystemExit(
+            "FATAL: managed role recovery failed: "
+            + ",".join(role_recovery["errors"])
+        )
+    if role_recovery["recovered"]:
+        logger.warning("Recovered orphaned managed role(s): %s",
+                       ", ".join(role_recovery["recovered"]))
+    if role_recovery["remote"]:
+        logger.info("Leaving remote managed role receipt(s) untouched: %s",
+                    ", ".join(role_recovery["remote"]))
+
+    # 2.5 Clean up legacy stale locks from our own hostname
     cleanup_stale_locks(results_dir, hostname)
 
     # 3. Scrub stale state files if orze (or orze-pro) was upgraded since
@@ -712,9 +728,10 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
         for role_name, rp in active_roles.items():
             logger.info("Killing role '%s' (PID %d)",
                         role_name, rp.process.pid)
-            terminate_role_process(rp, f"role {role_name}")
+            reaped = terminate_role_process(rp, f"role {role_name}")
             rp.close_log()
-            _fs_unlock(rp.lock_dir)
+            if reaped:
+                _fs_unlock(rp.lock_dir)
 
         # Wait up to 10s then SIGKILL
         deadline = time.time() + 10
@@ -760,9 +777,10 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
         for role_name, rp in active_roles.items():
             logger.info("Terminating role '%s' (PID %d)...",
                         role_name, rp.process.pid)
-            terminate_role_process(rp, f"role {role_name}")
+            reaped = terminate_role_process(rp, f"role {role_name}")
             rp.close_log()
-            _fs_unlock(rp.lock_dir)
+            if reaped:
+                _fs_unlock(rp.lock_dir)
 
     # 3. Write shutdown sentinel (tells the watchdog not to restart us)
     sentinel = results_dir / ".orze_shutdown"

@@ -24,3 +24,16 @@ def test_recent_corrupt_lock_metadata_keeps_race_grace(tmp_path):
     (lock_dir / "lock.json").write_bytes(b"\0" * 32)
 
     assert not _fs_lock(lock_dir, stale_seconds=0)
+
+
+def test_managed_role_receipt_prevents_stale_lock_takeover(tmp_path):
+    lock_dir = tmp_path / "role"
+    lock_dir.mkdir()
+    (lock_dir / "lock.json").write_bytes(b"\0" * 32)
+    receipt = lock_dir / "role-process.json"
+    receipt.write_text("{}\n", encoding="utf-8")
+    old = time.time() - 60
+    os.utime(lock_dir, (old, old))
+
+    assert not _fs_lock(lock_dir, stale_seconds=0)
+    assert receipt.exists()

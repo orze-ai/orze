@@ -58,6 +58,15 @@ def _fs_lock(lock_dir: Path, stale_seconds: float = 600) -> bool:
         (lock_dir / "lock.json").write_text(json.dumps(meta), encoding="utf-8")
         return True
     except FileExistsError:
+        # A managed-role crash receipt is process authority, not a disposable
+        # lock artifact. Only startup reconciliation on its owning host may
+        # remove it after nonce-bound stable identities are proven stopped.
+        role_receipt = lock_dir / "role-process.json"
+        if role_receipt.exists() or role_receipt.is_symlink():
+            logger.error(
+                "Refusing lock takeover with unresolved managed role "
+                "receipt: %s", lock_dir)
+            return False
         # Check for stale lock
         try:
             meta_path = lock_dir / "lock.json"

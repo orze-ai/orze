@@ -53,6 +53,8 @@ import json
 import os
 import signal
 import secrets
+import shutil
+import socket
 import subprocess
 import logging
 import sys
@@ -63,6 +65,12 @@ from typing import Any, Optional
 from pathlib import Path
 
 logger = logging.getLogger("orze")
+
+_ROLE_PROCESS_RECEIPT = "role-process.json"
+_ROLE_RECEIPT_VERSION = 1
+_MAX_ROLE_RECEIPTS = 1024
+_MAX_ROLE_DESCENDANTS = 4096
+_MAX_ROLE_RECEIPT_BYTES = 1024 * 1024
 
 
 def capture_process_identity(pid: int) -> dict:
@@ -793,6 +801,11 @@ class RoleProcess:
     _root_start_ticks: Optional[int] = field(default=None, repr=False)
     _pgid: Optional[int] = field(default=None, repr=False)
     _tracked_descendants: list[dict] = field(default_factory=list, repr=False)
+    # Per-launch capability injected into the role environment. Only its hash
+    # is persisted; startup rechecks the live process environment before any
+    # crash-recovery signal is authorized.
+    process_nonce: Optional[str] = field(default=None, repr=False)
+    _receipt_error: bool = field(default=False, repr=False)
 
     def __post_init__(self):
         pid = getattr(self.process, "pid", None)
@@ -801,10 +814,34 @@ class RoleProcess:
         try:
             identity = capture_process_identity(pid)
         except (OSError, ValueError, ProcessLookupError):
+            nonce_hash = _role_nonce_sha256(self.process_nonce)
+            if self.process_nonce is not None:
+                matches = (_process_identities_with_nonce_hash(nonce_hash)
+                           if nonce_hash is not None else None)
+                if matches is not None:
+                    _reap_exact_identities(matches, timeout=3)
+                raise RuntimeError("role_process_identity_capture_failed")
             return
         self._root_start_ticks = identity["start_ticks"]
         self._pgid = identity["pgid"]
+        if self.process_nonce is not None:
+            if (not isinstance(self.process_nonce, str)
+                    or len(self.process_nonce) != 64
+                    or any(char not in "0123456789abcdef"
+                           for char in self.process_nonce)
+                    or not _process_has_nonce_hash(
+                        pid, hashlib.sha256(
+                            self.process_nonce.encode("ascii")).hexdigest())):
+                _terminate_and_reap(
+                    self.process, f"unattested role {self.role_name}",
+                    timeout=3, pgid=self._pgid)
+                raise RuntimeError("role_process_receipt_initialization_failed")
         refresh_role_process_descendants(self)
+        if self._receipt_error:
+            _terminate_and_reap(
+                self.process, f"unattested role {self.role_name}",
+                timeout=3, pgid=self._pgid)
+            raise RuntimeError("role_process_receipt_initialization_failed")
 
     def close_log(self):
         if self._log_fh and not self._log_fh.closed:
@@ -839,7 +876,258 @@ def refresh_role_process_descendants(rp: RoleProcess) -> int:
             retained[(identity["pid"], identity["start_ticks"])] = identity
     rp._tracked_descendants = sorted(
         retained.values(), key=lambda identity: identity["pid"])
+    if rp.process_nonce is not None and not persist_role_process_receipt(rp):
+        rp._receipt_error = True
     return len(rp._tracked_descendants)
+
+
+def _process_has_nonce_hash(pid: int, expected_sha256: str) -> bool:
+    """Verify the role nonce without returning or logging environment data."""
+    try:
+        payload = Path(f"/proc/{int(pid)}/environ").read_bytes()
+    except (OSError, ValueError):
+        return False
+    prefix = b"ORZE_ROLE_PROCESS_NONCE="
+    values = [item[len(prefix):] for item in payload.split(b"\0")
+              if item.startswith(prefix)]
+    return (len(values) == 1
+            and hashlib.sha256(values[0]).hexdigest() == expected_sha256)
+
+
+def _role_nonce_sha256(nonce: object) -> Optional[str]:
+    if (not isinstance(nonce, str) or len(nonce) != 64
+            or any(char not in "0123456789abcdef" for char in nonce)):
+        return None
+    return hashlib.sha256(nonce.encode("ascii")).hexdigest()
+
+
+def _process_identities_with_nonce_hash(
+        nonce_sha256: Optional[str]) -> Optional[list[dict]]:
+    """Return a bounded identity set matching one role capability hash."""
+    if nonce_sha256 is None:
+        return None
+    try:
+        entries = Path("/proc").iterdir()
+    except OSError:
+        return None
+    matches = []
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        if not _process_has_nonce_hash(pid, nonce_sha256):
+            continue
+        try:
+            matches.append(capture_process_identity(pid))
+        except (OSError, ValueError, ProcessLookupError):
+            continue
+        if len(matches) > _MAX_ROLE_DESCENDANTS:
+            return None
+    return matches
+
+
+def _reap_exact_identities(identities: list[dict], timeout: float) -> bool:
+    """Terminate only stable identities already authorized by a role nonce."""
+    identities = list({
+        (item["pid"], item["start_ticks"]): item for item in identities
+    }.values())
+    _signal_tracked_processes(identities, signal.SIGTERM)
+    deadline = time.time() + timeout
+    while time.time() < deadline and any(
+            process_is_running(item["pid"], item["start_ticks"])
+            for item in identities):
+        time.sleep(0.05)
+    remaining = [
+        item for item in identities
+        if process_is_running(item["pid"], item["start_ticks"])
+    ]
+    if remaining:
+        _signal_tracked_processes(remaining, signal.SIGKILL)
+        deadline = time.time() + timeout
+        while time.time() < deadline and any(
+                process_is_running(item["pid"], item["start_ticks"])
+                for item in remaining):
+            time.sleep(0.05)
+        remaining = [
+            item for item in remaining
+            if process_is_running(item["pid"], item["start_ticks"])
+        ]
+    return not remaining
+
+
+def _atomic_private_json(path: Path, payload: dict) -> None:
+    """Atomically persist a private controller receipt with fsync."""
+    encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":"))
+               + "\n").encode("utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.parent.is_symlink() or not path.parent.is_dir():
+        raise OSError("role receipt parent is not a real directory")
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{secrets.token_hex(6)}")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        remaining = memoryview(encoded)
+        while remaining:
+            written = os.write(fd, remaining)
+            if written <= 0:
+                raise OSError("short role receipt write")
+            remaining = remaining[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(tmp, path)
+    dir_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
+def persist_role_process_receipt(rp: RoleProcess) -> bool:
+    """Persist hash-only crash-recovery authority for one managed role."""
+    if rp.process_nonce is None or rp._root_start_ticks is None or rp._pgid is None:
+        return False
+    try:
+        controller = capture_process_identity(os.getpid())
+        descendants = [
+            {
+                "pid": identity["pid"],
+                "pgid": identity["pgid"],
+                "start_ticks": identity["start_ticks"],
+            }
+            for identity in rp._tracked_descendants[:_MAX_ROLE_DESCENDANTS]
+        ]
+        if len(rp._tracked_descendants) > _MAX_ROLE_DESCENDANTS:
+            return False
+        payload = {
+            "schema_version": _ROLE_RECEIPT_VERSION,
+            "role_name": rp.role_name,
+            "host": socket.gethostname(),
+            "controller": controller,
+            "root": {
+                "pid": int(rp.process.pid),
+                "pgid": int(rp._pgid),
+                "start_ticks": int(rp._root_start_ticks),
+            },
+            "nonce_sha256": hashlib.sha256(
+                rp.process_nonce.encode("ascii")).hexdigest(),
+            "descendants": descendants,
+            "updated_ns": time.time_ns(),
+        }
+        _atomic_private_json(rp.lock_dir / _ROLE_PROCESS_RECEIPT, payload)
+        return True
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def _valid_identity(value: object) -> bool:
+    return (isinstance(value, dict)
+            and type(value.get("pid")) is int and value["pid"] > 0
+            and type(value.get("pgid")) is int and value["pgid"] > 0
+            and type(value.get("start_ticks")) is int
+            and value["start_ticks"] > 0)
+
+
+def reconcile_orphaned_role_receipts(
+    orze_dir: Path,
+    hostname: Optional[str] = None,
+    timeout: float = 3,
+) -> dict:
+    """Reap locally orphaned roles from bounded, nonce-bound receipts.
+
+    Receipts from another host are left untouched. Invalid or unverifiable
+    local receipts fail closed and authorize no signals.
+    """
+    hostname = hostname or socket.gethostname()
+    lock_root = Path(orze_dir) / "locks"
+    report = {"recovered": [], "remote": [], "errors": []}
+    if not lock_root.exists():
+        return report
+    try:
+        entries = sorted(lock_root.iterdir(), key=lambda path: path.name)
+    except OSError:
+        report["errors"].append("role_receipt_lock_root_unreadable")
+        return report
+    receipt_entries = [
+        entry for entry in entries
+        if entry.is_dir() and (
+            (entry / _ROLE_PROCESS_RECEIPT).exists()
+            or (entry / _ROLE_PROCESS_RECEIPT).is_symlink()
+        )
+    ]
+    if len(receipt_entries) > _MAX_ROLE_RECEIPTS:
+        report["errors"].append("role_receipt_count_exceeded")
+        return report
+
+    for lock_dir in receipt_entries:
+        role = lock_dir.name
+        receipt_path = lock_dir / _ROLE_PROCESS_RECEIPT
+        try:
+            if lock_dir.is_symlink() or receipt_path.is_symlink():
+                raise ValueError("redirected")
+            if receipt_path.stat().st_size > _MAX_ROLE_RECEIPT_BYTES:
+                raise ValueError("oversized")
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            report["errors"].append(f"role_receipt_invalid:{role}")
+            continue
+        if not isinstance(receipt, dict):
+            report["errors"].append(f"role_receipt_invalid:{role}")
+            continue
+        receipt_role = receipt.get("role_name")
+        nonce_sha256 = receipt.get("nonce_sha256")
+        descendants = receipt.get("descendants")
+        if (receipt.get("schema_version") != _ROLE_RECEIPT_VERSION
+                or receipt_role != role
+                or not isinstance(receipt.get("host"), str)
+                or not _valid_identity(receipt.get("controller"))
+                or not _valid_identity(receipt.get("root"))
+                or not isinstance(nonce_sha256, str)
+                or len(nonce_sha256) != 64
+                or any(char not in "0123456789abcdef"
+                       for char in nonce_sha256)
+                or not isinstance(descendants, list)
+                or len(descendants) > _MAX_ROLE_DESCENDANTS
+                or any(not _valid_identity(item) for item in descendants)):
+            report["errors"].append(f"role_receipt_invalid:{role}")
+            continue
+        if receipt["host"] != hostname:
+            report["remote"].append(role)
+            continue
+
+        controller = receipt["controller"]
+        if process_is_running(controller["pid"], controller["start_ticks"]):
+            report["errors"].append(f"role_controller_still_live:{role}")
+            continue
+
+        nonce_matches = _process_identities_with_nonce_hash(nonce_sha256)
+        if nonce_matches is None:
+            report["errors"].append(f"role_receipt_nonce_scan_failed:{role}")
+            continue
+        records = [receipt["root"], *descendants, *nonce_matches]
+        root = receipt["root"]
+        if process_is_running(root["pid"], root["start_ticks"]):
+            records.extend(process_descendant_identities(root["pid"]))
+        live = {
+            (record["pid"], record["start_ticks"]): record
+            for record in records
+            if process_is_running(record["pid"], record["start_ticks"])
+        }
+        if any(not _process_has_nonce_hash(record["pid"], nonce_sha256)
+               for record in live.values()):
+            report["errors"].append(f"role_receipt_nonce_mismatch:{role}")
+            continue
+
+        identities = sorted(live.values(), key=lambda item: item["pid"])
+        if not _reap_exact_identities(identities, timeout):
+            report["errors"].append(f"role_receipt_reap_failed:{role}")
+            continue
+        try:
+            shutil.rmtree(lock_dir)
+        except OSError:
+            report["errors"].append(f"role_receipt_cleanup_failed:{role}")
+            continue
+        report["recovered"].append(role)
+    return report
 
 
 def terminate_role_process(
@@ -861,18 +1149,33 @@ def terminate_role_process(
     # exited: Linux may already have reused that ID. Exact retained descendant
     # identities remain safe to signal after reparenting.
     pgid = rp._pgid if root_live else None
+    tracked = list(rp._tracked_descendants)
+    nonce_scan_ok = True
+    if rp.process_nonce is not None:
+        matches = _process_identities_with_nonce_hash(
+            _role_nonce_sha256(rp.process_nonce))
+        if matches is None:
+            nonce_scan_ok = False
+        else:
+            tracked.extend(matches)
     result = (reaper or _terminate_and_reap)(
         rp.process,
         label,
         timeout=timeout,
         pgid=pgid,
-        tracked_identities=list(rp._tracked_descendants),
+        tracked_identities=tracked,
         discover_pgid=root_live,
     )
+    clean = result is not False and nonce_scan_ok
+    if clean:
+        try:
+            (rp.lock_dir / _ROLE_PROCESS_RECEIPT).unlink(missing_ok=True)
+        except OSError:
+            clean = False
     rp._tracked_descendants.clear()
     # Legacy/mocked reapers returned None; only an explicit False means the
     # termination proof failed.
-    return result is not False
+    return clean
 
 
 def run_pre_script(idea_id: str, gpu: int, cfg: dict,
