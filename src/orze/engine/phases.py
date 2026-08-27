@@ -34,7 +34,8 @@ from orze.engine.failure import (
 )
 from orze.engine.launcher import (
     launch, _get_checkpoint_dir, _write_failure, _is_launcher_paused,
-    _resolve_train_script, GpuUnavailableError,
+    _resolve_train_script, find_forbidden_launch_override,
+    GpuUnavailableError,
 )
 from orze.engine.process import run_artifact_preflight, run_pre_script
 from orze.engine.scheduler import claim, get_unclaimed, _count_statuses
@@ -928,41 +929,66 @@ class OrzePhaseMixin:
                         except Exception:
                             pass  # fall back to tick-cached idea_cfg
 
+                    forbidden_path = find_forbidden_launch_override(idea_cfg)
+                    if forbidden_path:
+                        reason = (
+                            "forbidden_launch_override:"
+                            f"{forbidden_path}")
+                        logger.warning(
+                            "[SKIP-INTEGRITY] %s — %s", idea_id, reason)
+                        try:
+                            from orze.engine.launcher import (
+                                log_validator_rejection,
+                            )
+                            log_validator_rejection(
+                                self.results_dir, idea_id,
+                                "forbidden_launch_override", reason,
+                                idea_cfg if isinstance(idea_cfg, dict) else {},
+                            )
+                        except Exception:
+                            pass
+                        _write_failure(
+                            self.results_dir / idea_id, reason,
+                            lake=self.lake, idea_id=idea_id, cfg=cfg)
+                        if self.lake:
+                            try:
+                                self.lake.set_status(idea_id, "skipped")
+                            except Exception:
+                                pass
+                        _record_failure(self.failure_counts, idea_id)
+                        continue
+
                     # orze_substrate v2: exec-hash pre-launch dedup.
                     # Skip launches whose proposed config matches a hash
                     # already produced by a prior completed idea.
-                    # force_launch: skip guard when force_launch=True
-                    # (e.g. OPD champion children with prior FAILED run at avg_wer=999)
-                    _force_launch = idea_cfg.get("force_launch") if isinstance(idea_cfg, dict) else False
-                    if not _force_launch:
-                        try:
-                            from orze_substrate.exec_hash import check as _exec_check
-                            _eh, _first, _wer = _exec_check(idea_cfg)
-                            if _first and _first != idea_id:
-                                logger.info(
-                                    "[exec-dedup] skipping %s — exec_hash=%s "
-                                    "already produced by %s (avg_wer=%s)",
-                                    idea_id, _eh, _first, _wer)
-                                _dup_metrics = {
-                                    "status": "SKIPPED_DUPLICATE",
-                                    "duplicate_of": _first,
-                                    "exec_hash": _eh,
-                                    "duplicate_avg_wer": _wer,
-                                    "skip_reason": "exec_hash matches prior completed idea",
-                                }
+                    try:
+                        from orze_substrate.exec_hash import check as _exec_check
+                        _eh, _first, _wer = _exec_check(idea_cfg)
+                        if _first and _first != idea_id:
+                            logger.info(
+                                "[exec-dedup] skipping %s — exec_hash=%s "
+                                "already produced by %s (avg_wer=%s)",
+                                idea_id, _eh, _first, _wer)
+                            _dup_metrics = {
+                                "status": "SKIPPED_DUPLICATE",
+                                "duplicate_of": _first,
+                                "exec_hash": _eh,
+                                "duplicate_avg_wer": _wer,
+                                "skip_reason": "exec_hash matches prior completed idea",
+                            }
+                            try:
+                                (self.results_dir / idea_id / "metrics.json"
+                                 ).write_text(json.dumps(_dup_metrics, indent=2))
+                            except Exception:
+                                pass
+                            if self.lake is not None:
                                 try:
-                                    (self.results_dir / idea_id / "metrics.json"
-                                     ).write_text(json.dumps(_dup_metrics, indent=2))
+                                    self.lake.set_status(idea_id, "skipped")
                                 except Exception:
                                     pass
-                                if self.lake is not None:
-                                    try:
-                                        self.lake.set_status(idea_id, "skipped")
-                                    except Exception:
-                                        pass
-                                continue
-                        except Exception as _eh_err:
-                            logger.debug("exec_hash pre-check failed: %r", _eh_err)
+                            continue
+                    except Exception as _eh_err:
+                        logger.debug("exec_hash pre-check failed: %r", _eh_err)
                     flat_cfg = {}
                     if idea_cfg:
                         for k, v in idea_cfg.items():
@@ -1009,14 +1035,7 @@ class OrzePhaseMixin:
                         _idea_cfg_for_validate = (
                             flat_cfg if flat_cfg
                             else ideas.get(idea_id, {}).get("config", {}))
-                        # force_launch: skip ALL validators when force_launch=True
-                        # (engineer cyc-4779 PRIORITY 1 guardrail fix). F5
-                        # nested-config validator must honour force_launch the
-                        # same way F5b does — otherwise force_launch ideas are
-                        # rejected before train.py can process the override.
-                        _fl_nested = _idea_cfg_for_validate
-                        if not (isinstance(_fl_nested, dict)
-                                and _fl_nested.get("force_launch")):
+                        if isinstance(_idea_cfg_for_validate, dict):
                             _wl = (cfg.get("nested_config_whitelist") or [])
                             _err = validate_idea_config_no_nested(
                                 _idea_cfg_for_validate, extra_whitelist=_wl)
@@ -1093,14 +1112,15 @@ class OrzePhaseMixin:
                     # bit-identical baseline WERs). 8 cycles of escalation
                     # to engineer pending; professor lands directly per
                     # cycle-095 commitment.
-                    # force_launch: skip ALL validators when force_launch=True
-                    _fl_cfg = flat_cfg if flat_cfg else ideas.get(idea_id, {}).get("config", {})
-                    if not (isinstance(_fl_cfg, dict) and _fl_cfg.get("force_launch")):
+                    _method_cfg = (
+                        flat_cfg if flat_cfg
+                        else ideas.get(idea_id, {}).get("config", {}))
+                    if isinstance(_method_cfg, dict):
                         try:
                             from orze.engine.launcher import (
                                 validate_idea_against_method_validators,
                             )
-                            _idea_cfg_for_mv = _fl_cfg
+                            _idea_cfg_for_mv = _method_cfg
                             _vdir = (self.results_dir / "_validators")
                             _mv_err = validate_idea_against_method_validators(
                                 _idea_cfg_for_mv, _vdir)
@@ -1137,11 +1157,6 @@ class OrzePhaseMixin:
                     # Use flat_cfg (malformed-key-cleaned) if available, else raw config.
                     # flat_cfg is built at lines 518-535 above, which fixes LLM-generated
                     # collapsed keys like "epochs: 40" → {"epochs": 40}.
-                    # force_launch: skip ALL validators when force_launch=True
-                    # (engineer cyc-4781 P0 guardrail fix). SOP validator must honour
-                    # force_launch the same way F5/F5b do — otherwise force_launch ideas
-                    # with unrecognized config keys (e.g. OPD children) are rejected
-                    # before train.py can process the override.
                     try:
                         from orze.extensions import get_extension
                         _sops = get_extension("sops")
@@ -1149,12 +1164,7 @@ class OrzePhaseMixin:
                             idea_cfg = flat_cfg if flat_cfg else ideas.get(idea_id, {}).get("config", {})
                             ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
                             ts = _resolve_train_script(ts, cfg)
-                            # force_launch: skip SOP validator when force_launch=True
-                            # (engineer cyc-4781 P0 guardrail fix). Must honour
-                            # force_launch the same way F5/F5b do — OPD children
-                            # with unrecognized config keys must reach train.py.
-                            _fl_sop = isinstance(idea_cfg, dict) and idea_cfg.get("force_launch")
-                            if ts and idea_cfg and not _fl_sop:
+                            if ts and idea_cfg:
                                 is_valid, err_msg = _sops.validate_idea(
                                     ts, idea_cfg, cfg.get("python", sys.executable))
                                 if not is_valid:

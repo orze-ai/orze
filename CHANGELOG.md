@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Fixed
+- **Idea data can no longer disable launch integrity checks.** The public
+  `force_launch` escape hatch is rejected at any nesting depth, including when
+  set to false, and no longer bypasses deduplication, schema, method, or SOP
+  validation. The final launcher also fails closed on malformed idea configs,
+  unsafe idea IDs, pause policy, and every stop/disable sentinel—even for
+  direct launcher callers and broken-symlink latch entries—before checking GPU
+  availability.
 - **Interrupted trainers now have an explicit, fail-closed resume contract.**
   Trainers may cooperatively publish a completed checkpoint and progress
   manifest. Orze records hashes for the checkpoint, idea config, exact train

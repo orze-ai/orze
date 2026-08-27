@@ -1026,6 +1026,47 @@ class GpuUnavailableError(RuntimeError):
     """
 
 
+class LaunchIntegrityError(RuntimeError):
+    """Raised when a launch attempts to bypass a control-plane invariant."""
+
+
+def find_forbidden_launch_override(value, path: str = "config",
+                                   _seen: Optional[set] = None,
+                                   _depth: int = 0) -> Optional[str]:
+    """Return the first nested ``force_launch`` path, if present.
+
+    The key is forbidden even when false: idea data must never carry a switch
+    that changes which integrity validators the control plane executes.
+    """
+    if _depth > 64:
+        return f"{path}.<nesting_limit_exceeded>"
+    if _seen is None:
+        _seen = set()
+    if isinstance(value, (dict, list)):
+        identity = id(value)
+        if identity in _seen:
+            return f"{path}.<recursive_reference>"
+        _seen.add(identity)
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}"
+            if str(key) == "force_launch":
+                return child_path
+            found = find_forbidden_launch_override(
+                child, child_path, _seen, _depth + 1)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found = find_forbidden_launch_override(
+                child, f"{path}[{index}]", _seen, _depth + 1)
+            if found:
+                return found
+    if isinstance(value, (dict, list)):
+        _seen.remove(id(value))
+    return None
+
+
 def _verify_gpu_free(gpu, min_free_mib: int) -> None:
     """Sanity-check that ``gpu`` has at least ``min_free_mib`` free VRAM
     immediately before spawning the subprocess.
@@ -1092,14 +1133,47 @@ def _is_launcher_paused(cfg: dict, results_dir: Path) -> bool:
     Every call emits ``[PAUSE_CHECK] path=<...> present=<bool> config_paused=<bool>``
     so operators can confirm which sentinel a daemon is watching.
     """
-    config_paused = bool(cfg.get("launcher", {}).get("paused", False))
+    launcher_cfg = cfg.get("launcher", {})
+    if not isinstance(launcher_cfg, dict):
+        logger.error("launcher config is not a mapping; pausing fail-closed")
+        return True
+    config_paused = bool(launcher_cfg.get("paused", False))
     flag_path = _resolve_pause_flag_path(cfg, results_dir)
-    flag_present = flag_path.exists()
+    try:
+        flag_path.lstat()
+        flag_present = True
+    except FileNotFoundError:
+        flag_present = False
+    except OSError:
+        flag_present = True
     logger.info(
         "[PAUSE_CHECK] path=%s present=%s config_paused=%s",
         flag_path, flag_present, config_paused,
     )
     return config_paused or flag_present
+
+
+def _assert_launch_authorized(idea_id: str, results_dir: Path,
+                              cfg: dict) -> None:
+    """Enforce stop/pause controls for every direct launcher caller."""
+    if (not isinstance(idea_id, str) or not idea_id
+            or Path(idea_id).parts != (idea_id,)
+            or idea_id in (".", "..")):
+        raise LaunchIntegrityError("idea_id_invalid")
+    results_dir = Path(results_dir)
+    for sentinel in (".orze_disabled", ".orze_stop_all", ".orze_shutdown"):
+        try:
+            (results_dir / sentinel).lstat()
+            present = True
+        except FileNotFoundError:
+            present = False
+        except OSError:
+            present = True
+        if present:
+            raise LaunchIntegrityError(
+                f"launch_blocked_by_sentinel:{sentinel}")
+    if _is_launcher_paused(cfg, results_dir):
+        raise LaunchIntegrityError("launch_blocked_by_pause_policy")
 
 
 def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> TrainingProcess:
@@ -1113,6 +1187,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     Args:
         lake: IdeaLake instance for FSM transition recording (optional)
     """
+    results_dir = Path(results_dir)
+    _assert_launch_authorized(idea_id, results_dir, cfg)
     log_path = results_dir / idea_id / "train_output.log"
 
     # F12: detect non-train ideas and dispatch to posthoc_runner.
@@ -1122,36 +1198,39 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     # launch time. Validators added/strengthened after enqueue must reject
     # orphan ideas before they consume a GPU. Train-kind only; posthoc has
     # its own schema and these validators don't apply.
-    # force_launch: skip ALL validators when force_launch=True — used by
-    # OPD champion children that must compound depth despite prior failures.
     if idea_cfg_path.exists():
         try:
             import yaml as _yaml
             with open(idea_cfg_path) as _qrf:
                 _qr_idea_cfg = _yaml.safe_load(_qrf) or {}
-            if not _qr_idea_cfg.get("force_launch"):
-                _validators_dir = Path(results_dir) / "_validators"
-                if _validators_dir.is_dir():
-                    _qr_err = validate_idea_against_method_validators(
-                        _qr_idea_cfg, _validators_dir)
-                    if _qr_err:
-                        _qr_mark = results_dir / idea_id / "_schema_invalid.txt"
-                        try:
-                            _qr_mark.parent.mkdir(parents=True, exist_ok=True)
-                            _qr_mark.write_text(
-                                f"queue_revalidation: {_qr_err}\n")
-                        except OSError:
-                            pass
-                        logger.warning(
-                            "QUEUE-REVALIDATION REJECTED idea=%s: %s",
-                            idea_id, _qr_err)
-                        raise RuntimeError(f"queue_revalidation_{_qr_err}")
+            if not isinstance(_qr_idea_cfg, dict):
+                raise LaunchIntegrityError("idea_config_must_be_mapping")
+            forbidden_path = find_forbidden_launch_override(_qr_idea_cfg)
+            if forbidden_path:
+                raise LaunchIntegrityError(
+                    f"forbidden_launch_override:{forbidden_path}")
+            _validators_dir = Path(results_dir) / "_validators"
+            if _validators_dir.is_dir():
+                _qr_err = validate_idea_against_method_validators(
+                    _qr_idea_cfg, _validators_dir)
+                if _qr_err:
+                    _qr_mark = results_dir / idea_id / "_schema_invalid.txt"
+                    try:
+                        _qr_mark.parent.mkdir(parents=True, exist_ok=True)
+                        _qr_mark.write_text(
+                            f"queue_revalidation: {_qr_err}\n")
+                    except OSError:
+                        pass
+                    logger.warning(
+                        "QUEUE-REVALIDATION REJECTED idea=%s: %s",
+                        idea_id, _qr_err)
+                    raise RuntimeError(f"queue_revalidation_{_qr_err}")
         except RuntimeError:
             raise
-        except Exception as _qr_e:  # pragma: no cover
-            logger.warning(
-                "Queue-revalidation soft-failed for idea=%s: %s",
-                idea_id, _qr_e)
+        except Exception as _qr_e:
+            raise LaunchIntegrityError(
+                "idea_config_validation_failed:"
+                f"{type(_qr_e).__name__}") from _qr_e
 
     idea_kind = _resolve_idea_kind(idea_id, idea_cfg_path, results_dir, cfg)
     if idea_kind and idea_kind != "train":

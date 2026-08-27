@@ -204,10 +204,10 @@ the new module does not write evidence or state. No validator registry, schema
 framework, or plugin API is added.
 
 The extraction does not merge the two validation sites. `phases.py` remains the
-post-claim, pre-`Popen` authority: it applies normalization, honors
-`force_launch`, records rejection evidence, writes the current failure-shaped
-metrics, sets `ideas.status = skipped`, and updates failure counts exactly as it
-does today.
+post-claim, pre-`Popen` authority: it applies normalization, rejects forbidden
+control-plane overrides, records rejection evidence, writes the current
+failure-shaped metrics, sets `ideas.status = skipped`, and updates failure
+counts exactly as it does today.
 The launch-time method check remains a last-moment guard for validators changed
 after enqueue. Its current `RuntimeError` and downstream classification remain
 unchanged in this slice. In particular:
@@ -215,7 +215,7 @@ unchanged in this slice. In particular:
 - nested-config validation must not be removed from `phases.py`;
 - a phase rejection must remain `SKIPPED`, not become a launch failure or an
   executor-fix attempt;
-- `force_launch` must bypass the same validators at both sites;
+- idea data must not carry a validator-bypass switch at either site;
 - validator names, rejection JSONL records, metrics text, and failure-count
   behavior must be characterized before code moves.
 
