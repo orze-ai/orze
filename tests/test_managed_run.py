@@ -758,3 +758,39 @@ def test_run_idea_cli_cleans_up_after_orchestrator_exception(
     output = capsys.readouterr().out
     assert "RuntimeError" in output
     assert "sensitive detail" not in output
+
+
+def test_run_idea_cli_reports_gpu_lease_contention_as_safe_rejection(
+        monkeypatch, capsys):
+    from orze.core.gpu_lease import GpuLeaseError
+
+    observed = {}
+    monkeypatch.setattr(
+        "sys.argv", ["orze", "run-idea", "idea-managed", "--gpu", "4"])
+    monkeypatch.setattr("orze.extensions._find_pro_key", lambda: "present")
+    monkeypatch.setattr(cli, "load_project_config", lambda path: {})
+    monkeypatch.setattr(
+        managed_run, "prepare_managed_idea_run",
+        lambda *args: {"idea_id": "idea-managed", "gpu": 4},
+    )
+
+    class Runner:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def run(self):
+            raise GpuLeaseError(
+                "gpu_lease_contended: physical_gpu=4")
+
+        def _graceful_shutdown(self, kill_all=False):
+            observed["kill_all"] = kill_all
+
+        def _remove_pid_file(self):
+            pytest.fail("fallback cleanup should not be needed")
+
+    monkeypatch.setattr("orze.engine.orchestrator.Orze", Runner)
+
+    assert cli.main() == 2
+    assert observed == {"kill_all": True}
+    output = capsys.readouterr().out
+    assert "gpu_lease_contended: physical_gpu=4" in output

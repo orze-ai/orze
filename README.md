@@ -251,6 +251,8 @@ test probes only the explicit invocation/`allowed_gpus` scope and uses CPU when
 no GPU scope is declared. These host-local leases coordinate Orze processes
 running as the same OS user; unrelated external launchers remain outside the
 Orze control boundary.
+Lease contention returns exit status 2 with a categorical
+`gpu_lease_contended: physical_gpu=N` reason.
 
 `orze run-idea IDEA --gpu N` is the fail-closed manual campaign path. It
 requires an exact runtime pin, an authoritative `QUEUED` lake row, a current

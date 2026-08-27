@@ -13,6 +13,7 @@ from orze.core.gpu_lease import (
     GpuLeaseError,
     acquire_gpu_leases,
     gpu_execution_lease,
+    safe_gpu_lease_reason,
 )
 from orze.engine.smoke_test import _find_free_gpu
 from orze.engine import launcher
@@ -53,6 +54,14 @@ def test_overlapping_controllers_fail_closed_but_disjoint_scopes_coexist():
     assert overlap.returncode != 0
     assert "gpu_lease_contended" in overlap.stderr
     assert disjoint.returncode == 0
+
+
+def test_cli_lease_reason_never_echoes_arbitrary_exception_content():
+    assert safe_gpu_lease_reason(GpuLeaseError(
+        "gpu_lease_contended: physical_gpu=4")) == (
+            "gpu_lease_contended: physical_gpu=4")
+    assert safe_gpu_lease_reason(GpuLeaseError(
+        "secret path and token")) == "gpu_lease_rejected"
 
 
 def test_multi_gpu_acquisition_releases_partial_scope_on_contention():

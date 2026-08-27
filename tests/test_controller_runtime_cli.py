@@ -82,6 +82,32 @@ def test_main_uses_configured_gpu_scope_without_global_discovery(monkeypatch):
     }
 
 
+def test_main_reports_gpu_lease_contention_without_traceback(
+        monkeypatch, capsys):
+    from orze.core.gpu_lease import GpuLeaseError
+
+    class Runner:
+        def __init__(self, gpu_ids, cfg, once=False):
+            pass
+
+        def run(self):
+            raise GpuLeaseError(
+                "gpu_lease_contended: physical_gpu=4")
+
+    monkeypatch.setattr(
+        "sys.argv", ["orze", "--once", "--no-admin"])
+    monkeypatch.setattr("orze.extensions._find_pro_key", lambda: "present")
+    monkeypatch.setattr(cli, "load_project_config", lambda path: {
+        "gpu_scheduling": {"allowed_gpus": [4]},
+    })
+    monkeypatch.setattr(cli, "_require_controller_runtime", lambda cfg: None)
+    monkeypatch.setattr("orze.engine.orchestrator.Orze", Runner)
+
+    assert cli.main() == 2
+    assert "gpu_lease_contended: physical_gpu=4" in (
+        capsys.readouterr().out)
+
+
 def test_lifecycle_start_runtime_drift_preserves_stop_latch(
         tmp_path, monkeypatch):
     results = tmp_path / "results"

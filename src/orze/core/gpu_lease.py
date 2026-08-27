@@ -12,6 +12,7 @@ import contextlib
 import fcntl
 import json
 import os
+import re
 import stat
 import threading
 from dataclasses import dataclass
@@ -21,6 +22,15 @@ from typing import Iterator, Sequence
 
 class GpuLeaseError(RuntimeError):
     """Raised when exclusive ownership of a physical GPU cannot be proven."""
+
+
+def safe_gpu_lease_reason(exc: BaseException) -> str:
+    """Return only the stable categorical lease reason safe for CLI output."""
+    reason = str(exc)
+    if re.fullmatch(
+            r"gpu_lease_[a-z_]+(?:: physical_gpu=[0-9]+)?", reason):
+        return reason
+    return "gpu_lease_rejected"
 
 
 _registry_lock = threading.RLock()

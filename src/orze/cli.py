@@ -812,6 +812,9 @@ Examples:
             "enabled": False,
         }
         from orze.engine.orchestrator import Orze
+        from orze.core.gpu_lease import (
+            GpuLeaseError, safe_gpu_lease_reason,
+        )
         print(
             f"Managed run admitted: {report['idea_id']} on physical GPU "
             f"{report['gpu']}"
@@ -819,6 +822,16 @@ Examples:
         runner = Orze([args.gpu], cfg, once=True)
         try:
             runner.run()
+        except GpuLeaseError as exc:
+            try:
+                runner._graceful_shutdown(kill_all=True)
+            except Exception:
+                runner._remove_pid_file()
+            print(
+                "ERROR: managed idea run rejected: "
+                f"{safe_gpu_lease_reason(exc)}"
+            )
+            return 2
         except Exception as exc:
             try:
                 runner._graceful_shutdown(kill_all=True)
@@ -1342,12 +1355,20 @@ Examples:
 
     # Launch orchestrator
     from orze.engine.orchestrator import Orze
+    from orze.core.gpu_lease import GpuLeaseError, safe_gpu_lease_reason
     orze = Orze(gpu_ids, cfg, once=args.once)
 
     if args.role_only:
         orze._run_role_once(args.role_only)
     else:
-        orze.run()
+        try:
+            orze.run()
+        except GpuLeaseError as exc:
+            print(
+                "ERROR: controller GPU ownership rejected: "
+                f"{safe_gpu_lease_reason(exc)}"
+            )
+            return 2
 
 
 if __name__ == "__main__":

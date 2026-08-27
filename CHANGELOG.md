@@ -10,7 +10,9 @@
   pre/post, post-hoc, and smoke-test children inherit lease descriptors, so a
   controller crash or detach cannot release a device still in use. Startup,
   watchdog, status, check, and orphan-cleanup telemetry now honors explicit
-  physical GPU scopes instead of inventorying unrelated devices.
+  physical GPU scopes instead of inventorying unrelated devices. Contention
+  exits with a stable categorical CLI rejection rather than an ambiguous
+  traceback, without echoing arbitrary exception content.
 - **Managed-agent stalls now use composite, content-free progress.** The
   five-minute default watchdog resets on role-log growth, Linux process-tree
   CPU movement, or metadata changes to declared outputs; research roles monitor
