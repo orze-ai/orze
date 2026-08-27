@@ -67,6 +67,7 @@ from orze.engine.execution_identity import (
     release_execution_identity, reserve_execution_identity,
 )
 from orze.core.fs import atomic_write, tail_file
+from orze.core.gpu_lease import gpu_execution_lease
 from orze.core.research_policy import validate_idea_against_research_policy
 from orze.reporting.notifications import notify
 
@@ -374,7 +375,8 @@ def _detect_zombie(tp) -> bool:
     # 2. Check GPU memory (nvidia-smi for this PID and children)
     try:
         result = subprocess.run(
-            ["nvidia-smi", "--query-compute-apps=pid,used_gpu_memory",
+            ["nvidia-smi", f"--id={tp.gpu}",
+             "--query-compute-apps=pid,used_gpu_memory",
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=5,
         )
@@ -463,7 +465,7 @@ def _scan_first_batch_marker(log_path: Optional[Path]) -> bool:
     return bool(_FIRST_BATCH_RE.search(text))
 
 
-def _gpu_util_for_pid(pid: int) -> Optional[int]:
+def _gpu_util_for_pid(pid: int, gpu: int) -> Optional[int]:
     """Return GPU util (0-100) for the GPU process *pid* runs on, or None
     if pid is not currently using a GPU / nvidia-smi is unavailable.
 
@@ -472,7 +474,8 @@ def _gpu_util_for_pid(pid: int) -> Optional[int]:
     """
     try:
         a = subprocess.run(
-            ["nvidia-smi", "--query-compute-apps=pid,gpu_uuid",
+            ["nvidia-smi", f"--id={gpu}",
+             "--query-compute-apps=pid,gpu_uuid",
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=5,
         )
@@ -492,7 +495,8 @@ def _gpu_util_for_pid(pid: int) -> Optional[int]:
         return None
     try:
         b = subprocess.run(
-            ["nvidia-smi", "--query-gpu=uuid,utilization.gpu",
+            ["nvidia-smi", f"--id={gpu}",
+             "--query-gpu=uuid,utilization.gpu",
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=5,
         )
@@ -530,7 +534,7 @@ def _watchdog_check(tp) -> bool:
         return False
 
     # 3. Sample all three signals.
-    gpu_util = _gpu_util_for_pid(tp.process.pid)
+    gpu_util = _gpu_util_for_pid(tp.process.pid, tp.gpu)
     try:
         log_mtime = tp.log_path.stat().st_mtime if tp.log_path else 0.0
     except OSError:
@@ -1116,18 +1120,24 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
 
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not.
-    _assert_controller_runtime_attested(cfg)
-    _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
+    with gpu_execution_lease(gpu) as lease_fds:
+        _assert_controller_runtime_attested(cfg)
+        _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
 
-    log_fh = open(log_path, "a")
-    log_fh.write(f"\n[posthoc_runner] kind={kind} gpu={gpu}\n")
-    log_fh.flush()
-    proc = subprocess.Popen(
-        cmd,
-        stdin=subprocess.PIPE,
-        stdout=log_fh, stderr=subprocess.STDOUT,
-        env=env, preexec_fn=_new_process_group,
-    )
+        log_fh = open(log_path, "a")
+        log_fh.write(f"\n[posthoc_runner] kind={kind} gpu={gpu}\n")
+        log_fh.flush()
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=log_fh, stderr=subprocess.STDOUT,
+                env=env, preexec_fn=_new_process_group,
+                pass_fds=lease_fds,
+            )
+        except Exception:
+            log_fh.close()
+            raise
     try:
         proc.stdin.write(json.dumps(idea_cfg).encode())
         proc.stdin.close()
@@ -1613,25 +1623,21 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     # time (c1136). Raises GpuUnavailableError if not — handled in
     # phases.py as a requeue, not a code-fix retry.
     try:
-        _assert_controller_runtime_attested(cfg)
-        _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
-    except Exception:
-        close_model_lineage_attestation(lineage_context)
-        release_execution_identity(
-            results_dir, cfg, execution_identity, idea_id, attempt_id)
-        raise
+        with gpu_execution_lease(gpu) as lease_fds:
+            _assert_controller_runtime_attested(cfg)
+            _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
 
-    # Keep file handle open for subprocess lifetime. Opening the log is also a
-    # pre-allocation operation, so failure must release identity admission.
-    try:
-        log_fh = open(log_path, "w", encoding="utf-8")
-        pass_fds = ()
-        if lineage_context:
-            pass_fds = (lineage_context["write_fd"],)
-        proc = subprocess.Popen(
-            cmd, env=env, stdout=log_fh, stderr=subprocess.STDOUT,
-            preexec_fn=_new_process_group, pass_fds=pass_fds,
-        )
+            # Keep the log open for the subprocess lifetime.  The GPU lease
+            # descriptor is inherited alongside any lineage attestation FD.
+            log_fh = open(log_path, "w", encoding="utf-8")
+            pass_fds = list(lease_fds)
+            if lineage_context:
+                pass_fds.append(lineage_context["write_fd"])
+            proc = subprocess.Popen(
+                cmd, env=env, stdout=log_fh, stderr=subprocess.STDOUT,
+                preexec_fn=_new_process_group,
+                pass_fds=tuple(pass_fds),
+            )
     except Exception:
         close_model_lineage_attestation(lineage_context)
         if "log_fh" in locals():

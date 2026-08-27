@@ -52,6 +52,7 @@ from orze.engine.launcher import (
     _verify_gpu_free,
 )
 from orze.core.fs import tail_file
+from orze.core.gpu_lease import gpu_execution_lease
 from orze.core.benchmark_contract import (
     BenchmarkContractError,
     load_benchmark_values,
@@ -178,25 +179,27 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     ep = None
     try:
         benchmark_env = prepare_benchmark_evaluation(idea_dir, cfg)
-        _assert_controller_runtime_attested(cfg)
-        _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
-        env = os.environ.copy()
-        for k, v in (cfg.get("train_extra_env") or {}).items():
-            env[k] = str(v)
-        # Expose only the authorized physical device. Within the child it is
-        # local CUDA device 0; {physical_gpu} remains available for non-CUDA
-        # tooling that needs the host index.
-        env["CUDA_VISIBLE_DEVICES"] = str(gpu)
-        env.update(benchmark_env)
-        log_fh = open(log_path, "w", encoding="utf-8")
-        try:
-            proc = subprocess.Popen(
-                cmd, env=env, stdout=log_fh, stderr=subprocess.STDOUT,
-                preexec_fn=_new_process_group,
-            )
-        except Exception:
-            log_fh.close()
-            raise
+        with gpu_execution_lease(gpu) as lease_fds:
+            _assert_controller_runtime_attested(cfg)
+            _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
+            env = os.environ.copy()
+            for k, v in (cfg.get("train_extra_env") or {}).items():
+                env[k] = str(v)
+            # Expose only the authorized physical device. Within the child it
+            # is local CUDA device 0; {physical_gpu} remains available for
+            # non-CUDA tooling that needs the host index.
+            env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+            env.update(benchmark_env)
+            log_fh = open(log_path, "w", encoding="utf-8")
+            try:
+                proc = subprocess.Popen(
+                    cmd, env=env, stdout=log_fh,
+                    stderr=subprocess.STDOUT,
+                    preexec_fn=_new_process_group, pass_fds=lease_fds,
+                )
+            except Exception:
+                log_fh.close()
+                raise
 
         # v4.5: No explicit FSM transition for eval launch.
         # Training + eval both occur within IN_PROGRESS state.
@@ -546,7 +549,6 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
         _assert_launch_authorized(idea_id, results_dir, cfg)
         _assert_gpu_authorized(gpu, cfg)
         _assert_controller_runtime_attested(cfg)
-        _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
         args = ps.get("args") or []
         timeout = ps.get("timeout", 3600)
         name = ps.get("name", f"post-script-{i}")
@@ -560,11 +562,14 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
         logger.info("Running %s for %s", name, idea_id)
 
         try:
-            with open(log_path, "w", encoding="utf-8") as log_fh:
-                result = subprocess.run(
-                    cmd, env=env, stdout=log_fh, stderr=subprocess.STDOUT,
-                    timeout=timeout,
-                )
+            with gpu_execution_lease(gpu) as lease_fds:
+                _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
+                with open(log_path, "w", encoding="utf-8") as log_fh:
+                    result = subprocess.run(
+                        cmd, env=env, stdout=log_fh,
+                        stderr=subprocess.STDOUT, timeout=timeout,
+                        pass_fds=lease_fds,
+                    )
             if result.returncode == 0:
                 logger.info("%s completed for %s", name, idea_id)
             else:

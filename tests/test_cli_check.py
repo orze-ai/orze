@@ -83,6 +83,28 @@ def test_check_reports_ready_only_without_stop_controls(
     assert "Ready to run" in capsys.readouterr().out
 
 
+def test_check_gpu_inventory_honors_configured_physical_scope(
+        tmp_path, monkeypatch):
+    cfg = _case(tmp_path)
+    cfg["gpu_scheduling"] = {"allowed_gpus": [4, 5, 6, 7]}
+    Path(cfg["_config_path"]).write_text("{}\n", encoding="utf-8")
+    observed = []
+    monkeypatch.setattr(
+        "orze.core.config._validate_config", lambda value: ([], []))
+    monkeypatch.setattr(
+        "orze.hardware.gpu.detect_all_gpus",
+        lambda gpu_ids: observed.append(gpu_ids) or list(gpu_ids),
+    )
+    monkeypatch.setattr(
+        extensions, "inspect_pro_status",
+        lambda: (False, "orze-pro not installed"),
+    )
+
+    cli_setup.do_check(cfg)
+
+    assert observed == [[4, 5, 6, 7]]
+
+
 def test_relative_results_pause_flag_uses_one_results_prefix(
         tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)

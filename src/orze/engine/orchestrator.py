@@ -38,6 +38,7 @@ from orze.engine.failure import (
     _record_failure, get_skipped_ideas, _try_executor_fix, _reset_idea_for_retry,
 )
 from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
+from orze.core.gpu_lease import acquire_gpu_leases
 from orze.core.ideas import parse_ideas, expand_sweeps
 from orze.core.config import (
     _validate_config, reload_dotenv,
@@ -149,6 +150,7 @@ class Orze(OrzePhaseMixin):
         self.active = self.slot_mgr  # dict-compatible drop-in
         self.active_evals: Dict[int, EvalProcess] = {}
         self.active_roles: Dict[str, RoleProcess] = {}
+        self._gpu_leases = None
         self.pending_evals: list = []
         self.running = True
         self._hostname = socket.gethostname()
@@ -308,7 +310,16 @@ class Orze(OrzePhaseMixin):
         atexit.register(self._atexit_cleanup)
 
     def _atexit_cleanup(self):
-        atexit_cleanup(self.active, self.active_evals, self.active_roles)
+        try:
+            atexit_cleanup(self.active, self.active_evals, self.active_roles)
+        finally:
+            self._release_gpu_leases()
+
+    def _release_gpu_leases(self):
+        leases = self._gpu_leases
+        self._gpu_leases = None
+        if leases is not None:
+            leases.close()
 
     def _build_state_dict(self):
         """Build state dict for persistence, merging reporter state."""
@@ -767,9 +778,35 @@ class Orze(OrzePhaseMixin):
     # _report_and_notify) live in OrzePhaseMixin (phases.py)
 
     def run(self):
+        """Run only while this controller exclusively owns its GPU scope."""
+        self._write_pid_file()
+        cleanup_pid = True
+        try:
+            # The persistent stop latch is checked before startup recovery,
+            # telemetry, lease acquisition, or any child-process execution.
+            if self._check_disabled():
+                logger.error("Exiting — Orze is disabled")
+                if self.lake:
+                    try:
+                        self.lake.close()
+                    except Exception:
+                        pass
+                return
+            self._gpu_leases = acquire_gpu_leases(self.gpu_ids)
+            result = self._run_leased()
+            # Normal run paths already remove their PID as part of lifecycle
+            # cleanup.  The wrapper owns cleanup only for early rejection or
+            # an exception escaping the controller loop.
+            cleanup_pid = False
+            return result
+        finally:
+            self._release_gpu_leases()
+            if cleanup_pid:
+                self._remove_pid_file()
+
+    def _run_leased(self):
         cfg = self.cfg
         managed_idea = cfg.get("_managed_idea_id")
-        self._write_pid_file()
 
         # Log pro status
         from orze.extensions import has_pro, pro_version
@@ -798,16 +835,6 @@ class Orze(OrzePhaseMixin):
         else:
             self._startup_checks()
             self._kill_orphans()
-        # Check persistent disable flag (never auto-deleted)
-        if self._check_disabled():
-            logger.error("Exiting — Orze is disabled")
-            if self.lake:
-                try:
-                    self.lake.close()
-                except Exception:
-                    pass
-            self._remove_pid_file()
-            return
         # Clear any stale shutdown sentinels from a previous run
         if not managed_idea:
             for sentinel_name in [".orze_shutdown", ".orze_stop_all"]:

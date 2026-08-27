@@ -202,6 +202,32 @@ def test_managed_pid_receipt_never_overwrites_daemon_pid(tmp_path):
     assert host_pid.read_text(encoding="utf-8") == "123"
 
 
+def test_disabled_orchestrator_exits_before_gpu_lease_or_startup(
+        tmp_path, monkeypatch):
+    calls = []
+
+    class Lake:
+        def close(self):
+            calls.append("lake_close")
+
+    runner = Orze.__new__(Orze)
+    runner.gpu_ids = [4]
+    runner._gpu_leases = None
+    runner.lake = Lake()
+    runner._write_pid_file = lambda: calls.append("pid_write")
+    runner._remove_pid_file = lambda: calls.append("pid_remove")
+    runner._check_disabled = lambda: True
+    runner._run_leased = lambda: pytest.fail("disabled controller started")
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.acquire_gpu_leases",
+        lambda *args: pytest.fail("disabled controller acquired GPU leases"),
+    )
+
+    runner.run()
+
+    assert calls == ["pid_write", "lake_close", "pid_remove"]
+
+
 def test_managed_orchestrator_skips_daemon_wide_hooks(
         tmp_path, monkeypatch):
     calls = []

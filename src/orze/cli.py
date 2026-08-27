@@ -1302,7 +1302,11 @@ Examples:
     if args.gpus:
         gpu_ids = [int(g.strip()) for g in args.gpus.split(",")]
     else:
-        gpu_ids = detect_all_gpus()
+        configured_scope = (
+            (cfg.get("gpu_scheduling") or {}).get("allowed_gpus") or [])
+        # A configured physical boundary is authoritative and avoids an
+        # inventory query over devices outside that boundary.
+        gpu_ids = list(configured_scope) if configured_scope else detect_all_gpus()
 
     if not gpu_ids:
         logger.error("No GPUs detected. Use --gpus to specify manually.")

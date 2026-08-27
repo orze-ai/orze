@@ -64,6 +64,8 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 from pathlib import Path
 
+from orze.core.gpu_lease import gpu_execution_lease
+
 logger = logging.getLogger("orze")
 
 _ROLE_PROCESS_RECEIPT = "role-process.json"
@@ -1203,10 +1205,12 @@ def run_pre_script(idea_id: str, gpu: int, cfg: dict,
     proc = None
     handle = None
     try:
-        proc = subprocess.Popen(
-            cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, preexec_fn=_new_process_group,
-        )
+        with gpu_execution_lease(gpu) as lease_fds:
+            proc = subprocess.Popen(
+                cmd, env=env, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True,
+                preexec_fn=_new_process_group, pass_fds=lease_fds,
+            )
         from types import SimpleNamespace
         handle = SimpleNamespace(
             idea_id=idea_id,

@@ -346,7 +346,10 @@ def test_launch_wires_parent_attestation_before_compute_start(
             return None
 
     def fake_popen(command, **kwargs):
-        fd, = kwargs["pass_fds"]
+        # The trainer inherits both the physical-GPU lease and the lineage
+        # attestation pipe; the latter is appended last by the launcher.
+        assert len(kwargs["pass_fds"]) == 2
+        fd = kwargs["pass_fds"][-1]
         os.write(fd, (kwargs["env"]["ORZE_BOUNDARY_ATTEST_NONCE"]
                       + "\n").encode("ascii"))
         return RunningProcess()
@@ -396,7 +399,8 @@ def test_launch_terminates_unattested_child_before_compute_start(
     process = RunningProcess()
 
     def fake_popen(command, **kwargs):
-        fd, = kwargs["pass_fds"]
+        assert len(kwargs["pass_fds"]) == 2
+        fd = kwargs["pass_fds"][-1]
         os.write(fd, b"0" * 64 + b"\n")
         return process
 

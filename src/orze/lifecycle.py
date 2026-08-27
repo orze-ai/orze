@@ -98,11 +98,19 @@ def _pgrep(pattern: str) -> list:
         return []
 
 
-def _cleanup_gpu_orphans(workdir: str):
-    """Kill orphaned processes from our workdir still holding GPUs."""
+def _cleanup_gpu_orphans(workdir: str, gpu_ids=None):
+    """Kill matching orphans visible on the explicitly scoped GPUs."""
+    command = [
+        "nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader",
+    ]
+    if gpu_ids is not None:
+        scoped = sorted(set(gpu_ids))
+        if not scoped:
+            return
+        command.append("--id=" + ",".join(str(gpu) for gpu in scoped))
     try:
         result = subprocess.run(
-            ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"],
+            command,
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode != 0:
@@ -271,7 +279,10 @@ def do_stop(cfg: dict, timeout: int = 60):
         _log("stop", "No orchestrator PID — skipping child cleanup")
 
     # 5. GPU orphan cleanup
-    _cleanup_gpu_orphans(workdir)
+    configured_scope = (
+        (cfg.get("gpu_scheduling") or {}).get("allowed_gpus") or [])
+    _cleanup_gpu_orphans(
+        workdir, list(configured_scope) if configured_scope else None)
 
     _log("stop", f"{time.strftime('%c')} — Stop complete")
 

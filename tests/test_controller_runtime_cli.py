@@ -49,6 +49,39 @@ def test_main_checks_controller_runtime_before_gpu_discovery(monkeypatch):
         cli.main()
 
 
+def test_main_uses_configured_gpu_scope_without_global_discovery(monkeypatch):
+    observed = {}
+
+    class Runner:
+        def __init__(self, gpu_ids, cfg, once=False):
+            observed["gpu_ids"] = gpu_ids
+            observed["once"] = once
+
+        def run(self):
+            observed["ran"] = True
+
+    monkeypatch.setattr(
+        "sys.argv", ["orze", "--once", "--no-admin"])
+    monkeypatch.setattr("orze.extensions._find_pro_key", lambda: "present")
+    monkeypatch.setattr(cli, "load_project_config", lambda path: {
+        "gpu_scheduling": {"allowed_gpus": [4, 5, 6, 7]},
+    })
+    monkeypatch.setattr(cli, "_require_controller_runtime", lambda cfg: None)
+    monkeypatch.setattr(
+        cli, "detect_all_gpus",
+        lambda: pytest.fail("must not inventory GPUs outside allowlist"),
+    )
+    monkeypatch.setattr("orze.engine.orchestrator.Orze", Runner)
+
+    cli.main()
+
+    assert observed == {
+        "gpu_ids": [4, 5, 6, 7],
+        "once": True,
+        "ran": True,
+    }
+
+
 def test_lifecycle_start_runtime_drift_preserves_stop_latch(
         tmp_path, monkeypatch):
     results = tmp_path / "results"

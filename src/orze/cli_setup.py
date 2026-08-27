@@ -1608,7 +1608,10 @@ def do_check(cfg: dict):
     # --- GPUs ---
     print()
     print("  \033[1mGPUs:\033[0m")
-    gpus = detect_all_gpus()
+    configured_scope = (
+        (cfg.get("gpu_scheduling") or {}).get("allowed_gpus") or [])
+    gpus = (detect_all_gpus(list(configured_scope))
+            if configured_scope else detect_all_gpus())
     if gpus:
         print(f"    {ok} {len(gpus)} GPU(s) detected: {gpus}")
     else:

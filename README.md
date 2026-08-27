@@ -241,6 +241,17 @@ versions; it cannot prevent an older, pre-contract executable from ignoring an
 unknown key. Use the managed systemd service and its independent `ExecStartPre`
 check when downgrade resistance is required.
 
+Every controller also takes a kernel-backed exclusive lease on each physical
+GPU in its invocation scope before startup checks or GPU telemetry. Controllers
+with disjoint scopes can coexist; any overlap fails closed. Training,
+evaluation, pre/post, post-hoc, and GPU smoke-test children inherit the lease
+descriptor, so a controller crash or clean detach cannot make a still-running
+child's device appear available to another Orze controller. The startup smoke
+test probes only the explicit invocation/`allowed_gpus` scope and uses CPU when
+no GPU scope is declared. These host-local leases coordinate Orze processes
+running as the same OS user; unrelated external launchers remain outside the
+Orze control boundary.
+
 `orze run-idea IDEA --gpu N` is the fail-closed manual campaign path. It
 requires an exact runtime pin, an authoritative `QUEUED` lake row, a current
 decision-admission receipt, and an allowed physical GPU. It honors every stop

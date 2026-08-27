@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Fixed
+- **Physical GPU ownership is now exclusive across local controllers.** Each
+  controller acquires an all-or-nothing kernel lease for its exact invocation
+  scope before startup checks or GPU telemetry; overlapping controllers fail
+  closed while disjoint scopes coexist. GPU-visible training, evaluation,
+  pre/post, post-hoc, and smoke-test children inherit lease descriptors, so a
+  controller crash or detach cannot release a device still in use. Startup,
+  watchdog, status, check, and orphan-cleanup telemetry now honors explicit
+  physical GPU scopes instead of inventorying unrelated devices.
 - **Managed-agent stalls now use composite, content-free progress.** The
   five-minute default watchdog resets on role-log growth, Linux process-tree
   CPU movement, or metadata changes to declared outputs; research roles monitor

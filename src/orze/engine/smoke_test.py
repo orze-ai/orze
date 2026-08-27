@@ -28,6 +28,8 @@ import time
 import yaml
 from pathlib import Path
 
+from orze.core.gpu_lease import gpu_execution_lease
+
 logger = logging.getLogger("orze")
 
 _SMOKE_ID = "_smoke_test"
@@ -37,11 +39,20 @@ _TIMEOUT = 300
 
 
 def _find_free_gpu(cfg: dict):
-    """Find a GPU with enough free memory, or return None."""
+    """Find a permitted GPU with enough free memory, or return None."""
+    scheduling = cfg.get("gpu_scheduling") or {}
+    scope = cfg.get("_managed_gpu_ids") or scheduling.get("allowed_gpus") or []
+    if not scope:
+        return None
+    if (not isinstance(scope, list)
+            or any(isinstance(gpu, bool) or not isinstance(gpu, int)
+                   or gpu < 0 for gpu in scope)):
+        return None
     try:
         import subprocess as _sp
         result = _sp.run(
-            ["nvidia-smi", "--query-gpu=index,memory.free",
+            ["nvidia-smi", "-i", ",".join(str(gpu) for gpu in scope),
+             "--query-gpu=index,memory.free",
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=5)
         threshold = cfg.get("gpu_mem_threshold", 40000)
@@ -99,8 +110,10 @@ def run_smoke_test(cfg: dict, results_dir: Path) -> tuple:
             env["CUDA_VISIBLE_DEVICES"] = ""
             logger.info("[SMOKE] Running 1-sample test on CPU (no free GPU)...")
         t0 = time.time()
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=_TIMEOUT, env=env)
+        with gpu_execution_lease(free_gpu) as lease_fds:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=_TIMEOUT,
+                env=env, pass_fds=lease_fds)
         elapsed = time.time() - t0
 
         # Check exit code

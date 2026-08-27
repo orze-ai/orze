@@ -25,6 +25,7 @@ def _mk_tp(tmp_path: Path, pid: int = 12345):
     fake_proc = SimpleNamespace(pid=pid, poll=lambda: None)
     return SimpleNamespace(
         idea_id="idea-test",
+        gpu=4,
         process=fake_proc,
         start_time=time.time() - 10.0,
         log_path=log,
@@ -34,7 +35,7 @@ def _mk_tp(tmp_path: Path, pid: int = 12345):
 
 def test_watchdog_kills_idle_process(tmp_path, monkeypatch):
     tp = _mk_tp(tmp_path)
-    monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid: 0)
+    monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid, gpu: 0)
     monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: 100)
 
     results = [L._watchdog_check(tp) for _ in range(L.WATCHDOG_CONSECUTIVE + 1)]
@@ -45,7 +46,7 @@ def test_watchdog_kills_idle_process(tmp_path, monkeypatch):
 
 def test_watchdog_spares_active_process(tmp_path, monkeypatch):
     tp = _mk_tp(tmp_path)
-    monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid: 0)
+    monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid, gpu: 0)
 
     cpu = [100]
     def cpu_jiffies(pid):
@@ -65,7 +66,7 @@ def test_watchdog_grace_period_blocks_kill(tmp_path, monkeypatch):
     monkeypatch.setattr(L, "WATCHDOG_GRACE_MIN", 60)
     tp = _mk_tp(tmp_path)
     tp.start_time = time.time()
-    monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid: 0)
+    monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid, gpu: 0)
     monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: 100)
     for _ in range(L.WATCHDOG_CONSECUTIVE + 5):
         assert L._watchdog_check(tp) is False
@@ -76,7 +77,7 @@ def test_watchdog_first_batch_marker_activates(tmp_path, monkeypatch):
     tp = _mk_tp(tmp_path)
     tp.start_time = time.time()
     tp.log_path.write_text("epoch 1 step 5 loss=0.4\n")
-    monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid: 0)
+    monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid, gpu: 0)
     monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: 100)
     results = [L._watchdog_check(tp) for _ in range(L.WATCHDOG_CONSECUTIVE + 1)]
     assert results[0] is False
@@ -104,12 +105,13 @@ def test_real_sleep_subprocess_marked_stuck(tmp_path, monkeypatch):
         log.write_text("epoch 0 batch 1/10\n")
         tp = SimpleNamespace(
             idea_id="idea-sleep",
+            gpu=4,
             process=proc,
             start_time=time.time() - 5,
             log_path=log,
             timeout=3600.0,
         )
-        monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid: 0)
+        monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid, gpu: 0)
         stuck = False
         for _ in range(L.WATCHDOG_CONSECUTIVE + 2):
             stuck = L._watchdog_check(tp)

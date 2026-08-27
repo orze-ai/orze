@@ -52,15 +52,27 @@ def _eval_already_running(idea_id: str, cfg: dict = None) -> bool:
         return False
 
 
-def detect_all_gpus() -> List[int]:
-    """Auto-detect available GPU indices."""
+def detect_all_gpus(gpu_ids: Optional[List[int]] = None) -> List[int]:
+    """Detect available GPU indices, optionally within an exact scope."""
     try:
+        command = [
+            "nvidia-smi", "--query-gpu=index", "--format=csv,noheader",
+        ]
+        if gpu_ids is not None:
+            scoped = sorted(set(gpu_ids))
+            if not scoped:
+                return []
+            command.append("--id=" + ",".join(str(gpu) for gpu in scoped))
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=index", "--format=csv,noheader"],
+            command,
             capture_output=True, text=True, timeout=10,
         )
-        return [int(x.strip()) for x in result.stdout.strip().split("\n")
-                if x.strip()]
+        allowed = set(gpu_ids) if gpu_ids is not None else None
+        return [
+            int(value) for value in result.stdout.strip().splitlines()
+            if value.strip()
+            and (allowed is None or int(value.strip()) in allowed)
+        ]
     except Exception:
         return []
 
