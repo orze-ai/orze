@@ -153,12 +153,16 @@ def _auto_install_pro() -> bool:
     return False
 
 
-def has_pro() -> bool:
-    """Check if orze-pro is installed and licensed."""
+def has_pro(*, auto_install: bool = True) -> bool:
+    """Check if orze-pro is installed and licensed.
+
+    Diagnostic callers pass ``auto_install=False`` so a status check cannot
+    mutate the Python environment or contact the package registry.
+    """
     try:
         mod = importlib.import_module("orze_pro")
     except ImportError:
-        if _auto_install_pro():
+        if auto_install and _auto_install_pro():
             try:
                 mod = importlib.import_module("orze_pro")
             except ImportError:
@@ -182,9 +186,9 @@ def pro_version() -> Optional[str]:
         return None
 
 
-def pro_features() -> List[str]:
+def pro_features(*, auto_install: bool = True) -> List[str]:
     """List available pro features (checks importability without full load)."""
-    if not has_pro():
+    if not has_pro(auto_install=auto_install):
         return []
     available = []
     for name, path in _PRO_MODULES.items():
@@ -200,21 +204,29 @@ def pro_features() -> List[str]:
 
 
 def check_pro_status() -> str:
-    """Return a human-readable pro status string for --check output."""
-    if has_pro():
-        ver = pro_version()
-        features = pro_features()
-        return f"orze-pro {ver} — {len(features)} features: {', '.join(features)}"
-    else:
-        # Check if built-in fallbacks exist (transition period)
-        fallbacks = []
-        for name, path in _BUILTIN_FALLBACK.items():
-            try:
-                importlib.import_module(path)
-                fallbacks.append(name)
-            except ImportError:
-                pass
-        if fallbacks:
-            return f"orze-pro not installed (using {len(fallbacks)} built-in modules)"
-        return ("orze-pro not installed — running in manual mode. "
-                "Install orze-pro for autonomous research agents.")
+    """Return side-effect-free package status for diagnostic output."""
+    return inspect_pro_status()[1]
+
+
+def inspect_pro_status() -> tuple[bool, str]:
+    """Inspect discoverability without importing, licensing, or installing."""
+    import importlib.metadata
+    import importlib.util
+    try:
+        spec = importlib.util.find_spec("orze_pro")
+    except (ImportError, ModuleNotFoundError, ValueError):
+        spec = None
+    if spec is None:
+        return False, (
+            "orze-pro not installed — running in manual mode. "
+            "Install orze-pro for autonomous research agents.")
+    try:
+        version = importlib.metadata.version("orze-pro")
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"
+    if version == "0.0.1":
+        return False, (
+            "orze-pro distribution stub detected — running in manual mode")
+    return True, (
+        f"orze-pro {version} is discoverable; license/features were not "
+        "executed by this diagnostic")

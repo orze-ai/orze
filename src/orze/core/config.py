@@ -210,6 +210,10 @@ DEFAULT_CONFIG = {
         "max_jobs_per_gpu": 1,     # safety cap (1 = backward compat)
         "allowed_gpus": [],         # optional hard physical-GPU allowlist
     },
+    "launcher": {
+        "paused": False,
+        "paused_flag_path": None,
+    },
     "pre_script": None,
     "pre_args": [],
     "pre_timeout": 3600,
@@ -679,6 +683,21 @@ def _validate_config(cfg: dict) -> tuple:
             errors.append(
                 "gpu_scheduling.min_free_vram_mib: must be a "
                 "non-negative integer")
+
+    launcher_cfg = cfg.get("launcher", DEFAULT_CONFIG["launcher"])
+    if not isinstance(launcher_cfg, dict):
+        errors.append("launcher: must be a mapping")
+    else:
+        if not isinstance(launcher_cfg.get("paused", False), bool):
+            errors.append("launcher.paused: must be true or false")
+        paused_path = launcher_cfg.get("paused_flag_path")
+        if (paused_path is not None
+                and (not isinstance(paused_path, str)
+                     or not paused_path.strip()
+                     or any(ord(char) < 32 for char in paused_path))):
+            errors.append(
+                "launcher.paused_flag_path: must be null or a non-empty "
+                "path without control characters")
 
     # Validate eval config consistency
     if cfg.get("eval_script") and not cfg.get("eval_output"):

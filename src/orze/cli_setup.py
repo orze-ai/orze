@@ -14,10 +14,11 @@ Calling spec:
     find_shared_mounts()       # detect network FS mounts
     resolve_init_path(path)    # resolve init target directory
     do_init(init_arg)          # scaffold a new orze project
-    do_check(cfg)              # validate config and environment
+    do_check(cfg)              # validate config/environment; no installs
 
 Pure functions: find_shared_mounts, resolve_init_path.
-Side-effectful: do_uninstall, stop_running_instance, do_upgrade, do_init, do_check.
+Diagnostic: do_check (transient writability probe; no installs or launches).
+Side-effectful: do_uninstall, stop_running_instance, do_upgrade, do_init.
 """
 
 import base64
@@ -1438,8 +1439,45 @@ noise: 0.1
 # --check: validate config and environment
 # ---------------------------------------------------------------------------
 
+def _runnable_blockers(cfg: dict) -> list[str]:
+    """Return stable reasons why a validated project must not launch."""
+    results_dir = Path(cfg.get("results_dir", "orze_results"))
+    reasons = []
+    for sentinel in (".orze_disabled", ".orze_stop_all", ".orze_shutdown"):
+        try:
+            (results_dir / sentinel).lstat()
+            present = True
+        except FileNotFoundError:
+            present = False
+        except OSError:
+            present = True
+        if present:
+            reasons.append(f"sentinel:{sentinel}")
+    launcher = cfg.get("launcher", {})
+    if not isinstance(launcher, dict):
+        reasons.append("launcher_policy_invalid")
+        return reasons
+    if launcher.get("paused") is True:
+        reasons.append("launcher_config_paused")
+    override = launcher.get("paused_flag_path")
+    if isinstance(override, str) and override:
+        pause_path = Path(override)
+        if not pause_path.is_absolute():
+            pause_path = results_dir / pause_path
+    else:
+        pause_path = results_dir / "_launcher_paused.flag"
+    try:
+        pause_path.lstat()
+        reasons.append("launcher_pause_flag_present")
+    except FileNotFoundError:
+        pass
+    except OSError:
+        reasons.append("launcher_pause_flag_unreadable")
+    return reasons
+
+
 def do_check(cfg: dict):
-    """Validate config, files, API keys, GPUs, .env — then exit."""
+    """Validate config and environment without installing or launching."""
     from orze.core.config import _validate_config, find_dotenv
     from orze.hardware.gpu import detect_all_gpus
 
@@ -1526,12 +1564,13 @@ def do_check(cfg: dict):
     print(f"    {ok if free_gb > 5 else warn_mark} disk: {free_gb:.1f} GB free")
 
     # --- API keys (only relevant for pro users) ---
-    from orze.extensions import has_pro
+    from orze.extensions import inspect_pro_status
     has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY"))
     has_gemini = bool(os.environ.get("GEMINI_API_KEY"))
     has_any_llm_key = has_anthropic or has_gemini
     any_key = has_any_llm_key or bool(os.environ.get("OPENAI_API_KEY"))
-    if has_pro():
+    pro_enabled, pro_status = inspect_pro_status()
+    if pro_enabled:
         print()
         print("  \033[1mAPI Keys:\033[0m")
         for env_var, label in [("ANTHROPIC_API_KEY", "Anthropic"),
@@ -1565,11 +1604,11 @@ def do_check(cfg: dict):
                 backend = rcfg.get("backend", "")
                 detail = f"mode={mode}" + (f", backend={backend}" if backend else "")
                 print(f"    {ok} {rname}: {detail}")
-        if research_names and not has_any_llm_key and has_pro():
+        if research_names and not has_any_llm_key and pro_enabled:
             print(f"    {warn_mark} \033[33mAuto-research will not work: no ANTHROPIC_API_KEY or GEMINI_API_KEY found\033[0m")
             print(f"      Add ANTHROPIC_API_KEY or GEMINI_API_KEY to .env to enable auto-research")
     else:
-        if has_pro():
+        if pro_enabled:
             print(f"    {no} No research agent configured — ideas will not be generated automatically")
             if not any_key:
                 print(f"      hint: add an API key to .env (GEMINI_API_KEY or ANTHROPIC_API_KEY)")
@@ -1608,6 +1647,13 @@ def do_check(cfg: dict):
               "Claude subscription credentials."
         )
 
+    blockers = _runnable_blockers(cfg)
+    if blockers:
+        print()
+        print("  \033[1mLaunch Controls:\033[0m")
+        for blocker in blockers:
+            print(f"    \033[33m[-]\033[0m {blocker}")
+
     if errors or warnings:
         print()
     if errors:
@@ -1625,10 +1671,14 @@ def do_check(cfg: dict):
         if not cp_ok:
             print(f"  hint: run \033[36morze init\033[0m to create a new project")
         sys.exit(1)
+    elif blockers:
+        print(
+            "\033[33m✓ Configuration valid; launch blocked by "
+            "stop/pause policy.\033[0m")
+        sys.exit(2)
     else:
-        from orze.extensions import has_pro, check_pro_status
-        if has_pro():
-            print(f"\033[32m\u2714 Ready to run.\033[0m (pro: \033[36m{check_pro_status()}\033[0m)")
+        if pro_enabled:
+            print(f"\033[32m\u2714 Ready to run.\033[0m (pro: \033[36m{pro_status}\033[0m)")
         else:
             print(f"\033[32m\u2714 Ready to run.\033[0m")
-            print(f"  \033[33m\u2139\033[0m {check_pro_status()}")
+            print(f"  \033[33m\u2139\033[0m {pro_status}")
