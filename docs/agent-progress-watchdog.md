@@ -26,6 +26,14 @@ its process-group and escaped descendants. The existing timeout outcome is kept
 for caller compatibility; the log marker distinguishes a progress stall from an
 absolute timeout.
 
+Normal completion, graceful shutdown, upgrade shutdown, and `atexit` use the
+same exact-identity reaper as timeout handling. A managed role cannot
+legitimize a detached child by exiting zero, and a child that called `setsid()`
+remains bound to the live identity set observed by the controller. Dead
+identities are pruned on every poll rather than accumulating across a long
+campaign. A zero-exit role is classified as an error if its tracked descendants
+cannot be proven stopped.
+
 The warmup suppresses the watchdog before a role has emitted its first log byte.
 The absolute timeout remains authoritative even while progress continues.
 

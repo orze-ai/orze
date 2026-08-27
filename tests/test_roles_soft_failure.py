@@ -123,6 +123,21 @@ def test_role_error_outcome(tmp_path, caplog):
     assert finished == [("engineer", OUTCOME_ERROR)]
 
 
+def test_zero_exit_is_error_when_descendants_cannot_be_reaped(
+        tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.ERROR)
+    rp = _make_rp("engineer", writes_ideas_file=False, tmp_path=tmp_path)
+    active = {"engineer": rp}
+    monkeypatch.setattr(roles_mod, "terminate_role_process",
+                        lambda *args, **kwargs: False)
+
+    finished = roles_mod.check_active_roles(
+        active, ideas_file=str(tmp_path / "ideas.md"))
+
+    assert finished == [("engineer", OUTCOME_ERROR)]
+    assert "could not be proven stopped" in caplog.text
+
+
 def test_role_timeout_outcome(tmp_path, caplog):
     """Still-running process past its timeout → OUTCOME_TIMEOUT + killed."""
     caplog.set_level(logging.WARNING)

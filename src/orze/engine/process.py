@@ -306,12 +306,26 @@ def _kill_pg(proc: subprocess.Popen, sig=signal.SIGTERM):
 
 
 def _terminate_and_reap(proc: subprocess.Popen, label: str = "",
-                        timeout: float = 10, pgid: Optional[int] = None):
+                        timeout: float = 10, pgid: Optional[int] = None,
+                        tracked_identities: Optional[list[dict]] = None,
+                        discover_pgid: bool = True):
     """Terminate a process and every descendant in its dedicated group."""
-    escaped_descendants = process_descendant_identities(proc.pid)
-    if pgid is None:
+    escaped_descendants = list(tracked_identities or [])
+    proc_pid = getattr(proc, "pid", None)
+    if type(proc_pid) is int and discover_pgid:
+        escaped_descendants.extend(process_descendant_identities(proc_pid))
+    # Retain only one record per stable process identity. A role may have
+    # observed the same child over many watchdog polls.
+    escaped_descendants = list({
+        (int(identity["pid"]), int(identity["start_ticks"])): identity
+        for identity in escaped_descendants
+        if isinstance(identity, dict)
+        and type(identity.get("pid")) is int
+        and type(identity.get("start_ticks")) is int
+    }.values())
+    if pgid is None and discover_pgid and type(proc_pid) is int:
         try:
-            pgid = os.getpgid(proc.pid)
+            pgid = os.getpgid(proc_pid)
         except (ProcessLookupError, PermissionError, OSError):
             pgid = None
     if pgid == os.getpgrp():
@@ -355,11 +369,12 @@ def _terminate_and_reap(proc: subprocess.Popen, label: str = "",
 
     # The group leader can exit on SIGTERM while a descendant ignores it.
     # Waiting only for ``proc`` then leaks that descendant indefinitely.
+    group_remaining = process_group_members(pgid) if pgid is not None else []
     if pgid is not None:
-        remaining = process_group_members(pgid)
-        if remaining:
+        if group_remaining:
             logger.warning("Force killing %d surviving descendant(s) of %s: %s",
-                           len(remaining), label or "process", remaining)
+                           len(group_remaining), label or "process",
+                           group_remaining)
             try:
                 os.killpg(pgid, signal.SIGKILL)
             except (ProcessLookupError, PermissionError, OSError):
@@ -367,10 +382,10 @@ def _terminate_and_reap(proc: subprocess.Popen, label: str = "",
             deadline = time.time() + 5
             while time.time() < deadline and process_group_members(pgid):
                 time.sleep(0.05)
-            remaining = process_group_members(pgid)
-            if remaining:
+            group_remaining = process_group_members(pgid)
+            if group_remaining:
                 logger.error("Failed to reap process group %d for %s: %s",
-                             pgid, label or "process", remaining)
+                             pgid, label or "process", group_remaining)
 
     escaped_remaining = [
         identity for identity in escaped_descendants
@@ -399,6 +414,7 @@ def _terminate_and_reap(proc: subprocess.Popen, label: str = "",
                 label or "process",
                 [identity["pid"] for identity in escaped_remaining],
             )
+    return not group_remaining and not escaped_remaining and proc.poll() is not None
 
 
 _OFFLINE_ENV_KEYS = (
@@ -771,6 +787,24 @@ class RoleProcess:
     # ideas-modified soft-failure check for those avoids spurious
     # "completed successfully but ideas file was not modified" warnings.
     writes_ideas_file: bool = True
+    # Stable process identities observed while the role is alive. Keeping
+    # live descendants across polls lets normal-exit and graceful-shutdown
+    # paths reap children that reparented themselves with setsid().
+    _root_start_ticks: Optional[int] = field(default=None, repr=False)
+    _pgid: Optional[int] = field(default=None, repr=False)
+    _tracked_descendants: list[dict] = field(default_factory=list, repr=False)
+
+    def __post_init__(self):
+        pid = getattr(self.process, "pid", None)
+        if type(pid) is not int:
+            return
+        try:
+            identity = capture_process_identity(pid)
+        except (OSError, ValueError, ProcessLookupError):
+            return
+        self._root_start_ticks = identity["start_ticks"]
+        self._pgid = identity["pgid"]
+        refresh_role_process_descendants(self)
 
     def close_log(self):
         if self._log_fh and not self._log_fh.closed:
@@ -778,6 +812,67 @@ class RoleProcess:
                 self._log_fh.close()
             except Exception:
                 pass
+
+
+def refresh_role_process_descendants(rp: RoleProcess) -> int:
+    """Refresh the live stable-identity set for a managed role.
+
+    Dead identities are pruned, so process churn cannot grow this state
+    indefinitely. The return value is the current number of retained live
+    descendants.
+    """
+    pid = getattr(rp.process, "pid", None)
+    if type(pid) is not int:
+        return 0
+    retained = {
+        (int(identity["pid"]), int(identity["start_ticks"])): identity
+        for identity in getattr(rp, "_tracked_descendants", [])
+        if isinstance(identity, dict)
+        and type(identity.get("pid")) is int
+        and type(identity.get("start_ticks")) is int
+        and process_is_running(identity["pid"], identity["start_ticks"])
+    }
+    root_start_ticks = getattr(rp, "_root_start_ticks", None)
+    if (root_start_ticks is not None
+            and process_is_running(pid, root_start_ticks)):
+        for identity in process_descendant_identities(pid):
+            retained[(identity["pid"], identity["start_ticks"])] = identity
+    rp._tracked_descendants = sorted(
+        retained.values(), key=lambda identity: identity["pid"])
+    return len(rp._tracked_descendants)
+
+
+def terminate_role_process(
+    rp: RoleProcess,
+    label: str,
+    timeout: float = 10,
+    *,
+    reaper=None,
+) -> bool:
+    """Terminate a role using its stable root and descendant identities."""
+    refresh_role_process_descendants(rp)
+    pid = getattr(rp.process, "pid", None)
+    root_live = (
+        type(pid) is int
+        and rp._root_start_ticks is not None
+        and process_is_running(pid, rp._root_start_ticks)
+    )
+    # Never signal a numeric process group after its recorded leader has
+    # exited: Linux may already have reused that ID. Exact retained descendant
+    # identities remain safe to signal after reparenting.
+    pgid = rp._pgid if root_live else None
+    result = (reaper or _terminate_and_reap)(
+        rp.process,
+        label,
+        timeout=timeout,
+        pgid=pgid,
+        tracked_identities=list(rp._tracked_descendants),
+        discover_pgid=root_live,
+    )
+    rp._tracked_descendants.clear()
+    # Legacy/mocked reapers returned None; only an explicit False means the
+    # termination proof failed.
+    return result is not False
 
 
 def run_pre_script(idea_id: str, gpu: int, cfg: dict,

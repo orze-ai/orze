@@ -21,6 +21,7 @@ from orze import __version__
 from orze.engine.process import (
     TrainingProcess, EvalProcess, RoleProcess,
     _kill_pg,
+    terminate_role_process,
     run_pre_script,
 )
 from orze.engine.scheduler import (
@@ -720,7 +721,7 @@ class Orze(OrzePhaseMixin):
         for gpu, tp in self.active.items():
             _kill_pg(tp.process, signal.SIGTERM)
         for role_name, rp in self.active_roles.items():
-            _kill_pg(rp.process, signal.SIGTERM)
+            terminate_role_process(rp, f"upgrade role {role_name}")
         deadline = time.time() + 10
         for gpu, tp in list(self.active.items()):
             try:
@@ -731,10 +732,6 @@ class Orze(OrzePhaseMixin):
         for gpu, ep in list(self.active_evals.items()):
             ep.close_log()
         for role_name, rp in list(self.active_roles.items()):
-            try:
-                rp.process.wait(timeout=max(1, deadline - time.time()))
-            except subprocess.TimeoutExpired:
-                _kill_pg(rp.process, signal.SIGKILL)
             rp.close_log()
             _fs_unlock(rp.lock_dir)
         try:

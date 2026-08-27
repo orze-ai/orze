@@ -42,6 +42,8 @@ from orze.engine.process import (
     _terminate_and_reap,
     process_tree_cpu_ticks,
     progress_paths_fingerprint,
+    refresh_role_process_descendants,
+    terminate_role_process,
 )
 from orze.core.fs import _fs_unlock
 from orze.core.ideas import count_idea_headings
@@ -207,6 +209,10 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
     finished = []
     for role_name in list(active_roles.keys()):
         rp = active_roles[role_name]
+        # Snapshot descendants before polling the leader. If the role exits
+        # after starting a detached child, ancestry disappears as soon as the
+        # child is reparented; the stable identity remains safe to reap.
+        refresh_role_process_descendants(rp)
         ret = rp.process.poll()
         elapsed = time.time() - rp.start_time
 
@@ -216,7 +222,8 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
             if elapsed > rp.timeout:
                 logger.warning("[ROLE TIMEOUT] %s after %.0fm — killing",
                                role_name, elapsed / 60)
-                _terminate_and_reap(rp.process, f"role {role_name}")
+                terminate_role_process(
+                    rp, f"role {role_name}", reaper=_terminate_and_reap)
                 rp.close_log()
                 _fs_unlock(rp.lock_dir)
                 del active_roles[role_name]
@@ -229,18 +236,28 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                     "declared-output progress for %g minutes; killing",
                     role_name, effective,
                 )
-                _terminate_and_reap(rp.process, f"role {role_name}")
+                terminate_role_process(
+                    rp, f"role {role_name}", reaper=_terminate_and_reap)
                 rp.close_log()
                 _fs_unlock(rp.lock_dir)
                 del active_roles[role_name]
                 finished.append((role_name, OUTCOME_TIMEOUT))
             continue
 
-        # Process exited
+        # Process exited. Managed roles are not permitted to leave background
+        # children behind, even on a zero exit. Reap exact descendants observed
+        # during prior polls before accepting the outcome.
+        reaped = terminate_role_process(
+            rp, f"completed role {role_name}", reaper=_terminate_and_reap)
         rp.close_log()
         _fs_unlock(rp.lock_dir)
         outcome: Outcome
-        if ret == 0:
+        if not reaped:
+            logger.error(
+                "%s exited %d but managed descendants could not be proven "
+                "stopped", role_name, ret)
+            outcome = OUTCOME_ERROR
+        elif ret == 0:
             # Only apply the ideas-modified soft-failure check to roles
             # whose job IS to append to ideas.md (research / research_gemini).
             # Strategy roles (professor, data_analyst, engineer, thinker,

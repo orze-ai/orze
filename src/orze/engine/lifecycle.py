@@ -25,7 +25,7 @@ from pathlib import Path
 from orze import __version__
 from orze.engine.process import (
     _kill_pg, process_is_running, process_group_members,
-    terminate_recorded_process_group,
+    terminate_recorded_process_group, terminate_role_process,
 )
 from orze.engine.health import fs_startup_check, cleanup_stale_locks, HealthMonitor
 from orze.engine.resume import write_interruption_receipt
@@ -712,8 +712,9 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
         for role_name, rp in active_roles.items():
             logger.info("Killing role '%s' (PID %d)",
                         role_name, rp.process.pid)
-            _kill_pg(rp.process, signal.SIGTERM)
-            all_procs.append(("role", rp))
+            terminate_role_process(rp, f"role {role_name}")
+            rp.close_log()
+            _fs_unlock(rp.lock_dir)
 
         # Wait up to 10s then SIGKILL
         deadline = time.time() + 10
@@ -759,22 +760,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
         for role_name, rp in active_roles.items():
             logger.info("Terminating role '%s' (PID %d)...",
                         role_name, rp.process.pid)
-            _kill_pg(rp.process, signal.SIGTERM)
-
-        # Wait for roles to exit (up to 10s), then SIGKILL stragglers
-        deadline = time.time() + 10
-        for role_name, rp in active_roles.items():
-            remaining = max(1, deadline - time.time())
-            try:
-                rp.process.wait(timeout=remaining)
-            except subprocess.TimeoutExpired:
-                logger.warning("Force killing role '%s' (PID %d)",
-                               role_name, rp.process.pid)
-                _kill_pg(rp.process, signal.SIGKILL)
-                try:
-                    rp.process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    logger.error("Failed to reap role '%s'", role_name)
+            terminate_role_process(rp, f"role {role_name}")
             rp.close_log()
             _fs_unlock(rp.lock_dir)
 
@@ -826,7 +812,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
 
 def atexit_cleanup(active: dict, active_evals: dict,
                    active_roles: dict) -> None:
-    """Last-resort cleanup: kill all tracked child process groups."""
+    """Last-resort cleanup of tracked groups and exact role descendants."""
     for gpu, tp in list(active.items()):
         _kill_pg(tp.process, signal.SIGKILL)
         tp.close_log()
@@ -834,7 +820,7 @@ def atexit_cleanup(active: dict, active_evals: dict,
         _kill_pg(ep.process, signal.SIGKILL)
         ep.close_log()
     for role_name, rp in list(active_roles.items()):
-        _kill_pg(rp.process, signal.SIGKILL)
+        terminate_role_process(rp, f"atexit role {role_name}", timeout=2)
         rp.close_log()
 
 
