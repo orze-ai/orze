@@ -180,6 +180,13 @@ def _payload_hash(payload: Mapping) -> str:
     ).encode("utf-8")).hexdigest()
 
 
+def data_separation_receipt_sha256(payload: Mapping) -> str:
+    """Return the canonical digest used to bind a verified receipt onward."""
+    if not isinstance(payload, Mapping) or payload.get("status") != "passed":
+        raise DataSeparationError("data_separation_receipt_not_passed")
+    return _payload_hash(payload)
+
+
 def _receipt_payload_valid(payload, policy: Mapping, policy_hash: str,
                            metadata_signature: str) -> bool:
     expected_keys = {

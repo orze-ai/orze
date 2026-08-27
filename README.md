@@ -159,7 +159,9 @@ ssh node2 "cd /nfs/project && orze start"
 - **Failure Protection** — Stops automatically when failure rates spike
 - **Fail-closed Data Boundaries** — Kernel-isolated held-out paths and optional
   training-network denial plus keyed-fingerprint manifest separation
-  ([configuration and limits](docs/data-boundaries.md))
+  ([configuration and limits](docs/data-boundaries.md)); managed runs can bind
+  those controls to exact output bytes with
+  [model lineage receipts](docs/model-lineage.md)
 - **Cross-Experiment Analysis** — Detects regressions, tradeoffs, and suggests actions
 - **Rich Notifications** — GPU VRAM, per-dataset breakdown, verified results, target/gap tracking
 - **Admin Panel** — Real-time web dashboard at `http://localhost:8787`

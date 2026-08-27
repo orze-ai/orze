@@ -59,6 +59,9 @@ report:
     evaluator_sha256: <sha256-of-eval_exact.py>
     dataset_manifest_sha256: <sha256-of-the-exact-ordered-sample-manifest>
     scorer_sha256: <sha256-of-the-normalizer-and-scoring-contract>
+    # Optional: require the evaluated hash to match an Orze-managed training
+    # artifact. This requires model_lineage.enabled: true.
+    # managed_model_lineage: true
 ```
 
 This example captures the Open ASR landing-page default at the pinned Space
@@ -118,8 +121,9 @@ At launch Orze hashes the sealed evaluator, generates a fresh random nonce,
 writes `_benchmark_evaluation.json`, and passes the nonce and receipt path in
 `ORZE_BENCHMARK_EVALUATION_NONCE` and `ORZE_BENCHMARK_RECEIPT`. The exposure
 ordinal and record hash are passed in `ORZE_BENCHMARK_EXPOSURE_ORDINAL` and
-`ORZE_BENCHMARK_EXPOSURE_RECORD_SHA256`. A successful evaluator writes JSON
-like:
+`ORZE_BENCHMARK_EXPOSURE_RECORD_SHA256`. With managed lineage enabled, the
+launcher also passes `ORZE_MANAGED_MODEL_LINEAGE_SHA256` and
+`ORZE_MODEL_ARTIFACT_SHA256`. A successful evaluator writes JSON like:
 
 ```json
 {
@@ -142,6 +146,7 @@ like:
   "inference_passes_per_sample": 1,
   "dataset_specific_routing": false,
   "model_artifact_sha256": "<sha256-of-the-one-evaluated-model-artifact>",
+  "managed_model_lineage_sha256": "<ORZE_MANAGED_MODEL_LINEAGE_SHA256>",
   "decoding_config_sha256": "<sha256-of-the-one-shared-decoding-config>",
   "metric_keys": ["<the exact required_metrics set>"]
 }
@@ -154,6 +159,13 @@ multiple components or passes, dataset-specific routing, missing/extra metric
 keys, dataset/scorer drift, an invalid shared-decoding identity, non-finite
 metrics, an incorrect macro mean, or missing/corrupt exposure evidence fails
 evaluation and keeps the row out of every local ranking.
+
+When `managed_model_lineage: true`, the receipt's model digest must equal the
+current managed artifact digest and its lineage digest must equal the parent
+provenance. Orze validates the full managed attempt again before reserving a
+benchmark exposure and when accepting the receipt. See
+[managed model lineage](model-lineage.md). Leave the flag false for external
+models; labeling an externally trained artifact as managed is not permitted.
 
 The idea directory, metrics, configured metric sources, provenance, and receipt
 must be ordinary non-redirected paths. Orze checks every path component and does

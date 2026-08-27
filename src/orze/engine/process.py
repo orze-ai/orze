@@ -669,6 +669,7 @@ class TrainingProcess:
     train_script: Optional[str] = None
     config_path: Optional[str] = None
     attempt_id: Optional[str] = None
+    execution_identity: Optional[str] = None
     _log_fh: Any = field(default=None, repr=False)
     _last_log_size: int = field(default=0, repr=False)
     _last_log_check: float = field(default=0.0, repr=False)

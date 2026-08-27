@@ -60,7 +60,9 @@ from orze.core.benchmark_contract import (
 logger = logging.getLogger("orze")
 
 
-def is_training_complete_for_downstream(idea_dir: Path) -> tuple[bool, str]:
+def is_training_complete_for_downstream(
+    idea_dir: Path, cfg: Optional[dict] = None,
+) -> tuple[bool, str]:
     """Return whether immutable training output is eligible for eval/postwork."""
     metrics_path = Path(idea_dir) / "metrics.json"
     if not metrics_path.is_file():
@@ -73,6 +75,15 @@ def is_training_complete_for_downstream(idea_dir: Path) -> tuple[bool, str]:
         return False, "training_metrics_invalid"
     if metrics.get("status") != "COMPLETED":
         return False, "training_not_completed"
+    lineage = (cfg or {}).get("model_lineage", {})
+    if isinstance(lineage, dict) and lineage.get("enabled") is True:
+        try:
+            from orze.core.model_lineage import (
+                validate_model_lineage_for_evaluation,
+            )
+            validate_model_lineage_for_evaluation(Path(idea_dir), cfg or {})
+        except Exception:
+            return False, "training_model_lineage_invalid"
     return True, "training_completed"
 
 
@@ -112,6 +123,25 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         return None
 
     eval_output = cfg.get("eval_output") or "eval_report.json"
+    idea_dir = results_dir / idea_id
+    managed_lineage = (
+        isinstance(cfg.get("model_lineage"), dict)
+        and cfg["model_lineage"].get("enabled") is True
+    )
+
+    def reject_ineligible() -> bool:
+        eligible, eligibility_reason = is_training_complete_for_downstream(
+            idea_dir, cfg)
+        if eligible:
+            return False
+        logger.warning(
+            "[EVAL_SKIP] idea=%s reason=%s", idea_id, eligibility_reason)
+        _record_eval_audit(idea_dir, "skip", eligibility_reason)
+        return True
+
+    if managed_lineage and reject_ineligible():
+        return None
+
     output_path = results_dir / idea_id / eval_output
     if output_path.exists():
         logger.info(
@@ -124,15 +154,7 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         )
         return None
 
-    idea_dir = results_dir / idea_id
-    eligible, eligibility_reason = is_training_complete_for_downstream(
-        idea_dir)
-    if not eligible:
-        logger.warning(
-            "[EVAL_SKIP] idea=%s reason=%s", idea_id, eligibility_reason)
-        _record_eval_audit(
-            idea_dir, "skip", eligibility_reason,
-        )
+    if not managed_lineage and reject_ineligible():
         return None
 
     python = cfg.get("python", sys.executable)
@@ -141,7 +163,6 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
 
     _assert_launch_authorized(idea_id, results_dir, cfg)
     _assert_gpu_authorized(gpu, cfg)
-    _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
 
     cmd = [python, eval_script]
     cmd.extend(_format_args(eval_args, {
@@ -155,6 +176,7 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     ep = None
     try:
         benchmark_env = prepare_benchmark_evaluation(idea_dir, cfg)
+        _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
         env = os.environ.copy()
         for k, v in (cfg.get("train_extra_env") or {}).items():
             env[k] = str(v)
@@ -477,7 +499,7 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
 
     idea_dir = results_dir / idea_id
     eligible, eligibility_reason = is_training_complete_for_downstream(
-        idea_dir)
+        idea_dir, cfg)
     if not eligible:
         logger.warning(
             "[POST_SCRIPT_SKIP] idea=%s reason=%s",

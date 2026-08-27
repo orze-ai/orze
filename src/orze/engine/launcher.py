@@ -115,6 +115,8 @@ _BOUNDARY_ENV_KEYS = (
     "ORZE_REQUIRE_KERNEL_BOUNDARY",
     "ORZE_KERNEL_BOUNDARY_ACTIVE",
     "ORZE_TRAINING_NETWORK",
+    "ORZE_BOUNDARY_ATTEST_FD",
+    "ORZE_BOUNDARY_ATTEST_NONCE",
 )
 
 
@@ -1523,7 +1525,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         DataSeparationError, ensure_data_separation,
     )
     try:
-        ensure_data_separation(cfg)
+        separation_receipt = ensure_data_separation(cfg)
     except DataSeparationError as exc:
         raise LaunchIntegrityError(str(exc)) from exc
     if kernel_boundary:
@@ -1558,12 +1560,34 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     except DuplicateExecutionError as exc:
         raise DuplicateLaunchError(str(exc)) from exc
 
+    from orze.core.model_lineage import (
+        ModelLineageError, close_model_lineage_attestation,
+        prepare_model_lineage_launch, receive_model_lineage_attestation,
+    )
+    lineage_context = None
+    try:
+        lineage_context = prepare_model_lineage_launch(
+            idea_id=idea_id,
+            attempt_id=attempt_id,
+            execution_identity=execution_identity,
+            idea_dir=results_dir / idea_id,
+            cfg=cfg,
+            separation_receipt=separation_receipt,
+        )
+        if lineage_context:
+            env.update(lineage_context["env"])
+    except ModelLineageError as exc:
+        release_execution_identity(
+            results_dir, cfg, execution_identity, idea_id, attempt_id)
+        raise LaunchIntegrityError(str(exc)) from exc
+
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not — handled in
     # phases.py as a requeue, not a code-fix retry.
     try:
         _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
     except Exception:
+        close_model_lineage_attestation(lineage_context)
         release_execution_identity(
             results_dir, cfg, execution_identity, idea_id, attempt_id)
         raise
@@ -1572,11 +1596,15 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     # pre-allocation operation, so failure must release identity admission.
     try:
         log_fh = open(log_path, "w", encoding="utf-8")
+        pass_fds = ()
+        if lineage_context:
+            pass_fds = (lineage_context["write_fd"],)
         proc = subprocess.Popen(
             cmd, env=env, stdout=log_fh, stderr=subprocess.STDOUT,
-            preexec_fn=_new_process_group,
+            preexec_fn=_new_process_group, pass_fds=pass_fds,
         )
     except Exception:
+        close_model_lineage_attestation(lineage_context)
         if "log_fh" in locals():
             log_fh.close()
         release_execution_identity(
@@ -1589,7 +1617,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         start_time=now, log_path=log_path,
         timeout=cfg.get("timeout", 3600),
         train_script=str(train_script), config_path=str(config_path),
-        attempt_id=attempt_id,
+        attempt_id=attempt_id, execution_identity=execution_identity,
         _log_fh=log_fh, _last_log_size=0,
         _last_log_check=now, _stall_since=0.0,
     )
@@ -1599,6 +1627,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     # only the orchestrator PID makes crash recovery unsafe (it can relaunch
     # while the original trainer still writes effects).
     try:
+        receive_model_lineage_attestation(
+            lineage_context, process_pid=proc.pid)
         if claim_path.exists():
             identity = capture_process_identity(proc.pid)
             claim_data = json.loads(claim_path.read_text(encoding="utf-8"))
@@ -1631,6 +1661,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         if resume_context:
             mark_resume_launched(resume_context, claim_path)
     except Exception:
+        close_model_lineage_attestation(lineage_context)
         _terminate_and_reap(proc, idea_id, timeout=3)
         try:
             from orze.engine.accounting import record_compute_terminal
@@ -2010,7 +2041,31 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, ret or -1, "training"), error_msg)
                     _record_failure(failure_counts, tp.idea_id)
             elif status == "COMPLETED":
-                account_terminal(tp, "completed", "trainer_completed", ret)
+                try:
+                    from orze.core.model_lineage import finalize_model_lineage
+                    finalize_model_lineage(
+                        tp, results_dir / tp.idea_id, cfg)
+                except Exception:
+                    account_terminal(
+                        tp, "failed", "model_lineage_invalid", ret)
+                    invalid_path = metrics_path.with_name(
+                        f"metrics.lineage_invalid.{time.time_ns()}.json")
+                    try:
+                        os.replace(metrics_path, invalid_path)
+                    except OSError:
+                        pass
+                    error_msg = "model_lineage_validation_failed"
+                    _write_failure(
+                        results_dir / tp.idea_id, error_msg,
+                        lake=lake, idea_id=tp.idea_id, cfg=cfg,
+                    )
+                    write_failure_analysis(
+                        results_dir / tp.idea_id, "integrity", error_msg)
+                    _record_failure(failure_counts, tp.idea_id)
+                    status = "FAILED"
+                else:
+                    account_terminal(
+                        tp, "completed", "trainer_completed", ret)
             if (status == "COMPLETED" and lake is not None
                     and not cfg.get("eval_script")):
                 # With no separate evaluation phase, successful training is

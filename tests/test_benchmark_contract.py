@@ -74,7 +74,7 @@ def _write_receipt(idea_dir: Path, cfg: dict, nonce: str) -> None:
     contract = cfg["report"]["benchmark_contract"]
     provenance = json.loads(
         (idea_dir / PROVENANCE_FILE).read_text(encoding="utf-8"))
-    (idea_dir / contract["receipt"]).write_text(json.dumps({
+    receipt = {
         "schema_version": 1,
         "benchmark_id": contract["benchmark_id"],
         "benchmark_revision": contract["revision"],
@@ -96,7 +96,14 @@ def _write_receipt(idea_dir: Path, cfg: dict, nonce: str) -> None:
         "model_artifact_sha256": "b" * 64,
         "decoding_config_sha256": "c" * 64,
         "metric_keys": ["metric_a", "metric_b"],
-    }), encoding="utf-8")
+    }
+    if contract.get("managed_model_lineage") is True:
+        receipt["managed_model_lineage_sha256"] = provenance[
+            "managed_model_lineage_sha256"]
+        receipt["model_artifact_sha256"] = provenance[
+            "model_artifact_sha256"]
+    (idea_dir / contract["receipt"]).write_text(
+        json.dumps(receipt), encoding="utf-8")
 
 
 def _ledger(cfg: dict) -> Path:
@@ -105,6 +112,42 @@ def _ledger(cfg: dict) -> Path:
 
 def test_valid_contract_pins_exact_evaluator_and_report_columns(tmp_path):
     assert validate_benchmark_contract_config(_config(tmp_path)) == []
+
+
+def test_managed_contract_requires_enabled_model_lineage(tmp_path):
+    cfg = _config(tmp_path)
+    cfg["report"]["benchmark_contract"]["managed_model_lineage"] = True
+    errors = validate_benchmark_contract_config(cfg)
+    assert any("requires model_lineage.enabled" in error for error in errors)
+
+
+def test_managed_contract_binds_exact_lineage_and_artifact(
+        tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    contract = cfg["report"]["benchmark_contract"]
+    contract["managed_model_lineage"] = True
+    cfg["model_lineage"] = {"enabled": True}
+    lineage = {"artifact_sha256": "f" * 64}
+    monkeypatch.setattr(
+        "orze.core.model_lineage.validate_model_lineage_for_evaluation",
+        lambda *args: (lineage, "1" * 64))
+    idea_dir = tmp_path / "results" / "idea-managed"
+    idea_dir.mkdir(parents=True)
+
+    env = prepare_benchmark_evaluation(idea_dir, cfg)
+    assert env["ORZE_MANAGED_MODEL_LINEAGE_SHA256"] == "1" * 64
+    assert env["ORZE_MODEL_ARTIFACT_SHA256"] == "f" * 64
+    _write_receipt(
+        idea_dir, cfg, env["ORZE_BENCHMARK_EVALUATION_NONCE"])
+    assert validate_benchmark_receipt(idea_dir, cfg) == (
+        True, "benchmark_contract_verified")
+
+    receipt_path = idea_dir / contract["receipt"]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["model_artifact_sha256"] = "e" * 64
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    assert validate_benchmark_receipt(idea_dir, cfg) == (
+        False, "benchmark_receipt_model_artifact_mismatch")
 
 
 @pytest.mark.parametrize("mutation, expected", [

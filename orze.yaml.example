@@ -71,6 +71,17 @@ orphan_timeout_hours: 0              # reclaim orphaned claims after N hours
 #   eval.py: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 #   data/eval_manifest.json: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
 
+# --- Managed model lineage (optional, fail closed) ---
+# Use only when this Orze run itself produces the evaluated artifact. It also
+# requires hard forbidden training roots, training_network: deny, and the full
+# keyed-fingerprint data_separation contract. See docs/model-lineage.md.
+# model_lineage:
+#   enabled: true
+#   artifact: model/model.safetensors  # relative to results/<idea-id>/
+#   max_files: 100000
+#   max_bytes: 107374182400
+#   attestation_timeout: 10
+
 # --- Additional post-training scripts (optional) ---
 # Run after eval. Each entry: {script, args, timeout, output, name}
 # post_scripts:

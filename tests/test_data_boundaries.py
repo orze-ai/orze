@@ -79,6 +79,8 @@ def test_boundary_environment_cannot_spoof_kernel_activation(tmp_path):
     held_out.mkdir()
     env = {
         "ORZE_KERNEL_BOUNDARY_ACTIVE": "1",
+        "ORZE_BOUNDARY_ATTEST_FD": "99",
+        "ORZE_BOUNDARY_ATTEST_NONCE": "spoofed",
         "ORZE_FORBIDDEN_PATHS": "/wrong",
         "ORZE_TRAINING_NETWORK": "inherit",
     }
@@ -96,6 +98,8 @@ def test_boundary_environment_cannot_spoof_kernel_activation(tmp_path):
     assert env["ORZE_REQUIRE_KERNEL_BOUNDARY"] == "1"
     assert env["ORZE_TRAINING_NETWORK"] == "deny"
     assert "ORZE_KERNEL_BOUNDARY_ACTIVE" not in env
+    assert "ORZE_BOUNDARY_ATTEST_FD" not in env
+    assert "ORZE_BOUNDARY_ATTEST_NONCE" not in env
 
 
 def test_isolated_command_has_no_fail_open_mount_and_denies_network(

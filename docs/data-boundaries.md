@@ -48,6 +48,11 @@ For a defensible leakage boundary:
 5. Treat benchmark receipts as local evidence. They do not prove the data
    history of an externally pretrained model or an official leaderboard rank.
 
+When Orze itself trains the evaluated artifact, enable
+[managed model lineage](model-lineage.md) to bind successful completion to the
+post-namespace boundary acknowledgement, data-separation receipt, and exact
+model bytes.
+
 The Python wrapper also requires a namespace-active marker whenever a hard
 boundary is configured. This is defense against a future launcher refactor
 accidentally executing user code outside the mandatory namespace; it is not a

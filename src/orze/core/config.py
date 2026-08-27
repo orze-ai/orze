@@ -299,6 +299,16 @@ DEFAULT_CONFIG = {
         "max_bytes": 2 * 1024 * 1024 * 1024,
         "max_line_bytes": 4096,
     },
+    # Bind one declared output artifact to its managed attempt, kernel-boundary
+    # activation, and data-separation receipt. Disabled for external/pretrained
+    # artifacts whose training did not run under Orze.
+    "model_lineage": {
+        "enabled": False,
+        "artifact": None,
+        "max_files": 100_000,
+        "max_bytes": 100 * 1024 * 1024 * 1024,
+        "attestation_timeout": 10,
+    },
     # Auto-seal eval scripts. When true, any file matching eval_*.py or
     # eval_*.sh in the project root is added to sealed_files at config
     # load time, preventing silent mutation by LLM agents.
@@ -826,6 +836,8 @@ def _validate_config(cfg: dict) -> tuple:
 
     from orze.core.data_separation import validate_data_separation_config
     errors.extend(validate_data_separation_config(cfg))
+    from orze.core.model_lineage import validate_model_lineage_config
+    errors.extend(validate_model_lineage_config(cfg))
 
     # Report columns are consumed as mappings by the leaderboard. Reject
     # shorthand strings during --check instead of crashing after compute has

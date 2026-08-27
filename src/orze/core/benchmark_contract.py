@@ -120,6 +120,17 @@ def validate_benchmark_contract_config(cfg: Mapping) -> list[str]:
         )
     if contract.get("aggregate") != "macro_mean":
         errors.append(f"{prefix}.aggregate: must be 'macro_mean'")
+    managed_lineage = contract.get("managed_model_lineage", False)
+    if not isinstance(managed_lineage, bool):
+        errors.append(
+            f"{prefix}.managed_model_lineage: must be true or false")
+    elif managed_lineage:
+        lineage = cfg.get("model_lineage", {})
+        if (not isinstance(lineage, Mapping)
+                or lineage.get("enabled") is not True):
+            errors.append(
+                f"{prefix}.managed_model_lineage: requires "
+                "model_lineage.enabled: true")
     evidence_scope = contract.get("evidence_scope")
     if evidence_scope not in _EVIDENCE_SCOPES:
         errors.append(
@@ -695,6 +706,19 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
             f"benchmark receipt existed before evaluation: {receipt_path}"
         )
 
+    lineage = None
+    lineage_sha256 = None
+    if contract.get("managed_model_lineage") is True:
+        try:
+            from orze.core.model_lineage import (
+                validate_model_lineage_for_evaluation,
+            )
+            lineage, lineage_sha256 = validate_model_lineage_for_evaluation(
+                Path(idea_dir), cfg)
+        except Exception as exc:
+            raise BenchmarkContractError(
+                "benchmark_managed_model_lineage_invalid") from exc
+
     eval_path = _project_path(cfg, str(cfg["eval_script"]))
     actual_digest = _sha256_file(eval_path)
     expected_digest = str(contract["evaluator_sha256"]).lower()
@@ -726,16 +750,27 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
         "evaluation_nonce": nonce,
         "pid": os.getpid(),
     }
+    if lineage is not None:
+        provenance.update({
+            "managed_model_lineage_sha256": lineage_sha256,
+            "model_artifact_sha256": lineage["artifact_sha256"],
+        })
     atomic_write(
         provenance_path,
         json.dumps(provenance, sort_keys=True, indent=2) + "\n",
     )
-    return {
+    child_env = {
         "ORZE_BENCHMARK_EVALUATION_NONCE": nonce,
         "ORZE_BENCHMARK_RECEIPT": str(receipt_path.resolve()),
         "ORZE_BENCHMARK_EXPOSURE_ORDINAL": str(exposure_ordinal),
         "ORZE_BENCHMARK_EXPOSURE_RECORD_SHA256": exposure_record_sha256,
     }
+    if lineage is not None:
+        child_env.update({
+            "ORZE_MANAGED_MODEL_LINEAGE_SHA256": str(lineage_sha256),
+            "ORZE_MODEL_ARTIFACT_SHA256": str(lineage["artifact_sha256"]),
+        })
+    return child_env
 
 
 def load_benchmark_values(idea_dir: Path, cfg: Mapping) -> dict:
@@ -883,6 +918,26 @@ def validate_benchmark_receipt(
     if (not isinstance(model_digest, str)
             or _SHA256_RE.fullmatch(model_digest.lower()) is None):
         return False, "benchmark_receipt_model_artifact_sha256_invalid"
+    if contract.get("managed_model_lineage") is True:
+        try:
+            from orze.core.model_lineage import (
+                validate_model_lineage_for_evaluation,
+            )
+            lineage, lineage_sha256 = validate_model_lineage_for_evaluation(
+                Path(idea_dir), cfg)
+        except Exception:
+            return False, "benchmark_managed_model_lineage_invalid"
+        if provenance.get(
+                "managed_model_lineage_sha256") != lineage_sha256:
+            return False, "benchmark_provenance_model_lineage_mismatch"
+        if provenance.get(
+                "model_artifact_sha256") != lineage["artifact_sha256"]:
+            return False, "benchmark_provenance_model_artifact_mismatch"
+        if receipt.get(
+                "managed_model_lineage_sha256") != lineage_sha256:
+            return False, "benchmark_receipt_model_lineage_mismatch"
+        if model_digest.lower() != lineage["artifact_sha256"]:
+            return False, "benchmark_receipt_model_artifact_mismatch"
     decoding_digest = receipt.get("decoding_config_sha256")
     if (not isinstance(decoding_digest, str)
             or _SHA256_RE.fullmatch(decoding_digest.lower()) is None):

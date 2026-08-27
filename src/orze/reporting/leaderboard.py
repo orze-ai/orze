@@ -356,6 +356,9 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             "min_datasets": report_cfg.get("min_datasets", 0),
             "metric_validation": cfg.get("metric_validation", {}),
             "benchmark_contract": benchmark_contract,
+            "model_lineage": cfg.get("model_lineage", {}),
+            "data_boundaries": cfg.get("data_boundaries", {}),
+            "data_separation": cfg.get("data_separation", {}),
             "cache_schema_version": _RESULT_CACHE_SCHEMA_VERSION,
         },
         sort_keys=True, default=str,
@@ -545,6 +548,20 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 # reason. Keep rendering the unrankable report instead of
                 # turning invalid control-path evidence into a report crash.
                 pass
+        content_evidence_paths = list(evidence_paths)
+        managed_lineage = (
+            isinstance(cfg.get("model_lineage"), dict)
+            and cfg["model_lineage"].get("enabled") is True
+        )
+        if managed_lineage:
+            try:
+                from orze.core.model_lineage import (
+                    model_lineage_evidence_paths,
+                )
+                evidence_paths.extend(
+                    model_lineage_evidence_paths(idea_dir, cfg))
+            except Exception:
+                evidence_paths.append(idea_dir / "_model_lineage.json")
         evidence_metadata = _evidence_metadata_signature(evidence_paths)
         cached = cache.get(idea_id)
         cached_row = cached.get("row") if isinstance(cached, dict) else None
@@ -564,8 +581,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 and cached.get("evidence_metadata") == evidence_metadata):
             rows.append(cached_row)
             continue
-        evidence_hash = _evidence_content_hash(evidence_paths)
-        if (cache_identity_ok
+        evidence_hash = _evidence_content_hash(content_evidence_paths)
+        if (cache_identity_ok and not managed_lineage
                 and cached.get("evidence_hash") == evidence_hash):
             if cached.get("evidence_metadata") != evidence_metadata:
                 cached["evidence_metadata"] = evidence_metadata

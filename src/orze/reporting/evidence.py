@@ -249,6 +249,15 @@ def qualify_local_report_evidence(
             None,
             f"metric_coverage_below_min:{observed}/{required}",
         )
+    lineage = cfg.get("model_lineage", {})
+    if isinstance(lineage, Mapping) and lineage.get("enabled") is True:
+        try:
+            from orze.core.model_lineage import (
+                validate_model_lineage_for_evaluation,
+            )
+            validate_model_lineage_for_evaluation(Path(idea_dir), cfg)
+        except Exception:
+            return metrics, values, None, "local_model_lineage_invalid"
     return metrics, values, float(value), "local_evidence_verified"
 
 
