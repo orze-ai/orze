@@ -34,15 +34,21 @@ def _detect_method():
 def _save_service_config(config_file, results_dir, workdir, python,
                          method, stall_threshold, log_file):
     """Write ~/.orze_service.json."""
+    from orze.service.runtime_contract import (
+        CONTRACT_VERSION,
+        capture_runtime_packages,
+    )
     data = {
         "config_file": str(Path(config_file).resolve()),
         "results_dir": str(Path(results_dir).resolve()),
         "workdir": str(Path(workdir).resolve()),
-        "python": python,
+        "python": str(python),
         "method": method,
         "stall_threshold": stall_threshold,
-        "log_file": log_file,
+        "log_file": str(log_file),
         "installed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "runtime_contract_version": CONTRACT_VERSION,
+        "runtime_packages": capture_runtime_packages(),
     }
     SERVICE_CONFIG_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return data
@@ -118,6 +124,7 @@ After=network.target
 Type=simple
 WorkingDirectory={workdir}
 ExecStart={python} -m orze.cli -c {config_file}
+ExecStartPre={python} -m orze.service.runtime_contract --startup-check
 # The sentinel-aware watchdog timer below is the sole restart owner.  A second
 # unconditional supervisor here would restart deliberate stops and permanent
 # startup failures in a tight loop, bypassing the watchdog's latch checks.
@@ -161,12 +168,38 @@ ExecStart={python} -m orze.service.watchdog
         capture_output=True, timeout=10,
     )
 
-    subprocess.run(["systemctl", "--user", "daemon-reload"],
-                   capture_output=True, timeout=10)
-    subprocess.run(["systemctl", "--user", "enable", "--now", "orze.service"],
-                   capture_output=True, timeout=10)
-    subprocess.run(["systemctl", "--user", "enable", "--now", "orze-watchdog.timer"],
-                   capture_output=True, timeout=10)
+    def checked(args, timeout=10):
+        result = subprocess.run(
+            args, capture_output=True, text=True, timeout=timeout)
+        if result.returncode != 0:
+            raise RuntimeError(f"service command failed: {args[-1]}")
+
+    checked(["systemctl", "--user", "daemon-reload"])
+
+    # Verify the effective unit, including drop-ins, before enabling anything.
+    # This catches stale overrides that the generated file alone cannot show.
+    if svc_cfg.get("runtime_contract_version") is not None:
+        from orze.service.runtime_contract import audit_runtime_contract
+        contract = audit_runtime_contract(svc_cfg)
+        if not contract.get("startup_allowed"):
+            reasons = ",".join(contract.get("errors") or [])
+            raise RuntimeError(
+                "installed service runtime contract rejected: "
+                f"{reasons or 'stop_latch_present'}"
+            )
+
+    try:
+        checked(["systemctl", "--user", "enable", "--now", "orze.service"])
+        checked(["systemctl", "--user", "enable", "--now",
+                 "orze-watchdog.timer"])
+    except Exception:
+        # Avoid leaving a partially installed unconditional owner active.
+        for unit in ("orze.service", "orze-watchdog.timer"):
+            subprocess.run(
+                ["systemctl", "--user", "disable", "--now", unit],
+                capture_output=True, timeout=10,
+            )
+        raise
 
 
 def _uninstall_systemd():
@@ -205,6 +238,16 @@ def install(config_file, method="auto", stall_threshold=1800):
     workdir = str(Path(config_file).resolve().parent)
     python = sys.executable
     log_file = str(Path(results_dir).resolve() / "orze.log")
+
+    active_latches = [
+        name for name in (".orze_disabled", ".orze_stop_all", ".orze_shutdown")
+        if (Path(results_dir) / name).exists()
+    ]
+    if active_latches:
+        raise RuntimeError(
+            "service install refused while stop latch is present: "
+            + ",".join(active_latches)
+        )
 
     if method == "auto":
         method = _detect_method()

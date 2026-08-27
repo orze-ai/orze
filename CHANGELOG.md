@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **Installed services now prove their effective runtime before startup.**
+  Service installation pins content hashes and import roots for the Orze and
+  optional Orze-Pro package trees, adds a fail-closed `ExecStartPre` audit, and
+  checks effective systemd properties so drop-ins cannot silently restore an
+  unconditional restart, mutable `PYTHONPATH`, environment files, or disabled
+  shutdown actions. Stop latches block installation/startup; an active or
+  enabled unit under a latch is reported as contract drift. The watchdog checks
+  the same boundary before launch, partial systemd activation is rolled back,
+  and `orze service audit` exposes stable non-secret reason codes.
 - **Alternate scheduling and recovery paths preserve admission truth.**
   Force-packed critical work now passes through the ordinary schema, SOP,
   artifact, setup, and accounting gates before its final co-tenant slot

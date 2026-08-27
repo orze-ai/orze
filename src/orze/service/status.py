@@ -84,7 +84,23 @@ def show_status():
     print(f"    Stall thresh: {svc_cfg.get('stall_threshold', 1800)}s")
     print(f"    Log file    : {svc_cfg.get('log_file', '?')}")
 
-    # 2. Watchdog active
+    # 2. Installed runtime contract (effective systemd properties + package
+    # identity). Report only stable reason codes; never print environment data.
+    print(f"\n  \033[1mRuntime contract:\033[0m")
+    try:
+        from orze.service.runtime_contract import audit_runtime_contract
+        contract = audit_runtime_contract(svc_cfg)
+        if contract.get("contract_ok"):
+            print(f"    {_ok('Installed runtime matches reviewed contract')}")
+        else:
+            reasons = ", ".join(contract.get("errors") or ["unknown"])
+            print(f"    {_no(f'Runtime drift: {reasons}')}")
+        if contract.get("active_latches"):
+            print(f"    {_warn('Startup blocked by stop latch')}")
+    except Exception as exc:
+        print(f"    {_no(f'Runtime audit unavailable: {type(exc).__name__}')}")
+
+    # 3. Watchdog active
     print(f"\n  \033[1mWatchdog:\033[0m")
     if method == "crontab":
         active = _is_crontab_active()
@@ -95,7 +111,7 @@ def show_status():
         print(f"    {_ok('orze.service active') if svc_active else _no('orze.service not active')}")
         print(f"    {_ok('orze-watchdog.timer active') if timer_active else _no('orze-watchdog.timer not active')}")
 
-    # 3. Orze process
+    # 4. Orze process
     results_dir = svc_cfg.get("results_dir", "orze_results")
     print(f"\n  \033[1mOrze process:\033[0m")
     pid = _read_pid(results_dir, hostname)
@@ -108,7 +124,7 @@ def show_status():
     else:
         print(f"    {_warn('No PID file found')}")
 
-    # 4. Heartbeat
+    # 5. Heartbeat
     threshold = svc_cfg.get("stall_threshold", 1800)
     print(f"\n  \033[1mHeartbeat:\033[0m")
     stale, age = _is_heartbeat_stale(results_dir, hostname, threshold)
@@ -120,7 +136,7 @@ def show_status():
     else:
         print(f"    {_warn('No heartbeat found')}")
 
-    # 5. Sentinels
+    # 6. Sentinels
     results_path = Path(results_dir)
     print(f"\n  \033[1mSentinels:\033[0m")
     sentinel_found = False
@@ -136,7 +152,7 @@ def show_status():
     if not sentinel_found:
         print(f"    {_ok('None active')}")
 
-    # 6. Last watchdog restart
+    # 7. Last watchdog restart
     print(f"\n  \033[1mLast restart:\033[0m")
     marker = results_path / f".orze_watchdog_restart_{hostname}.json"
     if marker.exists():

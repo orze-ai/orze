@@ -1,0 +1,286 @@
+"""Fail-closed verification for the installed Orze service runtime."""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Iterable, Optional
+
+from orze.service.watchdog import load_service_config
+
+
+CONTRACT_VERSION = 1
+_STOP_SENTINELS = (".orze_disabled", ".orze_stop_all", ".orze_shutdown")
+_IGNORED_PARTS = {"__pycache__"}
+_IGNORED_SUFFIXES = {".pyc", ".pyo"}
+
+
+class RuntimeContractError(RuntimeError):
+    """Raised when runtime identity cannot be captured safely."""
+
+
+def _hash_package_tree(root: Path) -> tuple[str, int]:
+    """Hash package-relative paths and bytes without following escape links."""
+    root = Path(root).resolve(strict=True)
+    digest = hashlib.sha256()
+    count = 0
+    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root)
+        if any(part in _IGNORED_PARTS for part in relative.parts):
+            continue
+        if path.suffix in _IGNORED_SUFFIXES:
+            continue
+        resolved = path.resolve(strict=True)
+        try:
+            resolved.relative_to(root)
+        except ValueError as exc:
+            raise RuntimeContractError("runtime_package_symlink_escape") from exc
+        payload = resolved.read_bytes()
+        encoded_name = relative.as_posix().encode("utf-8")
+        digest.update(len(encoded_name).to_bytes(8, "big"))
+        digest.update(encoded_name)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+        count += 1
+    if count == 0:
+        raise RuntimeContractError("runtime_package_empty")
+    return digest.hexdigest(), count
+
+
+def capture_runtime_packages(
+        names: Iterable[str] = ("orze", "orze_pro")) -> list[dict]:
+    """Capture import roots and content hashes for installed runtime packages."""
+    captured = []
+    for name in names:
+        try:
+            spec = importlib.util.find_spec(name)
+        except (ImportError, AttributeError, ValueError):
+            spec = None
+        if spec is None or not spec.submodule_search_locations:
+            if name == "orze":
+                raise RuntimeContractError("orze_runtime_not_importable")
+            continue
+        locations = list(spec.submodule_search_locations)
+        if len(locations) != 1:
+            raise RuntimeContractError(
+                f"{name}_runtime_location_ambiguous")
+        root = Path(locations[0]).resolve(strict=True)
+        tree_hash, file_count = _hash_package_tree(root)
+        captured.append({
+            "name": name,
+            "root": str(root),
+            "sha256": tree_hash,
+            "file_count": file_count,
+        })
+    return captured
+
+
+def _systemd_properties() -> dict:
+    keys = (
+        "Restart", "WorkingDirectory", "ExecStart", "ExecStartPre",
+        "Environment", "EnvironmentFiles", "PassEnvironment",
+        "ActiveState", "UnitFileState",
+    )
+    result = subprocess.run(
+        ["systemctl", "--user", "show", "orze.service",
+         "--all", f"--property={','.join(keys)}"],
+        capture_output=True, text=True, timeout=10,
+    )
+    if result.returncode != 0:
+        raise RuntimeContractError("systemd_properties_unavailable")
+    properties = {}
+    for line in result.stdout.splitlines():
+        key, separator, value = line.partition("=")
+        if separator:
+            properties[key] = value
+    required = {
+        "Restart", "WorkingDirectory", "ExecStart", "Environment",
+        "PassEnvironment", "ActiveState", "UnitFileState",
+    }
+    if any(key not in properties for key in required):
+        raise RuntimeContractError("systemd_properties_incomplete")
+    properties.setdefault("ExecStartPre", "")
+    properties.setdefault("EnvironmentFiles", "")
+    unit_text = subprocess.run(
+        ["systemctl", "--user", "cat", "orze.service", "--no-pager"],
+        capture_output=True, text=True, timeout=10,
+    )
+    if unit_text.returncode != 0:
+        raise RuntimeContractError("systemd_unit_text_unavailable")
+    properties["_UnitText"] = unit_text.stdout
+    return properties
+
+
+def _runtime_errors(expected: object, observed: list[dict]) -> list[str]:
+    if not isinstance(expected, list) or not expected:
+        return ["runtime_identity_missing"]
+    errors = []
+    by_name = {
+        record.get("name"): record
+        for record in observed if isinstance(record, dict)
+    }
+    for record in expected:
+        if not isinstance(record, dict) or not isinstance(record.get("name"), str):
+            errors.append("runtime_identity_invalid")
+            continue
+        current = by_name.get(record["name"])
+        if current is None:
+            errors.append(f"runtime_package_missing:{record['name']}")
+            continue
+        for field in ("root", "sha256", "file_count"):
+            if current.get(field) != record.get(field):
+                errors.append(f"runtime_package_{field}_drift:{record['name']}")
+    expected_names = {
+        record.get("name") for record in expected if isinstance(record, dict)
+    }
+    for name in by_name.keys() - expected_names:
+        errors.append(f"runtime_package_unpinned:{name}")
+    return errors
+
+
+def _unit_errors(svc_cfg: dict, properties: dict) -> list[str]:
+    errors = []
+    if properties.get("Restart") != "no":
+        errors.append("systemd_restart_policy_drift")
+    try:
+        expected_workdir = str(Path(svc_cfg["workdir"]).resolve(strict=True))
+        observed_workdir = str(Path(
+            properties.get("WorkingDirectory", "")
+        ).resolve(strict=False))
+        if observed_workdir != expected_workdir:
+            errors.append("systemd_workdir_drift")
+    except (KeyError, OSError, RuntimeError):
+        errors.append("systemd_workdir_invalid")
+
+    exec_start = properties.get("ExecStart", "")
+    required_start = (
+        str(svc_cfg.get("python", "")), "-m", "orze.cli", "-c",
+        str(svc_cfg.get("config_file", "")),
+    )
+    if any(not token or token not in exec_start for token in required_start):
+        errors.append("systemd_exec_start_drift")
+    exec_pre = properties.get("ExecStartPre", "")
+    if "orze.service.runtime_contract" not in exec_pre or "--startup-check" not in exec_pre:
+        errors.append("systemd_exec_start_pre_missing")
+
+    environment = properties.get("Environment", "")
+    pass_environment = properties.get("PassEnvironment", "")
+    if "PYTHONPATH=" in environment or "PYTHONPATH" in pass_environment.split():
+        errors.append("systemd_pythonpath_override")
+    if "orze_subscription_limit_actions=off" in environment.lower():
+        errors.append("systemd_shutdown_actions_disabled")
+    if properties.get("EnvironmentFiles", "").strip():
+        errors.append("systemd_environment_files_unpinned")
+    if re.search(r"(?mi)^\s*EnvironmentFile\s*=\s*\S", properties.get(
+            "_UnitText", "")):
+        errors.append("systemd_environment_files_unpinned")
+    return errors
+
+
+def audit_runtime_contract(
+    svc_cfg: dict,
+    *,
+    properties: Optional[dict] = None,
+    observed_packages: Optional[list[dict]] = None,
+) -> dict:
+    """Return contract and startup decisions using stable, non-secret codes."""
+    errors = []
+    if not isinstance(svc_cfg, dict):
+        return {
+            "schema_version": 1,
+            "contract_ok": False,
+            "startup_allowed": False,
+            "errors": ["service_config_invalid"],
+            "active_latches": [],
+        }
+    if svc_cfg.get("runtime_contract_version") != CONTRACT_VERSION:
+        errors.append("runtime_contract_version_missing_or_unsupported")
+    try:
+        configured_python = Path(svc_cfg["python"]).resolve(strict=True)
+        if configured_python != Path(sys.executable).resolve(strict=True):
+            errors.append("runtime_python_identity_drift")
+    except (KeyError, OSError, RuntimeError):
+        errors.append("runtime_python_invalid")
+    for key, kind in (
+        ("workdir", "directory"),
+        ("results_dir", "directory"),
+        ("config_file", "file"),
+    ):
+        try:
+            path = Path(svc_cfg[key]).resolve(strict=True)
+            valid = path.is_dir() if kind == "directory" else path.is_file()
+            if not valid:
+                errors.append(f"service_{key}_invalid")
+        except (KeyError, OSError, RuntimeError):
+            errors.append(f"service_{key}_invalid")
+    try:
+        observed = (observed_packages if observed_packages is not None
+                    else capture_runtime_packages())
+        errors.extend(_runtime_errors(svc_cfg.get("runtime_packages"), observed))
+    except (OSError, RuntimeContractError) as exc:
+        errors.append(str(exc))
+
+    if svc_cfg.get("method") == "systemd":
+        try:
+            effective = properties if properties is not None else _systemd_properties()
+            errors.extend(_unit_errors(svc_cfg, effective))
+        except (OSError, RuntimeContractError, subprocess.TimeoutExpired) as exc:
+            errors.append(str(exc))
+            effective = {}
+    else:
+        effective = {}
+
+    results_text = svc_cfg.get("results_dir")
+    results_dir = Path(results_text) if results_text else None
+    active_latches = [
+        name for name in _STOP_SENTINELS
+        if results_dir is not None and (results_dir / name).exists()
+    ]
+    if active_latches and svc_cfg.get("method") == "systemd":
+        if effective.get("ActiveState") == "active":
+            errors.append("latched_systemd_unit_active")
+        if effective.get("UnitFileState") in {"enabled", "enabled-runtime"}:
+            errors.append("latched_systemd_unit_enabled")
+
+    errors = sorted(set(errors))
+    return {
+        "schema_version": 1,
+        "contract_ok": not errors,
+        "startup_allowed": not errors and not active_latches,
+        "errors": errors,
+        "active_latches": active_latches,
+    }
+
+
+def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    startup_check = argv == ["--startup-check"]
+    if argv and not startup_check:
+        print("usage: python -m orze.service.runtime_contract [--startup-check]",
+              file=sys.stderr)
+        return 2
+    svc_cfg = load_service_config()
+    if not svc_cfg:
+        report = {
+            "schema_version": 1,
+            "contract_ok": False,
+            "startup_allowed": False,
+            "errors": ["service_config_missing"],
+            "active_latches": [],
+        }
+    else:
+        report = audit_runtime_contract(svc_cfg)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if (report["startup_allowed"] if startup_check
+                 else report["contract_ok"]) else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

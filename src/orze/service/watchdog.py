@@ -155,6 +155,15 @@ def _launch_orze(svc_cfg):
     once it has checked the stop sentinels, it asks the main unit to start.
     Crontab installations retain the detached-process behavior.
     """
+    from orze.service.runtime_contract import audit_runtime_contract
+    contract = audit_runtime_contract(svc_cfg)
+    if not contract.get("startup_allowed"):
+        reasons = ",".join(contract.get("errors") or [])
+        if contract.get("active_latches"):
+            reasons = reasons or "stop_latch_present"
+        raise RuntimeError(
+            f"runtime contract rejected service start: {reasons or 'unknown'}"
+        )
     if svc_cfg.get("method") == "systemd":
         # A previous crash may leave the unit failed or start-rate-limited.
         # Clearing that bookkeeping is safe here because check_and_restart()

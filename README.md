@@ -203,6 +203,7 @@ notifications:
 ```bash
 orze service install -c orze.yaml    # auto-restart on crash + manage containers
 orze service status                  # check health
+orze service audit                   # verify effective unit + pinned runtime
 orze service uninstall               # remove
 ```
 
@@ -212,6 +213,10 @@ For systemd installations, the watchdog timer is the sole restart decision
 owner. The main service does not unconditionally restart itself, so
 `.orze_disabled` and `.orze_stop_all` remain authoritative during deliberate
 stops and persistent startup failures cannot become restart storms.
+Installation pins the imported Orze/Orze-Pro package trees. Before every
+systemd start, Orze checks those hashes plus the effective unit properties
+(including drop-ins) and fails closed on runtime drift or an active stop latch.
+Reinstall the service intentionally after a reviewed package upgrade.
 
 ```yaml
 containers:

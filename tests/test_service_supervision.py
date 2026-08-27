@@ -37,12 +37,73 @@ def test_systemd_unit_delegates_restarts_to_sentinel_aware_watchdog(
     timer = (tmp_path / "orze-watchdog.timer").read_text(encoding="utf-8")
     assert "Restart=no" in service
     assert "Restart=always" not in service
+    assert ("ExecStartPre=/opt/orze/bin/python -m "
+            "orze.service.runtime_contract --startup-check") in service
     assert "OnUnitActiveSec=300" in timer
     assert any(
         args == ["systemctl", "--user", "enable", "--now",
                  "orze-watchdog.timer"]
         for args, _ in calls
     )
+
+
+def test_systemd_install_audits_effective_unit_before_enable(
+        tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return _completed()
+
+    monkeypatch.setattr(install, "_SYSTEMD_DIR", tmp_path)
+    monkeypatch.setattr(install.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        "orze.service.runtime_contract.audit_runtime_contract",
+        lambda cfg: {
+            "startup_allowed": False,
+            "errors": ["systemd_pythonpath_override"],
+            "active_latches": [],
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="systemd_pythonpath_override"):
+        install._install_systemd({
+            "python": "/opt/orze/bin/python",
+            "workdir": "/srv/project",
+            "log_file": "/srv/project/results/orze.log",
+            "config_file": "/srv/project/orze.yaml",
+            "runtime_contract_version": 1,
+        })
+
+    assert ["systemctl", "--user", "daemon-reload"] in calls
+    assert not any("enable" in call for call in calls)
+
+
+def test_partial_systemd_enable_is_rolled_back(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args == ["systemctl", "--user", "enable", "--now",
+                    "orze-watchdog.timer"]:
+            return _completed(returncode=1)
+        return _completed()
+
+    monkeypatch.setattr(install, "_SYSTEMD_DIR", tmp_path)
+    monkeypatch.setattr(install.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="service command failed"):
+        install._install_systemd({
+            "python": "/opt/orze/bin/python",
+            "workdir": "/srv/project",
+            "log_file": "/srv/project/results/orze.log",
+            "config_file": "/srv/project/orze.yaml",
+        })
+
+    assert ["systemctl", "--user", "disable", "--now",
+            "orze.service"] in calls
+    assert ["systemctl", "--user", "disable", "--now",
+            "orze-watchdog.timer"] in calls
 
 
 def test_systemd_watchdog_restarts_the_tracked_main_unit(monkeypatch):
@@ -59,6 +120,11 @@ def test_systemd_watchdog_restarts_the_tracked_main_unit(monkeypatch):
 
     monkeypatch.setattr(watchdog.subprocess, "run", fake_run)
     monkeypatch.setattr(watchdog.subprocess, "Popen", detached_launch_is_a_bug)
+    monkeypatch.setattr(
+        "orze.service.runtime_contract.audit_runtime_contract",
+        lambda cfg: {"startup_allowed": True, "errors": [],
+                     "active_latches": []},
+    )
 
     pid = watchdog._launch_orze({"method": "systemd"})
 
@@ -78,6 +144,11 @@ def test_systemd_watchdog_reports_start_failure(monkeypatch):
         return _completed()
 
     monkeypatch.setattr(watchdog.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        "orze.service.runtime_contract.audit_runtime_contract",
+        lambda cfg: {"startup_allowed": True, "errors": [],
+                     "active_latches": []},
+    )
 
     with pytest.raises(RuntimeError, match="preflight rejected startup"):
         watchdog._launch_orze({"method": "systemd"})
@@ -114,6 +185,11 @@ def test_crontab_watchdog_keeps_detached_launch(monkeypatch, tmp_path):
         return SimpleNamespace(pid=9876)
 
     monkeypatch.setattr(watchdog.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        "orze.service.runtime_contract.audit_runtime_contract",
+        lambda cfg: {"startup_allowed": True, "errors": [],
+                     "active_latches": []},
+    )
 
     pid = watchdog._launch_orze({
         "method": "crontab",

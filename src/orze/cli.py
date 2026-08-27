@@ -211,6 +211,8 @@ Examples:
 
     svc_sub.add_parser("uninstall", help="Uninstall watchdog service")
     svc_sub.add_parser("status", help="Show watchdog service status")
+    svc_sub.add_parser(
+        "audit", help="Verify installed runtime and effective service policy")
 
     svc_logs = svc_sub.add_parser("logs", help="Show watchdog logs")
     svc_logs.add_argument("-n", type=int, default=50,
@@ -1014,6 +1016,9 @@ Examples:
         elif action == "status":
             from orze.service.status import show_status
             show_status()
+        elif action == "audit":
+            from orze.service.runtime_contract import main as audit_main
+            return audit_main([])
         elif action == "logs":
             from orze.service.status import show_logs
             show_logs(n=args.n)
