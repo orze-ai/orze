@@ -60,6 +60,10 @@ from orze.engine.process import (
 from orze.engine.resume import (
     mark_resume_launched, prepare_resume_launch, write_interruption_receipt,
 )
+from orze.engine.execution_identity import (
+    DuplicateExecutionError, compute_execution_identity,
+    release_execution_identity, reserve_execution_identity,
+)
 from orze.core.fs import atomic_write, tail_file
 from orze.reporting.notifications import notify
 
@@ -1068,6 +1072,10 @@ class LaunchIntegrityError(RuntimeError):
     """Raised when a launch attempts to bypass a control-plane invariant."""
 
 
+class DuplicateLaunchError(LaunchIntegrityError):
+    """Raised when exact-execution admission rejects a training launch."""
+
+
 def find_forbidden_launch_override(value, path: str = "config",
                                    _seen: Optional[set] = None,
                                    _depth: int = 0) -> Optional[str]:
@@ -1434,27 +1442,52 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         raise LaunchIntegrityError(
             "artifact_preflight_receipt_missing_or_stale")
 
+    attempt_id = secrets.token_hex(16)
+    stored_attempt = stored_claim.get("attempt_id")
+    if stored_attempt:
+        attempt_id = str(stored_attempt)
+
+    try:
+        execution_identity = compute_execution_identity(
+            config_path=Path(config_path),
+            base_config_path=Path(cfg["base_config"]),
+            train_script=Path(train_script),
+            python=str(python),
+            train_extra_args=list(cfg.get("train_extra_args") or []),
+            train_extra_env=dict(cfg.get("train_extra_env") or {}),
+            data_boundaries=dict(db_cfg),
+        )
+        reserve_execution_identity(
+            results_dir, cfg, execution_identity, idea_id, attempt_id)
+    except DuplicateExecutionError as exc:
+        raise DuplicateLaunchError(str(exc)) from exc
+
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not — handled in
     # phases.py as a requeue, not a code-fix retry.
-    _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
-
-    # Keep file handle open for subprocess lifetime
-    log_fh = open(log_path, "w", encoding="utf-8")
     try:
+        _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
+    except Exception:
+        release_execution_identity(
+            results_dir, cfg, execution_identity, idea_id, attempt_id)
+        raise
+
+    # Keep file handle open for subprocess lifetime. Opening the log is also a
+    # pre-allocation operation, so failure must release identity admission.
+    try:
+        log_fh = open(log_path, "w", encoding="utf-8")
         proc = subprocess.Popen(
             cmd, env=env, stdout=log_fh, stderr=subprocess.STDOUT,
             preexec_fn=_new_process_group,
         )
     except Exception:
-        log_fh.close()
+        if "log_fh" in locals():
+            log_fh.close()
+        release_execution_identity(
+            results_dir, cfg, execution_identity, idea_id, attempt_id)
         raise
 
     now = time.time()
-    attempt_id = secrets.token_hex(16)
-    stored_attempt = stored_claim.get("attempt_id")
-    if stored_attempt:
-        attempt_id = str(stored_attempt)
     tp = TrainingProcess(
         idea_id=idea_id, gpu=gpu, process=proc,
         start_time=now, log_path=log_path,

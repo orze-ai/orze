@@ -215,9 +215,12 @@ _META_KEYS = frozenset({"parent", "Parent", "category", "hypothesis",
 def hash_config(config: dict) -> str:
     clean = {k: v for k, v in config.items()
              if not k.startswith("_") and k not in _META_KEYS}
-    return hashlib.md5(
+    # Full SHA-256 avoids silently treating a truncated-hash collision as an
+    # exact experiment duplicate.  This cache is rebuilt from result evidence
+    # at startup, so changing the key format requires no in-place migration.
+    return hashlib.sha256(
         json.dumps(clean, sort_keys=True, default=str).encode()
-    ).hexdigest()[:12]
+    ).hexdigest()
 
 
 def load_hashes(results_dir: Path, cfg: dict = None) -> dict:

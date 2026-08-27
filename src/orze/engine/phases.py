@@ -38,7 +38,7 @@ from orze.engine.failure import (
 from orze.engine.launcher import (
     launch, _get_checkpoint_dir, _write_failure, _is_launcher_paused,
     _resolve_train_script, find_forbidden_launch_override,
-    GpuUnavailableError,
+    DuplicateLaunchError, GpuUnavailableError,
 )
 from orze.engine.process import run_artifact_preflight, run_pre_script
 from orze.engine.accounting import (
@@ -335,6 +335,29 @@ class OrzePhaseMixin:
             db_ids = self.lake.get_all_ids()
             ingested_ids = []
             config_hashes = self._load_config_hashes()
+            # Completed-only caching leaves a race window in which several
+            # identical proposals can all be queued before the first one
+            # finishes.  Include every already-admitted non-failed row and
+            # update this map after each insert, so one sync batch cannot
+            # manufacture deterministic replicas under different IDs.
+            try:
+                rows = self.lake.conn.execute(
+                    "SELECT idea_id, config FROM ideas "
+                    "WHERE lower(status) IN "
+                    "('queued', 'pending', 'running', 'completed') "
+                    "ORDER BY rowid"
+                ).fetchall()
+                for row in rows:
+                    admitted_cfg = yaml.safe_load(row[1]) or {}
+                    if isinstance(admitted_cfg, dict):
+                        config_hashes.setdefault(
+                            self._config_override_hash(admitted_cfg), row[0])
+            except Exception as exc:
+                # DB/config ambiguity must not erase the completed cache. The
+                # final launch identity boundary remains authoritative.
+                logger.warning(
+                    "Could not extend config dedup with admitted ideas: %s",
+                    type(exc).__name__)
             for idea_id, idea in raw_ideas.items():
                 if idea_id not in db_ids:
                     # Config dedup: skip if overrides match a completed idea
@@ -370,6 +393,7 @@ class OrzePhaseMixin:
                         hypothesis=_raw_f("Hypothesis"),
                         approach_family=idea.get("approach_family", _raw_f("Approach Family") or "other"),
                     )
+                    config_hashes[override_hash] = idea_id
                     ingested_ids.append(idea_id)
 
             if ingested_ids:
@@ -1353,6 +1377,22 @@ class OrzePhaseMixin:
                                 ideas[idea_id]["title"][:50])
                     try:
                         tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)
+                    except DuplicateLaunchError as e:
+                        logger.info(
+                            "[EXECUTION-DEDUP] %s rejected before GPU: %s",
+                            idea_id, e)
+                        account_zero_gpu(
+                            "rejected", "duplicate_execution_identity")
+                        atomic_write(
+                            self.results_dir / idea_id / "metrics.json",
+                            json.dumps({
+                                "status": "SKIPPED_DUPLICATE",
+                                "skip_reason": str(e),
+                            }, indent=2),
+                        )
+                        if self.lake is not None:
+                            self.lake.set_status(idea_id, "skipped")
+                        continue
                     except GpuUnavailableError as e:
                         # Resource issue, not a code bug: do NOT invoke
                         # the executor-fix path and do NOT count this

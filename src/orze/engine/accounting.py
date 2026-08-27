@@ -14,6 +14,7 @@ import os
 import re
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 
 
@@ -214,6 +215,63 @@ def record_zero_gpu_outcome(
     }
     return _write_once(
         _receipt_path(idea_dir, attempt_id, "terminal"), payload)
+
+
+def record_recovered_compute_terminal(
+    idea_dir: Path,
+    claim: dict,
+    *,
+    outcome: str = "interrupted",
+    reason_code: str = "startup_recovery",
+) -> dict:
+    """Close the allocation ledger after recovery proves a trainer stopped.
+
+    The lifecycle recovery path, not this helper, is responsible for proving
+    the recorded process group is empty.  This function converts that verdict
+    into the same immutable terminal receipt used during normal shutdown, so a
+    repaired/resumed attempt can be admitted without discarding crash evidence.
+    """
+    idea_dir = Path(idea_dir)
+    if not isinstance(claim, dict):
+        raise ComputeAccountingError("recovery_claim_invalid")
+    attempt_id = _token(claim.get("attempt_id", ""), "attempt_id")
+    idea_id = _token(idea_dir.name, "idea_id")
+    gpu = claim.get("gpu")
+    if isinstance(gpu, bool) or not isinstance(gpu, int) or gpu < 0:
+        raise ComputeAccountingError("physical_gpu_invalid")
+
+    start_path = _receipt_path(idea_dir, attempt_id, "start")
+    started_at = claim.get("trainer_started_at")
+    if start_path.exists():
+        try:
+            start = json.loads(start_path.read_text(encoding="utf-8"))
+            if (not isinstance(start, dict)
+                    or start.get("idea_id") != idea_id
+                    or start.get("attempt_id") != attempt_id
+                    or start.get("event") != "start"):
+                raise ValueError("start receipt identity mismatch")
+            started_at = start.get("started_at_epoch")
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError,
+                TypeError, ValueError) as exc:
+            raise ComputeAccountingError("recovery_start_invalid") from exc
+    try:
+        started_at = float(started_at)
+    except (TypeError, ValueError) as exc:
+        raise ComputeAccountingError("recovery_start_missing") from exc
+    if not math.isfinite(started_at) or started_at < 0:
+        raise ComputeAccountingError("recovery_start_invalid")
+
+    tp = SimpleNamespace(
+        idea_id=idea_id,
+        attempt_id=attempt_id,
+        gpu=gpu,
+        start_time=started_at,
+        process=SimpleNamespace(pid=claim.get("trainer_pid")),
+    )
+    return record_compute_terminal(
+        tp, idea_dir, outcome, reason_code,
+        phase="training", return_code=None,
+    )
 
 
 def summarize_compute_receipts(results_dir: Path) -> dict:

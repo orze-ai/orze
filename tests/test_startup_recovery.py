@@ -44,6 +44,38 @@ def test_dead_local_in_progress_claim_is_audited_and_released(tmp_path):
     lake.close()
 
 
+def test_recovery_closes_compute_ledger_for_identity_retry(tmp_path):
+    results = tmp_path / "results"
+    idea_dir = results / "idea-0001"
+    idea_dir.mkdir(parents=True)
+    db_path = tmp_path / "ideas.db"
+    lake = IdeaLake(str(db_path))
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
+    assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
+    assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
+    lake.close()
+    (idea_dir / "claim.json").write_text(json.dumps({
+        "attempt_id": "attempt-a",
+        "claimed_by": socket.gethostname(),
+        "pid": 999999999,
+        "gpu": 4,
+        "trainer_started_at": 1.0,
+    }))
+
+    reconcile_stale_running({
+        "results_dir": str(results),
+        "idea_lake_db": str(db_path),
+    })
+
+    terminal = json.loads((
+        idea_dir / "_compute_receipts" / "attempt-a" / "terminal.json"
+    ).read_text(encoding="utf-8"))
+    assert terminal["outcome"] == "interrupted"
+    assert terminal["reason_code"] == "startup_recovery"
+    assert not (idea_dir / "claim.json").exists()
+    assert list(idea_dir.glob("claim.recovered.*.json"))
+
+
 def test_missing_owner_pid_does_not_wedge_recovery(tmp_path):
     results = tmp_path / "results"
     idea_dir = results / "idea-0001"

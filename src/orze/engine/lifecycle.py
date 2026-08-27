@@ -233,6 +233,26 @@ def reconcile_stale_running(cfg: dict) -> None:
                         )
                         others.append(idea_id)
                         continue
+                    # New execution-identity admission retains ownership until
+                    # this immutable terminal receipt exists.  Only emit it
+                    # after the process group has been proven empty above.
+                    if claim.get("attempt_id"):
+                        try:
+                            from orze.engine.accounting import (
+                                record_recovered_compute_terminal,
+                            )
+                            record_recovered_compute_terminal(
+                                results_dir / idea_id,
+                                claim,
+                                outcome="interrupted",
+                                reason_code="startup_recovery",
+                            )
+                        except Exception as exc:
+                            logger.error(
+                                "Cannot recover %s: compute ledger closure "
+                                "failed: %s", idea_id, type(exc).__name__)
+                            others.append(idea_id)
+                            continue
                     metrics_status = {
                         "COMPLETE": "COMPLETED",
                         "FAILED": "FAILED",
