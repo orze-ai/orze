@@ -1381,6 +1381,11 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     """
     results_dir = Path(results_dir)
     _assert_launch_authorized(idea_id, results_dir, cfg)
+    from orze.core.decision_batches import validate_idea_decision_admission
+    decision_error = validate_idea_decision_admission(
+        results_dir, cfg, idea_id)
+    if decision_error:
+        raise LaunchIntegrityError(decision_error)
     _assert_gpu_authorized(gpu, cfg)
     log_path = results_dir / idea_id / "train_output.log"
 

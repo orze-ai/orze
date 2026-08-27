@@ -10,6 +10,16 @@ from typing import Mapping, Optional
 UNRESTRICTED_MODEL_FORM = "unrestricted"
 SINGLE_MODEL_FORM = "single_model_single_pass"
 MODEL_FORMS = frozenset({UNRESTRICTED_MODEL_FORM, SINGLE_MODEL_FORM})
+AUTONOMOUS_APPROACH_FAMILIES = frozenset({
+    "architecture",
+    "data",
+    "ensemble",
+    "infrastructure",
+    "optimization",
+    "other",
+    "regularization",
+    "training_config",
+})
 
 # These fields unambiguously request multiple inference-time model artifacts.
 # Training-time LoRA, EMA, SWA, distillation, and checkpoint merging are not on
@@ -279,10 +289,17 @@ def validate_idea_against_research_policy(
     model_form = policy.get("model_form", UNRESTRICTED_MODEL_FORM)
     if model_form not in MODEL_FORMS:
         return "research_policy_model_form_invalid"
-    if not single_model_required(cfg):
-        return None
     if not isinstance(idea_cfg, Mapping):
         return "research_policy_idea_config_invalid"
+    if batch_decision_contract_required(cfg):
+        # Implicit Cartesian expansion would turn one receipt-bound proposal
+        # into unbound ``-ht-N`` executions and silently exceed its declared
+        # experiment count. Contract-governed batches must spell out each arm.
+        from orze.core.ideas import config_has_implicit_sweep
+        if config_has_implicit_sweep(idea_cfg):
+            return "batch_decision_contract_implicit_sweep_forbidden"
+    if not single_model_required(cfg):
+        return None
 
     forbidden_families = policy.get("forbidden_approach_families", [])
     if not isinstance(forbidden_families, list):

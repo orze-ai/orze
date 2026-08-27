@@ -114,6 +114,36 @@ If the qualified lifecycle/evidence authority cannot be loaded, batch admission
 stops before an LLM call; that failure is not treated as a first campaign with
 an empty baseline.
 
+Only one staged or admitted decision batch may exist at a time. Before another
+producer call, Orze reconciles every admitted idea against the read-only audited
+Idea Lake and the same current evidence qualifier used for steering. Active
+ideas keep the gate closed. When all are terminal, at least one qualified result
+must satisfy the declared comparator and threshold to release the branch.
+Artifact-only, lifecycle-conflicting, incomplete, non-finite, or leakage-tainted
+results cannot satisfy it. `redirect_family` permanently rejects the admitted
+batch's normalized approach families from later autonomous batches while the
+receipts remain in project control state; `stop_branch` stops the autonomous
+producer entirely. A staged receipt left by an interrupted queue append also
+blocks rather than guessing whether admission occurred.
+
+The final Orze launcher independently requires the idea ID to appear in exactly
+one currently `admitted` receipt before GPU authorization. Contractless manual
+or alternate-path queue insertion therefore cannot bypass the batch gate; the
+free parameter-variation producer is disabled when this policy is active.
+Receipt staging itself rejects reused idea IDs and concurrent unresolved
+batches. Completely external scripts that never call Orze remain outside this
+boundary and must not be represented as contract-governed runs.
+
+List-valued hyperparameter axes that Orze would normally expand into implicit
+`-ht-N` children are rejected under this policy. Each experiment arm must be an
+explicit receipt-bound idea; bundled list keys that the idea parser already
+defines as one configuration remain eligible.
+
+Queue text is appended, fsynced, and receipt admission is finalized before the
+shared ingestion lock is released. If finalization fails, Orze truncates the
+append back under that same lock and leaves the receipt staged. Thus a compliant
+consumer cannot observe newly queued text during the staged-to-admitted gap.
+
 ## Evidence scope and exposure budgets
 
 Every contract chooses one evidence scope:

@@ -12,6 +12,12 @@ CALLING SPEC:
         Write content atomically via tmp+rename with fsync. Safe for Lustre
         shared filesystems where multiple nodes may read concurrently.
 
+    locked_append(path: Path, content: str, lock_dir: Path,
+                  stale_seconds: float = 60, after_append=None) -> bool
+        Append and fsync only while holding the named filesystem lock. Returns
+        false without writing when another owner holds the lock. An optional
+        finalizer runs before unlock; failure truncates the append back.
+
     deep_get(obj: dict, dotpath: str, default=None) -> Any
         Get nested dict value by dot-separated path, e.g. 'a.b.c'.
 
@@ -23,6 +29,7 @@ import logging
 import os
 import shutil
 import socket
+import stat as statlib
 import time
 import uuid
 from pathlib import Path
@@ -166,6 +173,63 @@ def atomic_write(path: Path, content: str):
         os.fsync(dir_fd)
     finally:
         os.close(dir_fd)
+
+
+def locked_append(path: Path, content: str, lock_dir: Path,
+                  stale_seconds: float = 60, after_append=None) -> bool:
+    """Append durable text and finalize it under one acquired lock."""
+    path = Path(path)
+    lock_dir = Path(lock_dir)
+    for candidate in (path, lock_dir):
+        absolute = candidate.absolute()
+        current = Path(absolute.anchor)
+        for part in absolute.parts[1:]:
+            current = current / part
+            if current.is_symlink():
+                return False
+    locked = _fs_lock(lock_dir, stale_seconds=stale_seconds)
+    if not locked:
+        return False
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        flags = os.O_RDWR | os.O_CREAT | os.O_APPEND
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(str(path), flags, 0o644)
+        try:
+            metadata = os.fstat(fd)
+            if (not statlib.S_ISREG(metadata.st_mode)
+                    or metadata.st_nlink != 1):
+                return False
+            original_size = metadata.st_size
+            encoded = content.encode("utf-8")
+            written = 0
+            while written < len(encoded):
+                count = os.write(fd, encoded[written:])
+                if count <= 0:
+                    raise OSError("locked_append_short_write")
+                written += count
+            os.fsync(fd)
+            if after_append is not None:
+                if not callable(after_append):
+                    raise TypeError("locked_append_finalizer_not_callable")
+                try:
+                    after_append()
+                except BaseException:
+                    os.ftruncate(fd, original_size)
+                    os.fsync(fd)
+                    raise
+        finally:
+            os.close(fd)
+        dir_fd = os.open(str(path.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+        return True
+    finally:
+        _fs_unlock(lock_dir)
+
+
 def tail_file(path: Path, n_bytes: int = 4096) -> str:
     """Read last n_bytes of a file."""
     try:

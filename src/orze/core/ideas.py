@@ -200,6 +200,32 @@ def _find_sweep_keys(config: dict, prefix: str = "") -> Dict[str, list]:
     return found
 
 
+def config_has_implicit_sweep(config, *, _seen=None, _depth: int = 0) -> bool:
+    """Safely detect whether config would create implicit experiment arms."""
+    if not isinstance(config, dict):
+        return False
+    if _seen is None:
+        _seen = set()
+    identity = id(config)
+    if identity in _seen or _depth > 64:
+        # Recursive/depth-hostile configs are invalid for a bounded contract.
+        return True
+    _seen.add(identity)
+    try:
+        for key, value in config.items():
+            if isinstance(value, dict):
+                if config_has_implicit_sweep(
+                        value, _seen=_seen, _depth=_depth + 1):
+                    return True
+            elif (isinstance(value, list) and key not in _SWEEP_BLOCKLIST
+                  and value and all(isinstance(
+                      item, (int, float, str, bool)) for item in value)):
+                return True
+        return False
+    finally:
+        _seen.remove(identity)
+
+
 def _set_nested(config: dict, dotpath: str, value):
     """Set a value at a dot-separated path in a nested dict."""
     keys = dotpath.split(".")
@@ -263,4 +289,3 @@ def expand_sweeps(ideas: Dict[str, dict],
             }
 
     return expanded
-

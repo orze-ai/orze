@@ -129,6 +129,11 @@ def _perturbations(key: str, value) -> List:
 def generate_variations(results_dir: Path, cfg: dict,
                         lake=None, max_ideas: int = 5) -> int:
     """Generate parameter variation ideas from the best experiment."""
+    from orze.core.research_policy import batch_decision_contract_required
+    if batch_decision_contract_required(cfg):
+        logger.info(
+            "Decision-contract policy disables contractless auto-variations")
+        return 0
     # Fan-out cap: don't keep perturbing an already-saturated parent. Skipping
     # saturated hubs spreads search across winners and deepens lineages, which
     # is the highest-leverage fix for research efficiency (Evo Score). 0/absent

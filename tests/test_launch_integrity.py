@@ -134,6 +134,28 @@ def test_single_model_policy_allows_training_that_emits_one_artifact():
     ) is None
 
 
+def test_decision_contract_requires_explicit_sweep_arms():
+    cfg = {"research_policy": {
+        "require_batch_decision_contract": True,
+        "max_decision_batch": 3,
+        "min_decision_effect": 0.1,
+    }}
+    assert validate_idea_against_research_policy(
+        {"learning_rate": [1e-4, 2e-4]}, cfg,
+        approach_family="optimization",
+    ) == "batch_decision_contract_implicit_sweep_forbidden"
+    # Known bundled list keys remain one experiment rather than a sweep axis.
+    assert validate_idea_against_research_policy(
+        {"adapters": ["one", "two"]}, cfg,
+        approach_family="architecture",
+    ) is None
+    recursive = {}
+    recursive["nested"] = recursive
+    assert validate_idea_against_research_policy(
+        recursive, cfg, approach_family="architecture",
+    ) == "batch_decision_contract_implicit_sweep_forbidden"
+
+
 def test_single_model_policy_rejects_ensemble_family():
     assert validate_idea_against_research_policy(
         {},
@@ -194,6 +216,29 @@ def test_direct_launch_rechecks_single_model_policy_before_gpu_telemetry(
 
     with pytest.raises(
             LaunchIntegrityError, match="research_policy_composite_forbidden"):
+        launch("idea-test", 4, results, cfg)
+    assert gpu_checked == []
+
+
+def test_direct_launch_requires_admitted_decision_receipt_before_gpu_telemetry(
+        launch_case, monkeypatch):
+    results, _, cfg = launch_case
+    cfg.update({
+        "report": {"primary_metric": "score", "sort": "descending"},
+        "research_policy": {
+            "require_batch_decision_contract": True,
+            "max_decision_batch": 1,
+            "min_decision_effect": 0.1,
+        },
+    })
+    gpu_checked = []
+    monkeypatch.setattr(
+        "orze.engine.launcher._verify_gpu_free",
+        lambda *args, **kwargs: gpu_checked.append(True),
+    )
+    with pytest.raises(
+            LaunchIntegrityError,
+            match="decision_contract_launch_admission_missing"):
         launch("idea-test", 4, results, cfg)
     assert gpu_checked == []
 

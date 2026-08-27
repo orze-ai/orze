@@ -265,6 +265,68 @@ def qualify_local_report_evidence(
 
 _SAFE_FAMILY_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
 
+_LIFECYCLE_STATUS_STATES = {
+    "queued": frozenset({"QUEUED"}),
+    "pending": frozenset({"QUEUED"}),
+    "claimed": frozenset({"CLAIMED"}),
+    # Framework state becomes CLAIMED before the legacy mirror is changed from
+    # the generic running token to IN_PROGRESS.
+    "running": frozenset({"CLAIMED", "IN_PROGRESS"}),
+    "training": frozenset({"IN_PROGRESS"}),
+    "evaluating": frozenset({"IN_PROGRESS"}),
+    "completed": frozenset({"COMPLETE"}),
+    "partial": frozenset({"FAILED"}),
+    "failed": frozenset({"FAILED"}),
+    "dead": frozenset({"FAILED"}),
+    "skipped": frozenset({"SKIPPED"}),
+    "archived": frozenset({"ARCHIVED"}),
+}
+
+
+def _open_authoritative_lifecycle(
+    db_path: Path,
+) -> tuple[sqlite3.Connection | None, str]:
+    """Open a policy-compliant lifecycle database read-only."""
+    path = Path(db_path)
+    connection = None
+    try:
+        absolute = path.absolute()
+        current = Path(absolute.anchor)
+        for part in absolute.parts[1:]:
+            current = current / part
+            if current.is_symlink():
+                return None, "authoritative_lifecycle_database_redirected"
+        if not path.is_file():
+            return None, "authoritative_lifecycle_database_unavailable"
+        if path.stat().st_nlink != 1:
+            return None, "authoritative_lifecycle_database_redirected"
+        connection = sqlite3.connect(
+            absolute.as_uri() + "?mode=ro",
+            uri=True,
+            timeout=5,
+        )
+        connection.execute("PRAGMA query_only=ON")
+        from orze.core.sqlite_policy import (
+            SQLitePolicyError,
+            inspect_shared_database_policy,
+        )
+        try:
+            policy = inspect_shared_database_policy(connection)
+        except SQLitePolicyError:
+            connection.close()
+            return None, "authoritative_lifecycle_database_invalid"
+        if not policy["compliant"]:
+            connection.close()
+            return None, "authoritative_lifecycle_database_policy_invalid"
+        return connection, "authoritative_lifecycle_loaded"
+    except (OSError, sqlite3.Error):
+        if connection is not None:
+            try:
+                connection.close()
+            except sqlite3.Error:
+                pass
+        return None, "authoritative_lifecycle_database_invalid"
+
 
 def _authoritative_completed_rows(
     db_path: Path,
@@ -272,39 +334,11 @@ def _authoritative_completed_rows(
     include_family: bool,
 ) -> tuple[list[tuple], str]:
     """Read agreed lifecycle-complete rows under the shared DB policy."""
-    path = Path(db_path)
+    connection, reason = _open_authoritative_lifecycle(db_path)
+    if connection is None:
+        return [], reason
     try:
-        absolute = path.absolute()
-        current = Path(absolute.anchor)
-        redirected = False
-        for part in absolute.parts[1:]:
-            current = current / part
-            if current.is_symlink():
-                redirected = True
-                break
-        if redirected:
-            return [], "authoritative_lifecycle_database_redirected"
-        if not path.is_file():
-            return [], "authoritative_lifecycle_database_unavailable"
-        if path.stat().st_nlink != 1:
-            return [], "authoritative_lifecycle_database_redirected"
-        connection = sqlite3.connect(
-            absolute.as_uri() + "?mode=ro",
-            uri=True,
-            timeout=5,
-        )
         try:
-            connection.execute("PRAGMA query_only=ON")
-            from orze.core.sqlite_policy import (
-                SQLitePolicyError,
-                inspect_shared_database_policy,
-            )
-            try:
-                policy = inspect_shared_database_policy(connection)
-            except SQLitePolicyError:
-                return [], "authoritative_lifecycle_database_invalid"
-            if not policy["compliant"]:
-                return [], "authoritative_lifecycle_database_policy_invalid"
             select = (
                 "i.idea_id, i.approach_family"
                 if include_family else "i.idea_id"
@@ -315,11 +349,73 @@ def _authoritative_completed_rows(
                 "WHERE lower(i.status) = 'completed' "
                 "AND s.current_state = 'COMPLETE'"
             ).fetchall()
-        finally:
-            connection.close()
-    except (OSError, sqlite3.Error):
-        return [], "authoritative_lifecycle_database_invalid"
+        except sqlite3.Error:
+            return [], "authoritative_lifecycle_database_invalid"
+    finally:
+        connection.close()
     return rows, "authoritative_lifecycle_loaded"
+
+
+def authoritative_idea_lifecycle(
+    db_path: Path,
+    idea_ids,
+) -> tuple[dict[str, dict[str, str]], str]:
+    """Load lifecycle state and safe family for an exact bounded ID set.
+
+    The audited FSM and legacy status mirror must agree. Missing rows,
+    malformed IDs, schema drift, redirected databases, and contradictory
+    lifecycle claims fail the entire read rather than being interpreted as
+    pending or failed experiments.
+    """
+    if (not isinstance(idea_ids, (list, tuple, set, frozenset))
+            or not 1 <= len(idea_ids) <= 64):
+        return {}, "authoritative_lifecycle_idea_ids_invalid"
+    normalized = []
+    seen = set()
+    from orze.core.ideas import IDEA_ID_PATTERN
+    idea_re = re.compile(IDEA_ID_PATTERN)
+    for idea_id in idea_ids:
+        if (not isinstance(idea_id, str) or len(idea_id) > 128
+                or idea_re.fullmatch(idea_id) is None
+                or idea_id in seen):
+            return {}, "authoritative_lifecycle_idea_ids_invalid"
+        normalized.append(idea_id)
+        seen.add(idea_id)
+
+    connection, reason = _open_authoritative_lifecycle(db_path)
+    if connection is None:
+        return {}, reason
+    try:
+        try:
+            marks = ",".join("?" for _ in normalized)
+            rows = connection.execute(
+                "SELECT i.idea_id, i.status, i.approach_family, "
+                "s.current_state FROM ideas AS i "
+                "JOIN idea_state AS s ON s.idea_id = i.idea_id "
+                f"WHERE i.idea_id IN ({marks})",
+                normalized,
+            ).fetchall()
+        except sqlite3.Error:
+            return {}, "authoritative_lifecycle_database_invalid"
+    finally:
+        connection.close()
+
+    if len(rows) != len(normalized):
+        return {}, "authoritative_lifecycle_rows_missing"
+    lifecycle = {}
+    for idea_id, raw_status, raw_family, state in rows:
+        status = str(raw_status or "").strip().lower()
+        if (not isinstance(state, str)
+                or state not in _LIFECYCLE_STATUS_STATES.get(
+                    status, frozenset())):
+            return {}, "authoritative_lifecycle_state_conflict"
+        family = str(raw_family or "other").strip().lower()
+        if _SAFE_FAMILY_RE.fullmatch(family) is None:
+            family = "other"
+        lifecycle[str(idea_id)] = {"state": state, "family": family}
+    if set(lifecycle) != set(normalized):
+        return {}, "authoritative_lifecycle_database_invalid"
+    return lifecycle, "authoritative_lifecycle_loaded"
 
 
 def authoritative_completed_idea_ids(

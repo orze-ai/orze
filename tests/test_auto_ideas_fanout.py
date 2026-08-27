@@ -8,7 +8,7 @@ import json
 
 import yaml
 
-from orze.engine.auto_ideas import _get_best_config
+from orze.engine.auto_ideas import _get_best_config, generate_variations
 from orze.idea_lake import IdeaLake
 
 
@@ -25,6 +25,15 @@ def _cfg():
 
 
 class TestFanoutCap:
+    def test_decision_policy_disables_contractless_variations(self, tmp_path):
+        cfg = _cfg()
+        cfg["research_policy"] = {
+            "require_batch_decision_contract": True,
+        }
+        cfg["ideas_file"] = str(tmp_path / "ideas.md")
+        assert generate_variations(tmp_path, cfg) == 0
+        assert not (tmp_path / "ideas.md").exists()
+
     def test_picks_global_best_when_uncapped(self, tmp_path):
         _make_idea(tmp_path, "idea-aaa", 5.0)
         _make_idea(tmp_path, "idea-bbb", 4.0)  # best (lower WER)

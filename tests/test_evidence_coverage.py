@@ -6,6 +6,7 @@ import pytest
 from orze.reporting.evidence import (
     authoritative_completed_idea_families,
     authoritative_completed_idea_ids,
+    authoritative_idea_lifecycle,
     count_dataset_metrics,
     dataset_metric_keys,
     minimum_dataset_coverage,
@@ -115,6 +116,91 @@ def test_only_internal_nonrank_presentation_is_safe():
         invalid = dict(valid)
         invalid[key] = value
         assert efficiency_presentation_is_safe(invalid) is False
+
+
+def test_authoritative_lifecycle_requires_exact_state_mirror(tmp_path):
+    db_path = tmp_path / "lake.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript("""
+        PRAGMA journal_mode=DELETE;
+        PRAGMA synchronous=FULL;
+        PRAGMA locking_mode=NORMAL;
+        CREATE TABLE ideas (
+            idea_id TEXT PRIMARY KEY,
+            status TEXT,
+            approach_family TEXT
+        );
+        CREATE TABLE idea_state (
+            idea_id TEXT PRIMARY KEY,
+            current_state TEXT
+        );
+    """)
+    rows = [
+        ("idea-queued", "queued", "architecture", "QUEUED"),
+        ("idea-running", "running", "data", "CLAIMED"),
+        ("idea-complete", "completed", "bad\nfamily", "COMPLETE"),
+        ("idea-failed", "partial", "optimization", "FAILED"),
+    ]
+    conn.executemany(
+        "INSERT INTO ideas VALUES (?, ?, ?)",
+        [(idea_id, status, family) for idea_id, status, family, _ in rows],
+    )
+    conn.executemany(
+        "INSERT INTO idea_state VALUES (?, ?)",
+        [(idea_id, state) for idea_id, _, _, state in rows],
+    )
+    conn.commit()
+    conn.close()
+
+    lifecycle, reason = authoritative_idea_lifecycle(
+        db_path, [row[0] for row in rows])
+    assert reason == "authoritative_lifecycle_loaded"
+    assert lifecycle["idea-queued"]["state"] == "QUEUED"
+    assert lifecycle["idea-running"]["state"] == "CLAIMED"
+    assert lifecycle["idea-complete"]["family"] == "other"
+    assert lifecycle["idea-failed"]["state"] == "FAILED"
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "UPDATE idea_state SET current_state='FAILED' "
+        "WHERE idea_id='idea-complete'")
+    conn.commit()
+    conn.close()
+    assert authoritative_idea_lifecycle(
+        db_path, ["idea-complete"]
+    ) == ({}, "authoritative_lifecycle_state_conflict")
+
+
+@pytest.mark.parametrize(
+    "idea_ids,reason",
+    [
+        ([], "authoritative_lifecycle_idea_ids_invalid"),
+        (["../escape"], "authoritative_lifecycle_idea_ids_invalid"),
+        (["idea-one", "idea-one"],
+         "authoritative_lifecycle_idea_ids_invalid"),
+        (["idea-missing"], "authoritative_lifecycle_rows_missing"),
+    ],
+)
+def test_authoritative_lifecycle_fails_closed(tmp_path, idea_ids, reason):
+    db_path = tmp_path / "lake.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript("""
+        PRAGMA journal_mode=DELETE;
+        PRAGMA synchronous=FULL;
+        PRAGMA locking_mode=NORMAL;
+        CREATE TABLE ideas (
+            idea_id TEXT PRIMARY KEY,
+            status TEXT,
+            approach_family TEXT
+        );
+        CREATE TABLE idea_state (
+            idea_id TEXT PRIMARY KEY,
+            current_state TEXT
+        );
+    """)
+    conn.commit()
+    conn.close()
+    assert authoritative_idea_lifecycle(db_path, idea_ids) == ({}, reason)
 
 
 def test_local_evidence_requires_completed_nonredirected_artifacts(tmp_path):
