@@ -13,6 +13,7 @@ import pytest
 import orze.cli as cli
 from orze.engine import lifecycle
 from orze.core import managed_run
+from orze.core.config import _validate_config
 from orze.core.managed_run import (
     ManagedRunError,
     prepare_managed_idea_run,
@@ -79,6 +80,53 @@ def test_managed_run_requires_exact_runtime_pin(managed_case):
         prepare_managed_idea_run(cfg, "idea-managed", 4)
 
 
+@pytest.mark.parametrize("key", [
+    "require_data_separation",
+    "require_model_lineage",
+    "require_benchmark_contract",
+    "require_explicit_untainted_metrics",
+])
+def test_managed_evidence_policy_requires_booleans(key):
+    errors, _ = _validate_config({"managed_run": {key: "yes"}})
+
+    assert f"managed_run.{key}: must be true or false" in errors
+
+
+def test_managed_evidence_policy_rejects_unknown_or_nonmapping_policy():
+    errors, _ = _validate_config({
+        "managed_run": {"require_data_seperation": True},
+    })
+    assert "managed_run: unknown keys: require_data_seperation" in errors
+
+    with pytest.raises(ManagedRunError, match="evidence_policy_invalid"):
+        verify_managed_idea_outcome({"managed_run": None}, "idea-managed")
+
+
+@pytest.mark.parametrize("key,reason", [
+    ("require_data_separation", "requires data_separation.enabled: true"),
+    ("require_model_lineage", "requires model_lineage.enabled: true"),
+    ("require_benchmark_contract", "requires report.benchmark_contract"),
+])
+def test_managed_evidence_policy_rejects_missing_contracts(key, reason):
+    errors, _ = _validate_config({"managed_run": {key: True}})
+
+    assert any(reason in error for error in errors)
+
+
+@pytest.mark.parametrize("policy_key,reason", [
+    ("require_data_separation", "data_separation_required"),
+    ("require_model_lineage", "model_lineage_required"),
+    ("require_benchmark_contract", "benchmark_contract_required"),
+])
+def test_managed_admission_enforces_required_evidence_contract(
+        managed_case, policy_key, reason):
+    _, cfg = managed_case
+    cfg["managed_run"] = {policy_key: True}
+
+    with pytest.raises(ManagedRunError, match=reason):
+        prepare_managed_idea_run(cfg, "idea-managed", 4)
+
+
 @pytest.mark.parametrize("sentinel", [
     ".orze_disabled", ".orze_stop_all", ".orze_shutdown",
 ])
@@ -86,6 +134,11 @@ def test_managed_run_honors_stop_state_before_gpu_telemetry(
         managed_case, sentinel, monkeypatch):
     results, cfg = managed_case
     (results / sentinel).write_text("stop\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "orze.core.config._validate_config",
+        lambda *args: pytest.fail(
+            "stop state must reject before config validation"),
+    )
     monkeypatch.setattr(
         "orze.engine.launcher._assert_gpu_authorized",
         lambda *args: pytest.fail("stop state must reject before GPU scope"),
@@ -521,6 +574,61 @@ def test_managed_outcome_requires_valid_model_lineage(
             "results_dir": str(results),
             "model_lineage": {"enabled": True},
         }, "idea-managed")
+
+
+def test_managed_outcome_requires_explicit_untainted_marker(
+        tmp_path, monkeypatch):
+    results = tmp_path / "results"
+    idea_dir = results / "idea-managed"
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "metrics.json").write_text(
+        '{"status":"COMPLETED"}', encoding="utf-8")
+    monkeypatch.setattr(
+        "orze.reporting.evidence.authoritative_idea_lifecycle",
+        lambda path, ids: ({
+            ids[0]: {"state": "COMPLETE", "family": "architecture"},
+        }, "authoritative_lifecycle_loaded"),
+    )
+
+    with pytest.raises(
+            ManagedRunError, match="explicit_untainted_metrics_required"):
+        verify_managed_idea_outcome({
+            "results_dir": str(results),
+            "managed_run": {
+                "require_explicit_untainted_metrics": True,
+            },
+        }, "idea-managed")
+
+
+def test_managed_outcome_revalidates_required_data_separation(
+        tmp_path, monkeypatch):
+    results = tmp_path / "results"
+    idea_dir = results / "idea-managed"
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "metrics.json").write_text(
+        '{"status":"COMPLETED","tainted_leakage":false}',
+        encoding="utf-8")
+    monkeypatch.setattr(
+        "orze.reporting.evidence.authoritative_idea_lifecycle",
+        lambda path, ids: ({
+            ids[0]: {"state": "COMPLETE", "family": "architecture"},
+        }, "authoritative_lifecycle_loaded"),
+    )
+    calls = []
+    monkeypatch.setattr(
+        "orze.core.data_separation.ensure_data_separation",
+        lambda cfg: calls.append(cfg) or {"schema_version": 1},
+    )
+    cfg = {
+        "results_dir": str(results),
+        "managed_run": {"require_data_separation": True},
+        "data_separation": {"enabled": True},
+    }
+
+    report = verify_managed_idea_outcome(cfg, "idea-managed")
+
+    assert calls == [cfg]
+    assert report["completed"] is True
 
 
 def test_run_idea_cli_builds_one_gpu_once_runner(tmp_path, monkeypatch):

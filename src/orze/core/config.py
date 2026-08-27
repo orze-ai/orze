@@ -220,6 +220,15 @@ DEFAULT_CONFIG = {
     # Managed systemd launches additionally use an independent ExecStartPre
     # contract, which is required for downgrade-resistant enforcement.
     "controller_runtime": None,
+    # Optional evidence requirements for ``orze run-idea``. Projects making
+    # public or benchmark-comparable claims should enable every requirement;
+    # ordinary local experiments retain backward-compatible defaults.
+    "managed_run": {
+        "require_data_separation": False,
+        "require_model_lineage": False,
+        "require_benchmark_contract": False,
+        "require_explicit_untainted_metrics": False,
+    },
     "pre_script": None,
     "pre_args": [],
     "pre_timeout": 3600,
@@ -769,6 +778,46 @@ def _validate_config(cfg: dict) -> tuple:
                             or file_count < 1):
                         errors.append(
                             f"{prefix}.file_count: must be a positive integer")
+
+    managed_run = cfg.get("managed_run", DEFAULT_CONFIG["managed_run"])
+    managed_keys = (
+        "require_data_separation",
+        "require_model_lineage",
+        "require_benchmark_contract",
+        "require_explicit_untainted_metrics",
+    )
+    if not isinstance(managed_run, dict):
+        errors.append("managed_run: must be a mapping")
+    else:
+        unknown = sorted(set(managed_run) - set(managed_keys))
+        if unknown:
+            errors.append(
+                "managed_run: unknown keys: " + ", ".join(unknown))
+        for key in managed_keys:
+            if not isinstance(managed_run.get(key, False), bool):
+                errors.append(f"managed_run.{key}: must be true or false")
+        separation = cfg.get("data_separation") or {}
+        lineage = cfg.get("model_lineage") or {}
+        report = cfg.get("report") or {}
+        if (managed_run.get("require_data_separation") is True
+                and (not isinstance(separation, dict)
+                     or separation.get("enabled") is not True)):
+            errors.append(
+                "managed_run.require_data_separation: requires "
+                "data_separation.enabled: true")
+        if (managed_run.get("require_model_lineage") is True
+                and (not isinstance(lineage, dict)
+                     or lineage.get("enabled") is not True)):
+            errors.append(
+                "managed_run.require_model_lineage: requires "
+                "model_lineage.enabled: true")
+        if (managed_run.get("require_benchmark_contract") is True
+                and (not isinstance(report, dict)
+                     or not isinstance(
+                         report.get("benchmark_contract"), dict))):
+            errors.append(
+                "managed_run.require_benchmark_contract: requires "
+                "report.benchmark_contract")
 
     # Validate eval config consistency
     if cfg.get("eval_script") and not cfg.get("eval_output"):

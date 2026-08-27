@@ -21,6 +21,45 @@ def _present(path: Path) -> bool:
         return True
 
 
+_EVIDENCE_REQUIREMENTS = (
+    "require_data_separation",
+    "require_model_lineage",
+    "require_benchmark_contract",
+    "require_explicit_untainted_metrics",
+)
+
+
+def _evidence_policy(cfg: Mapping) -> Mapping:
+    policy = cfg.get("managed_run", {})
+    if not isinstance(policy, Mapping) or any(
+            not isinstance(policy.get(key, False), bool)
+            for key in _EVIDENCE_REQUIREMENTS):
+        raise ManagedRunError("managed_run_evidence_policy_invalid")
+    if set(policy) - set(_EVIDENCE_REQUIREMENTS):
+        raise ManagedRunError("managed_run_evidence_policy_invalid")
+    return policy
+
+
+def _require_evidence_contracts(cfg: Mapping) -> Mapping:
+    policy = _evidence_policy(cfg)
+    separation = cfg.get("data_separation") or {}
+    lineage = cfg.get("model_lineage") or {}
+    report = cfg.get("report") or {}
+    if (policy.get("require_data_separation") is True
+            and (not isinstance(separation, Mapping)
+                 or separation.get("enabled") is not True)):
+        raise ManagedRunError("managed_run_data_separation_required")
+    if (policy.get("require_model_lineage") is True
+            and (not isinstance(lineage, Mapping)
+                 or lineage.get("enabled") is not True)):
+        raise ManagedRunError("managed_run_model_lineage_required")
+    if (policy.get("require_benchmark_contract") is True
+            and (not isinstance(report, Mapping)
+                 or not isinstance(report.get("benchmark_contract"), Mapping))):
+        raise ManagedRunError("managed_run_benchmark_contract_required")
+    return policy
+
+
 def prepare_managed_idea_run(
     cfg: Mapping,
     idea_id: str,
@@ -42,23 +81,9 @@ def prepare_managed_idea_run(
     if isinstance(gpu, bool) or not isinstance(gpu, int) or gpu < 0:
         raise ManagedRunError("managed_run_gpu_invalid")
 
-    from orze.core.config import _validate_config
-    errors, _ = _validate_config(cfg)
-    if errors:
-        raise ManagedRunError("managed_run_config_validation_failed")
-
-    contract = cfg.get("controller_runtime")
-    if contract is None:
-        raise ManagedRunError("managed_run_controller_runtime_pin_required")
-    from orze.service.runtime_contract import (
-        RuntimeContractError,
-        require_controller_runtime_contract,
-    )
-    try:
-        require_controller_runtime_contract(contract)
-    except RuntimeContractError as exc:
-        raise ManagedRunError(str(exc)) from exc
-
+    # Stop state is the cheapest and most authoritative refusal. Check it
+    # before config/runtime hashing so a deliberately stopped project stays
+    # inert even while its prospective evidence policy is incomplete.
     results_dir = Path(cfg.get("results_dir", "orze_results"))
     for sentinel in (".orze_disabled", ".orze_stop_all", ".orze_shutdown"):
         if _present(results_dir / sentinel):
@@ -78,6 +103,24 @@ def prepare_managed_idea_run(
         pause_path = results_dir / "_launcher_paused.flag"
     if _present(pause_path):
         raise ManagedRunError("managed_run_blocked_by_pause_policy")
+
+    from orze.core.config import _validate_config
+    errors, _ = _validate_config(cfg)
+    if errors:
+        raise ManagedRunError("managed_run_config_validation_failed")
+
+    contract = cfg.get("controller_runtime")
+    if contract is None:
+        raise ManagedRunError("managed_run_controller_runtime_pin_required")
+    from orze.service.runtime_contract import (
+        RuntimeContractError,
+        require_controller_runtime_contract,
+    )
+    try:
+        require_controller_runtime_contract(contract)
+    except RuntimeContractError as exc:
+        raise ManagedRunError(str(exc)) from exc
+    _require_evidence_contracts(cfg)
 
     # Pure scope validation; this helper never calls nvidia-smi.
     from orze.engine.launcher import LaunchIntegrityError, _assert_gpu_authorized
@@ -122,6 +165,7 @@ def prepare_managed_idea_run(
 
 def verify_managed_idea_outcome(cfg: Mapping, idea_id: str) -> dict:
     """Require a truthful terminal outcome before ``run-idea`` exits zero."""
+    policy = _require_evidence_contracts(cfg)
     results_dir = Path(cfg.get("results_dir", "orze_results"))
     idea_dir = results_dir / idea_id
     metrics_path = idea_dir / "metrics.json"
@@ -139,6 +183,10 @@ def verify_managed_idea_outcome(cfg: Mapping, idea_id: str) -> dict:
         raise ManagedRunError("managed_run_training_not_completed")
     if metrics.get("tainted_leakage") is True:
         raise ManagedRunError("managed_run_tainted_leakage")
+    if (policy.get("require_explicit_untainted_metrics") is True
+            and metrics.get("tainted_leakage") is not False):
+        raise ManagedRunError(
+            "managed_run_explicit_untainted_metrics_required")
 
     lake_path = Path(cfg.get("idea_lake_db") or results_dir / "idea_lake.db")
     from orze.reporting.evidence import authoritative_idea_lifecycle
@@ -180,6 +228,16 @@ def verify_managed_idea_outcome(cfg: Mapping, idea_id: str) -> dict:
         except ModelLineageError as exc:
             raise ManagedRunError(str(exc)) from exc
 
+    if policy.get("require_data_separation") is True:
+        from orze.core.data_separation import (
+            DataSeparationError,
+            ensure_data_separation,
+        )
+        try:
+            ensure_data_separation(cfg)
+        except DataSeparationError as exc:
+            raise ManagedRunError(str(exc)) from exc
+
     report = cfg.get("report") or {}
     if isinstance(report, Mapping) and report.get("benchmark_contract"):
         from orze.core.benchmark_contract import validate_benchmark_receipt
@@ -198,4 +256,6 @@ def verify_managed_idea_outcome(cfg: Mapping, idea_id: str) -> dict:
             isinstance(report, Mapping) and report.get("benchmark_contract")),
         "model_lineage_required": bool(
             isinstance(lineage, Mapping) and lineage.get("enabled") is True),
+        "explicit_untainted_metrics_required": bool(
+            policy.get("require_explicit_untainted_metrics") is True),
     }

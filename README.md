@@ -250,6 +250,24 @@ visibility to that one device. Exit status zero additionally requires a
 `COMPLETE` lifecycle plus configured evaluation, post-script, benchmark, and
 model-lineage evidence. It is not a ranking claim.
 
+Public or benchmark-comparable campaigns should also make the evidence policy
+explicit. These switches make configuration invalid—and admission impossible—
+until the corresponding full contracts are configured:
+
+```yaml
+managed_run:
+  require_data_separation: true
+  require_model_lineage: true
+  require_benchmark_contract: true
+  require_explicit_untainted_metrics: true
+```
+
+With this policy, an absent or merely implicit no-leakage claim cannot produce
+a successful command status. Data-separation evidence is revalidated at the
+terminal boundary; model-lineage and benchmark receipts retain their existing
+fail-closed validation. The defaults remain `false` for ordinary local runs
+that make no public or benchmark-comparable claim.
+
 ```yaml
 containers:
   paperdog:
