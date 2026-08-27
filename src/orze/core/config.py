@@ -272,12 +272,15 @@ DEFAULT_CONFIG = {
     },
     "auto_upgrade": True,
     "sweep_stray": True,        # sweep stray files to .orze/stray/ by default
-    # Data boundary guardrails. When any prefix is declared here, orze
-    # launches training via orze.data_boundaries.wrap, which monkey-patches
-    # builtins.open() to abort on reads of forbidden paths (data leakage).
+    # Data boundary guardrails. Hard path blocks use a verified private mount
+    # namespace; network denial uses a private network namespace. watch_paths
+    # is explicitly Python-level audit only.
     "data_boundaries": {
         "forbidden_in_training": [],  # list[str] — abort training on read
         "watch_paths": [],            # list[str] — log-only audit
+        # ``deny`` runs the trainer and all descendants in a private network
+        # namespace. ``inherit`` is not sufficient for a no-leakage claim.
+        "training_network": "inherit",
     },
     # Auto-seal eval scripts. When true, any file matching eval_*.py or
     # eval_*.sh in the project root is added to sealed_files at config
@@ -772,6 +775,37 @@ def _validate_config(cfg: dict) -> tuple:
                     errors.append(
                         f"sealed_hashes.{fpath}: expected a 64-character SHA-256"
                     )
+
+    # Data-boundary configuration controls whether held-out paths and the
+    # network are visible to training. Validate it here and again at the final
+    # launcher boundary so a direct caller cannot bypass startup validation.
+    boundaries = cfg.get("data_boundaries", {})
+    if not isinstance(boundaries, dict):
+        errors.append("data_boundaries: must be a mapping")
+    else:
+        for key in ("forbidden_in_training", "watch_paths"):
+            paths = boundaries.get(key, [])
+            if (not isinstance(paths, list)
+                    or any(not isinstance(path, str) or not path.strip()
+                           for path in paths)):
+                errors.append(
+                    f"data_boundaries.{key}: must be a list of non-empty paths"
+                )
+            elif any(not Path(path).is_absolute() for path in paths):
+                errors.append(
+                    f"data_boundaries.{key}: every path must be absolute"
+                )
+            elif any(":" in path or any(ord(char) < 32 for char in path)
+                     for path in paths):
+                errors.append(
+                    f"data_boundaries.{key}: paths cannot contain ':' or "
+                    "control characters"
+                )
+        network = boundaries.get("training_network", "inherit")
+        if network not in ("inherit", "deny"):
+            errors.append(
+                "data_boundaries.training_network: expected 'inherit' or 'deny'"
+            )
 
     # Report columns are consumed as mappings by the leaderboard. Reject
     # shorthand strings during --check instead of crashing after compute has

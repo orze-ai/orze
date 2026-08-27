@@ -1,4 +1,4 @@
-"""Data boundary guardrails — catch data leakage via two layered defenses.
+"""Data boundary guardrails with fail-closed kernel isolation.
 
 ORZE data_boundaries supports two modes, set independently per path in
 orze.yaml. Pick the right one for your training script architecture:
@@ -8,17 +8,20 @@ orze.yaml. Pick the right one for your training script architecture:
         - /path/to/test/data
       watch_paths:             # AUDIT ONLY — log via builtins.open patch
         - /path/to/eval/data
+      training_network: deny   # HARD BLOCK — private network namespace
 
 Mode 1: forbidden_in_training (kernel-enforced)
-  The orze launcher wraps training with:
+  The orze launcher first proves namespace/mount capability without GPU
+  visibility, then wraps training with:
     unshare -U --map-root-user -m bash -c "
-      mount --bind <empty_overlay> <forbidden>
+      mount -t tmpfs <forbidden-directory>
       exec python -m orze.data_boundaries.wrap train.py ...
     "
-  Every file rooted at <forbidden> returns ENOENT at the kernel layer.
+  Every prior file rooted at <forbidden> is hidden at the kernel layer.
   Works against any library — pyarrow, h5py, tfrecord, lmdb, C
   extensions — because the block happens below the Python layer.
-  Requires Linux with `unshare` available.
+  Missing tools, unavailable or redirected paths, namespace failures, and
+  mount failures reject before GPU telemetry. There is no Python-only fallback.
 
   USE WHEN: your training subprocess is pure training — it does not
   also evaluate on the forbidden path. If train and eval share a
@@ -68,8 +71,10 @@ Env vars (set by launcher.py when data_boundaries is configured):
                           to. Tab-delimited: TAG\\tprefix\\tfull-path.
 
 Scope limitations:
-  - HTTP/network fetches are not caught by either mode. If your code
-    downloads test data at runtime, neither mechanism sees it.
+  - Path isolation cannot find undeclared aliases, hard links, copied samples,
+    or contamination already present in a pretrained model.
+  - ``training_network: inherit`` permits remote reads. Use ``deny`` to isolate
+    training and all descendants in a private network namespace.
   - watch_paths is Python-level only; kernel mode covers all libraries
     but requires a separate subprocess for eval to avoid blocking
     legitimate test-set reads.

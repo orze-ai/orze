@@ -46,9 +46,11 @@ import json
 import logging
 import os
 import secrets
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Dict, Optional
@@ -106,19 +108,71 @@ def _get_checkpoint_dir(cfg: dict) -> Optional[Path]:
     return None
 
 
-_UNSHARE_WARNED = False
-_OVERLAY_DIR = Path("/tmp/orze_empty_overlay")
+_BOUNDARY_ENV_KEYS = (
+    "ORZE_FORBIDDEN_PATHS",
+    "ORZE_WATCH_PATHS",
+    "ORZE_ACCESS_LOG",
+    "ORZE_REQUIRE_KERNEL_BOUNDARY",
+    "ORZE_KERNEL_BOUNDARY_ACTIVE",
+    "ORZE_TRAINING_NETWORK",
+)
 
 
-def _resolve_paths(paths) -> list:
-    """Realpath-resolve a list of path strings, dropping empties."""
-    out = []
-    for p in paths or []:
+def _resolve_paths(paths) -> list[str]:
+    """Resolve a validated list of path strings to canonical paths."""
+    return [os.path.realpath(str(path)) for path in (paths or [])]
+
+
+def _validated_data_boundary_policy(db_cfg) -> tuple[list[str], list[str], str]:
+    """Return canonical boundary policy or reject a direct launch.
+
+    Hard-block targets must be stable ordinary files or directories. A
+    redirected or missing target cannot support a claim that it was hidden
+    from training, so it fails before GPU telemetry.
+    """
+    if not isinstance(db_cfg, dict):
+        raise LaunchIntegrityError("data_boundary_policy_not_mapping")
+    for key in ("forbidden_in_training", "watch_paths"):
+        raw = db_cfg.get(key, [])
+        if (not isinstance(raw, list)
+                or any(not isinstance(path, str) or not path.strip()
+                       for path in raw)):
+            raise LaunchIntegrityError(
+                f"data_boundary_{key}_invalid")
+        if any(":" in path or any(ord(char) < 32 for char in path)
+               for path in raw):
+            raise LaunchIntegrityError(
+                f"data_boundary_{key}_unsafe_characters")
+        if any(not Path(path).is_absolute() for path in raw):
+            raise LaunchIntegrityError(
+                f"data_boundary_{key}_must_be_absolute")
+
+    forbidden = _resolve_paths(db_cfg.get("forbidden_in_training"))
+    watch = _resolve_paths(db_cfg.get("watch_paths"))
+    network = db_cfg.get("training_network", "inherit")
+    if network not in ("inherit", "deny"):
+        raise LaunchIntegrityError("data_boundary_training_network_invalid")
+
+    canonical_forbidden = []
+    for raw, resolved in zip(
+            db_cfg.get("forbidden_in_training", []), forbidden):
+        if os.path.abspath(raw) != resolved:
+            raise LaunchIntegrityError("data_boundary_forbidden_path_redirected")
+        if resolved == os.path.sep:
+            raise LaunchIntegrityError("data_boundary_forbidden_root_invalid")
         try:
-            out.append(os.path.realpath(str(p)))
-        except Exception:
-            out.append(str(p))
-    return [p for p in out if p]
+            mode = os.stat(resolved, follow_symlinks=False).st_mode
+        except OSError as exc:
+            raise LaunchIntegrityError(
+                "data_boundary_forbidden_path_unavailable") from exc
+        import stat
+        if not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
+            raise LaunchIntegrityError(
+                "data_boundary_forbidden_path_type_unsupported")
+        if resolved not in canonical_forbidden:
+            canonical_forbidden.append(resolved)
+
+    return canonical_forbidden, list(dict.fromkeys(watch)), network
 
 
 def _apply_data_boundary_env(env: Dict[str, str], db_cfg: dict,
@@ -127,8 +181,9 @@ def _apply_data_boundary_env(env: Dict[str, str], db_cfg: dict,
     data_boundaries config. Used both by the in-process builtins.open patch
     and by the kernel namespace isolation path.
     """
-    forbidden = _resolve_paths(db_cfg.get("forbidden_in_training"))
-    watch = _resolve_paths(db_cfg.get("watch_paths"))
+    forbidden, watch, network = _validated_data_boundary_policy(db_cfg)
+    for key in _BOUNDARY_ENV_KEYS:
+        env.pop(key, None)
     if forbidden:
         env["ORZE_FORBIDDEN_PATHS"] = ":".join(forbidden)
     if watch:
@@ -138,51 +193,95 @@ def _apply_data_boundary_env(env: Dict[str, str], db_cfg: dict,
     except Exception:
         pass
     env["ORZE_ACCESS_LOG"] = str(idea_dir / "_access_log.tsv")
+    if forbidden or network == "deny":
+        env["ORZE_REQUIRE_KERNEL_BOUNDARY"] = "1"
+    env["ORZE_TRAINING_NETWORK"] = network
 
 
-def _has_unshare() -> bool:
-    """True if `unshare` is on PATH and supports unprivileged user+mount ns."""
-    import shutil
-    return shutil.which("unshare") is not None
-
-
-def _ensure_empty_overlay() -> Path:
-    """Ensure /tmp/orze_empty_overlay exists (empty dir used as bind-mount
-    source to hide forbidden paths inside the training namespace)."""
+def _probe_kernel_boundary(*, deny_network: bool) -> None:
+    """Prove user/mount (and optionally network) isolation without a GPU."""
+    unshare = shutil.which("unshare")
+    bash = shutil.which("bash")
+    mount = shutil.which("mount")
+    umount = shutil.which("umount")
+    if None in (unshare, bash, mount, umount):
+        raise LaunchIntegrityError("data_boundary_kernel_tools_unavailable")
+    args = [unshare, "-U", "--map-root-user", "-m"]
+    if deny_network:
+        args.append("-n")
+    env = os.environ.copy()
+    for key in (
+        "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES",
+        "HIP_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES",
+    ):
+        env[key] = ""
     try:
-        _OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        pass
-    return _OVERLAY_DIR
+        with tempfile.TemporaryDirectory(
+                prefix="orze-boundary-probe-") as target:
+            completed = subprocess.run(
+                args + [
+                    bash, "-ceu",
+                    f"{mount} --make-rprivate /; "
+                    f"{mount} -t tmpfs -o "
+                    "nosuid,nodev,noexec,size=4096,mode=000 "
+                    f"tmpfs \"$1\"; {umount} \"$1\"",
+                    "orze-boundary-probe", target,
+                ],
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+            )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise LaunchIntegrityError(
+            "data_boundary_kernel_probe_failed") from exc
+    if completed.returncode != 0:
+        raise LaunchIntegrityError("data_boundary_kernel_probe_failed")
 
 
-def _build_isolated_cmd(base_cmd: list, forbidden_paths: list) -> list:
+def _build_isolated_cmd(base_cmd: list, forbidden_paths: list,
+                        *, deny_network: bool = False) -> list:
     """Wrap `base_cmd` so it runs inside a private user+mount namespace with
     each forbidden path bind-mounted over by an empty dir. Any file read
     rooted at a forbidden path returns ENOENT at the kernel layer — no
     Python patches, no library-specific hooks.
 
-    Requires Linux `unshare` with unprivileged user namespaces. Callers
-    should check _has_unshare() first and fall back to the in-process
-    builtins.open patch (the 3.2.26 behavior) when unavailable.
+    Every namespace or mount operation is mandatory. Any setup failure exits
+    before the training script; there is no Python-only fallback for a hard
+    boundary.
     """
     import shlex
-    overlay = _ensure_empty_overlay()
+    unshare = shutil.which("unshare")
+    bash = shutil.which("bash")
+    mount = shutil.which("mount")
+    if None in (unshare, bash, mount):
+        raise LaunchIntegrityError("data_boundary_kernel_tools_unavailable")
 
-    # Build the mount script. We bind-mount the empty overlay over each
-    # forbidden path. Nonexistent paths are skipped (|| true) — orze may
-    # declare paths that don't exist on every host.
-    mount_lines = []
+    q_mount = shlex.quote(mount)
+    mount_lines = ["set -eu", f"{q_mount} --make-rprivate /"]
     for p in forbidden_paths:
-        q_overlay = shlex.quote(str(overlay))
         q_path = shlex.quote(p)
         mount_lines.append(
-            f"[ -e {q_path} ] && mount --bind {q_overlay} {q_path} 2>/dev/null || true"
+            f"if [ -L {q_path} ]; then exit 125; "
+            f"elif [ -d {q_path} ]; then "
+            f"{q_mount} -t tmpfs -o "
+            f"nosuid,nodev,noexec,size=4096,mode=000 "
+            f"tmpfs {q_path}; "
+            f"elif [ -f {q_path} ]; then "
+            f"{q_mount} --bind /dev/null {q_path}; "
+            f"{q_mount} -o remount,bind,ro {q_path}; "
+            f"else exit 125; fi"
         )
-    mount_script = "\n".join(mount_lines)
-
-    inner = f"{mount_script}\nexec {shlex.join(base_cmd)}"
-    return ["unshare", "-U", "--map-root-user", "-m", "bash", "-c", inner]
+    mount_lines.extend([
+        "export ORZE_KERNEL_BOUNDARY_ACTIVE=1",
+        f"exec {shlex.join(base_cmd)}",
+    ])
+    args = [unshare, "-U", "--map-root-user", "-m"]
+    if deny_network:
+        args.append("-n")
+    return args + [bash, "-c", "\n".join(mount_lines)]
 
 
 def _format_args(args, template_vars: dict) -> list:
@@ -1346,20 +1445,15 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         except Exception:
             pass  # fall back to global train_script
 
-    # Data boundary guardrails. Two layered defenses, activated when
-    # data_boundaries is configured:
-    #   1. Kernel isolation (primary): unshare -U -m bash -c "mount --bind
-    #      empty_dir forbidden_path; exec python -m orze.data_boundaries.wrap
-    #      train.py ...". Any file read rooted at a forbidden path returns
-    #      ENOENT at the kernel layer — works regardless of which library
-    #      does the I/O (pyarrow, h5py, tfrecord, C extensions, network).
-    #   2. In-process audit (secondary): orze.data_boundaries.wrap activates
-    #      a monkey-patched builtins.open() that appends to ORZE_ACCESS_LOG
-    #      for post-hoc audit of Python-level file accesses.
-    db_cfg = cfg.get("data_boundaries") or {}
-    forbidden = _resolve_paths(db_cfg.get("forbidden_in_training"))
-    watch = _resolve_paths(db_cfg.get("watch_paths"))
-    use_wrapper = bool(forbidden or watch)
+    # Data boundary guardrails. Hard path blocks and network denial require a
+    # verified user/mount namespace and never degrade to Python-only hooks.
+    # The builtins.open wrapper remains defense in depth and provides the
+    # explicitly audit-only watch mode.
+    db_cfg = cfg.get("data_boundaries", {})
+    forbidden, watch, training_network = _validated_data_boundary_policy(
+        db_cfg)
+    kernel_boundary = bool(forbidden or training_network == "deny")
+    use_wrapper = bool(kernel_boundary or watch)
 
     # Use per-idea config if it exists, otherwise global base config
     config_path = cfg["base_config"]
@@ -1392,23 +1486,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     if resume_context:
         base_cmd.extend(resume_context["args"])
 
-    # Wrap with namespace isolation if forbidden paths are configured and
-    # unshare is available. Falls back to the in-process patch otherwise.
-    if forbidden and _has_unshare():
-        cmd = _build_isolated_cmd(base_cmd, forbidden)
-    else:
-        cmd = base_cmd
-        if forbidden and not _has_unshare():
-            global _UNSHARE_WARNED
-            if not _UNSHARE_WARNED:
-                logger.warning(
-                    "data_boundaries.forbidden_in_training is set but `unshare` "
-                    "is not available. Falling back to in-process builtins.open "
-                    "patch, which does NOT catch pyarrow/h5py/C-extension reads. "
-                    "Install util-linux (provides unshare) for kernel-level "
-                    "isolation."
-                )
-                _UNSHARE_WARNED = True
+    cmd = base_cmd
 
     env = os.environ.copy()
     for k, v in (cfg.get("train_extra_env") or {}).items():
@@ -1441,6 +1519,16 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             idea_id, results_dir, cfg):
         raise LaunchIntegrityError(
             "artifact_preflight_receipt_missing_or_stale")
+    if kernel_boundary:
+        _probe_kernel_boundary(deny_network=training_network == "deny")
+        # The actual namespace setup repeats every mandatory operation after
+        # the zero-GPU capability probe. A race or host-policy change exits
+        # before user training code rather than weakening the boundary.
+        cmd = _build_isolated_cmd(
+            base_cmd,
+            forbidden,
+            deny_network=training_network == "deny",
+        )
 
     attempt_id = secrets.token_hex(16)
     stored_attempt = stored_claim.get("attempt_id")
