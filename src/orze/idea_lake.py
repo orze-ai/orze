@@ -71,7 +71,12 @@ CREATE TABLE IF NOT EXISTS id_sequence (
 CREATE TABLE IF NOT EXISTS idea_state (
     idea_id TEXT PRIMARY KEY,
     current_state TEXT NOT NULL DEFAULT 'QUEUED',
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    queued_at TEXT,
+    claimed_at TEXT,
+    started_at TEXT,
+    terminal_at TEXT,
+    completed_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_idea_state_current ON idea_state(current_state);
@@ -90,7 +95,6 @@ CREATE TABLE IF NOT EXISTS idea_transitions (
 
 CREATE INDEX IF NOT EXISTS idx_idea_transitions_idea_id ON idea_transitions(idea_id);
 CREATE INDEX IF NOT EXISTS idx_idea_transitions_to_state ON idea_transitions(to_state);
-CREATE INDEX IF NOT EXISTS idx_idea_transitions_ts ON idea_transitions(ts);
 
 CREATE TABLE IF NOT EXISTS schema_migrations (
     name TEXT PRIMARY KEY,
@@ -202,6 +206,10 @@ class IdeaLake:
 
     def _ensure_schema(self):
         self.conn.executescript(_SCHEMA_SQL)
+        # Normalize the original audited-FSM column names before any index or
+        # writer assumes the current schema. Some deployed databases use
+        # transitioned_at/transitioned_by_* with NOT NULL constraints.
+        self._normalize_transition_schema()
         # Ensure id_sequence has a row
         row = self.conn.execute("SELECT next_id FROM id_sequence LIMIT 1").fetchone()
         if row is None:
@@ -216,6 +224,69 @@ class IdeaLake:
             _init_trig(self.conn)
         except Exception as e:
             logger.warning("trigger_ledger schema init failed: %s", e)
+
+    def _normalize_transition_schema(self) -> None:
+        """Losslessly rename the original transition receipt columns.
+
+        Renaming, rather than copying into newly added columns, preserves both
+        historical values and legacy NOT NULL constraints without requiring
+        future writers to maintain two timestamp columns.
+        """
+        aliases = {
+            "transitioned_at": "ts",
+            "transitioned_by_host": "host",
+            "transitioned_by_pid": "pid",
+        }
+        existing_columns = {
+            row[1] for row in self.conn.execute(
+                "PRAGMA table_info(idea_transitions)"
+            ).fetchall()
+        }
+        has_index = self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
+            ("idx_idea_transitions_ts",),
+        ).fetchone()
+        if {"ts", "host", "pid"}.issubset(existing_columns) and has_index:
+            return
+
+        def _do_migrate():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                columns = {
+                    row[1] for row in self.conn.execute(
+                        "PRAGMA table_info(idea_transitions)"
+                    ).fetchall()
+                }
+                for old, new in aliases.items():
+                    if new not in columns and old in columns:
+                        self.conn.execute(
+                            f"ALTER TABLE idea_transitions "
+                            f"RENAME COLUMN {old} TO {new}"
+                        )
+                        columns.remove(old)
+                        columns.add(new)
+                # Extremely old/custom tables may have neither spelling. Keep
+                # their existing rows explicitly unknown rather than deriving
+                # timestamps from row IDs or filesystem metadata.
+                for name, declaration in (
+                    ("ts", "TEXT"), ("host", "TEXT"), ("pid", "INTEGER")
+                ):
+                    if name not in columns:
+                        self.conn.execute(
+                            f"ALTER TABLE idea_transitions "
+                            f"ADD COLUMN {name} {declaration}"
+                        )
+                        columns.add(name)
+                self.conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_idea_transitions_ts "
+                    "ON idea_transitions(ts)"
+                )
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        _retry_on_busy(_do_migrate)
 
     def _migrate_if_needed(self):
         """Migrate from old fixed-column schema to generic JSON blobs."""
@@ -331,8 +402,170 @@ class IdeaLake:
         except Exception as e:
             logger.warning("v4.5 FSM migration failed: %s (will retry next init)", e)
 
+        self._ensure_lifecycle_timestamp_schema()
         self._reconcile_lifecycle_columns()
         self._reconcile_partial_states()
+
+    def _ensure_lifecycle_timestamp_schema(self) -> None:
+        """Add current-attempt lifecycle clocks without inventing history.
+
+        Existing rows remain NULL: ``updated_at`` or filesystem mtimes are not
+        evidence of when an old attempt was queued, claimed, started, or
+        finished.  New values are written only by an accepted lifecycle edge.
+        """
+        columns = {
+            row[1]
+            for row in self.conn.execute("PRAGMA table_info(idea_state)").fetchall()
+        }
+        missing = [
+            name for name in (
+                "queued_at", "claimed_at", "started_at", "terminal_at",
+                "completed_at",
+            )
+            if name not in columns
+        ]
+        if not missing:
+            return
+
+        def _do_migrate():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                # Re-read under the write lock in case another opener migrated
+                # the shared database while this connection was waiting.
+                current = {
+                    row[1] for row in self.conn.execute(
+                        "PRAGMA table_info(idea_state)"
+                    ).fetchall()
+                }
+                for name in missing:
+                    if name not in current:
+                        self.conn.execute(
+                            f"ALTER TABLE idea_state ADD COLUMN {name} TEXT"
+                        )
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        _retry_on_busy(_do_migrate)
+
+    @staticmethod
+    def _transition_time(conn: sqlite3.Connection) -> str:
+        """Return one framework-owned UTC timestamp for an atomic edge."""
+        return conn.execute(
+            "SELECT strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
+        ).fetchone()[0]
+
+    @staticmethod
+    def _lifecycle_timestamp_sql(to_state: str) -> tuple:
+        """Return SQL assignments/values for the current attempt.
+
+        The clocks describe when the database accepted each lifecycle edge,
+        not an unverified timestamp supplied by a worker.  Requeue starts a
+        fresh current attempt; the immutable transition ledger retains prior
+        attempts.
+        """
+        if to_state == "QUEUED":
+            return (
+                "queued_at = ?, claimed_at = NULL, started_at = NULL, "
+                "terminal_at = NULL, completed_at = NULL",
+                1,
+            )
+        if to_state == "CLAIMED":
+            return (
+                "claimed_at = ?, started_at = NULL, terminal_at = NULL, "
+                "completed_at = NULL",
+                1,
+            )
+        if to_state == "IN_PROGRESS":
+            return (
+                "started_at = ?, terminal_at = NULL, "
+                "completed_at = NULL",
+                1,
+            )
+        if to_state == "COMPLETE":
+            return (
+                "terminal_at = ?, completed_at = ?",
+                2,
+            )
+        if to_state in ("FAILED", "SKIPPED"):
+            return (
+                "terminal_at = ?, completed_at = NULL",
+                1,
+            )
+        return ("", 0)
+
+    @classmethod
+    def _state_timestamp_clause(cls, to_state: str, at: str) -> tuple:
+        sql, marker_count = cls._lifecycle_timestamp_sql(to_state)
+        return sql, tuple(at for _ in range(marker_count))
+
+    @classmethod
+    def _write_state_row(
+        cls,
+        conn: sqlite3.Connection,
+        idea_id: str,
+        to_state: str,
+        host: str,
+        pid: int,
+        sop_type: str,
+        at: str,
+        *,
+        expected_state: Optional[str] = None,
+    ) -> bool:
+        """Write state and its clocks together; optionally compare-and-swap."""
+        timestamp_sql, timestamp_values = cls._state_timestamp_clause(to_state, at)
+        assignments = (
+            "current_state = ?, updated_by_host = ?, updated_by_pid = ?, "
+            "sop_type = ?, updated_at = ?"
+        )
+        if timestamp_sql:
+            assignments += ", " + timestamp_sql
+        params = [to_state, host, pid, sop_type, at, *timestamp_values, idea_id]
+        where = "idea_id = ?"
+        if expected_state is not None:
+            where += " AND current_state = ?"
+            params.append(expected_state)
+        cursor = conn.execute(
+            f"UPDATE idea_state SET {assignments} WHERE {where}", params
+        )
+        return cursor.rowcount == 1
+
+    @staticmethod
+    def _insert_state_row(
+        conn: sqlite3.Connection,
+        idea_id: str,
+        state: str,
+        host: str,
+        pid: int,
+        sop_type: str,
+        at: str,
+        *,
+        known_queued_at: bool = False,
+        record_lifecycle: bool = True,
+    ) -> None:
+        """Insert a newly observed state with only timestamps actually known."""
+        queued_at = (
+            at if record_lifecycle and (known_queued_at or state == "QUEUED")
+            else None
+        )
+        claimed_at = at if record_lifecycle and state == "CLAIMED" else None
+        started_at = at if record_lifecycle and state == "IN_PROGRESS" else None
+        terminal_at = (
+            at if record_lifecycle and state in ("COMPLETE", "FAILED", "SKIPPED")
+            else None
+        )
+        completed_at = at if record_lifecycle and state == "COMPLETE" else None
+        conn.execute(
+            "INSERT INTO idea_state "
+            "(idea_id, current_state, updated_by_host, updated_by_pid, sop_type, "
+            "updated_at, queued_at, claimed_at, started_at, terminal_at, "
+            "completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                idea_id, state, host, pid, sop_type, at, queued_at, claimed_at,
+                started_at, terminal_at, completed_at,
+            ),
+        )
 
     def _reconcile_lifecycle_columns(self) -> None:
         """Idempotently repair legacy/FSM lifecycle divergence.
@@ -451,6 +684,7 @@ class IdeaLake:
                     "'IN_PROGRESS', 'COMPLETE')"
                 ).fetchall()
                 for idea_id, current in rows:
+                    transition_at = self._transition_time(self.conn)
                     self.conn.execute(
                         "UPDATE idea_state SET current_state = 'FAILED', "
                         "updated_by_host = 'migration', updated_by_pid = ?, "
@@ -460,10 +694,10 @@ class IdeaLake:
                     self.conn.execute(
                         "INSERT INTO idea_transitions "
                         "(idea_id, from_state, to_state, reason, host, pid, "
-                        "sop_type) VALUES (?, ?, 'FAILED', "
+                        "sop_type, ts) VALUES (?, ?, 'FAILED', "
                         "'migration_partial_not_complete', 'migration', ?, "
-                        "'training')",
-                        (idea_id, current, os.getpid()),
+                        "'training', ?)",
+                        (idea_id, current, os.getpid(), transition_at),
                     )
                 self.conn.execute(
                     "INSERT INTO schema_migrations (name) VALUES (?)",
@@ -534,6 +768,7 @@ class IdeaLake:
                 pass
 
         def _do_insert():
+            recorded_at = self._transition_time(self.conn)
             self.conn.execute(
                 """INSERT OR REPLACE INTO ideas (
                     idea_id, id_num, title, priority, category, parent, hypothesis,
@@ -562,8 +797,8 @@ class IdeaLake:
                     json.dumps(eval_metrics) if eval_metrics else None,
                     status,
                     training_time,
-                    datetime.datetime.now().isoformat(),
-                    created_at or datetime.datetime.now().isoformat(),
+                    recorded_at,
+                    created_at or recorded_at,
                     approach_family,
                     kind,
                 ),
@@ -576,11 +811,24 @@ class IdeaLake:
             # their declared initial state only.
             initial_state = STATUS_TO_STATE.get(str(status).lower())
             if initial_state is not None:
-                self.conn.execute(
-                    "INSERT OR IGNORE INTO idea_state (idea_id, current_state) "
-                    "VALUES (?, ?)",
-                    (idea_id, initial_state),
-                )
+                existing = self.conn.execute(
+                    "SELECT 1 FROM idea_state WHERE idea_id = ?", (idea_id,)
+                ).fetchone()
+                if existing is None:
+                    self._insert_state_row(
+                        self.conn,
+                        idea_id,
+                        initial_state,
+                        "idea_insert",
+                        os.getpid(),
+                        "training",
+                        recorded_at,
+                        # Only queue admission is a lifecycle event observed by
+                        # this writer. Imported terminal/archive statuses retain
+                        # NULL clocks instead of fabricated historical times.
+                        known_queued_at=initial_state == "QUEUED",
+                        record_lifecycle=initial_state == "QUEUED",
+                    )
             self.conn.commit()
         _retry_on_busy(_do_insert)
 
@@ -643,12 +891,15 @@ class IdeaLake:
                 current = row[0] if row else "QUEUED"
                 if current == target:
                     if row is None:
-                        self.conn.execute(
-                            "INSERT INTO idea_state "
-                            "(idea_id, current_state, updated_by_host, "
-                            "updated_by_pid) "
-                            "VALUES (?, ?, 'legacy_status', ?)",
-                            (idea_id, target, os.getpid()),
+                        self._insert_state_row(
+                            self.conn,
+                            idea_id,
+                            target,
+                            "legacy_status",
+                            os.getpid(),
+                            "training",
+                            self._transition_time(self.conn),
+                            record_lifecycle=False,
                         )
                     self.conn.execute(
                         "UPDATE ideas SET status = ? WHERE idea_id = ?",
@@ -665,31 +916,38 @@ class IdeaLake:
                     self.conn.rollback()
                     return False
 
+                transition_at = self._transition_time(self.conn)
                 if row:
-                    cursor = self.conn.execute(
-                        "UPDATE idea_state SET current_state = ?, "
-                        "updated_by_host = 'legacy_status', "
-                        "updated_by_pid = ?, updated_at = datetime('now') "
-                        "WHERE idea_id = ? AND current_state = ?",
-                        (target, os.getpid(), idea_id, current),
-                    )
-                    if cursor.rowcount != 1:
+                    if not self._write_state_row(
+                        self.conn,
+                        idea_id,
+                        target,
+                        "legacy_status",
+                        os.getpid(),
+                        "training",
+                        transition_at,
+                        expected_state=current,
+                    ):
                         self.conn.rollback()
                         return False
                 else:
-                    self.conn.execute(
-                        "INSERT INTO idea_state "
-                        "(idea_id, current_state, updated_by_host, updated_by_pid) "
-                        "VALUES (?, ?, 'legacy_status', ?)",
-                        (idea_id, target, os.getpid()),
+                    self._insert_state_row(
+                        self.conn,
+                        idea_id,
+                        target,
+                        "legacy_status",
+                        os.getpid(),
+                        "training",
+                        transition_at,
                     )
 
                 self.conn.execute(
                     "INSERT INTO idea_transitions "
-                    "(idea_id, from_state, to_state, reason, host, pid, sop_type) "
-                    "VALUES (?, ?, ?, ?, 'legacy_status', ?, 'training')",
+                    "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
+                    "VALUES (?, ?, ?, ?, 'legacy_status', ?, 'training', ?)",
                     (idea_id, current, target,
-                     f"set_status:{str(status).lower()}", os.getpid()),
+                     f"set_status:{str(status).lower()}", os.getpid(),
+                     transition_at),
                 )
                 self.conn.execute(
                     "UPDATE ideas SET status = ? WHERE idea_id = ?",
@@ -760,25 +1018,35 @@ class IdeaLake:
                 if current not in ("QUEUED", "CLAIMED", "IN_PROGRESS"):
                     self.conn.rollback()
                     return False
+                transition_at = self._transition_time(self.conn)
                 if row:
-                    self.conn.execute(
-                        "UPDATE idea_state SET current_state = ?, "
-                        "updated_by_host = 'reconciler', updated_by_pid = ?, "
-                        "updated_at = datetime('now') WHERE idea_id = ?",
-                        (state, os.getpid(), idea_id),
-                    )
+                    if not self._write_state_row(
+                        self.conn,
+                        idea_id,
+                        state,
+                        "reconciler",
+                        os.getpid(),
+                        "training",
+                        transition_at,
+                        expected_state=current,
+                    ):
+                        self.conn.rollback()
+                        return False
                 else:
-                    self.conn.execute(
-                        "INSERT INTO idea_state "
-                        "(idea_id, current_state, updated_by_host, updated_by_pid) "
-                        "VALUES (?, ?, 'reconciler', ?)",
-                        (idea_id, state, os.getpid()),
+                    self._insert_state_row(
+                        self.conn,
+                        idea_id,
+                        state,
+                        "reconciler",
+                        os.getpid(),
+                        "training",
+                        transition_at,
                     )
                 self.conn.execute(
                     "INSERT INTO idea_transitions "
-                    "(idea_id, from_state, to_state, reason, host, pid, sop_type) "
-                    "VALUES (?, ?, ?, ?, 'reconciler', ?, 'training')",
-                    (idea_id, current, state, reason, os.getpid()),
+                    "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
+                    "VALUES (?, ?, ?, ?, 'reconciler', ?, 'training', ?)",
+                    (idea_id, current, state, reason, os.getpid(), transition_at),
                 )
                 if eval_metrics is None:
                     self.conn.execute(
@@ -1337,30 +1605,40 @@ class IdeaLake:
                     self.conn.rollback()
                     return False
 
+                transition_at = self._transition_time(self.conn)
                 if row:
-                    cursor = self.conn.execute(
-                        "UPDATE idea_state SET current_state = ?, updated_by_host = ?, "
-                        "updated_by_pid = ?, sop_type = ?, updated_at = datetime('now') "
-                        "WHERE idea_id = ? AND current_state = ?",
-                        (to_state, host, pid, sop_type, idea_id, from_state),
-                    )
-                    if cursor.rowcount != 1:
+                    if not self._write_state_row(
+                        self.conn,
+                        idea_id,
+                        to_state,
+                        host,
+                        pid,
+                        sop_type,
+                        transition_at,
+                        expected_state=from_state,
+                    ):
                         self.conn.rollback()
                         return False
                 else:
-                    self.conn.execute(
-                        "INSERT INTO idea_state "
-                        "(idea_id, current_state, updated_by_host, updated_by_pid, sop_type, updated_at) "
-                        "VALUES (?, ?, ?, ?, ?, datetime('now'))",
-                        (idea_id, to_state, host, pid, sop_type),
+                    self._insert_state_row(
+                        self.conn,
+                        idea_id,
+                        to_state,
+                        host,
+                        pid,
+                        sop_type,
+                        transition_at,
                     )
 
                 # Record transition
                 self.conn.execute(
                     "INSERT INTO idea_transitions "
-                    "(idea_id, from_state, to_state, reason, host, pid, sop_type) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (idea_id, from_state, to_state, reason or "", host, pid, sop_type)
+                    "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        idea_id, from_state, to_state, reason or "", host, pid,
+                        sop_type, transition_at,
+                    )
                 )
 
                 # Keep the compatibility status and the audited FSM in the
