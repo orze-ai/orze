@@ -46,6 +46,24 @@ and validation-policy changes therefore invalidate the cached log value even
 without a database write. File contents are neither retained nor logged; the
 scan is constant-memory and never follows an unsafe idea or source path.
 
+The research-role digest uses the same resolver. It never ranks harvested or
+raw `metrics.json` values directly: current completion, exact configured
+sources, metric validation, dataset coverage, and any enabled benchmark receipt
+must pass first. Its bounded candidate set combines the 200 newest artifacts
+with up to 50 cached historic leaders, but the cache contributes identities
+only; every cached candidate is re-qualified from current artifacts and the
+cached score is ignored. The digest explicitly states its candidate scope,
+qualification counts, evidence mode, and that it is not an official rank. In
+local-artifact mode it also warns that evaluator/dataset identity is not
+cryptographically proven; a benchmark contract is required to prove that
+comparison identity.
+
+Because this digest crosses an LLM prompt boundary, it exports no raw failure
+message or arbitrary configuration value. Failures are reduced locally to a
+stable category and approach families to the presence of a structural key.
+Metrics/configs and the leaderboard index are bounded, non-redirected inputs;
+the index can nominate a candidate but cannot supply evidence or a value.
+
 ## How it is computed
 
 Evo Score is a weighted blend of five components, each normalized to `0..1`
