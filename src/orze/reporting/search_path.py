@@ -35,7 +35,12 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 # Statuses treated as "this idea actually ran and produced a result we trust".
 _SCORED_STATUSES = {"completed"}
 # Statuses that represent wasted / broken compute.
-_FAILED_STATUSES = {"failed", "error"}
+_FAILED_STATUSES = {"failed", "error", "partial", "dead"}
+_SUCCESSFUL_TERMINAL_STATUSES = {"completed"}
+_NON_ATTEMPT_STATUSES = {
+    "queued", "pending", "claimed", "running", "training", "evaluating",
+    "skipped", "archived",
+}
 
 # Layout spacing (abstract units; the frontend scales as needed).
 _X_GAP = 1.0
@@ -218,11 +223,46 @@ def compute_research_efficiency(
     th = th or Thresholds()
     total = max(n_total, 1)
 
-    # reliability: share of attempts that were not failures/errors.
-    failed = sum(v for k, v in status_counts.items()
-                 if k.lower() in _FAILED_STATUSES)
-    failure_rate = failed / total
-    reliability = 1.0 - failure_rate
+    # Reliability is a terminal-attempt rate. Queued, running, skipped, and
+    # archived proposals are not successful executions merely because they did
+    # not fail. Legacy partial/dead outcomes map to FAILED in the audited FSM.
+    normalized_counts = {
+        str(status).lower(): count
+        for status, count in status_counts.items()
+        if not isinstance(count, bool) and isinstance(count, int) and count >= 0
+    }
+    successful_attempts = sum(
+        count for status, count in normalized_counts.items()
+        if status in _SUCCESSFUL_TERMINAL_STATUSES
+    )
+    failed_attempts = sum(
+        count for status, count in normalized_counts.items()
+        if status in _FAILED_STATUSES
+    )
+    terminal_attempts = successful_attempts + failed_attempts
+    non_attempts = sum(
+        count for status, count in normalized_counts.items()
+        if status in _NON_ATTEMPT_STATUSES
+    )
+    classified = terminal_attempts + non_attempts
+    reported = sum(normalized_counts.values())
+    unclassified = sum(
+        count for status, count in normalized_counts.items()
+        if (status not in _SUCCESSFUL_TERMINAL_STATUSES
+            and status not in _FAILED_STATUSES
+            and status not in _NON_ATTEMPT_STATUSES)
+    ) + max(0, n_total - reported)
+    assessed_attempts = terminal_attempts + unclassified
+    unsuccessful = failed_attempts + unclassified
+    # No assessed attempt is no evidence of reliable execution, so the score
+    # fails closed at zero while the rate remains null rather than claiming 0%
+    # failures. Unclassified rows are assessed as unsuccessful above.
+    if assessed_attempts:
+        failure_rate: Optional[float] = unsuccessful / assessed_attempts
+        reliability = successful_attempts / assessed_attempts
+    else:
+        failure_rate = None
+        reliability = 0.0
 
     # yield: scored results per idea produced, saturating at a target rate.
     yield_rate = n_scored / total
@@ -277,7 +317,18 @@ def compute_research_efficiency(
             "max_fanout": top1,
             "gini": _gini(fanout),
         },
-        "failure_rate": round(failure_rate, 4),
+        "failure_rate": (
+            round(failure_rate, 4) if failure_rate is not None else None),
+        "reliability_accounting": {
+            "terminal_attempts": terminal_attempts,
+            "assessed_attempts": assessed_attempts,
+            "successful": successful_attempts,
+            "failed": failed_attempts,
+            "excluded_non_attempts": non_attempts,
+            "unclassified": unclassified,
+            "unclassified_penalty": unclassified,
+            "classified": classified,
+        },
         "yield_rate": round(yield_rate, 4),
         "depth_yield": depth_yield,
     }

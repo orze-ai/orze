@@ -57,7 +57,7 @@ Evo Score is a weighted blend of five components, each normalized to `0..1`
 | **Refine success** | refinements that actually beat their parent | 1.5 |
 | **Depth utilization** | parented ideas that are themselves evolved further (search compounds vs sprays flat) | 1.5 |
 | **Diversity** | `1 − share of edges held by the single biggest hub` | 1.0 |
-| **Reliability** | `1 − failure rate` | 1.0 |
+| **Reliability** | completed ÷ completed + failed/error/partial/dead + unclassified outcome rows | 1.0 |
 
 ```
 Evo Score = 100 × Σ(componentᵢ.score × weightᵢ) / Σ(weightᵢ)     # Σweight = 6
@@ -65,6 +65,16 @@ Evo Score = 100 × Σ(componentᵢ.score × weightᵢ) / Σ(weightᵢ)     # Σw
 
 All weights, the yield target, and grade cutoffs are configurable under
 `report.search_path` (`eff_w_*`, `eff_yield_target`, …).
+
+Reliability excludes queued, running, skipped, archived, unknown, and other
+non-attempt rows from its denominator. They are not successful executions merely
+because they did not fail. With no terminal attempts, reliability contributes
+zero and `failure_rate` is null. The API's `reliability_accounting` reports the
+successful, failed, excluded non-attempt, and unclassified counts so this
+denominator cannot be inferred incorrectly. Legacy `partial` and `dead` rows
+are failures, matching their mapping to `FAILED` in the audited lifecycle.
+Unexpected, missing, or count-mismatched statuses are conservatively penalized
+as unsuccessful instead of being allowed to inflate the score.
 
 ### Grade cutoffs
 
@@ -113,12 +123,12 @@ Grade A (≥85) requires every component at roughly **0.85+**. Concretely:
 | Refine success | 0% | **≥ 80%** of refinements improve on their parent |
 | Depth utilization | 5.3% | **≥ 80%** — winners spawn deeper refinements |
 | Diversity | 0.44 (hub 56%) | **≥ 0.85** — no single hub > ~15% of edges |
-| Reliability | 0.29 (71% fail) | **≥ 0.90** — ≤ 10% of runs fail/error |
+| Reliability | 0.29 (71% fail) | **≥ 0.90** — ≤ 10% of terminal attempts fail/error/partial/dead |
 
 **Picture of an A-grade run:** not today's flat star, but a **broad, deep tree** —
 many independent lineages, each winner promoted and refined several levels deep,
 ≥4 in 5 refinements actually improving, ≥1 in 10 ideas producing a scored
-result, and ≤1 in 10 runs erroring.
+result, and ≤1 in 10 terminal attempts ending unsuccessfully.
 
 Worked example that lands at A:
 

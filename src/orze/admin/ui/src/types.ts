@@ -269,7 +269,17 @@ export interface ResearchEfficiency {
   weights_sum?: number;
   exploration_exploitation: { explore: number; exploit: number; exploit_share: number };
   concentration: { top1_share: number; top5_share: number; max_fanout: number; gini: number };
-  failure_rate: number;
+  failure_rate: number | null;
+  reliability_accounting?: {
+    terminal_attempts: number;
+    assessed_attempts: number;
+    successful: number;
+    failed: number;
+    excluded_non_attempts: number;
+    unclassified: number;
+    unclassified_penalty: number;
+    classified: number;
+  };
   yield_rate: number;
   depth_yield: DepthYieldRow[];
   evidence_qualification?: EvidenceQualification;

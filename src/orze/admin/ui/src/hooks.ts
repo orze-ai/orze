@@ -118,7 +118,7 @@ const EMPTY_RESEARCH_EFFICIENCY = {
   score: null, grade: '—', components: {}, depth_yield: [],
   exploration_exploitation: { explore: 0, exploit: 0, exploit_share: 0 },
   concentration: { top1_share: 0, top5_share: 0, max_fanout: 0, gini: 0 },
-  failure_rate: 0, yield_rate: 0,
+  failure_rate: null, yield_rate: 0,
   presentation: {
     claim_scope: 'internal_research_efficiency',
     qualification_applied: false,

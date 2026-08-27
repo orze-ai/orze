@@ -474,6 +474,57 @@ class TestResearchEfficiency:
         assert abs(e["failure_rate"] - 0.4) < 1e-6
         assert abs(e["yield_rate"] - 0.1) < 1e-6
 
+    def test_non_attempts_do_not_inflate_terminal_reliability(self):
+        e = self._eff(
+            n_total=100,
+            status_counts={
+                "completed": 1, "failed": 1, "skipped": 90, "queued": 8,
+            },
+        )
+        assert e["components"]["reliability"]["value"] == 0.5
+        assert e["failure_rate"] == 0.5
+        assert e["reliability_accounting"] == {
+            "terminal_attempts": 2,
+            "assessed_attempts": 2,
+            "successful": 1,
+            "failed": 1,
+            "excluded_non_attempts": 98,
+            "unclassified": 0,
+            "unclassified_penalty": 0,
+            "classified": 100,
+        }
+
+    def test_partial_and_dead_are_failed_terminal_attempts(self):
+        e = self._eff(
+            n_total=4,
+            status_counts={
+                "completed": 1, "partial": 1, "dead": 1, "error": 1,
+            },
+        )
+        assert e["failure_rate"] == 0.75
+        assert e["components"]["reliability"]["value"] == 0.25
+        assert e["reliability_accounting"]["failed"] == 3
+
+    def test_no_terminal_attempts_provide_no_reliability_credit(self):
+        e = self._eff(
+            n_total=100,
+            status_counts={"skipped": 90, "queued": 10},
+        )
+        assert e["failure_rate"] is None
+        assert e["components"]["reliability"]["value"] == 0.0
+        assert e["reliability_accounting"]["terminal_attempts"] == 0
+
+    def test_unclassified_statuses_are_penalized_not_credited(self):
+        e = self._eff(
+            n_total=4,
+            status_counts={"completed": 1, "mystery": 2},
+        )
+        # One omitted row plus two unknown-status rows fail closed.
+        assert e["reliability_accounting"]["unclassified"] == 3
+        assert e["reliability_accounting"]["assessed_attempts"] == 4
+        assert e["components"]["reliability"]["value"] == 0.25
+        assert e["failure_rate"] == 0.75
+
     def test_concentration(self):
         e = self._eff(fanout=[8, 1, 1])  # 10 edges, top1 = 0.8
         assert abs(e["concentration"]["top1_share"] - 0.8) < 1e-6

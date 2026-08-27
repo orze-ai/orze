@@ -566,7 +566,7 @@ const COMPONENT_LABEL: Record<string, string> = {
   success: 'Refine success',
   depth_utilization: 'Depth utilization',
   diversity: 'Hub diversity',
-  reliability: 'Reliability (1 − fail)',
+  reliability: 'Reliability (attempt outcomes)',
 };
 
 // Top-level research-efficiency panel: a single 0-100 score + grade for how well
