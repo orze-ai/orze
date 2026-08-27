@@ -35,10 +35,11 @@ CALLING SPEC:
     _new_process_group() -> None
         preexec_fn for subprocess.Popen; calls os.setpgrp() to create a new process group
 
-    run_pre_script(idea_id, gpu, cfg) -> bool
+    run_pre_script(idea_id, gpu, cfg, results_dir=None) -> bool
         idea_id: str
         gpu: int — set as CUDA_VISIBLE_DEVICES
         cfg: dict — uses 'pre_script', 'pre_args', 'pre_timeout', 'python', 'train_extra_env'
+        results_dir: optional result root for framework compute receipts
         returns: True if no pre_script configured or script exited 0, False on failure/timeout
         side effects: runs blocking subprocess
 
@@ -51,6 +52,7 @@ import hashlib
 import json
 import os
 import signal
+import secrets
 import subprocess
 import logging
 import sys
@@ -525,6 +527,7 @@ class TrainingProcess:
     timeout: float
     train_script: Optional[str] = None
     config_path: Optional[str] = None
+    attempt_id: Optional[str] = None
     _log_fh: Any = field(default=None, repr=False)
     _last_log_size: int = field(default=0, repr=False)
     _last_log_check: float = field(default=0.0, repr=False)
@@ -548,6 +551,7 @@ class EvalProcess:
     start_time: float
     log_path: Path
     timeout: float
+    attempt_id: Optional[str] = None
     _log_fh: Any = field(default=None, repr=False)
 
     def close_log(self):
@@ -626,7 +630,8 @@ class RoleProcess:
                 pass
 
 
-def run_pre_script(idea_id: str, gpu: int, cfg: dict) -> bool:
+def run_pre_script(idea_id: str, gpu: int, cfg: dict,
+                   results_dir: Optional[Path] = None) -> bool:
     """Run pre-training script if configured. Returns True if OK to proceed."""
     import sys
     pre_script = cfg.get("pre_script")
@@ -647,24 +652,70 @@ def run_pre_script(idea_id: str, gpu: int, cfg: dict) -> bool:
     env["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
     logger.info("Running pre-script for %s on GPU %s", idea_id, gpu)
+    proc = None
+    handle = None
     try:
-        result = subprocess.run(
-            cmd, env=env, capture_output=True, text=True,
-            timeout=pre_timeout,
+        proc = subprocess.Popen(
+            cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, preexec_fn=_new_process_group,
         )
-        if result.returncode == 0:
+        from types import SimpleNamespace
+        handle = SimpleNamespace(
+            idea_id=idea_id,
+            gpu=gpu,
+            process=proc,
+            start_time=time.time(),
+            attempt_id=secrets.token_hex(16),
+        )
+        if results_dir is not None:
+            from orze.engine.accounting import record_compute_start
+            record_compute_start(
+                handle, Path(results_dir) / idea_id, phase="pre_script")
+        _, stderr = proc.communicate(timeout=pre_timeout)
+        if proc.returncode == 0:
             logger.info("Pre-script OK for %s", idea_id)
+            if results_dir is not None:
+                from orze.engine.accounting import record_compute_terminal
+                record_compute_terminal(
+                    handle, Path(results_dir) / idea_id, "completed",
+                    "pre_script_completed", phase="pre_script",
+                    return_code=proc.returncode)
             return True
-        else:
-            logger.warning("Pre-script failed for %s (exit %d): %s",
-                           idea_id, result.returncode,
-                           result.stderr[-200:] if result.stderr else "")
-            return False
+        logger.warning("Pre-script failed for %s (exit %d): %s",
+                       idea_id, proc.returncode,
+                       stderr[-200:] if stderr else "")
+        if results_dir is not None:
+            from orze.engine.accounting import record_compute_terminal
+            record_compute_terminal(
+                handle, Path(results_dir) / idea_id, "failed",
+                "pre_script_nonzero", phase="pre_script",
+                return_code=proc.returncode)
+        return False
     except subprocess.TimeoutExpired:
         logger.warning("Pre-script timed out for %s after %ds",
                        idea_id, pre_timeout)
+        _terminate_and_reap(proc, f"pre-script {idea_id}")
+        if results_dir is not None:
+            from orze.engine.accounting import record_compute_terminal
+            record_compute_terminal(
+                handle, Path(results_dir) / idea_id, "interrupted",
+                "pre_script_timeout", phase="pre_script",
+                return_code=proc.poll())
         return False
     except Exception as e:
+        if proc is not None and proc.poll() is None:
+            _terminate_and_reap(proc, f"pre-script {idea_id}", timeout=3)
+        if results_dir is not None and handle is not None:
+            from orze.engine.accounting import record_compute_terminal
+            record_compute_terminal(
+                handle, Path(results_dir) / idea_id, "failed",
+                "pre_script_error", phase="pre_script",
+                return_code=proc.poll())
+        elif results_dir is not None:
+            from orze.engine.accounting import record_zero_gpu_outcome
+            record_zero_gpu_outcome(
+                idea_id, Path(results_dir) / idea_id, gpu, "rejected",
+                "pre_script_popen_failed", phase="pre_script")
         logger.warning("Pre-script error for %s: %s", idea_id, e)
         return False
 

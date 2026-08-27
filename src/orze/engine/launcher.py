@@ -45,6 +45,7 @@ import datetime
 import json
 import logging
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -988,6 +989,20 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
     if gpu is not None and int(gpu) >= 0:
         env["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
+    claim_path = idea_dir / "claim.json"
+    claim_data = {}
+    if claim_path.exists():
+        try:
+            claim_data = json.loads(claim_path.read_text(encoding="utf-8"))
+            if not isinstance(claim_data, dict):
+                raise ValueError("claim must be a mapping")
+            if ("gpu" in claim_data and claim_data.get("gpu") != gpu):
+                raise ValueError("claim GPU does not match launch GPU")
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError,
+                ValueError) as exc:
+            raise LaunchIntegrityError(
+                "claim_receipt_invalid_or_mismatched") from exc
+
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not.
     _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
@@ -1006,14 +1021,32 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
         proc.stdin.close()
     except Exception:  # pragma: no cover
         pass
+    attempt_id = secrets.token_hex(16)
+    if claim_data.get("attempt_id"):
+        attempt_id = str(claim_data["attempt_id"])
     tp = TrainingProcess(
         idea_id=idea_id, gpu=gpu, process=proc,
         start_time=time.time(),
         log_path=log_path,
         timeout=float(cfg.get("posthoc_timeout", 3600)),
+        attempt_id=attempt_id,
         _log_fh=log_fh,
     )
     tp.is_posthoc = True
+    from orze.engine.accounting import record_compute_start
+    try:
+        record_compute_start(tp, idea_dir, phase="posthoc")
+    except Exception:
+        _terminate_and_reap(proc, idea_id, timeout=3)
+        try:
+            from orze.engine.accounting import record_compute_terminal
+            record_compute_terminal(
+                tp, idea_dir, "failed", "posthoc_launch_initialization_failed",
+                phase="posthoc", return_code=proc.poll())
+        except Exception:
+            pass
+        tp.close_log()
+        raise
     return tp
 
 
@@ -1371,16 +1404,30 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     if use_wrapper:
         _apply_data_boundary_env(env, db_cfg, results_dir / idea_id)
 
-    # Final sanity-check that the claimed GPU is still free at Popen
-    # time (c1136). Raises GpuUnavailableError if not — handled in
-    # phases.py as a requeue, not a code-fix retry.
-    _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
-
     claim_path = results_dir / idea_id / "claim.json"
+    stored_claim = {}
+    if claim_path.exists():
+        try:
+            stored_claim = json.loads(claim_path.read_text(encoding="utf-8"))
+            if not isinstance(stored_claim, dict):
+                raise ValueError("claim must be a mapping")
+            if ("gpu" in stored_claim
+                    and stored_claim.get("gpu") != gpu):
+                raise ValueError("claim GPU does not match launch GPU")
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError,
+                ValueError) as exc:
+            raise LaunchIntegrityError(
+                "claim_receipt_invalid_or_mismatched") from exc
+
     if lake is not None and not claim_path.exists():
         raise RuntimeError(
             f"Lifecycle-managed launch requires an existing claim for {idea_id}"
         )
+
+    # Final sanity-check that the claimed GPU is still free at Popen
+    # time (c1136). Raises GpuUnavailableError if not — handled in
+    # phases.py as a requeue, not a code-fix retry.
+    _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
 
     # Keep file handle open for subprocess lifetime
     log_fh = open(log_path, "w", encoding="utf-8")
@@ -1394,6 +1441,19 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         raise
 
     now = time.time()
+    attempt_id = secrets.token_hex(16)
+    stored_attempt = stored_claim.get("attempt_id")
+    if stored_attempt:
+        attempt_id = str(stored_attempt)
+    tp = TrainingProcess(
+        idea_id=idea_id, gpu=gpu, process=proc,
+        start_time=now, log_path=log_path,
+        timeout=cfg.get("timeout", 3600),
+        train_script=str(train_script), config_path=str(config_path),
+        attempt_id=attempt_id,
+        _log_fh=log_fh, _last_log_size=0,
+        _last_log_check=now, _stall_since=0.0,
+    )
 
     # Persist the actual trainer identity before advertising IN_PROGRESS.
     # The trainer deliberately owns a separate process group, so recording
@@ -1404,12 +1464,16 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             identity = capture_process_identity(proc.pid)
             claim_data = json.loads(claim_path.read_text(encoding="utf-8"))
             claim_data.update({
+                "attempt_id": attempt_id,
                 "trainer_pid": identity["pid"],
                 "trainer_pgid": identity["pgid"],
                 "trainer_start_ticks": identity["start_ticks"],
                 "trainer_started_at": now,
             })
             atomic_write(claim_path, json.dumps(claim_data, indent=2))
+
+        from orze.engine.accounting import record_compute_start
+        record_compute_start(tp, results_dir / idea_id, phase="training")
 
         # Record FSM transition: CLAIMED → IN_PROGRESS using the process
         # whose effects recovery must mediate.
@@ -1429,17 +1493,18 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             mark_resume_launched(resume_context, claim_path)
     except Exception:
         _terminate_and_reap(proc, idea_id, timeout=3)
+        try:
+            from orze.engine.accounting import record_compute_terminal
+            record_compute_terminal(
+                tp, results_dir / idea_id, "failed",
+                "training_launch_initialization_failed",
+                phase="training", return_code=proc.poll())
+        except Exception:
+            pass
         log_fh.close()
         raise
 
-    return TrainingProcess(
-        idea_id=idea_id, gpu=gpu, process=proc,
-        start_time=now, log_path=log_path,
-        timeout=cfg.get("timeout", 3600),
-        train_script=str(train_script), config_path=str(config_path),
-        _log_fh=log_fh, _last_log_size=0,
-        _last_log_check=now, _stall_since=0.0,
-    )
+    return tp
 
 
 def _write_failure(idea_dir: Path, reason: str, lake=None, idea_id=None, cfg=None):
@@ -1514,6 +1579,19 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
     from orze.engine.health import check_stalled, detect_fatal_in_log, _adaptive_stall_minutes
     from orze.engine.failure import _record_failure, _try_executor_fix, _reset_idea_for_retry
     from orze.engine.failure_analysis import classify_failure, write_failure_analysis as _write_fa_orig
+    from orze.engine.accounting import record_compute_terminal
+
+    def account_terminal(tp, outcome: str, reason_code: str,
+                         return_code: Optional[int]) -> None:
+        phase = "posthoc" if getattr(tp, "is_posthoc", False) else "training"
+        record_compute_terminal(
+            tp,
+            results_dir / tp.idea_id,
+            outcome,
+            reason_code,
+            phase=phase,
+            return_code=return_code,
+        )
 
     # Wrap write_failure_analysis to also run SOP feedback (orze-pro)
     def write_failure_analysis(idea_dir, category, error_msg):
@@ -1732,6 +1810,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 if anomaly:
                     logger.warning("[ANOMALY] %s", anomaly)
             if metrics_error:
+                account_terminal(tp, "failed", "metrics_invalid", ret)
                 invalid_path = metrics_path.with_name(
                     f"metrics.invalid.{time.time_ns()}.json")
                 try:
@@ -1755,6 +1834,8 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 # VRAM precheck failure is environmental (GPU busy), not a code bug.
                 # Re-queue so the idea retries when VRAM is available; don't burn fix budget.
                 if str(error_msg).startswith("insufficient_vram:"):
+                    account_terminal(
+                        tp, "requeued", "trainer_vram_precheck", ret)
                     logger.warning("[VRAM-CONTENTION] %s — %s — re-queuing",
                                    tp.idea_id, str(error_msg)[:100])
                     _reset_idea_for_retry(
@@ -1772,6 +1853,8 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 elif _try_executor_fix(tp.idea_id, error_msg,
                                        results_dir, cfg, fix_counts,
                                        exit_code=ret if ret is not None else -1):
+                    account_terminal(
+                        tp, "failed", "trainer_declared_failed", ret)
                     _reset_idea_for_retry(results_dir / tp.idea_id)
                     try:
                         new_tp = launch(tp.idea_id, actual_gpu, results_dir, cfg)
@@ -1783,9 +1866,14 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
                 else:
+                    account_terminal(
+                        tp, "failed", "trainer_declared_failed", ret)
                     write_failure_analysis(results_dir / tp.idea_id, classify_failure(error_msg, ret or -1, "training"), error_msg)
                     _record_failure(failure_counts, tp.idea_id)
-            elif status == "COMPLETED" and lake is not None and not cfg.get("eval_script"):
+            elif status == "COMPLETED":
+                account_terminal(tp, "completed", "trainer_completed", ret)
+            if (status == "COMPLETED" and lake is not None
+                    and not cfg.get("eval_script")):
                 # With no separate evaluation phase, successful training is
                 # the terminal lifecycle event.  Persist it immediately;
                 # periodic catch-up is only a crash-recovery fallback.
@@ -1819,6 +1907,11 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
             except Exception:
                 pass
             logger.warning("[FAILED] %s on GPU %s — %s", tp.idea_id, gpu, reason)
+            exit_reason_code = (
+                "process_exit_nonzero" if ret not in (None, 0)
+                else "metrics_missing"
+            )
+            account_terminal(tp, "failed", exit_reason_code, ret)
             if _try_executor_fix(tp.idea_id, reason,
                                  results_dir, cfg, fix_counts,
                                  exit_code=ret if ret is not None else -1):

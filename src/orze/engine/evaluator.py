@@ -37,6 +37,7 @@ import datetime
 import json
 import logging
 import os
+import secrets
 import subprocess
 import sys
 import time
@@ -144,6 +145,8 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     log_path = results_dir / idea_id / "eval_output.log"
     logger.info("Launching eval for %s on GPU %s", idea_id, gpu)
 
+    proc = None
+    ep = None
     try:
         env = os.environ.copy()
         for k, v in (cfg.get("train_extra_env") or {}).items():
@@ -166,12 +169,28 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         # Training + eval both occur within IN_PROGRESS state.
         # Only final COMPLETE/FAILED is recorded (below).
 
-        return EvalProcess(
+        ep = EvalProcess(
             idea_id=idea_id, gpu=gpu, process=proc,
             start_time=time.time(), log_path=log_path,
-            timeout=eval_timeout, _log_fh=log_fh,
+            timeout=eval_timeout, attempt_id=secrets.token_hex(16),
+            _log_fh=log_fh,
         )
+        from orze.engine.accounting import record_compute_start
+        record_compute_start(ep, idea_dir, phase="evaluation")
+        return ep
     except Exception as e:
+        if proc is not None and proc.poll() is None:
+            _terminate_and_reap(proc, f"eval {idea_id}", timeout=3)
+        if ep is not None:
+            try:
+                from orze.engine.accounting import record_compute_terminal
+                record_compute_terminal(
+                    ep, idea_dir, "failed",
+                    "evaluation_launch_initialization_failed",
+                    phase="evaluation", return_code=proc.poll())
+            except Exception:
+                pass
+            ep.close_log()
         logger.warning("Failed to launch eval for %s: %s", idea_id, e)
         return None
 
@@ -187,16 +206,23 @@ def run_eval(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None):
         return
     eval_output = cfg.get("eval_output") or "eval_report.json"
     reason = ""
+    outcome = "failed"
+    reason_code = "evaluation_error"
     try:
         ep.process.wait(timeout=ep.timeout)
         if ep.process.returncode == 0:
             logger.info("Eval completed for %s", idea_id)
+            outcome = "completed"
+            reason_code = "evaluation_process_completed"
         else:
             reason = f"Exit code {ep.process.returncode}"
+            reason_code = "evaluation_process_nonzero"
             logger.warning("Eval failed for %s (exit %d)",
                            idea_id, ep.process.returncode)
     except subprocess.TimeoutExpired:
         reason = f"Timed out after {ep.timeout}s"
+        outcome = "interrupted"
+        reason_code = "evaluation_timeout"
         logger.warning("Eval timed out for %s after %ds",
                        idea_id, ep.timeout)
         _terminate_and_reap(ep.process, f"eval {idea_id}")
@@ -205,6 +231,10 @@ def run_eval(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None):
         logger.warning("Eval error for %s: %s", idea_id, e)
     finally:
         ep.close_log()
+        from orze.engine.accounting import record_compute_terminal
+        record_compute_terminal(
+            ep, results_dir / idea_id, outcome, reason_code,
+            phase="evaluation", return_code=ep.process.poll())
         if reason:
             _write_eval_failure_marker(results_dir, idea_id, eval_output, reason, lake=lake)
 
@@ -240,7 +270,7 @@ def _write_eval_failure_marker(results_dir: Path, idea_id: str,
                 reason=reason[:100],
                 host=socket.gethostname(),
                 pid=os.getpid(),
-                sop_type=cfg.get("sop", "training"),
+                sop_type="training",
             )
         except Exception as e:
             logger.warning("FSM transition failed (non-blocking): %s", e)
@@ -254,6 +284,7 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
         lake: IdeaLake instance for FSM transition recording (optional)
     """
     eval_output = cfg.get("eval_output") or "eval_report.json"
+    from orze.engine.accounting import record_compute_terminal
     finished = []
     for gpu in list(active_evals.keys()):
         ep = active_evals[gpu]
@@ -270,6 +301,10 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                 _write_eval_failure_marker(
                     results_dir, ep.idea_id, eval_output,
                     f"Timed out after {elapsed/60:.0f}m")
+                record_compute_terminal(
+                    ep, results_dir / ep.idea_id, "interrupted",
+                    "evaluation_timeout", phase="evaluation",
+                    return_code=ep.process.poll())
                 del active_evals[gpu]
                 finished.append((ep.idea_id, gpu))
             continue
@@ -281,12 +316,14 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
             logger.info("[EVAL OK] %s on GPU %s in %.1fm",
                         ep.idea_id, gpu, elapsed / 60)
             # Verify sealed files and validate metrics
+            sealed_ok = True
             sealed_files = cfg.get("sealed_files", [])
             if sealed_files:
                 from orze.engine.sealed import load_sealed_manifest, verify_sealed_files
                 manifest = load_sealed_manifest(results_dir)
                 changed = verify_sealed_files(sealed_files, manifest)
                 if changed:
+                    sealed_ok = False
                     logger.error("[SEALED VIOLATION] %s modified sealed files: %s",
                                  ep.idea_id, changed)
                     from orze.engine.failure_analysis import write_failure_analysis
@@ -296,7 +333,7 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                     _write_eval_failure_marker(
                         results_dir, ep.idea_id, eval_output,
                         f"Sealed file violation: {', '.join(changed)}", lake=lake)
-            else:
+            if sealed_ok:
                 # Validate metric values (NaN, inf, range)
                 metrics_path = results_dir / ep.idea_id / "metrics.json"
                 if metrics_path.exists():
@@ -322,8 +359,16 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                                 f"Metric validation failed: {reason}", lake=lake)
                         else:
                             eval_success = True
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        _write_eval_failure_marker(
+                            results_dir, ep.idea_id, eval_output,
+                            "Metric validation could not read a valid metrics "
+                            f"document: {type(exc).__name__}", lake=lake)
+                else:
+                    _write_eval_failure_marker(
+                        results_dir, ep.idea_id, eval_output,
+                        "Evaluation process exited successfully without "
+                        "metrics.json", lake=lake)
         else:
             # Log tail of eval output for diagnosis
             eval_tail = tail_file(ep.log_path, 2048).strip()
@@ -333,6 +378,16 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
             _write_eval_failure_marker(
                 results_dir, ep.idea_id, eval_output,
                 f"Exit code {ret}: {eval_tail[-300:] if eval_tail else 'no output'}", lake=lake)
+
+        record_compute_terminal(
+            ep,
+            results_dir / ep.idea_id,
+            "completed" if eval_success else "failed",
+            ("evaluation_validated" if eval_success
+             else "evaluation_failed_validation_or_process"),
+            phase="evaluation",
+            return_code=ret,
+        )
 
         # Record FSM transition: IN_PROGRESS → COMPLETE (v4.5: generic for all SOP types)
         if eval_success and lake:

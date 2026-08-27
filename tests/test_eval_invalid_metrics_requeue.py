@@ -13,11 +13,13 @@ _write_eval_failure_marker (writes the eval_output). So invalid-metrics ideas
 had no eval_output and were re-queued every cycle.
 """
 import json
+import hashlib
 from pathlib import Path
 
 import pytest
 
 from orze.engine.evaluator import check_active_evals
+from orze.engine.sealed import write_sealed_manifest
 
 
 class _FakeProc:
@@ -100,3 +102,27 @@ def test_sealed_path_unaffected_valid_metrics_no_marker(tmp_path):
     check_active_evals(active, tmp_path, CFG)
     # No failure marker should be written for a valid result.
     assert not (idea_dir / EVAL_OUTPUT).exists()
+
+
+def test_unchanged_sealed_files_still_validate_and_complete_eval(tmp_path):
+    idea_id = "idea-sealed-ok"
+    idea_dir = _setup_idea(
+        tmp_path, idea_id,
+        {"status": "COMPLETED", "wer": 5.3},
+    )
+    sealed = tmp_path / "evaluation_manifest.json"
+    sealed.write_text('{"split":"public"}', encoding="utf-8")
+    write_sealed_manifest(tmp_path, {
+        str(sealed): hashlib.sha256(sealed.read_bytes()).hexdigest(),
+    })
+    cfg = dict(CFG, sealed_files=[str(sealed)])
+    ep = _FakeEvalProcess(idea_id, idea_dir / "eval_output.log")
+
+    assert check_active_evals({0: ep}, tmp_path, cfg) == [(idea_id, 0)]
+
+    assert not (idea_dir / EVAL_OUTPUT).exists()
+    receipt = json.loads(next(
+        (idea_dir / "_compute_receipts").glob("*/terminal.json")
+    ).read_text())
+    assert receipt["outcome"] == "completed"
+    assert receipt["reason_code"] == "evaluation_validated"

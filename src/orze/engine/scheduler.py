@@ -45,6 +45,7 @@ import socket
 import datetime
 import json
 import logging
+import secrets
 import sys
 from typing import Dict, List, Optional
 from pathlib import Path
@@ -192,6 +193,7 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
             return False  # completed/failed idea, not claimable
 
     claim_info = {
+        "attempt_id": secrets.token_hex(16),
         "claimed_by": socket.gethostname(),
         "claimed_at": datetime.datetime.now().isoformat(),
         "pid": os.getpid(),

@@ -41,6 +41,11 @@ from orze.engine.launcher import (
     GpuUnavailableError,
 )
 from orze.engine.process import run_artifact_preflight, run_pre_script
+from orze.engine.accounting import (
+    ComputeAccountingError,
+    record_compute_terminal,
+    record_zero_gpu_outcome,
+)
 from orze.engine.scheduler import claim, get_unclaimed, _count_statuses
 from orze.hardware.gpu import get_gpu_memory_used, _eval_already_running
 from orze.reporting.leaderboard import update_report, write_admin_cache
@@ -900,6 +905,16 @@ class OrzePhaseMixin:
                     if not claim(idea_id, self.results_dir, gpu,
                                  lake=self.lake):
                         continue
+
+                    def account_zero_gpu(outcome: str, reason_code: str) -> None:
+                        record_zero_gpu_outcome(
+                            idea_id,
+                            self.results_dir / idea_id,
+                            int(gpu),
+                            outcome,
+                            reason_code,
+                            phase="admission",
+                        )
                     # Write idea config so train scripts can read it.
                     # The only sanitization needed here is the LLM-generated
                     # "collapsed" key pattern: {"epochs: 40": None}, which
@@ -955,6 +970,7 @@ class OrzePhaseMixin:
                             except Exception:
                                 pass
                         _record_failure(self.failure_counts, idea_id)
+                        account_zero_gpu("rejected", "forbidden_launch_override")
                         continue
 
                     # orze_substrate v2: exec-hash pre-launch dedup.
@@ -985,7 +1001,10 @@ class OrzePhaseMixin:
                                     self.lake.set_status(idea_id, "skipped")
                                 except Exception:
                                     pass
+                            account_zero_gpu("rejected", "duplicate_exec_hash")
                             continue
+                    except ComputeAccountingError:
+                        raise
                     except Exception as _eh_err:
                         logger.debug("exec_hash pre-check failed: %r", _eh_err)
                     flat_cfg = {}
@@ -1099,7 +1118,11 @@ class OrzePhaseMixin:
                                                 c.close()
                                     except Exception:
                                         pass
+                                account_zero_gpu(
+                                    "rejected", "nested_config_invalid")
                                 continue
+                    except ComputeAccountingError:
+                        raise
                     except Exception:
                         pass
 
@@ -1148,7 +1171,11 @@ class OrzePhaseMixin:
                                         pass
                                 _record_failure(
                                     self.failure_counts, idea_id)
+                                account_zero_gpu(
+                                    "rejected", "method_validator_rejected")
                                 continue
+                        except ComputeAccountingError:
+                            raise
                         except Exception:
                             pass
 
@@ -1205,7 +1232,11 @@ class OrzePhaseMixin:
                                                 {"train_script": ts, "name": ts},
                                                 next(iter(methods.values()), {}),
                                                 err_msg, self.results_dir)
+                                    account_zero_gpu(
+                                        "rejected", "sop_validation_rejected")
                                     continue
+                    except ComputeAccountingError:
+                        raise
                     except Exception:
                         pass
 
@@ -1233,13 +1264,16 @@ class OrzePhaseMixin:
                             self.results_dir / idea_id, reason,
                             lake=self.lake, idea_id=idea_id, cfg=cfg)
                         _record_failure(self.failure_counts, idea_id)
+                        account_zero_gpu(
+                            "rejected", "artifact_preflight_failed")
                         return free
                     self._artifact_preflight_blocked_until = 0.0
 
                     # Project setup runs only after every static validator and
                     # the zero-GPU artifact resolver have passed. This avoids
                     # spending setup work on rejected or unlaunchable ideas.
-                    if not run_pre_script(idea_id, gpu, cfg):
+                    if not run_pre_script(
+                            idea_id, gpu, cfg, self.results_dir):
                         logger.warning(
                             "Pre-script failed for %s, marking FAILED",
                             idea_id)
@@ -1249,7 +1283,8 @@ class OrzePhaseMixin:
                                              self.fix_counts):
                             _reset_idea_for_retry(
                                 self.results_dir / idea_id)
-                            if run_pre_script(idea_id, gpu, cfg):
+                            if run_pre_script(
+                                    idea_id, gpu, cfg, self.results_dir):
                                 pass  # fixed — fall through to launch
                             else:
                                 _write_failure(
@@ -1281,7 +1316,18 @@ class OrzePhaseMixin:
                             "[GPU_VALIDATION_FAIL] idea=%s gpu=%s reason=%s "
                             "— requeueing (no failure recorded)",
                             idea_id, gpu, e)
-                        _reset_idea_for_retry(self.results_dir / idea_id)
+                        account_zero_gpu(
+                            "requeued", "gpu_unavailable_before_launch")
+                        _reset_idea_for_retry(
+                            self.results_dir / idea_id,
+                            release_claim=True,
+                        )
+                        if self.lake is not None:
+                            if not self.lake.set_status(idea_id, "queued"):
+                                raise RuntimeError(
+                                    "Could not persist GPU-unavailable requeue "
+                                    f"for {idea_id}"
+                                )
                         continue
                     except Exception as e:
                         logger.error("Failed to launch %s on GPU %s: %s",
@@ -1330,9 +1376,26 @@ class OrzePhaseMixin:
                         except Exception as cleanup_err:
                             logger.warning("Cleanup after slot-race failed: %s",
                                            cleanup_err)
+                        record_compute_terminal(
+                            tp,
+                            self.results_dir / idea_id,
+                            "requeued",
+                            "scheduler_slot_race",
+                            phase=("posthoc" if getattr(
+                                tp, "is_posthoc", False) else "training"),
+                            return_code=tp.process.poll(),
+                        )
+                        _reset_idea_for_retry(
+                            self.results_dir / idea_id,
+                            release_claim=True,
+                        )
                         if self.lake:
-                            # Return idea to queue so a later iteration retries
-                            self.lake.set_status(idea_id, "queued")
+                            # Return idea to queue so a later iteration retries.
+                            if not self.lake.set_status(idea_id, "queued"):
+                                raise RuntimeError(
+                                    "Could not persist slot-race requeue for "
+                                    f"{idea_id}"
+                                )
                         continue
                     base_id = idea_id
                     if "-ht-" in base_id:
@@ -1632,6 +1695,19 @@ class OrzePhaseMixin:
             role_states=self.role_states,
             notification_health=nh,
         )
+
+        # Compute efficiency is separate from the genealogy-based Evo Score.
+        # Publish a derived snapshot from framework-owned immutable receipts;
+        # never use trainer-reported ``training_time`` for allocation totals.
+        try:
+            from orze.engine.accounting import summarize_compute_receipts
+            compute_summary = summarize_compute_receipts(self.results_dir)
+            atomic_write(
+                self.results_dir / "compute_accounting.json",
+                json.dumps(compute_summary, indent=2, sort_keys=True) + "\n",
+            )
+        except Exception as e:
+            logger.warning("Compute-accounting summary failed: %s", e)
 
         # 9b. Admin cache (pre-aggregated nodes/queue/alerts)
         try:

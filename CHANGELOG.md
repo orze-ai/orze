@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **Compute efficiency now uses framework-owned allocation receipts.** Claims
+  receive unique attempt IDs; training, posthoc, and evaluation processes write
+  private, immutable start/terminal receipts from Orze's process clock, while
+  prelaunch rejection and resource deferral record exactly zero GPU seconds.
+  Repair retries renew and archive their claims, GPU-unavailable and slot-race
+  retries release claims through the audited lifecycle, and the reporting loop
+  publishes an aggregate that does not trust trainer-supplied `training_time`.
+  Successful evaluations with unchanged sealed files now reach metrics
+  validation instead of being misclassified and repeatedly evaluated.
 - **Executor-fix agents now share the managed tool boundary.** Automated
   Claude repair calls must use the fail-closed OS sandbox and deterministic
   workspace hook, suppress ambient settings, reject the permission-bypass key

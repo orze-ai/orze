@@ -352,6 +352,27 @@ def write_interruption_receipt(tp, results_dir: Path, cfg: dict, reason: str,
         idea_dir / "interruption.json",
         json.dumps(receipt, indent=2, sort_keys=True) + "\n",
     )
+    # The resumability document and compute ledger serve different purposes:
+    # this call records only allocation facts and a stable reason code.
+    from orze.engine.accounting import record_compute_terminal
+    phase = "posthoc" if getattr(tp, "is_posthoc", False) else "training"
+    compute_reason = {
+        "timeout": "interruption_timeout",
+        "stall": "interruption_stall",
+        "zombie": "interruption_zombie",
+        "watchdog": "interruption_watchdog",
+        "fatal_log": "interruption_fatal_log",
+        "admin_kill": "interruption_admin_kill",
+        "orze_stop": "interruption_orze_stop",
+    }.get(str(reason), "interruption_other")
+    record_compute_terminal(
+        tp,
+        idea_dir,
+        "interrupted",
+        compute_reason,
+        phase=phase,
+        return_code=return_code,
+    )
     return receipt
 
 

@@ -19,13 +19,16 @@ CALLING SPEC:
         retried). cfg keys used: max_fix_attempts, ideas_file, train_script,
         executor_fix.{claude_bin, model, timeout, max_turns}.
 """
+import datetime
 import json
 import logging
 import os
+import secrets
 import subprocess
+import time
 from pathlib import Path
 
-from orze.core.fs import tail_file
+from orze.core.fs import atomic_write, tail_file
 from orze.core.ideas import parse_ideas
 
 logger = logging.getLogger("orze")
@@ -62,12 +65,41 @@ def _reset_idea_for_retry(idea_dir: Path, release_claim: bool = False):
             attempt += 1
         log.rename(idea_dir / f"train_output.attempt{attempt}.log")
 
+    claim = idea_dir / "claim.json"
+    if not claim.exists():
+        return
+
+    archive = idea_dir / f"claim.retry.{time.time_ns()}.json"
     if release_claim:
-        claim = idea_dir / "claim.json"
-        if claim.exists():
-            claim.replace(
-                idea_dir / f"claim.retry.{__import__('time').time_ns()}.json"
-            )
+        claim.replace(archive)
+        return
+
+    # An immediate repair/relaunch remains owned by the same scheduler, but it
+    # is a distinct allocation attempt. Preserve the old claim as evidence and
+    # issue a fresh attempt ID before the next Popen.
+    try:
+        claim_data = json.loads(claim.read_text(encoding="utf-8"))
+        if not isinstance(claim_data, dict):
+            raise ValueError("claim must be a mapping")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        # An invalid claim must not be silently replaced: recovery needs the
+        # original bytes to diagnose ownership safely.
+        raise RuntimeError("cannot renew invalid retry claim")
+    claim.replace(archive)
+    for key in (
+        "trainer_pid", "trainer_pgid", "trainer_start_ticks",
+        "trainer_started_at", "resume",
+    ):
+        claim_data.pop(key, None)
+    claim_data["attempt_id"] = secrets.token_hex(16)
+    claim_data["claimed_at"] = datetime.datetime.now().isoformat()
+    try:
+        atomic_write(claim, json.dumps(claim_data, indent=2))
+    except Exception:
+        # Preserve ownership if renewing the live claim fails after archival.
+        if not claim.exists() and archive.exists():
+            archive.replace(claim)
+        raise
 
 
 _ARGPARSE_UNRECOGNIZED_RE = __import__("re").compile(
