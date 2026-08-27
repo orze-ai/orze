@@ -39,6 +39,18 @@ from orze.hardware.gpu import detect_all_gpus
 logger = logging.getLogger("orze")
 
 
+def _require_controller_runtime(cfg: dict) -> None:
+    """Fail before GPU discovery when an opt-in runtime pin drifts."""
+    contract = cfg.get("controller_runtime")
+    if contract is None:
+        return
+    from orze.service.runtime_contract import audit_controller_runtime_contract
+    report = audit_controller_runtime_contract(contract)
+    if not report["contract_ok"]:
+        reasons = ",".join(report["errors"])
+        raise SystemExit(f"Controller runtime contract rejected: {reasons}")
+
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -213,6 +225,9 @@ Examples:
     svc_sub.add_parser("status", help="Show watchdog service status")
     svc_sub.add_parser(
         "audit", help="Verify installed runtime and effective service policy")
+    svc_sub.add_parser(
+        "capture-runtime",
+        help="Print a project controller_runtime identity pin")
 
     svc_logs = svc_sub.add_parser("logs", help="Show watchdog logs")
     svc_logs.add_argument("-n", type=int, default=50,
@@ -1052,6 +1067,9 @@ Examples:
         elif action == "audit":
             from orze.service.runtime_contract import main as audit_main
             return audit_main([])
+        elif action == "capture-runtime":
+            from orze.service.runtime_contract import main as audit_main
+            return audit_main(["--capture-controller"])
         elif action == "logs":
             from orze.service.status import show_logs
             show_logs(n=args.n)
@@ -1145,6 +1163,7 @@ Examples:
 
     # --restart: stop running instance, then continue to start a new one
     if args.restart:
+        _require_controller_runtime(cfg)
         stop_running_instance(Path(cfg["results_dir"]))
         print("Starting new orze instance...")
 
@@ -1185,6 +1204,11 @@ Examples:
     # --research-only is an alias for --role-only research
     if args.research_only:
         args.role_only = "research"
+
+    # Exact controller identity is checked before GPU discovery and before
+    # any admin thread or orchestrator state can be created.  Stop/disable
+    # controls above intentionally remain reachable during runtime drift.
+    _require_controller_runtime(cfg)
 
     # Detect GPUs
     if args.gpus:

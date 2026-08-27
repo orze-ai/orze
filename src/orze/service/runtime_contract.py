@@ -15,6 +15,7 @@ from orze.service.watchdog import load_service_config
 
 
 CONTRACT_VERSION = 1
+CONTROLLER_CONTRACT_VERSION = 1
 _STOP_SENTINELS = (".orze_disabled", ".orze_stop_all", ".orze_shutdown")
 _IGNORED_PARTS = {"__pycache__"}
 _IGNORED_SUFFIXES = {".pyc", ".pyo"}
@@ -145,6 +146,64 @@ def _runtime_errors(expected: object, observed: list[dict]) -> list[str]:
     return errors
 
 
+def audit_controller_runtime_contract(
+    expected: object,
+    *,
+    observed_packages: Optional[list[dict]] = None,
+    observed_python: Optional[str] = None,
+) -> dict:
+    """Verify an opt-in project pin for direct controller launches.
+
+    Unlike the service contract, this check is executed by the controller
+    package itself.  It detects path, interpreter, and content drift in
+    contract-aware runtimes, but cannot bootstrap trust in an older runtime
+    that predates this check.  Managed systemd launches use the independent
+    ``ExecStartPre`` service contract for that downgrade boundary.
+    """
+    errors = []
+    if not isinstance(expected, dict):
+        errors.append("controller_runtime_invalid")
+        expected = {}
+    if expected.get("contract_version") != CONTROLLER_CONTRACT_VERSION:
+        errors.append(
+            "controller_runtime_contract_version_missing_or_unsupported")
+
+    configured_python = expected.get("python")
+    if not isinstance(configured_python, str) or not configured_python.strip():
+        errors.append("controller_runtime_python_invalid")
+    else:
+        try:
+            current_python = Path(
+                observed_python or sys.executable).resolve(strict=True)
+            if Path(configured_python).resolve(strict=True) != current_python:
+                errors.append("controller_runtime_python_identity_drift")
+        except (OSError, RuntimeError):
+            errors.append("controller_runtime_python_invalid")
+
+    try:
+        observed = (observed_packages if observed_packages is not None
+                    else capture_runtime_packages())
+        errors.extend(_runtime_errors(expected.get("packages"), observed))
+    except (OSError, RuntimeContractError) as exc:
+        errors.append(str(exc))
+
+    errors = sorted(set(errors))
+    return {
+        "schema_version": 1,
+        "contract_ok": not errors,
+        "errors": errors,
+    }
+
+
+def capture_controller_runtime_contract() -> dict:
+    """Return a ready-to-paste exact pin for the current controller."""
+    return {
+        "contract_version": CONTROLLER_CONTRACT_VERSION,
+        "python": str(Path(sys.executable).resolve(strict=True)),
+        "packages": capture_runtime_packages(),
+    }
+
+
 def _unit_errors(svc_cfg: dict, properties: dict) -> list[str]:
     errors = []
     if properties.get("Restart") != "no":
@@ -262,10 +321,22 @@ def audit_runtime_contract(
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     startup_check = argv == ["--startup-check"]
-    if argv and not startup_check:
-        print("usage: python -m orze.service.runtime_contract [--startup-check]",
-              file=sys.stderr)
+    capture_controller = argv == ["--capture-controller"]
+    if argv and not startup_check and not capture_controller:
+        print(
+            "usage: python -m orze.service.runtime_contract "
+            "[--startup-check|--capture-controller]",
+            file=sys.stderr,
+        )
         return 2
+    if capture_controller:
+        try:
+            report = capture_controller_runtime_contract()
+        except (OSError, RuntimeContractError) as exc:
+            print(json.dumps({"error": str(exc)}, indent=2, sort_keys=True))
+            return 1
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0
     svc_cfg = load_service_config()
     if not svc_cfg:
         report = {

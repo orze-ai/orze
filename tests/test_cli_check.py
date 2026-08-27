@@ -92,3 +92,31 @@ def test_relative_results_pause_flag_uses_one_results_prefix(
 
     assert cli_setup._runnable_blockers({"results_dir": "results"}) == [
         "launcher_pause_flag_present"]
+
+
+def test_check_rejects_controller_runtime_drift(
+        tmp_path, monkeypatch, capsys):
+    cfg = _case(tmp_path)
+    Path(cfg["_config_path"]).write_text("{}\n", encoding="utf-8")
+    cfg["controller_runtime"] = {
+        "contract_version": 1,
+        "python": "/runtime/python",
+        "packages": [],
+    }
+    _isolate_check(monkeypatch)
+    monkeypatch.setattr(
+        "orze.service.runtime_contract.audit_controller_runtime_contract",
+        lambda contract: {
+            "schema_version": 1,
+            "contract_ok": False,
+            "errors": ["runtime_package_sha256_drift:orze"],
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli_setup.do_check(cfg)
+
+    assert exc.value.code == 1
+    output = capsys.readouterr().out
+    assert "runtime_package_sha256_drift:orze" in output
+    assert "Ready to run" not in output

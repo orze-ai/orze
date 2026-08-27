@@ -33,6 +33,8 @@ orze --role-only documenter        # any configured role
 ```bash
 orze service install -c orze.yaml  # install watchdog (crontab or systemd)
 orze service status                # check health
+orze service audit                 # verify unit policy and pinned runtime
+orze service capture-runtime       # print direct-launch identity pin
 orze service uninstall
 ```
 
@@ -65,6 +67,11 @@ Options:
 ```
 
 CLI args override orze.yaml values.
+
+`orze --check` also prints the controller interpreter and import root. A
+configured `controller_runtime` exact pin fails before GPU discovery on drift.
+Only the managed systemd service's independent pre-start contract is resistant
+to an older executable that predates the project-level check.
 
 ## Admin API
 

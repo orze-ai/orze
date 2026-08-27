@@ -1488,6 +1488,15 @@ def do_check(cfg: dict):
     no = "\033[31m[ ]\033[0m"
     warn_mark = "\033[33m[-]\033[0m"
 
+    controller_contract = cfg.get("controller_runtime")
+    controller_report = None
+    if controller_contract is not None:
+        from orze.service.runtime_contract import (
+            audit_controller_runtime_contract,
+        )
+        controller_report = audit_controller_runtime_contract(
+            controller_contract)
+
     # --- Files ---
     print("  \033[1mFiles:\033[0m")
     cp = Path(cfg.get("_config_path", "orze.yaml"))
@@ -1580,6 +1589,22 @@ def do_check(cfg: dict):
         if not has_any_llm_key:
             print(f"      hint: add ANTHROPIC_API_KEY or GEMINI_API_KEY to .env for auto-research")
 
+    # --- Controller runtime ---
+    print()
+    print("  \033[1mController Runtime:\033[0m")
+    package_root = Path(__file__).resolve().parent
+    print(f"    {ok} import root: {package_root}")
+    print(f"    {ok} python: {Path(sys.executable).resolve()}")
+    if controller_report is None:
+        print(
+            f"    {warn_mark} direct/manual launch identity is not pinned; "
+            "use a managed systemd service for downgrade-resistant attestation")
+    elif controller_report["contract_ok"]:
+        print(f"    {ok} project controller runtime contract verified")
+    else:
+        for reason in controller_report["errors"]:
+            print(f"    {no} {reason}")
+
     # --- GPUs ---
     print()
     print("  \033[1mGPUs:\033[0m")
@@ -1622,6 +1647,8 @@ def do_check(cfg: dict):
 
     # --- Validation ---
     errors, warnings = _validate_config(cfg)
+    if controller_report is not None:
+        errors.extend(controller_report["errors"])
 
     # Round-2 A2: Claude roles configured without ANTHROPIC_API_KEY is a
     # hard error, not a warning. Round-1 surfaced silent role death after

@@ -214,6 +214,10 @@ DEFAULT_CONFIG = {
         "paused": False,
         "paused_flag_path": None,
     },
+    # Optional exact identity pin for direct/manual controller launches.
+    # Managed systemd launches additionally use an independent ExecStartPre
+    # contract, which is required for downgrade-resistant enforcement.
+    "controller_runtime": None,
     "pre_script": None,
     "pre_args": [],
     "pre_timeout": 3600,
@@ -698,6 +702,53 @@ def _validate_config(cfg: dict) -> tuple:
             errors.append(
                 "launcher.paused_flag_path: must be null or a non-empty "
                 "path without control characters")
+
+    controller_runtime = cfg.get("controller_runtime")
+    if controller_runtime is not None:
+        if not isinstance(controller_runtime, dict):
+            errors.append("controller_runtime: must be a mapping or null")
+        else:
+            if controller_runtime.get("contract_version") != 1:
+                errors.append(
+                    "controller_runtime.contract_version: must be 1")
+            runtime_python = controller_runtime.get("python")
+            if (not isinstance(runtime_python, str)
+                    or not runtime_python.strip()):
+                errors.append(
+                    "controller_runtime.python: must be a non-empty path")
+            packages = controller_runtime.get("packages")
+            if not isinstance(packages, list) or not packages:
+                errors.append(
+                    "controller_runtime.packages: must be a non-empty list")
+            else:
+                seen_names = set()
+                for index, record in enumerate(packages):
+                    prefix = f"controller_runtime.packages[{index}]"
+                    if not isinstance(record, dict):
+                        errors.append(f"{prefix}: must be a mapping")
+                        continue
+                    name = record.get("name")
+                    if name not in ("orze", "orze_pro"):
+                        errors.append(
+                            f"{prefix}.name: must be 'orze' or 'orze_pro'")
+                    elif name in seen_names:
+                        errors.append(f"{prefix}.name: duplicate package {name}")
+                    else:
+                        seen_names.add(name)
+                    root = record.get("root")
+                    if not isinstance(root, str) or not Path(root).is_absolute():
+                        errors.append(f"{prefix}.root: must be an absolute path")
+                    tree_hash = record.get("sha256")
+                    if (not isinstance(tree_hash, str)
+                            or re.fullmatch(r"[0-9a-f]{64}", tree_hash) is None):
+                        errors.append(
+                            f"{prefix}.sha256: must be 64 lowercase hex characters")
+                    file_count = record.get("file_count")
+                    if (isinstance(file_count, bool)
+                            or not isinstance(file_count, int)
+                            or file_count < 1):
+                        errors.append(
+                            f"{prefix}.file_count: must be a positive integer")
 
     # Validate eval config consistency
     if cfg.get("eval_script") and not cfg.get("eval_output"):

@@ -2,6 +2,7 @@
 
 import json
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -9,8 +10,11 @@ import pytest
 from orze.core import config as config_module
 from orze.service import install
 from orze.service.runtime_contract import (
+    CONTROLLER_CONTRACT_VERSION,
     CONTRACT_VERSION,
+    audit_controller_runtime_contract,
     audit_runtime_contract,
+    capture_controller_runtime_contract,
     capture_runtime_packages,
 )
 from orze.service import runtime_contract
@@ -206,6 +210,98 @@ def test_real_orze_runtime_capture_is_nonempty_and_content_addressed():
     assert captured[0]["name"] == "orze"
     assert captured[0]["file_count"] > 0
     assert len(captured[0]["sha256"]) == 64
+
+
+def test_matching_direct_controller_runtime_is_accepted(tmp_path):
+    runtime = [{
+        "name": "orze", "root": "/runtime/orze", "sha256": "a" * 64,
+        "file_count": 10,
+    }]
+    contract = {
+        "contract_version": CONTROLLER_CONTRACT_VERSION,
+        "python": sys.executable,
+        "packages": runtime,
+    }
+
+    report = audit_controller_runtime_contract(
+        contract, observed_packages=runtime, observed_python=sys.executable)
+
+    assert report == {"schema_version": 1, "contract_ok": True, "errors": []}
+
+
+@pytest.mark.parametrize(("mutation", "reason"), [
+    ({"python": "/missing/python"}, "controller_runtime_python_invalid"),
+    ({"contract_version": 0},
+     "controller_runtime_contract_version_missing_or_unsupported"),
+])
+def test_direct_controller_metadata_drift_is_rejected(mutation, reason):
+    runtime = [{
+        "name": "orze", "root": "/runtime/orze", "sha256": "a" * 64,
+        "file_count": 10,
+    }]
+    contract = {
+        "contract_version": CONTROLLER_CONTRACT_VERSION,
+        "python": sys.executable,
+        "packages": runtime,
+        **mutation,
+    }
+
+    report = audit_controller_runtime_contract(
+        contract, observed_packages=runtime, observed_python=sys.executable)
+
+    assert reason in report["errors"]
+    assert report["contract_ok"] is False
+
+
+def test_capture_controller_contract_is_ready_for_project_config(monkeypatch):
+    runtime = [{
+        "name": "orze", "root": "/runtime/orze", "sha256": "a" * 64,
+        "file_count": 10,
+    }]
+    monkeypatch.setattr(runtime_contract, "capture_runtime_packages",
+                        lambda: runtime)
+
+    captured = capture_controller_runtime_contract()
+
+    assert captured["contract_version"] == CONTROLLER_CONTRACT_VERSION
+    assert captured["python"] == str(Path(sys.executable).resolve())
+    assert captured["packages"] == runtime
+
+
+def test_capture_controller_cli_is_service_config_independent(
+        monkeypatch, capsys):
+    monkeypatch.setattr(
+        runtime_contract, "capture_controller_runtime_contract",
+        lambda: {"contract_version": 1, "python": "/python", "packages": []},
+    )
+    monkeypatch.setattr(
+        runtime_contract, "load_service_config",
+        lambda: pytest.fail("capture must not read installed service state"),
+    )
+
+    assert runtime_contract.main(["--capture-controller"]) == 0
+    assert json.loads(capsys.readouterr().out)["python"] == "/python"
+
+
+def test_controller_runtime_config_schema_rejects_ambiguous_pins():
+    errors, _ = config_module._validate_config({
+        "controller_runtime": {
+            "contract_version": 1,
+            "python": "",
+            "packages": [{
+                "name": "other",
+                "root": "relative",
+                "sha256": "NOT-A-HASH",
+                "file_count": 0,
+            }],
+        },
+    })
+
+    assert any("controller_runtime.python" in error for error in errors)
+    assert any(".name" in error for error in errors)
+    assert any(".root" in error for error in errors)
+    assert any(".sha256" in error for error in errors)
+    assert any(".file_count" in error for error in errors)
 
 
 def test_systemd_property_reader_treats_unset_optional_fields_as_empty(

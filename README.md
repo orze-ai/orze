@@ -223,6 +223,16 @@ systemd start, Orze checks those hashes plus the effective unit properties
 (including drop-ins) and fails closed on runtime drift or an active stop latch.
 Reinstall the service intentionally after a reviewed package upgrade.
 
+Direct/manual launches can opt into the same exact interpreter and package-tree
+identity check with a `controller_runtime` block in `orze.yaml`. Run
+`orze service capture-runtime` from the reviewed executable to print a
+canonical block to paste under that key, then run `orze --check` to verify it
+and see the active interpreter and import root. This in-process pin detects
+drift only in contract-aware Orze
+versions; it cannot prevent an older, pre-contract executable from ignoring an
+unknown key. Use the managed systemd service and its independent `ExecStartPre`
+check when downgrade resistance is required.
+
 ```yaml
 containers:
   paperdog:
