@@ -256,12 +256,17 @@ def _evo_evidence_signature(lake_db: Path, cfg: dict) -> str:
 def _evo_score_signature(lake_db: Path, cfg: dict):
     """Return the inputs that can change the Evo Score.
 
-    SQLite may keep recent commits in ``-wal``, so the database file alone is
-    not a sufficient change detector. Current result/provenance artifacts and
-    qualification configuration also affect which rows are scoreable.
+    The supported rollback journal and any policy-violating WAL drift are
+    change inputs alongside the main database. Current result/provenance
+    artifacts and qualification configuration also affect scoreability.
     """
     files = []
-    for path in (lake_db, Path(f"{lake_db}-wal")):
+    # DELETE is the supported shared-filesystem mode. Include its transient
+    # rollback journal so a scan taken during a transaction is invalidated
+    # after commit/rollback. Retain the WAL sidecar only as a drift signal: a
+    # policy-violating WAL database must never preserve a cached score.
+    for path in (
+            lake_db, Path(f"{lake_db}-journal"), Path(f"{lake_db}-wal")):
         try:
             st = path.stat()
             files.append((st.st_mtime_ns, st.st_size))

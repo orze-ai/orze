@@ -38,13 +38,21 @@ and counts. The presentation contract always declares
 not a model's official leaderboard result, even when the underlying local
 measurements satisfy a benchmark contract.
 
-The engine's change detector covers the IdeaLake database and WAL, every
-qualification-affecting configuration field, and a streaming SHA-256 digest of
-the declared evidence files for completed ideas plus benchmark exposure
-ledgers. Artifact deletion, repair, same-size replacement, provenance changes,
-and validation-policy changes therefore invalidate the cached log value even
-without a database write. File contents are neither retained nor logged; the
-scan is constant-memory and never follows an unsafe idea or source path.
+The engine's change detector covers the IdeaLake database, its supported
+rollback-journal activity, unsupported WAL drift, every qualification-affecting
+configuration field, and a streaming SHA-256 digest of the declared evidence
+files for completed ideas plus benchmark exposure ledgers. Artifact deletion,
+repair, same-size replacement, provenance changes, and validation-policy
+changes therefore invalidate the cached log value even without a database
+write. File contents are neither retained nor logged; the scan is
+constant-memory and never follows an unsafe idea or source path.
+
+Autonomous steering consumers can reuse the same qualification boundary. Their
+candidate set comes from a read-only Idea Lake connection only when its
+`DELETE`/`FULL`/`NORMAL` storage policy is compliant and both lifecycle views
+agree on completion. An artifact-only `COMPLETED` claim, conflicting lifecycle,
+tainted result, invalid local evidence, or missing benchmark receipt therefore
+cannot spend a research plateau budget.
 
 The research-role digest uses the same resolver. It never ranks harvested or
 raw `metrics.json` values directly: current completion, exact configured

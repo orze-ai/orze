@@ -45,12 +45,15 @@ def test_evo_score_rebuilds_only_when_lake_inputs_change(tmp_path, monkeypatch):
     assert _log_evo_score_if_changed(owner, lake, cfg) is False
     assert len(calls) == 1
 
-    # WAL-only commits and report changes must both invalidate the cache.
+    # Supported rollback-journal activity, unsupported WAL drift, and report
+    # changes must each invalidate the cache.
+    (tmp_path / "idea_lake.db-journal").write_bytes(b"transaction")
+    assert _log_evo_score_if_changed(owner, lake, cfg) is True
     (tmp_path / "idea_lake.db-wal").write_bytes(b"commit")
     assert _log_evo_score_if_changed(owner, lake, cfg) is True
     cfg["report"]["sort"] = "descending"
     assert _log_evo_score_if_changed(owner, lake, cfg) is True
-    assert len(calls) == 3
+    assert len(calls) == 4
 
 
 def _completed_lake(path, idea_id="idea-a"):

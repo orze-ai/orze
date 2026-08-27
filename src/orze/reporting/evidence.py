@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import json
+import sqlite3
 from pathlib import Path
 from typing import Mapping
 
@@ -259,6 +260,113 @@ def qualify_local_report_evidence(
         except Exception:
             return metrics, values, None, "local_model_lineage_invalid"
     return metrics, values, float(value), "local_evidence_verified"
+
+
+def authoritative_completed_idea_ids(
+    db_path: Path,
+) -> tuple[set[str], str]:
+    """Load lifecycle-complete idea IDs from the authoritative lake read-only.
+
+    A metrics artifact is result evidence, not lifecycle authority. Consumers
+    that steer research must require both the audited FSM state and the legacy
+    status mirror to agree on completion. Missing, redirected, hard-linked, or
+    incompatible databases fail closed and never get created by inspection.
+    """
+    path = Path(db_path)
+    try:
+        absolute = path.absolute()
+        current = Path(absolute.anchor)
+        redirected = False
+        for part in absolute.parts[1:]:
+            current = current / part
+            if current.is_symlink():
+                redirected = True
+                break
+        if redirected:
+            return set(), "authoritative_lifecycle_database_redirected"
+        if not path.is_file():
+            return set(), "authoritative_lifecycle_database_unavailable"
+        if path.stat().st_nlink != 1:
+            return set(), "authoritative_lifecycle_database_redirected"
+        connection = sqlite3.connect(
+            absolute.as_uri() + "?mode=ro",
+            uri=True,
+            timeout=5,
+        )
+        try:
+            connection.execute("PRAGMA query_only=ON")
+            from orze.core.sqlite_policy import (
+                SQLitePolicyError,
+                inspect_shared_database_policy,
+            )
+            try:
+                policy = inspect_shared_database_policy(connection)
+            except SQLitePolicyError:
+                return set(), "authoritative_lifecycle_database_invalid"
+            if not policy["compliant"]:
+                return set(), "authoritative_lifecycle_database_policy_invalid"
+            rows = connection.execute(
+                "SELECT i.idea_id FROM ideas AS i "
+                "JOIN idea_state AS s ON s.idea_id = i.idea_id "
+                "WHERE lower(i.status) = 'completed' "
+                "AND s.current_state = 'COMPLETE'"
+            ).fetchall()
+        finally:
+            connection.close()
+    except (OSError, sqlite3.Error):
+        return set(), "authoritative_lifecycle_database_invalid"
+
+    completed = {
+        str(row[0])
+        for row in rows
+        if row and isinstance(row[0], str)
+        and row[0] not in ("", ".", "..")
+        and Path(row[0]).parts == (row[0],)
+    }
+    return completed, "authoritative_lifecycle_loaded"
+
+
+def qualify_authoritative_report_evidence(
+    idea_id: str,
+    results_dir: Path,
+    cfg: Mapping,
+    completed_idea_ids: set[str],
+) -> tuple[dict, dict, float | None, str]:
+    """Qualify one steering result against lifecycle and evidence contracts.
+
+    The caller loads ``completed_idea_ids`` once per scan with
+    :func:`authoritative_completed_idea_ids`. Benchmark-enabled projects also
+    require the current sealed benchmark receipt; local evidence alone cannot
+    spend a benchmark-driven plateau budget.
+    """
+    if (not isinstance(idea_id, str) or idea_id in ("", ".", "..")
+            or Path(idea_id).parts != (idea_id,)):
+        return {}, {}, None, "idea_id_invalid"
+    if idea_id not in completed_idea_ids:
+        return {}, {}, None, "authoritative_lifecycle_not_complete"
+
+    idea_dir = Path(results_dir) / idea_id
+    metrics, values, value, reason = qualify_local_report_evidence(
+        idea_dir, cfg)
+    if reason != "local_evidence_verified":
+        return metrics, values, None, reason
+    if metrics.get("tainted_leakage"):
+        return metrics, values, None, "local_evidence_tainted_leakage"
+
+    report = cfg.get("report") or {}
+    if isinstance(report, Mapping) and report.get("benchmark_contract"):
+        try:
+            from orze.core.benchmark_contract import validate_benchmark_receipt
+            valid, benchmark_reason = validate_benchmark_receipt(
+                idea_dir, cfg, values=values)
+        except Exception:
+            return metrics, values, None, "benchmark_validation_failed"
+        if not valid:
+            return metrics, values, None, str(
+                benchmark_reason or "benchmark_receipt_invalid")
+        return metrics, values, value, "benchmark_evidence_verified"
+
+    return metrics, values, value, "authoritative_local_evidence_verified"
 
 
 def local_report_evidence_paths(idea_dir: Path,
