@@ -44,6 +44,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 from orze import __version__
 from orze.core.fs import atomic_write
+from orze.core.benchmark_contract import benchmark_exposure_summary
 from orze.hardware.gpu import _query_gpu_details
 
 TrainingProcess = Any  # type alias to avoid circular import
@@ -578,6 +579,7 @@ def write_status_json(results_dir: Path, iteration: int,
         "top_results": top_results[:10],
         "roles": roles_status,
         "role_health": role_health,
+        "benchmark_exposure": benchmark_exposure_summary(results_dir, cfg),
         "research_enabled": "research" in roles_cfg,
         "research_cycles": research_rs.get("cycles", 0),
         "last_research_min_ago": (

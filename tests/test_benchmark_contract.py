@@ -1,18 +1,23 @@
 import hashlib
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 
 from orze.core.benchmark_contract import (
     BenchmarkContractError,
+    EXPOSURE_LEDGER_FILE,
+    EXPOSURE_LOCK_DIR,
     PROVENANCE_FILE,
+    benchmark_exposure_summary,
     prepare_benchmark_evaluation,
     validate_benchmark_contract_config,
     validate_benchmark_receipt,
 )
 from orze.reporting.leaderboard import update_report
+from orze.reporting.state import write_status_json
 from orze.engine import evaluator as evaluator_module
 
 
@@ -46,6 +51,10 @@ def _config(tmp_path: Path) -> dict:
                 "required_metrics": ["metric_a", "metric_b"],
                 "receipt": "benchmark_receipt.json",
                 "model_form": "single_model_single_pass",
+                "evidence_scope": "local_reproduction",
+                "selection_mode": "adaptive",
+                "prior_exposures": 2,
+                "max_evaluations": 100,
                 "aggregate": "macro_mean",
                 "aggregate_tolerance": 1e-9,
                 "evaluator_sha256": digest,
@@ -58,6 +67,8 @@ def _config(tmp_path: Path) -> dict:
 
 def _write_receipt(idea_dir: Path, cfg: dict, nonce: str) -> None:
     contract = cfg["report"]["benchmark_contract"]
+    provenance = json.loads(
+        (idea_dir / PROVENANCE_FILE).read_text(encoding="utf-8"))
     (idea_dir / contract["receipt"]).write_text(json.dumps({
         "schema_version": 1,
         "benchmark_id": contract["benchmark_id"],
@@ -66,6 +77,12 @@ def _write_receipt(idea_dir: Path, cfg: dict, nonce: str) -> None:
         "evaluator_sha256": contract["evaluator_sha256"],
         "dataset_manifest_sha256": contract["dataset_manifest_sha256"],
         "scorer_sha256": contract["scorer_sha256"],
+        "evidence_scope": contract["evidence_scope"],
+        "selection_mode": contract["selection_mode"],
+        "prior_exposures": contract["prior_exposures"],
+        "max_evaluations": contract["max_evaluations"],
+        "exposure_ordinal": provenance["exposure_ordinal"],
+        "exposure_record_sha256": provenance["exposure_record_sha256"],
         "evaluation_nonce": nonce,
         "model_form": "single_model_single_pass",
         "component_model_count": 1,
@@ -93,6 +110,17 @@ def test_valid_contract_pins_exact_evaluator_and_report_columns(tmp_path):
      "missing from report.columns"),
     (lambda c: c["report"]["columns"][1].update(
         source="../borrowed.json:metric_a"), "inside the idea directory"),
+    (lambda c: c["report"]["benchmark_contract"].update(
+        selection_mode="confirmation", prior_exposures=1),
+     "already adaptive/benchmark-fitted"),
+    (lambda c: c["report"]["benchmark_contract"].update(
+        selection_mode="confirmation", prior_exposures=0,
+        max_evaluations=2), "additional looks must be labeled adaptive"),
+    (lambda c: c["report"]["benchmark_contract"].update(
+        evidence_scope="official"), "evidence_scope"),
+    (lambda c: c["report"]["benchmark_contract"].update(
+        prior_exposures=101, max_evaluations=100),
+     "prior_exposures cannot exceed max_evaluations"),
 ])
 def test_invalid_contracts_fail_closed(tmp_path, mutation, expected):
     cfg = _config(tmp_path)
@@ -133,6 +161,7 @@ def test_preexisting_receipt_is_rejected_before_evaluation(tmp_path):
     with pytest.raises(BenchmarkContractError, match="existed before evaluation"):
         prepare_benchmark_evaluation(idea_dir, cfg)
     assert not (idea_dir / PROVENANCE_FILE).exists()
+    assert not (idea_dir.parent / EXPOSURE_LEDGER_FILE).exists()
 
 
 def test_wrong_coverage_or_aggregate_is_unrankable(tmp_path):
@@ -171,6 +200,14 @@ def test_wrong_coverage_or_aggregate_is_unrankable(tmp_path):
      "benchmark_receipt_dataset_manifest_sha256_mismatch"),
     ("scorer_sha256", "f" * 64,
      "benchmark_receipt_scorer_sha256_mismatch"),
+    ("evidence_scope", "development_proxy",
+     "benchmark_receipt_evidence_scope_mismatch"),
+    ("selection_mode", "confirmation",
+     "benchmark_receipt_selection_mode_mismatch"),
+    ("exposure_ordinal", 99,
+     "benchmark_receipt_exposure_ordinal_mismatch"),
+    ("exposure_record_sha256", "f" * 64,
+     "benchmark_receipt_exposure_record_mismatch"),
     ("model_form", "ensemble", "benchmark_receipt_model_form_mismatch"),
     ("inference_passes_per_sample", 2,
      "benchmark_receipt_inference_pass_count_mismatch"),
@@ -225,10 +262,16 @@ def test_report_ranks_only_contract_verified_rows_and_labels_scope(tmp_path):
     report = (results / "report.md").read_text(encoding="utf-8")
     assert "| Local Rank |" in report
     assert "not an official leaderboard rank" in report
+    assert "Evidence scope: `local_reproduction`" in report
+    assert "Selection mode: `adaptive`" in report
+    assert "3/100 used (97 remaining)" in report
+    assert "benchmark-fitted adaptive evidence" in report
     assert "idea-unproven" in report
     assert "benchmark_provenance_missing" in report
     cache = json.loads((results / "_leaderboard.json").read_text())
     assert cache["rank_scope"] == "local"
+    assert cache["benchmark_exposure"]["total_exposures"] == 3
+    assert cache["benchmark_exposure"]["benchmark_fitted"] is True
     assert [row["idea_id"] for row in cache["top"]] == ["idea-valid"]
 
     # Preserve timestamps while changing same-width receipt content. Contract
@@ -243,6 +286,191 @@ def test_report_ranks_only_contract_verified_rows_and_labels_scope(tmp_path):
     assert update_report(results, ideas, cfg) == []
     cache = json.loads((results / "_leaderboard.json").read_text())
     assert cache["top"] == []
+
+
+def test_confirmation_budget_is_reserved_atomically_and_fails_closed(tmp_path):
+    cfg = _config(tmp_path)
+    contract = cfg["report"]["benchmark_contract"]
+    contract.update({
+        "selection_mode": "confirmation",
+        "prior_exposures": 0,
+        "max_evaluations": 1,
+    })
+    first = tmp_path / "results" / "idea-first"
+    second = tmp_path / "results" / "idea-second"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+
+    env = prepare_benchmark_evaluation(first, cfg)
+    assert env["ORZE_BENCHMARK_EXPOSURE_ORDINAL"] == "1"
+    summary = benchmark_exposure_summary(first.parent, cfg)
+    assert summary == {
+        "enabled": True,
+        "valid": True,
+        "evidence_scope": "local_reproduction",
+        "selection_mode": "confirmation",
+        "prior_exposures": 0,
+        "managed_exposures": 1,
+        "total_exposures": 1,
+        "max_evaluations": 1,
+        "remaining": 0,
+        "benchmark_fitted": False,
+    }
+    write_status_json(
+        first.parent, iteration=1, active={}, free_gpus=[], queue_depth=0,
+        completed_count=0, failed_count=0, skipped_count=0, top_results=[],
+        cfg=cfg,
+    )
+    status = json.loads((first.parent / "status.json").read_text())
+    assert status["benchmark_exposure"] == summary
+
+    with pytest.raises(
+            BenchmarkContractError,
+            match="benchmark_exposure_budget_exhausted:1/1"):
+        prepare_benchmark_evaluation(second, cfg)
+    assert not (second / PROVENANCE_FILE).exists()
+
+
+def test_concurrent_budget_reservations_cannot_oversubscribe(tmp_path):
+    cfg = _config(tmp_path)
+    cfg["report"]["benchmark_contract"].update({
+        "selection_mode": "confirmation",
+        "prior_exposures": 0,
+        "max_evaluations": 1,
+    })
+    ideas = [tmp_path / "results" / f"idea-{index}" for index in range(2)]
+    for idea_dir in ideas:
+        idea_dir.mkdir(parents=True)
+
+    def reserve(idea_dir):
+        try:
+            return "ok", prepare_benchmark_evaluation(idea_dir, cfg)
+        except BenchmarkContractError as exc:
+            return "error", str(exc)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(reserve, ideas))
+
+    assert [kind for kind, _ in outcomes].count("ok") == 1
+    error = next(value for kind, value in outcomes if kind == "error")
+    assert error in {
+        "benchmark_exposure_ledger_locked",
+        "benchmark_exposure_budget_exhausted:1/1",
+    }
+    ledger = ideas[0].parent / EXPOSURE_LEDGER_FILE
+    assert len(ledger.read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_corrupt_or_tampered_exposure_ledger_invalidates_receipt(tmp_path):
+    cfg = _config(tmp_path)
+    idea_dir = tmp_path / "results" / "idea-ledger"
+    idea_dir.mkdir(parents=True)
+    env = prepare_benchmark_evaluation(idea_dir, cfg)
+    _write_receipt(
+        idea_dir, cfg, env["ORZE_BENCHMARK_EVALUATION_NONCE"])
+    ledger = idea_dir.parent / EXPOSURE_LEDGER_FILE
+
+    ledger.write_text("not-json\n", encoding="utf-8")
+    ok, reason = validate_benchmark_receipt(idea_dir, cfg)
+    assert ok is False
+    assert reason == "benchmark_exposure_ledger_corrupt:1"
+
+
+def test_exposure_record_content_hash_is_verified(tmp_path):
+    cfg = _config(tmp_path)
+    idea_dir = tmp_path / "results" / "idea-ledger-hash"
+    idea_dir.mkdir(parents=True)
+    env = prepare_benchmark_evaluation(idea_dir, cfg)
+    _write_receipt(
+        idea_dir, cfg, env["ORZE_BENCHMARK_EVALUATION_NONCE"])
+    ledger = idea_dir.parent / EXPOSURE_LEDGER_FILE
+    record = json.loads(ledger.read_text(encoding="utf-8"))
+    record["pid"] += 1
+    ledger.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    ok, reason = validate_benchmark_receipt(idea_dir, cfg)
+    assert ok is False
+    assert reason == "benchmark_exposure_ledger_integrity_invalid:1"
+
+
+def test_deleted_exposure_record_is_detected_from_provenance(tmp_path):
+    cfg = _config(tmp_path)
+    idea_dir = tmp_path / "results" / "idea-ledger-delete"
+    idea_dir.mkdir(parents=True)
+    env = prepare_benchmark_evaluation(idea_dir, cfg)
+    _write_receipt(
+        idea_dir, cfg, env["ORZE_BENCHMARK_EVALUATION_NONCE"])
+    (idea_dir.parent / EXPOSURE_LEDGER_FILE).unlink()
+
+    ok, reason = validate_benchmark_receipt(idea_dir, cfg)
+    assert ok is False
+    assert reason == "benchmark_exposure_record_deleted:idea-ledger-delete"
+    summary = benchmark_exposure_summary(idea_dir.parent, cfg)
+    assert summary["valid"] is False
+    assert summary["reason"] == reason
+
+
+def test_exposure_budget_cannot_be_rewritten_after_first_look(tmp_path):
+    cfg = _config(tmp_path)
+    idea_dir = tmp_path / "results" / "idea-policy-drift"
+    idea_dir.mkdir(parents=True)
+    env = prepare_benchmark_evaluation(idea_dir, cfg)
+    _write_receipt(
+        idea_dir, cfg, env["ORZE_BENCHMARK_EVALUATION_NONCE"])
+
+    cfg["report"]["benchmark_contract"]["max_evaluations"] = 101
+    ok, reason = validate_benchmark_receipt(idea_dir, cfg)
+    assert ok is False
+    assert reason == "benchmark_provenance_max_evaluations_mismatch"
+    summary = benchmark_exposure_summary(idea_dir.parent, cfg)
+    assert summary["valid"] is False
+    assert summary["reason"] == "benchmark_exposure_policy_drift"
+
+
+@pytest.mark.parametrize("mutation", [
+    {"selection_mode": "confirmation", "prior_exposures": 0,
+     "max_evaluations": 1},
+    {"evidence_scope": "development_proxy"},
+    {"benchmark_id": "renamed-benchmark"},
+    {"view": "renamed-view"},
+])
+def test_same_dataset_history_cannot_be_reset_by_relabeling(
+        tmp_path, mutation):
+    cfg = _config(tmp_path)
+    idea_dir = tmp_path / "results" / "idea-before-relabel"
+    idea_dir.mkdir(parents=True)
+    prepare_benchmark_evaluation(idea_dir, cfg)
+
+    cfg["report"]["benchmark_contract"].update(mutation)
+    next_idea = idea_dir.parent / "idea-after-relabel"
+    next_idea.mkdir()
+    with pytest.raises(
+            BenchmarkContractError,
+            match="benchmark_exposure_policy_drift"):
+        prepare_benchmark_evaluation(next_idea, cfg)
+
+    summary = benchmark_exposure_summary(idea_dir.parent, cfg)
+    assert summary["valid"] is False
+    assert summary["reason"] == "benchmark_exposure_policy_drift"
+
+
+@pytest.mark.parametrize("target_name, expected", [
+    (EXPOSURE_LEDGER_FILE, "benchmark_exposure_ledger_symlink_forbidden"),
+    (EXPOSURE_LOCK_DIR, "benchmark_exposure_lock_symlink_forbidden"),
+])
+def test_exposure_control_paths_reject_symlinks(
+        tmp_path, target_name, expected):
+    cfg = _config(tmp_path)
+    results = tmp_path / "results"
+    idea_dir = results / "idea-symlink"
+    idea_dir.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.write_text("do not touch", encoding="utf-8")
+    (results / target_name).symlink_to(outside)
+
+    with pytest.raises(BenchmarkContractError, match=expected):
+        prepare_benchmark_evaluation(idea_dir, cfg)
+    assert outside.read_text(encoding="utf-8") == "do not touch"
 
 
 def test_eval_launcher_rejects_prefabricated_receipt_without_spawning(

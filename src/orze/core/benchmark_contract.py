@@ -1,8 +1,10 @@
 """Fail-closed provenance for benchmark-comparable evaluation results.
 
 The contract deliberately does not try to infer an external leaderboard rank.
-It proves only that a local result was produced by the configured evaluator for
-the exact benchmark revision/view and model form.  Reporting code may then
+It validates that a local result carries nonce-bound evidence from the configured
+evaluator for the exact benchmark revision/view and model form. A durable
+exposure ledger also distinguishes adaptive development from one untouched
+confirmation and enforces the preregistered look budget. Reporting code may then
 compute a *local* ordering among contract-compliant runs.
 """
 
@@ -14,17 +16,23 @@ import math
 import os
 import re
 import secrets
+import socket
+import time
 from pathlib import Path
 from typing import Mapping, Optional
 
-from orze.core.fs import atomic_write, deep_get
+from orze.core.fs import _fs_lock, _fs_unlock, atomic_write, deep_get
 
 
 SCHEMA_VERSION = 1
 PROVENANCE_FILE = "_benchmark_evaluation.json"
+EXPOSURE_LEDGER_FILE = "_benchmark_exposures.jsonl"
+EXPOSURE_LOCK_DIR = ".benchmark_exposure.lock"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _IMMUTABLE_REVISION_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 _MODEL_FORM = "single_model_single_pass"
+_EVIDENCE_SCOPES = {"development_proxy", "local_reproduction"}
+_SELECTION_MODES = {"adaptive", "confirmation"}
 
 
 class BenchmarkContractError(RuntimeError):
@@ -97,6 +105,50 @@ def validate_benchmark_contract_config(cfg: Mapping) -> list[str]:
         )
     if contract.get("aggregate") != "macro_mean":
         errors.append(f"{prefix}.aggregate: must be 'macro_mean'")
+    evidence_scope = contract.get("evidence_scope")
+    if evidence_scope not in _EVIDENCE_SCOPES:
+        errors.append(
+            f"{prefix}.evidence_scope: must be one of "
+            + ", ".join(sorted(_EVIDENCE_SCOPES))
+        )
+    selection_mode = contract.get("selection_mode")
+    if selection_mode not in _SELECTION_MODES:
+        errors.append(
+            f"{prefix}.selection_mode: must be one of "
+            + ", ".join(sorted(_SELECTION_MODES))
+        )
+    prior_exposures = contract.get("prior_exposures")
+    if (isinstance(prior_exposures, bool)
+            or not isinstance(prior_exposures, int) or prior_exposures < 0):
+        errors.append(
+            f"{prefix}.prior_exposures: must be a non-negative integer"
+        )
+    max_evaluations = contract.get("max_evaluations")
+    if (isinstance(max_evaluations, bool)
+            or not isinstance(max_evaluations, int) or max_evaluations < 1):
+        errors.append(
+            f"{prefix}.max_evaluations: must be a positive integer"
+        )
+    if (isinstance(prior_exposures, int)
+            and not isinstance(prior_exposures, bool)
+            and isinstance(max_evaluations, int)
+            and not isinstance(max_evaluations, bool)
+            and prior_exposures > max_evaluations):
+        errors.append(
+            f"{prefix}: prior_exposures cannot exceed max_evaluations"
+        )
+    if selection_mode == "confirmation":
+        if prior_exposures != 0:
+            errors.append(
+                f"{prefix}: confirmation requires prior_exposures: 0; "
+                "otherwise the benchmark is already "
+                "adaptive/benchmark-fitted"
+            )
+        if max_evaluations != 1:
+            errors.append(
+                f"{prefix}: confirmation requires max_evaluations: 1; "
+                "additional looks must be labeled adaptive"
+            )
     tolerance = contract.get("aggregate_tolerance", 1e-6)
     if (isinstance(tolerance, bool) or not isinstance(tolerance, (int, float))
             or not math.isfinite(float(tolerance)) or tolerance < 0):
@@ -179,6 +231,289 @@ def validate_benchmark_contract_config(cfg: Mapping) -> list[str]:
     return errors
 
 
+def _exposure_dataset_identity(contract: Mapping) -> dict:
+    """Identity that cannot be reset by relabeling the same sealed dataset."""
+    return {
+        "dataset_manifest_sha256": str(
+            contract["dataset_manifest_sha256"]
+        ).lower(),
+    }
+
+
+def _exposure_base_identity(contract: Mapping) -> dict:
+    return {
+        **_exposure_dataset_identity(contract),
+        "benchmark_id": contract["benchmark_id"],
+        "benchmark_revision": str(contract["revision"]).lower(),
+        "benchmark_view": contract["view"],
+        "scorer_sha256": str(contract["scorer_sha256"]).lower(),
+        "evidence_scope": contract["evidence_scope"],
+        "selection_mode": contract["selection_mode"],
+    }
+
+
+def _exposure_identity(contract: Mapping) -> dict:
+    return {
+        **_exposure_base_identity(contract),
+        "prior_exposures": int(contract["prior_exposures"]),
+        "max_evaluations": int(contract["max_evaluations"]),
+    }
+
+
+def _read_exposure_ledger(results_dir: Path) -> list[dict]:
+    path = Path(results_dir) / EXPOSURE_LEDGER_FILE
+    if path.is_symlink():
+        raise BenchmarkContractError(
+            "benchmark_exposure_ledger_symlink_forbidden"
+        )
+    if not path.exists():
+        return []
+    records = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise BenchmarkContractError(
+            "benchmark_exposure_ledger_unreadable"
+        ) from exc
+    for line_number, line in enumerate(lines, 1):
+        if not line.strip():
+            raise BenchmarkContractError(
+                f"benchmark_exposure_ledger_blank_line:{line_number}"
+            )
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise BenchmarkContractError(
+                f"benchmark_exposure_ledger_corrupt:{line_number}"
+            ) from exc
+        if not isinstance(record, dict) or record.get("schema_version") != 1:
+            raise BenchmarkContractError(
+                f"benchmark_exposure_ledger_schema_invalid:{line_number}"
+            )
+        declared_hash = record.get("record_sha256")
+        canonical_record = dict(record)
+        canonical_record.pop("record_sha256", None)
+        actual_hash = hashlib.sha256(json.dumps(
+            canonical_record, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+        if (not isinstance(declared_hash, str)
+                or _SHA256_RE.fullmatch(declared_hash) is None
+                or declared_hash != actual_hash):
+            raise BenchmarkContractError(
+                f"benchmark_exposure_ledger_integrity_invalid:{line_number}"
+            )
+        records.append(record)
+    hashes = [record["record_sha256"] for record in records]
+    if len(hashes) != len(set(hashes)):
+        raise BenchmarkContractError(
+            "benchmark_exposure_ledger_duplicate_record"
+        )
+    return records
+
+
+def _matching_exposures(records: list[dict], contract: Mapping) -> list[dict]:
+    identity = _exposure_identity(contract)
+    return [
+        record for record in records
+        if all(record.get(key) == value for key, value in identity.items())
+    ]
+
+
+def _validated_matching_exposures(
+        records: list[dict], contract: Mapping) -> list[dict]:
+    dataset_identity = _exposure_dataset_identity(contract)
+    policy_records = [
+        record for record in records
+        if all(record.get(key) == value
+               for key, value in dataset_identity.items())
+    ]
+    expected_policy = _exposure_identity(contract)
+    if any(any(record.get(key) != value
+               for key, value in expected_policy.items())
+           for record in policy_records):
+        raise BenchmarkContractError(
+            "benchmark_exposure_policy_drift"
+        )
+    matching = _matching_exposures(records, contract)
+    prior = int(contract["prior_exposures"])
+    raw_ordinals = [record.get("exposure_ordinal") for record in matching]
+    if any(isinstance(value, bool) or not isinstance(value, int)
+           for value in raw_ordinals):
+        raise BenchmarkContractError(
+            "benchmark_exposure_ledger_ordinal_sequence_invalid"
+        )
+    ordinals = sorted(raw_ordinals)
+    expected = list(range(prior + 1, prior + len(matching) + 1))
+    if ordinals != expected:
+        raise BenchmarkContractError(
+            "benchmark_exposure_ledger_ordinal_sequence_invalid"
+        )
+    maximum = int(contract["max_evaluations"])
+    if prior + len(matching) > maximum:
+        raise BenchmarkContractError(
+            f"benchmark_exposure_budget_exhausted:"
+            f"{prior + len(matching)}/{maximum}"
+        )
+    return matching
+
+
+def _audit_exposure_provenance_links(
+        results_dir: Path, records: list[dict], contract: Mapping) -> None:
+    """Reject deletion of ledger rows still referenced by idea provenance."""
+    matching_hashes = {
+        record["record_sha256"]
+        for record in _matching_exposures(records, contract)
+    }
+    identity = _exposure_identity(contract)
+    try:
+        children = list(Path(results_dir).iterdir())
+    except OSError as exc:
+        raise BenchmarkContractError(
+            "benchmark_exposure_results_directory_unreadable"
+        ) from exc
+    for child in children:
+        if child.is_symlink():
+            if (child / PROVENANCE_FILE).exists():
+                raise BenchmarkContractError(
+                    f"benchmark_exposure_provenance_symlink:{child.name}"
+                )
+            continue
+        if not child.is_dir() or child.name == EXPOSURE_LOCK_DIR:
+            continue
+        provenance_path = child / PROVENANCE_FILE
+        if not provenance_path.exists():
+            continue
+        try:
+            provenance = json.loads(
+                provenance_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+            raise BenchmarkContractError(
+                f"benchmark_exposure_provenance_invalid:{child.name}"
+            ) from exc
+        if not isinstance(provenance, dict):
+            raise BenchmarkContractError(
+                f"benchmark_exposure_provenance_invalid:{child.name}"
+            )
+        if not all(provenance.get(key) == value
+                   for key, value in identity.items()):
+            continue
+        if provenance.get("exposure_record_sha256") not in matching_hashes:
+            raise BenchmarkContractError(
+                f"benchmark_exposure_record_deleted:{child.name}"
+            )
+
+
+def _reserve_benchmark_exposure(
+    idea_dir: Path,
+    contract: Mapping,
+    evaluator_sha256: str,
+    nonce: str,
+) -> tuple[int, str]:
+    """Atomically reserve one benchmark look before the evaluator starts."""
+    results_dir = Path(idea_dir).parent
+    lock_dir = results_dir / EXPOSURE_LOCK_DIR
+    if lock_dir.is_symlink():
+        raise BenchmarkContractError(
+            "benchmark_exposure_lock_symlink_forbidden"
+        )
+    if not _fs_lock(lock_dir, stale_seconds=300):
+        raise BenchmarkContractError("benchmark_exposure_ledger_locked")
+    try:
+        records = _read_exposure_ledger(results_dir)
+        matching = _validated_matching_exposures(records, contract)
+        _audit_exposure_provenance_links(results_dir, records, contract)
+        prior = int(contract["prior_exposures"])
+        ordinal = prior + len(matching) + 1
+        maximum = int(contract["max_evaluations"])
+        if ordinal > maximum:
+            raise BenchmarkContractError(
+                f"benchmark_exposure_budget_exhausted:{ordinal - 1}/{maximum}"
+            )
+        nonce_sha256 = hashlib.sha256(nonce.encode("utf-8")).hexdigest()
+        record = {
+            "schema_version": 1,
+            **_exposure_identity(contract),
+            "exposure_ordinal": ordinal,
+            "idea_id": Path(idea_dir).name,
+            "evaluation_nonce_sha256": nonce_sha256,
+            "evaluator_sha256": evaluator_sha256,
+            "host": socket.gethostname(),
+            "pid": os.getpid(),
+            "reserved_at_unix_ns": time.time_ns(),
+        }
+        canonical = json.dumps(record, sort_keys=True, separators=(",", ":"))
+        record_sha256 = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        record["record_sha256"] = record_sha256
+        ledger_path = results_dir / EXPOSURE_LEDGER_FILE
+        existed = ledger_path.exists()
+        flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(str(ledger_path), flags, 0o600)
+        except OSError as exc:
+            raise BenchmarkContractError(
+                "benchmark_exposure_ledger_unwritable"
+            ) from exc
+        try:
+            line = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
+            written = 0
+            while written < len(line):
+                count = os.write(fd, line[written:])
+                if count <= 0:
+                    raise BenchmarkContractError(
+                        "benchmark_exposure_ledger_short_write"
+                    )
+                written += count
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        if not existed:
+            parent_fd = os.open(str(results_dir), os.O_RDONLY)
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
+        return ordinal, record_sha256
+    finally:
+        _fs_unlock(lock_dir)
+
+
+def benchmark_exposure_summary(results_dir: Path, cfg: Mapping) -> dict:
+    """Return non-secret exposure accounting for reporting and status."""
+    contract = get_benchmark_contract(cfg)
+    if contract is None:
+        return {"enabled": False}
+    try:
+        all_records = _read_exposure_ledger(Path(results_dir))
+        records = _validated_matching_exposures(all_records, contract)
+        _audit_exposure_provenance_links(
+            Path(results_dir), all_records, contract,
+        )
+    except BenchmarkContractError as exc:
+        return {
+            "enabled": True,
+            "valid": False,
+            "reason": str(exc),
+        }
+    prior = int(contract.get("prior_exposures", 0))
+    observed = len(records)
+    maximum = int(contract.get("max_evaluations", 0))
+    return {
+        "enabled": True,
+        "valid": True,
+        "evidence_scope": contract.get("evidence_scope"),
+        "selection_mode": contract.get("selection_mode"),
+        "prior_exposures": prior,
+        "managed_exposures": observed,
+        "total_exposures": prior + observed,
+        "max_evaluations": maximum,
+        "remaining": max(0, maximum - prior - observed),
+        "benchmark_fitted": (
+            contract.get("selection_mode") == "adaptive" or prior > 0
+        ),
+    }
+
+
 def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]:
     """Pin evaluator identity and return nonce-bearing child environment.
 
@@ -188,6 +523,12 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
     contract = get_benchmark_contract(cfg)
     if contract is None:
         return {}
+    if (contract.get("selection_mode") == "confirmation"
+            and (contract.get("prior_exposures") != 0
+                 or contract.get("max_evaluations") != 1)):
+        raise BenchmarkContractError(
+            "benchmark_confirmation_policy_invalid"
+        )
 
     receipt_path = Path(idea_dir) / contract["receipt"]
     if receipt_path.exists():
@@ -205,6 +546,9 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
         )
 
     nonce = secrets.token_hex(32)
+    exposure_ordinal, exposure_record_sha256 = _reserve_benchmark_exposure(
+        Path(idea_dir), contract, actual_digest, nonce,
+    )
     provenance = {
         "schema_version": SCHEMA_VERSION,
         "benchmark_id": contract["benchmark_id"],
@@ -214,6 +558,12 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
         "dataset_manifest_sha256": str(
             contract["dataset_manifest_sha256"]).lower(),
         "scorer_sha256": str(contract["scorer_sha256"]).lower(),
+        "evidence_scope": contract["evidence_scope"],
+        "selection_mode": contract["selection_mode"],
+        "prior_exposures": int(contract["prior_exposures"]),
+        "max_evaluations": int(contract["max_evaluations"]),
+        "exposure_ordinal": exposure_ordinal,
+        "exposure_record_sha256": exposure_record_sha256,
         "evaluation_nonce": nonce,
         "pid": os.getpid(),
     }
@@ -224,6 +574,8 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
     return {
         "ORZE_BENCHMARK_EVALUATION_NONCE": nonce,
         "ORZE_BENCHMARK_RECEIPT": str(receipt_path.resolve()),
+        "ORZE_BENCHMARK_EXPOSURE_ORDINAL": str(exposure_ordinal),
+        "ORZE_BENCHMARK_EXPOSURE_RECORD_SHA256": exposure_record_sha256,
     }
 
 
@@ -296,6 +648,10 @@ def validate_benchmark_receipt(
         "dataset_manifest_sha256": str(
             contract["dataset_manifest_sha256"]).lower(),
         "scorer_sha256": str(contract["scorer_sha256"]).lower(),
+        "evidence_scope": contract["evidence_scope"],
+        "selection_mode": contract["selection_mode"],
+        "prior_exposures": int(contract["prior_exposures"]),
+        "max_evaluations": int(contract["max_evaluations"]),
     }
     for key, expected_value in expected.items():
         if provenance.get(key) != expected_value:
@@ -305,6 +661,42 @@ def validate_benchmark_receipt(
     if (not isinstance(provenance.get("evaluation_nonce"), str)
             or receipt.get("evaluation_nonce") != provenance["evaluation_nonce"]):
         return False, "benchmark_receipt_nonce_mismatch"
+    exposure_ordinal = provenance.get("exposure_ordinal")
+    if (isinstance(exposure_ordinal, bool)
+            or not isinstance(exposure_ordinal, int) or exposure_ordinal < 1
+            or receipt.get("exposure_ordinal") != exposure_ordinal):
+        return False, "benchmark_receipt_exposure_ordinal_mismatch"
+    record_sha256 = provenance.get("exposure_record_sha256")
+    if (not isinstance(record_sha256, str)
+            or _SHA256_RE.fullmatch(record_sha256) is None
+            or receipt.get("exposure_record_sha256") != record_sha256):
+        return False, "benchmark_receipt_exposure_record_mismatch"
+    try:
+        ledger_records = _read_exposure_ledger(Path(idea_dir).parent)
+        _validated_matching_exposures(ledger_records, contract)
+        _audit_exposure_provenance_links(
+            Path(idea_dir).parent, ledger_records, contract,
+        )
+    except BenchmarkContractError as exc:
+        return False, str(exc)
+    ledger_match = [
+        record for record in _matching_exposures(ledger_records, contract)
+        if record.get("record_sha256") == record_sha256
+    ]
+    if len(ledger_match) != 1:
+        return False, "benchmark_exposure_record_missing_or_duplicated"
+    exposure_record = ledger_match[0]
+    canonical_record = dict(exposure_record)
+    canonical_record.pop("record_sha256", None)
+    actual_record_sha256 = hashlib.sha256(json.dumps(
+        canonical_record, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+    if (actual_record_sha256 != record_sha256
+            or exposure_record.get("exposure_ordinal") != exposure_ordinal
+            or exposure_record.get("idea_id") != Path(idea_dir).name
+            or exposure_record.get("evaluation_nonce_sha256") != hashlib.sha256(
+                provenance["evaluation_nonce"].encode("utf-8")).hexdigest()):
+        return False, "benchmark_exposure_record_integrity_mismatch"
 
     if receipt.get("model_form") != _MODEL_FORM:
         return False, "benchmark_receipt_model_form_mismatch"

@@ -54,6 +54,15 @@ from orze.reporting.leaderboard import _format_report_text
 logger = logging.getLogger("orze")
 
 
+def _evidence_context(data: dict, escape_fn=str) -> str:
+    scope = data.get("evidence_scope")
+    if not scope:
+        return ""
+    mode = data.get("selection_mode")
+    value = str(scope) + (f"/{mode}" if mode else "")
+    return f" [{escape_fn(value)}]"
+
+
 # Runtime per-channel delivery state, keyed by channel label (same key
 # space as ``startup_canary`` / ``validate_channels`` outputs). Updated
 # from inside ``notify()`` after every send so silent post-boot drift —
@@ -299,7 +308,10 @@ def _format_leaderboard(data: dict, bold_fn=str, escape_fn=str) -> str:
     if not board:
         return ""
     metric = escape_fn(str(data.get("metric_name", "score")))
-    lines = [f"\nLocal top {len(board)} ({metric}):"]
+    lines = [
+        f"\nLocal top {len(board)} ({metric})"
+        f"{_evidence_context(data, escape_fn)}:"
+    ]
     for i, entry in enumerate(board, 1):
         val = entry.get("value")
         if isinstance(val, float):
@@ -404,7 +416,8 @@ def _format_slack(event: str, data: dict) -> dict:
                          f"*Host:* `{host}` (pid {pid})")}
     if event == "new_best":
         prev = data.get("prev_best_id", "none")
-        text = (f":trophy: *NEW LOCAL BEST* `{data['idea_id']}`: {data['title']}\n"
+        text = (f":trophy: *NEW LOCAL BEST*"
+                f"{_evidence_context(data)} `{data['idea_id']}`: {data['title']}\n"
                 f"{data['metric_name']}: *{data['metric_value']}*"
                 f" (was `{prev}`)")
     elif event == "failed":
@@ -422,7 +435,8 @@ def _format_slack(event: str, data: dict) -> dict:
         text = (f":white_check_mark: *Completed* `{data.get('idea_id', '?')}`: "
                 f"{data.get('title', '?')}\n"
                 f"{data.get('metric_name', '?')}: {data.get('metric_value', '?')}"
-                f" (local rank #{data.get('rank', '?')})"
+                f" (local rank #{data.get('rank', '?')}"
+                f"{_evidence_context(data)})"
                 f"{t_str}")
     if not data.get("summary_only"):
         text += _format_leaderboard(data, lambda s: f"*{s}*")
@@ -496,7 +510,8 @@ def _format_discord(event: str, data: dict) -> dict:
                             f"**Host:** `{host}` (pid {pid})")}
     if event == "new_best":
         prev = data.get("prev_best_id", "none")
-        content = (f"**NEW LOCAL BEST** `{data['idea_id']}`: {data['title']}\n"
+        content = (f"**NEW LOCAL BEST**{_evidence_context(data)} "
+                   f"`{data['idea_id']}`: {data['title']}\n"
                    f"{data['metric_name']}: **{data['metric_value']}**"
                    f" (was `{prev}`)")
     elif event == "failed":
@@ -513,7 +528,8 @@ def _format_discord(event: str, data: dict) -> dict:
             pass
         content = (f"**Completed** `{data.get('idea_id', '?')}`: {data.get('title', '?')}\n"
                    f"{data.get('metric_name', '?')}: {data.get('metric_value', '?')}"
-                   f" (local rank #{data.get('rank', '?')})"
+                   f" (local rank #{data.get('rank', '?')}"
+                   f"{_evidence_context(data)})"
                    f"{t_str}")
     if not data.get("summary_only"):
         content += _format_leaderboard(data, lambda s: f"**{s}**")
@@ -789,7 +805,8 @@ def _format_telegram(event: str, data: dict, channel_cfg: dict) -> tuple:
                 delta_str = f" | \u0394 {delta:+.2f}%"
         except (ValueError, TypeError):
             pass
-        text = (f"\U0001f3c6\U0001f3c6\U0001f3c6 <b>NEW LOCAL BEST</b>\n"
+        text = (f"\U0001f3c6\U0001f3c6\U0001f3c6 <b>NEW LOCAL BEST</b>"
+                f"{_evidence_context(data, esc)}\n"
                 f"<code>{idea_id}</code>: {title}\n"
                 f"{metric}: <b>{val_str}</b>"
                 f" (was {esc(str(prev_val or '?'))}% <code>{prev_id}</code>)"
@@ -820,7 +837,8 @@ def _format_telegram(event: str, data: dict, channel_cfg: dict) -> tuple:
         else:
             medal = "\u2705"
         text = (f"{medal} <code>{idea_id}</code>: {title}\n"
-                f"{metric}: <b>{val}</b> (local #{rank_str}){t_str}")
+                f"{metric}: <b>{val}</b> (local #{rank_str}"
+                f"{_evidence_context(data, esc)}){t_str}")
     if not data.get("summary_only"):
         text += _format_leaderboard(data, lambda s: f"<b>{s}</b>", escape_fn=esc)
 

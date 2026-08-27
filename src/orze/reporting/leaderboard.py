@@ -38,7 +38,9 @@ from orze.core.fs import deep_get, atomic_write
 from orze.core.ideas import expand_sweeps
 from orze.core.config import DEFAULT_CONFIG, orze_path
 from orze.core.benchmark_contract import (
+    EXPOSURE_LEDGER_FILE,
     PROVENANCE_FILE,
+    benchmark_exposure_summary,
     get_benchmark_contract,
     validate_benchmark_receipt,
 )
@@ -313,6 +315,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     Returns sorted list of completed row dicts."""
     report_cfg = cfg.get("report") or DEFAULT_CONFIG["report"]
     benchmark_contract = get_benchmark_contract(cfg)
+    exposure_summary = benchmark_exposure_summary(results_dir, cfg)
     primary_metric = report_cfg.get("primary_metric") or "test_accuracy"
     sort_order = report_cfg.get("sort") or "descending"
     mh_columns = (cfg.get("metric_harvest") or {}).get("columns")
@@ -465,6 +468,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 if evidence_path.exists():
                     mtime = max(mtime, evidence_path.stat().st_mtime)
                 evidence_paths.append(evidence_path)
+            evidence_paths.append(results_dir / EXPOSURE_LEDGER_FILE)
         evidence_hash = None
         if benchmark_contract:
             # Integrity-sensitive evidence is keyed by bytes, not mtimes. A
@@ -628,12 +632,33 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             f"- Benchmark: `{benchmark_contract['benchmark_id']}`",
             f"- Immutable revision: `{benchmark_contract['revision']}`",
             f"- View: `{benchmark_contract['view']}`",
+            f"- Evidence scope: `{benchmark_contract['evidence_scope']}`",
+            f"- Selection mode: `{benchmark_contract['selection_mode']}`",
             "- Model form: `single_model_single_pass`",
             "- Rank scope: **local ordering among contract-verified runs; "
             "not an official leaderboard rank**",
             "- Exact metric coverage: "
             + ", ".join(f"`{key}`" for key in
                         benchmark_contract["required_metrics"]),
+            "- Exposure budget: "
+            + (
+                f"{exposure_summary.get('total_exposures', '?')}/"
+                f"{exposure_summary.get('max_evaluations', '?')} used "
+                f"({exposure_summary.get('remaining', '?')} remaining)"
+                if exposure_summary.get("valid") else
+                f"**invalid** (`{exposure_summary.get('reason', 'unknown')}`)"
+            ),
+            "- Interpretation: "
+            + (
+                "**unrankable: exposure evidence is invalid**"
+                if not exposure_summary.get("valid") else
+                (
+                    "**benchmark-fitted adaptive evidence; not an independent "
+                    "confirmation**"
+                    if exposure_summary.get("benchmark_fitted") else
+                    "bounded confirmation evidence"
+                )
+            ),
             "",
         ])
     lines.extend([
@@ -889,6 +914,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             "metric": primary_metric,
             "rank_scope": "local",
             "benchmark_contract": benchmark_contract,
+            "benchmark_exposure": exposure_summary,
         }, default=str),
     )
 
@@ -923,7 +949,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         _atomic_write_if_changed(view_lb_path, json.dumps(
             {"top": view_entries, "metric": primary_metric, "view": vname,
              "title": vtitle, "rank_scope": "local",
-             "benchmark_contract": benchmark_contract}, default=str))
+             "benchmark_contract": benchmark_contract,
+             "benchmark_exposure": exposure_summary}, default=str))
 
         # Append view section to report.md
         lines.append(f"## {vtitle}")
@@ -1107,7 +1134,12 @@ def format_report_text(data: dict) -> str:
         lines.append("")
 
     if board:
-        lines.append(f"Local top {len(board)} ({metric}):")
+        contract = data.get("evidence_scope")
+        selection = data.get("selection_mode")
+        context = (
+            f" [{contract}/{selection}]" if contract and selection else ""
+        )
+        lines.append(f"Local top {len(board)} ({metric}){context}:")
         for i, entry in enumerate(board, 1):
             val = entry.get("value")
             val_str = f"{val:.4f}" if isinstance(val, float) else str(val)
@@ -1381,6 +1413,10 @@ class NotificationProcessor:
             "training_time": t_time,
             "rank": rank if rank is not None else "?",
             "rank_scope": "local",
+            "evidence_scope": (get_benchmark_contract(cfg) or {}).get(
+                "evidence_scope"),
+            "selection_mode": (get_benchmark_contract(cfg) or {}).get(
+                "selection_mode"),
             "leaderboard": leaderboard,
             "view_leaderboards": view_lbs,
             "summary_only": summary_only,
@@ -1511,6 +1547,10 @@ class NotificationProcessor:
                 "prev_best_id": self._best_idea_id,
                 "prev_best_val": prev_fmt,
                 "rank_scope": "local",
+                "evidence_scope": (get_benchmark_contract(cfg) or {}).get(
+                    "evidence_scope"),
+                "selection_mode": (get_benchmark_contract(cfg) or {}).get(
+                    "selection_mode"),
                 "leaderboard": leaderboard,
                 "view_leaderboards": view_lbs,
             }, cfg)
@@ -1565,6 +1605,10 @@ class NotificationProcessor:
             "metric_name": primary,
             "leaderboard": leaderboard,
             "rank_scope": "local",
+            "evidence_scope": (get_benchmark_contract(cfg) or {}).get(
+                "evidence_scope"),
+            "selection_mode": (get_benchmark_contract(cfg) or {}).get(
+                "selection_mode"),
             "view_leaderboards": view_lbs,
             "machines": build_machine_status_fn(),
         }, cfg)

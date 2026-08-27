@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Fixed
+- **Benchmark reuse is now explicitly scoped and budgeted.** Contracted
+  evaluations declare `development_proxy` or `local_reproduction` evidence and
+  `adaptive` or `confirmation` selection. An append-only, lock-protected ledger
+  reserves each exposure before process launch, binds it to the fresh evaluator
+  nonce, and enforces declared prior exposure plus a hard maximum. Confirmation
+  refuses any prior look, and relabeling the same sealed dataset cannot reset
+  its recorded history. Corrupt, missing, duplicated, or backdated exposure
+  evidence invalidates the result. Reports, caches, and notifications expose
+  the scope, selection mode, remaining budget, and benchmark-fitted status so
+  adaptive test reuse cannot masquerade as an independent confirmation.
 - **Benchmark progress is now provenance-gated and explicitly local.** Optional
   `report.benchmark_contract` pins an immutable benchmark revision, view,
   evaluator hash, exact metric coverage, macro aggregation, and a fresh
