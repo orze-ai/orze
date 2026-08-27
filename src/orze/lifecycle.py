@@ -282,9 +282,11 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
              gpus: str = None, timeout: int = None):
     """Start orze on the local node.
 
-    1. Check not already running
-    2. Clear sentinels (.orze_disabled, .orze_stop_all, .orze_shutdown)
-    3. Launch orze (detached daemon or foreground via os.execv)
+    1. Verify the opt-in controller runtime contract
+    2. Check not already running
+    3. Clear sentinels (.orze_disabled, .orze_stop_all, .orze_shutdown)
+    4. Build the child command
+    5. Launch orze (detached daemon or foreground via os.execv)
 
     Args:
         gpus: Comma-separated GPU IDs (e.g. "0,1,3"). None = auto-detect.
@@ -293,6 +295,12 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
     Returns PID in daemon mode. In foreground mode, replaces the process
     via os.execv (never returns).
     """
+    # This function is also a public Python entry point, so enforce identity
+    # here rather than relying only on cli.py or on the eventual child. The
+    # check must precede directory creation and, critically, sentinel removal.
+    from orze.service.runtime_contract import require_controller_runtime_contract
+    require_controller_runtime_contract(cfg.get("controller_runtime"))
+
     results_dir = Path(cfg["results_dir"])
     hostname = socket.gethostname()
     config_path = config_path or cfg.get("_config_path", "orze.yaml")
@@ -300,7 +308,7 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
     log_file = str(Path(cfg.get("results_dir", "orze_results")) / "orze.log")
     Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 
-    # 1. Check not already running
+    # 2. Check not already running
     pid = _read_pid(results_dir, hostname)
     if pid and _is_alive(pid):
         _log("start", f"Orze is already running (PID {pid}). "
@@ -314,7 +322,7 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
              f"Use 'orze restart' instead.")
         sys.exit(1)
 
-    # 2. Clear sentinels
+    # 3. Clear sentinels
     results_dir.mkdir(parents=True, exist_ok=True)
     for name in [".orze_disabled", ".orze_stop_all", ".orze_shutdown"]:
         sentinel = results_dir / name
@@ -322,14 +330,14 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
             sentinel.unlink(missing_ok=True)
             _log("start", f"Removed {name}")
 
-    # 3. Build command
+    # 4. Build command
     cmd = [python, "-m", "orze.cli", "-c", config_path]
     if gpus:
         cmd.extend(["--gpus", gpus])
     if timeout is not None:
         cmd.extend(["--timeout", str(timeout)])
 
-    # 4. Launch
+    # 5. Launch
     if foreground:
         gpu_msg = f" on GPUs {gpus}" if gpus else ""
         _log("start", f"Starting orze in foreground{gpu_msg}...")

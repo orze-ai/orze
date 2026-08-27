@@ -41,14 +41,14 @@ logger = logging.getLogger("orze")
 
 def _require_controller_runtime(cfg: dict) -> None:
     """Fail before GPU discovery when an opt-in runtime pin drifts."""
-    contract = cfg.get("controller_runtime")
-    if contract is None:
-        return
-    from orze.service.runtime_contract import audit_controller_runtime_contract
-    report = audit_controller_runtime_contract(contract)
-    if not report["contract_ok"]:
-        reasons = ",".join(report["errors"])
-        raise SystemExit(f"Controller runtime contract rejected: {reasons}")
+    from orze.service.runtime_contract import (
+        RuntimeContractError,
+        require_controller_runtime_contract,
+    )
+    try:
+        require_controller_runtime_contract(cfg.get("controller_runtime"))
+    except RuntimeContractError as exc:
+        raise SystemExit(f"Controller runtime contract rejected: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -779,20 +779,30 @@ Examples:
 
     if command == "start":
         from orze.lifecycle import do_start
+        from orze.service.runtime_contract import RuntimeContractError
         cfg = load_project_config(args.config_file)
         if args.timeout is not None:
             cfg["timeout"] = args.timeout
         config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
-        do_start(cfg, foreground=args.foreground, config_path=config_path,
-                 gpus=args.gpus, timeout=args.timeout)
+        try:
+            do_start(cfg, foreground=args.foreground, config_path=config_path,
+                     gpus=args.gpus, timeout=args.timeout)
+        except RuntimeContractError as exc:
+            print(f"ERROR: start rejected: {exc}")
+            return 2
         return
 
     if command == "restart":
         from orze.lifecycle import do_restart
+        from orze.service.runtime_contract import RuntimeContractError
         cfg = load_project_config(args.config_file)
         config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
-        do_restart(cfg, timeout=args.timeout, foreground=args.foreground,
-                   config_path=config_path, gpus=args.gpus)
+        try:
+            do_restart(cfg, timeout=args.timeout, foreground=args.foreground,
+                       config_path=config_path, gpus=args.gpus)
+        except RuntimeContractError as exc:
+            print(f"ERROR: restart stopped but start rejected: {exc}")
+            return 2
         return
 
     if command == "reset":
@@ -1184,6 +1194,9 @@ Examples:
 
     # --enable
     if args.enable:
+        # Removing a persistent stop latch authorizes future work. A drifted
+        # controller may always stop/disable, but it may never re-enable.
+        _require_controller_runtime(cfg)
         disable_path = Path(cfg["results_dir"]) / ".orze_disabled"
         if disable_path.exists():
             disable_path.unlink()

@@ -213,6 +213,24 @@ def audit_controller_runtime_contract(
     }
 
 
+def require_controller_runtime_contract(expected: object) -> dict:
+    """Require an opt-in controller pin and raise only stable error codes.
+
+    The no-contract case remains backward compatible. Callers use this shared
+    boundary before any state transition that can authorize later work, not
+    only at controller startup or immediately before GPU telemetry.
+    """
+    if expected is None:
+        return {"schema_version": 1, "contract_ok": True, "errors": []}
+    report = audit_controller_runtime_contract(expected)
+    if not report["contract_ok"]:
+        reasons = ",".join(sorted(set(report.get("errors") or [])))
+        raise RuntimeContractError(
+            "controller_runtime_contract_rejected:"
+            f"{reasons or 'unknown_runtime_drift'}")
+    return report
+
+
 def capture_controller_runtime_contract() -> dict:
     """Return a ready-to-paste exact pin for the current controller."""
     return {
