@@ -1,5 +1,9 @@
 """One-idea managed runs must fail closed before any GPU observation."""
 
+import os
+import subprocess
+import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -7,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 import orze.cli as cli
+from orze.engine import lifecycle
 from orze.core import managed_run
 from orze.core.managed_run import (
     ManagedRunError,
@@ -142,6 +147,189 @@ def test_managed_pid_receipt_never_overwrites_daemon_pid(tmp_path):
     assert not runner._pid_file.exists()
     assert daemon_pid.read_text(encoding="utf-8") == "123"
     assert host_pid.read_text(encoding="utf-8") == "123"
+
+
+def test_managed_orchestrator_skips_daemon_wide_hooks(
+        tmp_path, monkeypatch):
+    calls = []
+
+    class Slots(dict):
+        def gpu_ids_in_use(self):
+            return set()
+
+    class Lake:
+        def close(self):
+            calls.append("lake_close")
+
+    class Healthy:
+        retry_delay = 0
+
+        def __init__(self, results_dir):
+            calls.append("health_monitor")
+
+        def check_before_write(self):
+            return True
+
+    runner = Orze.__new__(Orze)
+    runner.cfg = {
+        "_managed_idea_id": "idea-managed",
+        "_managed_idea_gpu": 4,
+        "ideas_file": str(tmp_path / "ideas.md"),
+        "results_dir": str(tmp_path),
+        "timeout": 60,
+        "poll": 1,
+        "roles": {},
+        "notifications": {"enabled": False},
+        "sealed_files": [],
+        "cleanup": {},
+        "min_disk_gb": 0,
+        "report": {"primary_metric": "score"},
+    }
+    runner.gpu_ids = [4]
+    runner.once = True
+    runner.results_dir = tmp_path
+    runner.slot_mgr = Slots()
+    runner.active = runner.slot_mgr
+    runner.active_evals = {}
+    runner.active_roles = {}
+    runner.pending_evals = []
+    runner.running = True
+    runner.iteration = 0
+    runner.failure_counts = {}
+    runner.fix_counts = {}
+    runner.role_states = {}
+    runner.notification_health = {}
+    runner._hostname = "test-host"
+    runner._instance_uuid = "test-instance"
+    runner._leader_handle = None
+    runner._auto_gpu_mode = False
+    runner._stop_event = threading.Event()
+    runner.lake = Lake()
+    runner._write_pid_file = lambda: calls.append("pid_write")
+    runner._remove_pid_file = lambda: calls.append("pid_remove")
+    runner._check_disabled = lambda: False
+    runner._check_stop_all = lambda: False
+    runner._sync_managed_idea = lambda cfg, idea_id: (
+        {idea_id: {"title": "selected", "config": {}}}, [], set(), {})
+    runner._launch_evals = lambda *args: ([], [])
+    runner._launch_training = lambda *args: [4]
+
+    forbidden = (
+        "_startup_checks", "_kill_orphans", "_check_auto_upgrade",
+        "_check_upgrade_sentinel", "_check_cluster_versions",
+        "_hot_reload_config", "_run_all_roles", "_rebuild_config_hashes",
+        "_report_and_notify",
+    )
+    for name in forbidden:
+        setattr(
+            runner, name,
+            lambda *args, _name=name, **kwargs: pytest.fail(
+                f"managed run called daemon-wide hook {_name}"),
+        )
+
+    monkeypatch.setattr("orze.engine.health.HealthMonitor", Healthy)
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.check_disk_space", lambda *args: True)
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.notify",
+        lambda *args: pytest.fail("managed run sent a notification"))
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.startup_canary",
+        lambda *args: pytest.fail("managed run called startup canary"))
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.parse_ideas",
+        lambda *args: pytest.fail("managed run parsed the global queue"))
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.update_report",
+        lambda *args: pytest.fail("managed run updated the global report"))
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.write_host_heartbeat",
+        lambda *args: pytest.fail("managed run wrote a daemon heartbeat"))
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.save_state",
+        lambda *args: pytest.fail("managed run saved daemon state"))
+
+    runner.run()
+
+    assert calls == ["pid_write", "health_monitor", "lake_close", "pid_remove"]
+
+
+def test_managed_shutdown_forces_child_termination(monkeypatch, tmp_path):
+    observed = {}
+    runner = Orze.__new__(Orze)
+    runner.cfg = {"_managed_idea_id": "idea-managed"}
+    runner.results_dir = tmp_path
+    runner.active = {4: object()}
+    runner.active_evals = {}
+    runner.active_roles = {}
+    runner.iteration = 1
+    runner.lake = None
+    runner._hostname = "test-host"
+    runner._instance_uuid = "test-instance"
+    runner._pid_file = tmp_path / ".orze.managed.idea-managed.1.pid"
+    runner._build_state_dict = lambda: {}
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.graceful_shutdown",
+        lambda *args, **kwargs: observed.update(kwargs),
+    )
+
+    runner._graceful_shutdown(kill_all=False)
+
+    assert observed["managed"] is True
+    assert observed["kill_all"] is True
+    assert observed["pid_file_path"] == runner._pid_file
+
+
+def test_managed_shutdown_does_not_mutate_daemon_state(
+        monkeypatch, tmp_path):
+    managed_pid = tmp_path / ".orze.managed.idea-managed.1.pid"
+    managed_pid.write_text("1", encoding="utf-8")
+    daemon_pid = tmp_path / ".orze.pid"
+    daemon_pid.write_text("123", encoding="utf-8")
+    closed = []
+    lake = SimpleNamespace(close=lambda: closed.append(True))
+    monkeypatch.setattr(
+        lifecycle, "write_shutdown_heartbeat",
+        lambda *args: pytest.fail("managed shutdown wrote daemon heartbeat"))
+    monkeypatch.setattr(
+        lifecycle, "save_state",
+        lambda *args: pytest.fail("managed shutdown saved daemon state"))
+    monkeypatch.setattr(
+        lifecycle, "notify",
+        lambda *args: pytest.fail("managed shutdown sent notification"))
+
+    lifecycle.graceful_shutdown(
+        tmp_path, {}, {}, {}, {}, 1, {}, lake,
+        "test-host", "test-instance", kill_all=True,
+        managed=True, pid_file_path=managed_pid,
+    )
+
+    assert closed == [True]
+    assert not managed_pid.exists()
+    assert daemon_pid.read_text(encoding="utf-8") == "123"
+    assert not (tmp_path / ".orze_shutdown").exists()
+
+
+def test_python_module_propagates_managed_rejection_exit_code(tmp_path):
+    config = tmp_path / "orze.yaml"
+    config.write_text("controller_runtime: null\n", encoding="utf-8")
+    source_root = Path(__file__).resolve().parents[1] / "src"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(source_root)
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "orze.cli", "run-idea", "idea-managed",
+            "--gpu", "4", "-c", str(config),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+    assert result.returncode == 2
+    assert "managed idea run rejected" in result.stdout
 
 
 def test_managed_run_requires_authoritative_queued_state(
@@ -402,3 +590,37 @@ def test_run_idea_cli_returns_failure_when_terminal_proof_is_missing(
     monkeypatch.setattr("orze.engine.orchestrator.Orze", Runner)
 
     assert cli.main() == 1
+
+
+def test_run_idea_cli_cleans_up_after_orchestrator_exception(
+        monkeypatch, capsys):
+    observed = {}
+    monkeypatch.setattr(
+        "sys.argv", ["orze", "run-idea", "idea-managed", "--gpu", "4"])
+    monkeypatch.setattr("orze.extensions._find_pro_key", lambda: "present")
+    monkeypatch.setattr(cli, "load_project_config", lambda path: {})
+    monkeypatch.setattr(
+        managed_run, "prepare_managed_idea_run",
+        lambda *args: {"idea_id": "idea-managed", "gpu": 4},
+    )
+
+    class Runner:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def run(self):
+            raise RuntimeError("sensitive detail must not be printed")
+
+        def _graceful_shutdown(self, kill_all=False):
+            observed["kill_all"] = kill_all
+
+        def _remove_pid_file(self):
+            pytest.fail("fallback cleanup should not be needed")
+
+    monkeypatch.setattr("orze.engine.orchestrator.Orze", Runner)
+
+    assert cli.main() == 1
+    assert observed == {"kill_all": True}
+    output = capsys.readouterr().out
+    assert "RuntimeError" in output
+    assert "sensitive detail" not in output
