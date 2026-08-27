@@ -1,0 +1,98 @@
+# Benchmark contracts
+
+Orze reports an internal comparison of experiments. It does not observe an
+external leaderboard's hidden data, maintainer verification, eligible-model
+rules, or current population. Consequently, every Orze ordering is a **local
+rank**, never an official leaderboard rank.
+
+Projects that need benchmark-comparable local results can enable a fail-closed
+contract under `report.benchmark_contract`:
+
+```yaml
+eval_script: eval_exact.py
+eval_output: eval_report.json
+sealed_hashes:
+  eval_exact.py: <sha256-of-eval_exact.py>
+
+report:
+  primary_metric: avg_wer
+  sort: ascending
+  min_datasets: 9
+  columns:
+    - {key: avg_wer, label: Average WER}
+    - {key: wer_ami_cleaned, label: AMI-Cleaned}
+    - {key: wer_earnings22_aa_chunked, label: Earnings22-AA}
+    - {key: wer_gigaspeech_cleaned, label: GigaSpeech-Cleaned}
+    - {key: wer_ls_clean, label: LS Clean}
+    - {key: wer_ls_other, label: LS Other}
+    - {key: wer_spgispeech, label: SPGISpeech}
+    - {key: wer_voxpopuli_aa_cleaned, label: VoxPopuli-AA}
+    - {key: wer_private_scripted, label: Private scripted}
+    - {key: wer_private_conversational, label: Private conversational}
+  benchmark_contract:
+    benchmark_id: hf-audio/open_asr_leaderboard
+    # Pin the source defining the view; branches such as `main` are rejected.
+    revision: 873970213e211390bd43e9f6a3ad32818cdc3874
+    view: default
+    required_metrics:
+      - wer_ami_cleaned
+      - wer_earnings22_aa_chunked
+      - wer_gigaspeech_cleaned
+      - wer_ls_clean
+      - wer_ls_other
+      - wer_spgispeech
+      - wer_voxpopuli_aa_cleaned
+      - wer_private_scripted
+      - wer_private_conversational
+    receipt: benchmark_receipt.json
+    model_form: single_model_single_pass
+    aggregate: macro_mean
+    aggregate_tolerance: 1.0e-6
+    evaluator_sha256: <sha256-of-eval_exact.py>
+    dataset_manifest_sha256: <sha256-of-the-exact-ordered-sample-manifest>
+    scorer_sha256: <sha256-of-the-normalizer-and-scoring-contract>
+```
+
+This example captures the Open ASR landing-page default at the pinned Space
+revision; it is an example, not a permanently current built-in policy. Pin a
+new immutable revision and update the exact metric set whenever the external
+view changes.
+
+## Evaluator receipt
+
+At launch Orze hashes the sealed evaluator, generates a fresh random nonce,
+writes `_benchmark_evaluation.json`, and passes the nonce and receipt path in
+`ORZE_BENCHMARK_EVALUATION_NONCE` and `ORZE_BENCHMARK_RECEIPT`. A successful
+evaluator writes JSON like:
+
+```json
+{
+  "schema_version": 1,
+  "benchmark_id": "hf-audio/open_asr_leaderboard",
+  "benchmark_revision": "873970213e211390bd43e9f6a3ad32818cdc3874",
+  "benchmark_view": "default",
+  "evaluator_sha256": "<sha256-of-eval_exact.py>",
+  "dataset_manifest_sha256": "<sha256-of-the-exact-ordered-sample-manifest>",
+  "scorer_sha256": "<sha256-of-the-normalizer-and-scoring-contract>",
+  "evaluation_nonce": "<ORZE_BENCHMARK_EVALUATION_NONCE>",
+  "model_form": "single_model_single_pass",
+  "component_model_count": 1,
+  "inference_passes_per_sample": 1,
+  "dataset_specific_routing": false,
+  "model_artifact_sha256": "<sha256-of-the-one-evaluated-model-artifact>",
+  "decoding_config_sha256": "<sha256-of-the-one-shared-decoding-config>",
+  "metric_keys": ["<the exact required_metrics set>"]
+}
+```
+
+The evaluator must write the receipt only after loading the one hashed model
+artifact and completing the declared evaluation. A receipt that existed before
+launch is rejected. Missing provenance, a nonce mismatch, evaluator drift,
+multiple components or passes, dataset-specific routing, missing/extra metric
+keys, dataset/scorer drift, an invalid shared-decoding identity, non-finite
+metrics, or an incorrect macro mean fails evaluation and keeps the row out of
+every local ranking.
+
+This contract makes honest claims mechanically easier, but it does not turn a
+local run into maintainer verification. An official rank must come from the
+external leaderboard itself and is deliberately outside Orze's report schema.

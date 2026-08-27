@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **Benchmark progress is now provenance-gated and explicitly local.** Optional
+  `report.benchmark_contract` pins an immutable benchmark revision, view,
+  evaluator hash, exact metric coverage, macro aggregation, and a fresh
+  nonce-bound evaluation receipt. Only receipts attesting one model component,
+  one inference pass per sample, and no dataset-specific routing can enter the
+  local ordering. Missing private sets, stale or fabricated receipts, evaluator
+  drift, partial coverage, and aggregate mismatches remain visible but
+  unranked. Reports, caches, and notifications now say `local rank`; Orze never
+  infers or presents an official external leaderboard rank.
 - **Installed services now prove their effective runtime before startup.**
   Service installation pins content hashes and import roots for the Orze and
   optional Orze-Pro package trees, adds a fail-closed `ExecStartPre` audit, and

@@ -50,6 +50,12 @@ from orze.engine.launcher import (
     _launch_min_free_vram, _verify_gpu_free,
 )
 from orze.core.fs import tail_file
+from orze.core.benchmark_contract import (
+    BenchmarkContractError,
+    load_benchmark_values,
+    prepare_benchmark_evaluation,
+    validate_benchmark_receipt,
+)
 
 logger = logging.getLogger("orze")
 
@@ -148,6 +154,7 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     proc = None
     ep = None
     try:
+        benchmark_env = prepare_benchmark_evaluation(idea_dir, cfg)
         env = os.environ.copy()
         for k, v in (cfg.get("train_extra_env") or {}).items():
             env[k] = str(v)
@@ -155,6 +162,7 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         # local CUDA device 0; {physical_gpu} remains available for non-CUDA
         # tooling that needs the host index.
         env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+        env.update(benchmark_env)
         log_fh = open(log_path, "w", encoding="utf-8")
         try:
             proc = subprocess.Popen(
@@ -191,6 +199,11 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
             except Exception:
                 pass
             ep.close_log()
+        if isinstance(e, BenchmarkContractError):
+            _record_eval_audit(
+                idea_dir, "reject", "benchmark_contract_preflight_failed",
+                detail=str(e),
+            )
         logger.warning("Failed to launch eval for %s: %s", idea_id, e)
         return None
 
@@ -211,9 +224,24 @@ def run_eval(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None):
     try:
         ep.process.wait(timeout=ep.timeout)
         if ep.process.returncode == 0:
-            logger.info("Eval completed for %s", idea_id)
-            outcome = "completed"
-            reason_code = "evaluation_process_completed"
+            contract_ok, contract_reason = validate_benchmark_receipt(
+                results_dir / idea_id, cfg,
+                values=load_benchmark_values(results_dir / idea_id, cfg),
+            )
+            if contract_ok:
+                logger.info("Eval completed for %s", idea_id)
+                outcome = "completed"
+                reason_code = "evaluation_process_completed"
+            else:
+                reason = f"Benchmark contract failed: {contract_reason}"
+                reason_code = "evaluation_benchmark_contract_failed"
+                logger.error("Eval contract failed for %s: %s",
+                             idea_id, contract_reason)
+                _record_eval_audit(
+                    results_dir / idea_id, "reject",
+                    "benchmark_contract_validation_failed",
+                    detail=contract_reason,
+                )
         else:
             reason = f"Exit code {ep.process.returncode}"
             reason_code = "evaluation_process_nonzero"
@@ -358,7 +386,37 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                                 results_dir, ep.idea_id, eval_output,
                                 f"Metric validation failed: {reason}", lake=lake)
                         else:
-                            eval_success = True
+                            contract_ok, contract_reason = (
+                                validate_benchmark_receipt(
+                                    results_dir / ep.idea_id, cfg,
+                                    values=load_benchmark_values(
+                                        results_dir / ep.idea_id, cfg),
+                                )
+                            )
+                            if contract_ok:
+                                eval_success = True
+                            else:
+                                logger.error(
+                                    "[BENCHMARK CONTRACT INVALID] %s: %s",
+                                    ep.idea_id, contract_reason,
+                                )
+                                from orze.engine.failure_analysis import (
+                                    write_failure_analysis,
+                                )
+                                write_failure_analysis(
+                                    results_dir / ep.idea_id, "eval_failure",
+                                    f"Benchmark contract failed: {contract_reason}",
+                                )
+                                _record_eval_audit(
+                                    results_dir / ep.idea_id, "reject",
+                                    "benchmark_contract_validation_failed",
+                                    detail=contract_reason,
+                                )
+                                _write_eval_failure_marker(
+                                    results_dir, ep.idea_id, eval_output,
+                                    "Benchmark contract failed: "
+                                    f"{contract_reason}", lake=lake,
+                                )
                     except Exception as exc:
                         _write_eval_failure_marker(
                             results_dir, ep.idea_id, eval_output,

@@ -37,6 +37,11 @@ from pathlib import Path
 from orze.core.fs import deep_get, atomic_write
 from orze.core.ideas import expand_sweeps
 from orze.core.config import DEFAULT_CONFIG, orze_path
+from orze.core.benchmark_contract import (
+    PROVENANCE_FILE,
+    get_benchmark_contract,
+    validate_benchmark_receipt,
+)
 from orze.reporting.state import _read_all_heartbeats
 
 
@@ -307,6 +312,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     """Generate a configurable leaderboard report.md from all results.
     Returns sorted list of completed row dicts."""
     report_cfg = cfg.get("report") or DEFAULT_CONFIG["report"]
+    benchmark_contract = get_benchmark_contract(cfg)
     primary_metric = report_cfg.get("primary_metric") or "test_accuracy"
     sort_order = report_cfg.get("sort") or "descending"
     mh_columns = (cfg.get("metric_harvest") or {}).get("columns")
@@ -316,7 +322,10 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     else:
         columns = user_columns or mh_columns or DEFAULT_CONFIG["report"]["columns"]
     import hashlib as _hl
-    _col_hash = _hl.md5(json.dumps(columns, sort_keys=True, default=str).encode()).hexdigest()
+    _col_hash = _hl.md5(json.dumps(
+        {"columns": columns, "benchmark_contract": benchmark_contract},
+        sort_keys=True, default=str,
+    ).encode()).hexdigest()
     title = report_cfg.get("title") or "Orze Report"
     reverse = sort_order == "descending"
     _sentinel = float("-inf") if reverse else float("inf")
@@ -439,6 +448,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
 
         # Check cache: invalidate if metrics.json OR any source file changed
         mtime = metrics_path.stat().st_mtime
+        evidence_paths = [metrics_path]
         # Also track mtime of external source files (e.g. fedex_test_report.json)
         for col in columns:
             src = col.get("source", "")
@@ -446,8 +456,34 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                 src_file = idea_dir / src.split(":", 1)[0]
                 if src_file.exists():
                     mtime = max(mtime, src_file.stat().st_mtime)
+                    evidence_paths.append(src_file)
+        if benchmark_contract:
+            for evidence_name in (
+                benchmark_contract["receipt"], PROVENANCE_FILE,
+            ):
+                evidence_path = idea_dir / evidence_name
+                if evidence_path.exists():
+                    mtime = max(mtime, evidence_path.stat().st_mtime)
+                evidence_paths.append(evidence_path)
+        evidence_hash = None
+        if benchmark_contract:
+            # Integrity-sensitive evidence is keyed by bytes, not mtimes. A
+            # copied or deliberately backdated file must never reuse a prior
+            # contract verdict from the report cache.
+            evidence_digest = _hl.sha256()
+            for evidence_path in sorted(
+                    set(evidence_paths), key=lambda path: str(path)):
+                evidence_digest.update(str(evidence_path).encode("utf-8"))
+                try:
+                    evidence_digest.update(evidence_path.read_bytes())
+                except OSError:
+                    evidence_digest.update(b"<missing>")
+            evidence_hash = evidence_digest.hexdigest()
         cached = cache.get(idea_id)
-        if cached and cached.get("mtime") == mtime and cached.get("col_hash") == _col_hash:
+        if (cached and cached.get("mtime") == mtime
+                and cached.get("col_hash") == _col_hash
+                and (benchmark_contract is None
+                     or cached.get("evidence_hash") == evidence_hash)):
             rows.append(cached["row"])
             continue
 
@@ -468,15 +504,25 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         # SYSTEMATIC FIX: No deceptive fallbacks. Only use verified report values.
         # If the external report is missing or zero, we show 0.0 or None.
         
+        contract_ok, contract_reason = validate_benchmark_receipt(
+            idea_dir, cfg, values=values,
+        )
         row_data = {
             "id": idea_id, "title": curr_idea_title,
             "status": metrics.get("status", "UNKNOWN"),
             "values": values,
             "primary_val": primary_val,
             "metrics": metrics,
+            "benchmark_contract_ok": contract_ok,
+            "benchmark_contract_reason": contract_reason,
         }
         rows.append(row_data)
-        cache[idea_id] = {"mtime": mtime, "col_hash": _col_hash, "row": row_data}
+        cache[idea_id] = {
+            "mtime": mtime,
+            "col_hash": _col_hash,
+            "evidence_hash": evidence_hash,
+            "row": row_data,
+        }
         updated_cache = True
 
     if updated_cache:
@@ -494,7 +540,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     # per-dataset metric for this row" but works for projects that
     # don't use the wer_* convention.
     min_ds = report_cfg.get("min_datasets", 0)
-    if min_ds > 0:
+    if min_ds > 0 and benchmark_contract is None:
         col_keys = []
         for c in (report_cfg.get("columns") or []):
             if isinstance(c, dict) and c.get("key"):
@@ -574,14 +620,39 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         f"| {counts.get('FAILED', 0)} "
         f"| {counts.get('IN_PROGRESS', 0)} | {counts.get('QUEUED', 0)} |",
         "",
+    ]
+    if benchmark_contract:
+        lines.extend([
+            "## Benchmark Contract",
+            "",
+            f"- Benchmark: `{benchmark_contract['benchmark_id']}`",
+            f"- Immutable revision: `{benchmark_contract['revision']}`",
+            f"- View: `{benchmark_contract['view']}`",
+            "- Model form: `single_model_single_pass`",
+            "- Rank scope: **local ordering among contract-verified runs; "
+            "not an official leaderboard rank**",
+            "- Exact metric coverage: "
+            + ", ".join(f"`{key}`" for key in
+                        benchmark_contract["required_metrics"]),
+            "",
+        ])
+    lines.extend([
         "## Results",
         "",
-    ]
+    ])
 
     eval_output = cfg.get("eval_output", "eval_report.json")
     completed = [r for r in rows if r["status"] == "COMPLETED"
                  or (r.get("primary_val") is not None
                      and (results_dir / r["id"] / eval_output).exists())]
+    contract_exclusions = []
+    if benchmark_contract:
+        contract_exclusions = [
+            r for r in completed if not r.get("benchmark_contract_ok", False)
+        ]
+        completed = [
+            r for r in completed if r.get("benchmark_contract_ok", False)
+        ]
 
     # Exclude experiments that completed trivially without producing
     # meaningful results (e.g. all eval datasets missing, script exited
@@ -627,8 +698,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                    reverse=reverse)
 
     if main_rows:
-        header = "| Rank | Idea | Title"
-        sep = "|------|------|------"
+        header = "| Local Rank | Idea | Title"
+        sep = "|------------|------|------"
         for col in columns:
             label = col.get("label", col.get("key", "?"))
             header += f" | {label}"
@@ -658,6 +729,21 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             lines.append(row)
         lines.append("")
 
+    if contract_exclusions:
+        lines.extend([
+            "## Unranked: Benchmark Contract Not Proven",
+            "",
+            "These completed runs remain visible for audit but cannot enter "
+            "the local benchmark-comparable ordering.",
+            "",
+        ])
+        for row in contract_exclusions:
+            lines.append(
+                f"- **{row['id']}** — "
+                f"`{row.get('benchmark_contract_reason', 'unknown')}`"
+            )
+        lines.append("")
+
     # --- Sweep Details section ---
     if sweep_groups:
         lines.append("## Sweep Details")
@@ -667,8 +753,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             children.sort(key=lambda r: _safe_float(r.get("primary_val")),
                           reverse=reverse)
             lines.append(f"### {parent_id} ({len(children)} variants)")
-            lines.append(f"| Rank | Sub-run | {primary_metric} |")
-            lines.append("|------|---------|" + "-" * max(6, len(primary_metric)) + "|")
+            lines.append(f"| Local Rank | Sub-run | {primary_metric} |")
+            lines.append("|------------|---------|" + "-" * max(6, len(primary_metric)) + "|")
             for i, r in enumerate(children, 1):
                 pv = r.get("primary_val", "—")
                 if isinstance(pv, float):
@@ -798,7 +884,12 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     lb_path = results_dir / "_leaderboard.json"
     _atomic_write_if_changed(
         lb_path,
-        json.dumps({"top": lb_entries, "metric": primary_metric}, default=str),
+        json.dumps({
+            "top": lb_entries,
+            "metric": primary_metric,
+            "rank_scope": "local",
+            "benchmark_contract": benchmark_contract,
+        }, default=str),
     )
 
     # --- Filtered view leaderboards ---
@@ -831,14 +922,15 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         view_lb_path = results_dir / f"_leaderboard_{vname}.json"
         _atomic_write_if_changed(view_lb_path, json.dumps(
             {"top": view_entries, "metric": primary_metric, "view": vname,
-             "title": vtitle}, default=str))
+             "title": vtitle, "rank_scope": "local",
+             "benchmark_contract": benchmark_contract}, default=str))
 
         # Append view section to report.md
         lines.append(f"## {vtitle}")
         lines.append("")
         if filtered_rows:
-            header = "| Rank | Idea | Title"
-            sep = "|------|------|------"
+            header = "| Local Rank | Idea | Title"
+            sep = "|------------|------|------"
             for col in columns:
                 label = col.get("label", col.get("key", "?"))
                 header += f" | {label}"
@@ -1015,7 +1107,7 @@ def format_report_text(data: dict) -> str:
         lines.append("")
 
     if board:
-        lines.append(f"Top {len(board)} ({metric}):")
+        lines.append(f"Local top {len(board)} ({metric}):")
         for i, entry in enumerate(board, 1):
             val = entry.get("value")
             val_str = f"{val:.4f}" if isinstance(val, float) else str(val)
@@ -1288,6 +1380,7 @@ class NotificationProcessor:
             "metric_name": primary, "metric_value": fmt_val,
             "training_time": t_time,
             "rank": rank if rank is not None else "?",
+            "rank_scope": "local",
             "leaderboard": leaderboard,
             "view_leaderboards": view_lbs,
             "summary_only": summary_only,
@@ -1417,6 +1510,7 @@ class NotificationProcessor:
                 "metric_name": primary, "metric_value": fmt,
                 "prev_best_id": self._best_idea_id,
                 "prev_best_val": prev_fmt,
+                "rank_scope": "local",
                 "leaderboard": leaderboard,
                 "view_leaderboards": view_lbs,
             }, cfg)
@@ -1470,6 +1564,7 @@ class NotificationProcessor:
             "queued": counts.get("QUEUED", 0),
             "metric_name": primary,
             "leaderboard": leaderboard,
+            "rank_scope": "local",
             "view_leaderboards": view_lbs,
             "machines": build_machine_status_fn(),
         }, cfg)

@@ -252,6 +252,9 @@ DEFAULT_CONFIG = {
         "ceiling_k": 20,
         "ceiling_std_threshold": 0.015,
         "ceiling_min_ideas": 30,
+        # Optional fail-closed contract for benchmark-comparable local ranks.
+        # See docs/benchmark-contract.md.
+        "benchmark_contract": None,
     },
     "stall_minutes": 0,         # 0 = disabled
     "max_idea_failures": 0,     # 0 = disabled (never skip)
@@ -768,6 +771,10 @@ def _validate_config(cfg: dict) -> tuple:
                     errors.append(
                         f"report.columns[{index}]: must be a mapping with a non-empty 'key'"
                     )
+        from orze.core.benchmark_contract import (
+            validate_benchmark_contract_config,
+        )
+        errors.extend(validate_benchmark_contract_config(cfg))
 
     # train_script must exist
     ts = cfg.get("train_script")
