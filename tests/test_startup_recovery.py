@@ -18,7 +18,7 @@ def test_dead_local_in_progress_claim_is_audited_and_released(tmp_path):
     idea_dir.mkdir(parents=True)
     db_path = tmp_path / "ideas.db"
     lake = IdeaLake(str(db_path))
-    lake.insert("idea-0001", "test", "{}", "", status="running")
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
     lake.close()
@@ -50,7 +50,7 @@ def test_missing_owner_pid_does_not_wedge_recovery(tmp_path):
     idea_dir.mkdir(parents=True)
     db_path = tmp_path / "ideas.db"
     lake = IdeaLake(str(db_path))
-    lake.insert("idea-0001", "test", "{}", "", status="running")
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
     lake.close()
@@ -75,7 +75,7 @@ def test_reused_owner_pid_is_rejected_by_start_identity(tmp_path):
     idea_dir.mkdir(parents=True)
     db_path = tmp_path / "ideas.db"
     lake = IdeaLake(str(db_path))
-    lake.insert("idea-0001", "test", "{}", "", status="running")
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
     lake.close()
@@ -103,7 +103,7 @@ def test_orphan_trainer_group_is_proven_stopped_before_requeue(tmp_path):
     idea_dir.mkdir(parents=True)
     db_path = tmp_path / "ideas.db"
     lake = IdeaLake(str(db_path))
-    lake.insert("idea-0001", "test", "{}", "", status="running")
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
 
     proc = subprocess.Popen(
@@ -206,7 +206,7 @@ def test_no_claim_recovery_wal_is_consumed_after_rename_crash(tmp_path):
     idea_dir.mkdir(parents=True)
     db_path = tmp_path / "ideas.db"
     lake = IdeaLake(str(db_path))
-    lake.insert("idea-0001", "test", "{}", "", status="running")
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
     lake.close()
@@ -233,7 +233,7 @@ def test_no_claim_completed_metrics_finalize_instead_of_requeue(tmp_path):
     idea_dir.mkdir(parents=True)
     db_path = tmp_path / "ideas.db"
     lake = IdeaLake(str(db_path))
-    lake.insert("idea-0001", "test", "{}", "", status="running")
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
     lake.close()
@@ -257,7 +257,7 @@ def test_dead_claim_with_partial_metrics_finalizes_failed(tmp_path):
     idea_dir.mkdir(parents=True)
     db_path = tmp_path / "ideas.db"
     lake = IdeaLake(str(db_path))
-    lake.insert("idea-0001", "test", "{}", "", status="running")
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
     lake.close()
@@ -279,7 +279,9 @@ def test_dead_claim_with_partial_metrics_finalizes_failed(tmp_path):
     assert lake.get("idea-0001")["status"] == "failed"
     assert lake.get_fsm_state("idea-0001") == "FAILED"
     history = lake.get_fsm_history("idea-0001")
-    assert history[-1]["reason"] == "startup_recover_failed_output"
+    assert history[-1]["reason"] == (
+        "reconcile_startup_recover_failed_output"
+    )
     lake.close()
     recovery = json.loads((idea_dir / "recovery.json").read_text())
     assert recovery["metrics_status_after_stop"] == "FAILED"

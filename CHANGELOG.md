@@ -3,6 +3,18 @@
 ## Unreleased
 
 ### Fixed
+- **Queue truth now comes from one audited lifecycle.** Imported active and
+  terminal rows immediately receive a matching FSM state, legacy PARTIAL rows
+  are auditably migrated to FAILED, startup/dead-process/VRAM/failure recovery
+  uses the transition API, and scheduler plus report counts derive from the
+  FSM instead of mixing database totals with filesystem guesses. A submission
+  file alone can no longer complete dead training, late artifacts cannot
+  rewrite an existing terminal decision, first liveness misses are persisted,
+  and queue reconciliation preserves claims, logs, and checkpoints rather
+  than deleting contradictory evidence. Deferred VRAM retries release their
+  live claim without deleting its receipt, avoiding a stranded queued run.
+  Minimal legacy databases are also
+  completed safely before lifecycle migrations create dependent indexes.
 - **Partial or failed checkpoints no longer enter evaluation implicitly.** A
   checkpoint file beside missing, corrupt, `FAILED`, `PARTIAL`, or running
   metrics can no longer override lifecycle state. Evaluation, backlog scans,

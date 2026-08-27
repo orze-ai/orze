@@ -402,7 +402,18 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         # this mapping every archived, skipped, failed, or completed DB row
         # whose result directory was cleaned up is falsely reported as queued.
         lake_status = str((db_idea or {}).get("status", "")).lower()
-        status_without_metrics = {
+        audited_state = (db_idea or {}).get("fsm_state")
+        audited_without_metrics = {
+            "QUEUED": "QUEUED",
+            "CLAIMED": "IN_PROGRESS",
+            "IN_PROGRESS": "IN_PROGRESS",
+            "FAILED": "FAILED",
+            "SKIPPED": "SKIPPED",
+            "ARCHIVED": "ARCHIVED",
+            # A completed row without its metrics artifact cannot be ranked.
+            "COMPLETE": "ARCHIVED",
+        }.get(audited_state)
+        status_without_metrics = audited_without_metrics or {
             "queued": "QUEUED",
             "running": "IN_PROGRESS",
             "failed": "FAILED",
@@ -526,15 +537,24 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         # Pipeline status describes executable experiments, not every archived
         # idea ever seen. Skipped ideas never consumed a run and archived ideas
         # are catalog entries, so neither belongs in this four-state total.
-        counts = {
-            "COMPLETED": len(lake.get_all_ids(status="completed")),
-            "FAILED": sum(
-                len(lake.get_all_ids(status=status))
-                for status in ("failed", "partial", "dead")
-            ),
-            "IN_PROGRESS": len(lake.get_all_ids(status="running")),
-            "QUEUED": len(lake.get_all_ids(status="queued")),
-        }
+        if hasattr(lake, "get_lifecycle_counts"):
+            audited_counts = lake.get_lifecycle_counts()
+            counts = {
+                state: audited_counts.get(state, 0)
+                for state in ("COMPLETED", "FAILED", "IN_PROGRESS", "QUEUED")
+            }
+        else:
+            # Compatibility for external lake adapters. Native IdeaLake uses
+            # the audited FSM path above.
+            counts = {
+                "COMPLETED": len(lake.get_all_ids(status="completed")),
+                "FAILED": sum(
+                    len(lake.get_all_ids(status=status))
+                    for status in ("failed", "partial", "dead")
+                ),
+                "IN_PROGRESS": len(lake.get_all_ids(status="running")),
+                "QUEUED": len(lake.get_all_ids(status="queued")),
+            }
     else:
         counts = {}
         for r in rows:

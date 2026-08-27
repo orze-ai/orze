@@ -44,11 +44,12 @@ def get_skipped_ideas(failure_counts: dict, max_failures: int) -> set:
             if count >= max_failures}
 
 
-def _reset_idea_for_retry(idea_dir: Path):
+def _reset_idea_for_retry(idea_dir: Path, release_claim: bool = False):
     """Clean up an idea's result dir so it can be re-launched.
 
-    Removes metrics.json and renames the old log for reference,
-    but preserves claim.json (idea stays claimed by us).
+    Removes metrics.json and renames the old log for reference. Immediate
+    repair/relaunch keeps the current claim; deferred retries must archive it
+    so the scheduler can claim the preserved directory again.
     """
     metrics = idea_dir / "metrics.json"
     if metrics.exists():
@@ -60,6 +61,13 @@ def _reset_idea_for_retry(idea_dir: Path):
         while (idea_dir / f"train_output.attempt{attempt}.log").exists():
             attempt += 1
         log.rename(idea_dir / f"train_output.attempt{attempt}.log")
+
+    if release_claim:
+        claim = idea_dir / "claim.json"
+        if claim.exists():
+            claim.replace(
+                idea_dir / f"claim.retry.{__import__('time').time_ns()}.json"
+            )
 
 
 _ARGPARSE_UNRECOGNIZED_RE = __import__("re").compile(
@@ -85,41 +93,48 @@ def _is_argparse_schema_invalid(error_text: str, exit_code: int,
 
 def _mark_lake_failure(idea_id: str, cfg: dict,
                        results_dir: Path, reason: str) -> None:
-    """Best-effort: mark idea ``failed`` in idea_lake with a failure reason
-    stored under ``eval_metrics.failure_reason``. Silent on any error —
-    the filesystem ``metrics.json`` is the authoritative failure record.
+    """Best-effort audited failure transition with a retained reason.
+
+    The filesystem ``metrics.json`` remains the terminal evidence, while the
+    lake transition keeps the compatibility status and FSM ledger atomic.
     """
-    import sqlite3
     import json as _json_mod
+    from orze.idea_lake import IdeaLake
+    lake = None
     try:
         db_path = cfg.get("idea_lake_db") or str(results_dir / "idea_lake.db")
         if not Path(db_path).exists():
             return
-        conn = sqlite3.connect(db_path, timeout=5)
+        lake = IdeaLake(db_path)
+        row = lake.conn.execute(
+            "SELECT eval_metrics FROM ideas WHERE idea_id = ?",
+            (idea_id,)).fetchone()
+        if row is None:
+            return
+        em_raw = row[0]
         try:
-            cur = conn.execute(
-                "SELECT eval_metrics FROM ideas WHERE idea_id = ?",
-                (idea_id,))
-            row = cur.fetchone()
-            if row is None:
-                return
-            em_raw = row[0]
-            try:
-                em = _json_mod.loads(em_raw) if em_raw else {}
-                if not isinstance(em, dict):
-                    em = {"_prev": em}
-            except (ValueError, TypeError):
-                em = {}
-            em["failure_reason"] = reason
-            conn.execute(
-                "UPDATE ideas SET status = 'failed', eval_metrics = ? "
-                "WHERE idea_id = ?",
-                (_json_mod.dumps(em), idea_id))
-            conn.commit()
-        finally:
-            conn.close()
-    except Exception:
-        pass
+            em = _json_mod.loads(em_raw) if em_raw else {}
+            if not isinstance(em, dict):
+                em = {"_prev": em}
+        except (ValueError, TypeError):
+            em = {}
+        em["failure_reason"] = reason
+        if not lake.reconcile_terminal_state(
+            idea_id,
+            "FAILED",
+            "reconcile_failure_marker",
+            eval_metrics=em,
+        ):
+            logger.warning(
+                "Failure evidence for %s conflicts with its terminal FSM state",
+                idea_id,
+            )
+    except Exception as exc:
+        logger.warning("Could not update audited failure for %s: %s",
+                       idea_id, exc)
+    finally:
+        if lake is not None:
+            lake.close()
 
 
 def _build_executor_fix_cmd(claude_bin: str, prompt: str, model: str,

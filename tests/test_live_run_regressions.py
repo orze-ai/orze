@@ -41,7 +41,7 @@ def test_missing_sentinel_does_not_consume_pypi_advisory(tmp_path):
 
 def test_terminal_transition_atomically_updates_queue_status(tmp_path):
     lake = IdeaLake(str(tmp_path / "ideas.db"))
-    lake.insert("idea-0001", "test", "{}", "", status="running")
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
     assert lake.record_state_transition("idea-0001", "IN_PROGRESS", "COMPLETE")
@@ -92,7 +92,7 @@ def test_malformed_metrics_cannot_complete_the_lifecycle(tmp_path):
     idea_dir.mkdir(parents=True)
     (idea_dir / "metrics.json").write_text("{broken", encoding="utf-8")
     lake = IdeaLake(str(tmp_path / "ideas.db"))
-    lake.insert("idea-0001", "test", "{}", "", status="running")
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
     tp = TrainingProcess(
@@ -112,6 +112,50 @@ def test_malformed_metrics_cannot_complete_the_lifecycle(tmp_path):
     lake.close()
 
 
+def test_vram_contention_releases_claim_and_audits_requeue(tmp_path):
+    class FinishedProcess:
+        def poll(self):
+            return 0
+
+        def wait(self, timeout=None):
+            return 0
+
+    results = tmp_path / "results"
+    idea_dir = results / "idea-vram"
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "metrics.json").write_text(json.dumps({
+        "status": "FAILED",
+        "error": "insufficient_vram: available=100 required=1000",
+    }), encoding="utf-8")
+    (idea_dir / "claim.json").write_text(json.dumps({
+        "claimed_by": socket.gethostname(), "pid": 999999999, "gpu": 4,
+    }), encoding="utf-8")
+    lake = IdeaLake(str(tmp_path / "ideas.db"))
+    lake.insert("idea-vram", "vram", "{}", "", status="queued")
+    assert lake.record_state_transition("idea-vram", "QUEUED", "CLAIMED")
+    assert lake.record_state_transition(
+        "idea-vram", "CLAIMED", "IN_PROGRESS")
+    tp = TrainingProcess(
+        idea_id="idea-vram", gpu=4, process=FinishedProcess(),
+        start_time=time.time(), log_path=idea_dir / "train_output.log",
+        timeout=60,
+    )
+
+    assert check_active(
+        {4: tp}, results, {"sops": {"failure_feedback": False}}, {}, lake=lake,
+    ) == [("idea-vram", 4)]
+
+    assert lake.get_fsm_state("idea-vram") == "QUEUED"
+    assert lake.get("idea-vram")["status"] == "queued"
+    assert not (idea_dir / "claim.json").exists()
+    assert list(idea_dir.glob("claim.retry.*.json"))
+    assert not (idea_dir / "metrics.json").exists()
+    assert get_unclaimed({
+        "idea-vram": {"priority": "medium", "config": {}}
+    }, results, lake=lake) == ["idea-vram"]
+    lake.close()
+
+
 def test_training_completion_accepts_catch_up_winning_the_transition(tmp_path):
     class FinishedProcess:
         def poll(self):
@@ -128,7 +172,7 @@ def test_training_completion_accepts_catch_up_winning_the_transition(tmp_path):
         encoding="utf-8",
     )
     lake = IdeaLake(str(tmp_path / "ideas.db"))
-    lake.insert("idea-0001", "test", "{}", "", status="running")
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
     assert lake.record_state_transition(

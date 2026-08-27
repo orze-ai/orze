@@ -1,36 +1,30 @@
 """F7: dead-PID reconciler for 'running' idea rows."""
 import json
 import sqlite3
-import textwrap
 from pathlib import Path
 
 from orze.engine.lifecycle import (
     reconcile_running_dead_pids,
     _running_idea_pids,
 )
+from orze.idea_lake import IdeaLake
 
 
 def _make_lake_with_running(tmp_path: Path, idea_ids: list) -> Path:
     db = tmp_path / "idea_lake.db"
-    conn = sqlite3.connect(str(db))
-    conn.executescript(textwrap.dedent("""
-        CREATE TABLE ideas (
-            idea_id TEXT PRIMARY KEY,
-            title TEXT,
-            config TEXT,
-            raw_markdown TEXT,
-            eval_metrics TEXT,
-            status TEXT
-        );
-    """))
+    lake = IdeaLake(str(db))
     for iid in idea_ids:
-        conn.execute(
-            "INSERT INTO ideas (idea_id, title, config, raw_markdown, status)"
-            " VALUES (?, 't', '{}', '', 'running')",
-            (iid,))
-    conn.commit()
-    conn.close()
+        lake.insert(iid, "t", "{}", "", status="running")
+    lake.close()
     return db
+
+
+def test_imported_running_status_initializes_matching_fsm(tmp_path):
+    db = _make_lake_with_running(tmp_path, ["idea-running"])
+    lake = IdeaLake(str(db))
+    assert lake.get("idea-running")["status"] == "running"
+    assert lake.get_fsm_state("idea-running") == "IN_PROGRESS"
+    lake.close()
 
 
 def test_running_without_claim_is_requeued(tmp_path, monkeypatch):
@@ -55,6 +49,9 @@ def test_running_without_claim_is_requeued(tmp_path, monkeypatch):
     conn.close()
     assert row[0] == "queued"
     assert row[1] is None
+    lake = IdeaLake(str(db))
+    assert lake.get_fsm_state("idea-orphan") == "QUEUED"
+    lake.close()
 
 
 def test_alive_running_not_touched(tmp_path, monkeypatch):
@@ -120,14 +117,14 @@ def test_missing_db_no_crash(tmp_path):
 def test_failed_orphan_without_claim_stays_terminal_and_is_idempotent(
         tmp_path, monkeypatch):
     db = _make_lake_with_running(tmp_path, ["idea-failed-orphan"])
-    conn = sqlite3.connect(str(db))
     em = json.dumps({"failure_reason": "orphaned_pid", "liveness_misses": 2})
-    conn.execute(
-        "UPDATE ideas SET status='failed', eval_metrics=? WHERE idea_id=?",
-        (em, "idea-failed-orphan"),
-    )
-    conn.commit()
-    conn.close()
+    lake = IdeaLake(str(db))
+    lake.conn.execute(
+        "UPDATE ideas SET eval_metrics=? WHERE idea_id=?",
+        (em, "idea-failed-orphan"))
+    lake.conn.commit()
+    assert lake.set_status("idea-failed-orphan", "failed")
+    lake.close()
     results_dir = tmp_path / "results"
     results_dir.mkdir()
     cfg = {"results_dir": str(results_dir), "idea_lake_db": str(db)}
@@ -146,17 +143,18 @@ def test_failed_orphan_without_claim_stays_terminal_and_is_idempotent(
     assert row == ("failed", em)
 
 
-def test_failed_orphan_can_still_recover_late_completed_metrics(
+def test_failed_orphan_is_not_silently_upgraded_by_late_metrics(
         tmp_path, monkeypatch):
     db = _make_lake_with_running(tmp_path, ["idea-late-complete"])
-    conn = sqlite3.connect(str(db))
-    conn.execute(
-        "UPDATE ideas SET status='failed', eval_metrics=? WHERE idea_id=?",
+    lake = IdeaLake(str(db))
+    lake.conn.execute(
+        "UPDATE ideas SET eval_metrics=? WHERE idea_id=?",
         (json.dumps({"failure_reason": "orphaned_pid"}),
          "idea-late-complete"),
     )
-    conn.commit()
-    conn.close()
+    lake.conn.commit()
+    assert lake.set_status("idea-late-complete", "failed")
+    lake.close()
     results_dir = tmp_path / "results"
     idea_dir = results_dir / "idea-late-complete"
     idea_dir.mkdir(parents=True)
@@ -166,7 +164,7 @@ def test_failed_orphan_can_still_recover_late_completed_metrics(
     monkeypatch.setattr(
         "orze.engine.lifecycle._running_idea_pids", lambda: set())
 
-    assert reconcile_running_dead_pids(cfg) == 1
+    assert reconcile_running_dead_pids(cfg) == 0
 
     conn = sqlite3.connect(str(db))
     status = conn.execute(
@@ -174,7 +172,42 @@ def test_failed_orphan_can_still_recover_late_completed_metrics(
         ("idea-late-complete",),
     ).fetchone()[0]
     conn.close()
-    assert status == "completed"
+    assert status == "failed"
+
+
+def test_submission_file_alone_cannot_complete_dead_training(
+        tmp_path, monkeypatch):
+    import os
+    import socket
+    import time
+
+    db = _make_lake_with_running(tmp_path, ["idea-submission-only"])
+    results_dir = tmp_path / "results"
+    idea_dir = results_dir / "idea-submission-only"
+    idea_dir.mkdir(parents=True)
+    claim = idea_dir / "claim.json"
+    claim.write_text(json.dumps({
+        "claimed_by": socket.gethostname(), "pid": 999999999,
+    }), encoding="utf-8")
+    (idea_dir / "submission.csv").write_text("id,prediction\n1,x\n")
+    old = time.time() - 600
+    os.utime(claim, (old, old))
+    cfg = {"results_dir": str(results_dir), "idea_lake_db": str(db)}
+    monkeypatch.setattr(
+        "orze.engine.lifecycle._running_idea_pids", lambda: set())
+
+    assert reconcile_running_dead_pids(cfg) == 0
+    lake = IdeaLake(str(db))
+    assert lake.get("idea-submission-only")["eval_metrics"][
+        "liveness_misses"
+    ] == 1
+    assert lake.get_fsm_state("idea-submission-only") == "IN_PROGRESS"
+    lake.close()
+    assert reconcile_running_dead_pids(cfg) == 1
+    lake = IdeaLake(str(db))
+    assert lake.get("idea-submission-only")["status"] == "failed"
+    assert lake.get_fsm_state("idea-submission-only") == "FAILED"
+    lake.close()
 
 
 def test_running_idea_pids_finds_self(tmp_path):

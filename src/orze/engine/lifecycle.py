@@ -145,10 +145,11 @@ def reconcile_stale_running(cfg: dict) -> None:
     lake_path = Path(cfg.get("idea_lake_db") or results_dir / "idea_lake.db")
     if not lake_path.exists():
         return
+    lake = None
     try:
-        import sqlite3
-        conn = sqlite3.connect(str(lake_path), timeout=5)
-        cur = conn.execute(
+        from orze.idea_lake import IdeaLake
+        lake = IdeaLake(str(lake_path))
+        cur = lake.conn.execute(
             "SELECT idea_id FROM ideas WHERE status = 'running'")
         all_running = [row[0] for row in cur.fetchall()]
 
@@ -298,56 +299,52 @@ def reconcile_stale_running(cfg: dict) -> None:
                 recoveries.append((idea_id, target))
 
         if recoveries:
-            conn.execute("BEGIN IMMEDIATE")
+            reconciled = []
             for idea_id, target_state in recoveries:
-                row = conn.execute(
-                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
-                    (idea_id,),
-                ).fetchone()
-                current_state = row[0] if row else None
-                if current_state in ("CLAIMED", "IN_PROGRESS"):
+                current_state = lake.get_fsm_state(idea_id)
+                persisted = False
+                if target_state in ("COMPLETE", "FAILED"):
                     reason = (
-                        "startup_recover_completed_output"
+                        "reconcile_startup_recover_completed_output"
                         if target_state == "COMPLETE"
-                        else "startup_recover_failed_output"
-                        if target_state == "FAILED"
-                        else "startup_recover_orphan_terminated"
+                        else "reconcile_startup_recover_failed_output"
                     )
-                    conn.execute(
-                        "UPDATE idea_state SET current_state=?, "
-                        "updated_by_host=?, updated_by_pid=?, "
-                        "updated_at=datetime('now') WHERE idea_id=?",
-                        (target_state, hostname, os.getpid(), idea_id),
+                    persisted = lake.reconcile_terminal_state(
+                        idea_id, target_state, reason)
+                elif current_state in ("CLAIMED", "IN_PROGRESS"):
+                    persisted = lake.record_state_transition(
+                        idea_id,
+                        current_state,
+                        "QUEUED",
+                        reason="startup_recover_orphan_terminated",
+                        host=hostname,
+                        pid=os.getpid(),
+                        sop_type="training",
                     )
-                    conn.execute(
-                        "INSERT INTO idea_transitions "
-                        "(idea_id, from_state, to_state, reason, host, pid, sop_type) "
-                        "VALUES (?, ?, ?, ?, ?, ?, 'training')",
-                        (idea_id, current_state, target_state, reason,
-                         hostname, os.getpid()),
+                elif current_state == "QUEUED":
+                    persisted = lake.set_status(idea_id, "queued")
+                if persisted:
+                    reconciled.append((idea_id, target_state))
+                else:
+                    logger.error(
+                        "Rejected startup lifecycle recovery for %s: %s -> %s",
+                        idea_id, current_state, target_state,
                     )
-                queue_status = {
-                    "COMPLETE": "completed",
-                    "FAILED": "failed",
-                    "QUEUED": "queued",
-                }[target_state]
-                conn.execute(
-                    "UPDATE ideas SET status=? WHERE idea_id=?",
-                    (queue_status, idea_id),
-                )
-            conn.commit()
-            logger.info(
-                "Reconciled %d stale local ideas: %s",
-                len(recoveries), ", ".join(
+            if reconciled:
+                logger.info(
+                    "Reconciled %d stale local ideas: %s",
+                    len(reconciled), ", ".join(
                     f"{idea_id}->{target.lower()}"
-                    for idea_id, target in recoveries[:10]),
-            )
+                    for idea_id, target in reconciled[:10]),
+                )
         if others:
             logger.info("Kept %d 'running' ideas owned by other hosts: %s",
                         len(others), ", ".join(others[:10]))
-        conn.close()
     except Exception as e:
         logger.warning("Failed to reconcile stale ideas: %s", e)
+    finally:
+        if lake is not None:
+            lake.close()
 
 
 def _running_idea_pids() -> set:
@@ -409,7 +406,6 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
     """
     import json as _json
     import socket as _socket
-    import sqlite3
     hostname = _socket.gethostname()
     results_dir = Path(cfg.get("results_dir", "orze_results"))
     lake_path = Path(cfg.get("idea_lake_db") or results_dir / "idea_lake.db")
@@ -420,8 +416,7 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
     # Grace period: skip reconcile for rows whose claim.json or
     # idea-dir activity is younger than this. Covers the launch
     # race window (claim.json written → subprocess spawn) and the
-    # post-completion flush window (best_submission.csv written →
-    # metrics.json status=COMPLETED). Cycle-092 cross-domain row
+    # post-completion metrics flush window. Cycle-092 cross-domain row
     # 65: standard distributed-task-queue grace is 120s.
     grace_seconds = 180
     now_ts = time.time()
@@ -431,18 +426,28 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
     n_requeued = 0
     n_skipped_grace = 0
     n_warned = 0
+    lake = None
     try:
-        conn = sqlite3.connect(str(lake_path), timeout=5)
-        cur = conn.execute(
-            "SELECT idea_id, eval_metrics, status FROM ideas "
-            "WHERE status = 'running' "
-            "OR (status = 'failed' "
-            "AND eval_metrics LIKE '%\"failure_reason\": \"orphaned_pid\"%')")
-        rows = cur.fetchall()
-        for idea_id, em_raw, row_status in rows:
+        from orze.idea_lake import IdeaLake
+        lake = IdeaLake(str(lake_path))
+        rows = lake.conn.execute(
+            "SELECT idea_id, eval_metrics FROM ideas "
+            "WHERE status = 'running'").fetchall()
+        for idea_id, em_raw in rows:
             idea_dir = results_dir / idea_id
             claim_path = idea_dir / "claim.json"
-            recovering_orphan = row_status == "failed"
+
+            def completed_on_disk() -> bool:
+                metrics_path = idea_dir / "metrics.json"
+                if not metrics_path.is_file():
+                    return False
+                try:
+                    metrics = _json.loads(
+                        metrics_path.read_text(encoding="utf-8"))
+                except (_json.JSONDecodeError, OSError, UnicodeDecodeError):
+                    return False
+                return (isinstance(metrics, dict)
+                        and metrics.get("status") == "COMPLETED")
 
             # ---- Ownership check (multi-host safety) ----
             if claim_path.exists():
@@ -451,14 +456,17 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                     if claim.get("claimed_by") != hostname:
                         continue
                 except (_json.JSONDecodeError, OSError):
-                    pass
-            elif not recovering_orphan:
-                # No claim.json — dispatch never started on any host.
-                # Re-queue rather than orphan-mark (engineer fix #1).
-                conn.execute(
-                    "UPDATE ideas SET status = 'queued' WHERE idea_id = ?",
-                    (idea_id,))
-                n_requeued += 1
+                    # Ownership cannot be proved. Never mutate another host's
+                    # possible work from a corrupt claim.
+                    continue
+            else:
+                # Completion may flush immediately before claim cleanup. It is
+                # the only terminal filesystem evidence accepted here.
+                if completed_on_disk():
+                    if lake.set_status(idea_id, "completed"):
+                        n_completed += 1
+                elif lake.set_status(idea_id, "queued"):
+                    n_requeued += 1
                 continue
 
             # ---- Live process? ----
@@ -471,10 +479,9 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
             # completion-flush window. Skip this iteration.
             try:
                 latest = claim_path.stat().st_mtime
-                # Also consider any submission/metrics file mtime — the
-                # train.py may write submission.csv just before exiting.
-                for fname in ("metrics.json", "best_submission.csv",
-                              "submission.csv", "best_solution.py"):
+                # Also consider real trainer progress and terminal metrics.
+                # A submission alone is not lifecycle evidence.
+                for fname in ("metrics.json", "train_output.log"):
                     fp = idea_dir / fname
                     if fp.exists():
                         latest = max(latest, fp.stat().st_mtime)
@@ -485,64 +492,34 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                 pass
 
             # ---- Completed-on-disk check ----
-            metrics_path = idea_dir / "metrics.json"
-            if metrics_path.exists():
-                try:
-                    m = _json.loads(metrics_path.read_text(encoding="utf-8"))
-                    if m.get("status") == "COMPLETED":
-                        conn.execute(
-                            "UPDATE ideas SET status = 'completed' "
-                            "WHERE idea_id = ?", (idea_id,))
-                        n_completed += 1
-                        continue
-                except (_json.JSONDecodeError, OSError):
-                    pass
-
-            # ---- Submission-on-disk check ----
-            # If a submission was written but no COMPLETED metrics, the
-            # work is empirically usable. Mark completed rather than
-            # orphan; let the grader/leaderboard score it.
-            for sub_name in ("best_submission.csv", "submission.csv"):
-                if (idea_dir / sub_name).exists():
-                    conn.execute(
-                        "UPDATE ideas SET status = 'completed' "
-                        "WHERE idea_id = ?", (idea_id,))
+            if completed_on_disk():
+                if lake.set_status(idea_id, "completed"):
                     n_completed += 1
-                    break
-            else:
-                # Already-terminal orphan rows are included only so a late
-                # metrics/submission flush can upgrade them to completed.
-                # Do not count them as newly orphaned again, and never requeue
-                # them merely because their stale claim file was cleaned up.
-                if recovering_orphan:
-                    continue
-                try:
-                    em = _json.loads(em_raw) if em_raw else {}
-                    if not isinstance(em, dict):
-                        em = {}
-                except (ValueError, TypeError):
+                continue
+
+            try:
+                em = _json.loads(em_raw) if em_raw else {}
+                if not isinstance(em, dict):
                     em = {}
-                # Require 2 consecutive liveness misses before orphan-marking
-                # (Phi-Accrual anti-flap: cross-domain row 93). A single miss
-                # can occur when the reconciler fires between process exit and
-                # metrics.json flush (the 180s grace window covers most cases
-                # but not all — especially slow FSx flushes under I/O load).
-                miss_count = em.get("liveness_misses", 0) + 1
-                if miss_count >= 2:
-                    em["failure_reason"] = "orphaned_pid"
-                    conn.execute(
-                        "UPDATE ideas SET status = 'failed', eval_metrics = ? "
-                        "WHERE idea_id = ?",
-                        (_json.dumps(em), idea_id))
+            except (ValueError, TypeError):
+                em = {}
+            # Require 2 consecutive liveness misses before orphan-marking
+            # (Phi-Accrual anti-flap). Persist the first miss immediately;
+            # the previous implementation forgot to commit warning-only
+            # cycles, so an orphan could remain "running" forever.
+            miss_count = em.get("liveness_misses", 0) + 1
+            em["liveness_misses"] = miss_count
+            if miss_count >= 2:
+                em["failure_reason"] = "orphaned_pid"
+            lake.conn.execute(
+                "UPDATE ideas SET eval_metrics = ? WHERE idea_id = ?",
+                (_json.dumps(em), idea_id))
+            lake.conn.commit()
+            if miss_count >= 2:
+                if lake.set_status(idea_id, "failed"):
                     n_orphaned += 1
-                else:
-                    em["liveness_misses"] = miss_count
-                    conn.execute(
-                        "UPDATE ideas SET eval_metrics = ? WHERE idea_id = ?",
-                        (_json.dumps(em), idea_id))
-                    n_warned += 1
-        if n_completed or n_orphaned or n_requeued:
-            conn.commit()
+            else:
+                n_warned += 1
         if n_completed:
             logger.info(
                 "Reconciled %d 'running' rows (completed on disk) -> completed",
@@ -563,9 +540,11 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
             logger.info(
                 "Reconciled %d orphaned 'running' rows (dead PID, 2+ misses) -> failed",
                 n_orphaned)
-        conn.close()
     except Exception as e:
         logger.warning("Failed to reconcile dead-PID rows: %s", e)
+    finally:
+        if lake is not None:
+            lake.close()
     return n_completed + n_orphaned
 
 

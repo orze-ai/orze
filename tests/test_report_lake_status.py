@@ -3,6 +3,7 @@
 import json
 
 from orze.reporting.leaderboard import update_report
+from orze.idea_lake import IdeaLake
 
 
 class _Lake:
@@ -51,6 +52,33 @@ def test_pipeline_status_uses_authoritative_lake_counts(tmp_path):
     assert "## Queue (1 ideas)" in report
     assert "idea-queued" in report
     assert "idea-skipped" not in report.split("## Queue", 1)[1]
+
+
+def test_native_report_counts_ignore_legacy_status_divergence(tmp_path):
+    lake = IdeaLake(str(tmp_path / "ideas.db"))
+    lake.insert("idea-complete", "done", "{}", "", status="completed")
+    lake.insert("idea-failed", "failed", "{}", "", status="failed")
+    lake.conn.execute(
+        "UPDATE ideas SET status = 'queued' WHERE idea_id = 'idea-complete'"
+    )
+    lake.conn.execute(
+        "UPDATE ideas SET status = 'completed' WHERE idea_id = 'idea-failed'"
+    )
+    lake.conn.commit()
+    cfg = {
+        "report": {
+            "title": "Audited",
+            "primary_metric": "score",
+            "sort": "descending",
+            "columns": [],
+        }
+    }
+
+    update_report(tmp_path, {}, cfg, lake=lake)
+
+    report = (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert "| 2 | 1 | 1 | 0 | 0 |" in report
+    lake.close()
 
 
 def test_min_datasets_counts_dataset_wer_not_aggregate_or_time(tmp_path):

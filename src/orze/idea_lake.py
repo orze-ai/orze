@@ -141,7 +141,9 @@ STATUS_TO_STATE = {
     "training": "IN_PROGRESS",
     "evaluating": "IN_PROGRESS",
     "completed": "COMPLETE",
-    "partial": "COMPLETE",
+    # A partial run may retain useful diagnostics, but it has not satisfied
+    # the completed-run contract and must never be advertised as complete.
+    "partial": "FAILED",
     "failed": "FAILED",
     "dead": "FAILED",
     "skipped": "SKIPPED",
@@ -225,6 +227,34 @@ class IdeaLake:
         has_old = bool(extra_cols)
         has_new = "eval_metrics" in cols
 
+        # CREATE TABLE IF NOT EXISTS does not add columns to a legacy table.
+        # Complete the metadata schema before creating indexes or opening the
+        # audited FSM; minimal historical databases otherwise failed halfway
+        # through migration (for example, idx_status_priority_id referenced a
+        # missing priority column).
+        metadata_columns = {
+            "priority": "TEXT DEFAULT 'medium'",
+            "category": "TEXT DEFAULT 'architecture'",
+            "parent": "TEXT",
+            "hypothesis": "TEXT",
+            "config_summary": "TEXT",
+            "training_time": "REAL",
+            "archived_at": "TEXT",
+            "created_at": "TEXT",
+        }
+        added_metadata = False
+        for column, declaration in metadata_columns.items():
+            if column not in cols:
+                logger.info(
+                    "Migrating idea_lake schema: adding %s column", column)
+                self.conn.execute(
+                    f"ALTER TABLE ideas ADD COLUMN {column} {declaration}"
+                )
+                cols.add(column)
+                added_metadata = True
+        if added_metadata:
+            self.conn.commit()
+
         if "id_num" not in cols:
             logger.info("Migrating idea_lake schema: adding id_num column")
             self.conn.execute("ALTER TABLE ideas ADD COLUMN id_num INTEGER")
@@ -302,6 +332,7 @@ class IdeaLake:
             logger.warning("v4.5 FSM migration failed: %s (will retry next init)", e)
 
         self._reconcile_lifecycle_columns()
+        self._reconcile_partial_states()
 
     def _reconcile_lifecycle_columns(self) -> None:
         """Idempotently repair legacy/FSM lifecycle divergence.
@@ -348,9 +379,10 @@ class IdeaLake:
                 # zero-compute rejection as skipped.
                 repairs = (
                     ("SKIPPED", ("skipped",), ("QUEUED", "FAILED")),
-                    ("COMPLETE", ("completed", "partial"),
+                    ("COMPLETE", ("completed",),
                      ("QUEUED", "IN_PROGRESS")),
-                    ("FAILED", ("failed", "dead"), ("QUEUED",)),
+                    ("FAILED", ("failed", "dead", "partial"),
+                     ("QUEUED", "IN_PROGRESS")),
                 )
                 for target, statuses, sources in repairs:
                     status_marks = ",".join("?" for _ in statuses)
@@ -374,6 +406,64 @@ class IdeaLake:
                         "SELECT idea_id FROM idea_state WHERE current_state = ?) "
                         "AND lower(status) IN ('queued', 'pending', 'running')",
                         (status, state),
+                    )
+                self.conn.execute(
+                    "INSERT INTO schema_migrations (name) VALUES (?)",
+                    (migration_name,),
+                )
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        _retry_on_busy(_do_reconcile)
+
+    def _reconcile_partial_states(self) -> None:
+        """One-time repair for legacy PARTIAL rows classified COMPLETE.
+
+        PARTIAL output can be retained for diagnosis, but it is not proof of
+        a completed run. Older FSM imports mapped it to COMPLETE; repair that
+        classification with an explicit migration edge so the correction is
+        visible rather than silently rewriting history.
+        """
+        migration_name = "partial_is_failed_v1"
+
+        def _do_reconcile():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                if self.conn.execute(
+                    "SELECT 1 FROM schema_migrations WHERE name = ?",
+                    (migration_name,),
+                ).fetchone():
+                    self.conn.rollback()
+                    return
+
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO idea_state (idea_id, current_state) "
+                    "SELECT idea_id, 'FAILED' FROM ideas "
+                    "WHERE lower(status) = 'partial'"
+                )
+                rows = self.conn.execute(
+                    "SELECT s.idea_id, s.current_state FROM idea_state s "
+                    "JOIN ideas i ON i.idea_id = s.idea_id "
+                    "WHERE lower(i.status) = 'partial' "
+                    "AND s.current_state IN ('QUEUED', 'CLAIMED', "
+                    "'IN_PROGRESS', 'COMPLETE')"
+                ).fetchall()
+                for idea_id, current in rows:
+                    self.conn.execute(
+                        "UPDATE idea_state SET current_state = 'FAILED', "
+                        "updated_by_host = 'migration', updated_by_pid = ?, "
+                        "updated_at = datetime('now') WHERE idea_id = ?",
+                        (os.getpid(), idea_id),
+                    )
+                    self.conn.execute(
+                        "INSERT INTO idea_transitions "
+                        "(idea_id, from_state, to_state, reason, host, pid, "
+                        "sop_type) VALUES (?, ?, 'FAILED', "
+                        "'migration_partial_not_complete', 'migration', ?, "
+                        "'training')",
+                        (idea_id, current, os.getpid()),
                     )
                 self.conn.execute(
                     "INSERT INTO schema_migrations (name) VALUES (?)",
@@ -478,13 +568,14 @@ class IdeaLake:
                     kind,
                 ),
             )
-            # New proposals enter through the queue. Imported running or
-            # terminal rows may be followed by explicit history replay (the
-            # startup recovery contract), so leave those without an implicit
-            # transition and let the idempotent startup reconciler backfill
-            # them on the next open.
+            # Initialize audited state for every known imported status. The
+            # one-time startup migration cannot backfill rows inserted after it
+            # has already run; leaving those rows absent made set_status()
+            # assume QUEUED and reject valid running -> terminal recovery.
+            # Imports still carry no invented transition history: this records
+            # their declared initial state only.
             initial_state = STATUS_TO_STATE.get(str(status).lower())
-            if initial_state == "QUEUED":
+            if initial_state is not None:
                 self.conn.execute(
                     "INSERT OR IGNORE INTO idea_state (idea_id, current_state) "
                     "VALUES (?, ?)",
@@ -611,6 +702,104 @@ class IdeaLake:
                 raise
         return bool(_retry_on_busy(_do))
 
+    def reconcile_terminal_state(
+        self,
+        idea_id: str,
+        state: str,
+        reason: str,
+        eval_metrics: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Atomically repair an active/queued row from terminal evidence.
+
+        Recovery sometimes discovers a terminal metrics file after the normal
+        transition writer was interrupted. Record that direct catch-up edge
+        explicitly instead of mutating only ``ideas.status`` or inventing
+        intermediate CLAIMED/IN_PROGRESS history. Conflicting terminal states
+        remain immutable and fail closed.
+        """
+        if state not in ("COMPLETE", "FAILED", "SKIPPED"):
+            raise ValueError("reconciliation target must be terminal")
+        if not isinstance(reason, str) or not reason.startswith("reconcile_"):
+            raise ValueError("reconciliation reason must start with reconcile_")
+
+        def _do():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                idea = self.conn.execute(
+                    "SELECT 1 FROM ideas WHERE idea_id = ?", (idea_id,),
+                ).fetchone()
+                if idea is None:
+                    self.conn.rollback()
+                    return False
+                row = self.conn.execute(
+                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                    (idea_id,),
+                ).fetchone()
+                current = row[0] if row else "QUEUED"
+                if current in ("COMPLETE", "FAILED", "SKIPPED", "ARCHIVED"):
+                    if current != state:
+                        logger.warning(
+                            "Conflicting terminal reconciliation rejected: "
+                            "%s %s -> %s", idea_id, current, state)
+                        self.conn.rollback()
+                        return False
+                    if eval_metrics is None:
+                        self.conn.execute(
+                            "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                            (STATE_TO_STATUS[state], idea_id),
+                        )
+                    else:
+                        self.conn.execute(
+                            "UPDATE ideas SET status = ?, eval_metrics = ? "
+                            "WHERE idea_id = ?",
+                            (STATE_TO_STATUS[state], json.dumps(eval_metrics),
+                             idea_id),
+                        )
+                    self.conn.commit()
+                    return True
+                if current not in ("QUEUED", "CLAIMED", "IN_PROGRESS"):
+                    self.conn.rollback()
+                    return False
+                if row:
+                    self.conn.execute(
+                        "UPDATE idea_state SET current_state = ?, "
+                        "updated_by_host = 'reconciler', updated_by_pid = ?, "
+                        "updated_at = datetime('now') WHERE idea_id = ?",
+                        (state, os.getpid(), idea_id),
+                    )
+                else:
+                    self.conn.execute(
+                        "INSERT INTO idea_state "
+                        "(idea_id, current_state, updated_by_host, updated_by_pid) "
+                        "VALUES (?, ?, 'reconciler', ?)",
+                        (idea_id, state, os.getpid()),
+                    )
+                self.conn.execute(
+                    "INSERT INTO idea_transitions "
+                    "(idea_id, from_state, to_state, reason, host, pid, sop_type) "
+                    "VALUES (?, ?, ?, ?, 'reconciler', ?, 'training')",
+                    (idea_id, current, state, reason, os.getpid()),
+                )
+                if eval_metrics is None:
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                        (STATE_TO_STATUS[state], idea_id),
+                    )
+                else:
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ?, eval_metrics = ? "
+                        "WHERE idea_id = ?",
+                        (STATE_TO_STATUS[state], json.dumps(eval_metrics),
+                         idea_id),
+                    )
+                self.conn.commit()
+                return True
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        return bool(_retry_on_busy(_do))
+
     def has(self, idea_id: str) -> bool:
         # SQLITE_BUSY exposure: same as get(). Wrap the read so a transient
         # lock contention is retried instead of raised into the orchestrator.
@@ -658,7 +847,8 @@ class IdeaLake:
         """Return lightweight lifecycle metadata keyed by idea ID."""
         def _do_metadata_index():
             return self.conn.execute(
-                "SELECT idea_id, title, status FROM ideas"
+                "SELECT i.idea_id, i.title, i.status, s.current_state "
+                "FROM ideas i LEFT JOIN idea_state s ON s.idea_id = i.idea_id"
             ).fetchall()
         rows = _retry_on_busy(_do_metadata_index)
         return {
@@ -666,9 +856,41 @@ class IdeaLake:
                 "idea_id": row["idea_id"],
                 "title": row["title"],
                 "status": row["status"],
+                "fsm_state": row["current_state"],
             }
             for row in rows
         }
+
+    def get_lifecycle_counts(self) -> Dict[str, int]:
+        """Return report-facing counts from the audited FSM.
+
+        Legacy status is consulted only for rows predating the FSM. Unknown
+        values remain visible as UNKNOWN instead of being guessed into a
+        healthy lifecycle bucket.
+        """
+        def _do_counts():
+            return self.conn.execute(
+                "SELECT i.status, s.current_state "
+                "FROM ideas i LEFT JOIN idea_state s ON s.idea_id = i.idea_id"
+            ).fetchall()
+
+        display_state = {
+            "QUEUED": "QUEUED",
+            "CLAIMED": "IN_PROGRESS",
+            "IN_PROGRESS": "IN_PROGRESS",
+            "COMPLETE": "COMPLETED",
+            "FAILED": "FAILED",
+            "SKIPPED": "SKIPPED",
+            "ARCHIVED": "ARCHIVED",
+        }
+        counts: Dict[str, int] = {}
+        for row in _retry_on_busy(_do_counts):
+            state = row["current_state"] or STATUS_TO_STATE.get(
+                str(row["status"]).lower()
+            )
+            key = display_state.get(state, "UNKNOWN")
+            counts[key] = counts.get(key, 0) + 1
+        return counts
 
     def get_queue(self, limit: int = 1000) -> List[Dict[str, Any]]:
         """Return ideas that both lifecycle representations say are queued."""
@@ -706,7 +928,6 @@ class IdeaLake:
             limit: max rows to scan (0 = all queued ideas)
         """
         import glob
-        import shutil
         from pathlib import Path
         rd = Path(results_dir)
         query = """SELECT idea_id FROM ideas
@@ -726,10 +947,17 @@ class IdeaLake:
                 continue
             # Determine final status from filesystem
             metrics_path = idea_dir / "metrics.json" if has_dir else None
+            terminal_metrics: Optional[Dict[str, Any]] = None
             if metrics_path and metrics_path.exists():
                 try:
                     m = json.loads(metrics_path.read_text(encoding="utf-8"))
-                    new_status = "completed" if m.get("status") == "COMPLETED" else "failed"
+                    if isinstance(m, dict):
+                        terminal_metrics = m
+                    new_status = (
+                        "completed"
+                        if isinstance(m, dict) and m.get("status") == "COMPLETED"
+                        else "failed"
+                    )
                 except (json.JSONDecodeError, OSError):
                     new_status = "failed"
             elif has_subs:
@@ -790,16 +1018,14 @@ class IdeaLake:
                 if best_sub_metrics is not None:
                     em = dict(best_sub_metrics)
                     em["_aggregated_from"] = "sweep_sub_runs"
-                    self.conn.execute(
-                        "UPDATE ideas SET eval_metrics = ? "
-                        "WHERE idea_id = ?",
-                        (json.dumps(em), idea_id),
-                    )
+                    terminal_metrics = em
             elif has_dir:
                 # Orphan dir (no metrics, no sweep subs).
-                # Only remove if claimed by this host — another node may
-                # still be training this idea.
-                import socket as _socket
+                # Filesystem artifacts are evidence, not disposable queue
+                # locks. A directory with no claim is already reclaimable by
+                # scheduler.claim(). A directory with a claim may still be
+                # live locally or remotely, so preserve it for the dedicated
+                # liveness/startup recovery path to adjudicate.
                 claim_path = idea_dir / "claim.json"
                 # Crash recovery intentionally releases claim.json while
                 # retaining recovery.json, the prior claim, logs, and attempt
@@ -812,25 +1038,26 @@ class IdeaLake:
                     continue
                 if claim_path.exists():
                     try:
-                        claim = json.loads(claim_path.read_text(encoding="utf-8"))
-                        if claim.get("claimed_by") != _socket.gethostname():
-                            continue  # owned by another host, don't touch
+                        json.loads(claim_path.read_text(encoding="utf-8"))
                     except (json.JSONDecodeError, OSError):
-                        pass
-                try:
-                    shutil.rmtree(idea_dir)
-                except OSError:
-                    pass
+                        logger.warning(
+                            "Preserving %s: claim ownership is unreadable",
+                            idea_id,
+                        )
                 continue  # leave as queued for retry
             else:
                 continue
-            self.conn.execute(
-                "UPDATE ideas SET status = ? WHERE idea_id = ?",
-                (new_status, idea_id),
+            target_state = (
+                "COMPLETE" if new_status == "completed" else "FAILED"
             )
-            updated += 1
+            if self.reconcile_terminal_state(
+                idea_id,
+                target_state,
+                f"reconcile_filesystem_{new_status}",
+                eval_metrics=terminal_metrics,
+            ):
+                updated += 1
         if updated:
-            self.conn.commit()
             logger.info("Reconciled %d stale queued ideas with filesystem", updated)
         return updated
 

@@ -1813,19 +1813,18 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                 if str(error_msg).startswith("insufficient_vram:"):
                     logger.warning("[VRAM-CONTENTION] %s — %s — re-queuing",
                                    tp.idea_id, str(error_msg)[:100])
-                    _reset_idea_for_retry(results_dir / tp.idea_id)
-                    try:
-                        import sqlite3 as _sq3
-                        _db = cfg.get("idea_lake_db") or str(results_dir / "idea_lake.db")
-                        if Path(_db).exists():
-                            _conn = _sq3.connect(_db, timeout=5)
-                            _conn.execute(
-                                "UPDATE ideas SET status='queued' WHERE idea_id=?",
-                                (tp.idea_id,))
-                            _conn.commit()
-                            _conn.close()
-                    except Exception:
-                        pass
+                    _reset_idea_for_retry(
+                        results_dir / tp.idea_id, release_claim=True)
+                    if lake is not None:
+                        try:
+                            if not lake.set_status(tp.idea_id, "queued"):
+                                logger.error(
+                                    "[VRAM-CONTENTION] audited requeue rejected "
+                                    "for %s", tp.idea_id)
+                        except Exception as exc:
+                            logger.error(
+                                "[VRAM-CONTENTION] audited requeue failed for "
+                                "%s: %s", tp.idea_id, exc)
                 elif _try_executor_fix(tp.idea_id, error_msg,
                                        results_dir, cfg, fix_counts,
                                        exit_code=ret if ret is not None else -1):
