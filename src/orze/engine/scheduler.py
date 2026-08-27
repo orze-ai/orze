@@ -20,9 +20,9 @@ CALLING SPEC:
         results_dir: Path
         hours: float — max age of stale claims (0 disables cleanup)
         lake: IdeaLake | None — if provided, resets cleaned ideas to 'queued'
-        returns: number of orphan directories removed
-        side effects: deletes results_dir/idea-*/  dirs that have claim.json but
-                      no metrics.json and no activity for > hours
+        returns: number of stale local claims safely archived
+        side effects: preserves result directories and archives claims/partial
+                      metrics only after stable process identity proves them dead
 
     _count_statuses(ideas, results_dir) -> dict
         ideas: Dict[str, dict]
@@ -38,7 +38,6 @@ CALLING SPEC:
 """
 import os
 import re
-import shutil
 import subprocess
 import time
 import socket
@@ -50,7 +49,7 @@ import sys
 from typing import Dict, List, Optional
 from pathlib import Path
 from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
-from orze.engine.process import capture_process_identity
+from orze.engine.process import capture_process_identity, process_is_running
 
 logger = logging.getLogger("orze")
 PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -241,24 +240,13 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
 
 def cleanup_orphans(results_dir: Path, hours: float,
                     lake=None) -> int:
-    """Reclaim stale claims on result dirs. Returns count reclaimed.
+    """Archive stale local claims without deleting experiment evidence.
 
-    Two classes of stale claims are reclaimed:
-
-    1. ``claim.json`` exists, ``metrics.json`` does NOT, activity older than
-       ``hours``: the whole directory is deleted (no useful output) and the
-       lake status is reset to 'queued' so the idea retries.
-
-    2. ``claim.json`` exists, ``metrics.json`` DOES exist, but the lake
-       still says ``status='running'`` and activity is older than ``hours``:
-       the training crashed mid-run after writing partial metrics (e.g. a
-       second node died between epochs). The dir is kept so partial
-       checkpoints/logs remain inspectable, but ``claim.json`` is removed
-       and lake status reset to 'queued' so the idea can be re-attempted.
-
-    Before this second class was handled, any cross-host claim that had
-    written partial metrics got stuck as 'running' forever, silently
-    consuming a queue slot even after the owning host was confirmed dead.
+    Age alone never proves an orphan: another host may own a quiet job, or a
+    local PID may have been reused. A claim is recoverable only when hostname,
+    PID, and process start ticks identify a dead local owner and any recorded
+    trainer is also dead. Partial/invalid metrics are archived before requeue;
+    valid terminal metrics remain authoritative.
     """
     if hours <= 0:
         return 0
@@ -286,46 +274,96 @@ def cleanup_orphans(results_dir: Path, hours: float,
 
             idea_id = d.name
             age_hours = (time.time() - last_activity) / 3600
-
-            if not metrics_path.exists():
-                # No output at all — delete the whole dir.
-                shutil.rmtree(d)
-                logger.info("Cleaned orphan: %s (last activity %.1fh ago)",
-                            idea_id, age_hours)
-                if lake:
-                    try:
-                        lake.set_status(idea_id, "queued")
-                    except Exception:
-                        pass
-                cleaned += 1
-                continue
-
-            # metrics.json exists. Only reclaim if lake still thinks this
-            # is running — i.e. training crashed before marking completion.
-            # Finished ideas (completed/failed/skipped) stay untouched.
-            if lake is None:
-                continue
             try:
-                idea = lake.get(idea_id)
-            except Exception:
+                claim_data = json.loads(
+                    claim_path.read_text(encoding="utf-8"))
+                if not isinstance(claim_data, dict):
+                    raise ValueError("claim must be a mapping")
+                if claim_data.get("claimed_by") != socket.gethostname():
+                    continue
+                owner_pid = int(claim_data["pid"])
+                owner_ticks = int(claim_data["owner_start_ticks"])
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError,
+                    KeyError, TypeError, ValueError):
+                logger.warning(
+                    "Keeping stale claim for %s: ownership identity is "
+                    "incomplete or invalid", idea_id)
                 continue
-            if not idea or idea.get("status") != "running":
+            if process_is_running(owner_pid, owner_ticks):
                 continue
 
-            try:
-                claim_path.unlink()
-            except OSError as e:
-                logger.warning("Failed to unlink claim for %s: %s",
-                               idea_id, e)
-                continue
-            try:
-                lake.set_status(idea_id, "queued")
-            except Exception as e:
-                logger.warning("Failed to re-queue %s: %s", idea_id, e)
-                continue
+            trainer_pid = claim_data.get("trainer_pid")
+            trainer_ticks = claim_data.get("trainer_start_ticks")
+            if trainer_pid is not None or trainer_ticks is not None:
+                try:
+                    if process_is_running(int(trainer_pid), int(trainer_ticks)):
+                        continue
+                except (TypeError, ValueError):
+                    logger.warning(
+                        "Keeping stale claim for %s: trainer identity is "
+                        "incomplete or invalid", idea_id)
+                    continue
+
+            metrics_status = None
+            if metrics_path.exists():
+                try:
+                    metrics = json.loads(
+                        metrics_path.read_text(encoding="utf-8"))
+                    if isinstance(metrics, dict):
+                        metrics_status = metrics.get("status")
+                except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                    pass
+
+            terminal_state = {
+                "COMPLETED": "COMPLETE",
+                "FAILED": "FAILED",
+            }.get(metrics_status)
+            if lake is not None:
+                try:
+                    if terminal_state is not None:
+                        persisted = lake.reconcile_terminal_state(
+                            idea_id,
+                            terminal_state,
+                            "reconcile_stale_claim_terminal_metrics",
+                        )
+                    else:
+                        persisted = lake.set_status(idea_id, "queued")
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to persist orphan recovery for %s: %s",
+                        idea_id, exc)
+                    continue
+                if not persisted:
+                    logger.warning(
+                        "Keeping stale claim for %s: lifecycle recovery was "
+                        "rejected", idea_id)
+                    continue
+
+            suffix = time.time_ns()
             logger.info(
-                "Reclaimed stale running claim: %s (last activity %.1fh ago, "
-                "partial metrics preserved)", idea_id, age_hours)
+                "Archiving stale local claim: %s (last activity %.1fh ago)",
+                idea_id, age_hours)
+            archived_metrics = None
+            if metrics_path.exists() and terminal_state is None:
+                archived_metrics = d / f"metrics.orphan.{suffix}.json"
+                os.replace(metrics_path, archived_metrics)
+            archived_claim = d / f"claim.orphan.{suffix}.json"
+            os.replace(claim_path, archived_claim)
+            atomic_write(
+                d / f"recovery.orphan.{suffix}.json",
+                json.dumps({
+                    "schema_version": 1,
+                    "idea_id": idea_id,
+                    "outcome": ("terminal_preserved" if terminal_state
+                                else "requeued"),
+                    "terminal_state": terminal_state,
+                    "claim_archive": archived_claim.name,
+                    "metrics_archive": (
+                        archived_metrics.name if archived_metrics else None),
+                    "recovered_at": datetime.datetime.now(
+                        datetime.timezone.utc).isoformat(),
+                }, indent=2, sort_keys=True) + "\n",
+            )
             cleaned += 1
         except Exception as e:
             logger.warning("Failed to clean orphan %s: %s", d.name, e)
@@ -373,6 +411,31 @@ def _count_statuses(ideas: Dict[str, dict], results_dir: Path,
 # Garbage collection / cleanup
 # ---------------------------------------------------------------------------
 
+_PROTECTED_EVIDENCE_NAMES = {
+    "artifact_preflight.json",
+    "interruption.json",
+    "progress.json",
+    "resume_request.json",
+}
+
+
+def _is_protected_evidence(idea_dir: Path, path: Path) -> bool:
+    """True for lifecycle/accounting evidence cleanup must never erase."""
+    try:
+        relative = path.relative_to(idea_dir)
+    except ValueError:
+        return True
+    if relative.parts and relative.parts[0] == "_compute_receipts":
+        return True
+    name = path.name
+    return (
+        name in _PROTECTED_EVIDENCE_NAMES
+        or (name.startswith("claim") and name.endswith(".json"))
+        or (name.startswith("metrics") and name.endswith(".json"))
+        or (name.startswith("recovery") and name.endswith(".json"))
+    )
+
+
 def run_cleanup(results_dir: Path, cfg: dict):
     """Run periodic cleanup: GC checkpoints, delete file patterns, run script."""
     cleanup_cfg = cfg.get("cleanup") or {}
@@ -411,7 +474,7 @@ def run_cleanup(results_dir: Path, cfg: dict):
             for pattern in patterns:
                 for f in d.glob(pattern):
                     try:
-                        if f.is_file():
+                        if f.is_file() and not _is_protected_evidence(d, f):
                             f.unlink()
                             deleted += 1
                     except Exception:

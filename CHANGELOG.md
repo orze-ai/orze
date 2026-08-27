@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **Alternate scheduling and recovery paths preserve admission truth.**
+  Force-packed critical work now passes through the ordinary schema, SOP,
+  artifact, setup, and accounting gates before its final co-tenant slot
+  assignment. Every direct or repair launch requires a passed artifact receipt
+  whose resolver, arguments, environment contract, and idea config still match,
+  before GPU telemetry. Stale-claim cleanup now requires stable proof that a
+  local owner and trainer are dead, never mutates another host's claim, archives
+  partial metrics and claims instead of deleting directories, and prevents
+  cleanup patterns from erasing lifecycle or compute evidence.
 - **Compute efficiency now uses framework-owned allocation receipts.** Claims
   receive unique attempt IDs; training, posthoc, and evaluation processes write
   private, immutable start/terminal receipts from Orze's process clock, while

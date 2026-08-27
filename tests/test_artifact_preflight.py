@@ -6,9 +6,16 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from orze.core.config import _validate_config
 from orze.engine.phases import OrzePhaseMixin
-from orze.engine.process import process_is_running, run_artifact_preflight
+from orze.engine.launcher import LaunchIntegrityError, launch
+from orze.engine.process import (
+    process_is_running,
+    run_artifact_preflight,
+    verify_artifact_preflight_receipt,
+)
 
 
 def _config(tmp_path: Path, script: Path, **overrides) -> dict:
@@ -64,7 +71,58 @@ def test_preflight_hides_accelerators_and_writes_hashed_receipt(tmp_path):
     assert receipt["gpu_visibility"] == "hidden"
     assert len(receipt["script_sha256"]) == 64
     assert len(receipt["config_sha256"]) == 64
+    assert len(receipt["contract_sha256"]) == 64
+    assert "script" not in receipt
     assert receipt["finished_at"] >= receipt["started_at"]
+    assert verify_artifact_preflight_receipt(
+        "idea-1", tmp_path / "results", cfg)
+
+
+def test_receipt_is_invalidated_by_config_or_resolver_contract_drift(tmp_path):
+    script = tmp_path / "resolve.py"
+    script.write_text("raise SystemExit(0)\n", encoding="utf-8")
+    base = tmp_path / "base.yaml"
+    base.write_text("model: fixture\n", encoding="utf-8")
+    cfg = _config(tmp_path, script)
+    results = tmp_path / "results"
+
+    assert run_artifact_preflight("idea-drift", results, cfg)
+    assert verify_artifact_preflight_receipt("idea-drift", results, cfg)
+
+    base.write_text("model: changed\n", encoding="utf-8")
+    assert not verify_artifact_preflight_receipt("idea-drift", results, cfg)
+    base.write_text("model: fixture\n", encoding="utf-8")
+    cfg["artifact_preflight"]["args"] = ["--new-contract"]
+    assert not verify_artifact_preflight_receipt("idea-drift", results, cfg)
+
+
+def test_direct_launch_requires_current_preflight_before_gpu_check(
+        tmp_path, monkeypatch):
+    resolver = tmp_path / "resolve.py"
+    resolver.write_text("raise SystemExit(0)\n", encoding="utf-8")
+    train = tmp_path / "train.py"
+    train.write_text("raise SystemExit(0)\n", encoding="utf-8")
+    base = tmp_path / "base.yaml"
+    base.write_text("{}\n", encoding="utf-8")
+    ideas = tmp_path / "ideas.md"
+    ideas.write_text("", encoding="utf-8")
+    cfg = _config(tmp_path, resolver)
+    cfg.update({
+        "train_script": str(train),
+        "ideas_file": str(ideas),
+    })
+    checked_gpu = []
+    monkeypatch.setattr(
+        "orze.engine.launcher._verify_gpu_free",
+        lambda *args: checked_gpu.append(args),
+    )
+
+    with pytest.raises(
+            LaunchIntegrityError,
+            match="artifact_preflight_receipt_missing_or_stale"):
+        launch("idea-direct", 4, tmp_path / "results", cfg)
+
+    assert checked_gpu == []
 
 
 def test_required_network_rejects_offline_environment_without_running(

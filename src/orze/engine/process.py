@@ -362,6 +362,81 @@ def _drain_and_hash(stream, digest) -> None:
         stream.close()
 
 
+def _artifact_preflight_identity(idea_id: str, results_dir: Path,
+                                 cfg: dict) -> dict:
+    """Return current hash-only identity for an enabled resolver contract."""
+    spec = cfg.get("artifact_preflight") or {}
+    results_dir = Path(results_dir)
+    idea_dir = results_dir / idea_id
+    policy = str(spec.get("network", "inherit")).strip().lower()
+    script_text = str(spec.get("script") or "")
+    project_root = Path(cfg.get("_project_root", "."))
+    script_path = Path(script_text)
+    if not script_path.is_absolute():
+        script_path = project_root / script_path
+    config_path = idea_dir / "idea_config.yaml"
+    if not config_path.exists():
+        config_path = Path(cfg.get("base_config", "configs/base.yaml"))
+        if not config_path.is_absolute():
+            config_path = project_root / config_path
+    extra_env_raw = cfg.get("train_extra_env") or {}
+    extra_env = extra_env_raw if isinstance(extra_env_raw, dict) else {}
+    contract = {
+        "script": script_text,
+        "args": [str(value) for value in (spec.get("args") or [])],
+        "interpreter": str(spec.get(
+            "interpreter", cfg.get("python", sys.executable)) or ""),
+        "network": policy,
+        # Bind environment shape and the artifact network switches without
+        # hashing arbitrary secret values into a durable offline oracle.
+        "train_extra_env_keys": sorted(
+            str(key) for key in extra_env),
+        "train_extra_env_type": type(extra_env_raw).__name__,
+        "offline_flags": {
+            key: _truthy_env(str(extra_env.get(
+                key, os.environ.get(key, ""))))
+            for key in _OFFLINE_ENV_KEYS
+        },
+    }
+    return {
+        "network_policy": policy,
+        "script_sha256": _sha256_file(script_path),
+        "config_sha256": _sha256_file(config_path),
+        "contract_sha256": hashlib.sha256(json.dumps(
+            contract, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")).hexdigest(),
+    }
+
+
+def verify_artifact_preflight_receipt(idea_id: str, results_dir: Path,
+                                      cfg: dict) -> bool:
+    """True only when a passed receipt matches the current launch contract."""
+    spec = cfg.get("artifact_preflight") or {}
+    if not isinstance(spec, dict) or not spec.get("enabled", False):
+        return True
+    try:
+        receipt = json.loads((
+            Path(results_dir) / idea_id / "artifact_preflight.json"
+        ).read_text(encoding="utf-8"))
+        expected = _artifact_preflight_identity(idea_id, results_dir, cfg)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError,
+            ValueError):
+        return False
+    return (
+        isinstance(receipt, dict)
+        and receipt.get("schema_version") == 1
+        and receipt.get("idea_id") == idea_id
+        and receipt.get("status") == "passed"
+        and receipt.get("gpu_visibility") == "hidden"
+        and all(expected.get(key) is not None
+                and receipt.get(key) == expected.get(key)
+                for key in (
+                    "network_policy", "script_sha256", "config_sha256",
+                    "contract_sha256",
+                ))
+    )
+
+
 def run_artifact_preflight(idea_id: str, results_dir: Path, cfg: dict) -> bool:
     """Run a bounded dataset/model resolver with accelerators hidden.
 
@@ -390,15 +465,13 @@ def run_artifact_preflight(idea_id: str, results_dir: Path, cfg: dict) -> bool:
         if not config_path.is_absolute():
             config_path = project_root / config_path
 
+    identity = _artifact_preflight_identity(idea_id, results_dir, cfg)
     receipt = {
         "schema_version": 1,
         "idea_id": idea_id,
         "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "network_policy": policy,
         "gpu_visibility": "hidden",
-        "script": script_text,
-        "script_sha256": _sha256_file(script_path),
-        "config_sha256": _sha256_file(config_path),
+        **identity,
     }
 
     def finish(status: str, **fields) -> bool:

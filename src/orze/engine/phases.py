@@ -872,6 +872,41 @@ class OrzePhaseMixin:
             logger.info("launcher paused — skipping dispatch this cycle")
             return free
 
+        # Opportunistic co-tenancy must enter through the same admission path
+        # as an exclusively free GPU. The former alternate force-pack branch
+        # claimed and launched directly, bypassing schema/SOP validation,
+        # artifact preflight, project setup, and zero-GPU accounting.
+        force_pack_target = None
+        if (not free and unclaimed and disk_ok and hasattr(self, "slot_mgr")
+                and self.slot_mgr.mode == "exclusive"):
+            from orze.engine.scheduler import get_critical_force_pack_eligible
+            eligible = set(get_critical_force_pack_eligible(
+                ideas, self.results_dir))
+            for candidate in unclaimed:
+                if candidate not in eligible:
+                    continue
+                candidate_cfg = (ideas.get(candidate) or {}).get("config") or {}
+                vram_floor = candidate_cfg.get(
+                    "min_free_vram_mib_for_eval", 12000)
+                try:
+                    force_gpus = self.slot_mgr.free_gpu_ids_force_pack(
+                        vram_floor, exclude=eval_gpus)
+                except (TypeError, ValueError) as exc:
+                    logger.warning(
+                        "force-pack policy invalid for %s: %s",
+                        candidate, type(exc).__name__)
+                    continue
+                if not force_gpus:
+                    continue
+                force_pack_target = (candidate, force_gpus[0])
+                unclaimed.remove(candidate)
+                unclaimed.insert(0, candidate)
+                free = [force_gpus[0]]
+                logger.info(
+                    "force-pack candidate %s on GPU %d will use the normal "
+                    "admission pipeline", candidate, force_gpus[0])
+                break
+
         if unclaimed and free and disk_ok:
             # With multi-slot scheduling, keep launching until all slots are full
             max_launches = len(free) * getattr(getattr(self, 'slot_mgr', None), 'slots_per_gpu', 1)
@@ -879,13 +914,24 @@ class OrzePhaseMixin:
             while unclaimed and launch_count < max_launches:
                 # Re-check free GPUs each iteration (slots fill up)
                 if hasattr(self, 'slot_mgr'):
-                    free = self.slot_mgr.free_gpu_ids(exclude=set(self.active_evals.keys()))
+                    if (force_pack_target is not None
+                            and force_pack_target[0] in unclaimed):
+                        free = [force_pack_target[1]]
+                    else:
+                        free = self.slot_mgr.free_gpu_ids(
+                            exclude=set(self.active_evals.keys()))
                 if not free:
                     break
                 gpu = free[0]  # least-loaded GPU (sorted by most free slots)
                 launched = False
                 while unclaimed:
                     idea_id = unclaimed.pop(0)
+                    if (force_pack_target is not None
+                            and idea_id != force_pack_target[0]):
+                        # Only the explicitly eligible critical idea may use
+                        # capacity that bypasses the exclusive job-count cap.
+                        unclaimed.insert(0, idea_id)
+                        break
                     # Enforce per-idea sweep concurrency limit
                     base_id = idea_id
                     if "-ht-" in base_id:
@@ -1359,7 +1405,13 @@ class OrzePhaseMixin:
                             _record_failure(self.failure_counts, idea_id)
                             continue
                     try:
-                        self.active[gpu] = tp
+                        if (force_pack_target is not None
+                                and idea_id == force_pack_target[0]
+                                and gpu == force_pack_target[1]):
+                            self.slot_mgr.force_assign(tp, gpu)
+                            force_pack_target = None
+                        else:
+                            self.active[gpu] = tp
                     except RuntimeError as slot_err:
                         # Race: capacity check passed at target selection but
                         # failed at registration (system-load throttle kicked in
@@ -1420,48 +1472,10 @@ class OrzePhaseMixin:
                 logger.info("No unclaimed ideas. %d training, %d eval.",
                             len(self.active), len(self.active_evals))
         else:
-            # Force-pack: dispatch critical ideas with declared VRAM floors onto
-            # co-tenanted GPUs when no GPU is exclusively free. The VRAM precheck
-            # in train.py (engineer cycle 838) is the safety gate; force-pack just
-            # lets critical ideas reach it despite the exclusive job-count cap.
-            _fp_dispatched = False
-            if (unclaimed and disk_ok and hasattr(self, "slot_mgr")
-                    and self.slot_mgr.mode == "exclusive"):
-                from orze.engine.scheduler import get_critical_force_pack_eligible
-                from orze.engine.gpu_slots import _query_all_gpu_usage
-                fp_set = set(get_critical_force_pack_eligible(ideas, self.results_dir))
-                for _fp_id in (i for i in unclaimed if i in fp_set):
-                    _fp_cfg = (ideas.get(_fp_id) or {}).get("config") or {}
-                    _vram_floor = _fp_cfg.get("min_free_vram_mib_for_eval", 12000)
-                    _fp_gpus = self.slot_mgr.free_gpu_ids_force_pack(
-                        _vram_floor, exclude=eval_gpus)
-                    if not _fp_gpus:
-                        break
-                    _fp_gpu = _fp_gpus[0]
-                    if not claim(_fp_id, self.results_dir, _fp_gpu, lake=self.lake):
-                        continue
-                    _fp_usage = _query_all_gpu_usage().get(_fp_gpu) or (0, 0)
-                    logger.info("force_pack: idea=%s gpu=%d free_mib=%d threshold_mib=%d",
-                                _fp_id, _fp_gpu, _fp_usage[1] - _fp_usage[0], _vram_floor)
-                    atomic_write(
-                        self.results_dir / _fp_id / "idea_config.yaml",
-                        yaml.dump({k: v for k, v in _fp_cfg.items() if v is not None},
-                                  default_flow_style=False))
-                    try:
-                        _fp_tp = launch(_fp_id, _fp_gpu, self.results_dir, cfg, lake=self.lake)
-                        self.slot_mgr.force_assign(_fp_tp, _fp_gpu)
-                        _fp_dispatched = True
-                    except Exception as _fp_err:
-                        logger.error("force_pack launch failed %s: %s", _fp_id, _fp_err)
-                        _write_failure(self.results_dir / _fp_id, f"force_pack: {_fp_err}",
-                                       lake=self.lake, idea_id=_fp_id, cfg=cfg)
-                        _record_failure(self.failure_counts, _fp_id)
-                    break
-            if not _fp_dispatched:
-                logger.info("%d ideas queued, no free GPUs (%d training, "
-                            "%d eval)",
-                            len(unclaimed), len(self.active),
-                            len(self.active_evals))
+            logger.info("%d ideas queued, no free GPUs (%d training, "
+                        "%d eval)",
+                        len(unclaimed), len(self.active),
+                        len(self.active_evals))
 
         # Circuit Breaker: if too many ideas exceeded max retries, stop the farm
         max_fail = cfg.get("max_idea_failures", 0)

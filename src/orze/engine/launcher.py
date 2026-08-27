@@ -55,7 +55,7 @@ from typing import Dict, Optional
 
 from orze.engine.process import (
     TrainingProcess, _new_process_group, _terminate_and_reap,
-    capture_process_identity,
+    capture_process_identity, verify_artifact_preflight_receipt,
 )
 from orze.engine.resume import (
     mark_resume_launched, prepare_resume_launch, write_interruption_receipt,
@@ -1003,6 +1003,11 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
             raise LaunchIntegrityError(
                 "claim_receipt_invalid_or_mismatched") from exc
 
+    if not verify_artifact_preflight_receipt(
+            idea_id, results_dir, cfg):
+        raise LaunchIntegrityError(
+            "artifact_preflight_receipt_missing_or_stale")
+
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not.
     _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
@@ -1423,6 +1428,11 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         raise RuntimeError(
             f"Lifecycle-managed launch requires an existing claim for {idea_id}"
         )
+
+    if not verify_artifact_preflight_receipt(
+            idea_id, results_dir, cfg):
+        raise LaunchIntegrityError(
+            "artifact_preflight_receipt_missing_or_stale")
 
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not — handled in
