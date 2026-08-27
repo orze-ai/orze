@@ -17,8 +17,22 @@ from orze.service.watchdog import load_service_config
 CONTRACT_VERSION = 1
 CONTROLLER_CONTRACT_VERSION = 1
 _STOP_SENTINELS = (".orze_disabled", ".orze_stop_all", ".orze_shutdown")
-_IGNORED_PARTS = {"__pycache__"}
+# Development-only dependency trees are not imported or served by the Orze
+# runtime; the admin server serves the separately hashed ``ui/dist`` build.
+# Including node_modules made every launch re-attestation read thousands of
+# irrelevant files and tied a runtime identity to local frontend tooling.
+_IGNORED_PARTS = {"__pycache__", "node_modules"}
 _IGNORED_SUFFIXES = {".pyc", ".pyo"}
+_RUNTIME_ENVIRONMENT_KEYS = {
+    "BASH_ENV",
+    "ENV",
+    "LD_LIBRARY_PATH",
+    "LD_PRELOAD",
+    "PYTHONHOME",
+    "PYTHONINSPECT",
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+}
 
 
 class RuntimeContractError(RuntimeError):
@@ -87,7 +101,7 @@ def _systemd_properties() -> dict:
     keys = (
         "Restart", "WorkingDirectory", "ExecStart", "ExecStartPre",
         "Environment", "EnvironmentFiles", "PassEnvironment",
-        "ActiveState", "UnitFileState",
+        "UnsetEnvironment", "ActiveState", "UnitFileState",
     )
     result = subprocess.run(
         ["systemctl", "--user", "show", "orze.service",
@@ -100,7 +114,13 @@ def _systemd_properties() -> dict:
     for line in result.stdout.splitlines():
         key, separator, value = line.partition("=")
         if separator:
-            properties[key] = value
+            # ExecStartPre may legally occur more than once. Preserve every
+            # effective record so an expected command cannot hide an extra
+            # pre-start command by appearing last in the property stream.
+            if key in properties:
+                properties[key] += "\n" + value
+            else:
+                properties[key] = value
     required = {
         "Restart", "WorkingDirectory", "ExecStart", "Environment",
         "PassEnvironment", "ActiveState", "UnitFileState",
@@ -109,6 +129,7 @@ def _systemd_properties() -> dict:
         raise RuntimeContractError("systemd_properties_incomplete")
     properties.setdefault("ExecStartPre", "")
     properties.setdefault("EnvironmentFiles", "")
+    properties.setdefault("UnsetEnvironment", "")
     unit_text = subprocess.run(
         ["systemctl", "--user", "cat", "orze.service", "--no-pager"],
         capture_output=True, text=True, timeout=10,
@@ -204,6 +225,42 @@ def capture_controller_runtime_contract() -> dict:
     }
 
 
+_EXEC_RECORD_RE = re.compile(
+    r"\{\s*path=(?P<path>.*?)\s*;\s*"
+    r"argv\[\]=(?P<argv>.*?)\s*;\s*"
+    r"ignore_errors=(?P<ignore>[^;\s]+)\s*;",
+    re.DOTALL,
+)
+
+
+def _exact_exec_property(value: object, expected: tuple[str, ...]) -> bool:
+    """Return whether a systemd show-property is one exact command record."""
+    if not isinstance(value, str) or not value.strip():
+        return False
+    records = list(_EXEC_RECORD_RE.finditer(value))
+    if len(records) != 1 or value.count("{ path=") != 1:
+        return False
+    record = records[0]
+    return (
+        record.group("path").strip() == expected[0]
+        and record.group("argv").strip() == " ".join(expected)
+        and record.group("ignore").strip() == "no"
+    )
+
+
+def _environment_keys(value: object, *, assignments: bool) -> set[str]:
+    if not isinstance(value, str):
+        return set()
+    if assignments:
+        return set(re.findall(
+            r"(?:^|\s)[\"']?([A-Za-z_][A-Za-z0-9_]*)=", value))
+    return {
+        token.strip("\"'").split("=", 1)[0]
+        for token in value.split()
+        if token.strip("\"'")
+    }
+
+
 def _unit_errors(svc_cfg: dict, properties: dict) -> list[str]:
     errors = []
     if properties.get("Restart") != "no":
@@ -218,21 +275,41 @@ def _unit_errors(svc_cfg: dict, properties: dict) -> list[str]:
     except (KeyError, OSError, RuntimeError):
         errors.append("systemd_workdir_invalid")
 
-    exec_start = properties.get("ExecStart", "")
     required_start = (
         str(svc_cfg.get("python", "")), "-m", "orze.cli", "-c",
         str(svc_cfg.get("config_file", "")),
     )
-    if any(not token or token not in exec_start for token in required_start):
+    if (any(not token for token in required_start)
+            or not _exact_exec_property(
+                properties.get("ExecStart", ""), required_start)):
         errors.append("systemd_exec_start_drift")
     exec_pre = properties.get("ExecStartPre", "")
-    if "orze.service.runtime_contract" not in exec_pre or "--startup-check" not in exec_pre:
+    required_pre = (
+        str(svc_cfg.get("python", "")), "-m",
+        "orze.service.runtime_contract", "--startup-check",
+    )
+    if not exec_pre:
         errors.append("systemd_exec_start_pre_missing")
+    elif (any(not token for token in required_pre)
+          or not _exact_exec_property(exec_pre, required_pre)):
+        errors.append("systemd_exec_start_pre_drift")
 
     environment = properties.get("Environment", "")
     pass_environment = properties.get("PassEnvironment", "")
-    if "PYTHONPATH=" in environment or "PYTHONPATH" in pass_environment.split():
+    explicit_keys = _environment_keys(environment, assignments=True)
+    passed_keys = _environment_keys(pass_environment, assignments=False)
+    unset_keys = _environment_keys(
+        properties.get("UnsetEnvironment", ""), assignments=False)
+    if "PYTHONPATH" in explicit_keys or "PYTHONPATH" in passed_keys:
         errors.append("systemd_pythonpath_override")
+    if ((explicit_keys | passed_keys) &
+            (_RUNTIME_ENVIRONMENT_KEYS - {"PYTHONPATH"})):
+        errors.append("systemd_runtime_environment_override")
+    # User services otherwise inherit their manager's environment. Explicitly
+    # remove interpreter/linker injection keys after all environment sources
+    # have been assembled, including manager state and future drop-ins.
+    if not _RUNTIME_ENVIRONMENT_KEYS.issubset(unset_keys):
+        errors.append("systemd_runtime_environment_unsealed")
     if "orze_subscription_limit_actions=off" in environment.lower():
         errors.append("systemd_shutdown_actions_disabled")
     if properties.get("EnvironmentFiles", "").strip():

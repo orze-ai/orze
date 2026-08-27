@@ -46,8 +46,10 @@ from typing import Dict, Optional
 
 from orze.engine.process import EvalProcess, _new_process_group, _terminate_and_reap
 from orze.engine.launcher import (
-    _assert_gpu_authorized, _assert_launch_authorized, _format_args,
-    _launch_min_free_vram, _verify_gpu_free,
+    LaunchIntegrityError, _assert_controller_runtime_attested,
+    _assert_gpu_authorized,
+    _assert_launch_authorized, _format_args, _launch_min_free_vram,
+    _verify_gpu_free,
 )
 from orze.core.fs import tail_file
 from orze.core.benchmark_contract import (
@@ -176,6 +178,7 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     ep = None
     try:
         benchmark_env = prepare_benchmark_evaluation(idea_dir, cfg)
+        _assert_controller_runtime_attested(cfg)
         _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
         env = os.environ.copy()
         for k, v in (cfg.get("train_extra_env") or {}).items():
@@ -208,6 +211,11 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         from orze.engine.accounting import record_compute_start
         record_compute_start(ep, idea_dir, phase="evaluation")
         return ep
+    except LaunchIntegrityError:
+        # A controller-identity failure is an authorization rejection, not a
+        # best-effort evaluator failure. Let the scheduler stop rather than
+        # silently continuing under a drifted runtime.
+        raise
     except Exception as e:
         if proc is not None and proc.poll() is None:
             _terminate_and_reap(proc, f"eval {idea_id}", timeout=3)
@@ -537,6 +545,7 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
 
         _assert_launch_authorized(idea_id, results_dir, cfg)
         _assert_gpu_authorized(gpu, cfg)
+        _assert_controller_runtime_attested(cfg)
         _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
         args = ps.get("args") or []
         timeout = ps.get("timeout", 3600)

@@ -7,6 +7,7 @@ import yaml
 
 from orze.engine.launcher import (
     LaunchIntegrityError,
+    _assert_controller_runtime_attested,
     _assert_gpu_authorized,
     _launch_min_free_vram,
     find_forbidden_launch_override,
@@ -14,7 +15,7 @@ from orze.engine.launcher import (
 )
 from orze.core.config import _validate_config
 from orze.core.research_policy import validate_idea_against_research_policy
-from orze.engine.evaluator import launch_eval
+from orze.engine.evaluator import launch_eval, run_post_scripts
 
 
 @pytest.fixture
@@ -241,6 +242,46 @@ def test_direct_launch_requires_admitted_decision_receipt_before_gpu_telemetry(
             match="decision_contract_launch_admission_missing"):
         launch("idea-test", 4, results, cfg)
     assert gpu_checked == []
+
+
+def test_direct_launch_rechecks_controller_runtime_before_gpu_telemetry(
+        launch_case, monkeypatch):
+    results, _, cfg = launch_case
+    cfg["controller_runtime"] = {"contract_version": 1}
+    gpu_checked = []
+    monkeypatch.setattr(
+        "orze.service.runtime_contract.audit_controller_runtime_contract",
+        lambda contract: {
+            "contract_ok": False,
+            "errors": ["runtime_package_sha256_drift:orze"],
+        },
+    )
+    monkeypatch.setattr(
+        "orze.engine.launcher._verify_gpu_free",
+        lambda *args, **kwargs: gpu_checked.append(True),
+    )
+
+    with pytest.raises(
+            LaunchIntegrityError, match="controller_runtime_contract_rejected"):
+        launch("idea-test", 4, results, cfg)
+    assert gpu_checked == []
+
+
+def test_runtime_attestation_error_is_stable_and_content_free(monkeypatch):
+    monkeypatch.setattr(
+        "orze.service.runtime_contract.audit_controller_runtime_contract",
+        lambda contract: {
+            "contract_ok": False,
+            "errors": ["runtime_package_sha256_drift:orze"],
+        },
+    )
+    with pytest.raises(
+            LaunchIntegrityError,
+            match=r"^controller_runtime_contract_rejected:"
+                  r"runtime_package_sha256_drift:orze$"):
+        _assert_controller_runtime_attested({
+            "controller_runtime": {"contract_version": 1},
+        })
 
 
 def test_recursive_config_is_rejected_without_recursing_forever():
@@ -506,4 +547,52 @@ def test_eval_rejects_out_of_scope_gpu_before_telemetry(
         lambda *args: checked.append(True))
     with pytest.raises(LaunchIntegrityError, match="outside_managed_scope:0"):
         launch_eval("idea-test", 0, results, cfg)
+    assert checked == []
+
+
+def test_eval_rechecks_controller_runtime_before_gpu_telemetry(
+        launch_case, monkeypatch):
+    results, idea_dir, cfg = launch_case
+    (idea_dir / "metrics.json").write_text(
+        '{"status":"COMPLETED"}', encoding="utf-8")
+    cfg.update({
+        "eval_script": "/usr/bin/true",
+        "controller_runtime": {"contract_version": 1},
+    })
+    checked = []
+    monkeypatch.setattr(
+        "orze.service.runtime_contract.audit_controller_runtime_contract",
+        lambda contract: {"contract_ok": False, "errors": ["runtime_drift"]},
+    )
+    monkeypatch.setattr(
+        "orze.engine.evaluator._verify_gpu_free",
+        lambda *args: checked.append(True))
+
+    with pytest.raises(
+            LaunchIntegrityError, match="controller_runtime_contract_rejected"):
+        launch_eval("idea-test", 4, results, cfg)
+    assert checked == []
+
+
+def test_post_script_rechecks_controller_runtime_before_gpu_telemetry(
+        launch_case, monkeypatch):
+    results, idea_dir, cfg = launch_case
+    (idea_dir / "metrics.json").write_text(
+        '{"status":"COMPLETED"}', encoding="utf-8")
+    cfg.update({
+        "post_scripts": [{"script": "/usr/bin/true"}],
+        "controller_runtime": {"contract_version": 1},
+    })
+    checked = []
+    monkeypatch.setattr(
+        "orze.service.runtime_contract.audit_controller_runtime_contract",
+        lambda contract: {"contract_ok": False, "errors": ["runtime_drift"]},
+    )
+    monkeypatch.setattr(
+        "orze.engine.evaluator._verify_gpu_free",
+        lambda *args: checked.append(True))
+
+    with pytest.raises(
+            LaunchIntegrityError, match="controller_runtime_contract_rejected"):
+        run_post_scripts("idea-test", 4, results, cfg)
     assert checked == []

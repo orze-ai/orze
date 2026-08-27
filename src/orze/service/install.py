@@ -125,6 +125,9 @@ Type=simple
 WorkingDirectory={workdir}
 ExecStart={python} -m orze.cli -c {config_file}
 ExecStartPre={python} -m orze.service.runtime_contract --startup-check
+# User services inherit the user manager environment. Remove interpreter and
+# dynamic-linker injection inputs after all unit/drop-in sources are combined.
+UnsetEnvironment=PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONINSPECT LD_PRELOAD LD_LIBRARY_PATH BASH_ENV ENV
 # The sentinel-aware watchdog timer below is the sole restart owner.  A second
 # unconditional supervisor here would restart deliberate stops and permanent
 # startup failures in a tight loop, bypassing the watchdog's latch checks.

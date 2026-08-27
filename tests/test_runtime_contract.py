@@ -12,6 +12,7 @@ from orze.service import install
 from orze.service.runtime_contract import (
     CONTROLLER_CONTRACT_VERSION,
     CONTRACT_VERSION,
+    _hash_package_tree,
     audit_controller_runtime_contract,
     audit_runtime_contract,
     capture_controller_runtime_contract,
@@ -48,15 +49,21 @@ def _fixture(tmp_path):
         "Restart": "no",
         "WorkingDirectory": str(workdir),
         "ExecStart": (
-            f"{{ path={python} ; argv[]={python} -m orze.cli -c {config} ; }}"
+            f"{{ path={python} ; argv[]={python} -m orze.cli -c {config} ; "
+            "ignore_errors=no ; }"
         ),
         "ExecStartPre": (
             f"{{ path={python} ; argv[]={python} -m "
-            "orze.service.runtime_contract --startup-check ; }}"
+            "orze.service.runtime_contract --startup-check ; "
+            "ignore_errors=no ; }"
         ),
         "Environment": "",
         "EnvironmentFiles": "",
         "PassEnvironment": "",
+        "UnsetEnvironment": (
+            "PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONINSPECT "
+            "LD_PRELOAD LD_LIBRARY_PATH BASH_ENV ENV"
+        ),
         "ActiveState": "inactive",
         "UnitFileState": "disabled",
     }
@@ -117,6 +124,57 @@ def test_runtime_package_drift_is_rejected(tmp_path, field, value, reason):
 
     assert reason in report["errors"]
     assert report["startup_allowed"] is False
+
+
+def test_exec_start_token_smuggling_is_rejected(tmp_path):
+    svc_cfg, properties, runtime = _fixture(tmp_path)
+    expected = properties["ExecStart"]
+    properties["ExecStart"] = (
+        "{ path=/bin/sh ; argv[]=/bin/sh -c echo " + expected
+        + " ; ignore_errors=no ; }"
+    )
+
+    report = audit_runtime_contract(
+        svc_cfg, properties=properties, observed_packages=runtime)
+
+    assert "systemd_exec_start_drift" in report["errors"]
+
+
+def test_extra_exec_start_pre_cannot_hide_behind_expected_record(tmp_path):
+    svc_cfg, properties, runtime = _fixture(tmp_path)
+    properties["ExecStartPre"] = (
+        "{ path=/bin/true ; argv[]=/bin/true ; ignore_errors=no ; }\n"
+        + properties["ExecStartPre"]
+    )
+
+    report = audit_runtime_contract(
+        svc_cfg, properties=properties, observed_packages=runtime)
+
+    assert "systemd_exec_start_pre_drift" in report["errors"]
+
+
+@pytest.mark.parametrize("key", [
+    "LD_PRELOAD", "LD_LIBRARY_PATH", "PYTHONHOME", "PYTHONSTARTUP",
+    "PYTHONINSPECT", "BASH_ENV", "ENV",
+])
+def test_runtime_environment_injection_is_rejected(tmp_path, key):
+    svc_cfg, properties, runtime = _fixture(tmp_path)
+    properties["Environment"] = f"{key}=/mutable"
+
+    report = audit_runtime_contract(
+        svc_cfg, properties=properties, observed_packages=runtime)
+
+    assert "systemd_runtime_environment_override" in report["errors"]
+
+
+def test_inherited_runtime_environment_must_be_explicitly_unset(tmp_path):
+    svc_cfg, properties, runtime = _fixture(tmp_path)
+    properties["UnsetEnvironment"] = "PYTHONPATH"
+
+    report = audit_runtime_contract(
+        svc_cfg, properties=properties, observed_packages=runtime)
+
+    assert "systemd_runtime_environment_unsealed" in report["errors"]
 
 
 def test_stop_latch_is_safe_only_when_systemd_unit_is_inactive_and_disabled(
@@ -210,6 +268,28 @@ def test_real_orze_runtime_capture_is_nonempty_and_content_addressed():
     assert captured[0]["name"] == "orze"
     assert captured[0]["file_count"] > 0
     assert len(captured[0]["sha256"]) == 64
+
+
+def test_runtime_hash_excludes_dev_dependencies_but_includes_served_ui(
+        tmp_path):
+    root = tmp_path / "orze"
+    (root / "admin/ui/node_modules/pkg").mkdir(parents=True)
+    (root / "admin/ui/dist").mkdir(parents=True)
+    (root / "runtime.py").write_text("RUNTIME = 1\n", encoding="utf-8")
+    dependency = root / "admin/ui/node_modules/pkg/index.js"
+    dependency.write_text("development dependency\n", encoding="utf-8")
+    asset = root / "admin/ui/dist/index.html"
+    asset.write_text("runtime asset one\n", encoding="utf-8")
+
+    original_hash, original_count = _hash_package_tree(root)
+    dependency.write_text("changed dependency\n", encoding="utf-8")
+    dependency_hash, dependency_count = _hash_package_tree(root)
+    asset.write_text("runtime asset two\n", encoding="utf-8")
+    asset_hash, asset_count = _hash_package_tree(root)
+
+    assert original_count == dependency_count == asset_count == 2
+    assert dependency_hash == original_hash
+    assert asset_hash != original_hash
 
 
 def test_matching_direct_controller_runtime_is_accepted(tmp_path):
@@ -312,6 +392,7 @@ def test_systemd_property_reader_treats_unset_optional_fields_as_empty(
         "ExecStart=orze\n"
         "Environment=\n"
         "PassEnvironment=\n"
+        "UnsetEnvironment=\n"
         "ActiveState=inactive\n"
         "UnitFileState=disabled\n"
     )
@@ -328,6 +409,7 @@ def test_systemd_property_reader_treats_unset_optional_fields_as_empty(
 
     assert properties["ExecStartPre"] == ""
     assert properties["EnvironmentFiles"] == ""
+    assert properties["UnsetEnvironment"] == ""
     assert properties["_UnitText"].startswith("[Service]")
 
 

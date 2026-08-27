@@ -1116,6 +1116,7 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
 
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not.
+    _assert_controller_runtime_attested(cfg)
     _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
 
     log_fh = open(log_path, "a")
@@ -1368,6 +1369,20 @@ def _launch_min_free_vram(cfg: dict) -> int:
     ))
 
 
+def _assert_controller_runtime_attested(cfg: dict) -> None:
+    """Re-attest an opt-in controller pin immediately before GPU telemetry."""
+    contract = cfg.get("controller_runtime")
+    if contract is None:
+        return
+    from orze.service.runtime_contract import audit_controller_runtime_contract
+    report = audit_controller_runtime_contract(contract)
+    if not report.get("contract_ok"):
+        reasons = ",".join(sorted(set(report.get("errors") or [])))
+        raise LaunchIntegrityError(
+            "controller_runtime_contract_rejected:"
+            f"{reasons or 'unknown_runtime_drift'}")
+
+
 def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> TrainingProcess:
     """Launch a training subprocess on the given GPU.
 
@@ -1600,6 +1615,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     # time (c1136). Raises GpuUnavailableError if not — handled in
     # phases.py as a requeue, not a code-fix retry.
     try:
+        _assert_controller_runtime_attested(cfg)
         _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
     except Exception:
         close_model_lineage_attestation(lineage_context)

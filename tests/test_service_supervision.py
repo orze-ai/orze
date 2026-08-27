@@ -39,6 +39,8 @@ def test_systemd_unit_delegates_restarts_to_sentinel_aware_watchdog(
     assert "Restart=always" not in service
     assert ("ExecStartPre=/opt/orze/bin/python -m "
             "orze.service.runtime_contract --startup-check") in service
+    assert ("UnsetEnvironment=PYTHONPATH PYTHONHOME PYTHONSTARTUP "
+            "PYTHONINSPECT LD_PRELOAD LD_LIBRARY_PATH BASH_ENV ENV") in service
     assert "OnUnitActiveSec=300" in timer
     assert any(
         args == ["systemctl", "--user", "enable", "--now",
