@@ -25,6 +25,7 @@ import {
 import { useSearchPath } from './hooks';
 import { useIdeaDetail } from './IdeaDetailContext';
 import { Card, LoadingState, Pill } from './components';
+import { canPresentEfficiencyScore, rejectedEvidenceCount } from './evidence';
 import type { SearchPathNode, SearchPathProblem, ResearchEfficiency } from './types';
 
 const X_SCALE = 26;
@@ -95,6 +96,10 @@ function ResearchTreeInner() {
   const rf = useReactFlow();
 
   const loading = (data as any)._loading && data.nodes.length === 0;
+  const qualifiedEfficiency = data.research_efficiency
+    && canPresentEfficiencyScore(data.research_efficiency)
+    ? data.research_efficiency
+    : null;
 
   // group nodes by their root (tree id) ----------------------------------
   const { byId, rootOf, roots } = useMemo(() => {
@@ -272,7 +277,11 @@ function ResearchTreeInner() {
           }
           sub={`${s.judged_edges ?? 0} judged · ${s.undiffable_edges ?? 0} n/a`}
         />
-        <Pill label="Scored" value={s.n_scored ?? 0} sub={data.metric.name} />
+        <Pill
+          label="Evidence scored"
+          value={qualifiedEfficiency?.evidence_qualification?.accepted ?? '—'}
+          sub={qualifiedEfficiency?.presentation?.evidence_label || 'qualification unavailable'}
+        />
         <Pill
           label="Refine win%"
           value={
@@ -564,7 +573,10 @@ const COMPONENT_LABEL: Record<string, string> = {
 // the engine *searches*, broken into weighted components, an explore-vs-exploit
 // split, hub concentration, and a depth-yield curve (does deeper search pay off?).
 function EfficiencyPanel({ eff, metricName }: { eff: ResearchEfficiency; metricName: string }) {
-  const grade = eff.grade || '—';
+  const qualification = eff.evidence_qualification;
+  const qualificationApplied = canPresentEfficiencyScore(eff);
+  const rejectedEvidence = rejectedEvidenceCount(eff);
+  const grade = qualificationApplied ? (eff.grade || '—') : '—';
   const gc = GRADE_COLOR[grade] || '#94a3b8';
   const ee = eff.exploration_exploitation;
   const exploitPct = Math.round((ee?.exploit_share || 0) * 100);
@@ -573,20 +585,22 @@ function EfficiencyPanel({ eff, metricName }: { eff: ResearchEfficiency; metricN
     <Card className="!p-0 overflow-hidden">
       <div className="flex items-center gap-2 border-b border-white/5 p-3">
         <Gauge size={15} className="text-emerald-400" />
-        <span className="text-sm font-semibold">Evo Score</span>
-        <span className="text-[11px] text-gray-500">orze's top-level metric — research efficiency (how well it searches)</span>
+        <span className="text-sm font-semibold">Internal Evo Score</span>
+        <span className="text-[11px] text-gray-500">research efficiency only — never an official leaderboard rank</span>
       </div>
       <div className="grid gap-4 p-4 lg:grid-cols-[160px_1fr_1fr]">
         {/* score + grade */}
         <div className="flex flex-col items-center justify-center rounded-lg bg-white/[0.02] p-3">
           <div className="text-4xl font-extrabold" style={{ color: gc }}>
-            {eff.score == null ? '—' : Math.round(eff.score)}
+            {!qualificationApplied || eff.score == null ? '—' : Math.round(eff.score)}
           </div>
           <div className="mt-1 rounded px-2 py-0.5 text-xs font-bold" style={{ background: `${gc}22`, color: gc }}>
             grade {grade}
           </div>
           <div className="mt-2 text-center text-[10px] text-gray-500">
-            yield {(eff.yield_rate * 100).toFixed(1)}% · fail {(eff.failure_rate * 100).toFixed(0)}%
+            {qualificationApplied
+              ? `${eff.presentation?.evidence_label} · ${qualification!.accepted} accepted · ${rejectedEvidence} rejected`
+              : 'evidence qualification unavailable'}
           </div>
         </div>
 

@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import { Cpu, HardDrive, Thermometer, Layers, TrendingUp, AlertTriangle, Play, Gauge } from 'lucide-react';
 import { useStatus, useNodes, useRuns, useResearchEfficiency } from './hooks';
 import { Badge, Card, IconKpi, LoadingState, statusColor, fmtRunName, fmtTime, IdeaLink } from './components';
+import { canPresentEfficiencyScore, rejectedEvidenceCount } from './evidence';
 
 export default function OverviewTab() {
   const status = useStatus();
@@ -37,18 +38,21 @@ export default function OverviewTab() {
     : 0;
   const tempMax = localGpus.length > 0 ? Math.max(...localGpus.map((g) => g.temperature_c)) : 0;
   const activeRuns = runs.active;
+  const qualification = eff.evidence_qualification;
+  const qualificationApplied = canPresentEfficiencyScore(eff);
+  const rejectedEvidence = rejectedEvidenceCount(eff);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
         <IconKpi
           icon={Gauge}
-          label="Evo Score"
-          value={eff.score == null ? '—' : `${Math.round(eff.score)} (${eff.grade})`}
+          label="Internal Evo Score"
+          value={!qualificationApplied || eff.score == null ? '—' : `${Math.round(eff.score)} (${eff.grade})`}
           sub={
-            eff.score == null
-              ? 'research efficiency'
-              : `yield ${(eff.yield_rate * 100).toFixed(1)}% · fail ${(eff.failure_rate * 100).toFixed(0)}%`
+            !qualificationApplied
+              ? 'evidence qualification unavailable'
+              : `${eff.presentation?.evidence_label} · ${qualification!.accepted} accepted · ${rejectedEvidence} rejected`
           }
         />
         <IconKpi icon={Cpu} label="GPU Util" value={`${gpuAvg}%`} spark={gpuSparkRef.current} />

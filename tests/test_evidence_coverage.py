@@ -3,6 +3,8 @@ from orze.reporting.evidence import (
     dataset_metric_keys,
     minimum_dataset_coverage,
     load_local_report_evidence,
+    efficiency_presentation_is_safe,
+    qualification_is_presentable,
 )
 
 
@@ -65,6 +67,46 @@ def test_invalid_minimum_fails_closed():
         {"min_datasets": True}, metrics={"a": 1.0}) == (False, 0, -1)
     assert minimum_dataset_coverage(
         {"min_datasets": 1.5}, metrics={"a": 1.0}) == (False, 0, -1)
+
+
+def test_only_complete_qualification_summaries_are_presentable():
+    valid = {
+        "mode": "verified_local_artifact",
+        "primary_metric": "score",
+        "fallback_metrics_allowed": False,
+        "accepted": 2,
+        "rejected": {"local_metrics_missing": 1},
+    }
+    assert qualification_is_presentable(valid) is True
+    for key, value in (
+        ("mode", "unknown"),
+        ("fallback_metrics_allowed", True),
+        ("accepted", True),
+        ("accepted", -1),
+        ("rejected", {"reason": float("nan")}),
+    ):
+        invalid = dict(valid)
+        invalid[key] = value
+        assert qualification_is_presentable(invalid) is False
+
+
+def test_only_internal_nonrank_presentation_is_safe():
+    valid = {
+        "claim_scope": "internal_research_efficiency",
+        "qualification_applied": True,
+        "evidence_label": "verified local artifacts",
+        "leaderboard_rank_comparable": False,
+    }
+    assert efficiency_presentation_is_safe(valid) is True
+    for key, value in (
+        ("claim_scope", "official_rank"),
+        ("qualification_applied", False),
+        ("evidence_label", ""),
+        ("leaderboard_rank_comparable", True),
+    ):
+        invalid = dict(valid)
+        invalid[key] = value
+        assert efficiency_presentation_is_safe(invalid) is False
 
 
 def test_local_evidence_requires_completed_nonredirected_artifacts(tmp_path):

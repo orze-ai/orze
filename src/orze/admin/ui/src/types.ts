@@ -243,6 +243,25 @@ export interface DepthYieldRow {
   best_metric: number | null;
 }
 
+export interface EvidenceQualification {
+  mode: 'verified_local_artifact' | 'benchmark_contract';
+  primary_metric: string;
+  fallback_metrics_allowed: false;
+  accepted: number;
+  rejected: Record<string, number>;
+  benchmark_id?: string;
+  benchmark_view?: string;
+  evidence_scope?: string;
+  selection_mode?: string;
+}
+
+export interface ResearchEfficiencyPresentation {
+  claim_scope: 'internal_research_efficiency';
+  qualification_applied: boolean;
+  evidence_label: string;
+  leaderboard_rank_comparable: false;
+}
+
 export interface ResearchEfficiency {
   score: number | null;
   grade: string;
@@ -253,6 +272,8 @@ export interface ResearchEfficiency {
   failure_rate: number;
   yield_rate: number;
   depth_yield: DepthYieldRow[];
+  evidence_qualification?: EvidenceQualification;
+  presentation?: ResearchEfficiencyPresentation;
 }
 
 export interface ResearchEfficiencyResponse extends ResearchEfficiency {
@@ -270,6 +291,7 @@ export interface SearchPathResponse {
   edges: { source: string; target: string }[];
   problems: SearchPathProblem[];
   coverage: Record<string, Record<string, number>>;
+  evidence_qualification?: EvidenceQualification;
   stats: {
     n_total: number;
     n_in_tree?: number;

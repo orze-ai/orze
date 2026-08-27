@@ -1053,8 +1053,21 @@ def build_from_lake(db_path: str, cfg: Optional[dict] = None,
     )
     # Keep the qualification next to the score so a high-level consumer cannot
     # present "yield" without also presenting what counted as evidence.
+    evidence_label = "verified local artifacts"
+    if qualification.get("mode") == "benchmark_contract":
+        selection = qualification.get("selection_mode") or "unlabeled"
+        evidence_label = f"benchmark contract ({selection})"
+    presentation = {
+        "claim_scope": "internal_research_efficiency",
+        "qualification_applied": True,
+        "evidence_label": evidence_label,
+        # Evo Score measures the search process. Even a provenance-valid
+        # benchmark contract does not make it an official leaderboard result.
+        "leaderboard_rank_comparable": False,
+    }
     output["evidence_qualification"] = qualification
     output["research_efficiency"]["evidence_qualification"] = qualification
+    output["research_efficiency"]["presentation"] = presentation
     return output
 
 

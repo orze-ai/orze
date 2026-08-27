@@ -30,6 +30,14 @@ coverage, and macro aggregate must additionally validate. The API returns
 `evidence_qualification` beside the score with stable accepted/rejected counts
 and no artifact contents.
 
+Operator-facing surfaces call this the **Internal Evo Score** and show its
+qualification mode plus accepted/rejected evidence counts. If qualification is
+missing, the API and dashboard suppress the number. Logs carry the same label
+and counts. The presentation contract always declares
+`leaderboard_rank_comparable: false`: Evo Score measures the research process,
+not a model's official leaderboard result, even when the underlying local
+measurements satisfy a benchmark contract.
+
 ## How it is computed
 
 Evo Score is a weighted blend of five components, each normalized to `0..1`

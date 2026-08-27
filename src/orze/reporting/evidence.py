@@ -15,6 +15,57 @@ def _finite_number(value) -> bool:
     )
 
 
+def qualification_is_presentable(qualification) -> bool:
+    """Return whether a qualification summary is safe beside a numeric score."""
+    if not isinstance(qualification, Mapping):
+        return False
+    if qualification.get("mode") not in {
+            "verified_local_artifact", "benchmark_contract"}:
+        return False
+    if qualification.get("fallback_metrics_allowed") is not False:
+        return False
+    primary = qualification.get("primary_metric")
+    if not isinstance(primary, str) or not primary.strip():
+        return False
+    accepted = qualification.get("accepted")
+    if (isinstance(accepted, bool) or not isinstance(accepted, int)
+            or accepted < 0):
+        return False
+    rejected = qualification.get("rejected")
+    if not isinstance(rejected, Mapping):
+        return False
+    if not all(
+        isinstance(reason, str)
+        and not isinstance(count, bool)
+        and isinstance(count, int)
+        and count >= 0
+        for reason, count in rejected.items()
+    ):
+        return False
+    if qualification.get("mode") == "benchmark_contract":
+        return all(
+            isinstance(qualification.get(key), str)
+            and bool(qualification[key].strip())
+            for key in (
+                "benchmark_id", "benchmark_view", "evidence_scope",
+                "selection_mode",
+            )
+        )
+    return True
+
+
+def efficiency_presentation_is_safe(presentation) -> bool:
+    """Return whether a presentation block prevents leaderboard ambiguity."""
+    return (
+        isinstance(presentation, Mapping)
+        and presentation.get("claim_scope") == "internal_research_efficiency"
+        and presentation.get("qualification_applied") is True
+        and isinstance(presentation.get("evidence_label"), str)
+        and bool(presentation["evidence_label"].strip())
+        and presentation.get("leaderboard_rank_comparable") is False
+    )
+
+
 def dataset_metric_keys(report_cfg: Mapping) -> list[str]:
     """Return the configured columns that constitute dataset coverage.
 

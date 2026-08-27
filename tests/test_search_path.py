@@ -309,6 +309,12 @@ class TestResolver:
         assert output["evidence_qualification"]["rejected"] == {
             "local_metrics_missing": 1,
         }
+        assert output["research_efficiency"]["presentation"] == {
+            "claim_scope": "internal_research_efficiency",
+            "qualification_applied": True,
+            "evidence_label": "verified local artifacts",
+            "leaderboard_rank_comparable": False,
+        }
 
 class TestConfigDelta:
     def test_single_key_change(self):

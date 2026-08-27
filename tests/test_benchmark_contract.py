@@ -18,6 +18,7 @@ from orze.core.benchmark_contract import (
     validate_benchmark_receipt,
 )
 from orze.reporting.leaderboard import update_report
+from orze.reporting.evidence import qualification_is_presentable
 from orze.reporting.search_path import build_from_lake
 from orze.reporting.state import write_status_json
 from orze.engine import evaluator as evaluator_module
@@ -192,9 +193,16 @@ def test_evo_score_counts_only_current_contract_verified_evidence(tmp_path):
     assert evidence["stats"]["n_scored"] == 1
     assert qualification["mode"] == "benchmark_contract"
     assert qualification["accepted"] == 1
+    assert qualification_is_presentable(qualification) is True
     assert qualification["rejected"] == {"benchmark_provenance_missing": 1}
     assert evidence["research_efficiency"][
         "evidence_qualification"] == qualification
+    assert evidence["research_efficiency"]["presentation"] == {
+        "claim_scope": "internal_research_efficiency",
+        "qualification_applied": True,
+        "evidence_label": "benchmark contract (adaptive)",
+        "leaderboard_rank_comparable": False,
+    }
 
 
 def test_preexisting_receipt_is_rejected_before_evaluation(tmp_path):

@@ -14,6 +14,7 @@ CALLING SPEC:
 
 import json
 import logging
+import math
 import os
 import re
 import shutil
@@ -153,9 +154,28 @@ def _log_evo_score_if_changed(owner, lake_db: Path, cfg: dict) -> bool:
     re_block = build_from_lake(str(lake_db), cfg).get("research_efficiency")
     owner._evo_score_signature = signature
     if re_block:
-        logger.info(
-            "Evo Score (research efficiency): %.1f grade %s",
-            re_block.get("score", 0.0), re_block.get("grade", "?"))
+        presentation = re_block.get("presentation") or {}
+        qualification = re_block.get("evidence_qualification")
+        score = re_block.get("score")
+        from orze.reporting.evidence import (
+            efficiency_presentation_is_safe, qualification_is_presentable,
+        )
+        if (not efficiency_presentation_is_safe(presentation)
+                or not qualification_is_presentable(qualification)
+                or isinstance(score, bool)
+                or not isinstance(score, (int, float))
+                or not math.isfinite(float(score))):
+            logger.warning(
+                "Internal Evo Score unavailable: evidence qualification missing")
+        else:
+            rejected = qualification.get("rejected") or {}
+            rejected_total = sum(rejected.values())
+            logger.info(
+                "Internal Evo Score: %.1f grade %s; evidence=%s; "
+                "accepted=%d rejected=%d; leaderboard_rank_comparable=false",
+                score, re_block.get("grade", "?"),
+                presentation.get("evidence_label", "qualified evidence"),
+                qualification.get("accepted", 0), rejected_total)
     return True
 
 

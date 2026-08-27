@@ -14,6 +14,7 @@ import argparse
 import datetime
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -519,6 +520,39 @@ def _lake_db_path() -> Path:
     return Path(_cfg.get("idea_lake_db") or Path(_ideas_file()).parent / "idea_lake.db")
 
 
+def _present_research_efficiency(full: dict) -> dict:
+    """Build the public API block, suppressing any unqualified numeric score."""
+    out = dict(full.get("research_efficiency") or {})
+    presentation = out.get("presentation") or {}
+    qualification = out.get("evidence_qualification")
+    score = out.get("score")
+    from orze.reporting.evidence import (
+        efficiency_presentation_is_safe, qualification_is_presentable,
+    )
+    if (not efficiency_presentation_is_safe(presentation)
+            or not qualification_is_presentable(qualification)
+            or isinstance(score, bool)
+            or not isinstance(score, (int, float))
+            or not math.isfinite(float(score))):
+        # A bare score is unsafe to present: older or mocked builders may omit
+        # the evidence contract even though they return a number.
+        out["score"] = None
+        out["grade"] = "—"
+        out["error"] = "evidence qualification unavailable"
+        out["presentation"] = {
+            "claim_scope": "internal_research_efficiency",
+            "qualification_applied": False,
+            "evidence_label": "evidence unavailable",
+            "leaderboard_rank_comparable": False,
+        }
+    out["metric"] = full.get("metric")
+    stats = full.get("stats") or {}
+    out["n_total"] = stats.get("n_total")
+    out["n_scored"] = stats.get("n_scored")
+    out["genuine_evolution_rate"] = stats.get("genuine_evolution_rate")
+    return out
+
+
 @app.get("/api/search_path")
 async def get_search_path():
     """Research search-path graph: genealogy forest + problem annotations.
@@ -555,15 +589,19 @@ async def get_research_efficiency():
         from orze.reporting.search_path import build_from_lake
         db = _lake_db_path()
         if not db.exists():
-            return {"score": None, "grade": "—", "error": "idea_lake.db not found"}
+            return {
+                "score": None,
+                "grade": "—",
+                "error": "idea_lake.db not found",
+                "presentation": {
+                    "claim_scope": "internal_research_efficiency",
+                    "qualification_applied": False,
+                    "evidence_label": "evidence unavailable",
+                    "leaderboard_rank_comparable": False,
+                },
+            }
         full = build_from_lake(str(db), _cfg)
-        out = dict(full.get("research_efficiency") or {})
-        out["metric"] = full.get("metric")
-        s = full.get("stats") or {}
-        out["n_total"] = s.get("n_total")
-        out["n_scored"] = s.get("n_scored")
-        out["genuine_evolution_rate"] = s.get("genuine_evolution_rate")
-        return out
+        return _present_research_efficiency(full)
 
     return _cached("research_efficiency", 30.0, _build)
 
