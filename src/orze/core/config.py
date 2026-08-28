@@ -254,6 +254,13 @@ DEFAULT_CONFIG = {
     "eval_args": [],
     "eval_timeout": 3600,
     "eval_output": "eval_report.json",
+    # Copy every declared local evaluator dependency into a content-addressed
+    # directory before launch. The child receives ORZE_EVALUATION_BUNDLE_ROOT
+    # and must resolve late-loaded project code from that directory.
+    "evaluation_bundle": {
+        "enabled": False,
+        "files": [],
+    },
     "post_scripts": [],
     "cleanup": {
         "script": None,
@@ -935,6 +942,9 @@ def _validate_config(cfg: dict) -> tuple:
                     errors.append(
                         f"sealed_hashes.{fpath}: expected a 64-character SHA-256"
                     )
+
+    from orze.core.evaluation_bundle import validate_evaluation_bundle_config
+    errors.extend(validate_evaluation_bundle_config(cfg))
 
     # Data-boundary configuration controls whether held-out paths and the
     # network are visible to training. Validate it here and again at the final

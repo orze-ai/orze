@@ -53,6 +53,11 @@ from orze.engine.launcher import (
 )
 from orze.core.fs import tail_file
 from orze.core.gpu_lease import gpu_execution_lease
+from orze.core.evaluation_bundle import (
+    EvaluationBundleError,
+    get_evaluation_bundle_config,
+    stage_evaluation_bundle,
+)
 from orze.core.benchmark_contract import (
     BenchmarkContractError,
     load_benchmark_values,
@@ -167,17 +172,21 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     _assert_launch_authorized(idea_id, results_dir, cfg)
     _assert_gpu_authorized(gpu, cfg)
 
-    cmd = [python, eval_script]
-    cmd.extend(_format_args(eval_args, {
-        "idea_id": idea_id, "gpu": 0, "physical_gpu": gpu,
-    }))
-
     log_path = results_dir / idea_id / "eval_output.log"
     logger.info("Launching eval for %s on GPU %s", idea_id, gpu)
 
     proc = None
     ep = None
     try:
+        bundle = None
+        entrypoint = eval_script
+        if get_evaluation_bundle_config(cfg) is not None:
+            bundle = stage_evaluation_bundle(idea_dir, cfg)
+            entrypoint = str(bundle.entrypoint)
+        cmd = [python, entrypoint]
+        cmd.extend(_format_args(eval_args, {
+            "idea_id": idea_id, "gpu": 0, "physical_gpu": gpu,
+        }))
         benchmark_env = prepare_benchmark_evaluation(idea_dir, cfg)
         with gpu_execution_lease(gpu) as lease_fds:
             _assert_controller_runtime_attested(cfg)
@@ -190,6 +199,9 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
             # non-CUDA tooling that needs the host index.
             env["CUDA_VISIBLE_DEVICES"] = str(gpu)
             env.update(benchmark_env)
+            if bundle is not None:
+                env.update(bundle.environment(Path(
+                    cfg.get("_project_root") or ".")))
             log_fh = open(log_path, "w", encoding="utf-8")
             try:
                 proc = subprocess.Popen(
@@ -235,6 +247,11 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         if isinstance(e, BenchmarkContractError):
             _record_eval_audit(
                 idea_dir, "reject", "benchmark_contract_preflight_failed",
+                detail=str(e),
+            )
+        elif isinstance(e, EvaluationBundleError):
+            _record_eval_audit(
+                idea_dir, "reject", "evaluation_bundle_preflight_failed",
                 detail=str(e),
             )
         logger.warning("Failed to launch eval for %s: %s", idea_id, e)

@@ -22,6 +22,11 @@ from pathlib import Path
 from typing import Mapping, Optional
 
 from orze.core.fs import _fs_lock, _fs_unlock, atomic_write, deep_get
+from orze.core.evaluation_bundle import (
+    EvaluationBundleError,
+    get_evaluation_bundle_config,
+    verify_evaluation_bundle,
+)
 
 
 SCHEMA_VERSION = 1
@@ -728,6 +733,16 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
             f"expected {expected_digest}, got {actual_digest}"
         )
 
+    # Bundle validation precedes exposure reservation. A missing/tampered
+    # bundle is infrastructure failure and must not consume a benchmark look.
+    bundle = None
+    if get_evaluation_bundle_config(cfg) is not None:
+        try:
+            bundle = verify_evaluation_bundle(Path(idea_dir), cfg)
+        except EvaluationBundleError as exc:
+            raise BenchmarkContractError(
+                f"benchmark_evaluation_bundle_invalid:{exc}") from exc
+
     nonce = secrets.token_hex(32)
     exposure_ordinal, exposure_record_sha256 = _reserve_benchmark_exposure(
         Path(idea_dir), cfg, contract, actual_digest, nonce,
@@ -750,6 +765,8 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
         "evaluation_nonce": nonce,
         "pid": os.getpid(),
     }
+    if bundle is not None:
+        provenance["evaluation_bundle_sha256"] = bundle.sha256
     if lineage is not None:
         provenance.update({
             "managed_model_lineage_sha256": lineage_sha256,
@@ -765,6 +782,9 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
         "ORZE_BENCHMARK_EXPOSURE_ORDINAL": str(exposure_ordinal),
         "ORZE_BENCHMARK_EXPOSURE_RECORD_SHA256": exposure_record_sha256,
     }
+    if bundle is not None:
+        child_env.update(bundle.environment(Path(
+            cfg.get("_project_root") or ".")))
     if lineage is not None:
         child_env.update({
             "ORZE_MANAGED_MODEL_LINEAGE_SHA256": str(lineage_sha256),
@@ -866,6 +886,15 @@ def validate_benchmark_receipt(
             return False, f"benchmark_provenance_{key}_mismatch"
         if receipt.get(key) != expected_value:
             return False, f"benchmark_receipt_{key}_mismatch"
+    if get_evaluation_bundle_config(cfg) is not None:
+        try:
+            bundle = verify_evaluation_bundle(Path(idea_dir), cfg)
+        except EvaluationBundleError as exc:
+            return False, f"benchmark_evaluation_bundle_invalid:{exc}"
+        if provenance.get("evaluation_bundle_sha256") != bundle.sha256:
+            return False, "benchmark_provenance_evaluation_bundle_mismatch"
+        if receipt.get("evaluation_bundle_sha256") != bundle.sha256:
+            return False, "benchmark_receipt_evaluation_bundle_mismatch"
     if (not isinstance(provenance.get("evaluation_nonce"), str)
             or receipt.get("evaluation_nonce") != provenance["evaluation_nonce"]):
         return False, "benchmark_receipt_nonce_mismatch"

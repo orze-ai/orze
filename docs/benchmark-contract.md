@@ -13,6 +13,16 @@ eval_script: eval_exact.py
 eval_output: eval_report.json
 sealed_hashes:
   eval_exact.py: <sha256-of-eval_exact.py>
+  eval_child_proxy.py: <sha256-of-eval_child_proxy.py>
+
+# Freeze the evaluator and every project-local dependency before reserving a
+# benchmark exposure or GPU. Late-loaded children must resolve their path from
+# ORZE_EVALUATION_BUNDLE_ROOT rather than the mutable project checkout.
+evaluation_bundle:
+  enabled: true
+  files:
+    - eval_exact.py
+    - eval_child_proxy.py
 
 report:
   primary_metric: avg_wer
@@ -191,6 +201,32 @@ different manifest. Copying the whole project without its `.orze` state also
 requires declaring the copied history in `prior_exposures`. For public claims,
 preserve and publish the ledger and artifacts or use an independent/WORM-backed
 evaluation service.
+
+## Immutable evaluation bundle
+
+`sealed_hashes` detects drift at a check point, but an evaluator may start a
+project-local child after that check. A concurrent edit could otherwise make
+one evaluation contain two code versions. Enabling `evaluation_bundle` copies
+the entrypoint and every declared local dependency into a content-addressed
+idea-local directory before exposure reservation and GPU acquisition. Source
+symlinks, paths outside the project, missing pins, source drift during the
+copy, and tampered bundle files fail closed.
+
+The launcher executes the bundled entrypoint and exports:
+
+- `ORZE_EVALUATION_BUNDLE_ROOT`
+- `ORZE_EVALUATION_BUNDLE_MANIFEST`
+- `ORZE_EVALUATION_BUNDLE_SHA256`
+- `ORZE_ORIGINAL_PROJECT_ROOT`
+
+Evaluators must load late project-local code and decoding contracts from the
+bundle root. Large immutable data, model artifacts, and the interpreter may
+remain at their original absolute paths. The bundle identity is written to
+benchmark provenance and the evaluator must copy
+`ORZE_EVALUATION_BUNDLE_SHA256` into `evaluation_bundle_sha256` in its receipt.
+Receipt validation rehashes the bundle and rejects a missing or mismatched
+identity. This makes the executed code graph auditable; it does not make
+undeclared dependencies safe, so the file list must be complete.
 
 ## Evaluator receipt
 
