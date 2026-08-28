@@ -987,6 +987,15 @@ class OrzePhaseMixin:
         sealed_blocked = False
         if sealed_files:
             manifest = load_sealed_manifest(self.results_dir)
+            # Explicit config pins are authoritative even when a managed
+            # one-idea runner intentionally skips the daemon-wide manifest
+            # initialization. This keeps direct managed runs fail-closed on
+            # content while avoiding a shared-manifest write race between
+            # concurrently scoped GPU workers.
+            manifest.update({
+                str(path): str(digest).lower()
+                for path, digest in (cfg.get("sealed_hashes") or {}).items()
+            })
             changed = verify_sealed_files(sealed_files, manifest)
             if changed:
                 sealed_blocked = True

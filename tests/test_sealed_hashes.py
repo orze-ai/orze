@@ -65,3 +65,35 @@ def test_sealed_violation_blocks_training_dispatch(tmp_path, monkeypatch):
     assert unclaimed == ["idea-must-not-launch"]
     assert notices[0][0] == "sealed_file_changed"
     assert "blocked" in notices[0][1]["message"]
+
+
+def test_managed_run_uses_explicit_pin_without_shared_manifest(
+        tmp_path, monkeypatch):
+    source = tmp_path / "eval_manifest.json"
+    source.write_text('{"revision":"expected"}', encoding="utf-8")
+    expected = hashlib.sha256(source.read_bytes()).hexdigest()
+    notices = []
+    monkeypatch.setattr("orze.engine.phases.get_gpu_memory_used", lambda _gpu: 0)
+    monkeypatch.setattr(
+        "orze.engine.phases.notify",
+        lambda event, payload, cfg: notices.append((event, payload)),
+    )
+    runner = SimpleNamespace(
+        cfg={
+            "_managed_idea_id": "idea-managed",
+            "sealed_files": [str(source)],
+            "sealed_hashes": {str(source): expected},
+            "gpu_mem_threshold": 2000,
+        },
+        results_dir=tmp_path,
+        active_evals={},
+        active={},
+        gpu_ids=[4],
+        once=True,
+        running=True,
+    )
+
+    free = OrzePhaseMixin._launch_training(runner, [], True, {})
+
+    assert free == [4]
+    assert notices == []
