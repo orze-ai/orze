@@ -753,7 +753,10 @@ class OrzePhaseMixin:
         # On-demand reconcile: if queue returned ideas but none are
         # unclaimed, stale DB rows are blocking — reconcile and retry.
         if not unclaimed and queue_ideas and self.lake:
-            n = self.lake.reconcile_statuses(str(self.results_dir))
+            n = self.lake.reconcile_statuses(
+                str(self.results_dir),
+                evaluation_required=bool(cfg.get("eval_script")),
+            )
             if n:
                 logger.info("On-demand reconcile: cleared %d stale ideas", n)
                 queue_ideas = {}
