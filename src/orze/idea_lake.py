@@ -98,6 +98,34 @@ CREATE TABLE IF NOT EXISTS idea_transitions (
 CREATE INDEX IF NOT EXISTS idx_idea_transitions_idea_id ON idea_transitions(idea_id);
 CREATE INDEX IF NOT EXISTS idx_idea_transitions_to_state ON idea_transitions(to_state);
 
+CREATE TABLE IF NOT EXISTS idea_stage_state (
+    idea_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    current_state TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    started_at TEXT,
+    terminal_at TEXT,
+    PRIMARY KEY (idea_id, stage)
+);
+
+CREATE INDEX IF NOT EXISTS idx_idea_stage_state_current
+ON idea_stage_state(stage, current_state);
+
+CREATE TABLE IF NOT EXISTS idea_stage_transitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    idea_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    from_state TEXT NOT NULL,
+    to_state TEXT NOT NULL,
+    reason TEXT,
+    host TEXT,
+    pid INTEGER,
+    ts TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_idea_stage_transitions_idea
+ON idea_stage_transitions(idea_id, stage, id);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     name TEXT PRIMARY KEY,
     applied_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -164,6 +192,17 @@ VALID_STATE_TRANSITIONS = {
     "FAILED": {"QUEUED", "SKIPPED"},
     "SKIPPED": {"QUEUED", "ARCHIVED"},
     "ARCHIVED": set(),
+}
+
+PIPELINE_STAGES = ("training", "evaluation")
+STAGE_TERMINALS = {"COMPLETE", "FAILED", "SKIPPED"}
+VALID_STAGE_TRANSITIONS = {
+    "NOT_STARTED": {"PENDING", "IN_PROGRESS", "COMPLETE", "FAILED", "SKIPPED"},
+    "PENDING": {"IN_PROGRESS", "COMPLETE", "FAILED", "SKIPPED"},
+    "IN_PROGRESS": {"PENDING", "COMPLETE", "FAILED"},
+    "COMPLETE": {"PENDING"},
+    "FAILED": {"PENDING"},
+    "SKIPPED": {"PENDING"},
 }
 
 
@@ -948,6 +987,19 @@ class IdeaLake:
                         transition_at,
                     )
 
+                if not self._sync_pipeline_for_global_transition(
+                    idea_id,
+                    current,
+                    target,
+                    f"set_status:{str(status).lower()}",
+                    "legacy_status",
+                    os.getpid(),
+                    "training",
+                    transition_at,
+                ):
+                    self.conn.rollback()
+                    return False
+
                 self.conn.execute(
                     "INSERT INTO idea_transitions "
                     "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
@@ -1049,6 +1101,18 @@ class IdeaLake:
                         "training",
                         transition_at,
                     )
+                if not self._sync_pipeline_for_global_transition(
+                    idea_id,
+                    current,
+                    state,
+                    reason,
+                    "reconciler",
+                    os.getpid(),
+                    "training",
+                    transition_at,
+                ):
+                    self.conn.rollback()
+                    return False
                 self.conn.execute(
                     "INSERT INTO idea_transitions "
                     "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
@@ -1067,6 +1131,90 @@ class IdeaLake:
                         (STATE_TO_STATUS[state], json.dumps(eval_metrics),
                          idea_id),
                     )
+                self.conn.commit()
+                return True
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        return bool(_retry_on_busy(_do))
+
+    def reconcile_training_complete(
+        self,
+        idea_id: str,
+        reason: str,
+    ) -> bool:
+        """Recover completed training while leaving required evaluation open.
+
+        This direct recovery edge is intentionally separate from ordinary FSM
+        admission. It is accepted only from a non-terminal lifecycle and keeps
+        the legacy row ``running`` until evaluation is independently closed.
+        """
+        if not isinstance(reason, str) or not reason.startswith("reconcile_"):
+            raise ValueError("reconciliation reason must start with reconcile_")
+
+        def _do():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                idea = self.conn.execute(
+                    "SELECT 1 FROM ideas WHERE idea_id = ?", (idea_id,),
+                ).fetchone()
+                if idea is None:
+                    self.conn.rollback()
+                    return False
+                row = self.conn.execute(
+                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                    (idea_id,),
+                ).fetchone()
+                current = row[0] if row else "QUEUED"
+                if current not in ("QUEUED", "CLAIMED", "IN_PROGRESS"):
+                    self.conn.rollback()
+                    return False
+                at = self._transition_time(self.conn)
+                if current != "IN_PROGRESS":
+                    if row:
+                        if not self._write_state_row(
+                            self.conn, idea_id, "IN_PROGRESS", "reconciler",
+                            os.getpid(), "training", at,
+                            expected_state=current,
+                        ):
+                            self.conn.rollback()
+                            return False
+                    else:
+                        self._insert_state_row(
+                            self.conn, idea_id, "IN_PROGRESS", "reconciler",
+                            os.getpid(), "training", at,
+                        )
+                    self.conn.execute(
+                        "INSERT INTO idea_transitions "
+                        "(idea_id, from_state, to_state, reason, host, pid, "
+                        "sop_type, ts) VALUES (?, ?, 'IN_PROGRESS', ?, "
+                        "'reconciler', ?, 'training', ?)",
+                        (idea_id, current, reason, os.getpid(), at),
+                    )
+                training = self._stage_state_in_tx(idea_id, "training")
+                if training != "COMPLETE" and not (
+                        training in ("NOT_STARTED", "PENDING", "IN_PROGRESS")
+                        and self._record_stage_transition_in_tx(
+                            idea_id, "training", training, "COMPLETE", reason,
+                            "reconciler", os.getpid(), at)):
+                    self.conn.rollback()
+                    return False
+                evaluation = self._stage_state_in_tx(idea_id, "evaluation")
+                if evaluation == "NOT_STARTED":
+                    if not self._record_stage_transition_in_tx(
+                            idea_id, "evaluation", "NOT_STARTED", "PENDING",
+                            "reconcile_evaluation_pending", "reconciler",
+                            os.getpid(), at):
+                        self.conn.rollback()
+                        return False
+                elif evaluation != "PENDING":
+                    self.conn.rollback()
+                    return False
+                self.conn.execute(
+                    "UPDATE ideas SET status = 'running' WHERE idea_id = ?",
+                    (idea_id,),
+                )
                 self.conn.commit()
                 return True
             except Exception:
@@ -1191,7 +1339,13 @@ class IdeaLake:
         rows = _retry_on_busy(_do_get_queue)
         return [dict(r) for r in rows]
 
-    def reconcile_statuses(self, results_dir: str, limit: int = 0) -> int:
+    def reconcile_statuses(
+        self,
+        results_dir: str,
+        limit: int = 0,
+        *,
+        evaluation_required: bool = False,
+    ) -> int:
         """Reconcile DB queue with filesystem: mark queued ideas that already
         have results dirs as completed/failed. Returns count of updates.
 
@@ -1321,6 +1475,12 @@ class IdeaLake:
                         )
                 continue  # leave as queued for retry
             else:
+                continue
+            if new_status == "completed" and evaluation_required:
+                if self.reconcile_training_complete(
+                    idea_id, "reconcile_filesystem_training_completed"
+                ):
+                    updated += 1
                 continue
             target_state = (
                 "COMPLETE" if new_status == "completed" else "FAILED"
@@ -1562,6 +1722,198 @@ class IdeaLake:
         self.conn.commit()
         logger.info("Successfully updated %d config summaries.", count)
 
+    def _stage_state_in_tx(self, idea_id: str, stage: str) -> str:
+        row = self.conn.execute(
+            "SELECT current_state FROM idea_stage_state "
+            "WHERE idea_id = ? AND stage = ?",
+            (idea_id, stage),
+        ).fetchone()
+        return row[0] if row else "NOT_STARTED"
+
+    def _record_stage_transition_in_tx(
+        self,
+        idea_id: str,
+        stage: str,
+        from_state: str,
+        to_state: str,
+        reason: str,
+        host: str,
+        pid: int,
+        at: str,
+    ) -> bool:
+        """Compare-and-swap one pipeline stage inside the caller's transaction."""
+        if stage not in PIPELINE_STAGES:
+            return False
+        actual = self._stage_state_in_tx(idea_id, stage)
+        if actual != from_state:
+            logger.warning(
+                "Stale stage transition rejected: %s stage=%s expected=%s "
+                "actual=%s to=%s", idea_id, stage, from_state, actual,
+                to_state,
+            )
+            return False
+        if to_state not in VALID_STAGE_TRANSITIONS.get(from_state, set()):
+            logger.warning(
+                "Invalid stage transition: %s stage=%s %s -> %s",
+                idea_id, stage, from_state, to_state,
+            )
+            return False
+
+        started_at = at if to_state == "IN_PROGRESS" else None
+        terminal_at = at if to_state in STAGE_TERMINALS else None
+        if actual == "NOT_STARTED":
+            self.conn.execute(
+                "INSERT INTO idea_stage_state "
+                "(idea_id, stage, current_state, updated_at, started_at, "
+                "terminal_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (idea_id, stage, to_state, at, started_at, terminal_at),
+            )
+        else:
+            cursor = self.conn.execute(
+                "UPDATE idea_stage_state SET current_state = ?, "
+                "updated_at = ?, started_at = CASE "
+                "WHEN ? = 'PENDING' THEN NULL "
+                "WHEN ? = 'IN_PROGRESS' THEN ? ELSE started_at END, "
+                "terminal_at = ? WHERE idea_id = ? AND stage = ? "
+                "AND current_state = ?",
+                (
+                    to_state, at, to_state, to_state, at, terminal_at,
+                    idea_id, stage, from_state,
+                ),
+            )
+            if cursor.rowcount != 1:
+                return False
+        self.conn.execute(
+            "INSERT INTO idea_stage_transitions "
+            "(idea_id, stage, from_state, to_state, reason, host, pid, ts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (idea_id, stage, from_state, to_state, reason, host, pid, at),
+        )
+        return True
+
+    def _sync_pipeline_for_global_transition(
+        self,
+        idea_id: str,
+        from_state: str,
+        to_state: str,
+        reason: str,
+        host: str,
+        pid: int,
+        sop_type: str,
+        at: str,
+    ) -> bool:
+        """Keep stage truth atomic with lifecycle launch/terminal/retry edges."""
+        if sop_type != "training":
+            return True
+
+        def move(stage: str, target: str, stage_reason: str) -> bool:
+            current = self._stage_state_in_tx(idea_id, stage)
+            if current == target:
+                return True
+            return self._record_stage_transition_in_tx(
+                idea_id, stage, current, target, stage_reason, host, pid, at)
+
+        if from_state == "CLAIMED" and to_state == "IN_PROGRESS":
+            return (
+                move("training", "IN_PROGRESS", reason)
+                and move("evaluation", "PENDING", "pipeline_initialized")
+            )
+        if to_state == "QUEUED":
+            return all(
+                move(stage, "PENDING", "pipeline_reset_for_retry")
+                for stage in PIPELINE_STAGES
+                if self._stage_state_in_tx(idea_id, stage) != "NOT_STARTED"
+            )
+        if to_state == "FAILED":
+            evaluation = self._stage_state_in_tx(idea_id, "evaluation")
+            if evaluation == "IN_PROGRESS":
+                return move("evaluation", "FAILED", reason)
+            training = self._stage_state_in_tx(idea_id, "training")
+            ok = True
+            if training not in ("COMPLETE", "FAILED"):
+                ok = move("training", "FAILED", reason)
+            evaluation = self._stage_state_in_tx(idea_id, "evaluation")
+            if evaluation not in ("COMPLETE", "FAILED", "SKIPPED"):
+                ok = move(
+                    "evaluation", "SKIPPED", "training_did_not_complete") and ok
+            return ok
+        if to_state == "COMPLETE":
+            evaluation = self._stage_state_in_tx(idea_id, "evaluation")
+            if evaluation == "IN_PROGRESS":
+                return move("evaluation", "COMPLETE", reason)
+            training = self._stage_state_in_tx(idea_id, "training")
+            ok = True
+            if training == "IN_PROGRESS":
+                ok = move("training", "COMPLETE", reason)
+            evaluation = self._stage_state_in_tx(idea_id, "evaluation")
+            if evaluation in ("NOT_STARTED", "PENDING"):
+                ok = move(
+                    "evaluation", "SKIPPED", "no_evaluation_configured") and ok
+            return ok
+        return True
+
+    def record_stage_transition(
+        self,
+        idea_id: str,
+        stage: str,
+        from_state: str,
+        to_state: str,
+        reason: str,
+        host: Optional[str] = None,
+        pid: Optional[int] = None,
+    ) -> bool:
+        """Atomically record one non-global training/evaluation stage edge."""
+        import socket as _socket
+        host = host or _socket.gethostname()
+        pid = pid or os.getpid()
+
+        def _do_transition():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                global_row = self.conn.execute(
+                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                    (idea_id,),
+                ).fetchone()
+                global_state = global_row[0] if global_row else "UNKNOWN"
+                if global_state not in ("CLAIMED", "IN_PROGRESS"):
+                    self.conn.rollback()
+                    return False
+                at = self._transition_time(self.conn)
+                if not self._record_stage_transition_in_tx(
+                    idea_id, stage, from_state, to_state, reason, host, pid, at,
+                ):
+                    self.conn.rollback()
+                    return False
+                self.conn.commit()
+                logger.info(
+                    "[PIPELINE_TRANSITION] idea=%s stage=%s %s -> %s "
+                    "reason=\"%s\"", idea_id, stage, from_state, to_state,
+                    reason,
+                )
+                return True
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        return bool(_retry_on_busy(_do_transition))
+
+    def get_stage_state(self, idea_id: str, stage: str) -> str:
+        if stage not in PIPELINE_STAGES:
+            raise ValueError(f"unknown pipeline stage: {stage}")
+        row = _retry_on_busy(lambda: self.conn.execute(
+            "SELECT current_state FROM idea_stage_state "
+            "WHERE idea_id = ? AND stage = ?", (idea_id, stage),
+        ).fetchone())
+        return row[0] if row else "NOT_STARTED"
+
+    def get_stage_history(self, idea_id: str) -> List[Dict[str, Any]]:
+        rows = _retry_on_busy(lambda: self.conn.execute(
+            "SELECT stage, from_state, to_state, reason, host, pid, ts "
+            "FROM idea_stage_transitions WHERE idea_id = ? ORDER BY id ASC",
+            (idea_id,),
+        ).fetchall())
+        return [dict(row) for row in rows]
+
     def record_state_transition(self, idea_id: str, from_state: str, to_state: str,
                                 reason: Optional[str] = None,
                                 host: Optional[str] = None,
@@ -1637,6 +1989,13 @@ class IdeaLake:
                         transition_at,
                     )
 
+                if not self._sync_pipeline_for_global_transition(
+                    idea_id, from_state, to_state, reason or "", host, pid,
+                    sop_type, transition_at,
+                ):
+                    self.conn.rollback()
+                    return False
+
                 # Record transition
                 self.conn.execute(
                     "INSERT INTO idea_transitions "
@@ -1707,11 +2066,15 @@ class IdeaLake:
         rows = _retry_on_busy(_do_detect)
         return [(r[0], r[1], r[2]) for r in rows]
 
-    def catch_up_missing_terminals(self, results_dir) -> int:
-        """Find ideas in IN_PROGRESS with completed metrics.json and record COMPLETE transitions.
+    def catch_up_missing_terminals(
+        self, results_dir, *, evaluation_required: bool = False,
+    ) -> int:
+        """Reconcile completed training without overstating pipeline success.
 
-        Handles case where training completed but FSM transition was never recorded
-        (e.g., when eval_script was not configured).
+        With a configured evaluator, completed training advances only the
+        training stage; the global lifecycle stays IN_PROGRESS until a valid
+        evaluation terminal is recorded. Without evaluation it closes the
+        global lifecycle as before.
 
         Returns count of transitions recorded.
         """
@@ -1738,23 +2101,59 @@ class IdeaLake:
                     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
                     if metrics.get("status") == "COMPLETED":
                         try:
-                            self.record_state_transition(
-                                idea_id,
-                                from_state="IN_PROGRESS",
-                                to_state="COMPLETE",
-                                reason="catch_up_training_completed",
-                                host="catch_up",
-                                pid=None,
-                                sop_type="training",
-                            )
-                            recorded += 1
+                            if evaluation_required:
+                                stage = self.get_stage_state(
+                                    idea_id, "training")
+                                training_ok = stage == "COMPLETE" or (
+                                        stage in (
+                                            "NOT_STARTED", "PENDING",
+                                            "IN_PROGRESS",
+                                        ) and self.record_stage_transition(
+                                            idea_id,
+                                            stage="training",
+                                            from_state=stage,
+                                            to_state="COMPLETE",
+                                            reason=(
+                                                "reconcile_training_completed_"
+                                                "evaluation_pending"
+                                            ),
+                                            host="catch_up",
+                                            pid=None,
+                                        ))
+                                evaluation_stage = self.get_stage_state(
+                                    idea_id, "evaluation")
+                                evaluation_ok = evaluation_stage == "PENDING"
+                                if (training_ok
+                                        and evaluation_stage == "NOT_STARTED"):
+                                    evaluation_ok = self.record_stage_transition(
+                                        idea_id,
+                                        stage="evaluation",
+                                        from_state="NOT_STARTED",
+                                        to_state="PENDING",
+                                        reason="reconcile_evaluation_pending",
+                                        host="catch_up",
+                                        pid=None,
+                                    )
+                                if training_ok and evaluation_ok:
+                                    recorded += 1
+                            elif self.record_state_transition(
+                                    idea_id,
+                                    from_state="IN_PROGRESS",
+                                    to_state="COMPLETE",
+                                    reason="catch_up_training_completed",
+                                    host="catch_up",
+                                    pid=None,
+                                    sop_type="training",
+                            ):
+                                recorded += 1
                         except Exception:
                             pass
                 except (json.JSONDecodeError, OSError):
                     pass
 
         if recorded > 0:
-            logger.info("Catch-up: recorded %d missing COMPLETE transitions", recorded)
+            logger.info(
+                "Catch-up: reconciled %d completed training outputs", recorded)
         return recorded
 
     def reap_dead_claims(self, max_age_minutes: int = 15) -> int:

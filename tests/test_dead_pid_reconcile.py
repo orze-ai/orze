@@ -54,6 +54,32 @@ def test_running_without_claim_is_requeued(tmp_path, monkeypatch):
     lake.close()
 
 
+def test_completed_training_without_claim_waits_for_required_evaluation(
+        tmp_path, monkeypatch):
+    idea_id = "idea-eval-pending"
+    db = _make_lake_with_running(tmp_path, [idea_id])
+    results_dir = tmp_path / "results"
+    idea_dir = results_dir / idea_id
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "metrics.json").write_text(
+        json.dumps({"status": "COMPLETED"}), encoding="utf-8")
+    cfg = {
+        "results_dir": str(results_dir),
+        "idea_lake_db": str(db),
+        "eval_script": "eval.py",
+    }
+    monkeypatch.setattr(
+        "orze.engine.lifecycle._running_idea_pids", lambda: set())
+
+    assert reconcile_running_dead_pids(cfg) == 1
+    lake = IdeaLake(str(db))
+    assert lake.get_fsm_state(idea_id) == "IN_PROGRESS"
+    assert lake.get(idea_id)["status"] == "running"
+    assert lake.get_stage_state(idea_id, "training") == "COMPLETE"
+    assert lake.get_stage_state(idea_id, "evaluation") == "PENDING"
+    lake.close()
+
+
 def test_alive_running_not_touched(tmp_path, monkeypatch):
     db = _make_lake_with_running(tmp_path, ["idea-alive"])
     results_dir = tmp_path / "results"

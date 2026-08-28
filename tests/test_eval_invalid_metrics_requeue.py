@@ -18,8 +18,9 @@ from pathlib import Path
 
 import pytest
 
-from orze.engine.evaluator import check_active_evals
+from orze.engine.evaluator import check_active_evals, _write_eval_failure_marker
 from orze.engine.sealed import write_sealed_manifest
+from orze.idea_lake import IdeaLake
 
 
 class _FakeProc:
@@ -126,3 +127,33 @@ def test_unchanged_sealed_files_still_validate_and_complete_eval(tmp_path):
     ).read_text())
     assert receipt["outcome"] == "completed"
     assert receipt["reason_code"] == "evaluation_validated"
+
+
+def test_existing_failed_report_still_closes_evaluation_stage(tmp_path):
+    idea_id = "idea-script-wrote-failure"
+    idea_dir = tmp_path / idea_id
+    idea_dir.mkdir()
+    (idea_dir / EVAL_OUTPUT).write_text(
+        json.dumps({"status": "FAILED", "reason": "domain error"}),
+        encoding="utf-8",
+    )
+    lake = IdeaLake(tmp_path / "lake.db")
+    lake.insert(idea_id, "eval", "{}", "", status="queued")
+    assert lake.record_state_transition(idea_id, "QUEUED", "CLAIMED")
+    assert lake.record_state_transition(idea_id, "CLAIMED", "IN_PROGRESS")
+    assert lake.record_stage_transition(
+        idea_id, "training", "IN_PROGRESS", "COMPLETE",
+        "training_completed_evaluation_pending",
+    )
+    assert lake.record_stage_transition(
+        idea_id, "evaluation", "PENDING", "IN_PROGRESS",
+        "evaluation_launched",
+    )
+
+    _write_eval_failure_marker(
+        tmp_path, idea_id, EVAL_OUTPUT, "process exited 1", lake=lake)
+
+    assert lake.get_fsm_state(idea_id) == "FAILED"
+    assert lake.get_stage_state(idea_id, "training") == "COMPLETE"
+    assert lake.get_stage_state(idea_id, "evaluation") == "FAILED"
+    lake.close()

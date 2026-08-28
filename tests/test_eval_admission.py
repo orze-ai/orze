@@ -9,6 +9,7 @@ from orze.engine.evaluator import (
     launch_eval,
     run_post_scripts,
 )
+from orze.idea_lake import IdeaLake
 
 
 @pytest.mark.parametrize("metrics,reason", [
@@ -124,3 +125,41 @@ def test_completed_eval_reaches_masked_popen(tmp_path, monkeypatch):
     assert ep is not None
     assert observed["env"]["CUDA_VISIBLE_DEVICES"] == "4"
     ep.close_log()
+
+
+@pytest.mark.parametrize(
+    "report,global_state,evaluation_state",
+    [
+        ({"status": "COMPLETED"}, "COMPLETE", "COMPLETE"),
+        ({"status": "FAILED", "reason": "domain"}, "FAILED", "FAILED"),
+    ],
+)
+def test_existing_eval_output_is_reconciled_without_gpu_launch(
+        tmp_path, monkeypatch, report, global_state, evaluation_state):
+    idea_id = "idea-existing-eval"
+    idea_dir = tmp_path / idea_id
+    idea_dir.mkdir()
+    (idea_dir / "metrics.json").write_text(
+        json.dumps({"status": "COMPLETED"}), encoding="utf-8")
+    (idea_dir / "eval_report.json").write_text(
+        json.dumps(report), encoding="utf-8")
+    lake = IdeaLake(tmp_path / "lake.db")
+    lake.insert(idea_id, "existing", "{}", "", status="queued")
+    assert lake.reconcile_training_complete(
+        idea_id, "reconcile_test_training_completed")
+    gpu_checked = []
+    monkeypatch.setattr(
+        "orze.engine.evaluator._verify_gpu_free",
+        lambda *args: gpu_checked.append(True),
+    )
+
+    assert launch_eval(idea_id, 4, tmp_path, {
+        "eval_script": "/usr/bin/true",
+        "eval_output": "eval_report.json",
+    }, lake=lake) is None
+
+    assert gpu_checked == []
+    assert lake.get_fsm_state(idea_id) == global_state
+    assert lake.get_stage_state(idea_id, "training") == "COMPLETE"
+    assert lake.get_stage_state(idea_id, "evaluation") == evaluation_state
+    lake.close()

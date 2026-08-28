@@ -54,6 +54,14 @@ end-to-end claim. Any target without this evidence remains open.
   a contending external command never starts, a disjoint command executes, and
   a child retains ownership if its wrapper is killed. Project attainment stays
   open until every GPU-capable cron/Slurm entry is migrated to this boundary.
+- Recovery correctness: staged lifecycle implementation present. Training and
+  evaluation have separate current-state rows and immutable transition ledgers;
+  launch and terminal stage writes share the global lifecycle transaction.
+  Completed training remains globally `IN_PROGRESS` while evaluation is
+  pending, evaluation failure preserves `training=COMPLETE`, and retry resets
+  both stages. Fault injection proves a failed stage-audit write rolls back the
+  global launch edge. Project attainment still requires a production database
+  reconciliation receipt after deployment.
 - Every other dimension: open until its required production-path evidence is
   implemented and verified.
 

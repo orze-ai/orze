@@ -2102,6 +2102,27 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     account_terminal(
                         tp, "completed", "trainer_completed", ret)
             if (status == "COMPLETED" and lake is not None
+                    and cfg.get("eval_script")):
+                training_stage = lake.get_stage_state(
+                    tp.idea_id, "training")
+                persisted = training_stage == "COMPLETE"
+                if training_stage in ("NOT_STARTED", "PENDING", "IN_PROGRESS"):
+                    persisted = lake.record_stage_transition(
+                        tp.idea_id,
+                        stage="training",
+                        from_state=training_stage,
+                        to_state="COMPLETE",
+                        reason="training_completed_evaluation_pending",
+                        host=socket.gethostname(),
+                        pid=os.getpid(),
+                    )
+                if not persisted:
+                    raise RuntimeError(
+                        f"Could not persist training stage completion for "
+                        f"{tp.idea_id}; current stage is "
+                        f"{lake.get_stage_state(tp.idea_id, 'training')}"
+                    )
+            if (status == "COMPLETED" and lake is not None
                     and not cfg.get("eval_script")):
                 # With no separate evaluation phase, successful training is
                 # the terminal lifecycle event.  Persist it immediately;

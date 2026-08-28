@@ -152,6 +152,76 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
 
     output_path = results_dir / idea_id / eval_output
     if output_path.exists():
+        if lake is not None and lake.get_fsm_state(idea_id) == "IN_PROGRESS":
+            training_stage = lake.get_stage_state(idea_id, "training")
+            if training_stage != "COMPLETE" and training_stage in (
+                    "NOT_STARTED", "PENDING", "IN_PROGRESS"):
+                lake.record_stage_transition(
+                    idea_id,
+                    stage="training",
+                    from_state=training_stage,
+                    to_state="COMPLETE",
+                    reason="reconcile_validated_training_output",
+                    host=socket.gethostname(),
+                    pid=os.getpid(),
+                )
+            contract_ok, contract_reason = validate_benchmark_receipt(
+                idea_dir, cfg, values=load_benchmark_values(idea_dir, cfg),
+            )
+            try:
+                existing_report = json.loads(
+                    output_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                existing_report = None
+            if (isinstance(existing_report, dict)
+                    and existing_report.get("status") == "FAILED"):
+                contract_ok = False
+                contract_reason = "evaluation_report_declared_failed"
+            evaluation_stage = lake.get_stage_state(idea_id, "evaluation")
+            target_stage = "COMPLETE" if contract_ok else "FAILED"
+            if evaluation_stage != target_stage:
+                if evaluation_stage not in (
+                        "NOT_STARTED", "PENDING", "IN_PROGRESS") or not (
+                        lake.record_stage_transition(
+                            idea_id,
+                            stage="evaluation",
+                            from_state=evaluation_stage,
+                            to_state=target_stage,
+                            reason=(
+                                "reconcile_existing_valid_evaluation_output"
+                                if contract_ok else
+                                "reconcile_existing_invalid_evaluation_output"
+                            ),
+                            host=socket.gethostname(),
+                            pid=os.getpid(),
+                        )):
+                    raise RuntimeError(
+                        "existing_evaluation_stage_reconciliation_failed")
+            target_global = "COMPLETE" if contract_ok else "FAILED"
+            if not lake.record_state_transition(
+                    idea_id,
+                    from_state="IN_PROGRESS",
+                    to_state=target_global,
+                    reason=(
+                        "reconcile_existing_valid_evaluation_output"
+                        if contract_ok else
+                        f"reconcile_existing_evaluation_output:{contract_reason}"
+                    ),
+                    host=socket.gethostname(),
+                    pid=os.getpid(),
+                    sop_type="training",
+            ):
+                raise RuntimeError(
+                    "existing_evaluation_global_reconciliation_failed")
+            _record_eval_audit(
+                idea_dir,
+                "reconcile",
+                (
+                    "existing_evaluation_output_valid"
+                    if contract_ok else "existing_evaluation_output_invalid"
+                ),
+                detail=contract_reason,
+            )
         logger.info(
             "[EVAL_SKIP] idea=%s reason=output_exists path=%s",
             idea_id, output_path,
@@ -177,6 +247,7 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
 
     proc = None
     ep = None
+    stage_started = False
     try:
         bundle = None
         entrypoint = eval_script
@@ -191,6 +262,37 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         with gpu_execution_lease(gpu) as lease_fds:
             _assert_controller_runtime_attested(cfg)
             _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
+            if lake is not None:
+                training_stage = lake.get_stage_state(idea_id, "training")
+                if training_stage != "COMPLETE":
+                    if training_stage not in (
+                            "NOT_STARTED", "PENDING", "IN_PROGRESS") or not (
+                            lake.record_stage_transition(
+                                idea_id,
+                                stage="training",
+                                from_state=training_stage,
+                                to_state="COMPLETE",
+                                reason="reconcile_validated_training_output",
+                                host=socket.gethostname(),
+                                pid=os.getpid(),
+                            )):
+                        raise RuntimeError(
+                            "training_stage_not_ready_for_evaluation")
+                evaluation_stage = lake.get_stage_state(
+                    idea_id, "evaluation")
+                if evaluation_stage not in ("NOT_STARTED", "PENDING") or not (
+                        lake.record_stage_transition(
+                            idea_id,
+                            stage="evaluation",
+                            from_state=evaluation_stage,
+                            to_state="IN_PROGRESS",
+                            reason=f"evaluation_launched on gpu {gpu}",
+                            host=socket.gethostname(),
+                            pid=os.getpid(),
+                        )):
+                    raise RuntimeError(
+                        "evaluation_stage_transition_rejected")
+                stage_started = True
             env = os.environ.copy()
             for k, v in (cfg.get("train_extra_env") or {}).items():
                 env[k] = str(v)
@@ -212,10 +314,6 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
             except Exception:
                 log_fh.close()
                 raise
-
-        # v4.5: No explicit FSM transition for eval launch.
-        # Training + eval both occur within IN_PROGRESS state.
-        # Only final COMPLETE/FAILED is recorded (below).
 
         ep = EvalProcess(
             idea_id=idea_id, gpu=gpu, process=proc,
@@ -253,6 +351,11 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
             _record_eval_audit(
                 idea_dir, "reject", "evaluation_bundle_preflight_failed",
                 detail=str(e),
+            )
+        if stage_started and lake is not None:
+            _write_eval_failure_marker(
+                results_dir, idea_id, eval_output,
+                f"Evaluation launch failed: {type(e).__name__}", lake=lake,
             )
         logger.warning("Failed to launch eval for %s: %s", idea_id, e)
         return None
@@ -329,27 +432,29 @@ def _write_eval_failure_marker(results_dir: Path, idea_id: str,
         lake: IdeaLake instance for FSM transition recording (optional)
     """
     report_path = results_dir / idea_id / eval_output
-    if report_path.exists():
-        return  # Script already wrote a report
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps({
-        "status": "FAILED",
-        "reason": reason[:500],
-    }, indent=2))
-    logger.info("Wrote eval failure marker for %s", idea_id)
+    if not report_path.exists():
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps({
+            "status": "FAILED",
+            "reason": reason[:500],
+        }, indent=2))
+        logger.info("Wrote eval failure marker for %s", idea_id)
 
-    # Record FSM transition: IN_PROGRESS → FAILED (v4.5: generic for all SOP types)
+    # A script may have written its own failed report before exiting. The
+    # lifecycle transition is independent evidence and must still be closed.
     if lake:
         try:
-            lake.record_state_transition(
-                idea_id,
-                from_state="IN_PROGRESS",
-                to_state="FAILED",
-                reason=reason[:100],
-                host=socket.gethostname(),
-                pid=os.getpid(),
-                sop_type="training",
-            )
+            current_state = lake.get_fsm_state(idea_id)
+            if current_state == "IN_PROGRESS":
+                lake.record_state_transition(
+                    idea_id,
+                    from_state="IN_PROGRESS",
+                    to_state="FAILED",
+                    reason=reason[:100],
+                    host=socket.gethostname(),
+                    pid=os.getpid(),
+                    sop_type="training",
+                )
         except Exception as e:
             logger.warning("FSM transition failed (non-blocking): %s", e)
 
@@ -378,7 +483,7 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                 ep.close_log()
                 _write_eval_failure_marker(
                     results_dir, ep.idea_id, eval_output,
-                    f"Timed out after {elapsed/60:.0f}m")
+                    f"Timed out after {elapsed/60:.0f}m", lake=lake)
                 record_compute_terminal(
                     ep, results_dir / ep.idea_id, "interrupted",
                     "evaluation_timeout", phase="evaluation",

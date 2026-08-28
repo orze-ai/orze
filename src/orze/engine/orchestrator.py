@@ -933,7 +933,10 @@ class Orze(OrzePhaseMixin):
         # Full reconcile at startup: clear ALL stale queued ideas at once
         if self.lake and not managed_idea:
             try:
-                n = self.lake.reconcile_statuses(str(self.results_dir))
+                n = self.lake.reconcile_statuses(
+                    str(self.results_dir),
+                    evaluation_required=bool(cfg.get("eval_script")),
+                )
                 if n:
                     logger.info("Startup reconcile: updated %d stale ideas", n)
             except Exception as e:
@@ -1066,7 +1069,10 @@ class Orze(OrzePhaseMixin):
             if (not managed_idea and self.lake
                     and self.iteration % 20 == 0):
                 try:
-                    self.lake.catch_up_missing_terminals(self.results_dir)
+                    self.lake.catch_up_missing_terminals(
+                        self.results_dir,
+                        evaluation_required=bool(self.cfg.get("eval_script")),
+                    )
                 except Exception as e:
                     logger.debug("FSM catch-up failed: %s", e)
 

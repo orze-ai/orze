@@ -97,6 +97,38 @@ def test_filesystem_reconcile_records_direct_terminal_catchup(tmp_path):
     lake.close()
 
 
+def test_filesystem_reconcile_keeps_required_evaluation_open(tmp_path):
+    results = tmp_path / "results"
+    idea_dir = results / "idea-eval-required"
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "metrics.json").write_text(
+        json.dumps({"status": "COMPLETED", "score": 0.9}),
+        encoding="utf-8",
+    )
+    lake = IdeaLake(str(tmp_path / "ideas.db"))
+    lake.insert(
+        "idea-eval-required", "complete", "{}", "", status="queued")
+
+    assert lake.reconcile_statuses(
+        str(results), evaluation_required=True) == 1
+    assert lake.get("idea-eval-required")["status"] == "running"
+    assert lake.get_fsm_state("idea-eval-required") == "IN_PROGRESS"
+    assert lake.get_stage_state(
+        "idea-eval-required", "training") == "COMPLETE"
+    assert lake.get_stage_state(
+        "idea-eval-required", "evaluation") == "PENDING"
+    assert [
+        (row["from_state"], row["to_state"], row["reason"])
+        for row in lake.get_fsm_history("idea-eval-required")
+    ] == [
+        (
+            "QUEUED", "IN_PROGRESS",
+            "reconcile_filesystem_training_completed",
+        )
+    ]
+    lake.close()
+
+
 def test_terminal_reconciliation_rejects_conflicting_evidence(tmp_path):
     lake = IdeaLake(str(tmp_path / "ideas.db"))
     lake.insert("idea-failed", "failed", "{}", "", status="failed")

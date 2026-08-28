@@ -172,6 +172,7 @@ def reconcile_stale_running(cfg: dict) -> None:
         recoveries = []
         others = []
         live_legacy = _running_idea_pids()
+        evaluation_required = bool(cfg.get("eval_script"))
 
         def _metrics_target(idea_id):
             metrics_path = results_dir / idea_id / "metrics.json"
@@ -182,7 +183,10 @@ def reconcile_stale_running(cfg: dict) -> None:
             except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 return None
             target = {
-                "COMPLETED": "COMPLETE",
+                "COMPLETED": (
+                    "EVALUATION_PENDING"
+                    if evaluation_required else "COMPLETE"
+                ),
                 "FAILED": "FAILED",
             }.get(metrics.get("status"))
             # This function is only consulted after the recorded owner and
@@ -271,6 +275,7 @@ def reconcile_stale_running(cfg: dict) -> None:
                             continue
                     metrics_status = {
                         "COMPLETE": "COMPLETED",
+                        "EVALUATION_PENDING": "COMPLETED",
                         "FAILED": "FAILED",
                     }.get(target)
                     atomic_write(
@@ -306,7 +311,10 @@ def reconcile_stale_running(cfg: dict) -> None:
                         recovery_pgid = recovery.get("trainer_pgid")
                         target = recovery.get("target_state")
                         if (recovery.get("trainer_proven_stopped") is not True
-                                or target not in ("QUEUED", "COMPLETE", "FAILED")
+                                or target not in (
+                                    "QUEUED", "EVALUATION_PENDING", "COMPLETE",
+                                    "FAILED",
+                                )
                                 or (recovery_pgid is not None
                                     and process_group_members(int(recovery_pgid)))):
                             raise ValueError("recovery WAL does not prove a stopped trainer")
@@ -347,6 +355,54 @@ def reconcile_stale_running(cfg: dict) -> None:
                     )
                     persisted = lake.reconcile_terminal_state(
                         idea_id, target_state, reason)
+                elif target_state == "EVALUATION_PENDING":
+                    if current_state == "CLAIMED":
+                        persisted = lake.record_state_transition(
+                            idea_id,
+                            "CLAIMED",
+                            "IN_PROGRESS",
+                            reason="reconcile_training_process_started",
+                            host=hostname,
+                            pid=os.getpid(),
+                            sop_type="training",
+                        )
+                        current_state = lake.get_fsm_state(idea_id)
+                    else:
+                        persisted = current_state == "IN_PROGRESS"
+                    if persisted:
+                        training_stage = lake.get_stage_state(
+                            idea_id, "training")
+                        persisted = training_stage == "COMPLETE" or (
+                            training_stage in (
+                                "NOT_STARTED", "PENDING", "IN_PROGRESS",
+                            ) and lake.record_stage_transition(
+                                idea_id,
+                                stage="training",
+                                from_state=training_stage,
+                                to_state="COMPLETE",
+                                reason=(
+                                    "reconcile_training_completed_"
+                                    "evaluation_pending"
+                                ),
+                                host=hostname,
+                                pid=os.getpid(),
+                            )
+                        )
+                    if persisted:
+                        evaluation_stage = lake.get_stage_state(
+                            idea_id, "evaluation")
+                        if evaluation_stage == "NOT_STARTED":
+                            persisted = lake.record_stage_transition(
+                                idea_id,
+                                stage="evaluation",
+                                from_state="NOT_STARTED",
+                                to_state="PENDING",
+                                reason="reconcile_evaluation_pending",
+                                host=hostname,
+                                pid=os.getpid(),
+                            )
+                        else:
+                            persisted = evaluation_stage == "PENDING"
                 elif current_state in ("CLAIMED", "IN_PROGRESS"):
                     persisted = lake.record_state_transition(
                         idea_id,
@@ -456,6 +512,7 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
     # 65: standard distributed-task-queue grace is 120s.
     grace_seconds = 180
     now_ts = time.time()
+    evaluation_required = bool(cfg.get("eval_script"))
 
     n_completed = 0
     n_orphaned = 0
@@ -485,6 +542,51 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                 return (isinstance(metrics, dict)
                         and metrics.get("status") == "COMPLETED")
 
+            def reconcile_completed_training() -> bool:
+                if not evaluation_required:
+                    return lake.set_status(idea_id, "completed")
+                current = lake.get_fsm_state(idea_id)
+                if current == "CLAIMED":
+                    if not lake.record_state_transition(
+                            idea_id, "CLAIMED", "IN_PROGRESS",
+                            reason="reconcile_training_process_started",
+                            host=hostname, pid=os.getpid(),
+                            sop_type="training"):
+                        return False
+                    current = "IN_PROGRESS"
+                if current != "IN_PROGRESS":
+                    return False
+                stage = lake.get_stage_state(idea_id, "training")
+                training_ok = stage == "COMPLETE"
+                if stage in ("NOT_STARTED", "PENDING", "IN_PROGRESS"):
+                    training_ok = lake.record_stage_transition(
+                        idea_id,
+                        stage="training",
+                        from_state=stage,
+                        to_state="COMPLETE",
+                        reason=(
+                            "reconcile_training_completed_"
+                            "evaluation_pending"
+                        ),
+                        host=hostname,
+                        pid=os.getpid(),
+                    )
+                if not training_ok:
+                    return False
+                evaluation_stage = lake.get_stage_state(
+                    idea_id, "evaluation")
+                if evaluation_stage == "NOT_STARTED":
+                    return lake.record_stage_transition(
+                        idea_id,
+                        stage="evaluation",
+                        from_state="NOT_STARTED",
+                        to_state="PENDING",
+                        reason="reconcile_evaluation_pending",
+                        host=hostname,
+                        pid=os.getpid(),
+                    )
+                return evaluation_stage == "PENDING"
+
             # ---- Ownership check (multi-host safety) ----
             if claim_path.exists():
                 try:
@@ -499,7 +601,7 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                 # Completion may flush immediately before claim cleanup. It is
                 # the only terminal filesystem evidence accepted here.
                 if completed_on_disk():
-                    if lake.set_status(idea_id, "completed"):
+                    if reconcile_completed_training():
                         n_completed += 1
                 elif lake.set_status(idea_id, "queued"):
                     n_requeued += 1
@@ -529,7 +631,7 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
 
             # ---- Completed-on-disk check ----
             if completed_on_disk():
-                if lake.set_status(idea_id, "completed"):
+                if reconcile_completed_training():
                     n_completed += 1
                 continue
 
@@ -557,9 +659,11 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
             else:
                 n_warned += 1
         if n_completed:
+            target = (
+                "evaluation pending" if evaluation_required else "completed")
             logger.info(
-                "Reconciled %d 'running' rows (completed on disk) -> completed",
-                n_completed)
+                "Reconciled %d 'running' rows (training completed on disk) "
+                "-> %s", n_completed, target)
         if n_requeued:
             logger.info(
                 "Reconciled %d 'running' rows (no claim.json) -> queued",
