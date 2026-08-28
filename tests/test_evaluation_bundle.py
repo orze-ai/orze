@@ -78,6 +78,21 @@ def test_bundle_survives_concurrent_worktree_edit(tmp_path):
     assert verify_evaluation_bundle(idea_dir, cfg).sha256 == bundle.sha256
 
 
+def test_bundle_paths_are_absolute_for_relative_idea_directory(
+        tmp_path, monkeypatch):
+    cfg = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    relative = Path("results/idea-relative")
+    relative.mkdir(parents=True)
+
+    bundle = stage_evaluation_bundle(relative, cfg)
+
+    assert bundle.root.is_absolute()
+    assert bundle.entrypoint.is_absolute()
+    assert bundle.manifest_path.is_absolute()
+    assert verify_evaluation_bundle(relative, cfg).root == bundle.root
+
+
 def test_bundle_rejects_source_drift_before_copy(tmp_path):
     cfg = _project(tmp_path)
     (tmp_path / "scripts/child.py").write_text(

@@ -216,6 +216,7 @@ def verify_evaluation_bundle(
     idea_dir: Path, cfg: Mapping,
 ) -> PreparedEvaluationBundle:
     """Verify the exact content-addressed bundle already staged for an idea."""
+    idea_dir = Path(idea_dir).resolve()
     expected_manifest = _manifest_for(cfg)
     identity = _manifest_sha256(expected_manifest)
     bundle_parent = Path(idea_dir) / BUNDLE_DIR
@@ -254,7 +255,7 @@ def stage_evaluation_bundle(
     expected_manifest = _manifest_for(cfg)
     identity = _manifest_sha256(expected_manifest)
     project_root = Path(cfg.get("_project_root") or ".").resolve()
-    idea_dir = Path(idea_dir)
+    idea_dir = Path(idea_dir).resolve()
     bundle_parent = idea_dir / BUNDLE_DIR
     if idea_dir.is_symlink() or bundle_parent.is_symlink():
         raise EvaluationBundleError("bundle_directory_symlink_forbidden")
