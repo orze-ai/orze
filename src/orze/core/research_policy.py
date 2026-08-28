@@ -161,7 +161,7 @@ def validate_batch_decision_contract(
         return None
     if not isinstance(contract, dict):
         return "batch_decision_contract_missing"
-    if set(contract) != {
+    required_fields = {
         "uncertainty",
         "metric",
         "baseline",
@@ -169,7 +169,9 @@ def validate_batch_decision_contract(
         "threshold",
         "on_failure",
         "max_experiments",
-    }:
+    }
+    if set(contract) not in (
+            required_fields, required_fields | {"required_successes"}):
         return "batch_decision_contract_fields_invalid"
     if not _bounded_statement(contract.get("uncertainty")):
         return "batch_decision_contract_uncertainty_invalid"
@@ -239,6 +241,11 @@ def validate_batch_decision_contract(
     if (isinstance(idea_count, bool) or not isinstance(idea_count, int)
             or idea_count < 1 or experiments != idea_count):
         return "batch_decision_contract_count_mismatch"
+    required_successes = contract.get("required_successes", 1)
+    if (isinstance(required_successes, bool)
+            or not isinstance(required_successes, int)
+            or not 1 <= required_successes <= experiments):
+        return "batch_decision_contract_success_count_invalid"
     return None
 
 

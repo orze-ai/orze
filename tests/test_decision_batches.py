@@ -32,8 +32,9 @@ def _cfg(tmp_path):
     }
 
 
-def _contract(on_failure="redirect_family", threshold=0.7):
-    return {
+def _contract(on_failure="redirect_family", threshold=0.7,
+              required_successes=None):
+    contract = {
         "uncertainty": "Whether this bounded family improves qualified score.",
         "metric": "score",
         "baseline": 0.5,
@@ -42,6 +43,9 @@ def _contract(on_failure="redirect_family", threshold=0.7):
         "on_failure": on_failure,
         "max_experiments": 2,
     }
+    if required_successes is not None:
+        contract["required_successes"] = required_successes
+    return contract
 
 
 def _ideas():
@@ -193,6 +197,35 @@ def test_qualified_threshold_success_releases_next_batch(tmp_path):
     with pytest.raises(ValueError, match="idea_reused"):
         stage_decision_contract(
             results_dir, cfg, 8, _contract(threshold=0.8), _ideas())
+
+
+def test_required_successes_prevents_best_of_n_batch_success(tmp_path):
+    db_path = _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "running", "data", "IN_PROGRESS"),
+    ])
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    cfg = _cfg(tmp_path)
+    contract = _contract(
+        on_failure="stop_branch", threshold=0.7, required_successes=2)
+    path, payload = stage_decision_contract(
+        results_dir, cfg, 7, contract, _ideas())
+    admit_decision_contract(path, payload, 2, cfg)
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "completed", "data", "COMPLETE"),
+    ])
+    _write_score(results_dir, "idea-alpha", 0.8)
+    _write_score(results_dir, "idea-beta", 0.6)
+
+    gate = reconcile_decision_batches(results_dir, cfg)
+
+    assert gate["allow_new_batch"] is False
+    assert gate["reason"] == "decision_contract_stop_active"
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    assert receipt["status"] == "failed_stopped"
+    assert receipt["qualified_success_count"] == 1
 
 
 def test_failed_batch_redirects_and_mechanically_blocks_families(tmp_path):

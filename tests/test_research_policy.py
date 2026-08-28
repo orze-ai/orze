@@ -35,6 +35,12 @@ def test_valid_batch_decision_contract_is_accepted():
         _contract(), _cfg(), idea_count=3, qualified_best=5.4) is None
 
 
+def test_contract_can_require_replicated_success_without_best_of_n():
+    assert validate_batch_decision_contract(
+        _contract(required_successes=3), _cfg(), idea_count=3,
+        qualified_best=5.4) is None
+
+
 def test_minimum_effect_boundary_tolerates_float_representation():
     assert validate_batch_decision_contract(
         _contract(threshold=5.38), _cfg(), idea_count=3,
@@ -68,6 +74,12 @@ def test_minimum_effect_boundary_tolerates_float_representation():
          "batch_decision_contract_budget_invalid"),
         (_contract(max_experiments=2),
          "batch_decision_contract_count_mismatch"),
+        (_contract(required_successes=True),
+         "batch_decision_contract_success_count_invalid"),
+        (_contract(required_successes=0),
+         "batch_decision_contract_success_count_invalid"),
+        (_contract(required_successes=4),
+         "batch_decision_contract_success_count_invalid"),
     ],
 )
 def test_invalid_batch_decision_contract_fails_closed(contract, reason):

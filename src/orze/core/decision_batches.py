@@ -180,11 +180,15 @@ def _validate_receipt(payload, path: Path, cfg: Mapping) -> str | None:
         resolved_at = _parse_time(payload.get("resolved_at"))
         if resolved_at is None or resolved_at < admitted_at:
             return "decision_receipt_resolution_invalid"
-        if status == "succeeded" and (successes < 1 or families):
+        required_successes = contract.get("required_successes", 1)
+        if status == "succeeded" and (
+                successes < required_successes or families):
             return "decision_receipt_resolution_invalid"
-        if status == "failed_redirect" and (successes != 0 or not families):
+        if status == "failed_redirect" and (
+                successes >= required_successes or not families):
             return "decision_receipt_resolution_invalid"
-        if status == "failed_stopped" and (successes != 0 or families):
+        if status == "failed_stopped" and (
+                successes >= required_successes or families):
             return "decision_receipt_resolution_invalid"
         if payload.get("resolution_sha256") != _resolution_hash(payload):
             return "decision_receipt_resolution_hash_invalid"
@@ -412,7 +416,8 @@ def reconcile_decision_batches(
                 "qualified_success_count": len(successes),
                 "blocked_families": [],
             })
-            if successes:
+            required_successes = contract.get("required_successes", 1)
+            if len(successes) >= required_successes:
                 resolved["status"] = "succeeded"
             elif contract["on_failure"] == "redirect_family":
                 families = sorted({

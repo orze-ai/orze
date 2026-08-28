@@ -106,6 +106,10 @@ baseline, direction-correct finite threshold, experiment count, and either a
 `stop_branch` or `redirect_family` failure action. The threshold must improve
 on the authoritative baseline by at least `min_decision_effect`; a stale,
 invented, already-achieved, or noise-sized target fails before queue insertion.
+`required_successes` may preregister how many independent members must pass
+before the batch succeeds (from one through `max_experiments`). Producers emit
+this field explicitly; receipts created before the field existed retain the
+historical one-success behavior.
 Accepted contracts are content-bound to their idea IDs under
 `.orze/policy/decision_contracts/` and become `admitted` only after the atomic
 queue append succeeds. This is a local experiment decision rule, not an
@@ -117,8 +121,9 @@ an empty baseline.
 Only one staged or admitted decision batch may exist at a time. Before another
 producer call, Orze reconciles every admitted idea against the read-only audited
 Idea Lake and the same current evidence qualifier used for steering. Active
-ideas keep the gate closed. When all are terminal, at least one qualified result
-must satisfy the declared comparator and threshold to release the branch.
+ideas keep the gate closed. When all are terminal, the preregistered number of
+qualified results must satisfy the declared comparator and threshold to release
+the branch.
 Artifact-only, lifecycle-conflicting, incomplete, non-finite, or leakage-tainted
 results cannot satisfy it. `redirect_family` permanently rejects the admitted
 batch's normalized approach families from later autonomous batches while the
