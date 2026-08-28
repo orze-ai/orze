@@ -48,5 +48,27 @@ end-to-end claim. Any target without this evidence remains open.
   content-addressed bundle; bundle identity is bound into benchmark provenance
   and receipts. Positive launch, source-drift, symlink, bundle-tamper, missing
   receipt binding, and concurrent working-tree mutation cases are tested.
+- GPU ownership primitive: implementation present. Orze controllers acquire
+  kernel leases for their full physical-GPU scope, and external schedulers can
+  participate through `orze gpu-lease-run --gpus 4,5 -- <command>`. Tests prove
+  a contending external command never starts, a disjoint command executes, and
+  a child retains ownership if its wrapper is killed. Project attainment stays
+  open until every GPU-capable cron/Slurm entry is migrated to this boundary.
 - Every other dimension: open until its required production-path evidence is
   implemented and verified.
+
+## External scheduler integration
+
+Every process capable of selecting or exposing a GPU must acquire the same
+physical-device leases. For example:
+
+```bash
+orze gpu-lease-run --gpus 4,5,6,7 -- python scripts/drain_queue.py
+```
+
+The scope must cover every physical GPU the wrapped command may select. Lease
+contention exits with status 75 and never starts the command, allowing cron or a
+batch scheduler to retry safely. The wrapper passes the lease descriptors into
+the child; killing only the wrapper cannot create an unleased detached job.
+GPU-capable commands that bypass this boundary remain outside Orze's ownership
+guarantee and must fail the project acceptance audit.

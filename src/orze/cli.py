@@ -202,6 +202,21 @@ Examples:
         help="Max training time for this idea",
     )
 
+    # gpu-lease-run — make external schedulers participate in the same
+    # physical-GPU exclusion locks as every Orze controller/child.
+    lease_run_parser = subparsers.add_parser(
+        "gpu-lease-run",
+        help="Run an external command under exclusive physical-GPU leases",
+    )
+    lease_run_parser.add_argument(
+        "--gpus", required=True,
+        help="Explicit comma-separated physical GPU IDs",
+    )
+    lease_run_parser.add_argument(
+        "lease_command", nargs=argparse.REMAINDER,
+        help="Command and arguments, conventionally after --",
+    )
+
     # start
     start_parser = subparsers.add_parser(
         "start", help="Start orze as a background daemon")
@@ -852,6 +867,39 @@ Examples:
             f"lifecycle={outcome['lifecycle_state']}"
         )
         return 0
+
+    if command == "gpu-lease-run":
+        from orze.core.gpu_lease import (
+            GpuLeaseError,
+            run_with_gpu_leases,
+            safe_gpu_lease_reason,
+        )
+        try:
+            raw_ids = [part.strip() for part in args.gpus.split(",")]
+            if not raw_ids or any(not part for part in raw_ids):
+                raise ValueError
+            gpu_ids = [int(part) for part in raw_ids]
+            if any(gpu < 0 for gpu in gpu_ids):
+                raise ValueError
+        except ValueError:
+            print("ERROR: --gpus must be explicit non-negative integer IDs")
+            return 2
+        lease_command = list(args.lease_command)
+        if lease_command[:1] == ["--"]:
+            lease_command = lease_command[1:]
+        if not lease_command:
+            print("ERROR: gpu-lease-run requires a command after --")
+            return 2
+        try:
+            return run_with_gpu_leases(gpu_ids, lease_command)
+        except GpuLeaseError as exc:
+            print(
+                "ERROR: external GPU ownership rejected: "
+                f"{safe_gpu_lease_reason(exc)}"
+            )
+            # EX_TEMPFAIL: an external scheduler should retry contention but
+            # must not run the unleased command.
+            return 75
 
     if command == "stop":
         from orze.lifecycle import do_stop

@@ -13,6 +13,7 @@ from orze.core.gpu_lease import (
     GpuLeaseError,
     acquire_gpu_leases,
     gpu_execution_lease,
+    run_with_gpu_leases,
     safe_gpu_lease_reason,
 )
 from orze.engine.smoke_test import _find_free_gpu
@@ -106,6 +107,68 @@ def test_inherited_descriptor_keeps_lease_after_launcher_releases_parent_copy():
         child.wait(timeout=5)
 
     assert _attempt_in_fresh_process(_gpu(4)).returncode == 0
+
+
+def test_external_scheduler_command_cannot_bypass_controller_lease(tmp_path):
+    marker = tmp_path / "must-not-run"
+    held = acquire_gpu_leases([_gpu(5)])
+    try:
+        command = [
+            sys.executable, "-m", "orze.cli", "gpu-lease-run",
+            "--gpus", str(_gpu(5)), "--",
+            sys.executable, "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).touch()",
+        ]
+        attempt = subprocess.run(
+            command, capture_output=True, text=True, env=_child_env())
+    finally:
+        held.close()
+
+    assert attempt.returncode == 75
+    assert "gpu_lease_contended" in attempt.stdout
+    assert not marker.exists()
+
+
+def test_external_scheduler_command_runs_only_while_lease_is_held(tmp_path):
+    marker = tmp_path / "ran"
+    command = [
+        sys.executable, "-c",
+        f"from pathlib import Path; Path({str(marker)!r}).touch()",
+    ]
+    assert run_with_gpu_leases([_gpu(6)], command) == 0
+    assert marker.exists()
+    assert _attempt_in_fresh_process(_gpu(6)).returncode == 0
+
+
+def test_external_child_inherits_lease_if_wrapper_is_killed():
+    gpu = _gpu(7)
+    code = (
+        "import sys; "
+        "from orze.core.gpu_lease import run_with_gpu_leases; "
+        f"raise SystemExit(run_with_gpu_leases([{gpu}], "
+        "[sys.executable, '-c', 'import time; time.sleep(1.5)']))"
+    )
+    wrapper = subprocess.Popen(
+        [sys.executable, "-c", code], env=_child_env())
+    try:
+        import time
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            if _attempt_in_fresh_process(gpu).returncode != 0:
+                break
+            time.sleep(0.02)
+        else:
+            pytest.fail("wrapper never acquired GPU lease")
+        wrapper.kill()
+        wrapper.wait(timeout=5)
+        # The detached child inherited the descriptor and retains the lease.
+        assert _attempt_in_fresh_process(gpu).returncode != 0
+        time.sleep(1.7)
+        assert _attempt_in_fresh_process(gpu).returncode == 0
+    finally:
+        if wrapper.poll() is None:
+            wrapper.kill()
+            wrapper.wait(timeout=5)
 
 
 def test_smoke_gpu_probe_is_restricted_to_explicit_scope(monkeypatch):

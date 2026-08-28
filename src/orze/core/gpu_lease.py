@@ -13,7 +13,9 @@ import fcntl
 import json
 import os
 import re
+import signal
 import stat
+import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -140,6 +142,11 @@ class GpuLeaseSet:
     def gpus(self) -> tuple[int, ...]:
         return tuple(lease.gpu for lease in self._leases)
 
+    @property
+    def fds(self) -> tuple[int, ...]:
+        """Descriptors a supervised child must inherit to retain ownership."""
+        return tuple(lease.fd for lease in self._leases)
+
     def close(self) -> None:
         if self._closed:
             return
@@ -174,6 +181,49 @@ def acquire_gpu_leases(gpu_ids: Sequence[int]) -> GpuLeaseSet:
                 lease.close()
             raise
     return GpuLeaseSet(acquired)
+
+
+def run_with_gpu_leases(
+    gpu_ids: Sequence[int], command: Sequence[str], *,
+    cwd: str | None = None, env: dict[str, str] | None = None,
+) -> int:
+    """Run one external scheduler command under Orze's GPU ownership locks.
+
+    This is the participation boundary for cron, Slurm wrappers, and project
+    scripts that do not launch through the Orze controller.  The lease FDs are
+    inherited by the child, so a killed wrapper cannot release ownership while
+    detached GPU work remains alive.
+    """
+    if (isinstance(command, (str, bytes)) or not command
+            or not all(isinstance(part, str) and part for part in command)):
+        raise GpuLeaseError("gpu_lease_command_invalid")
+    leases = acquire_gpu_leases(gpu_ids)
+    child: subprocess.Popen | None = None
+    previous_handlers: dict[int, object] = {}
+
+    def forward(signum, _frame):
+        if child is None or child.poll() is not None:
+            return
+        try:
+            os.killpg(child.pid, signum)
+        except ProcessLookupError:
+            pass
+
+    try:
+        child = subprocess.Popen(
+            list(command), cwd=cwd, env=env,
+            pass_fds=leases.fds, start_new_session=True,
+        )
+        if threading.current_thread() is threading.main_thread():
+            for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+                previous_handlers[signum] = signal.getsignal(signum)
+                signal.signal(signum, forward)
+        return_code = child.wait()
+        return return_code if return_code >= 0 else 128 - return_code
+    finally:
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
+        leases.close()
 
 
 @contextlib.contextmanager
