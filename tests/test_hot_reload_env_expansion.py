@@ -55,6 +55,15 @@ class HotReloadEnvExpansionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             cfg_path = Path(td) / "orze.yaml"
             cfg_path.write_text(cfg_yaml)
+            # Bind reload to a sandbox dotenv next to the sandbox config.
+            # Without this fixture, find_dotenv() legitimately falls back to
+            # the caller's CWD and a test launched from a real project can read
+            # and print that project's notification credentials on failure.
+            (Path(td) / ".env").write_text(
+                "TELEGRAM_BOT_TOKEN=real-token-12345\n"
+                "TELEGRAM_CHAT_ID=9999\n",
+                encoding="utf-8",
+            )
 
             self_ = MagicMock(spec=Orze)
             self_.cfg = {

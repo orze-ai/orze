@@ -48,7 +48,7 @@ import secrets
 import sys
 from typing import Dict, List, Optional
 from pathlib import Path
-from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
+from orze.core.fs import _fs_lock, _fs_unlock, atomic_create, atomic_write
 from orze.engine.process import capture_process_identity, process_is_running
 
 logger = logging.getLogger("orze")
@@ -205,7 +205,13 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
         # Recovery still handles legacy claims conservatively; a normal Linux
         # launch should always make this identity available.
         pass
-    atomic_write(idea_dir / "claim.json", json.dumps(claim_info, indent=2))
+    # The directory may legitimately pre-exist without terminal evidence, so
+    # mkdir alone cannot be the ownership primitive. Publish claim.json with an
+    # exclusive atomic link: exactly one contender wins and readers never see
+    # a partially-written claim.
+    claim_path = idea_dir / "claim.json"
+    if not atomic_create(claim_path, json.dumps(claim_info, indent=2)):
+        return False
 
     if lake:
         try:
@@ -225,7 +231,7 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
             # claim.json behind after a rejected DB claim strands the idea and
             # makes a later scheduler believe another worker owns it.
             try:
-                (idea_dir / "claim.json").unlink(missing_ok=True)
+                claim_path.unlink(missing_ok=True)
             except OSError:
                 pass
             logger.warning("Claim rollback for %s: %s", idea_id, exc)

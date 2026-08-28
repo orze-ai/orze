@@ -100,6 +100,9 @@ orze upgrade                  # reinstall from source + restart daemon
 orze admin migrate            # migrate legacy layout to .orze/
 orze service install          # auto-restart on crash (systemd)
 
+# CPU-only harness efficiency receipt
+python -m orze.benchmarks.harness_efficiency --work-dir .orze
+
 # Pro
 orze pro activate <key>       # activate license
 orze pro status               # check license info
@@ -154,7 +157,8 @@ ssh node2 "cd /nfs/project && orze start"
 
 ## Key Features
 
-- **Scales to 1M+ Experiments** — SQLite-backed job queue with O(log N) scheduling
+- **Measured control-plane scaling** — indexed queue/config-identity paths with
+  a reproducible [efficiency acceptance receipt](docs/harness-efficiency.md)
 - **Config Inheritance** — Child ideas inherit parent configs; specify only what changes
 - **HP Sweep** — `lr: [1e-4, 3e-4]` auto-expands into all combinations
 - **Failure Protection** — Stops automatically when failure rates spike

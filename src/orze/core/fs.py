@@ -12,6 +12,10 @@ CALLING SPEC:
         Write content atomically via tmp+rename with fsync. Safe for Lustre
         shared filesystems where multiple nodes may read concurrently.
 
+    atomic_create(path: Path, content: str) -> bool
+        Publish complete content only when path does not already exist. Uses
+        an atomic hard-link commit so concurrent claimers have one winner.
+
     locked_append(path: Path, content: str, lock_dir: Path,
                   stale_seconds: float = 60, after_append=None) -> bool
         Append and fsync only while holding the named filesystem lock. Returns
@@ -144,11 +148,18 @@ def atomic_write(path: Path, content: str):
     import errno
     path.parent.mkdir(parents=True, exist_ok=True)
     safe_host = "".join(c if c.isalnum() else "_" for c in socket.gethostname())
-    tmp = path.with_name(f"{path.name}.{safe_host}.{os.getpid()}.tmp")
+    tmp = path.with_name(
+        f"{path.name}.{safe_host}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+    )
     # Write with explicit fsync before close so other Lustre clients see full content
-    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    fd = os.open(
+        str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644
+    )
     try:
-        os.write(fd, content.encode("utf-8"))
+        encoded = content.encode("utf-8")
+        written = 0
+        while written < len(encoded):
+            written += os.write(fd, encoded[written:])
         os.fsync(fd)
     except OSError as e:
         os.close(fd)
@@ -166,13 +177,70 @@ def atomic_write(path: Path, content: str):
             os.close(fd)
         except OSError:
             pass  # already closed in the except branch
-    tmp.replace(path)
+    try:
+        tmp.replace(path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
     # fsync parent directory so the rename is durable and visible on other nodes
     dir_fd = os.open(str(path.parent), os.O_RDONLY)
     try:
         os.fsync(dir_fd)
     finally:
         os.close(dir_fd)
+
+
+def atomic_create(path: Path, content: str) -> bool:
+    """Atomically create one complete file without replacing a winner.
+
+    The content is first fsynced to a unique file in the destination
+    directory. ``link(2)`` then publishes it under ``path`` only if no entry
+    exists there; that namespace operation is atomic across processes and
+    hosts on Orze's supported shared filesystems. Readers therefore see either
+    no file or the complete file, never the partial bytes of an O_EXCL writer.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    safe_host = "".join(
+        c if c.isalnum() else "_" for c in socket.gethostname()
+    )
+    tmp = path.with_name(
+        f".{path.name}.{safe_host}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+    )
+    fd = os.open(
+        str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644
+    )
+    try:
+        encoded = content.encode("utf-8")
+        written = 0
+        while written < len(encoded):
+            written += os.write(fd, encoded[written:])
+        os.fsync(fd)
+    except Exception:
+        try:
+            os.close(fd)
+        finally:
+            tmp.unlink(missing_ok=True)
+        raise
+    else:
+        os.close(fd)
+
+    published = False
+    try:
+        os.link(str(tmp), str(path))
+        published = True
+    except FileExistsError:
+        return False
+    finally:
+        tmp.unlink(missing_ok=True)
+
+    if published:
+        dir_fd = os.open(str(path.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    return published
 
 
 def locked_append(path: Path, content: str, lock_dir: Path,

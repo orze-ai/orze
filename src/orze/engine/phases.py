@@ -12,6 +12,7 @@ CALLING SPEC:
     Each method accesses orchestrator state via self.
 """
 
+import copy
 import hashlib
 import json
 import logging
@@ -469,6 +470,37 @@ def _run_reflection_for_ingested(lake, ingested_ids, substrate_cfg, results_dir)
 class OrzePhaseMixin:
     """Phase methods for the main orchestration loop."""
 
+    def _parse_lake_queue_config(self, idea_id: str, config_yaml: str) -> dict:
+        """Parse one queued config once per exact source value.
+
+        Queue rows are revisited every poll. Returning a deep copy prevents a
+        downstream sweep/normalizer from mutating the cached source of truth.
+        """
+        cache = getattr(self, "_queue_config_parse_cache", None)
+        if cache is None:
+            cache = {}
+            self._queue_config_parse_cache = cache
+        cached = cache.get(idea_id)
+        if cached is not None and cached[0] == config_yaml:
+            return copy.deepcopy(cached[1])
+        try:
+            parsed = yaml.safe_load(config_yaml) or {}
+        except yaml.YAMLError:
+            parsed = {}
+        if not isinstance(parsed, dict):
+            parsed = {}
+        cache[idea_id] = (config_yaml, parsed)
+        return copy.deepcopy(parsed)
+
+    def _prune_lake_queue_config_cache(self, active_ids) -> None:
+        cache = getattr(self, "_queue_config_parse_cache", None)
+        if not cache:
+            return
+        active = set(active_ids)
+        for idea_id in tuple(cache):
+            if idea_id not in active:
+                del cache[idea_id]
+
     def _sync_managed_idea(self, cfg, idea_id):
         """Load one already-admitted queue row without touching other ideas."""
         from orze.core.managed_run import prepare_managed_idea_run
@@ -533,18 +565,19 @@ class OrzePhaseMixin:
             # finishes.  Include every already-admitted non-failed row and
             # update this map after each insert, so one sync batch cannot
             # manufacture deterministic replicas under different IDs.
+            pending_hashes = {
+                idea_id: self._config_override_hash(idea.get("config", {}))
+                for idea_id, idea in raw_ideas.items()
+                if idea_id not in db_ids
+            }
             try:
-                rows = self.lake.conn.execute(
-                    "SELECT idea_id, config FROM ideas "
-                    "WHERE lower(status) IN "
-                    "('queued', 'pending', 'running', 'completed') "
-                    "ORDER BY rowid"
-                ).fetchall()
-                for row in rows:
-                    admitted_cfg = yaml.safe_load(row[1]) or {}
-                    if isinstance(admitted_cfg, dict):
-                        config_hashes.setdefault(
-                            self._config_override_hash(admitted_cfg), row[0])
+                needed = {
+                    identity for identity in pending_hashes.values()
+                    if identity not in config_hashes
+                }
+                admitted_hashes = self.lake.find_admitted_config_hashes(needed)
+                for identity, admitted_id in admitted_hashes.items():
+                    config_hashes.setdefault(identity, admitted_id)
             except Exception as exc:
                 # DB/config ambiguity must not erase the completed cache. The
                 # final launch identity boundary remains authoritative.
@@ -554,8 +587,7 @@ class OrzePhaseMixin:
             for idea_id, idea in raw_ideas.items():
                 if idea_id not in db_ids:
                     # Config dedup: skip if overrides match a completed idea
-                    override_hash = self._config_override_hash(
-                        idea.get("config", {}))
+                    override_hash = pending_hashes[idea_id]
                     existing_id = config_hashes.get(override_hash)
                     if existing_id:
                         logger.info(
@@ -714,11 +746,12 @@ class OrzePhaseMixin:
         queue_ideas = {}
 
         if self.lake:
-            for r in self.lake.get_queue(limit=2000):
-                try:
-                    cfg_parsed = yaml.safe_load(r["config"]) or {}
-                except yaml.YAMLError:
-                    cfg_parsed = {}
+            queue_rows = self.lake.get_queue(limit=2000)
+            queue_ids = []
+            for r in queue_rows:
+                queue_ids.append(r["idea_id"])
+                cfg_parsed = self._parse_lake_queue_config(
+                    r["idea_id"], r["config"] or "")
                 # Pre-filter: skip ideas with missing strategy files BEFORE
                 # sweep expansion. This prevents expanding a broken idea into
                 # N sub-runs that all get skipped individually every iteration.
@@ -739,6 +772,7 @@ class OrzePhaseMixin:
                     "config": cfg_parsed,
                     "raw": "",
                 }
+            self._prune_lake_queue_config_cache(queue_ids)
             # Expand any sweeps in the queue
             ideas = expand_sweeps(queue_ideas, max_combos=sweep_max)
         else:
@@ -760,17 +794,19 @@ class OrzePhaseMixin:
             if n:
                 logger.info("On-demand reconcile: cleared %d stale ideas", n)
                 queue_ideas = {}
-                for r in self.lake.get_queue(limit=2000):
-                    try:
-                        cfg_parsed = yaml.safe_load(r["config"]) or {}
-                    except yaml.YAMLError:
-                        cfg_parsed = {}
+                queue_rows = self.lake.get_queue(limit=2000)
+                queue_ids = []
+                for r in queue_rows:
+                    queue_ids.append(r["idea_id"])
+                    cfg_parsed = self._parse_lake_queue_config(
+                        r["idea_id"], r["config"] or "")
                     queue_ideas[r["idea_id"]] = {
                         "title": r["title"],
                         "priority": r["priority"],
                         "config": cfg_parsed,
                         "raw": "",
                     }
+                self._prune_lake_queue_config_cache(queue_ids)
                 ideas = expand_sweeps(queue_ideas, max_combos=sweep_max)
                 unclaimed = get_unclaimed(ideas, self.results_dir, skipped, lake=self.lake)
 

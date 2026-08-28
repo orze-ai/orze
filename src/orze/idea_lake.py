@@ -12,16 +12,18 @@ Usage:
 """
 
 import datetime
+import hashlib
 import json
 import logging
 import os
 import re
 import sqlite3
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 import yaml
 
+from orze.core.integrity import hash_config
 from orze.core.sqlite_policy import apply_shared_database_policy
 
 logger = logging.getLogger("idea_lake")
@@ -53,6 +55,8 @@ CREATE TABLE IF NOT EXISTS ideas (
     parent TEXT,
     hypothesis TEXT,
     config TEXT NOT NULL,
+    config_hash TEXT,
+    config_source_sha256 TEXT,
     raw_markdown TEXT NOT NULL,
     config_summary TEXT,
     eval_metrics TEXT,
@@ -137,6 +141,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 _KNOWN_META_COLS = {
     "idea_id", "id_num", "title", "priority", "category", "parent",
     "hypothesis", "config", "raw_markdown", "config_summary",
+    "config_hash", "config_source_sha256",
     "eval_metrics", "status", "training_time", "archived_at", "created_at",
     "approach_family", "kind",
 }
@@ -358,6 +363,8 @@ class IdeaLake:
             "training_time": "REAL",
             "archived_at": "TEXT",
             "created_at": "TEXT",
+            "config_hash": "TEXT",
+            "config_source_sha256": "TEXT",
         }
         added_metadata = False
         for column, declaration in metadata_columns.items():
@@ -440,6 +447,35 @@ class IdeaLake:
             )
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_kind ON ideas(kind)")
             self.conn.commit()
+
+        # Config identities make exact experiment dedup a cheap indexed read
+        # instead of reparsing every admitted YAML document on every scheduler
+        # tick. Existing rows are backfilled lazily by
+        # get_admitted_config_hashes(), keeping database open bounded.
+        # Every production config-hash probe also constrains admitted status,
+        # so the compound index below covers the hot path. Keeping the earlier
+        # single-column index doubled large-import write amplification with no
+        # read gain for that path.
+        self.conn.execute("DROP INDEX IF EXISTS idx_config_hash")
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_status_config_hash_nocase "
+            "ON ideas(status COLLATE NOCASE, config_hash)"
+        )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_missing_config_identity "
+            "ON ideas(status COLLATE NOCASE) "
+            "WHERE config_hash IS NULL OR config_source_sha256 IS NULL"
+        )
+        self.conn.execute(
+            "CREATE TRIGGER IF NOT EXISTS invalidate_config_identity "
+            "AFTER UPDATE OF config ON ideas "
+            "WHEN NEW.config IS NOT OLD.config "
+            "BEGIN "
+            "UPDATE ideas SET config_hash = NULL, "
+            "config_source_sha256 = NULL WHERE idea_id = NEW.idea_id; "
+            "END"
+        )
+        self.conn.commit()
 
         # v4.5: Genericize FSM (orthogonal to SOP type)
         try:
@@ -804,27 +840,36 @@ class IdeaLake:
                 except ValueError:
                     id_num = hash(idea_id) % (2**31)
 
-        # Auto-compute summary if missing
-        if not config_summary and config_yaml:
+        # Parse once for both the flattened summary and the canonical dedup
+        # identity. The source digest lets readers detect unsupported direct
+        # SQL edits that changed config without updating its derived hash.
+        config_obj = None
+        if config_yaml:
             try:
-                cfg_obj = yaml.safe_load(config_yaml)
-                if isinstance(cfg_obj, dict):
-                    config_summary = flatten_config(cfg_obj)
+                config_obj = yaml.safe_load(config_yaml)
             except yaml.YAMLError:
                 pass
+        if not config_summary and isinstance(config_obj, dict):
+            config_summary = flatten_config(config_obj)
+        config_source_sha256 = hashlib.sha256(
+            config_yaml.encode("utf-8")
+        ).hexdigest()
+        config_hash = (
+            hash_config(config_obj) if isinstance(config_obj, dict) else None
+        )
 
         def _do_insert():
             recorded_at = self._transition_time(self.conn)
             self.conn.execute(
                 """INSERT OR REPLACE INTO ideas (
                     idea_id, id_num, title, priority, category, parent, hypothesis,
-                    config, raw_markdown,
+                    config, config_hash, config_source_sha256, raw_markdown,
                     config_summary, eval_metrics,
                     status, training_time, archived_at, created_at,
                     approach_family, kind
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?,
+                    ?, ?, ?, ?,
                     ?, ?,
                     ?, ?, ?, ?,
                     ?, ?
@@ -838,6 +883,8 @@ class IdeaLake:
                     parent,
                     hypothesis,
                     config_yaml,
+                    config_hash,
+                    config_source_sha256,
                     raw_markdown,
                     json.dumps(config_summary) if config_summary else None,
                     json.dumps(eval_metrics) if eval_metrics else None,
@@ -1232,6 +1279,120 @@ class IdeaLake:
             ).fetchone()
         row = _retry_on_busy(_do_has)
         return row is not None
+
+    def _repair_admitted_config_hashes(self) -> int:
+        """Backfill only missing admitted identities and return repair count."""
+        statuses = ("queued", "pending", "running", "completed")
+
+        def _read_missing():
+            return self.conn.execute(
+                "SELECT idea_id, config FROM ideas "
+                "WHERE status COLLATE NOCASE IN (?, ?, ?, ?) "
+                "AND (config_hash IS NULL OR config_source_sha256 IS NULL) "
+                "ORDER BY rowid",
+                statuses,
+            ).fetchall()
+
+        rows = _retry_on_busy(_read_missing)
+        repairs = []
+        for row in rows:
+            idea_id = row["idea_id"]
+            config_yaml = row["config"] or ""
+            source_sha256 = hashlib.sha256(
+                config_yaml.encode("utf-8")
+            ).hexdigest()
+            try:
+                config_obj = yaml.safe_load(config_yaml) or {}
+            except yaml.YAMLError:
+                logger.warning(
+                    "Cannot derive config identity for %s: invalid YAML",
+                    idea_id,
+                )
+                continue
+            if not isinstance(config_obj, dict):
+                logger.warning(
+                    "Cannot derive config identity for %s: config is not a mapping",
+                    idea_id,
+                )
+                continue
+            repairs.append((
+                hash_config(config_obj), source_sha256, idea_id, config_yaml,
+            ))
+
+        if repairs:
+            def _repair_rows():
+                self.conn.execute("BEGIN IMMEDIATE")
+                try:
+                    for identity, source_sha256, idea_id, config_yaml in repairs:
+                        # Compare the source text so a concurrent config edit
+                        # cannot receive an identity derived from older bytes.
+                        self.conn.execute(
+                            "UPDATE ideas SET config_hash = ?, "
+                            "config_source_sha256 = ? "
+                            "WHERE idea_id = ? AND config = ?",
+                            (identity, source_sha256, idea_id, config_yaml),
+                        )
+                    self.conn.commit()
+                except Exception:
+                    self.conn.rollback()
+                    raise
+
+            _retry_on_busy(_repair_rows)
+            logger.info(
+                "Backfilled %d admitted config identities", len(repairs)
+            )
+        return len(repairs)
+
+    def find_admitted_config_hashes(
+        self, identities: Iterable[str],
+    ) -> Dict[str, str]:
+        """Resolve only proposal identities needed by the current ingest batch.
+
+        This is O(batch), not O(lake): an empty proposal batch performs no SQL;
+        a non-empty batch uses the status/config-hash index. Legacy identities
+        are backfilled once, and the config-update trigger makes later edits
+        re-enter that repair path.
+        """
+        requested = list(dict.fromkeys(
+            identity for identity in identities
+            if isinstance(identity, str)
+            and re.fullmatch(r"[0-9a-f]{64}", identity)
+        ))
+        if not requested:
+            return {}
+        self._repair_admitted_config_hashes()
+        statuses = ("queued", "pending", "running", "completed")
+        found: Dict[str, str] = {}
+        for offset in range(0, len(requested), 400):
+            batch = requested[offset:offset + 400]
+            placeholders = ",".join("?" for _ in batch)
+            rows = _retry_on_busy(
+                lambda batch=batch, placeholders=placeholders:
+                self.conn.execute(
+                    "SELECT config_hash, idea_id FROM ideas "
+                    "WHERE status COLLATE NOCASE IN (?, ?, ?, ?) "
+                    f"AND config_hash IN ({placeholders}) ORDER BY rowid",
+                    (*statuses, *batch),
+                ).fetchall()
+            )
+            for row in rows:
+                found.setdefault(row["config_hash"], row["idea_id"])
+        return found
+
+    def get_admitted_config_hashes(self) -> Dict[str, str]:
+        """Return all admitted identities; prefer targeted lookup in hot paths."""
+        self._repair_admitted_config_hashes()
+        statuses = ("queued", "pending", "running", "completed")
+        rows = _retry_on_busy(lambda: self.conn.execute(
+            "SELECT config_hash, idea_id FROM ideas "
+            "WHERE status COLLATE NOCASE IN (?, ?, ?, ?) "
+            "AND config_hash IS NOT NULL ORDER BY rowid",
+            statuses,
+        ).fetchall())
+        identities: Dict[str, str] = {}
+        for row in rows:
+            identities.setdefault(row["config_hash"], row["idea_id"])
+        return identities
 
     def count(self) -> int:
         def _do_count():
@@ -1631,13 +1792,21 @@ class IdeaLake:
             config_summary = idea.get("config_summary")
             config_yaml = idea.get("config_yaml", "")
 
-            if not config_summary and config_yaml:
+            config_obj = None
+            if config_yaml:
                 try:
-                    cfg_obj = yaml.safe_load(config_yaml)
-                    if isinstance(cfg_obj, dict):
-                        config_summary = flatten_config(cfg_obj)
+                    config_obj = yaml.safe_load(config_yaml)
                 except yaml.YAMLError:
                     pass
+            if not config_summary and isinstance(config_obj, dict):
+                config_summary = flatten_config(config_obj)
+            config_source_sha256 = hashlib.sha256(
+                config_yaml.encode("utf-8")
+            ).hexdigest()
+            config_hash = (
+                hash_config(config_obj)
+                if isinstance(config_obj, dict) else None
+            )
 
             # Extract numeric ID for sorting (supports both numeric and hex IDs)
             id_num = None
@@ -1658,13 +1827,13 @@ class IdeaLake:
             self.conn.execute(
                 """INSERT OR IGNORE INTO ideas (
                     idea_id, id_num, title, priority, category, parent, hypothesis,
-                    config, raw_markdown,
+                    config, config_hash, config_source_sha256, raw_markdown,
                     config_summary, eval_metrics,
                     status, training_time, archived_at, created_at,
                     approach_family
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?,
+                    ?, ?, ?, ?,
                     ?, ?,
                     ?, ?, ?, ?,
                     ?
@@ -1678,6 +1847,8 @@ class IdeaLake:
                     idea.get("parent"),
                     idea.get("hypothesis"),
                     config_yaml,
+                    config_hash,
+                    config_source_sha256,
                     idea.get("raw_markdown", ""),
                     json.dumps(config_summary) if config_summary else None,
                     json.dumps(eval_metrics) if eval_metrics else None,
