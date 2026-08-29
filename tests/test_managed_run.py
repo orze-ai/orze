@@ -275,6 +275,10 @@ def test_managed_orchestrator_skips_daemon_wide_hooks(
         def close(self):
             calls.append("lake_close")
 
+    class Leases:
+        def close(self):
+            calls.append("lease_close")
+
     class Healthy:
         retry_delay = 0
 
@@ -300,6 +304,7 @@ def test_managed_orchestrator_skips_daemon_wide_hooks(
         "report": {"primary_metric": "score"},
     }
     runner.gpu_ids = [4]
+    runner._gpu_leases = None
     runner.once = True
     runner.results_dir = tmp_path
     runner.slot_mgr = Slots()
@@ -363,11 +368,17 @@ def test_managed_orchestrator_skips_daemon_wide_hooks(
         "orze.engine.orchestrator.save_state",
         lambda *args: pytest.fail("managed run saved daemon state"))
     monkeypatch.setattr(
+        "orze.engine.orchestrator.acquire_gpu_leases",
+        lambda ids: Leases())
+    monkeypatch.setattr(
         "orze.engine.orchestrator.assert_gpu_scope_idle", lambda ids: None)
 
     runner.run()
 
-    assert calls == ["pid_write", "health_monitor", "lake_close", "pid_remove"]
+    assert calls == [
+        "pid_write", "health_monitor", "lake_close", "pid_remove",
+        "lease_close",
+    ]
 
 
 def test_managed_shutdown_forces_child_termination(monkeypatch, tmp_path):
