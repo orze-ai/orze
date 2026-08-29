@@ -1055,11 +1055,14 @@ def _resolve_idea_kind(idea_id: str, idea_cfg_path: Path,
 
 def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
                     *, kind: str,
-                    idea_cfg_path: Path) -> TrainingProcess:
+                    idea_cfg_path: Path,
+                    lake=None) -> TrainingProcess:
     """Run a post-hoc idea in a subprocess and return a TrainingProcess-like
     handle so the rest of the scheduler (check_active etc.) is unchanged.
     """
     import yaml
+
+    _assert_campaign_evidence_authorized(cfg, lake)
 
     idea_dir = Path(results_dir) / idea_id
     idea_dir.mkdir(parents=True, exist_ok=True)
@@ -1403,6 +1406,35 @@ def _assert_controller_runtime_attested(cfg: dict) -> None:
         raise LaunchIntegrityError(str(exc)) from exc
 
 
+def _assert_campaign_evidence_authorized(cfg: dict, lake=None) -> None:
+    """Reject a GPU boundary lacking its exact active campaign contract."""
+    campaign = cfg.get("campaign_efficiency") or {}
+    if campaign.get("required_for_launch", False) is not True:
+        return
+    if (campaign.get("enabled") is not True
+            or not isinstance(campaign.get("campaign_id"), str)
+            or lake is None):
+        raise LaunchIntegrityError("campaign_evidence_not_ready")
+    scheduling = cfg.get("gpu_scheduling") or {}
+    scope = cfg.get("_managed_gpu_ids") or scheduling.get("allowed_gpus")
+    if not isinstance(scope, list) or not scope:
+        raise LaunchIntegrityError("campaign_evidence_gpu_scope_missing")
+    try:
+        from orze.engine.campaign_efficiency import (
+            require_active_campaign_registration,
+        )
+        require_active_campaign_registration(
+            lake,
+            campaign_id=campaign["campaign_id"],
+            physical_scope=list(scope),
+            poll_seconds=cfg.get("poll"),
+        )
+    except Exception as exc:
+        if isinstance(exc, LaunchIntegrityError):
+            raise
+        raise LaunchIntegrityError(str(exc)) from exc
+
+
 def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> TrainingProcess:
     """Launch a training subprocess on the given GPU.
 
@@ -1416,6 +1448,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     """
     results_dir = Path(results_dir)
     _assert_launch_authorized(idea_id, results_dir, cfg)
+    _assert_campaign_evidence_authorized(cfg, lake)
     from orze.core.decision_batches import validate_idea_decision_admission
     decision_error = validate_idea_decision_admission(
         results_dir, cfg, idea_id)
@@ -1478,7 +1511,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     if idea_kind and idea_kind != "train":
         return _launch_posthoc(idea_id, gpu, results_dir, cfg,
                                kind=idea_kind,
-                               idea_cfg_path=idea_cfg_path)
+                               idea_cfg_path=idea_cfg_path,
+                               lake=lake)
 
     python = cfg.get("python", sys.executable)
     train_script = cfg["train_script"]

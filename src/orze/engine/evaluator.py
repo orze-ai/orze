@@ -47,6 +47,7 @@ from typing import Dict, Optional
 from orze.engine.process import EvalProcess, _new_process_group, _terminate_and_reap
 from orze.engine.launcher import (
     LaunchIntegrityError, _assert_controller_runtime_attested,
+    _assert_campaign_evidence_authorized,
     _assert_gpu_authorized, _authorized_gpu_environment,
     _assert_launch_authorized, _format_args, _launch_min_free_vram,
     _verify_gpu_free,
@@ -243,6 +244,7 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     eval_timeout = cfg.get("eval_timeout", 3600)
 
     _assert_launch_authorized(idea_id, results_dir, cfg)
+    _assert_campaign_evidence_authorized(cfg, lake)
     _assert_gpu_authorized(gpu, cfg)
 
     log_path = results_dir / idea_id / "eval_output.log"
@@ -626,7 +628,8 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
     return finished
 
 
-def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
+def run_post_scripts(
+        idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None):
     """Run additional post-training scripts (beyond eval_script).
     Each entry in post_scripts is a dict with: script, args, timeout, output."""
     post_scripts = (cfg.get("post_scripts") or [])
@@ -642,6 +645,8 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
             idea_id, eligibility_reason)
         _record_eval_audit(idea_dir, "skip", eligibility_reason)
         return
+
+    _assert_campaign_evidence_authorized(cfg, lake)
 
     python = cfg.get("python", sys.executable)
     env = os.environ.copy()

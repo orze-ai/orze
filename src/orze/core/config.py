@@ -221,6 +221,7 @@ DEFAULT_CONFIG = {
     "campaign_efficiency": {
         "enabled": False,
         "campaign_id": None,
+        "required_for_launch": False,
     },
     # Optional exact identity pin for direct/manual controller launches.
     # Managed systemd launches additionally use an independent ExecStartPre
@@ -752,8 +753,12 @@ def _validate_config(cfg: dict) -> tuple:
     else:
         campaign_enabled = campaign_cfg.get("enabled", False)
         campaign_id = campaign_cfg.get("campaign_id")
+        campaign_required = campaign_cfg.get("required_for_launch", False)
         if not isinstance(campaign_enabled, bool):
             errors.append("campaign_efficiency.enabled: must be true or false")
+        if not isinstance(campaign_required, bool):
+            errors.append(
+                "campaign_efficiency.required_for_launch: must be true or false")
         if campaign_id is not None and (
                 not isinstance(campaign_id, str) or not campaign_id.strip()
                 or re.fullmatch(
@@ -765,6 +770,15 @@ def _validate_config(cfg: dict) -> tuple:
         if campaign_enabled and not campaign_id:
             errors.append(
                 "campaign_efficiency.campaign_id: required when enabled")
+        launcher_paused = (
+            launcher_cfg.get("paused", False)
+            if isinstance(launcher_cfg, dict) else False
+        )
+        if (campaign_required is True and not launcher_paused
+                and campaign_enabled is not True):
+            errors.append(
+                "campaign_efficiency.enabled: required before unpausing when "
+                "required_for_launch is true")
 
     controller_runtime = cfg.get("controller_runtime")
     if controller_runtime is not None:

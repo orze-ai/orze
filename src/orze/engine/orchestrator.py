@@ -31,7 +31,10 @@ from orze.engine.launcher import (
     launch, check_active, _get_checkpoint_dir, _write_failure,
     _is_launcher_paused,
 )
-from orze.engine.campaign_efficiency import capture_campaign_efficiency_sample
+from orze.engine.campaign_efficiency import (
+    capture_campaign_efficiency_sample,
+    require_active_campaign_registration,
+)
 from orze.engine.evaluator import (
     launch_eval, check_active_evals, run_eval, run_post_scripts,
 )
@@ -1205,9 +1208,25 @@ class Orze(OrzePhaseMixin):
                 eval_finished = check_active_evals(
                     self.active_evals, self.results_dir, cfg, lake=self.lake)
 
+            # Reap existing children first, then reject every *new* GPU launch
+            # (post-script, evaluation, or training) unless the exact campaign
+            # evidence window is active. Clearing pause controls alone cannot
+            # create unmeasured work.
+            campaign_efficiency_cfg = cfg.get("campaign_efficiency") or {}
+            if (self.lake is not None
+                    and campaign_efficiency_cfg.get("required_for_launch", False)
+                    and not _is_launcher_paused(cfg, self.results_dir)):
+                require_active_campaign_registration(
+                    self.lake,
+                    campaign_id=campaign_efficiency_cfg.get("campaign_id"),
+                    physical_scope=list(self.gpu_ids),
+                    poll_seconds=cfg["poll"],
+                )
+
             # 3b. Run post-scripts for evals that just completed
             for idea_id, gpu in eval_finished:
-                run_post_scripts(idea_id, gpu, self.results_dir, cfg)
+                run_post_scripts(
+                    idea_id, gpu, self.results_dir, cfg, lake=self.lake)
 
             if not self.running:
                 break
@@ -1258,7 +1277,7 @@ class Orze(OrzePhaseMixin):
             # failures are retained as incomplete evidence and never retried
             # with an unscoped all-GPU query.
             campaign_efficiency_cfg = cfg.get("campaign_efficiency") or {}
-            if (not managed_idea and self.lake is not None
+            if (self.lake is not None
                     and campaign_efficiency_cfg.get("enabled", False)):
                 try:
                     active_eval_ids = {
@@ -1337,7 +1356,8 @@ class Orze(OrzePhaseMixin):
                                             if immediate:
                                                 run_post_scripts(
                                                     idea_id, gpu,
-                                                    self.results_dir, cfg)
+                                                    self.results_dir, cfg,
+                                                    lake=self.lake)
                                         else:
                                             run_eval(
                                                 idea_id, gpu,
@@ -1345,7 +1365,8 @@ class Orze(OrzePhaseMixin):
                                                 lake=self.lake)
                                             run_post_scripts(
                                                 idea_id, gpu,
-                                                self.results_dir, cfg)
+                                                self.results_dir, cfg,
+                                                lake=self.lake)
                                 except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                                     pass
                             all_once_finished.append((idea_id, gpu))
@@ -1363,7 +1384,8 @@ class Orze(OrzePhaseMixin):
                             self.active_evals, self.results_dir, cfg, lake=self.lake)
                         for idea_id, gpu in ef:
                             run_post_scripts(
-                                idea_id, gpu, self.results_dir, cfg)
+                                idea_id, gpu, self.results_dir, cfg,
+                                lake=self.lake)
                             all_once_finished.append((idea_id, gpu))
                 if all_once_finished and not managed_idea:
                     ideas = parse_ideas(cfg["ideas_file"])

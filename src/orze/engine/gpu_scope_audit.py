@@ -29,12 +29,14 @@ _BOUNDARIES = {
         "_launch_posthoc": frozenset({
             "_authorized_gpu_environment",
             "_assert_controller_runtime_attested",
+            "_assert_campaign_evidence_authorized",
             "gpu_execution_lease",
             "record_compute_start",
         }),
         "launch": frozenset({
             "_authorized_gpu_environment",
             "_assert_controller_runtime_attested",
+            "_assert_campaign_evidence_authorized",
             "gpu_execution_lease",
             "record_compute_start",
         }),
@@ -43,12 +45,14 @@ _BOUNDARIES = {
         "launch_eval": frozenset({
             "_authorized_gpu_environment",
             "_assert_controller_runtime_attested",
+            "_assert_campaign_evidence_authorized",
             "gpu_execution_lease",
             "record_compute_start",
         }),
         "run_post_scripts": frozenset({
             "_authorized_gpu_environment",
             "_assert_controller_runtime_attested",
+            "_assert_campaign_evidence_authorized",
             "gpu_execution_lease",
             "record_compute_start",
             "record_compute_terminal",

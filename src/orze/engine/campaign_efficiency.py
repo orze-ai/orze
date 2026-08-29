@@ -534,6 +534,57 @@ def verify_campaign_registration(
     }
 
 
+def require_active_campaign_registration(
+    lake: IdeaLake,
+    *,
+    campaign_id: str,
+    physical_scope: List[int],
+    poll_seconds: float,
+    now_epoch: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Require an exact preregistered active campaign before any new launch."""
+    now = time.time() if now_epoch is None else float(now_epoch)
+    row = lake.conn.execute(
+        "SELECT manifest_sha256, manifest_json, registered_at_epoch "
+        "FROM harness_campaign_registrations WHERE campaign_id = ?",
+        (campaign_id,),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("campaign_evidence_registration_missing")
+    try:
+        manifest = json.loads(row["manifest_json"])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("campaign_evidence_registration_invalid") from exc
+    validation_epoch = float(manifest.get("start_epoch", 0)) - 1.0
+    error = _manifest_error(
+        manifest, validation_epoch, require_ended=False,
+    )
+    canonical = _canonical_manifest(manifest)
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    if (error is not None
+            or manifest.get("campaign_id") != campaign_id
+            or row["manifest_json"] != canonical
+            or row["manifest_sha256"] != digest
+            or float(row["registered_at_epoch"])
+            > float(manifest.get("start_epoch", -1))):
+        raise RuntimeError("campaign_evidence_registration_invalid")
+    if not float(manifest["start_epoch"]) <= now <= float(manifest["end_epoch"]):
+        raise RuntimeError("campaign_evidence_window_inactive")
+    if manifest["physical_scope"] != list(physical_scope):
+        raise RuntimeError("campaign_evidence_physical_scope_mismatch")
+    if float(manifest["poll_seconds"]) != float(poll_seconds):
+        raise RuntimeError("campaign_evidence_poll_seconds_mismatch")
+    return {
+        "campaign_id": campaign_id,
+        "manifest_sha256": digest,
+        "expected_idea_count": len(manifest["expected_idea_ids"]),
+        "start_epoch": float(manifest["start_epoch"]),
+        "end_epoch": float(manifest["end_epoch"]),
+        "physical_scope": list(physical_scope),
+        "poll_seconds": float(poll_seconds),
+    }
+
+
 def analyze_campaign(
     db_path: str | Path,
     manifest: Dict[str, Any],

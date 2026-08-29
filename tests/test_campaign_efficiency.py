@@ -11,6 +11,7 @@ from orze.engine.campaign_efficiency import (
     capture_campaign_efficiency_sample,
     capture_campaign_progress_update,
     preregister_campaign,
+    require_active_campaign_registration,
 )
 from orze.engine.reproducibility import config_identity_sha256
 from orze.idea_lake import IdeaLake
@@ -277,6 +278,81 @@ def test_enabled_sampling_requires_campaign_id():
         "campaign_efficiency": {"enabled": True},
     })
     assert "campaign_efficiency.campaign_id: required when enabled" in errors
+
+
+def test_required_campaign_evidence_blocks_unmeasured_unpause():
+    errors, _ = _validate_config({
+        "launcher": {"paused": False},
+        "campaign_efficiency": {
+            "enabled": False,
+            "campaign_id": None,
+            "required_for_launch": True,
+        },
+    })
+    assert any("required before unpausing" in error for error in errors)
+
+    paused_errors, _ = _validate_config({
+        "launcher": {"paused": True},
+        "campaign_efficiency": {
+            "enabled": False,
+            "campaign_id": None,
+            "required_for_launch": True,
+        },
+    })
+    assert not any("required before unpausing" in error
+                   for error in paused_errors)
+
+
+def test_active_campaign_registration_is_required_before_launch(tmp_path):
+    db_path = tmp_path / "lake.db"
+    lake = IdeaLake(str(db_path))
+    with pytest.raises(RuntimeError, match="registration_missing"):
+        require_active_campaign_registration(
+            lake,
+            campaign_id="campaign-test-001",
+            physical_scope=[4, 5, 6, 7],
+            poll_seconds=10,
+            now_epoch=time.time(),
+        )
+    lake.close()
+
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    report = require_active_campaign_registration(
+        lake,
+        campaign_id=manifest["campaign_id"],
+        physical_scope=[4, 5, 6, 7],
+        poll_seconds=10,
+        now_epoch=manifest["start_epoch"],
+    )
+    assert report["manifest_sha256"]
+    assert report["expected_idea_count"] == 2
+    with pytest.raises(RuntimeError, match="physical_scope_mismatch"):
+        require_active_campaign_registration(
+            lake,
+            campaign_id=manifest["campaign_id"],
+            physical_scope=[4, 5, 6],
+            poll_seconds=10,
+            now_epoch=manifest["start_epoch"],
+        )
+    with pytest.raises(RuntimeError, match="poll_seconds_mismatch"):
+        require_active_campaign_registration(
+            lake,
+            campaign_id=manifest["campaign_id"],
+            physical_scope=[4, 5, 6, 7],
+            poll_seconds=11,
+            now_epoch=manifest["start_epoch"],
+        )
+    with pytest.raises(RuntimeError, match="window_inactive"):
+        require_active_campaign_registration(
+            lake,
+            campaign_id=manifest["campaign_id"],
+            physical_scope=[4, 5, 6, 7],
+            poll_seconds=10,
+            now_epoch=manifest["end_epoch"] + 1,
+        )
+    lake.close()
 
 
 def test_campaign_id_must_be_safe_for_operator_receipt_path():
