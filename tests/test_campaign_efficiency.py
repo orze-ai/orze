@@ -1094,6 +1094,59 @@ def test_one_claim_cannot_fill_multiple_terminal_latency_samples(tmp_path):
     assert receipt["metrics"]["unmatched_terminal_release_count"] == 1
 
 
+def test_unfilled_release_with_eligible_demand_fails_latency_target(tmp_path):
+    """One fast refill cannot hide another demanded slot left unfilled."""
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "INSERT INTO idea_transitions "
+        "(idea_id, from_state, to_state, ts) VALUES (?, ?, ?, ?)",
+        (
+            "idea-001", "IN_PROGRESS", "FAILED",
+            _iso(manifest["start_epoch"] + 16),
+        ),
+    )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["metrics"]["demanded_terminal_release_count"] == 2
+    assert receipt["metrics"]["unmatched_demanded_terminal_release_count"] == 1
+    assert receipt["checks"]["terminal_to_next_claim"]["passed"] is False
+    assert receipt["status"] == "FAILED"
+
+
+def test_preallocation_terminal_does_not_count_as_slot_release(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "INSERT INTO idea_transitions "
+        "(idea_id, from_state, to_state, ts) VALUES (?, ?, ?, ?)",
+        (
+            "idea-002", "QUEUED", "SKIPPED",
+            _iso(manifest["start_epoch"] + 14),
+        ),
+    )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["metrics"]["terminal_release_count"] == 1
+    assert receipt["metrics"]["non_allocation_terminal_count"] == 1
+
+
 def test_retry_cannot_hide_an_earlier_slow_queue_to_claim(tmp_path):
     """Every immutable claim must retain its own eligible-queue latency."""
     db_path = tmp_path / "lake.db"

@@ -1267,8 +1267,11 @@ def analyze_campaign(
                 break
 
     queue_to_claim = []
+    eligible_queue_intervals = []
+    fallback_claim_events = []
     claim_event_count = 0
     unmatched_claim_events = []
+    unmatched_queued_demand_idea_ids = []
     for idea_id in expected_idea_ids:
         state = state_by_id.get(idea_id)
         if state is None:
@@ -1285,6 +1288,9 @@ def analyze_campaign(
             if to_state == "QUEUED":
                 available_at = at
                 continue
+            if to_state in {"COMPLETE", "FAILED", "SKIPPED"}:
+                available_at = None
+                continue
             if to_state != "CLAIMED":
                 continue
             ledger_claims.append(at)
@@ -1299,32 +1305,68 @@ def analyze_campaign(
                     and current_claimed is not None
                     and abs(current_claimed - at) <= 1e-6):
                 queue_origin = current_queued
-            if in_window:
-                if queue_origin is not None and queue_origin <= at:
-                    queue_to_claim.append(at - queue_origin)
-                else:
-                    unmatched_claim_events.append({
+            if queue_origin is not None and queue_origin <= at:
+                if (queue_origin <= manifest["end_epoch"]
+                        and at >= manifest["start_epoch"]):
+                    eligible_queue_intervals.append({
                         "idea_id": idea_id,
+                        "queued_at_epoch": queue_origin,
                         "claimed_at_epoch": at,
                     })
+                if in_window:
+                    queue_to_claim.append(at - queue_origin)
+            elif in_window:
+                unmatched_claim_events.append({
+                    "idea_id": idea_id,
+                    "claimed_at_epoch": at,
+                })
             available_at = None
 
-        if (current_claimed is not None
-                and manifest["start_epoch"]
+        if (current_claimed is not None and not any(
+                abs(current_claimed - at) <= 1e-6
+                for at in ledger_claims
+        )):
+            current_claim_in_window = (
+                manifest["start_epoch"]
                 <= current_claimed <= manifest["end_epoch"]
-                and not any(
-                    abs(current_claimed - at) <= 1e-6
-                    for at in ledger_claims
-                )):
-            claim_event_count += 1
+            )
+            if current_claim_in_window:
+                claim_event_count += 1
+                fallback_claim_events.append((current_claimed, idea_id))
             if (current_queued is not None
                     and current_queued <= current_claimed):
-                queue_to_claim.append(current_claimed - current_queued)
-            else:
+                if (current_queued <= manifest["end_epoch"]
+                        and current_claimed >= manifest["start_epoch"]):
+                    eligible_queue_intervals.append({
+                        "idea_id": idea_id,
+                        "queued_at_epoch": current_queued,
+                        "claimed_at_epoch": current_claimed,
+                    })
+                if current_claim_in_window:
+                    queue_to_claim.append(
+                        current_claimed - current_queued
+                    )
+            elif current_claim_in_window:
                 unmatched_claim_events.append({
                     "idea_id": idea_id,
                     "claimed_at_epoch": current_claimed,
                 })
+            available_at = None
+        if available_at is None and state["current_state"] == "QUEUED":
+            if (current_queued is not None
+                    and (
+                        current_claimed is None
+                        or current_queued > current_claimed
+                    )):
+                available_at = current_queued
+            else:
+                unmatched_queued_demand_idea_ids.append(idea_id)
+        if available_at is not None and available_at <= manifest["end_epoch"]:
+            eligible_queue_intervals.append({
+                "idea_id": idea_id,
+                "queued_at_epoch": available_at,
+                "claimed_at_epoch": None,
+            })
 
     timeline = []
     for transition in transitions:
@@ -1332,7 +1374,14 @@ def analyze_campaign(
             continue
         at = _epoch(transition["ts"])
         if at is not None:
-            timeline.append((at, transition["to_state"], transition["idea_id"]))
+            timeline.append((
+                at, transition["to_state"], transition["idea_id"],
+                transition["from_state"],
+            ))
+    timeline.extend(
+        (at, "CLAIMED", idea_id, "QUEUED")
+        for at, idea_id in fallback_claim_events
+    )
     # One claim can refill only one released slot.  Sort equal-time terminal
     # events before claims so concurrent database writers cannot make the
     # pairing depend on insertion order.
@@ -1342,23 +1391,52 @@ def analyze_campaign(
     ))
     release_to_claim = []
     unmatched_releases = []
+    demanded_release_to_claim = []
+    unmatched_demanded_releases = []
+    non_demanded_terminal_release_count = 0
+    non_allocation_terminal_count = 0
     terminal_release_count = 0
-    for at, state, _ in timeline:
+    for at, state, idea_id, from_state in timeline:
         if not manifest["start_epoch"] <= at <= manifest["end_epoch"]:
             continue
         if state in terminal_states:
+            if from_state not in {"CLAIMED", "IN_PROGRESS"}:
+                non_allocation_terminal_count += 1
+                continue
             terminal_release_count += 1
             unmatched_releases.append(at)
+            eligible_idea_ids = sorted({
+                interval["idea_id"]
+                for interval in eligible_queue_intervals
+                if interval["queued_at_epoch"] <= at
+                and (
+                    interval["claimed_at_epoch"] is None
+                    or at <= interval["claimed_at_epoch"]
+                )
+            })
+            if eligible_idea_ids:
+                unmatched_demanded_releases.append({
+                    "released_idea_id": str(idea_id),
+                    "released_at_epoch": at,
+                    "eligible_idea_ids": eligible_idea_ids,
+                })
+            else:
+                non_demanded_terminal_release_count += 1
         elif state == "CLAIMED" and unmatched_releases:
             released_at = unmatched_releases.pop(0)
             release_to_claim.append(at - released_at)
+            if unmatched_demanded_releases:
+                demanded = unmatched_demanded_releases.pop(0)
+                demanded_release_to_claim.append(
+                    at - demanded["released_at_epoch"]
+                )
 
     allocation_duty = (
         sum(allocation_ratios) / len(allocation_ratios)
         if allocation_ratios else None
     )
     queue_p95 = _percentile(queue_to_claim, 0.95)
-    release_p95 = _percentile(release_to_claim, 0.95)
+    release_p95 = _percentile(demanded_release_to_claim, 0.95)
     receipt["metrics"] = {
         "sample_count": len(parsed_rows),
         "malformed_sample_count": malformed_rows,
@@ -1403,11 +1481,32 @@ def analyze_campaign(
         "claim_event_count": claim_event_count,
         "unmatched_queue_to_claim_count": len(unmatched_claim_events),
         "unmatched_queue_to_claim_events": unmatched_claim_events,
+        "unmatched_queued_demand_idea_ids": sorted(
+            unmatched_queued_demand_idea_ids
+        ),
         "queue_to_claim_p95_seconds": queue_p95,
-        "terminal_to_next_claim_count": len(release_to_claim),
+        "terminal_to_next_claim_count": len(demanded_release_to_claim),
+        "all_terminal_to_next_claim_pair_count": len(release_to_claim),
         "terminal_to_next_claim_p95_seconds": release_p95,
         "terminal_release_count": terminal_release_count,
         "unmatched_terminal_release_count": len(unmatched_releases),
+        "demanded_terminal_release_count": (
+            len(demanded_release_to_claim)
+            + len(unmatched_demanded_releases)
+        ),
+        "terminal_to_next_claim_demanded_pair_count": len(
+            demanded_release_to_claim
+        ),
+        "unmatched_demanded_terminal_release_count": len(
+            unmatched_demanded_releases
+        ),
+        "unmatched_demanded_terminal_releases": (
+            unmatched_demanded_releases
+        ),
+        "non_demanded_terminal_release_count": (
+            non_demanded_terminal_release_count
+        ),
+        "non_allocation_terminal_count": non_allocation_terminal_count,
     }
 
     evidence_checks = {
@@ -1437,8 +1536,12 @@ def analyze_campaign(
         ),
         "minimum_claims": len(queue_to_claim) >= manifest["minimum_claims"],
         "queue_claim_history_complete": not unmatched_claim_events,
+        "queued_demand_history_complete": (
+            not unmatched_queued_demand_idea_ids
+        ),
         "minimum_release_to_claim_pairs": (
-            len(release_to_claim) >= manifest["minimum_release_to_claim_pairs"]
+            len(demanded_release_to_claim)
+            >= manifest["minimum_release_to_claim_pairs"]
         ),
         "demand_observed": demand_samples > 0,
         "demand_membership_complete": (
@@ -1470,6 +1573,7 @@ def analyze_campaign(
         ),
         "terminal_to_next_claim": (
             release_p95 is not None
+            and not unmatched_demanded_releases
             and release_p95 / poll
             <= manifest["targets"]["max_terminal_to_next_claim_poll_intervals"]
         ),
