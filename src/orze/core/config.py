@@ -216,6 +216,12 @@ DEFAULT_CONFIG = {
         "paused": False,
         "paused_flag_path": None,
     },
+    # Opt-in local campaign evidence. A campaign_id must first be registered
+    # once with campaign_efficiency.preregister_campaign.
+    "campaign_efficiency": {
+        "enabled": False,
+        "campaign_id": None,
+    },
     # Optional exact identity pin for direct/manual controller launches.
     # Managed systemd launches additionally use an independent ExecStartPre
     # contract, which is required for downgrade-resistant enforcement.
@@ -738,6 +744,25 @@ def _validate_config(cfg: dict) -> tuple:
             errors.append(
                 "launcher.paused_flag_path: must be null or a non-empty "
                 "path without control characters")
+
+    campaign_cfg = cfg.get(
+        "campaign_efficiency", DEFAULT_CONFIG["campaign_efficiency"])
+    if not isinstance(campaign_cfg, dict):
+        errors.append("campaign_efficiency: must be a mapping")
+    else:
+        campaign_enabled = campaign_cfg.get("enabled", False)
+        campaign_id = campaign_cfg.get("campaign_id")
+        if not isinstance(campaign_enabled, bool):
+            errors.append("campaign_efficiency.enabled: must be true or false")
+        if campaign_id is not None and (
+                not isinstance(campaign_id, str) or not campaign_id.strip()
+                or any(ord(char) < 32 for char in campaign_id)):
+            errors.append(
+                "campaign_efficiency.campaign_id: must be null or a "
+                "non-empty string without control characters")
+        if campaign_enabled and not campaign_id:
+            errors.append(
+                "campaign_efficiency.campaign_id: required when enabled")
 
     controller_runtime = cfg.get("controller_runtime")
     if controller_runtime is not None:

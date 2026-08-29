@@ -130,6 +130,38 @@ CREATE TABLE IF NOT EXISTS idea_stage_transitions (
 CREATE INDEX IF NOT EXISTS idx_idea_stage_transitions_idea
 ON idea_stage_transitions(idea_id, stage, id);
 
+CREATE TABLE IF NOT EXISTS harness_efficiency_samples (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id TEXT,
+    controller_id TEXT NOT NULL,
+    host TEXT NOT NULL,
+    iteration INTEGER NOT NULL,
+    observed_at_epoch REAL NOT NULL,
+    observed_at TEXT NOT NULL,
+    poll_seconds REAL NOT NULL,
+    physical_scope_json TEXT NOT NULL,
+    gpu_telemetry_json TEXT NOT NULL,
+    telemetry_complete INTEGER NOT NULL,
+    active_training_gpus_json TEXT NOT NULL,
+    active_evaluation_gpus_json TEXT NOT NULL,
+    remaining_training INTEGER NOT NULL,
+    remaining_evaluation INTEGER NOT NULL,
+    launcher_paused INTEGER NOT NULL,
+    disk_ok INTEGER NOT NULL,
+    UNIQUE(controller_id, iteration)
+);
+
+CREATE INDEX IF NOT EXISTS idx_harness_efficiency_observed
+ON harness_efficiency_samples(observed_at_epoch);
+
+CREATE TABLE IF NOT EXISTS harness_campaign_registrations (
+    campaign_id TEXT PRIMARY KEY,
+    manifest_sha256 TEXT NOT NULL,
+    manifest_json TEXT NOT NULL,
+    registered_at_epoch REAL NOT NULL,
+    registered_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     name TEXT PRIMARY KEY,
     applied_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -2397,3 +2429,156 @@ class IdeaLake:
 
     def close(self):
         self.conn.close()
+
+    def record_harness_efficiency_sample(
+        self,
+        *,
+        campaign_id: Optional[str],
+        controller_id: str,
+        host: str,
+        iteration: int,
+        observed_at_epoch: float,
+        poll_seconds: float,
+        physical_scope: List[int],
+        gpu_telemetry: List[Dict[str, Any]],
+        active_training_gpus: List[int],
+        active_evaluation_gpus: List[int],
+        remaining_training: int,
+        remaining_evaluation: int,
+        launcher_paused: bool,
+        disk_ok: bool,
+    ) -> bool:
+        """Persist one local, source-bound scheduler-efficiency observation.
+
+        The row deliberately contains no idea IDs, configs, metrics, or model
+        outputs.  GPU telemetry is accepted only for the explicitly supplied
+        physical scope.  Missing/malformed telemetry is retained as an
+        incomplete observation so downstream verification fails closed rather
+        than silently dropping inconvenient samples.
+        """
+        import math
+
+        if campaign_id is not None and (
+                not isinstance(campaign_id, str) or not campaign_id.strip()):
+            raise ValueError("campaign_id must be null or a non-empty string")
+        if not isinstance(controller_id, str) or not controller_id.strip():
+            raise ValueError("controller_id must be a non-empty string")
+        if not isinstance(host, str) or not host.strip():
+            raise ValueError("host must be a non-empty string")
+        if isinstance(iteration, bool) or not isinstance(iteration, int) or iteration < 0:
+            raise ValueError("iteration must be a non-negative integer")
+        if (isinstance(observed_at_epoch, bool)
+                or not isinstance(observed_at_epoch, (int, float))
+                or not math.isfinite(float(observed_at_epoch))
+                or float(observed_at_epoch) <= 0):
+            raise ValueError("observed_at_epoch must be finite and positive")
+        if (isinstance(poll_seconds, bool)
+                or not isinstance(poll_seconds, (int, float))
+                or not math.isfinite(float(poll_seconds))
+                or float(poll_seconds) <= 0):
+            raise ValueError("poll_seconds must be finite and positive")
+
+        def _gpu_set(name: str, values: List[int], *, nonempty: bool = False):
+            if not isinstance(values, list):
+                raise ValueError(f"{name} must be a list")
+            if any(isinstance(value, bool) or not isinstance(value, int)
+                   or value < 0 for value in values):
+                raise ValueError(f"{name} must contain non-negative integers")
+            normalized = sorted(set(values))
+            if len(normalized) != len(values):
+                raise ValueError(f"{name} must not contain duplicates")
+            if nonempty and not normalized:
+                raise ValueError(f"{name} must not be empty")
+            return normalized
+
+        scope = _gpu_set("physical_scope", physical_scope, nonempty=True)
+        training = _gpu_set("active_training_gpus", active_training_gpus)
+        evaluation = _gpu_set("active_evaluation_gpus", active_evaluation_gpus)
+        if not set(training + evaluation).issubset(scope):
+            raise ValueError("active GPUs must be inside physical_scope")
+        if set(training) & set(evaluation):
+            raise ValueError("training and evaluation GPU sets must be disjoint")
+        for name, value in (
+            ("remaining_training", remaining_training),
+            ("remaining_evaluation", remaining_evaluation),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+        if not isinstance(launcher_paused, bool) or not isinstance(disk_ok, bool):
+            raise ValueError("launcher_paused and disk_ok must be booleans")
+        if not isinstance(gpu_telemetry, list):
+            raise ValueError("gpu_telemetry must be a list")
+
+        clean_telemetry = []
+        telemetry_indexes = []
+        telemetry_valid = True
+        required = (
+            "index", "memory_used_mib", "memory_total_mib",
+            "utilization_pct", "temperature_c",
+        )
+        for item in gpu_telemetry:
+            if not isinstance(item, dict) or any(key not in item for key in required):
+                telemetry_valid = False
+                continue
+            try:
+                index = item["index"]
+                used = item["memory_used_mib"]
+                total = item["memory_total_mib"]
+                utilization = item["utilization_pct"]
+                temperature = item["temperature_c"]
+                numeric = (index, used, total, utilization, temperature)
+                if any(isinstance(value, bool) or not isinstance(value, (int, float))
+                       or not math.isfinite(float(value)) for value in numeric):
+                    raise ValueError
+                index = int(index)
+                if (float(index) != float(item["index"]) or index not in scope
+                        or used < 0 or total <= 0 or used > total
+                        or utilization < 0 or utilization > 100
+                        or temperature < -100 or temperature > 200):
+                    raise ValueError
+                telemetry_indexes.append(index)
+                clean_telemetry.append({
+                    "index": index,
+                    "memory_used_mib": int(used),
+                    "memory_total_mib": int(total),
+                    "utilization_pct": float(utilization),
+                    "temperature_c": float(temperature),
+                })
+            except (TypeError, ValueError):
+                telemetry_valid = False
+        telemetry_complete = (
+            telemetry_valid
+            and len(telemetry_indexes) == len(set(telemetry_indexes))
+            and sorted(telemetry_indexes) == scope
+        )
+        clean_telemetry.sort(key=lambda item: item["index"])
+        observed_at = datetime.datetime.fromtimestamp(
+            float(observed_at_epoch), datetime.timezone.utc
+        ).isoformat()
+        canonical = lambda value: json.dumps(
+            value, sort_keys=True, separators=(",", ":"))
+
+        def _insert():
+            cursor = self.conn.execute(
+                "INSERT OR IGNORE INTO harness_efficiency_samples "
+                "(campaign_id, controller_id, host, iteration, "
+                "observed_at_epoch, observed_at, "
+                "poll_seconds, physical_scope_json, gpu_telemetry_json, "
+                "telemetry_complete, active_training_gpus_json, "
+                "active_evaluation_gpus_json, remaining_training, "
+                "remaining_evaluation, launcher_paused, disk_ok) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    campaign_id.strip() if campaign_id else None,
+                    controller_id.strip(), host.strip(), iteration,
+                    float(observed_at_epoch), observed_at, float(poll_seconds),
+                    canonical(scope), canonical(clean_telemetry),
+                    int(telemetry_complete), canonical(training),
+                    canonical(evaluation), remaining_training,
+                    remaining_evaluation, int(launcher_paused), int(disk_ok),
+                ),
+            )
+            self.conn.commit()
+            return cursor.rowcount == 1
+
+        return bool(_retry_on_busy(_insert))

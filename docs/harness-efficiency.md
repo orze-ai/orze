@@ -14,13 +14,15 @@ python -m orze.benchmarks.harness_efficiency \
   --work-dir /path/to/project/.orze \
   --ideas 50000 \
   --queue-limit 2000 \
-  --iterations 15 \
+  --iterations 20 \
   --output /path/to/receipt.json
 ```
 
 The command does not import a model, launch training/evaluation, or probe an
-accelerator. A receipt is `VERIFIED` only with at least 10,000 ideas and 15
-steady-state samples, and only when every target and invariant passes:
+accelerator. A receipt is `VERIFIED` only with at least 10,000 ideas and 20
+steady-state samples, and only when every target and invariant passes. Twenty
+is the minimum sample count at which nearest-rank p95 is not simply the single
+maximum; the receipt also retains every raw latency observation:
 
 | Dimension | Target |
 |---|---:|
@@ -71,3 +73,51 @@ separate preregistered run with real workload evidence:
 
 These rows remain open until their own receipts exist. Local proxy scores,
 configuration inspection, or a CPU benchmark cannot close them.
+
+## Preregistered campaign receipt
+
+Before a campaign starts, write a JSON manifest with a unique `campaign_id`,
+future `start_epoch` and `end_epoch`, the exact physical `physical_scope`, the
+configured `poll_seconds`, minimum evidence counts, and all four targets from
+`DEFAULT_CAMPAIGN_TARGETS`. Thresholds may be stricter than the defaults but
+cannot be weakened. Register it once in the same IdeaLake used by the daemon:
+
+```bash
+python -m orze.engine.campaign_efficiency register \
+  --db /path/to/project/.orze/idea_lake.db \
+  --manifest /path/to/campaign-manifest.json
+```
+
+Registration stores a canonical manifest hash and database timestamp, rejects
+a campaign whose start is not in the future, and never overwrites an existing
+campaign ID through the API. This local SQLite ledger is auditable evidence,
+not a cryptographic third-party attestation; externally published claims still
+need the repository's sealed source/data identities and official evaluation
+receipts. Then opt in to one local sample per ordinary scheduler iteration:
+
+```yaml
+campaign_efficiency:
+  enabled: true
+  campaign_id: the-same-unique-id
+```
+
+Each sample records only controller/host identity, timestamps, scheduler demand,
+active physical GPU IDs, and scoped hardware counters. It contains no idea IDs,
+configs, scores, model outputs, or dataset content. The hardware query is always
+passed the controller's explicit GPU list; an error or partial response is
+stored as incomplete evidence and is never replaced by an all-GPU query.
+
+After the registered window ends, generate the receipt:
+
+```bash
+python -m orze.engine.campaign_efficiency analyze \
+  --db /path/to/project/.orze/idea_lake.db \
+  --manifest /path/to/campaign-manifest.json \
+  --output /path/to/campaign-receipt.json
+```
+
+`VERIFIED` requires an exact preregistered-manifest match, complete samples and
+physical scope, sufficient lifecycle evidence and demand, and every target.
+Incomplete evidence is `UNVERIFIED`; complete evidence that misses a target is
+`FAILED`. Mean hardware utilization is reported as an observation, not silently
+used as a substitute for allocation duty cycle or official benchmark evidence.

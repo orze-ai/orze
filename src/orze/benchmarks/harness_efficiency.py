@@ -32,7 +32,11 @@ from orze.idea_lake import IdeaLake
 
 SCHEMA_VERSION = 1
 MIN_ACCEPTANCE_IDEAS = 10_000
-MIN_ACCEPTANCE_ITERATIONS = 15
+# A nearest-rank p95 needs at least 20 observations; with 15, p95 is the
+# single maximum and one unrelated filesystem scheduling pause determines the
+# verdict. Twenty still fails on two slow observations while exposing raw
+# samples for audit.
+MIN_ACCEPTANCE_ITERATIONS = 20
 MIN_BULK_INSERT_ROWS_PER_SECOND = 1_000.0
 DEFAULT_TARGETS_MS = {
     "cold_open_p95_ms": 75.0,
@@ -60,6 +64,7 @@ def _latency_summary(values: Iterable[float]) -> dict:
     samples = list(values)
     return {
         "samples": len(samples),
+        "samples_ms": [round(value, 3) for value in samples],
         "median_ms": round(statistics.median(samples), 3),
         "p95_ms": round(_percentile(samples, 0.95), 3),
         "max_ms": round(max(samples), 3),

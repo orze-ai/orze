@@ -29,7 +29,9 @@ from orze.engine.scheduler import (
 )
 from orze.engine.launcher import (
     launch, check_active, _get_checkpoint_dir, _write_failure,
+    _is_launcher_paused,
 )
+from orze.engine.campaign_efficiency import capture_campaign_efficiency_sample
 from orze.engine.evaluator import (
     launch_eval, check_active_evals, run_eval, run_post_scripts,
 )
@@ -1246,6 +1248,44 @@ class Orze(OrzePhaseMixin):
 
             # 7. Launch training on free GPUs + circuit breaker
             free = self._launch_training(unclaimed, disk_ok, ideas)
+
+            # 7b. Persist one local, privacy-safe scheduler/GPU observation.
+            # The sampler queries exactly this controller's physical scope;
+            # failures are retained as incomplete evidence and never retried
+            # with an unscoped all-GPU query.
+            campaign_efficiency_cfg = cfg.get("campaign_efficiency") or {}
+            if (not managed_idea and self.lake is not None
+                    and campaign_efficiency_cfg.get("enabled", False)):
+                try:
+                    active_eval_ids = {
+                        process.idea_id for process in self.active_evals.values()
+                    }
+                    backlog_remaining = sum(
+                        1 for _, idea_id in backlog
+                        if idea_id not in active_eval_ids
+                    )
+                    capture_campaign_efficiency_sample(
+                        self.lake,
+                        campaign_id=campaign_efficiency_cfg.get("campaign_id"),
+                        controller_id=self._instance_uuid,
+                        host=self._hostname,
+                        iteration=self.iteration,
+                        poll_seconds=cfg["poll"],
+                        physical_scope=list(self.gpu_ids),
+                        active_training_gpus=list(
+                            self.slot_mgr.gpu_ids_in_use()),
+                        active_evaluation_gpus=list(self.active_evals.keys()),
+                        remaining_training=len(unclaimed),
+                        remaining_evaluation=(
+                            len(self.pending_evals) + backlog_remaining
+                        ),
+                        launcher_paused=_is_launcher_paused(
+                            cfg, self.results_dir),
+                        disk_ok=bool(disk_ok),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "campaign efficiency sample failed: %s", exc)
 
             # 8. Update report
             if managed_idea:
