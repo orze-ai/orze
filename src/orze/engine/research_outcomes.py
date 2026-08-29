@@ -92,6 +92,7 @@ def analyze_research_outcomes(
                 start_epoch=manifest["start_epoch"],
                 end_epoch=manifest["end_epoch"],
                 physical_scope=manifest["physical_scope"],
+                expected_rejections=outcome["expected_rejections"],
             )
         except Exception as exc:
             compute = {
@@ -190,6 +191,9 @@ def analyze_research_outcomes(
             "duplicate_training_attempts"
         ),
         "zero_gpu_rejection_rate": compute.get("zero_gpu_rejection_rate"),
+        "expected_rejection_attempts": compute.get(
+            "expected_rejection_attempts"
+        ),
         "reproducibility_groups": len(reproduction.get("groups") or []),
     }
 
@@ -203,6 +207,9 @@ def analyze_research_outcomes(
         ),
         "exact_preregistered_idea_universe": idea_universe_matches,
         "compute_evidence_complete": compute.get("status") == "VERIFIED",
+        "rejection_contract_complete": (
+            compute.get("rejection_contract_complete") is True
+        ),
         "qualified_success_identity_complete": success_identity_complete,
         "lineage_evidence_complete": lineage.get("status") in {
             "VERIFIED", "NOT_APPLICABLE",

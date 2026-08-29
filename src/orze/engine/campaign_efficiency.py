@@ -503,6 +503,7 @@ def _manifest_error(
         if (not isinstance(outcome, dict)
                 or set(outcome) != {
                     "expected_decision_identity_sha256",
+                    "expected_rejections",
                     "artifact_relation",
                     "reproducibility_contract",
                     "targets",
@@ -515,6 +516,29 @@ def _manifest_error(
                        or any(char not in "0123456789abcdef" for char in value)
                        for value in identities)):
             return "outcome_contract decision identities are invalid"
+        expected_rejections = outcome.get("expected_rejections")
+        rejection_keys = []
+        if not isinstance(expected_rejections, list):
+            return "outcome_contract expected_rejections must be a list"
+        for rejection in expected_rejections:
+            if (not isinstance(rejection, dict)
+                    or set(rejection) != {"idea_id", "phase", "reason_code"}
+                    or rejection.get("idea_id") not in idea_ids
+                    or rejection.get("phase") not in {
+                        "admission", "pre_script", "training", "posthoc",
+                        "evaluation", "post_script",
+                    }
+                    or not isinstance(rejection.get("reason_code"), str)
+                    or _CONTROLLER_RE.fullmatch(
+                        rejection["reason_code"]
+                    ) is None):
+                return "outcome_contract expected_rejections are invalid"
+            rejection_keys.append((
+                rejection["idea_id"], rejection["phase"],
+                rejection["reason_code"],
+            ))
+        if len(rejection_keys) != len(set(rejection_keys)):
+            return "outcome_contract expected_rejections must be unique"
         if outcome.get("artifact_relation") not in {
                 "identical", "distinct", "any"}:
             return "outcome_contract artifact_relation is invalid"

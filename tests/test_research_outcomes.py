@@ -117,7 +117,7 @@ def _cfg(tmp_path):
 
 def _build_campaign(
     tmp_path, monkeypatch, *, qualified=True, expected_idea_ids=None,
-    observe_rejection=True,
+    observe_rejection=True, expected_rejections=None,
 ):
     now = time.time()
     start = now - 10
@@ -157,6 +157,13 @@ def _build_campaign(
         "targets": dict(DEFAULT_CAMPAIGN_TARGETS),
         "outcome_contract": {
             "expected_decision_identity_sha256": [identity],
+            "expected_rejections": (
+                expected_rejections if expected_rejections is not None else [{
+                    "idea_id": idea_id,
+                    "phase": "admission",
+                    "reason_code": "synthetic_preallocation_rejection",
+                }]
+            ),
             "artifact_relation": "any",
             "reproducibility_contract": {
                 "mode": "not_applicable",
@@ -305,8 +312,51 @@ def test_research_outcome_does_not_pass_unobserved_rejection_target(
         cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
     )
 
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["metrics"]["zero_gpu_rejection_rate"] == 0.0
+    assert receipt["checks"]["rejection_contract_complete"]["passed"] is False
+    assert receipt["checks"]["zero_gpu_rejection_rate"]["passed"] is False
+
+
+def test_late_policy_rejection_cannot_hide_behind_failed_outcome(
+        tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path,
+        monkeypatch,
+        qualified=True,
+        expected_rejections=[
+            {
+                "idea_id": "idea-outcome",
+                "phase": "admission",
+                "reason_code": "synthetic_preallocation_rejection",
+            },
+            {
+                "idea_id": "idea-outcome",
+                "phase": "evaluation",
+                "reason_code": "late_policy_rejection",
+            },
+        ],
+    )
+    late = SimpleNamespace(
+        idea_id="idea-outcome",
+        attempt_id="d" * 32,
+        process=SimpleNamespace(pid=os.getpid()),
+        gpu=5,
+        start_time=time.time() - 1,
+    )
+    idea_dir = results / late.idea_id
+    record_compute_start(late, idea_dir, phase="evaluation")
+    record_compute_terminal(
+        late, idea_dir, "failed", "late_policy_rejection",
+        phase="evaluation", return_code=1,
+    )
+
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
+    )
+
     assert receipt["status"] == "FAILED"
-    assert receipt["metrics"]["zero_gpu_rejection_rate"] is None
+    assert receipt["metrics"]["zero_gpu_rejection_rate"] == 0.5
     assert receipt["checks"]["zero_gpu_rejection_rate"]["passed"] is False
 
 
@@ -403,6 +453,7 @@ def test_research_outcome_rejects_decision_universe_mismatch(
         monkeypatch,
         qualified=True,
         expected_idea_ids=["idea-other"],
+        expected_rejections=[],
     )
 
     receipt = analyze_research_outcomes(

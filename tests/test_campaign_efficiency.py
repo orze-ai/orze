@@ -79,6 +79,27 @@ def _demand_membership(
     }
 
 
+def _outcome_contract(manifest):
+    return {
+        "expected_decision_identity_sha256": ["a" * 64],
+        "expected_rejections": [],
+        "artifact_relation": "identical",
+        "reproducibility_contract": {
+            "mode": "not_applicable",
+            "rationale": (
+                "This synthetic campaign does not ask a replication question."
+            ),
+            "expected_config_identity_sha256": {
+                idea_id: config_identity_sha256({"seed": index})
+                for index, idea_id in enumerate(
+                    manifest["expected_idea_ids"], start=1
+                )
+            },
+        },
+        "targets": dict(DEFAULT_OUTCOME_TARGETS),
+    }
+
+
 def _populate_complete_campaign(
         db_path, manifest, *, controllers=None, hosts=None):
     controllers = controllers or ["controller-a"] * 5
@@ -747,27 +768,26 @@ def test_registration_rejects_weakened_targets(tmp_path):
 
 def test_registration_rejects_weakened_outcome_targets(tmp_path):
     manifest = _manifest()
-    manifest["outcome_contract"] = {
-        "expected_decision_identity_sha256": ["a" * 64],
-        "artifact_relation": "identical",
-        "reproducibility_contract": {
-            "mode": "not_applicable",
-            "rationale": (
-                "This synthetic campaign does not ask a replication question."
-            ),
-            "expected_config_identity_sha256": {
-                idea_id: config_identity_sha256({"seed": index})
-                for index, idea_id in enumerate(
-                    manifest["expected_idea_ids"], start=1
-                )
-            },
-        },
-        "targets": dict(DEFAULT_OUTCOME_TARGETS),
-    }
+    manifest["outcome_contract"] = _outcome_contract(manifest)
     manifest["outcome_contract"]["targets"][
         "max_gpu_hours_per_qualified_success"
     ] = 8.1
     with pytest.raises(ValueError, match="cannot be weaker"):
+        preregister_campaign(tmp_path / "lake.db", manifest)
+
+
+def test_registration_rejects_duplicate_expected_rejections(tmp_path):
+    manifest = _manifest()
+    manifest["outcome_contract"] = _outcome_contract(manifest)
+    rejection = {
+        "idea_id": "idea-001",
+        "phase": "admission",
+        "reason_code": "known_invalid_candidate",
+    }
+    manifest["outcome_contract"]["expected_rejections"] = [
+        rejection, dict(rejection),
+    ]
+    with pytest.raises(ValueError, match="expected_rejections must be unique"):
         preregister_campaign(tmp_path / "lake.db", manifest)
 
 

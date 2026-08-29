@@ -574,6 +574,11 @@ def test_campaign_compute_audit_verifies_closed_scoped_exact_ideas(tmp_path):
         start_epoch=now - 10,
         end_epoch=now + 10,
         physical_scope=[4, 5, 6, 7],
+        expected_rejections=[{
+            "idea_id": rejected_id,
+            "phase": "admission",
+            "reason_code": "method_validator_rejected",
+        }],
     )
 
     assert audit["status"] == "VERIFIED"
@@ -605,6 +610,7 @@ def test_campaign_compute_audit_does_not_invent_unobserved_rejection_rate(
         start_epoch=now - 10,
         end_epoch=now + 10,
         physical_scope=[4, 5, 6, 7],
+        expected_rejections=[],
     )
 
     assert audit["status"] == "VERIFIED"
@@ -631,12 +637,43 @@ def test_campaign_compute_audit_counts_allocated_rejection_in_denominator(
         start_epoch=now - 10,
         end_epoch=now + 10,
         physical_scope=[4, 5, 6, 7],
+        expected_rejections=[{
+            "idea_id": rejected.idea_id,
+            "phase": "training",
+            "reason_code": "late_policy_rejection",
+        }],
     )
 
     assert audit["status"] == "VERIFIED"
     assert audit["rejection_attempts"] == 1
     assert audit["zero_gpu_rejection_attempts"] == 0
     assert audit["zero_gpu_rejection_rate"] == 0.0
+
+
+def test_campaign_compute_audit_rejects_unregistered_rejection_attempt(
+        tmp_path):
+    results = tmp_path / "results"
+    now = time.time()
+    idea_id = "idea-unregistered-rejection"
+    assert claim(idea_id, results, 4)
+    record_zero_gpu_outcome(
+        idea_id, results / idea_id, 4, "rejected",
+        "undeclared_policy_rejection",
+    )
+
+    audit = audit_campaign_compute_receipts(
+        results,
+        idea_ids=[idea_id],
+        start_epoch=now - 10,
+        end_epoch=now + 10,
+        physical_scope=[4, 5, 6, 7],
+        expected_rejections=[],
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["rejection_contract_complete"] is False
+    assert len(audit["unexpected_rejection_attempts"]) == 1
+    assert audit["zero_gpu_rejection_rate"] is None
 
 
 def test_campaign_compute_audit_fails_closed_on_scope_and_missing_terminal(
@@ -653,6 +690,7 @@ def test_campaign_compute_audit_fails_closed_on_scope_and_missing_terminal(
         start_epoch=now - 10,
         end_epoch=now + 10,
         physical_scope=[5, 6, 7],
+        expected_rejections=[],
     )
 
     assert audit["status"] == "UNVERIFIED"
@@ -682,6 +720,7 @@ def test_campaign_compute_audit_rejects_redirected_receipt(tmp_path):
         start_epoch=now - 10,
         end_epoch=now + 10,
         physical_scope=[4, 5, 6, 7],
+        expected_rejections=[],
     )
 
     assert audit["status"] == "UNVERIFIED"
@@ -714,6 +753,7 @@ def test_campaign_compute_audit_cannot_hide_unregistered_losing_idea(tmp_path):
         start_epoch=now - 10,
         end_epoch=now + 10,
         physical_scope=[4, 5, 6, 7],
+        expected_rejections=[],
     )
 
     assert audit["status"] == "UNVERIFIED"

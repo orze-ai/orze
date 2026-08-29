@@ -15,7 +15,7 @@ import re
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Optional
+from typing import Mapping, Optional
 
 
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
@@ -436,13 +436,15 @@ def audit_campaign_compute_receipts(
     start_epoch: float,
     end_epoch: float,
     physical_scope: list[int],
+    expected_rejections: list[Mapping],
 ) -> dict:
     """Audit exact campaign compute evidence without trusting trainer output.
 
     Unlike the repository-wide operational summary, this verifier requires a
-    closed idea set and time/GPU scope. Every expected idea must have terminal
-    accounting, every allocated start must close, paired receipts must agree,
-    and zero-GPU outcomes must be genuine pre-allocation rejections/requeues.
+    closed idea set, time/GPU scope, and exact preregistered rejection
+    descriptors. Every expected idea must have terminal accounting, every
+    allocated start must close, paired receipts must agree, and zero-GPU
+    outcomes must be genuine pre-allocation rejections/requeues.
     """
     if (not isinstance(idea_ids, list) or not idea_ids
             or len(idea_ids) != len(set(idea_ids))):
@@ -461,6 +463,22 @@ def audit_campaign_compute_receipts(
                    for gpu in physical_scope)):
         raise ComputeAccountingError("campaign_physical_scope_invalid")
     allowed = set(physical_scope)
+    if not isinstance(expected_rejections, list):
+        raise ComputeAccountingError("expected_rejections_invalid")
+    expected_rejection_keys = []
+    for item in expected_rejections:
+        if (not isinstance(item, Mapping)
+                or set(item) != {"idea_id", "phase", "reason_code"}):
+            raise ComputeAccountingError("expected_rejections_invalid")
+        idea_id = _token(item["idea_id"], "idea_id")
+        phase = _token(item["phase"], "phase")
+        reason_code = _token(item["reason_code"], "reason_code")
+        if idea_id not in expected or phase not in _PHASES:
+            raise ComputeAccountingError("expected_rejections_invalid")
+        expected_rejection_keys.append((idea_id, phase, reason_code))
+    if len(expected_rejection_keys) != len(set(expected_rejection_keys)):
+        raise ComputeAccountingError("expected_rejections_duplicate")
+    expected_rejection_set = set(expected_rejection_keys)
 
     invalid = 0
     out_of_scope = 0
@@ -548,6 +566,8 @@ def audit_campaign_compute_receipts(
                         raise ValueError
                     phase = _token(receipt.get("phase", ""), "phase")
                     outcome = _token(receipt.get("outcome", ""), "outcome")
+                    if event == "terminal":
+                        _token(receipt.get("reason_code", ""), "reason_code")
                     if phase not in _PHASES or outcome not in _OUTCOMES:
                         raise ValueError
                     gpu = receipt.get("physical_gpu")
@@ -589,6 +609,7 @@ def audit_campaign_compute_receipts(
     zero_gpu_valid = 0
     rejection_attempts = 0
     zero_gpu_rejections = 0
+    valid_zero_gpu_rejection_keys = []
     allocated_seconds = 0.0
     terminal_ideas = set()
     training_starts = {}
@@ -631,6 +652,9 @@ def audit_campaign_compute_receipts(
                 zero_gpu_valid += 1
                 if outcome == "rejected":
                     zero_gpu_rejections += 1
+                    valid_zero_gpu_rejection_keys.append((
+                        idea_id, phase, terminal["reason_code"],
+                    ))
             else:
                 invalid += 1
             continue
@@ -652,6 +676,54 @@ def audit_campaign_compute_receipts(
     duplicate_training_attempts = sum(
         max(0, count - 1) for count in training_starts.values()
     )
+    observed_expected_rejections = {}
+    unexpected_rejection_attempts = []
+    for (idea_id, attempt_id), pair in events.items():
+        terminal = pair.get("terminal")
+        if terminal is None:
+            continue
+        key = (idea_id, terminal["phase"], terminal["reason_code"])
+        if key in expected_rejection_set:
+            observed_expected_rejections.setdefault(key, []).append({
+                "idea_id": idea_id,
+                "attempt_id": attempt_id,
+                "phase": terminal["phase"],
+                "reason_code": terminal["reason_code"],
+                "outcome": terminal["outcome"],
+                "allocated": pair.get("start") is not None,
+            })
+        elif terminal["outcome"] == "rejected":
+            unexpected_rejection_attempts.append({
+                "idea_id": idea_id,
+                "attempt_id": attempt_id,
+                "phase": terminal["phase"],
+                "reason_code": terminal["reason_code"],
+                "allocated": pair.get("start") is not None,
+            })
+    missing_expected_rejections = [
+        {"idea_id": idea_id, "phase": phase, "reason_code": reason_code}
+        for idea_id, phase, reason_code in expected_rejection_keys
+        if (idea_id, phase, reason_code) not in observed_expected_rejections
+    ]
+    duplicate_expected_rejections = [
+        event
+        for key in expected_rejection_keys
+        for event in observed_expected_rejections.get(key, [])[1:]
+    ]
+    expected_rejection_observations = [
+        event
+        for key in expected_rejection_keys
+        for event in observed_expected_rejections.get(key, [])
+    ]
+    valid_zero_gpu_rejection_set = set(valid_zero_gpu_rejection_keys)
+    matched_zero_gpu_rejections = sum(
+        key in valid_zero_gpu_rejection_set for key in expected_rejection_keys
+    )
+    rejection_contract_complete = (
+        not missing_expected_rejections
+        and not duplicate_expected_rejections
+        and not unexpected_rejection_attempts
+    )
     missing_terminal_ideas = sorted(expected - terminal_ideas)
     evidence_complete = (
         invalid == 0
@@ -660,6 +732,7 @@ def audit_campaign_compute_receipts(
         and not missing_terminal_ideas
         and not unexpected_ideas
         and zero_gpu == zero_gpu_valid
+        and rejection_contract_complete
     )
     return {
         "schema_version": 1,
@@ -675,11 +748,22 @@ def audit_campaign_compute_receipts(
         "incomplete_started_attempts": incomplete,
         "zero_gpu_terminal_attempts": zero_gpu,
         "valid_zero_gpu_terminal_attempts": zero_gpu_valid,
-        "rejection_attempts": rejection_attempts,
-        "zero_gpu_rejection_attempts": zero_gpu_rejections,
+        "expected_rejection_attempts": len(expected_rejection_keys),
+        "observed_rejection_outcome_attempts": rejection_attempts,
+        "observed_zero_gpu_rejection_outcome_attempts": zero_gpu_rejections,
+        "rejection_attempts": len(expected_rejection_keys),
+        "zero_gpu_rejection_attempts": matched_zero_gpu_rejections,
         "zero_gpu_rejection_rate": (
-            zero_gpu_rejections / rejection_attempts
-            if rejection_attempts else None
+            matched_zero_gpu_rejections / len(expected_rejection_keys)
+            if expected_rejection_keys else None
+        ),
+        "rejection_contract_complete": rejection_contract_complete,
+        "missing_expected_rejections": missing_expected_rejections,
+        "duplicate_expected_rejections": duplicate_expected_rejections,
+        "unexpected_rejection_attempts": unexpected_rejection_attempts,
+        "expected_rejection_observations": expected_rejection_observations,
+        "allocated_expected_rejection_attempts": sum(
+            event["allocated"] for event in expected_rejection_observations
         ),
         "out_of_scope_receipts": out_of_scope,
         "invalid_receipts": invalid,
