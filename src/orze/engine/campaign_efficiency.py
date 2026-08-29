@@ -555,6 +555,45 @@ def _percentile(values: List[float], percentile: float) -> Optional[float]:
     return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
 
 
+def _time_weighted_allocation_duty(
+    observations: List[tuple[float, float, float]],
+    *,
+    start_epoch: float,
+    end_epoch: float,
+) -> tuple[Optional[float], float, float]:
+    """Integrate allocation fulfillment over demanded wall-clock time.
+
+    Each observation is ``(epoch, demand_indicator, allocation_ratio)``.
+    Boundary intervals retain the nearest observation and interior intervals
+    use trapezoidal integration. Consequently, duplicating cadence inside an
+    otherwise unchanged short high-duty interval adds no statistical weight.
+    """
+    if not observations:
+        return None, 0.0, 0.0
+    ordered = sorted(observations, key=lambda item: item[0])
+    demand_seconds = 0.0
+    fulfilled_seconds = 0.0
+
+    first_epoch, first_demand, first_ratio = ordered[0]
+    leading = max(0.0, first_epoch - start_epoch)
+    demand_seconds += leading * first_demand
+    fulfilled_seconds += leading * first_ratio
+
+    for left, right in zip(ordered, ordered[1:]):
+        duration = max(0.0, right[0] - left[0])
+        demand_seconds += duration * (left[1] + right[1]) / 2.0
+        fulfilled_seconds += duration * (left[2] + right[2]) / 2.0
+
+    last_epoch, last_demand, last_ratio = ordered[-1]
+    trailing = max(0.0, end_epoch - last_epoch)
+    demand_seconds += trailing * last_demand
+    fulfilled_seconds += trailing * last_ratio
+    duty = (
+        fulfilled_seconds / demand_seconds if demand_seconds > 0 else None
+    )
+    return duty, demand_seconds, fulfilled_seconds
+
+
 def _epoch(value: str) -> Optional[float]:
     if not value:
         return None
@@ -1154,6 +1193,7 @@ def analyze_campaign(
     )
 
     allocation_ratios = []
+    allocation_observations = []
     allocated_utilization = []
     demand_samples = 0
     for row in parsed_rows:
@@ -1167,7 +1207,15 @@ def analyze_campaign(
         desired = min(len(scope), len(active) + remaining)
         if desired and membership is not None:
             demand_samples += 1
-            allocation_ratios.append(len(active) / desired)
+            ratio = len(active) / desired
+            allocation_ratios.append(ratio)
+            allocation_observations.append((
+                float(row["observed_at_epoch"]), 1.0, ratio,
+            ))
+        else:
+            allocation_observations.append((
+                float(row["observed_at_epoch"]), 0.0, 0.0,
+            ))
         telemetry_by_gpu = {
             item["index"]: item["utilization_pct"] for item in row["telemetry"]
             if isinstance(item, dict) and "index" in item
@@ -1514,9 +1562,18 @@ def analyze_campaign(
             "eligible_queue_to_claim_seconds": latency,
         })
 
-    allocation_duty = (
+    sample_mean_allocation_duty = (
         sum(allocation_ratios) / len(allocation_ratios)
         if allocation_ratios else None
+    )
+    (
+        allocation_duty,
+        allocation_demand_seconds,
+        allocation_fulfillment_seconds,
+    ) = _time_weighted_allocation_duty(
+        allocation_observations,
+        start_epoch=float(manifest["start_epoch"]),
+        end_epoch=float(manifest["end_epoch"]),
     )
     raw_queue_p95 = _percentile(queue_to_claim, 0.95)
     queue_p95 = _percentile(eligible_queue_to_claim, 0.95)
@@ -1557,6 +1614,12 @@ def analyze_campaign(
         "max_sample_gap_seconds": max_gap,
         "max_sample_gap_poll_intervals": max_gap / poll,
         "allocation_duty_cycle": allocation_duty,
+        "allocation_duty_aggregation": (
+            "elapsed_time_weighted_trapezoidal"
+        ),
+        "sample_mean_allocation_duty_cycle": sample_mean_allocation_duty,
+        "allocation_demand_seconds": allocation_demand_seconds,
+        "allocation_fulfillment_seconds": allocation_fulfillment_seconds,
         "allocated_gpu_utilization_mean_pct": (
             sum(allocated_utilization) / len(allocated_utilization)
             if allocated_utilization else None

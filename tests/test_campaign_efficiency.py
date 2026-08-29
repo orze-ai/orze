@@ -1012,7 +1012,10 @@ def test_preregistered_complete_campaign_can_be_verified(tmp_path):
     )
     assert receipt["status"] == "VERIFIED", receipt["checks"]
     assert receipt["metrics"]["sample_count"] == 5
-    assert receipt["metrics"]["allocation_duty_cycle"] == 0.9
+    assert receipt["metrics"]["allocation_duty_cycle"] == pytest.approx(
+        0.90625
+    )
+    assert receipt["metrics"]["sample_mean_allocation_duty_cycle"] == 0.9
     assert receipt["metrics"]["allocated_gpu_utilization_mean_pct"] == 95.0
     assert receipt["metrics"]["raw_queue_to_claim_p95_seconds"] == 19.25
     assert receipt["metrics"]["queue_to_claim_p95_seconds"] == 19.25
@@ -1128,6 +1131,58 @@ def test_understated_scheduler_demand_cannot_inflate_allocation_duty(tmp_path):
     )
     assert receipt["status"] == "UNVERIFIED"
     assert receipt["checks"]["demand_membership_complete"]["passed"] is False
+
+
+def test_bursty_oversampling_cannot_inflate_allocation_duty(tmp_path):
+    """Duty is elapsed-time weighted, not a cadence-weighted row mean."""
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "UPDATE harness_efficiency_samples "
+        "SET active_training_gpus_json = '[4]' WHERE iteration IN (1, 2)"
+    )
+    membership = _demand_membership(
+        manifest, active_training=["idea-002"],
+    )
+    for iteration, offset in enumerate(range(21, 29), start=6):
+        at = manifest["start_epoch"] + offset
+        lake.record_harness_efficiency_sample(
+            campaign_id=manifest["campaign_id"],
+            controller_id="controller-a",
+            host="host-a",
+            iteration=iteration,
+            observed_at_epoch=at,
+            poll_seconds=10,
+            physical_scope=[4, 5, 6, 7],
+            gpu_telemetry=_telemetry([4, 5, 6, 7]),
+            active_training_gpus=[4, 5, 6],
+            active_evaluation_gpus=[],
+            remaining_training=0,
+            remaining_evaluation=0,
+            demand_membership=membership,
+            launcher_paused=False,
+            disk_ok=True,
+        )
+        _record_progress(
+            lake, manifest, controller="controller-a", host="host-a",
+            iteration=iteration, at=at,
+        )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "FAILED", receipt["checks"]
+    assert receipt["metrics"]["sample_mean_allocation_duty_cycle"] > 0.90
+    assert receipt["metrics"]["allocation_duty_cycle"] == pytest.approx(0.8125)
+    assert receipt["metrics"]["allocation_demand_seconds"] == pytest.approx(40)
+    assert receipt["checks"]["allocation_duty_cycle"]["passed"] is False
 
 
 def test_relabeling_queued_demand_as_inactive_fails_lifecycle_check(tmp_path):
