@@ -162,6 +162,7 @@ def test_public_rank_rejects_absent_model_instead_of_inventing_rank():
     assert receipt["status"] == "UNVERIFIED"
     assert receipt["rank_claim_proven"] is False
     assert receipt["reason"] == "public_rank_model_absent"
+    assert receipt["default_dataset_columns"] == DEFAULTS
 
 
 def test_public_rank_rejects_duplicate_model_rows():

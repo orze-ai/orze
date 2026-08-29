@@ -448,6 +448,7 @@ def verify_open_asr_public_rank(
 
         info_response = _request(request, "GET", LEADERBOARD_INFO_URL)
         defaults = _main_endpoint_defaults(_strict_json(info_response.body))
+        receipt["default_dataset_columns"] = defaults
         receipt["public_endpoint_evidence"]["leaderboard_info"] = (
             _endpoint_evidence(info_response, LEADERBOARD_INFO_URL, "GET")
         )
@@ -476,7 +477,6 @@ def verify_open_asr_public_rank(
         table_claim = _derive_table_claim(
             _parse_complete_sse(result_response.body), model_id)
         receipt.update(table_claim)
-        receipt["default_dataset_columns"] = defaults
         if eligibility is None:
             raise PublicRankError("public_rank_model_eligibility_unverified")
         receipt["eligibility_evidence"] = eligibility
