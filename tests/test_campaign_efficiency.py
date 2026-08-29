@@ -2,9 +2,11 @@ import ast
 import datetime
 import inspect
 import json
+import shutil
 import textwrap
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -47,10 +49,13 @@ def _telemetry(scope):
     ]
 
 
-def _manifest():
+def _manifest(tmp_path):
     start = int(time.time()) + 11
     return {
         "campaign_id": "campaign-test-001",
+        "operator_progress_root": str(
+            tmp_path / "results" / "_campaign_progress"
+        ),
         "expected_idea_ids": ["idea-001", "idea-002"],
         "start_epoch": start,
         "end_epoch": start + 40,
@@ -100,6 +105,23 @@ def _outcome_contract(manifest):
     }
 
 
+def _record_progress(
+        lake, manifest, *, controller, host, iteration, at,
+        blocker_code="training_active"):
+    return capture_campaign_progress_update(
+        lake,
+        results_dir=Path(manifest["operator_progress_root"]).parent,
+        campaign_id=manifest["campaign_id"],
+        controller_id=controller,
+        host=host,
+        iteration=iteration,
+        completed_rows=[],
+        primary_metric="score",
+        blocker_code=blocker_code,
+        observed_at_epoch=at,
+    )
+
+
 def _populate_complete_campaign(
         db_path, manifest, *, controllers=None, hosts=None):
     controllers = controllers or ["controller-a"] * 5
@@ -133,20 +155,9 @@ def _populate_complete_campaign(
             launcher_paused=False,
             disk_ok=True,
         )
-        lake.record_harness_campaign_progress(
-            campaign_id=manifest["campaign_id"],
-            controller_id=controller,
-            host=host,
-            iteration=iteration,
-            observed_at_epoch=at,
-            last_valid_artifact_sha256=None,
-            last_valid_artifact_idea_id=None,
-            last_valid_artifact_at_epoch=None,
-            blocker_code="training_active",
-            next_deadline_epoch=min(
-                manifest["end_epoch"],
-                at + manifest["targets"]["max_operator_update_gap_seconds"],
-            ),
+        _record_progress(
+            lake, manifest, controller=controller, host=host,
+            iteration=iteration, at=at,
         )
     lake.conn.executemany(
         "INSERT INTO idea_state "
@@ -246,7 +257,7 @@ def test_campaign_sample_duplicate_must_be_content_identical(tmp_path):
 
 def test_registered_campaign_sample_requires_exact_demand_membership(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
     with pytest.raises(
@@ -486,7 +497,7 @@ def test_managed_campaign_iterations_emit_matching_progress_evidence():
 def test_progress_update_is_visible_content_bound_and_persistent(tmp_path):
     db_path = tmp_path / "lake.db"
     results = tmp_path / "results"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
     row = {
@@ -540,7 +551,7 @@ def test_progress_update_is_visible_content_bound_and_persistent(tmp_path):
 def test_progress_update_identity_conflict_fails_closed(tmp_path):
     db_path = tmp_path / "lake.db"
     results = tmp_path / "results"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
     kwargs = {
@@ -567,7 +578,7 @@ def test_database_failure_cannot_publish_phantom_latest(
         tmp_path, monkeypatch):
     db_path = tmp_path / "lake.db"
     results = tmp_path / "results"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
     monkeypatch.setattr(
@@ -600,7 +611,7 @@ def test_database_failure_cannot_publish_phantom_latest(
 def test_out_of_order_update_cannot_replace_newer_latest(tmp_path):
     db_path = tmp_path / "lake.db"
     results = tmp_path / "results"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
     newer = capture_campaign_progress_update(
@@ -638,7 +649,7 @@ def test_out_of_order_update_cannot_replace_newer_latest(tmp_path):
 
 def test_progress_update_rejects_redirected_output_directory(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
     results = tmp_path / "results"
@@ -710,7 +721,7 @@ def test_active_campaign_registration_is_required_before_launch(tmp_path):
         )
     lake.close()
 
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
     report = require_active_campaign_registration(
@@ -760,14 +771,14 @@ def test_campaign_id_must_be_safe_for_operator_receipt_path():
 
 
 def test_registration_rejects_weakened_targets(tmp_path):
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     manifest["targets"]["min_allocation_duty_cycle"] = 0.89
     with pytest.raises(ValueError, match="cannot be weaker"):
         preregister_campaign(tmp_path / "lake.db", manifest)
 
 
 def test_registration_rejects_weakened_outcome_targets(tmp_path):
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     manifest["outcome_contract"] = _outcome_contract(manifest)
     manifest["outcome_contract"]["targets"][
         "max_gpu_hours_per_qualified_success"
@@ -777,7 +788,7 @@ def test_registration_rejects_weakened_outcome_targets(tmp_path):
 
 
 def test_registration_rejects_duplicate_expected_rejections(tmp_path):
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     manifest["outcome_contract"] = _outcome_contract(manifest)
     rejection = {
         "idea_id": "idea-001",
@@ -793,7 +804,7 @@ def test_registration_rejects_duplicate_expected_rejections(tmp_path):
 
 def test_incomplete_telemetry_is_retained_and_fails_closed(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
     for iteration in range(1, 6):
@@ -821,20 +832,9 @@ def test_incomplete_telemetry_is_retained_and_fails_closed(tmp_path):
             launcher_paused=False,
             disk_ok=True,
         )
-        lake.record_harness_campaign_progress(
-            campaign_id=manifest["campaign_id"],
-            controller_id="controller-a",
-            host="host-a",
-            iteration=iteration,
-            observed_at_epoch=at,
-            last_valid_artifact_sha256=None,
-            last_valid_artifact_idea_id=None,
-            last_valid_artifact_at_epoch=None,
-            blocker_code="training_active",
-            next_deadline_epoch=min(
-                manifest["end_epoch"],
-                at + manifest["targets"]["max_operator_update_gap_seconds"],
-            ),
+        _record_progress(
+            lake, manifest, controller="controller-a", host="host-a",
+            iteration=iteration, at=at,
         )
     lake.close()
 
@@ -847,7 +847,7 @@ def test_incomplete_telemetry_is_retained_and_fails_closed(tmp_path):
 
 def test_preregistered_complete_campaign_can_be_verified(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
     for iteration in range(1, 6):
@@ -875,20 +875,9 @@ def test_preregistered_complete_campaign_can_be_verified(tmp_path):
             launcher_paused=False,
             disk_ok=True,
         )
-        lake.record_harness_campaign_progress(
-            campaign_id=manifest["campaign_id"],
-            controller_id="controller-a",
-            host="host-a",
-            iteration=iteration,
-            observed_at_epoch=at,
-            last_valid_artifact_sha256=None,
-            last_valid_artifact_idea_id=None,
-            last_valid_artifact_at_epoch=None,
-            blocker_code="training_active",
-            next_deadline_epoch=min(
-                manifest["end_epoch"],
-                at + manifest["targets"]["max_operator_update_gap_seconds"],
-            ),
+        _record_progress(
+            lake, manifest, controller="controller-a", host="host-a",
+            iteration=iteration, at=at,
         )
     lake.conn.execute(
         "INSERT INTO idea_state "
@@ -934,10 +923,98 @@ def test_preregistered_complete_campaign_can_be_verified(tmp_path):
     assert receipt["metrics"]["terminal_to_next_claim_p95_seconds"] == 5.0
 
 
+def test_database_rows_cannot_substitute_for_operator_visible_updates(
+        tmp_path):
+    """A green DB timeline is not proof that any update was published."""
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    shutil.rmtree(manifest["operator_progress_root"])
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["operator_publication_complete"][
+        "passed"
+    ] is False
+
+
+def test_missing_latest_operator_view_fails_closed(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    latest = (
+        Path(manifest["operator_progress_root"])
+        / manifest["campaign_id"] / "latest.json"
+    )
+    latest.unlink()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["operator_publication_complete"][
+        "passed"
+    ] is False
+    assert receipt["metrics"]["operator_latest_valid"] is False
+
+
+def test_unexpected_operator_update_file_fails_closed(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    campaign_dir = (
+        Path(manifest["operator_progress_root"]) / manifest["campaign_id"]
+    )
+    (campaign_dir / "phantom.json").write_text("{}\n", encoding="utf-8")
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["metrics"]["operator_publication_reason"] == (
+        "operator_progress_publication_universe_mismatch"
+    )
+
+
+def test_published_operator_blocker_must_match_scheduler_state(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    shutil.rmtree(manifest["operator_progress_root"])
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute("DELETE FROM harness_campaign_progress")
+    lake.conn.commit()
+    for iteration in range(1, 6):
+        at = manifest["start_epoch"] + (iteration - 1) * 10
+        _record_progress(
+            lake, manifest, controller="controller-a", host="host-a",
+            iteration=iteration, at=at, blocker_code="no_eligible_work",
+        )
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["operator_blockers_match_scheduler"][
+        "passed"
+    ] is False
+
+
 def test_understated_scheduler_demand_cannot_inflate_allocation_duty(tmp_path):
     """Aggregate counters alone must not turn queued work into full duty."""
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
@@ -959,7 +1036,7 @@ def test_understated_scheduler_demand_cannot_inflate_allocation_duty(tmp_path):
 
 def test_relabeling_queued_demand_as_inactive_fails_lifecycle_check(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(db_path, manifest)
     hidden = json.dumps({
@@ -993,7 +1070,7 @@ def test_relabeling_queued_demand_as_inactive_fails_lifecycle_check(tmp_path):
 
 def test_one_claim_cannot_fill_multiple_terminal_latency_samples(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
@@ -1020,7 +1097,7 @@ def test_one_claim_cannot_fill_multiple_terminal_latency_samples(tmp_path):
 def test_retry_cannot_hide_an_earlier_slow_queue_to_claim(tmp_path):
     """Every immutable claim must retain its own eligible-queue latency."""
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
@@ -1095,7 +1172,7 @@ def test_retry_cannot_hide_an_earlier_slow_queue_to_claim(tmp_path):
 
 def test_unrelated_lifecycle_rows_cannot_improve_campaign_latency(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
@@ -1124,7 +1201,7 @@ def test_unrelated_lifecycle_rows_cannot_improve_campaign_latency(tmp_path):
 
 def test_missing_preregistered_lifecycle_row_fails_closed(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     manifest["expected_idea_ids"].append("idea-003")
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(db_path, manifest)
@@ -1140,7 +1217,7 @@ def test_missing_preregistered_lifecycle_row_fails_closed(tmp_path):
 
 def test_multiple_sequential_controller_identities_are_observed(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(
         db_path,
@@ -1162,7 +1239,7 @@ def test_multiple_sequential_controller_identities_are_observed(tmp_path):
 
 def test_multiple_physical_hosts_fail_closed(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(
         db_path,
@@ -1182,7 +1259,7 @@ def test_multiple_physical_hosts_fail_closed(tmp_path):
 
 def test_missing_operator_update_fails_closed(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
@@ -1203,7 +1280,7 @@ def test_missing_operator_update_fails_closed(tmp_path):
 
 def test_operator_update_sla_miss_is_a_failed_target(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     manifest["targets"]["max_operator_update_gap_seconds"] = 5.0
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(db_path, manifest)
@@ -1220,7 +1297,7 @@ def test_operator_update_sla_miss_is_a_failed_target(tmp_path):
 
 def test_operator_deadline_tamper_fails_closed(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
@@ -1244,7 +1321,7 @@ def test_operator_deadline_tamper_fails_closed(tmp_path):
 
 def test_operator_update_must_match_scheduler_sample_identity(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     _populate_complete_campaign(db_path, manifest)
     shifted = manifest["start_epoch"] + 11
@@ -1274,15 +1351,27 @@ def test_operator_update_must_match_scheduler_sample_identity(tmp_path):
 
 
 def test_registration_rejects_invalid_campaign_idea_universe(tmp_path):
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     manifest["expected_idea_ids"] = ["idea-001", "idea-001"]
     with pytest.raises(ValueError, match="unique valid idea IDs"):
         preregister_campaign(tmp_path / "lake.db", manifest)
 
 
+def test_registration_requires_canonical_operator_progress_root(tmp_path):
+    manifest = _manifest(tmp_path)
+    manifest.pop("operator_progress_root")
+    with pytest.raises(ValueError, match="missing required fields"):
+        preregister_campaign(tmp_path / "lake.db", manifest)
+
+    manifest = _manifest(tmp_path)
+    manifest["operator_progress_root"] += "/../_campaign_progress"
+    with pytest.raises(ValueError, match="canonical safe absolute path"):
+        preregister_campaign(tmp_path / "lake-2.db", manifest)
+
+
 def test_complete_evidence_with_missed_target_is_failed(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))
     for iteration in range(1, 6):
@@ -1310,20 +1399,10 @@ def test_complete_evidence_with_missed_target_is_failed(tmp_path):
             launcher_paused=False,
             disk_ok=True,
         )
-        lake.record_harness_campaign_progress(
-            campaign_id=manifest["campaign_id"],
-            controller_id="controller-a",
-            host="host-a",
-            iteration=iteration,
-            observed_at_epoch=at,
-            last_valid_artifact_sha256=None,
-            last_valid_artifact_idea_id=None,
-            last_valid_artifact_at_epoch=None,
-            blocker_code="eligible_queue_waiting",
-            next_deadline_epoch=min(
-                manifest["end_epoch"],
-                at + manifest["targets"]["max_operator_update_gap_seconds"],
-            ),
+        _record_progress(
+            lake, manifest, controller="controller-a", host="host-a",
+            iteration=iteration, at=at,
+            blocker_code="training_active",
         )
     lake.conn.execute(
         "INSERT INTO idea_state "
@@ -1367,7 +1446,7 @@ def test_complete_evidence_with_missed_target_is_failed(tmp_path):
 
 def test_tampered_sample_is_unverified_instead_of_crashing(tmp_path):
     db_path = tmp_path / "lake.db"
-    manifest = _manifest()
+    manifest = _manifest(tmp_path)
     manifest["minimum_samples"] = 1
     preregister_campaign(db_path, manifest)
     lake = IdeaLake(str(db_path))

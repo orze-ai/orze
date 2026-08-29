@@ -52,7 +52,10 @@ from orze.engine.accounting import (
     record_compute_terminal,
     record_zero_gpu_outcome,
 )
-from orze.engine.campaign_efficiency import capture_campaign_progress_update
+from orze.engine.campaign_efficiency import (
+    capture_campaign_progress_update,
+    derive_campaign_progress_blocker,
+)
 from orze.engine.scheduler import claim, get_unclaimed, _count_statuses
 from orze.hardware.gpu import get_gpu_memory_used, _eval_already_running
 from orze.reporting.leaderboard import update_report, write_admin_cache
@@ -1815,20 +1818,14 @@ class OrzePhaseMixin:
                 or not campaign_cfg.get("enabled", False)):
             return None
         was_paused = _is_launcher_paused(cfg, self.results_dir)
-        if was_paused:
-            progress_blocker = "launcher_paused"
-        elif not disk_ok:
-            progress_blocker = "disk_unavailable"
-        elif self.active_evals:
-            progress_blocker = "evaluation_active"
-        elif self.active:
-            progress_blocker = "training_active"
-        elif self.pending_evals or backlog:
-            progress_blocker = "evaluation_queued"
-        elif unclaimed:
-            progress_blocker = "eligible_queue_waiting"
-        else:
-            progress_blocker = "no_eligible_work"
+        progress_blocker = derive_campaign_progress_blocker(
+            launcher_paused=was_paused,
+            disk_ok=bool(disk_ok),
+            active_training=bool(self.active),
+            active_evaluation=bool(self.active_evals),
+            remaining_training=bool(unclaimed),
+            remaining_evaluation=bool(self.pending_evals or backlog),
+        )
         try:
             campaign_progress = capture_campaign_progress_update(
                 self.lake,

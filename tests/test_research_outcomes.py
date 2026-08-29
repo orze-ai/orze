@@ -146,6 +146,7 @@ def _build_campaign(
     identity = staged["identity_sha256"]
     manifest = {
         "campaign_id": "research-outcome-test",
+        "operator_progress_root": str(results / "_campaign_progress"),
         "expected_idea_ids": expected_idea_ids or [idea_id],
         "start_epoch": start,
         "end_epoch": end,

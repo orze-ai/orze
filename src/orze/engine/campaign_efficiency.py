@@ -12,6 +12,7 @@ import datetime
 import hashlib
 import json
 import math
+import os
 import re
 import time
 from pathlib import Path
@@ -68,6 +69,27 @@ _PROGRESS_CORE_FIELDS = frozenset({
     "blocker_code",
     "next_deadline_epoch",
 })
+
+
+def derive_campaign_progress_blocker(
+    *, launcher_paused: bool, disk_ok: bool,
+    active_training: bool, active_evaluation: bool,
+    remaining_training: bool, remaining_evaluation: bool,
+) -> str:
+    """Derive the one truthful operator blocker from scheduler state."""
+    if launcher_paused:
+        return "launcher_paused"
+    if not disk_ok:
+        return "disk_unavailable"
+    if active_evaluation:
+        return "evaluation_active"
+    if active_training:
+        return "training_active"
+    if remaining_evaluation:
+        return "evaluation_queued"
+    if remaining_training:
+        return "eligible_queue_waiting"
+    return "no_eligible_work"
 
 
 def capture_campaign_efficiency_sample(
@@ -268,6 +290,119 @@ def _publish_latest_monotonic(progress_dir: Path, payload: dict) -> None:
         _fs_unlock(lock_dir)
 
 
+def _read_published_progress(path: Path) -> dict:
+    """Read one operator receipt without accepting redirects or ambiguity."""
+    try:
+        stat = path.lstat()
+        if (path.is_symlink() or not path.is_file() or stat.st_nlink != 1
+                or not 1 <= stat.st_size <= 64 * 1024):
+            raise OSError("campaign_progress_publication_invalid")
+        raw = path.read_text(encoding="utf-8")
+
+        def strict_object(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("duplicate key")
+                result[key] = value
+            return result
+
+        payload = json.loads(raw, object_pairs_hook=strict_object)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError,
+            TypeError, ValueError) as exc:
+        raise OSError("campaign_progress_publication_invalid") from exc
+    if not isinstance(payload, dict):
+        raise OSError("campaign_progress_publication_invalid")
+    return payload
+
+
+def _audit_progress_publication(
+    manifest: dict, progress_rows: list[dict]
+) -> dict:
+    """Reconcile immutable DB evidence with the exact operator-visible files."""
+    root = Path(manifest["operator_progress_root"])
+    campaign_id = manifest["campaign_id"]
+    directory = root / campaign_id
+    result = {
+        "complete": False,
+        "reason": "operator_progress_publication_unavailable",
+        "published_update_count": 0,
+        "latest_valid": False,
+    }
+    if (_progress_path_redirected(root)
+            or _progress_path_redirected(directory)
+            or not directory.is_dir()):
+        return result
+    expected_payloads = {}
+    for row in progress_rows:
+        core = {
+            "schema_version": 1,
+            "campaign_id": campaign_id,
+            "controller_id": row["controller_id"],
+            "host": row["host"],
+            "iteration": row["iteration"],
+            "observed_at_epoch": float(row["observed_at_epoch"]),
+            "observed_at": row["observed_at"],
+            "last_valid_artifact_sha256": row[
+                "last_valid_artifact_sha256"
+            ],
+            "last_valid_artifact_idea_id": row[
+                "last_valid_artifact_idea_id"
+            ],
+            "last_valid_artifact_at_epoch": row[
+                "last_valid_artifact_at_epoch"
+            ],
+            "blocker_code": row["blocker_code"],
+            "next_deadline_epoch": float(row["next_deadline_epoch"]),
+        }
+        canonical = json.dumps(core, sort_keys=True, separators=(",", ":"))
+        payload = {
+            **core,
+            "update_sha256": hashlib.sha256(
+                canonical.encode("utf-8")
+            ).hexdigest(),
+        }
+        filename = f"{row['controller_id']}-{row['iteration']:08d}.json"
+        if filename in expected_payloads:
+            result["reason"] = "operator_progress_identity_duplicate"
+            return result
+        expected_payloads[filename] = payload
+    expected_names = set(expected_payloads) | {"latest.json"}
+    try:
+        observed_names = {path.name for path in directory.iterdir()}
+    except OSError:
+        return result
+    if observed_names != expected_names:
+        result["reason"] = "operator_progress_publication_universe_mismatch"
+        return result
+    try:
+        for filename, expected in expected_payloads.items():
+            observed = _read_published_progress(directory / filename)
+            if observed != expected:
+                result["reason"] = "operator_progress_publication_mismatch"
+                return result
+            _progress_payload_order(observed, campaign_id)
+            result["published_update_count"] += 1
+        latest = _read_published_progress(directory / "latest.json")
+        _progress_payload_order(latest, campaign_id)
+        expected_latest = max(
+            expected_payloads.values(),
+            key=lambda item: _progress_payload_order(item, campaign_id),
+        )
+        if latest != expected_latest:
+            result["reason"] = "operator_progress_latest_mismatch"
+            return result
+    except (OSError, ValueError):
+        result["reason"] = "operator_progress_publication_invalid"
+        return result
+    result.update({
+        "complete": True,
+        "reason": "operator_progress_publication_complete",
+        "latest_valid": True,
+    })
+    return result
+
+
 def capture_campaign_progress_update(
     lake: IdeaLake,
     *,
@@ -318,6 +453,10 @@ def capture_campaign_progress_update(
     end = float(manifest["end_epoch"])
     if not start <= float(now) <= end:
         return None
+    expected_progress_root = Path(manifest["operator_progress_root"])
+    results_path = Path(os.path.abspath(results_dir))
+    if results_path / "_campaign_progress" != expected_progress_root:
+        raise ValueError("campaign progress root does not match registration")
     max_gap = float(manifest["targets"]["max_operator_update_gap_seconds"])
     next_deadline = min(end, float(now) + max_gap)
     artifact_id, artifact_sha = _qualified_artifact_identity(
@@ -359,7 +498,6 @@ def capture_campaign_progress_update(
         **core,
         "update_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
     }
-    results_path = Path(results_dir).absolute()
     if _progress_path_redirected(results_path):
         raise OSError("campaign_progress_directory_redirected")
     progress_root = results_path / "_campaign_progress"
@@ -440,13 +578,19 @@ def _manifest_error(
         "campaign_id", "start_epoch", "end_epoch",
         "physical_scope", "poll_seconds", "minimum_samples",
         "minimum_claims", "minimum_release_to_claim_pairs", "targets",
-        "expected_idea_ids",
+        "expected_idea_ids", "operator_progress_root",
     }
     if not isinstance(manifest, dict) or not required.issubset(manifest):
         return "manifest is missing required fields"
     if (not isinstance(manifest["campaign_id"], str)
             or _CAMPAIGN_RE.fullmatch(manifest["campaign_id"]) is None):
         return "campaign_id must be a safe non-empty identifier"
+    progress_root = manifest["operator_progress_root"]
+    if (not isinstance(progress_root, str) or not progress_root
+            or not Path(progress_root).is_absolute()
+            or progress_root != os.path.abspath(progress_root)
+            or Path(progress_root).name != "_campaign_progress"):
+        return "operator_progress_root must be a canonical safe absolute path"
     idea_ids = manifest["expected_idea_ids"]
     if (not isinstance(idea_ids, list)
             or not 1 <= len(idea_ids) <= _MAX_CAMPAIGN_IDEAS
@@ -838,6 +982,9 @@ def analyze_campaign(
                         or not isinstance(parsed[key], int)
                         or parsed[key] < 0):
                     raise ValueError
+            if (parsed["launcher_paused"] not in (0, 1)
+                    or parsed["disk_ok"] not in (0, 1)):
+                raise ValueError
             membership_valid = True
             try:
                 membership = json.loads(row["demand_membership_json"])
@@ -952,6 +1099,7 @@ def analyze_campaign(
         max(progress_gaps) if progress_gaps
         else manifest["end_epoch"] - manifest["start_epoch"]
     )
+    publication = _audit_progress_publication(manifest, parsed_progress)
     samples_by_iteration = {
         (row["controller_id"], row["iteration"]): row
         for row in parsed_rows
@@ -960,6 +1108,29 @@ def analyze_campaign(
         (row["controller_id"], row["iteration"]): row
         for row in parsed_progress
     }
+    operator_blocker_mismatches = []
+    for key in sorted(set(samples_by_iteration) & set(progress_by_iteration)):
+        sample = samples_by_iteration[key]
+        membership = sample["demand_membership"]
+        expected_blocker = derive_campaign_progress_blocker(
+            launcher_paused=bool(sample["launcher_paused"]),
+            disk_ok=bool(sample["disk_ok"]),
+            active_training=bool(sample["training"]),
+            active_evaluation=bool(sample["evaluation"]),
+            remaining_training=bool(
+                membership and membership["remaining_training"]
+            ),
+            remaining_evaluation=bool(
+                membership and membership["remaining_evaluation"]
+            ),
+        )
+        if progress_by_iteration[key]["blocker_code"] != expected_blocker:
+            operator_blocker_mismatches.append({
+                "controller_id": key[0],
+                "iteration": key[1],
+                "recorded": progress_by_iteration[key]["blocker_code"],
+                "expected": expected_blocker,
+            })
     operator_updates_match_samples = (
         len(samples_by_iteration) == len(parsed_rows)
         and len(progress_by_iteration) == len(parsed_progress)
@@ -1193,12 +1364,18 @@ def analyze_campaign(
         "malformed_sample_count": malformed_rows,
         "operator_update_count": len(parsed_progress),
         "malformed_operator_update_count": malformed_progress_rows,
+        "published_operator_update_count": publication[
+            "published_update_count"
+        ],
+        "operator_publication_reason": publication["reason"],
+        "operator_latest_valid": publication["latest_valid"],
         "max_operator_update_gap_seconds": max_progress_gap,
         "operator_blocker_counts": dict(sorted({
             code: sum(1 for row in parsed_progress
                       if row["blocker_code"] == code)
             for code in {row["blocker_code"] for row in parsed_progress}
         }.items())),
+        "operator_blocker_mismatches": operator_blocker_mismatches,
         "last_valid_artifact_sha256": (
             parsed_progress[-1]["last_valid_artifact_sha256"]
             if parsed_progress else None
@@ -1244,6 +1421,11 @@ def analyze_campaign(
             bool(parsed_progress)
             and malformed_progress_rows == 0
             and operator_updates_match_samples
+        ),
+        "operator_publication_complete": publication["complete"],
+        "operator_blockers_match_scheduler": (
+            operator_updates_match_samples
+            and not operator_blocker_mismatches
         ),
         "operator_update_deadlines_valid": progress_deadlines_valid,
         "single_physical_host": (
