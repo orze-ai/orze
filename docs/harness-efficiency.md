@@ -129,11 +129,12 @@ campaign_efficiency:
   campaign_id: the-same-unique-id
 ```
 
-Each sample records only controller/host identity, timestamps, scheduler demand,
-active physical GPU IDs, and scoped hardware counters. It contains no idea IDs,
-configs, scores, model outputs, or dataset content. The hardware query is always
-passed the controller's explicit GPU list; an error or partial response is
-stored as incomplete evidence and is never replaced by an all-GPU query.
+Each sample records only controller/host identity, timestamps, the exact
+preregistered scheduler-demand partition, active physical GPU IDs, and scoped
+hardware counters. It contains no configs, scores, model outputs, or dataset
+content. The hardware query is always passed the controller's explicit GPU
+list; an error or partial response is stored as incomplete evidence and is
+never replaced by an all-GPU query.
 
 After the registered window ends, generate the receipt:
 
@@ -149,7 +150,11 @@ physical scope on exactly one host, no missing or unexpected
 in-window lifecycle allocation, sufficient lifecycle evidence and demand, and
 every target. Queue-to-claim and terminal-to-next-claim metrics use only the
 preregistered idea IDs; unrelated work in the same Idea Lake cannot improve a
-campaign receipt. Sequential controller identities are retained as an
+campaign receipt. Queue-to-claim retains the raw lifecycle latency and excludes
+capacity-full time only when the receipt names an exact eligible scheduler
+sample or a one-to-one demanded terminal release as the capacity opportunity;
+without that evidence it conservatively uses the raw queue clock. Sequential
+controller identities are retained as an
 observation and allowed so a verified restart does not erase campaign evidence.
 Every scheduler sample must have a matching immutable operator-progress update.
 The latest update is published under `results/_campaign_progress/<campaign>/`

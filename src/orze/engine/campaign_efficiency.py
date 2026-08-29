@@ -1267,6 +1267,7 @@ def analyze_campaign(
                 break
 
     queue_to_claim = []
+    claim_queue_observations = []
     eligible_queue_intervals = []
     fallback_claim_events = []
     claim_event_count = 0
@@ -1315,6 +1316,11 @@ def analyze_campaign(
                     })
                 if in_window:
                     queue_to_claim.append(at - queue_origin)
+                    claim_queue_observations.append({
+                        "idea_id": idea_id,
+                        "queued_at_epoch": queue_origin,
+                        "claimed_at_epoch": at,
+                    })
             elif in_window:
                 unmatched_claim_events.append({
                     "idea_id": idea_id,
@@ -1346,6 +1352,11 @@ def analyze_campaign(
                     queue_to_claim.append(
                         current_claimed - current_queued
                     )
+                    claim_queue_observations.append({
+                        "idea_id": idea_id,
+                        "queued_at_epoch": current_queued,
+                        "claimed_at_epoch": current_claimed,
+                    })
             elif current_claim_in_window:
                 unmatched_claim_events.append({
                     "idea_id": idea_id,
@@ -1392,6 +1403,7 @@ def analyze_campaign(
     release_to_claim = []
     unmatched_releases = []
     demanded_release_to_claim = []
+    demanded_claim_release_events = []
     unmatched_demanded_releases = []
     non_demanded_terminal_release_count = 0
     non_allocation_terminal_count = 0
@@ -1430,12 +1442,84 @@ def analyze_campaign(
                 demanded_release_to_claim.append(
                     at - demanded["released_at_epoch"]
                 )
+                demanded_claim_release_events.append({
+                    "claimed_idea_id": str(idea_id),
+                    "claimed_at_epoch": at,
+                    "released_at_epoch": demanded["released_at_epoch"],
+                })
+
+    eligible_queue_to_claim = []
+    queue_capacity_adjustments = []
+    for observation in claim_queue_observations:
+        matching_releases = [
+            event for event in demanded_claim_release_events
+            if event["claimed_idea_id"] == observation["idea_id"]
+            and abs(
+                event["claimed_at_epoch"]
+                - observation["claimed_at_epoch"]
+            ) <= 1e-6
+        ]
+        free_slot_sample_epochs = [
+            float(row["observed_at_epoch"])
+            for row in parsed_rows
+            if observation["queued_at_epoch"]
+            <= float(row["observed_at_epoch"])
+            <= observation["claimed_at_epoch"]
+            and row["demand_membership"] is not None
+            and observation["idea_id"]
+            in row["demand_membership"]["remaining_training"]
+            and len(set(row["training"]) | set(row["evaluation"]))
+            < len(row["scope"])
+            and not bool(row["launcher_paused"])
+            and bool(row["disk_ok"])
+        ]
+        demanded_release_epochs = [
+            event["released_at_epoch"] for event in matching_releases
+        ]
+        capacity_opportunities = [
+            {
+                "kind": "scheduler_sample",
+                "observed_at_epoch": at,
+            }
+            for at in free_slot_sample_epochs
+        ]
+        if len(matching_releases) == 1:
+            capacity_opportunities.append(
+                {
+                    "kind": "demanded_terminal_release",
+                    "observed_at_epoch": demanded_release_epochs[0],
+                }
+            )
+        available_at = observation["queued_at_epoch"]
+        if capacity_opportunities:
+            available_at = max(
+                available_at,
+                min(
+                    event["observed_at_epoch"]
+                    for event in capacity_opportunities
+                ),
+            )
+        latency = observation["claimed_at_epoch"] - available_at
+        eligible_queue_to_claim.append(latency)
+        queue_capacity_adjustments.append({
+            **observation,
+            "eligible_clock_start_epoch": available_at,
+            "capacity_opportunity_proven": bool(capacity_opportunities),
+            "capacity_opportunities": capacity_opportunities,
+            "free_slot_sample_epochs": free_slot_sample_epochs,
+            "demanded_terminal_release_epochs": demanded_release_epochs,
+            "capacity_wait_excluded_seconds": (
+                available_at - observation["queued_at_epoch"]
+            ),
+            "eligible_queue_to_claim_seconds": latency,
+        })
 
     allocation_duty = (
         sum(allocation_ratios) / len(allocation_ratios)
         if allocation_ratios else None
     )
-    queue_p95 = _percentile(queue_to_claim, 0.95)
+    raw_queue_p95 = _percentile(queue_to_claim, 0.95)
+    queue_p95 = _percentile(eligible_queue_to_claim, 0.95)
     release_p95 = _percentile(demanded_release_to_claim, 0.95)
     receipt["metrics"] = {
         "sample_count": len(parsed_rows),
@@ -1485,6 +1569,8 @@ def analyze_campaign(
             unmatched_queued_demand_idea_ids
         ),
         "queue_to_claim_p95_seconds": queue_p95,
+        "raw_queue_to_claim_p95_seconds": raw_queue_p95,
+        "queue_capacity_adjustments": queue_capacity_adjustments,
         "terminal_to_next_claim_count": len(demanded_release_to_claim),
         "all_terminal_to_next_claim_pair_count": len(release_to_claim),
         "terminal_to_next_claim_p95_seconds": release_p95,

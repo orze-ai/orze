@@ -436,6 +436,59 @@ def test_required_campaign_sample_passes_complete_contract_to_sampler(
         "inactive": [],
     }
     assert observed["require_complete_telemetry"] is True
+    assert observed["observed_at_epoch"] == (
+        runner._campaign_sample_identity["observed_at_epoch"]
+    )
+    assert runner._campaign_sample_identity == {
+        "campaign_id": "campaign-required",
+        "controller_id": "controller-a",
+        "host": "host-a",
+        "iteration": 4,
+        "observed_at_epoch": observed["observed_at_epoch"],
+    }
+
+
+def test_required_progress_reuses_persisted_scheduler_sample_time(
+        tmp_path, monkeypatch):
+    observed = {}
+    sample_time = time.time()
+    runner = SimpleNamespace(
+        cfg={
+            "campaign_efficiency": {
+                "enabled": True,
+                "required_for_launch": True,
+                "campaign_id": "campaign-required",
+            },
+            "launcher": {"paused": False},
+            "report": {"primary_metric": "score"},
+        },
+        lake=object(),
+        results_dir=tmp_path / "results",
+        active_evals={}, active={"4": object()}, pending_evals=[],
+        _instance_uuid="controller-a", _hostname="host-a", iteration=4,
+        _campaign_sample_identity={
+            "campaign_id": "campaign-required",
+            "controller_id": "controller-a",
+            "host": "host-a",
+            "iteration": 4,
+            "observed_at_epoch": sample_time,
+        },
+        _halt_required_campaign_evidence=lambda reason: None,
+    )
+
+    def capture(*args, **kwargs):
+        observed.update(kwargs)
+        return {"status": "ACTIVE"}
+
+    monkeypatch.setattr(
+        phases_module, "capture_campaign_progress_update", capture
+    )
+    progress = OrzePhaseMixin._capture_campaign_progress_evidence(
+        runner, [], [], True, []
+    )
+
+    assert progress == {"status": "ACTIVE"}
+    assert observed["observed_at_epoch"] == sample_time
 
 
 def test_required_campaign_progress_failure_halts_dispatch(tmp_path, monkeypatch):
@@ -458,6 +511,13 @@ def test_required_campaign_progress_failure_halts_dispatch(tmp_path, monkeypatch
         _instance_uuid="controller-a",
         _hostname="host-a",
         iteration=2,
+        _campaign_sample_identity={
+            "campaign_id": "campaign-required",
+            "controller_id": "controller-a",
+            "host": "host-a",
+            "iteration": 2,
+            "observed_at_epoch": time.time(),
+        },
         _halt_required_campaign_evidence=halted.append,
     )
     monkeypatch.setattr(
@@ -472,6 +532,41 @@ def test_required_campaign_progress_failure_halts_dispatch(tmp_path, monkeypatch
 
     assert progress["status"] == "UNAVAILABLE"
     assert halted == ["campaign_progress_update_failed"]
+
+
+def test_required_progress_without_paired_sample_halts_before_publication(
+        tmp_path, monkeypatch):
+    halted = []
+    launched = []
+    runner = SimpleNamespace(
+        cfg={
+            "campaign_efficiency": {
+                "enabled": True,
+                "required_for_launch": True,
+                "campaign_id": "campaign-required",
+            },
+            "launcher": {"paused": False},
+            "report": {"primary_metric": "score"},
+        },
+        lake=object(), results_dir=tmp_path / "results",
+        active_evals={}, active={}, pending_evals=[],
+        _instance_uuid="controller-a", _hostname="host-a", iteration=3,
+        _campaign_sample_identity=None,
+        _halt_required_campaign_evidence=halted.append,
+    )
+    monkeypatch.setattr(
+        phases_module,
+        "capture_campaign_progress_update",
+        lambda *args, **kwargs: launched.append(kwargs),
+    )
+
+    progress = OrzePhaseMixin._capture_campaign_progress_evidence(
+        runner, [], [], True, []
+    )
+
+    assert progress["reason"] == "campaign_progress_sample_identity_missing"
+    assert halted == ["campaign_progress_sample_identity_missing"]
+    assert launched == []
 
 
 def test_managed_campaign_iterations_emit_matching_progress_evidence():
@@ -919,6 +1014,7 @@ def test_preregistered_complete_campaign_can_be_verified(tmp_path):
     assert receipt["metrics"]["sample_count"] == 5
     assert receipt["metrics"]["allocation_duty_cycle"] == 0.9
     assert receipt["metrics"]["allocated_gpu_utilization_mean_pct"] == 95.0
+    assert receipt["metrics"]["raw_queue_to_claim_p95_seconds"] == 19.25
     assert receipt["metrics"]["queue_to_claim_p95_seconds"] == 19.25
     assert receipt["metrics"]["terminal_to_next_claim_p95_seconds"] == 5.0
 
@@ -1250,6 +1346,51 @@ def test_unrelated_lifecycle_rows_cannot_improve_campaign_latency(tmp_path):
         "idea-unrelated"
     ]
     assert receipt["metrics"]["queue_to_claim_count"] == 2
+
+
+def test_capacity_full_wait_does_not_count_as_free_slot_queue_latency(
+        tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    queued_at = manifest["start_epoch"] - 100
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "UPDATE idea_state SET queued_at = ?, first_queued_at = ? "
+        "WHERE idea_id = 'idea-002'",
+        (_iso(queued_at), _iso(queued_at)),
+    )
+    lake.conn.execute(
+        "UPDATE harness_efficiency_samples SET "
+        "active_training_gpus_json = '[4,5,6,7]'"
+    )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["metrics"]["raw_queue_to_claim_p95_seconds"] > 100
+    assert receipt["metrics"]["queue_to_claim_p95_seconds"] == 5.0
+    adjustment = next(
+        row for row in receipt["metrics"]["queue_capacity_adjustments"]
+        if row["idea_id"] == "idea-002"
+    )
+    assert adjustment["capacity_opportunity_proven"] is True
+    assert adjustment["free_slot_sample_epochs"] == []
+    assert adjustment["demanded_terminal_release_epochs"] == [
+        manifest["start_epoch"] + 15
+    ]
+    assert adjustment["capacity_opportunities"] == [{
+        "kind": "demanded_terminal_release",
+        "observed_at_epoch": manifest["start_epoch"] + 15,
+    }]
+    assert adjustment["capacity_wait_excluded_seconds"] == 115.0
+    assert adjustment["eligible_queue_to_claim_seconds"] == 5.0
+    assert receipt["checks"]["queue_to_claim"]["passed"] is True
+    assert receipt["status"] == "VERIFIED", receipt["checks"]
 
 
 def test_missing_preregistered_lifecycle_row_fails_closed(tmp_path):

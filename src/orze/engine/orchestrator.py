@@ -472,12 +472,14 @@ class Orze(OrzePhaseMixin):
     def _capture_campaign_efficiency_evidence(
             self, unclaimed, backlog, disk_ok: bool) -> bool:
         """Capture one complete required sample or stop all scoped work."""
+        self._campaign_sample_identity = None
         cfg = self.cfg
         campaign = cfg.get("campaign_efficiency") or {}
         if self.lake is None or not campaign.get("enabled", False):
             return False
         required = campaign.get("required_for_launch", False) is True
         try:
+            observed_at_epoch = time.time()
             active_training_ids = {
                 process.idea_id for process in self.slot_mgr.values()
             }
@@ -511,7 +513,7 @@ class Orze(OrzePhaseMixin):
                 "remaining_evaluation": sorted(remaining_eval_ids),
                 "inactive": sorted(expected_ids - accounted_ids),
             }
-            capture_campaign_efficiency_sample(
+            persisted = capture_campaign_efficiency_sample(
                 self.lake,
                 campaign_id=campaign.get("campaign_id"),
                 controller_id=self._instance_uuid,
@@ -528,8 +530,18 @@ class Orze(OrzePhaseMixin):
                     cfg, self.results_dir),
                 disk_ok=bool(disk_ok),
                 demand_membership=demand_membership,
+                observed_at_epoch=observed_at_epoch,
                 require_complete_telemetry=required,
             )
+            if persisted is not True:
+                raise OSError("campaign_efficiency_sample_not_persisted")
+            self._campaign_sample_identity = {
+                "campaign_id": campaign.get("campaign_id"),
+                "controller_id": self._instance_uuid,
+                "host": self._hostname,
+                "iteration": self.iteration,
+                "observed_at_epoch": observed_at_epoch,
+            }
             return True
         except Exception as exc:
             logger.warning("campaign efficiency sample failed: %s", exc)

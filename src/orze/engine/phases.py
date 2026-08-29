@@ -1818,6 +1818,36 @@ class OrzePhaseMixin:
                 or not campaign_cfg.get("enabled", False)):
             return None
         was_paused = _is_launcher_paused(cfg, self.results_dir)
+        sample_identity = getattr(
+            self, "_campaign_sample_identity", None
+        )
+        sample_identity_matches = (
+            isinstance(sample_identity, dict)
+            and sample_identity.get("campaign_id")
+            == campaign_cfg.get("campaign_id")
+            and sample_identity.get("controller_id") == self._instance_uuid
+            and sample_identity.get("host") == self._hostname
+            and sample_identity.get("iteration") == self.iteration
+            and isinstance(
+                sample_identity.get("observed_at_epoch"), (int, float)
+            )
+            and not isinstance(
+                sample_identity.get("observed_at_epoch"), bool
+            )
+        )
+        if not sample_identity_matches:
+            logger.warning(
+                "campaign operator progress missing paired scheduler sample"
+            )
+            if campaign_cfg.get("required_for_launch", False):
+                self._halt_required_campaign_evidence(
+                    "campaign_progress_sample_identity_missing"
+                )
+            return {
+                "status": "UNAVAILABLE",
+                "campaign_id": campaign_cfg.get("campaign_id"),
+                "reason": "campaign_progress_sample_identity_missing",
+            }
         progress_blocker = derive_campaign_progress_blocker(
             launcher_paused=was_paused,
             disk_ok=bool(disk_ok),
@@ -1839,6 +1869,7 @@ class OrzePhaseMixin:
                     "primary_metric", "test_accuracy"
                 ),
                 blocker_code=progress_blocker,
+                observed_at_epoch=sample_identity["observed_at_epoch"],
             )
             if campaign_progress is None:
                 if (campaign_cfg.get("required_for_launch", False)
