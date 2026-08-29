@@ -9,6 +9,7 @@ from orze.engine.launcher import (
     LaunchIntegrityError,
     _assert_controller_runtime_attested,
     _assert_gpu_authorized,
+    _authorized_gpu_environment,
     _launch_min_free_vram,
     find_forbidden_launch_override,
     launch,
@@ -420,6 +421,23 @@ def test_daemon_invocation_scope_narrows_configured_allowlist():
     _assert_gpu_authorized(5, cfg)
     with pytest.raises(LaunchIntegrityError, match="outside_managed_scope:6"):
         _assert_gpu_authorized(6, cfg)
+
+
+def test_gpu_child_environment_is_built_only_after_scope_authorization():
+    cfg = {
+        "_managed_gpu_ids": [4, 5, 6, 7],
+        "gpu_scheduling": {
+            "allowed_gpus": [4, 5, 6, 7],
+            "reserved_gpus": [0, 1, 2, 3],
+        },
+    }
+    env = _authorized_gpu_environment(
+        4, cfg, {"CUDA_VISIBLE_DEVICES": "all", "KEEP": "yes"}
+    )
+    assert env["CUDA_VISIBLE_DEVICES"] == "4"
+    assert env["KEEP"] == "yes"
+    with pytest.raises(LaunchIntegrityError, match="outside_managed_scope:0"):
+        _authorized_gpu_environment(0, cfg, {})
 
 
 def test_configured_allowlist_cannot_be_widened_by_internal_scope():

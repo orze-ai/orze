@@ -47,7 +47,7 @@ from typing import Dict, Optional
 from orze.engine.process import EvalProcess, _new_process_group, _terminate_and_reap
 from orze.engine.launcher import (
     LaunchIntegrityError, _assert_controller_runtime_attested,
-    _assert_gpu_authorized,
+    _assert_gpu_authorized, _authorized_gpu_environment,
     _assert_launch_authorized, _format_args, _launch_min_free_vram,
     _verify_gpu_free,
 )
@@ -299,7 +299,7 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
             # Expose only the authorized physical device. Within the child it
             # is local CUDA device 0; {physical_gpu} remains available for
             # non-CUDA tooling that needs the host index.
-            env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+            env = _authorized_gpu_environment(gpu, cfg, env)
             env.update(benchmark_env)
             if bundle is not None:
                 env.update(bundle.environment(Path(
@@ -644,7 +644,7 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
     env = os.environ.copy()
     for k, v in (cfg.get("train_extra_env") or {}).items():
         env[k] = str(v)
-    env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    env = _authorized_gpu_environment(gpu, cfg, env)
 
     for i, ps in enumerate(post_scripts):
         script = ps.get("script")

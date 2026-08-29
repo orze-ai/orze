@@ -1097,7 +1097,7 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
 
     env = os.environ.copy()
     if gpu is not None and int(gpu) >= 0:
-        env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+        env = _authorized_gpu_environment(gpu, cfg, env)
 
     claim_path = idea_dir / "claim.json"
     claim_data = {}
@@ -1371,6 +1371,18 @@ def _assert_gpu_authorized(gpu: int, cfg: dict) -> None:
         raise LaunchIntegrityError(f"gpu_is_reserved:{gpu}")
 
 
+def _authorized_gpu_environment(
+    gpu: int,
+    cfg: dict,
+    base_env: Optional[dict] = None,
+) -> dict:
+    """Return a child environment exposing exactly one authorized GPU."""
+    _assert_gpu_authorized(gpu, cfg)
+    env = dict(os.environ if base_env is None else base_env)
+    env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    return env
+
+
 def _launch_min_free_vram(cfg: dict) -> int:
     scheduling = cfg.get("gpu_scheduling") or {}
     return int(cfg.get(
@@ -1531,7 +1543,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     env = os.environ.copy()
     for k, v in (cfg.get("train_extra_env") or {}).items():
         env[k] = str(v)
-    env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    env = _authorized_gpu_environment(gpu, cfg, env)
     if use_wrapper:
         _apply_data_boundary_env(env, db_cfg, results_dir / idea_id)
 

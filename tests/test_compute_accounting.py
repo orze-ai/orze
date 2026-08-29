@@ -275,6 +275,25 @@ def test_pre_script_allocation_has_its_own_receipt(tmp_path):
     assert terminal["reason_code"] == "pre_script_completed"
 
 
+def test_pre_script_rejects_out_of_scope_gpu_before_process_start(
+        tmp_path, monkeypatch):
+    started = []
+    monkeypatch.setattr(
+        "orze.engine.process.subprocess.Popen",
+        lambda *args, **kwargs: started.append(True),
+    )
+    with pytest.raises(Exception, match="outside_managed_scope:0"):
+        run_pre_script("idea-scope", 0, {
+            "pre_script": "/usr/bin/true",
+            "gpu_scheduling": {
+                "allowed_gpus": [4, 5, 6, 7],
+                "reserved_gpus": [0, 1, 2, 3],
+            },
+            "_managed_gpu_ids": [4, 5, 6, 7],
+        }, tmp_path)
+    assert started == []
+
+
 def test_completed_process_gets_framework_terminal_receipt(tmp_path):
     results = tmp_path / "results"
     idea_dir = results / "idea-accounting"

@@ -134,3 +134,19 @@ batch scheduler to retry safely. The wrapper passes the lease descriptors into
 the child; killing only the wrapper cannot create an unleased detached job.
 GPU-capable commands that bypass this boundary remain outside Orze's ownership
 guarantee and must fail the project acceptance audit.
+
+## GPU scope audit
+
+The scope auditor checks the complete code-owned subprocess boundary universe,
+requires every GPU-visible child environment to pass through the shared physical
+allowlist guard, binds the exact source and project configuration, and launches
+one trivial no-CUDA child under each permitted lease. Forbidden-ID faults stop
+before a child is created. It does not query or open an accelerator:
+
+```bash
+python -m orze.engine.gpu_scope_audit \
+  --config /path/to/orze.yaml \
+  --physical-scope 4,5,6,7 \
+  --forbidden-scope 0,1,2,3 \
+  --output /path/to/gpu-scope-receipt.json
+```

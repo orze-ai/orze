@@ -1192,14 +1192,19 @@ def run_pre_script(idea_id: str, gpu: int, cfg: dict,
     pre_args = cfg.get("pre_args") or []
     pre_timeout = cfg.get("pre_timeout", 3600)
 
-    from orze.engine.launcher import _format_args
+    from orze.engine.launcher import (
+        _assert_controller_runtime_attested,
+        _authorized_gpu_environment,
+        _format_args,
+    )
     cmd = [python, pre_script]
     cmd.extend(_format_args(pre_args, {"idea_id": idea_id, "gpu": gpu}))
 
     env = os.environ.copy()
     for k, v in (cfg.get("train_extra_env") or {}).items():
         env[k] = str(v)
-    env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    env = _authorized_gpu_environment(gpu, cfg, env)
+    _assert_controller_runtime_attested(cfg)
 
     logger.info("Running pre-script for %s on GPU %s", idea_id, gpu)
     proc = None

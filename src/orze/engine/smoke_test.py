@@ -48,6 +48,13 @@ def _find_free_gpu(cfg: dict):
             or any(isinstance(gpu, bool) or not isinstance(gpu, int)
                    or gpu < 0 for gpu in scope)):
         return None
+    from orze.engine.launcher import (
+        _assert_controller_runtime_attested,
+        _assert_gpu_authorized,
+    )
+    for gpu in scope:
+        _assert_gpu_authorized(gpu, cfg)
+    _assert_controller_runtime_attested(cfg)
     try:
         import subprocess as _sp
         result = _sp.run(
@@ -104,7 +111,8 @@ def run_smoke_test(cfg: dict, results_dir: Path) -> tuple:
         # Try to find a free GPU; fall back to CPU
         free_gpu = _find_free_gpu(cfg)
         if free_gpu is not None:
-            env["CUDA_VISIBLE_DEVICES"] = str(free_gpu)
+            from orze.engine.launcher import _authorized_gpu_environment
+            env = _authorized_gpu_environment(free_gpu, cfg, env)
             logger.info("[SMOKE] Running 1-sample test on GPU %d...", free_gpu)
         else:
             env["CUDA_VISIBLE_DEVICES"] = ""

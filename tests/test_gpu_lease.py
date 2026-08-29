@@ -200,6 +200,21 @@ def test_smoke_gpu_probe_without_explicit_scope_uses_no_telemetry(monkeypatch):
     assert _find_free_gpu({}) is None
 
 
+def test_smoke_gpu_probe_rejects_out_of_scope_before_telemetry(monkeypatch):
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *args, **kwargs: pytest.fail("must reject before telemetry"),
+    )
+    with pytest.raises(Exception, match="outside_managed_scope:0"):
+        _find_free_gpu({
+            "_managed_gpu_ids": [0],
+            "gpu_scheduling": {
+                "allowed_gpus": [4, 5, 6, 7],
+                "reserved_gpus": [0, 1, 2, 3],
+            },
+        })
+
+
 def test_process_watchdog_telemetry_is_restricted_to_assigned_gpu(monkeypatch):
     calls = []
     responses = iter([
