@@ -5,7 +5,16 @@ from orze.benchmarks.harness_efficiency import (
 )
 
 
-def test_small_run_is_diagnostic_but_exercises_real_control_plane(tmp_path):
+def test_small_run_is_diagnostic_but_exercises_real_control_plane(
+        tmp_path, monkeypatch):
+    # This 100-row probe verifies real control-plane behavior, not production
+    # bulk-insert performance. The acceptance-scale Gate independently retains
+    # the 50,000-row / 1,000 rows-per-second production target.
+    monkeypatch.setattr(
+        "orze.benchmarks.harness_efficiency."
+        "MIN_BULK_INSERT_ROWS_PER_SECOND",
+        1.0,
+    )
     receipt = run_benchmark(
         tmp_path,
         idea_count=100,
@@ -15,7 +24,7 @@ def test_small_run_is_diagnostic_but_exercises_real_control_plane(tmp_path):
         targets={key: 10_000.0 for key in DEFAULT_TARGETS_MS},
     )
 
-    assert receipt["status"] == "DIAGNOSTIC"
+    assert receipt["status"] == "DIAGNOSTIC", receipt["targets"]
     assert receipt["scope"]["acceptance_scale_met"] is False
     assert receipt["scope"]["accelerator_access"] == "none"
     assert receipt["scope"]["model_or_evaluation_executed"] is False
@@ -30,6 +39,9 @@ def test_small_run_is_diagnostic_but_exercises_real_control_plane(tmp_path):
         "schema_bootstrap_cache_hits_exact"
     ] == {"observed": True, "passed": True}
     assert receipt["targets"]["passed"] is True
+    assert receipt["targets"]["throughput"][
+        "minimum_rows_per_second"
+    ] == 1.0
     assert receipt["targets"]["throughput"]["passed"] is True
 
 
