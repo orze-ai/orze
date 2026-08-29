@@ -44,6 +44,27 @@ summaries, and each target verdict are included in the JSON receipt. Runs below
 the acceptance scale can be useful diagnostics but are labelled `DIAGNOSTIC`,
 never `VERIFIED`.
 
+## Read-only recovery acceptance
+
+Audit the deployed database without invoking startup repair or opening an
+accelerator:
+
+```bash
+python -m orze.engine.recovery_audit \
+  --db /path/to/project/.orze/idea_lake.db \
+  --results-dir /path/to/project/results \
+  --output /path/to/recovery-receipt.json
+```
+
+`VERIFIED` requires the current and immutable global/stage ledgers to agree,
+legacy status mirrors to agree with the global FSM, every local active claim to
+name a live exact `(pid, start_ticks)` identity, and no terminal row to retain a
+live owner or trainer. A missing deployed stage schema/history, redirected or
+hard-linked database/claim, remote owner that cannot be checked locally, or
+unstable evidence is `UNVERIFIED`. A directly observed state/process or
+current/transition contradiction is `FAILED`. The receipt binds the database
+and auditor SHA-256 values and explicitly proves no leaderboard rank.
+
 ## Why config identity is indexed
 
 The scheduler only needs to ask whether the small batch of newly proposed

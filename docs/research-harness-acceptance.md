@@ -60,8 +60,13 @@ end-to-end claim. Any target without this evidence remains open.
   Completed training remains globally `IN_PROGRESS` while evaluation is
   pending, evaluation failure preserves `training=COMPLETE`, and retry resets
   both stages. Fault injection proves a failed stage-audit write rolls back the
-  global launch edge. Project attainment still requires a production database
-  reconciliation receipt after deployment.
+  global launch edge. The read-only recovery auditor verifies the shared SQLite
+  policy, legacy/global state agreement, training/evaluation stage pairs, the
+  final immutable transition for each current state, and nonce-bound local
+  claim process liveness. It never runs startup reconciliation or changes a
+  lifecycle row. Missing stage history or a remote/unreadable claim is
+  `UNVERIFIED`; a proven live-process/terminal-state, dead-process/active-state,
+  or ledger contradiction is `FAILED`.
 - Campaign outcome efficiency: implementation present. A write-once
   preregistered campaign binds the exact decision receipts and targets. The
   analyzer validates resolved qualified-success identities, closed framework
