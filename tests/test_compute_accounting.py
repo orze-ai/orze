@@ -590,6 +590,10 @@ def test_campaign_compute_audit_verifies_closed_scoped_exact_ideas(tmp_path):
     assert audit["zero_gpu_rejection_attempts"] == 1
     assert audit["duplicate_training_attempts"] == 0
     assert audit["missing_terminal_ideas"] == []
+    assert audit["allocation_duration_mismatch_attempts"] == []
+    assert audit["recorded_allocated_gpu_seconds_total"] == pytest.approx(
+        audit["allocated_gpu_seconds_total"], abs=0.01
+    )
 
 
 def test_campaign_compute_audit_does_not_invent_unobserved_rejection_rate(
@@ -726,6 +730,43 @@ def test_campaign_compute_audit_rejects_redirected_receipt(tmp_path):
     assert audit["status"] == "UNVERIFIED"
     assert audit["invalid_receipts"] == 1
     assert audit["incomplete_started_attempts"] == 1
+
+
+def test_campaign_compute_audit_rejects_underreported_allocation_time(
+        tmp_path):
+    results = tmp_path / "results"
+    now = time.time()
+    tp = _tp(tmp_path, attempt_id="9" * 32)
+    tp.start_time = now - 3600
+    idea_dir = results / tp.idea_id
+    record_compute_start(tp, idea_dir)
+    record_compute_terminal(
+        tp, idea_dir, "completed", "trainer_completed", return_code=0
+    )
+    terminal_path = (
+        idea_dir / "_compute_receipts" / tp.attempt_id / "terminal.json"
+    )
+    terminal = json.loads(terminal_path.read_text(encoding="utf-8"))
+    assert terminal["allocated_gpu_seconds"] > 3500
+    terminal["allocated_gpu_seconds"] = 0.0
+    terminal_path.write_text(json.dumps(terminal), encoding="utf-8")
+
+    audit = audit_campaign_compute_receipts(
+        results,
+        idea_ids=[tp.idea_id],
+        start_epoch=now - 3700,
+        end_epoch=now + 10,
+        physical_scope=[4, 5, 6, 7],
+        expected_rejections=[],
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["allocation_duration_mismatch_attempts"] == [{
+        "idea_id": tp.idea_id,
+        "attempt_id": tp.attempt_id,
+        "recorded_seconds": 0.0,
+        "timestamp_seconds": pytest.approx(3600, abs=1.0),
+    }]
 
 
 def test_campaign_compute_audit_cannot_hide_unregistered_losing_idea(tmp_path):

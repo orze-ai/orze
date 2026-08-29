@@ -382,6 +382,32 @@ def test_research_outcome_receipt_is_unverified_when_compute_is_incomplete(
     assert receipt["lineage_evidence"]["status"] == "UNVERIFIED"
 
 
+def test_research_outcome_rejects_underreported_gpu_hours(
+        tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path, monkeypatch, qualified=True
+    )
+    terminal_path = (
+        results / "idea-outcome" / "_compute_receipts" / ("a" * 32)
+        / "terminal.json"
+    )
+    terminal = json.loads(terminal_path.read_text(encoding="utf-8"))
+    assert terminal["allocated_gpu_seconds"] > 1.0
+    terminal["allocated_gpu_seconds"] = 0.0
+    terminal_path.write_text(json.dumps(terminal), encoding="utf-8")
+
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["compute_evidence_complete"]["passed"] is False
+    assert len(receipt["compute_evidence"][
+        "allocation_duration_mismatch_attempts"
+    ]) == 1
+    assert receipt["metrics"]["allocated_gpu_seconds_total"] > 1.0
+
+
 def test_post_decision_model_and_lineage_replacement_invalidates_outcome(
         tmp_path, monkeypatch):
     cfg, results, manifest, end = _build_campaign(

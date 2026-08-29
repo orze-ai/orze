@@ -231,4 +231,9 @@ The outcome receipt distinguishes three states: missing/contradictory evidence
 is `UNVERIFIED`, complete evidence that misses a preregistered target is
 `FAILED`, and only complete passing evidence is `VERIFIED`. It explicitly sets
 `rank_claim_proven: false`; local campaign success never proves an official
-leaderboard rank.
+leaderboard rank. GPU hours come from framework allocation receipts rather than
+trainer-reported utilization. The campaign audit independently derives every
+paired allocation duration from its start and terminal timestamps, retains the
+recorded duration separately, and makes any mismatch `UNVERIFIED`; rewriting a
+long allocation to zero seconds therefore cannot improve
+GPU-hours-per-qualified-success.

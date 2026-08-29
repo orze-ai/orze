@@ -26,6 +26,7 @@ _PHASES = {
 _OUTCOMES = {
     "started", "completed", "failed", "interrupted", "rejected", "requeued",
 }
+_ALLOCATION_DURATION_TOLERANCE_SECONDS = 0.01
 
 
 class ComputeAccountingError(RuntimeError):
@@ -611,6 +612,8 @@ def audit_campaign_compute_receipts(
     zero_gpu_rejections = 0
     valid_zero_gpu_rejection_keys = []
     allocated_seconds = 0.0
+    recorded_allocated_seconds = 0.0
+    allocation_duration_mismatches = []
     terminal_ideas = set()
     training_starts = {}
     by_phase = {}
@@ -628,6 +631,7 @@ def audit_campaign_compute_receipts(
         terminal_ideas.add(idea_id)
         seconds = float(terminal["allocated_gpu_seconds"])
         allocated_seconds += seconds
+        recorded_allocated_seconds += seconds
         phase = terminal["phase"]
         phase_summary = by_phase.setdefault(phase, {
             "attempts": 0,
@@ -665,6 +669,31 @@ def audit_campaign_compute_receipts(
                 or terminal.get("started_at_epoch")
                 != start.get("started_at_epoch")):
             invalid += 1
+            continue
+        finished_at_epoch = _parse_receipt_time(terminal.get("finished_at"))
+        timestamp_seconds = (
+            finished_at_epoch - float(start["started_at_epoch"])
+            if finished_at_epoch is not None else float("nan")
+        )
+        accounted_seconds = max(0.0, timestamp_seconds)
+        allocated_seconds += accounted_seconds - seconds
+        phase_summary["allocated_gpu_seconds"] += (
+            accounted_seconds - seconds
+        )
+        if (not math.isfinite(timestamp_seconds)
+                or timestamp_seconds < 0
+                or abs(seconds - timestamp_seconds)
+                > _ALLOCATION_DURATION_TOLERANCE_SECONDS):
+            invalid += 1
+            allocation_duration_mismatches.append({
+                "idea_id": idea_id,
+                "attempt_id": _attempt_id,
+                "recorded_seconds": seconds,
+                "timestamp_seconds": (
+                    round(timestamp_seconds, 3)
+                    if math.isfinite(timestamp_seconds) else None
+                ),
+            })
 
     for phase_summary in by_phase.values():
         phase_summary["allocated_gpu_seconds"] = round(
@@ -769,6 +798,12 @@ def audit_campaign_compute_receipts(
         "invalid_receipts": invalid,
         "unexpected_sidecars": unexpected_sidecars,
         "allocated_gpu_seconds_total": round(allocated_seconds, 3),
+        "recorded_allocated_gpu_seconds_total": round(
+            recorded_allocated_seconds, 3
+        ),
+        "allocation_duration_mismatch_attempts": (
+            allocation_duration_mismatches
+        ),
         "training_start_counts_by_idea": dict(sorted(training_starts.items())),
         "duplicate_training_attempts": duplicate_training_attempts,
         "by_phase": dict(sorted(by_phase.items())),
