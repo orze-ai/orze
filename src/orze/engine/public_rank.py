@@ -21,10 +21,10 @@ import re
 import socket
 import stat
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable, Mapping
 import urllib.request
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote, unquote, urljoin, urlsplit
 
 from orze.core.fs import atomic_write
 
@@ -49,6 +49,15 @@ _HF_HREF_RE = re.compile(
     r'''href=["']https://huggingface\.co/([^"'?#]+)["']''', re.IGNORECASE,
 )
 ELIGIBILITY_METHOD = "managed_model_lineage_and_single_pass_preflight_v1"
+PUBLICATION_IDENTITY_METHOD = "hf_public_model_revision_exact_files_v1"
+_HUB_COMMIT_RE = re.compile(r"[0-9a-f]{40}")
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+_GIT_BLOB_RE = re.compile(r"[0-9a-f]{40}")
+_MODEL_CARD_DECLARATION_RE = re.compile(
+    rb"<!--\s*orze-publication-identity-v1\s*\r?\n"
+    rb"(\{.*?\})\s*\r?\n-->",
+    re.DOTALL,
+)
 
 
 class PublicRankError(ValueError):
@@ -64,6 +73,12 @@ class EndpointResponse:
 
 
 Transport = Callable[[str, str, bytes | None, int, int], EndpointResponse]
+
+
+@dataclass(frozen=True)
+class ManagedEligibilityContext:
+    evidence: dict
+    artifact_manifest: dict
 
 
 def _strict_json(data: bytes, *, allow_nan_as_none: bool = False):
@@ -170,7 +185,7 @@ def _default_transport(
         raise PublicRankError("public_rank_request_failed") from exc
     if result.status != 200:
         raise PublicRankError("public_rank_http_status_invalid")
-    if not result.body or len(result.body) > max_bytes:
+    if len(result.body) > max_bytes:
         raise PublicRankError("public_rank_response_size_invalid")
     _allowed_url(result.final_url, leaderboard=leaderboard)
     return result
@@ -202,10 +217,11 @@ def _request(
     url: str,
     body: bytes | None = None,
     timeout: int = 30,
+    allow_empty: bool = False,
 ) -> EndpointResponse:
     response = transport(method, url, body, timeout, _MAX_RESPONSE_BYTES)
     if (not isinstance(response, EndpointResponse) or response.status != 200
-            or not response.body
+            or (not response.body and not allow_empty)
             or len(response.body) > _MAX_RESPONSE_BYTES):
         raise PublicRankError("public_rank_transport_response_invalid")
     return response
@@ -394,11 +410,11 @@ def _read_stable_regular(path: Path, max_bytes: int = 1024 * 1024) -> bytes:
     return data
 
 
-def _managed_eligibility_evidence(
+def _managed_eligibility_context(
     idea_dir: Path | None,
     cfg: Mapping | None,
     model_id: str,
-) -> dict | None:
+) -> ManagedEligibilityContext | None:
     """Derive eligibility only from the managed production evidence chain."""
     if idea_dir is None and cfg is None:
         return None
@@ -417,8 +433,10 @@ def _managed_eligibility_evidence(
     if not valid:
         raise PublicRankError("public_rank_benchmark_invalid:" + reason)
     try:
-        lineage, lineage_sha256 = validate_model_lineage_for_evaluation(
-            idea_dir, cfg)
+        lineage, lineage_sha256, artifact_manifest = (
+            validate_model_lineage_for_evaluation(
+                idea_dir, cfg, include_artifact_manifest=True)
+        )
     except Exception as exc:
         raise PublicRankError("public_rank_model_lineage_invalid") from exc
     contract = get_benchmark_contract(cfg)
@@ -447,7 +465,7 @@ def _managed_eligibility_evidence(
             or not isinstance(evaluation_bundle_sha256, str)
             or re.fullmatch(r"[0-9a-f]{64}", evaluation_bundle_sha256) is None):
         raise PublicRankError("public_rank_managed_eligibility_mismatch")
-    return {
+    evidence = {
         "verification_method": ELIGIBILITY_METHOD,
         "verifier_source_sha256": hashlib.sha256(
             Path(__file__).read_bytes()).hexdigest(),
@@ -459,6 +477,280 @@ def _managed_eligibility_evidence(
         "model_lineage_sha256": lineage_sha256,
         "benchmark_receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
         "evaluation_bundle_sha256": evaluation_bundle_sha256,
+        "artifact_manifest_sha256": artifact_manifest["manifest_sha256"],
+        "artifact_files": lineage["artifact_files"],
+        "artifact_bytes": lineage["artifact_bytes"],
+    }
+    return ManagedEligibilityContext(evidence, artifact_manifest)
+
+
+def _managed_eligibility_evidence(
+    idea_dir: Path | None,
+    cfg: Mapping | None,
+    model_id: str,
+) -> dict | None:
+    """Compatibility wrapper returning only receipt-safe eligibility fields."""
+    context = _managed_eligibility_context(idea_dir, cfg, model_id)
+    return None if context is None else context.evidence
+
+
+def _canonical_sha256(value: Mapping) -> str:
+    try:
+        encoded = json.dumps(
+            value, sort_keys=True, separators=(",", ":"), allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise PublicRankError("public_rank_publication_manifest_invalid") from exc
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _safe_hub_path(value) -> str:
+    if (not isinstance(value, str) or not value or "\\" in value
+            or "\x00" in value):
+        raise PublicRankError("public_rank_hub_file_path_invalid")
+    path = PurePosixPath(value)
+    if (path.is_absolute() or value.startswith("./") or value.endswith("/")
+            or any(part in {"", ".", ".."} for part in path.parts)
+            or path.as_posix() != value):
+        raise PublicRankError("public_rank_hub_file_path_invalid")
+    return value
+
+
+def _is_publication_metadata(path: str) -> bool:
+    if path in {".gitattributes", "README.md"}:
+        return True
+    parts = PurePosixPath(path).parts
+    return (
+        len(parts) >= 2
+        and parts[0] == ".eval_results"
+        and PurePosixPath(path).suffix.lower() in {".yaml", ".yml"}
+    )
+
+
+def _canonical_submission_url(model_id: str, url: str) -> None:
+    parsed = urlsplit(url)
+    if (parsed.scheme != "https" or parsed.hostname != "huggingface.co"
+            or parsed.username is not None or parsed.password is not None
+            or parsed.port not in (None, 443) or parsed.query or parsed.fragment
+            or parsed.path.rstrip("/") != "/" + model_id):
+        raise PublicRankError("public_rank_submission_url_not_canonical_model")
+
+
+def _validate_hub_file_response_url(
+    final_url: str, *, model_id: str, commit: str, path: str,
+) -> None:
+    parsed = urlsplit(final_url)
+    decoded_path = unquote(parsed.path)
+    allowed_paths = {
+        f"/{model_id}/resolve/{commit}/{path}",
+        f"/api/resolve-cache/models/{model_id}/{commit}/{path}",
+    }
+    if (parsed.scheme != "https" or parsed.hostname != "huggingface.co"
+            or parsed.username is not None or parsed.password is not None
+            or parsed.port not in (None, 443) or parsed.fragment
+            or decoded_path not in allowed_paths):
+        raise PublicRankError("public_rank_hub_file_redirect_invalid")
+
+
+def _publication_identity_evidence(
+    artifact_manifest: Mapping,
+    model_id: str,
+    public_submission_url: str,
+    transport: Transport,
+) -> dict:
+    """Bind managed local artifact bytes to one immutable public Hub commit."""
+    _canonical_submission_url(model_id, public_submission_url)
+    if not isinstance(artifact_manifest, Mapping):
+        raise PublicRankError("public_rank_local_artifact_manifest_invalid")
+    files = artifact_manifest.get("files")
+    if (artifact_manifest.get("schema_version") != 1
+            or artifact_manifest.get("hash_method") != "sha256_bytes_v1"
+            or not isinstance(files, list) or not files
+            or len(files) > 100_000):
+        raise PublicRankError("public_rank_local_artifact_manifest_invalid")
+    local_by_path = {}
+    for item in files:
+        path = _safe_hub_path(item.get("path") if isinstance(item, Mapping) else None)
+        size = item.get("size") if isinstance(item, Mapping) else None
+        digest = item.get("sha256") if isinstance(item, Mapping) else None
+        if (set(item) != {"path", "size", "sha256"}
+                or path in local_by_path or isinstance(size, bool)
+                or not isinstance(size, int) or size < 0
+                or not isinstance(digest, str)
+                or _SHA256_RE.fullmatch(digest) is None):
+            raise PublicRankError("public_rank_local_artifact_manifest_invalid")
+        local_by_path[path] = {"path": path, "size": size, "sha256": digest}
+    local_core = {
+        "schema_version": 1,
+        "hash_method": "sha256_bytes_v1",
+        "files": [local_by_path[path] for path in sorted(local_by_path)],
+    }
+    local_manifest_sha256 = _canonical_sha256(local_core)
+    if artifact_manifest.get("manifest_sha256") != local_manifest_sha256:
+        raise PublicRankError("public_rank_local_artifact_manifest_invalid")
+
+    api_url = "https://huggingface.co/api/models/" + model_id + "?blobs=true"
+    api_response = _request(transport, "GET", api_url)
+    if (api_response.final_url != api_url
+            or not api_response.content_type.startswith("application/json")):
+        raise PublicRankError("public_rank_hub_api_response_invalid")
+    api_payload = _strict_json(api_response.body)
+    commit = api_payload.get("sha") if isinstance(api_payload, Mapping) else None
+    siblings = api_payload.get("siblings") if isinstance(
+        api_payload, Mapping) else None
+    if (api_payload.get("id") != model_id
+            or api_payload.get("private") is not False
+            or not isinstance(commit, str)
+            or _HUB_COMMIT_RE.fullmatch(commit) is None
+            or not isinstance(siblings, list) or not siblings
+            or len(siblings) > 100_000):
+        raise PublicRankError("public_rank_hub_model_metadata_invalid")
+
+    remote_by_path = {}
+    repository_identity = []
+    for sibling in siblings:
+        if not isinstance(sibling, Mapping):
+            raise PublicRankError("public_rank_hub_file_metadata_invalid")
+        path = _safe_hub_path(sibling.get("rfilename"))
+        size = sibling.get("size")
+        blob_id = sibling.get("blobId")
+        lfs = sibling.get("lfs")
+        if (path in remote_by_path or isinstance(size, bool)
+                or not isinstance(size, int) or size < 0
+                or not isinstance(blob_id, str)
+                or _GIT_BLOB_RE.fullmatch(blob_id) is None):
+            raise PublicRankError("public_rank_hub_file_metadata_invalid")
+        lfs_sha256 = None
+        if lfs is not None:
+            if (not isinstance(lfs, Mapping)
+                    or not isinstance(lfs.get("sha256"), str)
+                    or _SHA256_RE.fullmatch(lfs["sha256"]) is None
+                    or isinstance(lfs.get("size"), bool)
+                    or lfs.get("size") != size):
+                raise PublicRankError("public_rank_hub_lfs_metadata_invalid")
+            lfs_sha256 = lfs["sha256"]
+        remote_by_path[path] = {
+            "path": path,
+            "size": size,
+            "blob_id": blob_id,
+            "lfs_sha256": lfs_sha256,
+        }
+        repository_identity.append(remote_by_path[path])
+
+    ignored = sorted(
+        path for path in remote_by_path if _is_publication_metadata(path))
+    payload_paths = set(remote_by_path) - set(ignored)
+    if payload_paths != set(local_by_path):
+        extra = sorted(payload_paths - set(local_by_path))
+        missing = sorted(set(local_by_path) - payload_paths)
+        reason = "public_rank_hub_artifact_file_set_mismatch"
+        if extra:
+            reason += ":extra=" + quote(",".join(extra[:8]), safe="")
+        if missing:
+            reason += ":missing=" + quote(",".join(missing[:8]), safe="")
+        raise PublicRankError(reason)
+
+    model_card = remote_by_path.get("README.md")
+    if (model_card is None or model_card["lfs_sha256"] is not None
+            or not 1 <= model_card["size"] <= 1024 * 1024):
+        raise PublicRankError("public_rank_model_card_metadata_invalid")
+    model_card_url = (
+        "https://huggingface.co/" + model_id + "/resolve/" + commit
+        + "/README.md"
+    )
+    model_card_response = _request(transport, "GET", model_card_url)
+    _validate_hub_file_response_url(
+        model_card_response.final_url,
+        model_id=model_id,
+        commit=commit,
+        path="README.md",
+    )
+    if len(model_card_response.body) != model_card["size"]:
+        raise PublicRankError("public_rank_model_card_size_mismatch")
+    declarations = _MODEL_CARD_DECLARATION_RE.findall(
+        model_card_response.body)
+    if len(declarations) != 1:
+        raise PublicRankError("public_rank_model_card_declaration_missing")
+    declaration = _strict_json(declarations[0])
+    expected_declaration = {
+        "schema_version": 1,
+        "model_id": model_id,
+        "model_form": "single_model_single_pass",
+        "component_model_count": 1,
+        "inference_passes_per_sample": 1,
+        "dataset_specific_routing": False,
+        "artifact_manifest_sha256": local_manifest_sha256,
+    }
+    if declaration != expected_declaration:
+        raise PublicRankError("public_rank_model_card_declaration_mismatch")
+    model_card_evidence = {
+        **_endpoint_evidence(
+            model_card_response, model_card_url, "GET"),
+        "declaration_sha256": _canonical_sha256(declaration),
+    }
+
+    remote_files = []
+    regular_file_evidence = []
+    lfs_files = 0
+    for path in sorted(payload_paths):
+        remote = remote_by_path[path]
+        if remote["lfs_sha256"] is not None:
+            digest = remote["lfs_sha256"]
+            lfs_files += 1
+        else:
+            if remote["size"] > _MAX_RESPONSE_BYTES:
+                raise PublicRankError(
+                    "public_rank_hub_regular_file_too_large_to_hash")
+            file_url = (
+                "https://huggingface.co/" + model_id + "/resolve/" + commit
+                + "/" + quote(path, safe="/")
+            )
+            response = _request(
+                transport, "GET", file_url, allow_empty=True)
+            _validate_hub_file_response_url(
+                response.final_url, model_id=model_id, commit=commit, path=path)
+            if len(response.body) != remote["size"]:
+                raise PublicRankError("public_rank_hub_file_size_mismatch")
+            digest = hashlib.sha256(response.body).hexdigest()
+            regular_file_evidence.append({
+                "path": path,
+                **_endpoint_evidence(response, file_url, "GET"),
+            })
+        remote_files.append({
+            "path": path,
+            "size": remote["size"],
+            "sha256": digest,
+        })
+    remote_core = {
+        "schema_version": 1,
+        "hash_method": "sha256_bytes_v1",
+        "files": remote_files,
+    }
+    remote_manifest_sha256 = _canonical_sha256(remote_core)
+    if remote_manifest_sha256 != local_manifest_sha256:
+        raise PublicRankError("public_rank_hub_artifact_bytes_mismatch")
+    return {
+        "verification_method": PUBLICATION_IDENTITY_METHOD,
+        "model_id": model_id,
+        "public_submission_url": public_submission_url,
+        "hub_commit_sha": commit,
+        "artifact_manifest_sha256": local_manifest_sha256,
+        "artifact_files": len(local_by_path),
+        "artifact_bytes": sum(item["size"] for item in local_by_path.values()),
+        "hub_repository_file_count": len(remote_by_path),
+        "matched_payload_file_count": len(remote_files),
+        "lfs_payload_file_count": lfs_files,
+        "regular_payload_file_count": len(regular_file_evidence),
+        "ignored_metadata_files": ignored,
+        "hub_repository_identity_sha256": _canonical_sha256({
+            "schema_version": 1,
+            "commit": commit,
+            "files": sorted(repository_identity, key=lambda item: item["path"]),
+        }),
+        "hub_api_evidence": _endpoint_evidence(
+            api_response, api_url, "GET"),
+        "model_card_evidence": model_card_evidence,
+        "regular_file_evidence": regular_file_evidence,
     }
 
 
@@ -493,7 +785,12 @@ def verify_open_asr_public_rank(
         if _MODEL_ID_RE.fullmatch(model_id) is None:
             raise PublicRankError("public_rank_model_id_invalid")
         _allowed_url(public_submission_url, leaderboard=False)
-        eligibility = _managed_eligibility_evidence(idea_dir, cfg, model_id)
+        eligibility_context = _managed_eligibility_context(
+            idea_dir, cfg, model_id)
+        eligibility = (
+            None if eligibility_context is None
+            else eligibility_context.evidence
+        )
         request = transport or _default_transport
 
         submission = _request(request, "GET", public_submission_url)
@@ -535,7 +832,14 @@ def verify_open_asr_public_rank(
         receipt.update(table_claim)
         if eligibility is None:
             raise PublicRankError("public_rank_model_eligibility_unverified")
+        publication_identity = _publication_identity_evidence(
+            eligibility_context.artifact_manifest,
+            model_id,
+            public_submission_url,
+            request,
+        )
         receipt["eligibility_evidence"] = eligibility
+        receipt["publication_identity_evidence"] = publication_identity
         receipt["model_form"] = "single_model_single_pass"
         receipt["ensemble"] = False
         receipt["routing"] = False

@@ -36,6 +36,16 @@ def _endpoint(method, url, *, post=False, content_type="application/json"):
 def _official_receipt(receipt_status):
     submission_url = "https://huggingface.co/org/standalone-asr"
     result_url = public_rank.LEADERBOARD_CALL_URL + "/0123456789abcdef"
+    artifact_manifest_sha256 = "e" * 64
+    declaration = {
+        "schema_version": 1,
+        "model_id": "org/standalone-asr",
+        "model_form": "single_model_single_pass",
+        "component_model_count": 1,
+        "inference_passes_per_sample": 1,
+        "dataset_specific_routing": False,
+        "artifact_manifest_sha256": artifact_manifest_sha256,
+    }
     return {
         "schema_version": 1,
         "status": receipt_status,
@@ -63,6 +73,41 @@ def _official_receipt(receipt_status):
             "model_lineage_sha256": "b" * 64,
             "benchmark_receipt_sha256": "c" * 64,
             "evaluation_bundle_sha256": "d" * 64,
+            "artifact_manifest_sha256": artifact_manifest_sha256,
+            "artifact_files": 1,
+            "artifact_bytes": 5,
+        },
+        "publication_identity_evidence": {
+            "verification_method": (
+                public_rank.PUBLICATION_IDENTITY_METHOD),
+            "model_id": "org/standalone-asr",
+            "public_submission_url": submission_url,
+            "hub_commit_sha": "1" * 40,
+            "artifact_manifest_sha256": artifact_manifest_sha256,
+            "artifact_files": 1,
+            "artifact_bytes": 5,
+            "hub_repository_file_count": 1,
+            "matched_payload_file_count": 1,
+            "lfs_payload_file_count": 1,
+            "regular_payload_file_count": 0,
+            "ignored_metadata_files": [],
+            "hub_repository_identity_sha256": "f" * 64,
+            "hub_api_evidence": _endpoint(
+                "GET",
+                "https://huggingface.co/api/models/"
+                "org/standalone-asr?blobs=true"),
+            "model_card_evidence": {
+                **_endpoint(
+                    "GET",
+                    "https://huggingface.co/org/standalone-asr/resolve/"
+                    + "1" * 40 + "/README.md",
+                    content_type="text/markdown"),
+                "declaration_sha256": hashlib.sha256(json.dumps(
+                    declaration, sort_keys=True, separators=(",", ":"),
+                    allow_nan=False,
+                ).encode()).hexdigest(),
+            },
+            "regular_file_evidence": [],
         },
         "landing_rank": 2,
         "landing_average_wer": 5.0,
@@ -319,6 +364,29 @@ def test_acceptance_matrix_rejects_public_rank_eligibility_model_mismatch(
     ][0]
     assert evidence["status"] == "UNVERIFIED"
     assert evidence["reason"] == "official_rank_model_eligibility_invalid"
+
+
+def test_acceptance_matrix_rejects_publication_artifact_manifest_mismatch(
+        tmp_path):
+    manifest_path, _ = _manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text())
+    official_path = tmp_path / "official.json"
+    payload = json.loads(official_path.read_text())
+    payload["publication_identity_evidence"][
+        "artifact_manifest_sha256"] = "0" * 64
+    digest = _write_json(official_path, payload)
+    manifest["requirements"]["official_leaderboard_outcome"]["evidence"][0][
+        "sha256"
+    ] = digest
+    _write_json(manifest_path, manifest)
+
+    receipt = audit_acceptance_matrix(manifest_path)
+
+    evidence = receipt["requirements"]["official_leaderboard_outcome"][
+        "evidence"
+    ][0]
+    assert evidence["status"] == "UNVERIFIED"
+    assert evidence["reason"] == "official_rank_publication_identity_invalid"
 
 
 def test_acceptance_matrix_rejects_receipt_rewrite(tmp_path):

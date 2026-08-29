@@ -322,6 +322,7 @@ def _validate_official_rank_evidence(payload: Mapping) -> None:
         "idea_id", "attempt_id", "execution_identity_sha256",
         "model_artifact_sha256", "model_lineage_sha256",
         "benchmark_receipt_sha256", "evaluation_bundle_sha256",
+        "artifact_manifest_sha256", "artifact_files", "artifact_bytes",
     }
     if (not isinstance(eligibility, Mapping)
             or set(eligibility) != eligibility_fields
@@ -339,12 +340,159 @@ def _validate_official_rank_evidence(payload: Mapping) -> None:
                        "verifier_source_sha256", "execution_identity_sha256",
                        "model_artifact_sha256", "model_lineage_sha256",
                        "benchmark_receipt_sha256", "evaluation_bundle_sha256",
-                   })):
+                       "artifact_manifest_sha256",
+                   })
+            or any(isinstance(eligibility.get(key), bool)
+                   or not isinstance(eligibility.get(key), int)
+                   or eligibility[key] <= 0
+                   for key in {"artifact_files", "artifact_bytes"})):
         raise AcceptanceManifestError("official_rank_model_eligibility_invalid")
     model_id = payload.get("model_id")
     if (not isinstance(model_id, str)
             or public_rank._MODEL_ID_RE.fullmatch(model_id) is None):
         raise AcceptanceManifestError("official_rank_model_id_invalid")
+    publication = payload.get("publication_identity_evidence")
+    publication_fields = {
+        "verification_method", "model_id", "public_submission_url",
+        "hub_commit_sha", "artifact_manifest_sha256", "artifact_files",
+        "artifact_bytes", "hub_repository_file_count",
+        "matched_payload_file_count", "lfs_payload_file_count",
+        "regular_payload_file_count", "ignored_metadata_files",
+        "hub_repository_identity_sha256", "hub_api_evidence",
+        "model_card_evidence", "regular_file_evidence",
+    }
+    if (not isinstance(publication, Mapping)
+            or set(publication) != publication_fields
+            or publication.get("verification_method")
+            != public_rank.PUBLICATION_IDENTITY_METHOD
+            or publication.get("model_id") != model_id
+            or publication.get("public_submission_url")
+            != payload.get("public_submission_url")
+            or public_rank._HUB_COMMIT_RE.fullmatch(
+                publication.get("hub_commit_sha", "")) is None
+            or publication.get("artifact_manifest_sha256")
+            != eligibility["artifact_manifest_sha256"]
+            or publication.get("artifact_files")
+            != eligibility["artifact_files"]
+            or publication.get("artifact_bytes")
+            != eligibility["artifact_bytes"]
+            or _SHA256_RE.fullmatch(publication.get(
+                "hub_repository_identity_sha256", "")) is None):
+        raise AcceptanceManifestError(
+            "official_rank_publication_identity_invalid")
+    count_fields = {
+        "artifact_files", "artifact_bytes", "hub_repository_file_count",
+        "matched_payload_file_count", "lfs_payload_file_count",
+        "regular_payload_file_count",
+    }
+    if any(isinstance(publication.get(key), bool)
+           or not isinstance(publication.get(key), int)
+           or publication[key] < 0 for key in count_fields):
+        raise AcceptanceManifestError(
+            "official_rank_publication_identity_invalid")
+    ignored = publication.get("ignored_metadata_files")
+    regular = publication.get("regular_file_evidence")
+    if (publication["artifact_files"] <= 0
+            or publication["artifact_bytes"] <= 0
+            or publication["matched_payload_file_count"]
+            != publication["artifact_files"]
+            or publication["lfs_payload_file_count"]
+            + publication["regular_payload_file_count"]
+            != publication["artifact_files"]
+            or not isinstance(ignored, list)
+            or ignored != sorted(set(ignored))
+            or any(not isinstance(path, str)
+                   or not public_rank._is_publication_metadata(path)
+                   for path in ignored)
+            or publication["hub_repository_file_count"]
+            != publication["artifact_files"] + len(ignored)
+            or not isinstance(regular, list)
+            or len(regular) != publication["regular_payload_file_count"]):
+        raise AcceptanceManifestError(
+            "official_rank_publication_identity_invalid")
+    api_evidence = publication.get("hub_api_evidence")
+    api_url = "https://huggingface.co/api/models/" + model_id + "?blobs=true"
+    endpoint_fields = {
+        "method", "request_url", "final_url", "http_status",
+        "content_type", "response_bytes", "response_sha256",
+    }
+    if (not isinstance(api_evidence, Mapping)
+            or set(api_evidence) != endpoint_fields
+            or api_evidence.get("method") != "GET"
+            or api_evidence.get("request_url") != api_url
+            or api_evidence.get("final_url") != api_url
+            or api_evidence.get("http_status") != 200
+            or not isinstance(api_evidence.get("content_type"), str)
+            or not api_evidence["content_type"].startswith("application/json")
+            or isinstance(api_evidence.get("response_bytes"), bool)
+            or not isinstance(api_evidence.get("response_bytes"), int)
+            or not 1 <= api_evidence["response_bytes"] <= 8 * 1024 * 1024
+            or _SHA256_RE.fullmatch(
+                api_evidence.get("response_sha256", "")) is None):
+        raise AcceptanceManifestError(
+            "official_rank_publication_identity_invalid")
+    model_card_evidence = publication.get("model_card_evidence")
+    model_card_url = (
+        "https://huggingface.co/" + model_id + "/resolve/"
+        + publication["hub_commit_sha"] + "/README.md"
+    )
+    declaration = {
+        "schema_version": 1,
+        "model_id": model_id,
+        "model_form": "single_model_single_pass",
+        "component_model_count": 1,
+        "inference_passes_per_sample": 1,
+        "dataset_specific_routing": False,
+        "artifact_manifest_sha256": eligibility[
+            "artifact_manifest_sha256"],
+    }
+    declaration_sha256 = hashlib.sha256(json.dumps(
+        declaration, sort_keys=True, separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")).hexdigest()
+    if (not isinstance(model_card_evidence, Mapping)
+            or set(model_card_evidence)
+            != {*endpoint_fields, "declaration_sha256"}
+            or model_card_evidence.get("method") != "GET"
+            or model_card_evidence.get("request_url") != model_card_url
+            or model_card_evidence.get("http_status") != 200
+            or not isinstance(model_card_evidence.get("final_url"), str)
+            or urlsplit(model_card_evidence["final_url"]).hostname
+            != "huggingface.co"
+            or isinstance(model_card_evidence.get("response_bytes"), bool)
+            or not isinstance(model_card_evidence.get("response_bytes"), int)
+            or not 1 <= model_card_evidence["response_bytes"] <= 1024 * 1024
+            or _SHA256_RE.fullmatch(model_card_evidence.get(
+                "response_sha256", "")) is None
+            or model_card_evidence.get("declaration_sha256")
+            != declaration_sha256):
+        raise AcceptanceManifestError(
+            "official_rank_publication_identity_invalid")
+    regular_paths = set()
+    expected_prefix = (
+        "https://huggingface.co/" + model_id + "/resolve/"
+        + publication["hub_commit_sha"] + "/"
+    )
+    for evidence in regular:
+        if (not isinstance(evidence, Mapping)
+                or set(evidence) != {"path", *endpoint_fields}
+                or not isinstance(evidence.get("path"), str)
+                or evidence["path"] in regular_paths
+                or evidence.get("method") != "GET"
+                or not isinstance(evidence.get("request_url"), str)
+                or not evidence["request_url"].startswith(expected_prefix)
+                or evidence.get("http_status") != 200
+                or not isinstance(evidence.get("final_url"), str)
+                or urlsplit(evidence["final_url"]).hostname
+                not in {"huggingface.co", "www.huggingface.co"}
+                or isinstance(evidence.get("response_bytes"), bool)
+                or not isinstance(evidence.get("response_bytes"), int)
+                or not 0 <= evidence["response_bytes"] <= 8 * 1024 * 1024
+                or _SHA256_RE.fullmatch(
+                    evidence.get("response_sha256", "")) is None):
+            raise AcceptanceManifestError(
+                "official_rank_publication_identity_invalid")
+        regular_paths.add(evidence["path"])
     default_columns = payload.get("default_dataset_columns")
     if (not isinstance(default_columns, list) or not default_columns
             or any(not isinstance(item, str) for item in default_columns)

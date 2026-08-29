@@ -238,6 +238,30 @@ def test_completed_lineage_binds_artifact_attempt_and_policy_without_rank_claim(
     assert _fp("train-sample") not in durable
 
 
+def test_publication_manifest_is_derived_from_same_validated_artifact(tmp_path):
+    cfg, idea_dir, _, finalized = _completed_lineage(tmp_path)
+
+    lineage, lineage_sha, manifest = validate_model_lineage_for_evaluation(
+        idea_dir, cfg, include_artifact_manifest=True)
+
+    expected_core = {
+        "schema_version": 1,
+        "hash_method": "sha256_bytes_v1",
+        "files": [{
+            "path": "model.bin",
+            "size": len(b"one standalone model"),
+            "sha256": hashlib.sha256(
+                b"one standalone model").hexdigest(),
+        }],
+    }
+    assert lineage == finalized
+    assert len(lineage_sha) == 64
+    assert manifest == {
+        **expected_core,
+        "manifest_sha256": lineage_module._canonical_hash(expected_core),
+    }
+
+
 def test_lineage_audit_rejects_compute_execution_identity_mismatch(tmp_path):
     cfg, idea_dir, tp, _ = _completed_lineage(tmp_path)
     replacement_identity = "d" * 64

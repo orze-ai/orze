@@ -296,7 +296,9 @@ def _stat_identity(info) -> tuple:
     )
 
 
-def _hash_stable_file(path: Path, before, digest_state) -> None:
+def _hash_stable_file(
+    path: Path, before, digest_state, mirror_digest_state=None,
+) -> None:
     """Hash one exact inode without following a last-moment symlink swap."""
     flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
@@ -315,6 +317,8 @@ def _hash_stable_file(path: Path, before, digest_state) -> None:
             if not chunk:
                 break
             digest_state.update(chunk)
+            if mirror_digest_state is not None:
+                mirror_digest_state.update(chunk)
         after_fd = os.fstat(fd)
     except ModelLineageError:
         raise
@@ -382,21 +386,36 @@ def _artifact_files(root: Path, max_files: int, max_bytes: int):
     return "directory_tree_v1", files, total, root_info
 
 
-def _artifact_digest_once(root: Path, max_files: int, max_bytes: int) -> dict:
+def _artifact_digest_once(
+    root: Path, max_files: int, max_bytes: int, *, include_manifest: bool = False,
+) -> dict:
     kind, files, total, root_before = _artifact_files(
         root, max_files, max_bytes)
     if kind == "file":
         digest_state = hashlib.sha256()
         _hash_stable_file(root, root_before, digest_state)
         digest = digest_state.hexdigest()
+        manifest_files = [{
+            "path": root.name,
+            "size": root_before.st_size,
+            "sha256": digest,
+        }]
     else:
         digest_state = hashlib.sha256(b"orze-model-tree-v1\0")
+        manifest_files = []
         for relative, path, before in files:
             encoded_name = relative.as_posix().encode("utf-8")
             digest_state.update(len(encoded_name).to_bytes(8, "big"))
             digest_state.update(encoded_name)
             digest_state.update(before.st_size.to_bytes(8, "big"))
-            _hash_stable_file(path, before, digest_state)
+            file_digest = hashlib.sha256()
+            _hash_stable_file(
+                path, before, digest_state, mirror_digest_state=file_digest)
+            manifest_files.append({
+                "path": relative.as_posix(),
+                "size": before.st_size,
+                "sha256": file_digest.hexdigest(),
+            })
         digest = digest_state.hexdigest()
         _, after_files, after_total, root_after = _artifact_files(
             root, max_files, max_bytes)
@@ -405,18 +424,33 @@ def _artifact_digest_once(root: Path, max_files: int, max_bytes: int) -> dict:
                 or _stat_identity(root_before) != _stat_identity(root_after)):
             raise ModelLineageError(
                 "model_lineage_artifact_changed_during_hash")
-    return {
+    result = {
         "artifact_sha256": digest,
         "artifact_kind": kind,
         "artifact_files": len(files),
         "artifact_bytes": total,
     }
+    if include_manifest:
+        manifest_core = {
+            "schema_version": 1,
+            "hash_method": "sha256_bytes_v1",
+            "files": manifest_files,
+        }
+        result["artifact_manifest"] = {
+            **manifest_core,
+            "manifest_sha256": _canonical_hash(manifest_core),
+        }
+    return result
 
 
-def _artifact_digest(root: Path, max_files: int, max_bytes: int) -> dict:
+def _artifact_digest(
+    root: Path, max_files: int, max_bytes: int, *, include_manifest: bool = False,
+) -> dict:
     """Require two identical full reads to rule out an unstable snapshot."""
-    first = _artifact_digest_once(root, max_files, max_bytes)
-    second = _artifact_digest_once(root, max_files, max_bytes)
+    first = _artifact_digest_once(
+        root, max_files, max_bytes, include_manifest=include_manifest)
+    second = _artifact_digest_once(
+        root, max_files, max_bytes, include_manifest=include_manifest)
     if first != second:
         raise ModelLineageError(
             "model_lineage_artifact_changed_during_hash")
@@ -501,8 +535,8 @@ def finalize_model_lineage(tp, idea_dir: Path, cfg: Mapping) -> dict:
 
 
 def validate_model_lineage_for_evaluation(
-    idea_dir: Path, cfg: Mapping,
-) -> tuple[dict, str]:
+    idea_dir: Path, cfg: Mapping, *, include_artifact_manifest: bool = False,
+) -> tuple[dict, str] | tuple[dict, str, dict]:
     """Validate current managed artifact and terminal attempt evidence."""
     spec = cfg.get("model_lineage", {})
     if not isinstance(spec, Mapping) or not spec.get("enabled", False):
@@ -578,9 +612,20 @@ def validate_model_lineage_for_evaluation(
     artifact = _artifact_digest(
         _idea_path(idea_dir, str(spec["artifact"])),
         int(spec.get("max_files", 100_000)),
-        int(spec.get("max_bytes", 100 * 1024 * 1024 * 1024)))
-    if any(lineage.get(key) != value for key, value in artifact.items()):
+        int(spec.get("max_bytes", 100 * 1024 * 1024 * 1024)),
+        include_manifest=include_artifact_manifest)
+    artifact_identity = {
+        key: artifact[key] for key in (
+            "artifact_sha256", "artifact_kind", "artifact_files",
+            "artifact_bytes",
+        )
+    }
+    if any(
+            lineage.get(key) != value
+            for key, value in artifact_identity.items()):
         raise ModelLineageError("model_lineage_artifact_drift")
+    if include_artifact_manifest:
+        return lineage, lineage_sha256, artifact["artifact_manifest"]
     return lineage, lineage_sha256
 
 
