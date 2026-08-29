@@ -16,8 +16,10 @@ import html
 import ipaddress
 import json
 import math
+import os
 import re
 import socket
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
@@ -46,13 +48,6 @@ _MODEL_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,95}/[A-Za-z0-9][A-Za-z0-
 _HF_HREF_RE = re.compile(
     r'''href=["']https://huggingface\.co/([^"'?#]+)["']''', re.IGNORECASE,
 )
-_ELIGIBILITY_FIELDS = {
-    "schema_version", "status", "verification_method", "model_id",
-    "model_form", "component_model_count", "inference_passes_per_sample",
-    "ensemble", "routing", "model_artifact_sha256", "model_lineage_sha256",
-    "benchmark_receipt_sha256", "evaluation_bundle_sha256",
-    "verifier_source_sha256",
-}
 ELIGIBILITY_METHOD = "managed_model_lineage_and_single_pass_preflight_v1"
 
 
@@ -368,42 +363,102 @@ def _derive_table_claim(table_payload, model_id: str) -> dict:
     }
 
 
-def _eligibility_evidence(data: bytes | None, model_id: str) -> dict | None:
-    if data is None:
+def _read_stable_regular(path: Path, max_bytes: int = 1024 * 1024) -> bytes:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise PublicRankError("public_rank_eligibility_receipt_unavailable") from exc
+    try:
+        before = os.fstat(descriptor)
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                or not 1 <= before.st_size <= max_bytes):
+            raise PublicRankError("public_rank_eligibility_receipt_invalid")
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = -1
+            data = handle.read(max_bytes + 1)
+            after = os.fstat(handle.fileno())
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    identity_before = (
+        before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
+        before.st_ctime_ns, before.st_nlink,
+    )
+    identity_after = (
+        after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns,
+        after.st_ctime_ns, after.st_nlink,
+    )
+    if len(data) > max_bytes or identity_before != identity_after:
+        raise PublicRankError("public_rank_eligibility_receipt_changed")
+    return data
+
+
+def _managed_eligibility_evidence(
+    idea_dir: Path | None,
+    cfg: Mapping | None,
+    model_id: str,
+) -> dict | None:
+    """Derive eligibility only from the managed production evidence chain."""
+    if idea_dir is None and cfg is None:
         return None
-    if not data or len(data) > 1024 * 1024:
-        raise PublicRankError("public_rank_eligibility_size_invalid")
-    payload = _strict_json(data)
-    if not isinstance(payload, Mapping) or set(payload) != _ELIGIBILITY_FIELDS:
-        raise PublicRankError("public_rank_eligibility_schema_invalid")
-    if (payload.get("schema_version") != 1
-            or payload.get("status") != "VERIFIED"
-            or payload.get("verification_method") != ELIGIBILITY_METHOD
-            or payload.get("verifier_source_sha256") != hashlib.sha256(
-                Path(__file__).read_bytes()).hexdigest()
-            or payload.get("model_id") != model_id
-            or payload.get("model_form") != "single_model_single_pass"
-            or payload.get("component_model_count") != 1
-            or payload.get("inference_passes_per_sample") != 1
-            or payload.get("ensemble") is not False
-            or payload.get("routing") is not False):
-        raise PublicRankError("public_rank_model_eligibility_invalid")
-    for key in (
-        "model_artifact_sha256", "model_lineage_sha256",
-        "benchmark_receipt_sha256", "evaluation_bundle_sha256",
-    ):
-        value = payload.get(key)
-        if not isinstance(value, str) or re.fullmatch(
-                r"[0-9a-f]{64}", value) is None:
-            raise PublicRankError("public_rank_eligibility_identity_invalid")
+    if idea_dir is None or not isinstance(cfg, Mapping):
+        raise PublicRankError("public_rank_managed_eligibility_context_invalid")
+    from orze.core.benchmark_contract import (
+        get_benchmark_contract,
+        validate_benchmark_receipt,
+    )
+    from orze.core.model_lineage import validate_model_lineage_for_evaluation
+
+    idea_dir = Path(idea_dir)
+    if idea_dir.is_symlink() or not idea_dir.is_dir():
+        raise PublicRankError("public_rank_managed_idea_invalid")
+    valid, reason = validate_benchmark_receipt(idea_dir, cfg)
+    if not valid:
+        raise PublicRankError("public_rank_benchmark_invalid:" + reason)
+    try:
+        lineage, lineage_sha256 = validate_model_lineage_for_evaluation(
+            idea_dir, cfg)
+    except Exception as exc:
+        raise PublicRankError("public_rank_model_lineage_invalid") from exc
+    contract = get_benchmark_contract(cfg)
+    if not isinstance(contract, Mapping):
+        raise PublicRankError("public_rank_benchmark_contract_missing")
+    receipt_name = contract.get("receipt")
+    if not isinstance(receipt_name, str) or not receipt_name:
+        raise PublicRankError("public_rank_benchmark_receipt_invalid")
+    root = idea_dir.resolve(strict=True)
+    receipt_path = (idea_dir / receipt_name).resolve(strict=True)
+    try:
+        receipt_path.relative_to(root)
+    except ValueError as exc:
+        raise PublicRankError("public_rank_benchmark_receipt_escaped") from exc
+    receipt_bytes = _read_stable_regular(receipt_path)
+    receipt = _strict_json(receipt_bytes)
+    artifact_sha256 = lineage.get("artifact_sha256")
+    evaluation_bundle_sha256 = receipt.get("evaluation_bundle_sha256")
+    if (not isinstance(receipt, Mapping)
+            or receipt.get("model_form") != "single_model_single_pass"
+            or receipt.get("component_model_count") != 1
+            or receipt.get("inference_passes_per_sample") != 1
+            or receipt.get("dataset_specific_routing") is not False
+            or receipt.get("model_artifact_sha256") != artifact_sha256
+            or receipt.get("managed_model_lineage_sha256") != lineage_sha256
+            or not isinstance(evaluation_bundle_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", evaluation_bundle_sha256) is None):
+        raise PublicRankError("public_rank_managed_eligibility_mismatch")
     return {
-        "receipt_sha256": hashlib.sha256(data).hexdigest(),
-        "verification_method": payload["verification_method"],
-        "verifier_source_sha256": payload["verifier_source_sha256"],
-        "model_artifact_sha256": payload["model_artifact_sha256"],
-        "model_lineage_sha256": payload["model_lineage_sha256"],
-        "benchmark_receipt_sha256": payload["benchmark_receipt_sha256"],
-        "evaluation_bundle_sha256": payload["evaluation_bundle_sha256"],
+        "verification_method": ELIGIBILITY_METHOD,
+        "verifier_source_sha256": hashlib.sha256(
+            Path(__file__).read_bytes()).hexdigest(),
+        "model_id": model_id,
+        "idea_id": lineage["idea_id"],
+        "attempt_id": lineage["attempt_id"],
+        "execution_identity_sha256": lineage["execution_identity_sha256"],
+        "model_artifact_sha256": artifact_sha256,
+        "model_lineage_sha256": lineage_sha256,
+        "benchmark_receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
+        "evaluation_bundle_sha256": evaluation_bundle_sha256,
     }
 
 
@@ -411,7 +466,8 @@ def verify_open_asr_public_rank(
     model_id: str,
     public_submission_url: str,
     *,
-    eligibility_receipt: bytes | None = None,
+    idea_dir: Path | None = None,
+    cfg: Mapping | None = None,
     transport: Transport | None = None,
 ) -> dict:
     """Fetch public endpoints and derive one model's current default ranks."""
@@ -437,7 +493,7 @@ def verify_open_asr_public_rank(
         if _MODEL_ID_RE.fullmatch(model_id) is None:
             raise PublicRankError("public_rank_model_id_invalid")
         _allowed_url(public_submission_url, leaderboard=False)
-        eligibility = _eligibility_evidence(eligibility_receipt, model_id)
+        eligibility = _managed_eligibility_evidence(idea_dir, cfg, model_id)
         request = transport or _default_transport
 
         submission = _request(request, "GET", public_submission_url)
@@ -497,15 +553,18 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--model-id", required=True)
     parser.add_argument("--submission-url", required=True)
-    parser.add_argument("--eligibility-receipt", type=Path)
+    parser.add_argument("--project-config", type=Path)
+    parser.add_argument("--idea-dir", type=Path)
     parser.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if (args.project_config is None) != (args.idea_dir is None):
+        parser.error("--project-config and --idea-dir must be supplied together")
+    cfg = None
+    if args.project_config is not None:
+        from orze.core.config import load_project_config
+        cfg = load_project_config(str(args.project_config))
     receipt = verify_open_asr_public_rank(
-        args.model_id, args.submission_url,
-        eligibility_receipt=(
-            args.eligibility_receipt.read_bytes()
-            if args.eligibility_receipt is not None else None
-        ),
+        args.model_id, args.submission_url, idea_dir=args.idea_dir, cfg=cfg,
     )
     atomic_write(
         Path(args.output), json.dumps(receipt, indent=2, sort_keys=True) + "\n",

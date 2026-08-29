@@ -51,11 +51,14 @@ def _official_receipt(receipt_status):
         "ensemble": False,
         "routing": False,
         "eligibility_evidence": {
-            "receipt_sha256": "e" * 64,
             "verification_method": (
                 "managed_model_lineage_and_single_pass_preflight_v1"),
             "verifier_source_sha256": hashlib.sha256(
                 Path(public_rank.__file__).read_bytes()).hexdigest(),
+            "model_id": "org/standalone-asr",
+            "idea_id": "managed-idea",
+            "attempt_id": "attempt-1",
+            "execution_identity_sha256": "f" * 64,
             "model_artifact_sha256": "a" * 64,
             "model_lineage_sha256": "b" * 64,
             "benchmark_receipt_sha256": "c" * 64,
@@ -294,6 +297,28 @@ def test_acceptance_matrix_rejects_public_rank_verifier_drift(tmp_path):
     ][0]
     assert evidence["status"] == "UNVERIFIED"
     assert evidence["reason"] == "official_rank_verifier_identity_invalid"
+
+
+def test_acceptance_matrix_rejects_public_rank_eligibility_model_mismatch(
+        tmp_path):
+    manifest_path, _ = _manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text())
+    official_path = tmp_path / "official.json"
+    payload = json.loads(official_path.read_text())
+    payload["eligibility_evidence"]["model_id"] = "org/different-model"
+    digest = _write_json(official_path, payload)
+    manifest["requirements"]["official_leaderboard_outcome"]["evidence"][0][
+        "sha256"
+    ] = digest
+    _write_json(manifest_path, manifest)
+
+    receipt = audit_acceptance_matrix(manifest_path)
+
+    evidence = receipt["requirements"]["official_leaderboard_outcome"][
+        "evidence"
+    ][0]
+    assert evidence["status"] == "UNVERIFIED"
+    assert evidence["reason"] == "official_rank_model_eligibility_invalid"
 
 
 def test_acceptance_matrix_rejects_receipt_rewrite(tmp_path):

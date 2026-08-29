@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import orze.engine.public_rank as public_rank
+import pytest
 from orze.engine.public_rank import (
     EndpointResponse,
     LEADERBOARD_CALL_URL,
@@ -14,6 +15,7 @@ from orze.engine.public_rank import (
 
 MODEL_ID = "org/standalone-asr"
 SUBMISSION_URL = "https://huggingface.co/org/standalone-asr"
+REAL_MANAGED_ELIGIBILITY = public_rank._managed_eligibility_evidence
 DEFAULTS = [
     "RTFx ⬆️️", "AMI-Cleaned", "Private (scripted)",
     "Private (conversational)",
@@ -21,24 +23,31 @@ DEFAULTS = [
 
 
 def _eligibility(model_id=MODEL_ID):
-    return json.dumps({
-        "schema_version": 1,
-        "status": "VERIFIED",
-        "verification_method": (
-            "managed_model_lineage_and_single_pass_preflight_v1"),
+    return {
+        "verification_method": public_rank.ELIGIBILITY_METHOD,
         "verifier_source_sha256": hashlib.sha256(
             Path(public_rank.__file__).read_bytes()).hexdigest(),
         "model_id": model_id,
-        "model_form": "single_model_single_pass",
-        "component_model_count": 1,
-        "inference_passes_per_sample": 1,
-        "ensemble": False,
-        "routing": False,
+        "idea_id": "managed-idea",
+        "attempt_id": "attempt-1",
+        "execution_identity_sha256": "f" * 64,
         "model_artifact_sha256": "a" * 64,
         "model_lineage_sha256": "b" * 64,
         "benchmark_receipt_sha256": "c" * 64,
         "evaluation_bundle_sha256": "d" * 64,
-    }, sort_keys=True).encode()
+    }
+
+
+@pytest.fixture(autouse=True)
+def _managed_eligibility_stub(monkeypatch):
+    def derive(idea_dir, cfg, model_id):
+        if idea_dir is None and cfg is None:
+            return None
+        assert idea_dir == Path("/managed")
+        assert cfg == {}
+        return _eligibility(model_id)
+    monkeypatch.setattr(
+        public_rank, "_managed_eligibility_evidence", derive)
 
 
 def _info(defaults=DEFAULTS):
@@ -103,7 +112,7 @@ def test_public_rank_is_derived_from_default_public_table():
     transport = FakeTransport()
 
     receipt = verify_open_asr_public_rank(
-        MODEL_ID, SUBMISSION_URL, eligibility_receipt=_eligibility(),
+        MODEL_ID, SUBMISSION_URL, idea_dir=Path("/managed"), cfg={},
         transport=transport)
 
     assert receipt["status"] == "VERIFIED"
@@ -142,7 +151,7 @@ def test_public_rank_rejects_defaults_without_both_private_tracks():
     transport = FakeTransport(info=_info(["AMI-Cleaned", "Private (scripted)"]))
 
     receipt = verify_open_asr_public_rank(
-        MODEL_ID, SUBMISSION_URL, eligibility_receipt=_eligibility(),
+        MODEL_ID, SUBMISSION_URL, idea_dir=Path("/managed"), cfg={},
         transport=transport)
 
     assert receipt["status"] == "UNVERIFIED"
@@ -156,7 +165,7 @@ def test_public_rank_rejects_absent_model_instead_of_inventing_rank():
     ]))
 
     receipt = verify_open_asr_public_rank(
-        MODEL_ID, SUBMISSION_URL, eligibility_receipt=_eligibility(),
+        MODEL_ID, SUBMISSION_URL, idea_dir=Path("/managed"), cfg={},
         transport=transport)
 
     assert receipt["status"] == "UNVERIFIED"
@@ -175,7 +184,7 @@ def test_public_rank_rejects_duplicate_model_rows():
     ]))
 
     receipt = verify_open_asr_public_rank(
-        MODEL_ID, SUBMISSION_URL, eligibility_receipt=_eligibility(),
+        MODEL_ID, SUBMISSION_URL, idea_dir=Path("/managed"), cfg={},
         transport=transport)
 
     assert receipt["status"] == "UNVERIFIED"
@@ -186,7 +195,7 @@ def test_public_rank_rejects_submission_without_model_identity():
     transport = FakeTransport(submission=b"some other public model")
 
     receipt = verify_open_asr_public_rank(
-        MODEL_ID, SUBMISSION_URL, eligibility_receipt=_eligibility(),
+        MODEL_ID, SUBMISSION_URL, idea_dir=Path("/managed"), cfg={},
         transport=transport)
 
     assert receipt["status"] == "UNVERIFIED"
@@ -196,7 +205,7 @@ def test_public_rank_rejects_submission_without_model_identity():
 def test_public_rank_rejects_fabricated_or_nonpublic_submission_url():
     receipt = verify_open_asr_public_rank(
         MODEL_ID, "https://example.test/invented",
-        eligibility_receipt=_eligibility(), transport=FakeTransport())
+        idea_dir=Path("/managed"), cfg={}, transport=FakeTransport())
 
     assert receipt["status"] == "UNVERIFIED"
     assert receipt["rank_claim_proven"] is False
@@ -210,7 +219,7 @@ def test_public_rank_rejects_table_rank_inconsistent_with_scores():
     ]))
 
     receipt = verify_open_asr_public_rank(
-        MODEL_ID, SUBMISSION_URL, eligibility_receipt=_eligibility(),
+        MODEL_ID, SUBMISSION_URL, idea_dir=Path("/managed"), cfg={},
         transport=transport)
 
     assert receipt["status"] == "UNVERIFIED"
@@ -228,3 +237,103 @@ def test_public_rank_observation_without_eligibility_cannot_green():
     assert receipt["ensemble"] is None
     assert receipt["routing"] is None
     assert receipt["reason"] == "public_rank_model_eligibility_unverified"
+
+
+def _managed_receipt(artifact="a" * 64):
+    return {
+        "model_form": "single_model_single_pass",
+        "component_model_count": 1,
+        "inference_passes_per_sample": 1,
+        "dataset_specific_routing": False,
+        "model_artifact_sha256": artifact,
+        "managed_model_lineage_sha256": "b" * 64,
+        "evaluation_bundle_sha256": "d" * 64,
+    }
+
+
+def test_managed_eligibility_is_derived_from_validated_production_receipts(
+        tmp_path, monkeypatch):
+    from orze.core import benchmark_contract, model_lineage
+
+    idea_dir = tmp_path / "managed-idea"
+    idea_dir.mkdir()
+    receipt_bytes = json.dumps(
+        _managed_receipt(), sort_keys=True).encode()
+    (idea_dir / "benchmark.json").write_bytes(receipt_bytes)
+    monkeypatch.setattr(
+        benchmark_contract, "validate_benchmark_receipt",
+        lambda idea, cfg: (True, "verified"))
+    monkeypatch.setattr(
+        benchmark_contract, "get_benchmark_contract",
+        lambda cfg: {"receipt": "benchmark.json"})
+    monkeypatch.setattr(
+        model_lineage, "validate_model_lineage_for_evaluation",
+        lambda idea, cfg: ({
+            "idea_id": "managed-idea",
+            "attempt_id": "attempt-1",
+            "execution_identity_sha256": "f" * 64,
+            "artifact_sha256": "a" * 64,
+        }, "b" * 64))
+
+    evidence = REAL_MANAGED_ELIGIBILITY(
+        idea_dir, {}, MODEL_ID)
+
+    assert evidence == {
+        "verification_method": public_rank.ELIGIBILITY_METHOD,
+        "verifier_source_sha256": hashlib.sha256(
+            Path(public_rank.__file__).read_bytes()).hexdigest(),
+        "model_id": MODEL_ID,
+        "idea_id": "managed-idea",
+        "attempt_id": "attempt-1",
+        "execution_identity_sha256": "f" * 64,
+        "model_artifact_sha256": "a" * 64,
+        "model_lineage_sha256": "b" * 64,
+        "benchmark_receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
+        "evaluation_bundle_sha256": "d" * 64,
+    }
+
+
+def test_managed_eligibility_rejects_benchmark_lineage_artifact_mismatch(
+        tmp_path, monkeypatch):
+    from orze.core import benchmark_contract, model_lineage
+
+    idea_dir = tmp_path / "managed-idea"
+    idea_dir.mkdir()
+    (idea_dir / "benchmark.json").write_text(
+        json.dumps(_managed_receipt(artifact="e" * 64)))
+    monkeypatch.setattr(
+        benchmark_contract, "validate_benchmark_receipt",
+        lambda idea, cfg: (True, "verified"))
+    monkeypatch.setattr(
+        benchmark_contract, "get_benchmark_contract",
+        lambda cfg: {"receipt": "benchmark.json"})
+    monkeypatch.setattr(
+        model_lineage, "validate_model_lineage_for_evaluation",
+        lambda idea, cfg: ({
+            "idea_id": "managed-idea",
+            "attempt_id": "attempt-1",
+            "execution_identity_sha256": "f" * 64,
+            "artifact_sha256": "a" * 64,
+        }, "b" * 64))
+
+    with pytest.raises(
+            public_rank.PublicRankError,
+            match="public_rank_managed_eligibility_mismatch"):
+        REAL_MANAGED_ELIGIBILITY(idea_dir, {}, MODEL_ID)
+
+
+def test_managed_eligibility_rejects_unverified_benchmark(
+        tmp_path, monkeypatch):
+    from orze.core import benchmark_contract
+
+    idea_dir = tmp_path / "managed-idea"
+    idea_dir.mkdir()
+    monkeypatch.setattr(
+        benchmark_contract, "validate_benchmark_receipt",
+        lambda idea, cfg: (False, "benchmark_receipt_missing"))
+
+    with pytest.raises(
+            public_rank.PublicRankError,
+            match=("public_rank_benchmark_invalid:"
+                   "benchmark_receipt_missing")):
+        REAL_MANAGED_ELIGIBILITY(idea_dir, {}, MODEL_ID)

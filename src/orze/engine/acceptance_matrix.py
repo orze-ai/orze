@@ -318,9 +318,10 @@ def _validate_official_rank_evidence(payload: Mapping) -> None:
         raise AcceptanceManifestError("official_rank_model_eligibility_invalid")
     eligibility = payload.get("eligibility_evidence")
     eligibility_fields = {
-        "receipt_sha256", "verification_method", "model_artifact_sha256",
-        "model_lineage_sha256", "benchmark_receipt_sha256",
-        "evaluation_bundle_sha256", "verifier_source_sha256",
+        "verification_method", "verifier_source_sha256", "model_id",
+        "idea_id", "attempt_id", "execution_identity_sha256",
+        "model_artifact_sha256", "model_lineage_sha256",
+        "benchmark_receipt_sha256", "evaluation_bundle_sha256",
     }
     if (not isinstance(eligibility, Mapping)
             or set(eligibility) != eligibility_fields
@@ -328,8 +329,17 @@ def _validate_official_rank_evidence(payload: Mapping) -> None:
             != public_rank.ELIGIBILITY_METHOD
             or eligibility.get("verifier_source_sha256")
             != payload.get("verifier_source_sha256")
+            or eligibility.get("model_id") != payload.get("model_id")
+            or not isinstance(eligibility.get("idea_id"), str)
+            or _SYSTEM_ID_RE.fullmatch(eligibility["idea_id"]) is None
+            or not isinstance(eligibility.get("attempt_id"), str)
+            or _SYSTEM_ID_RE.fullmatch(eligibility["attempt_id"]) is None
             or any(_SHA256_RE.fullmatch(eligibility.get(key, "")) is None
-                   for key in eligibility_fields - {"verification_method"})):
+                   for key in {
+                       "verifier_source_sha256", "execution_identity_sha256",
+                       "model_artifact_sha256", "model_lineage_sha256",
+                       "benchmark_receipt_sha256", "evaluation_bundle_sha256",
+                   })):
         raise AcceptanceManifestError("official_rank_model_eligibility_invalid")
     model_id = payload.get("model_id")
     if (not isinstance(model_id, str)
