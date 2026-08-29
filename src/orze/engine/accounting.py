@@ -19,6 +19,7 @@ from typing import Mapping, Optional
 
 
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 _PHASES = {
     "training", "posthoc", "evaluation", "post_script", "pre_script",
     "admission",
@@ -74,7 +75,7 @@ def _write_once(path: Path, payload: dict) -> dict:
             raise ComputeAccountingError("existing_receipt_unreadable") from exc
         identity_fields = (
             "schema_version", "idea_id", "attempt_id", "phase", "event",
-            "outcome", "physical_gpu",
+            "outcome", "physical_gpu", "execution_identity_sha256",
         )
         if any(existing.get(key) != payload.get(key) for key in identity_fields):
             raise ComputeAccountingError("conflicting_receipt")
@@ -109,6 +110,12 @@ def _base(tp, phase: str, event: str, outcome: str) -> dict:
         "outcome": outcome,
         "physical_gpu": gpu,
     }
+    execution_identity = getattr(tp, "execution_identity", None)
+    if execution_identity is not None:
+        if (not isinstance(execution_identity, str)
+                or _HEX64_RE.fullmatch(execution_identity) is None):
+            raise ComputeAccountingError("execution_identity_invalid")
+        payload["execution_identity_sha256"] = execution_identity
     return payload
 
 
@@ -327,6 +334,10 @@ def record_recovered_compute_terminal(
         gpu=gpu,
         start_time=started_at,
         process=SimpleNamespace(pid=claim.get("trainer_pid")),
+        execution_identity=(
+            start.get("execution_identity_sha256")
+            if start_path.exists() else None
+        ),
     )
     return record_compute_terminal(
         tp, idea_dir, outcome, reason_code,
@@ -571,6 +582,15 @@ def audit_campaign_compute_receipts(
                         _token(receipt.get("reason_code", ""), "reason_code")
                     if phase not in _PHASES or outcome not in _OUTCOMES:
                         raise ValueError
+                    execution_identity = receipt.get(
+                        "execution_identity_sha256"
+                    )
+                    if (phase == "training"
+                            and (not isinstance(execution_identity, str)
+                                 or _HEX64_RE.fullmatch(
+                                     execution_identity
+                                 ) is None)):
+                        raise ValueError
                     gpu = receipt.get("physical_gpu")
                     if (isinstance(gpu, bool) or not isinstance(gpu, int)
                             or gpu < 0):
@@ -616,6 +636,7 @@ def audit_campaign_compute_receipts(
     allocation_duration_mismatches = []
     terminal_ideas = set()
     training_starts = {}
+    training_execution_starts = {}
     by_phase = {}
     for (idea_id, _attempt_id), pair in events.items():
         start = pair.get("start")
@@ -623,6 +644,10 @@ def audit_campaign_compute_receipts(
         if start is not None:
             if start["phase"] == "training":
                 training_starts[idea_id] = training_starts.get(idea_id, 0) + 1
+                execution_identity = start["execution_identity_sha256"]
+                training_execution_starts[execution_identity] = (
+                    training_execution_starts.get(execution_identity, 0) + 1
+                )
             if terminal is None:
                 incomplete += 1
                 continue
@@ -666,6 +691,8 @@ def audit_campaign_compute_receipts(
                 or start["attempt_id"] != terminal["attempt_id"]
                 or start["phase"] != terminal["phase"]
                 or start["physical_gpu"] != terminal["physical_gpu"]
+                or start.get("execution_identity_sha256")
+                != terminal.get("execution_identity_sha256")
                 or terminal.get("started_at_epoch")
                 != start.get("started_at_epoch")):
             invalid += 1
@@ -703,7 +730,7 @@ def audit_campaign_compute_receipts(
             phase_summary["outcomes"].items()
         ))
     duplicate_training_attempts = sum(
-        max(0, count - 1) for count in training_starts.values()
+        max(0, count - 1) for count in training_execution_starts.values()
     )
     observed_expected_rejections = {}
     unexpected_rejection_attempts = []
@@ -805,6 +832,9 @@ def audit_campaign_compute_receipts(
             allocation_duration_mismatches
         ),
         "training_start_counts_by_idea": dict(sorted(training_starts.items())),
+        "training_start_counts_by_execution_identity": dict(sorted(
+            training_execution_starts.items()
+        )),
         "duplicate_training_attempts": duplicate_training_attempts,
         "by_phase": dict(sorted(by_phase.items())),
     }

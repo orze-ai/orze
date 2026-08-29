@@ -58,6 +58,7 @@ def _tp(tmp_path, *, attempt_id="a" * 32, return_code=0):
         log_path=tmp_path / "train.log",
         timeout=60,
         attempt_id=attempt_id,
+        execution_identity="c" * 64,
     )
 
 
@@ -78,6 +79,7 @@ def test_receipts_are_private_idempotent_and_terminal_immutable(tmp_path):
         "schema_version", "idea_id", "attempt_id", "phase", "event",
         "outcome", "physical_gpu", "started_at_epoch", "finished_at",
         "allocated_gpu_seconds", "return_code", "reason_code", "process_pid",
+        "execution_identity_sha256",
     }
     assert start["outcome"] == "started"
     terminal_path = (
@@ -594,6 +596,68 @@ def test_campaign_compute_audit_verifies_closed_scoped_exact_ideas(tmp_path):
     assert audit["recorded_allocated_gpu_seconds_total"] == pytest.approx(
         audit["allocated_gpu_seconds_total"], abs=0.01
     )
+
+
+def test_cross_idea_execution_duplicate_is_counted(tmp_path):
+    results = tmp_path / "results"
+    now = time.time()
+    execution_identity = "d" * 64
+    first = _tp(tmp_path, attempt_id="1" * 32)
+    first.idea_id = "idea-duplicate-first"
+    first.execution_identity = execution_identity
+    first.start_time = now - 5
+    second = _tp(tmp_path, attempt_id="2" * 32)
+    second.idea_id = "idea-duplicate-second"
+    second.execution_identity = execution_identity
+    second.gpu = 5
+    second.start_time = now - 4
+    for tp in (first, second):
+        idea_dir = results / tp.idea_id
+        record_compute_start(tp, idea_dir)
+        record_compute_terminal(
+            tp, idea_dir, "completed", "trainer_completed", return_code=0,
+        )
+
+    audit = audit_campaign_compute_receipts(
+        results,
+        idea_ids=[first.idea_id, second.idea_id],
+        start_epoch=now - 10,
+        end_epoch=now + 10,
+        physical_scope=[4, 5, 6, 7],
+        expected_rejections=[],
+    )
+
+    assert audit["status"] == "VERIFIED"
+    assert audit["duplicate_training_attempts"] == 1
+    assert audit["training_start_counts_by_execution_identity"] == {
+        execution_identity: 2,
+    }
+
+
+def test_campaign_training_without_execution_identity_is_unverified(tmp_path):
+    results = tmp_path / "results"
+    now = time.time()
+    tp = _tp(tmp_path, attempt_id="3" * 32)
+    tp.execution_identity = None
+    tp.start_time = now - 5
+    idea_dir = results / tp.idea_id
+    record_compute_start(tp, idea_dir)
+    record_compute_terminal(
+        tp, idea_dir, "completed", "trainer_completed", return_code=0,
+    )
+
+    audit = audit_campaign_compute_receipts(
+        results,
+        idea_ids=[tp.idea_id],
+        start_epoch=now - 10,
+        end_epoch=now + 10,
+        physical_scope=[4, 5, 6, 7],
+        expected_rejections=[],
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["invalid_receipts"] == 2
+    assert audit["missing_terminal_ideas"] == [tp.idea_id]
 
 
 def test_campaign_compute_audit_does_not_invent_unobserved_rejection_rate(
