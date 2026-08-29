@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS harness_efficiency_samples (
     active_evaluation_gpus_json TEXT NOT NULL,
     remaining_training INTEGER NOT NULL,
     remaining_evaluation INTEGER NOT NULL,
+    demand_membership_json TEXT,
     launcher_paused INTEGER NOT NULL,
     disk_ok INTEGER NOT NULL,
     UNIQUE(controller_id, iteration)
@@ -319,6 +320,7 @@ class IdeaLake:
             self.conn.execute("INSERT INTO id_sequence (next_id) VALUES (1)")
             self.conn.commit()
         self._migrate_if_needed()
+        self._ensure_harness_efficiency_schema()
         # Trigger consumption ledger (resolves c1005 / DEC-009). Owned by
         # orze.engine.trigger_ledger but the table is materialised here
         # so it exists from first connect, before any consumer runs.
@@ -327,6 +329,21 @@ class IdeaLake:
             _init_trig(self.conn)
         except Exception as e:
             logger.warning("trigger_ledger schema init failed: %s", e)
+
+    def _ensure_harness_efficiency_schema(self) -> None:
+        """Add exact scheduler-demand evidence without rewriting old rows."""
+        columns = {
+            row[1] for row in self.conn.execute(
+                "PRAGMA table_info(harness_efficiency_samples)"
+            ).fetchall()
+        }
+        if "demand_membership_json" in columns:
+            return
+        self.conn.execute(
+            "ALTER TABLE harness_efficiency_samples "
+            "ADD COLUMN demand_membership_json TEXT"
+        )
+        self.conn.commit()
 
     def _normalize_transition_schema(self) -> None:
         """Losslessly rename the original transition receipt columns.
@@ -2468,10 +2485,12 @@ class IdeaLake:
         remaining_evaluation: int,
         launcher_paused: bool,
         disk_ok: bool,
+        demand_membership: Optional[Dict[str, List[str]]] = None,
     ) -> bool:
         """Persist one local, source-bound scheduler-efficiency observation.
 
-        The row deliberately contains no idea IDs, configs, metrics, or model
+        Campaign rows bind aggregate demand to an exact partition of the
+        preregistered idea IDs.  They contain no configs, metrics, or model
         outputs.  GPU telemetry is accepted only for the explicitly supplied
         physical scope.  Missing/malformed telemetry is retained as an
         incomplete observation so downstream verification fails closed rather
@@ -2525,6 +2544,49 @@ class IdeaLake:
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise ValueError(f"{name} must be a non-negative integer")
+
+        membership_categories = (
+            "active_training", "active_evaluation", "remaining_training",
+            "remaining_evaluation", "inactive",
+        )
+        normalized_membership = None
+        if demand_membership is not None:
+            if (not isinstance(demand_membership, dict)
+                    or set(demand_membership) != set(membership_categories)):
+                raise ValueError(
+                    "demand_membership must contain the exact categories")
+            normalized_membership = {}
+            seen_ideas = set()
+            for category in membership_categories:
+                idea_ids = demand_membership[category]
+                if (not isinstance(idea_ids, list)
+                        or any(not isinstance(idea_id, str) or not idea_id
+                               for idea_id in idea_ids)
+                        or len(idea_ids) != len(set(idea_ids))):
+                    raise ValueError(
+                        f"demand_membership.{category} must be a unique "
+                        "non-empty-string list")
+                if seen_ideas & set(idea_ids):
+                    raise ValueError(
+                        "demand_membership categories must be disjoint")
+                seen_ideas.update(idea_ids)
+                normalized_membership[category] = sorted(idea_ids)
+            if remaining_training != len(
+                    normalized_membership["remaining_training"]):
+                raise ValueError(
+                    "remaining_training does not match demand_membership")
+            if remaining_evaluation != len(
+                    normalized_membership["remaining_evaluation"]):
+                raise ValueError(
+                    "remaining_evaluation does not match demand_membership")
+            if bool(training) != bool(
+                    normalized_membership["active_training"]):
+                raise ValueError(
+                    "active training GPUs do not match demand_membership")
+            if bool(evaluation) != bool(
+                    normalized_membership["active_evaluation"]):
+                raise ValueError(
+                    "active evaluation GPUs do not match demand_membership")
         if not isinstance(launcher_paused, bool) or not isinstance(disk_ok, bool):
             raise ValueError("launcher_paused and disk_ok must be booleans")
         if not isinstance(gpu_telemetry, list):
@@ -2580,6 +2642,30 @@ class IdeaLake:
             value, sort_keys=True, separators=(",", ":"))
 
         normalized_campaign_id = campaign_id.strip() if campaign_id else None
+        if normalized_campaign_id:
+            registration = self.conn.execute(
+                "SELECT manifest_json FROM harness_campaign_registrations "
+                "WHERE campaign_id = ?", (normalized_campaign_id,),
+            ).fetchone()
+            if registration is not None:
+                if normalized_membership is None:
+                    raise ValueError(
+                        "registered campaign requires demand_membership")
+                try:
+                    expected_ids = set(json.loads(
+                        registration["manifest_json"]
+                    )["expected_idea_ids"])
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    raise ValueError("registered campaign manifest is invalid")
+                observed_ids = {
+                    idea_id
+                    for values in normalized_membership.values()
+                    for idea_id in values
+                }
+                if observed_ids != expected_ids:
+                    raise ValueError(
+                        "demand_membership must exactly partition the "
+                        "preregistered idea universe")
         values = (
             normalized_campaign_id,
             controller_id.strip(), host.strip(), iteration,
@@ -2587,7 +2673,10 @@ class IdeaLake:
             canonical(scope), canonical(clean_telemetry),
             int(telemetry_complete), canonical(training),
             canonical(evaluation), remaining_training,
-            remaining_evaluation, int(launcher_paused), int(disk_ok),
+            remaining_evaluation,
+            (canonical(normalized_membership)
+             if normalized_membership is not None else None),
+            int(launcher_paused), int(disk_ok),
         )
 
         def _insert():
@@ -2598,8 +2687,9 @@ class IdeaLake:
                 "poll_seconds, physical_scope_json, gpu_telemetry_json, "
                 "telemetry_complete, active_training_gpus_json, "
                 "active_evaluation_gpus_json, remaining_training, "
-                "remaining_evaluation, launcher_paused, disk_ok) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "remaining_evaluation, demand_membership_json, "
+                "launcher_paused, disk_ok) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 values,
             )
             self.conn.commit()
@@ -2611,7 +2701,8 @@ class IdeaLake:
                 "physical_scope_json, gpu_telemetry_json, "
                 "telemetry_complete, active_training_gpus_json, "
                 "active_evaluation_gpus_json, remaining_training, "
-                "remaining_evaluation, launcher_paused, disk_ok "
+                "remaining_evaluation, demand_membership_json, "
+                "launcher_paused, disk_ok "
                 "FROM harness_efficiency_samples "
                 "WHERE campaign_id IS ? AND controller_id = ? "
                 "AND iteration = ?",

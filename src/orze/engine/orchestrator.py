@@ -478,13 +478,39 @@ class Orze(OrzePhaseMixin):
             return False
         required = campaign.get("required_for_launch", False) is True
         try:
+            active_training_ids = {
+                process.idea_id for process in self.slot_mgr.values()
+            }
             active_eval_ids = {
                 process.idea_id for process in self.active_evals.values()
             }
-            backlog_remaining = sum(
-                1 for _, idea_id in backlog
-                if idea_id not in active_eval_ids
+            remaining_training_ids = set(unclaimed)
+            remaining_eval_ids = {
+                idea_id for idea_id, _ in self.pending_evals
+            } | {
+                idea_id for _, idea_id in backlog
+            }
+            remaining_eval_ids -= active_eval_ids
+            registration = self.lake.conn.execute(
+                "SELECT manifest_json FROM harness_campaign_registrations "
+                "WHERE campaign_id = ?", (campaign.get("campaign_id"),),
+            ).fetchone()
+            if registration is None:
+                raise RuntimeError("campaign_efficiency_registration_missing")
+            expected_ids = set(json.loads(
+                registration["manifest_json"]
+            )["expected_idea_ids"])
+            accounted_ids = (
+                active_training_ids | active_eval_ids
+                | remaining_training_ids | remaining_eval_ids
             )
+            demand_membership = {
+                "active_training": sorted(active_training_ids),
+                "active_evaluation": sorted(active_eval_ids),
+                "remaining_training": sorted(remaining_training_ids),
+                "remaining_evaluation": sorted(remaining_eval_ids),
+                "inactive": sorted(expected_ids - accounted_ids),
+            }
             capture_campaign_efficiency_sample(
                 self.lake,
                 campaign_id=campaign.get("campaign_id"),
@@ -496,13 +522,12 @@ class Orze(OrzePhaseMixin):
                 active_training_gpus=list(
                     self.slot_mgr.gpu_ids_in_use()),
                 active_evaluation_gpus=list(self.active_evals.keys()),
-                remaining_training=len(unclaimed),
-                remaining_evaluation=(
-                    len(self.pending_evals) + backlog_remaining
-                ),
+                remaining_training=len(remaining_training_ids),
+                remaining_evaluation=len(remaining_eval_ids),
                 launcher_paused=_is_launcher_paused(
                     cfg, self.results_dir),
                 disk_ok=bool(disk_ok),
+                demand_membership=demand_membership,
                 require_complete_telemetry=required,
             )
             return True

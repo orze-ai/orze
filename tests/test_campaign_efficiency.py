@@ -48,7 +48,7 @@ def _telemetry(scope):
 
 
 def _manifest():
-    start = time.time() + 10
+    start = int(time.time()) + 11
     return {
         "campaign_id": "campaign-test-001",
         "expected_idea_ids": ["idea-001", "idea-002"],
@@ -63,6 +63,22 @@ def _manifest():
     }
 
 
+def _demand_membership(
+        manifest, *, active_training=(), active_evaluation=(),
+        remaining_training=(), remaining_evaluation=()):
+    assigned = set(
+        (*active_training, *active_evaluation, *remaining_training,
+         *remaining_evaluation)
+    )
+    return {
+        "active_training": list(active_training),
+        "active_evaluation": list(active_evaluation),
+        "remaining_training": list(remaining_training),
+        "remaining_evaluation": list(remaining_evaluation),
+        "inactive": sorted(set(manifest["expected_idea_ids"]) - assigned),
+    }
+
+
 def _populate_complete_campaign(
         db_path, manifest, *, controllers=None, hosts=None):
     controllers = controllers or ["controller-a"] * 5
@@ -73,6 +89,12 @@ def _populate_complete_campaign(
     for iteration, (controller, host) in enumerate(
             zip(controllers, hosts), start=1):
         at = manifest["start_epoch"] + (iteration - 1) * 10
+        early = iteration <= 2
+        membership = _demand_membership(
+            manifest,
+            active_training=["idea-001"] if early else ["idea-002"],
+            remaining_training=["idea-002"] if early else [],
+        )
         lake.record_harness_efficiency_sample(
             campaign_id=manifest["campaign_id"],
             controller_id=controller,
@@ -83,9 +105,10 @@ def _populate_complete_campaign(
             physical_scope=[4, 5, 6, 7],
             gpu_telemetry=_telemetry([4, 5, 6, 7]),
             active_training_gpus=[4, 5, 6],
-            active_evaluation_gpus=[7],
-            remaining_training=2,
+            active_evaluation_gpus=[],
+            remaining_training=len(membership["remaining_training"]),
             remaining_evaluation=0,
+            demand_membership=membership,
             launcher_paused=False,
             disk_ok=True,
         )
@@ -109,11 +132,11 @@ def _populate_complete_campaign(
         "(idea_id, current_state, queued_at, claimed_at) VALUES (?, ?, ?, ?)",
         [
             (
-                "idea-001", "IN_PROGRESS", _iso(manifest["start_epoch"]),
-                _iso(manifest["start_epoch"] + 5),
+                "idea-001", "IN_PROGRESS", _iso(manifest["start_epoch"] - 5),
+                _iso(manifest["start_epoch"]),
             ),
             (
-                "idea-002", "CLAIMED", _iso(manifest["start_epoch"] + 15),
+                "idea-002", "CLAIMED", _iso(manifest["start_epoch"]),
                 _iso(manifest["start_epoch"] + 20),
             ),
         ],
@@ -200,6 +223,32 @@ def test_campaign_sample_duplicate_must_be_content_identical(tmp_path):
     lake.close()
 
 
+def test_registered_campaign_sample_requires_exact_demand_membership(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    with pytest.raises(
+            ValueError, match="requires demand_membership"):
+        lake.record_harness_efficiency_sample(
+            campaign_id=manifest["campaign_id"],
+            controller_id="controller-a",
+            host="host-a",
+            iteration=1,
+            observed_at_epoch=manifest["start_epoch"],
+            poll_seconds=10,
+            physical_scope=[4, 5, 6, 7],
+            gpu_telemetry=_telemetry([4, 5, 6, 7]),
+            active_training_gpus=[4],
+            active_evaluation_gpus=[],
+            remaining_training=1,
+            remaining_evaluation=0,
+            launcher_paused=False,
+            disk_ok=True,
+        )
+    lake.close()
+
+
 def test_required_campaign_sample_retains_but_rejects_incomplete_telemetry(
         tmp_path):
     lake = IdeaLake(str(tmp_path / "lake.db"))
@@ -243,9 +292,24 @@ def test_required_campaign_sample_failure_persistently_halts_controller(
         "launcher": {"paused": False},
     }
     runner.results_dir = tmp_path / "results"
-    runner.lake = object()
+    expected_ids = [
+        "idea-train-active", "idea-train-pending",
+        "idea-eval-active", "idea-eval-pending", "idea-eval-backlog",
+    ]
+    runner.lake = SimpleNamespace(conn=SimpleNamespace(
+        execute=lambda *args, **kwargs: SimpleNamespace(
+            fetchone=lambda: {
+                "manifest_json": json.dumps({
+                    "expected_idea_ids": expected_ids,
+                })
+            }
+        )
+    ))
     runner.gpu_ids = [4, 5, 6, 7]
-    runner.slot_mgr = SimpleNamespace(gpu_ids_in_use=lambda: {4})
+    runner.slot_mgr = SimpleNamespace(
+        gpu_ids_in_use=lambda: {4},
+        values=lambda: [SimpleNamespace(idea_id="idea-train-active")],
+    )
     runner.active_evals = {}
     runner.pending_evals = []
     runner._instance_uuid = "controller-a"
@@ -286,13 +350,28 @@ def test_required_campaign_sample_passes_complete_contract_to_sampler(
         "launcher": {"paused": False},
     }
     runner.results_dir = tmp_path / "results"
-    runner.lake = object()
+    expected_ids = [
+        "idea-train-active", "idea-train-pending",
+        "idea-eval-active", "idea-eval-pending", "idea-eval-backlog",
+    ]
+    runner.lake = SimpleNamespace(conn=SimpleNamespace(
+        execute=lambda *args, **kwargs: SimpleNamespace(
+            fetchone=lambda: {
+                "manifest_json": json.dumps({
+                    "expected_idea_ids": expected_ids,
+                })
+            }
+        )
+    ))
     runner.gpu_ids = [4, 5, 6, 7]
-    runner.slot_mgr = SimpleNamespace(gpu_ids_in_use=lambda: {4})
+    runner.slot_mgr = SimpleNamespace(
+        gpu_ids_in_use=lambda: {4},
+        values=lambda: [SimpleNamespace(idea_id="idea-train-active")],
+    )
     runner.active_evals = {
         5: SimpleNamespace(idea_id="idea-eval-active")
     }
-    runner.pending_evals = ["idea-eval-pending"]
+    runner.pending_evals = [("idea-eval-pending", 6)]
     runner._instance_uuid = "controller-a"
     runner._hostname = "host-a"
     runner.iteration = 4
@@ -315,6 +394,15 @@ def test_required_campaign_sample_passes_complete_contract_to_sampler(
     assert observed["active_evaluation_gpus"] == [5]
     assert observed["remaining_training"] == 1
     assert observed["remaining_evaluation"] == 2
+    assert observed["demand_membership"] == {
+        "active_training": ["idea-train-active"],
+        "active_evaluation": ["idea-eval-active"],
+        "remaining_training": ["idea-train-pending"],
+        "remaining_evaluation": [
+            "idea-eval-backlog", "idea-eval-pending",
+        ],
+        "inactive": [],
+    }
     assert observed["require_complete_telemetry"] is True
 
 
@@ -690,6 +778,12 @@ def test_incomplete_telemetry_is_retained_and_fails_closed(tmp_path):
     lake = IdeaLake(str(db_path))
     for iteration in range(1, 6):
         at = manifest["start_epoch"] + (iteration - 1) * 10
+        early = iteration <= 2
+        membership = _demand_membership(
+            manifest,
+            active_training=["idea-001"] if early else ["idea-002"],
+            remaining_training=["idea-002"] if early else [],
+        )
         lake.record_harness_efficiency_sample(
             campaign_id=manifest["campaign_id"],
             controller_id="controller-a",
@@ -701,8 +795,9 @@ def test_incomplete_telemetry_is_retained_and_fails_closed(tmp_path):
             gpu_telemetry=_telemetry([4, 5]),
             active_training_gpus=[4],
             active_evaluation_gpus=[],
-            remaining_training=1,
+            remaining_training=len(membership["remaining_training"]),
             remaining_evaluation=0,
+            demand_membership=membership,
             launcher_paused=False,
             disk_ok=True,
         )
@@ -737,6 +832,12 @@ def test_preregistered_complete_campaign_can_be_verified(tmp_path):
     lake = IdeaLake(str(db_path))
     for iteration in range(1, 6):
         at = manifest["start_epoch"] + (iteration - 1) * 10
+        early = iteration <= 2
+        membership = _demand_membership(
+            manifest,
+            active_training=["idea-001"] if early else ["idea-002"],
+            remaining_training=["idea-002"] if early else [],
+        )
         lake.record_harness_efficiency_sample(
             campaign_id=manifest["campaign_id"],
             controller_id="controller-a",
@@ -747,9 +848,10 @@ def test_preregistered_complete_campaign_can_be_verified(tmp_path):
             physical_scope=[4, 5, 6, 7],
             gpu_telemetry=_telemetry([4, 5, 6, 7]),
             active_training_gpus=[4, 5, 6],
-            active_evaluation_gpus=[7],
-            remaining_training=2,
+            active_evaluation_gpus=[],
+            remaining_training=len(membership["remaining_training"]),
             remaining_evaluation=0,
+            demand_membership=membership,
             launcher_paused=False,
             disk_ok=True,
         )
@@ -772,15 +874,15 @@ def test_preregistered_complete_campaign_can_be_verified(tmp_path):
         "INSERT INTO idea_state "
         "(idea_id, current_state, queued_at, claimed_at) VALUES (?, ?, ?, ?)",
         (
-            "idea-001", "IN_PROGRESS", _iso(manifest["start_epoch"]),
-            _iso(manifest["start_epoch"] + 5),
+            "idea-001", "IN_PROGRESS", _iso(manifest["start_epoch"] - 5),
+            _iso(manifest["start_epoch"]),
         ),
     )
     lake.conn.execute(
         "INSERT INTO idea_state "
         "(idea_id, current_state, queued_at, claimed_at) VALUES (?, ?, ?, ?)",
         (
-            "idea-002", "CLAIMED", _iso(manifest["start_epoch"] + 15),
+            "idea-002", "CLAIMED", _iso(manifest["start_epoch"]),
             _iso(manifest["start_epoch"] + 20),
         ),
     )
@@ -804,12 +906,69 @@ def test_preregistered_complete_campaign_can_be_verified(tmp_path):
     receipt = analyze_campaign(
         db_path, manifest, now_epoch=manifest["end_epoch"] + 10
     )
-    assert receipt["status"] == "VERIFIED"
+    assert receipt["status"] == "VERIFIED", receipt["checks"]
     assert receipt["metrics"]["sample_count"] == 5
-    assert receipt["metrics"]["allocation_duty_cycle"] == 1.0
+    assert receipt["metrics"]["allocation_duty_cycle"] == 0.9
     assert receipt["metrics"]["allocated_gpu_utilization_mean_pct"] == 95.0
-    assert receipt["metrics"]["queue_to_claim_p95_seconds"] == 5.0
+    assert receipt["metrics"]["queue_to_claim_p95_seconds"] == 19.25
     assert receipt["metrics"]["terminal_to_next_claim_p95_seconds"] == 5.0
+
+
+def test_understated_scheduler_demand_cannot_inflate_allocation_duty(tmp_path):
+    """Aggregate counters alone must not turn queued work into full duty."""
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "UPDATE harness_efficiency_samples SET "
+        "active_training_gpus_json = '[4]', "
+        "active_evaluation_gpus_json = '[]', "
+        "remaining_training = 0, remaining_evaluation = 0"
+    )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["demand_membership_complete"]["passed"] is False
+
+
+def test_relabeling_queued_demand_as_inactive_fails_lifecycle_check(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    hidden = json.dumps({
+        "active_training": [],
+        "active_evaluation": [],
+        "remaining_training": [],
+        "remaining_evaluation": [],
+        "inactive": manifest["expected_idea_ids"],
+    }, sort_keys=True, separators=(",", ":"))
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "UPDATE harness_efficiency_samples SET "
+        "active_training_gpus_json = '[]', "
+        "active_evaluation_gpus_json = '[]', "
+        "remaining_training = 0, remaining_evaluation = 0, "
+        "demand_membership_json = ?",
+        (hidden,),
+    )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["demand_membership_complete"]["passed"] is True
+    assert receipt["checks"]["demand_membership_matches_lifecycle"][
+        "passed"
+    ] is False
 
 
 def test_one_claim_cannot_fill_multiple_terminal_latency_samples(tmp_path):
@@ -1033,7 +1192,7 @@ def test_operator_update_sla_miss_is_a_failed_target(tmp_path):
         db_path, manifest, now_epoch=manifest["end_epoch"] + 10
     )
 
-    assert receipt["status"] == "FAILED"
+    assert receipt["status"] == "FAILED", receipt["checks"]
     assert receipt["checks"]["operator_updates_complete"]["passed"] is True
     assert receipt["checks"]["operator_update_gap"]["passed"] is False
     assert receipt["metrics"]["max_operator_update_gap_seconds"] == 10.0
@@ -1108,6 +1267,12 @@ def test_complete_evidence_with_missed_target_is_failed(tmp_path):
     lake = IdeaLake(str(db_path))
     for iteration in range(1, 6):
         at = manifest["start_epoch"] + (iteration - 1) * 10
+        early = iteration <= 2
+        membership = _demand_membership(
+            manifest,
+            active_training=["idea-001"] if early else ["idea-002"],
+            remaining_training=["idea-002"] if early else [],
+        )
         lake.record_harness_efficiency_sample(
             campaign_id=manifest["campaign_id"],
             controller_id="controller-a",
@@ -1119,8 +1284,9 @@ def test_complete_evidence_with_missed_target_is_failed(tmp_path):
             gpu_telemetry=_telemetry([4, 5, 6, 7]),
             active_training_gpus=[4],
             active_evaluation_gpus=[],
-            remaining_training=4,
+            remaining_training=len(membership["remaining_training"]),
             remaining_evaluation=0,
+            demand_membership=membership,
             launcher_paused=False,
             disk_ok=True,
         )
@@ -1143,15 +1309,15 @@ def test_complete_evidence_with_missed_target_is_failed(tmp_path):
         "INSERT INTO idea_state "
         "(idea_id, current_state, queued_at, claimed_at) VALUES (?, ?, ?, ?)",
         (
-            "idea-001", "IN_PROGRESS", _iso(manifest["start_epoch"]),
-            _iso(manifest["start_epoch"] + 5),
+            "idea-001", "IN_PROGRESS", _iso(manifest["start_epoch"] - 5),
+            _iso(manifest["start_epoch"]),
         ),
     )
     lake.conn.execute(
         "INSERT INTO idea_state "
         "(idea_id, current_state, queued_at, claimed_at) VALUES (?, ?, ?, ?)",
         (
-            "idea-002", "CLAIMED", _iso(manifest["start_epoch"] + 15),
+            "idea-002", "CLAIMED", _iso(manifest["start_epoch"]),
             _iso(manifest["start_epoch"] + 20),
         ),
     )
@@ -1175,7 +1341,7 @@ def test_complete_evidence_with_missed_target_is_failed(tmp_path):
     receipt = analyze_campaign(
         db_path, manifest, now_epoch=manifest["end_epoch"] + 10
     )
-    assert receipt["status"] == "FAILED"
+    assert receipt["status"] == "FAILED", receipt["checks"]
     assert receipt["checks"]["allocation_duty_cycle"]["passed"] is False
 
 
@@ -1198,6 +1364,11 @@ def test_tampered_sample_is_unverified_instead_of_crashing(tmp_path):
         active_evaluation_gpus=[],
         remaining_training=1,
         remaining_evaluation=0,
+        demand_membership=_demand_membership(
+            manifest,
+            active_training=["idea-001"],
+            remaining_training=["idea-002"],
+        ),
         launcher_paused=False,
         disk_ok=True,
     )

@@ -1,7 +1,9 @@
 """Local, fail-closed evidence for scheduler and GPU campaign efficiency.
 
 This module never launches work.  Sampling queries only the caller-provided
-physical GPU scope and stores no idea IDs, configs, model outputs, or metrics.
+physical GPU scope. Campaign samples store only preregistered idea IDs, as an
+exact scheduler-demand partition; they store no configs, model outputs, or
+metrics.
 """
 
 from __future__ import annotations
@@ -83,6 +85,7 @@ def capture_campaign_efficiency_sample(
     remaining_evaluation: int,
     launcher_paused: bool,
     disk_ok: bool,
+    demand_membership: Optional[Dict[str, List[str]]] = None,
     observed_at_epoch: Optional[float] = None,
     require_complete_telemetry: bool = False,
     telemetry_query: Callable[[Optional[List[int]]], List[dict]] = (
@@ -120,6 +123,7 @@ def capture_campaign_efficiency_sample(
         remaining_evaluation=remaining_evaluation,
         launcher_paused=launcher_paused,
         disk_ok=disk_ok,
+        demand_membership=demand_membership,
     )
     if not persisted:
         raise OSError("campaign_efficiency_sample_not_persisted")
@@ -731,7 +735,8 @@ def analyze_campaign(
             "WHERE ts IS NOT NULL ORDER BY ts, id"
         ).fetchall()
         states = lake.conn.execute(
-            "SELECT idea_id, first_queued_at, queued_at, claimed_at "
+            "SELECT idea_id, current_state, first_queued_at, queued_at, "
+            "claimed_at, started_at, terminal_at "
             "FROM idea_state"
         ).fetchall()
         registration = lake.conn.execute(
@@ -764,6 +769,10 @@ def analyze_campaign(
     )
     parsed_rows = []
     malformed_rows = 0
+    membership_categories = (
+        "active_training", "active_evaluation", "remaining_training",
+        "remaining_evaluation", "inactive",
+    )
     for row in rows:
         try:
             parsed = {
@@ -805,6 +814,38 @@ def analyze_campaign(
                         or not isinstance(parsed[key], int)
                         or parsed[key] < 0):
                     raise ValueError
+            membership_valid = True
+            try:
+                membership = json.loads(row["demand_membership_json"])
+                if (not isinstance(membership, dict)
+                        or set(membership) != set(membership_categories)):
+                    raise ValueError
+                seen_ideas = set()
+                for category in membership_categories:
+                    idea_ids = membership[category]
+                    if (not isinstance(idea_ids, list)
+                            or any(not isinstance(idea_id, str)
+                                   or idea_id not in expected_idea_set
+                                   for idea_id in idea_ids)
+                            or len(idea_ids) != len(set(idea_ids))
+                            or seen_ideas & set(idea_ids)):
+                        raise ValueError
+                    seen_ideas.update(idea_ids)
+                if (seen_ideas != expected_idea_set
+                        or parsed["remaining_training"] != len(
+                            membership["remaining_training"])
+                        or parsed["remaining_evaluation"] != len(
+                            membership["remaining_evaluation"])
+                        or bool(parsed["training"]) != bool(
+                            membership["active_training"])
+                        or bool(parsed["evaluation"]) != bool(
+                            membership["active_evaluation"])):
+                    raise ValueError
+                parsed["demand_membership"] = membership
+            except (TypeError, ValueError, json.JSONDecodeError):
+                membership_valid = False
+                parsed["demand_membership"] = None
+            parsed["demand_membership_valid"] = membership_valid
             if (not math.isfinite(float(parsed["observed_at_epoch"]))
                     or not math.isfinite(float(parsed["poll_seconds"]))
                     or parsed["poll_seconds"] <= 0):
@@ -922,9 +963,14 @@ def analyze_campaign(
     demand_samples = 0
     for row in parsed_rows:
         active = set(row["training"]) | set(row["evaluation"])
-        remaining = int(row["remaining_training"]) + int(row["remaining_evaluation"])
+        membership = row["demand_membership"]
+        remaining = (
+            len(membership["remaining_training"])
+            + len(membership["remaining_evaluation"])
+            if membership is not None else 0
+        )
         desired = min(len(scope), len(active) + remaining)
-        if desired:
+        if desired and membership is not None:
             demand_samples += 1
             allocation_ratios.append(len(active) / desired)
         telemetry_by_gpu = {
@@ -966,6 +1012,64 @@ def analyze_campaign(
         idea_id = str(transition["idea_id"])
         if idea_id in expected_idea_set:
             transitions_by_idea[idea_id].append(transition)
+
+    def _lifecycle_state_at(idea_id: str, at_epoch: float) -> Optional[str]:
+        """Reconstruct the audited training lifecycle at one sample time."""
+        state = state_by_id.get(idea_id)
+        events = []
+        if state is not None:
+            for column, lifecycle_state in (
+                ("first_queued_at", "QUEUED"),
+                ("queued_at", "QUEUED"),
+                ("claimed_at", "CLAIMED"),
+                ("started_at", "IN_PROGRESS"),
+            ):
+                event_at = _epoch(state[column])
+                if event_at is not None:
+                    events.append((event_at, 0, lifecycle_state))
+            terminal_at = _epoch(state["terminal_at"])
+            if (terminal_at is not None
+                    and state["current_state"] in {
+                        "COMPLETE", "FAILED", "SKIPPED",
+                    }):
+                events.append((terminal_at, 0, state["current_state"]))
+        for transition in transitions_by_idea[idea_id]:
+            event_at = _epoch(transition["ts"])
+            if event_at is not None:
+                events.append((event_at, 1, transition["to_state"]))
+        eligible = [event for event in events if event[0] <= at_epoch]
+        return max(eligible)[2] if eligible else None
+
+    lifecycle_membership_consistent = True
+    allowed_categories_by_state = {
+        None: {"inactive"},
+        "QUEUED": {"remaining_training"},
+        "CLAIMED": {"active_training"},
+        "IN_PROGRESS": {"active_training"},
+        "COMPLETE": {
+            "active_evaluation", "remaining_evaluation", "inactive",
+        },
+        "FAILED": {"inactive"},
+        "SKIPPED": {"inactive"},
+    }
+    for row in parsed_rows:
+        membership = row["demand_membership"]
+        if membership is None:
+            lifecycle_membership_consistent = False
+            continue
+        category_by_idea = {
+            idea_id: category
+            for category, idea_ids in membership.items()
+            for idea_id in idea_ids
+        }
+        for idea_id in expected_idea_ids:
+            lifecycle_state = _lifecycle_state_at(
+                idea_id, float(row["observed_at_epoch"])
+            )
+            if category_by_idea[idea_id] not in allowed_categories_by_state.get(
+                    lifecycle_state, set()):
+                lifecycle_membership_consistent = False
+                break
 
     queue_to_claim = []
     claim_event_count = 0
@@ -1131,6 +1235,14 @@ def analyze_campaign(
             len(release_to_claim) >= manifest["minimum_release_to_claim_pairs"]
         ),
         "demand_observed": demand_samples > 0,
+        "demand_membership_complete": (
+            bool(parsed_rows)
+            and len(parsed_rows) == len(rows)
+            and all(row["demand_membership_valid"] for row in parsed_rows)
+        ),
+        "demand_membership_matches_lifecycle": (
+            bool(parsed_rows) and lifecycle_membership_consistent
+        ),
     }
     for name, passed in evidence_checks.items():
         receipt["checks"][name] = {"passed": passed}
