@@ -64,6 +64,9 @@ from orze.core.benchmark_contract import (
     prepare_benchmark_evaluation,
     validate_benchmark_receipt,
 )
+from orze.engine.accounting import (
+    ComputeAccountingError, record_compute_start, record_compute_terminal,
+)
 
 logger = logging.getLogger("orze")
 
@@ -683,22 +686,81 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
         log_path = results_dir / idea_id / f"{name}.log"
         logger.info("Running %s for %s", name, idea_id)
 
+        proc = None
+        handle = None
+        log_fh = None
         try:
             with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
                 _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
-                with open(log_path, "w", encoding="utf-8") as log_fh:
-                    result = subprocess.run(
-                        cmd, env=env, stdout=log_fh,
-                        stderr=subprocess.STDOUT, timeout=timeout,
-                        pass_fds=lease_fds,
-                    )
-            if result.returncode == 0:
+                log_fh = open(log_path, "w", encoding="utf-8")
+                started = time.time()
+                proc = subprocess.Popen(
+                    cmd, env=env, stdout=log_fh,
+                    stderr=subprocess.STDOUT,
+                    preexec_fn=_new_process_group,
+                    pass_fds=lease_fds,
+                )
+                ep = EvalProcess(
+                    idea_id=idea_id,
+                    gpu=gpu,
+                    process=proc,
+                    start_time=started,
+                    log_path=log_path,
+                    timeout=float(timeout),
+                    attempt_id=secrets.token_hex(16),
+                    _log_fh=log_fh,
+                )
+                handle = ep
+                record_compute_start(
+                    handle, idea_dir, phase="post_script")
+            return_code = proc.wait(timeout=timeout)
+            record_compute_terminal(
+                handle, idea_dir,
+                "completed" if return_code == 0 else "failed",
+                ("post_script_completed" if return_code == 0
+                 else "post_script_nonzero"),
+                phase="post_script", return_code=return_code,
+            )
+            if return_code == 0:
                 logger.info("%s completed for %s", name, idea_id)
             else:
                 logger.warning("%s failed for %s (exit %d)",
-                               name, idea_id, result.returncode)
+                               name, idea_id, return_code)
         except subprocess.TimeoutExpired:
+            _terminate_and_reap(proc, f"post-script {idea_id}:{name}")
+            if handle is not None:
+                record_compute_terminal(
+                    handle, idea_dir, "interrupted", "post_script_timeout",
+                    phase="post_script", return_code=proc.poll(),
+                )
             logger.warning("%s timed out for %s after %ds",
                            name, idea_id, timeout)
+        except ComputeAccountingError:
+            if proc is not None and proc.poll() is None:
+                _terminate_and_reap(
+                    proc, f"post-script {idea_id}:{name}", timeout=3)
+            if handle is not None:
+                try:
+                    record_compute_terminal(
+                        handle, idea_dir, "failed", "post_script_error",
+                        phase="post_script", return_code=proc.poll(),
+                    )
+                except ComputeAccountingError:
+                    pass
+            raise
         except Exception as e:
+            if proc is not None and proc.poll() is None:
+                _terminate_and_reap(
+                    proc, f"post-script {idea_id}:{name}", timeout=3)
+            if handle is not None:
+                try:
+                    record_compute_terminal(
+                        handle, idea_dir, "failed", "post_script_error",
+                        phase="post_script", return_code=proc.poll(),
+                    )
+                except Exception:
+                    pass
             logger.warning("%s error for %s: %s", name, idea_id, e)
+        finally:
+            if log_fh is not None:
+                log_fh.close()

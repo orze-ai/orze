@@ -10,6 +10,7 @@ from orze.engine.evaluator import (
     run_post_scripts,
 )
 from orze.idea_lake import IdeaLake
+from orze.engine.accounting import ComputeAccountingError
 
 
 @pytest.mark.parametrize("metrics,reason", [
@@ -94,6 +95,66 @@ def test_post_scripts_do_not_run_for_failed_checkpoint(
         "post_scripts": [{"script": "/usr/bin/true"}],
     })
     assert calls == []
+
+
+def test_post_script_gpu_allocation_has_paired_framework_receipts(
+        tmp_path, monkeypatch):
+    idea_dir = tmp_path / "idea-test"
+    idea_dir.mkdir()
+    (idea_dir / "metrics.json").write_text(
+        '{"status":"COMPLETED"}', encoding="utf-8")
+    script = tmp_path / "post.py"
+    script.write_text("raise SystemExit(0)\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "orze.engine.evaluator._verify_gpu_free", lambda *_args: None)
+
+    run_post_scripts("idea-test", 4, tmp_path, {
+        "post_scripts": [{"script": str(script), "name": "accounted"}],
+        "python": __import__("sys").executable,
+        "gpu_scheduling": {
+            "allowed_gpus": [4, 5, 6, 7],
+            "reserved_gpus": [0, 1, 2, 3],
+        },
+        "_managed_gpu_ids": [4, 5, 6, 7],
+    })
+
+    receipt_dirs = list((idea_dir / "_compute_receipts").iterdir())
+    assert len(receipt_dirs) == 1
+    start = json.loads((receipt_dirs[0] / "start.json").read_text())
+    terminal = json.loads((receipt_dirs[0] / "terminal.json").read_text())
+    assert start["phase"] == "post_script"
+    assert start["physical_gpu"] == 4
+    assert terminal["phase"] == "post_script"
+    assert terminal["outcome"] == "completed"
+    assert terminal["reason_code"] == "post_script_completed"
+
+
+def test_post_script_accounting_failure_stops_the_control_plane(
+        tmp_path, monkeypatch):
+    idea_dir = tmp_path / "idea-test"
+    idea_dir.mkdir()
+    (idea_dir / "metrics.json").write_text(
+        '{"status":"COMPLETED"}', encoding="utf-8")
+    script = tmp_path / "post.py"
+    script.write_text("import time; time.sleep(30)\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "orze.engine.evaluator._verify_gpu_free", lambda *_args: None)
+    monkeypatch.setattr(
+        "orze.engine.evaluator.record_compute_start",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ComputeAccountingError("injected_start_failure")),
+    )
+
+    with pytest.raises(ComputeAccountingError, match="injected_start_failure"):
+        run_post_scripts("idea-test", 4, tmp_path, {
+            "post_scripts": [{"script": str(script), "name": "accounted"}],
+            "python": __import__("sys").executable,
+            "gpu_scheduling": {
+                "allowed_gpus": [4, 5, 6, 7],
+                "reserved_gpus": [0, 1, 2, 3],
+            },
+            "_managed_gpu_ids": [4, 5, 6, 7],
+        })
 
 
 def test_completed_eval_reaches_masked_popen(tmp_path, monkeypatch):

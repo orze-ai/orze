@@ -37,11 +37,11 @@ CALLING SPEC:
 
     run_pre_script(idea_id, gpu, cfg, results_dir=None) -> bool
         idea_id: str
-        gpu: int — set as CUDA_VISIBLE_DEVICES
+        gpu: int — accepted for API compatibility; never exposed to child
         cfg: dict — uses 'pre_script', 'pre_args', 'pre_timeout', 'python', 'train_extra_env'
-        results_dir: optional result root for framework compute receipts
+        results_dir: accepted for API compatibility; accounting belongs to claim
         returns: True if no pre_script configured or script exited 0, False on failure/timeout
-        side effects: runs blocking subprocess
+        side effects: runs a blocking CPU-only subprocess
 
     run_artifact_preflight(idea_id, results_dir, cfg) -> bool
         returns: True if disabled or resolver exited 0, False otherwise
@@ -63,8 +63,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from pathlib import Path
-
-from orze.core.gpu_lease import gpu_execution_lease
 
 logger = logging.getLogger("orze")
 
@@ -1182,7 +1180,15 @@ def terminate_role_process(
 
 def run_pre_script(idea_id: str, gpu: int, cfg: dict,
                    results_dir: Optional[Path] = None) -> bool:
-    """Run pre-training script if configured. Returns True if OK to proceed."""
+    """Run project setup without granting it an accelerator.
+
+    Admission continues after this hook, so allocating a GPU here would let a
+    subsequently rejected idea consume compute while its claim is recorded as
+    zero-GPU.  Keep the historical ``gpu`` and ``results_dir`` parameters for
+    callers, but do not expose the selected physical GPU, acquire its lease, or
+    create a separate compute attempt.  The scheduler records a terminal
+    zero-GPU outcome against the original claim if this hook ultimately fails.
+    """
     import sys
     pre_script = cfg.get("pre_script")
     if not pre_script:
@@ -1192,87 +1198,45 @@ def run_pre_script(idea_id: str, gpu: int, cfg: dict,
     pre_args = cfg.get("pre_args") or []
     pre_timeout = cfg.get("pre_timeout", 3600)
 
-    from orze.engine.launcher import (
-        _assert_controller_runtime_attested,
-        _authorized_gpu_environment,
-        _format_args,
-    )
+    from orze.engine.launcher import _format_args
     cmd = [python, pre_script]
-    cmd.extend(_format_args(pre_args, {"idea_id": idea_id, "gpu": gpu}))
+    cmd.extend(_format_args(pre_args, {"idea_id": idea_id, "gpu": -1}))
 
     env = os.environ.copy()
     for k, v in (cfg.get("train_extra_env") or {}).items():
         env[k] = str(v)
-    env = _authorized_gpu_environment(gpu, cfg, env)
-    _assert_controller_runtime_attested(cfg)
+    # Apply these last so train_extra_env cannot accidentally restore a GPU
+    # mapping.  This is a cooperative CPU-only boundary; arbitrary setup code
+    # is not treated as trusted accelerator work by the harness.
+    env["CUDA_VISIBLE_DEVICES"] = ""
+    env["NVIDIA_VISIBLE_DEVICES"] = ""
+    env["HIP_VISIBLE_DEVICES"] = ""
+    env["ROCR_VISIBLE_DEVICES"] = ""
 
-    logger.info("Running pre-script for %s on GPU %s", idea_id, gpu)
+    logger.info("Running CPU-only pre-script for %s", idea_id)
     proc = None
-    handle = None
     try:
-        with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
-            proc = subprocess.Popen(
-                cmd, env=env, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, text=True,
-                preexec_fn=_new_process_group, pass_fds=lease_fds,
-            )
-        from types import SimpleNamespace
-        handle = SimpleNamespace(
-            idea_id=idea_id,
-            gpu=gpu,
-            process=proc,
-            start_time=time.time(),
-            attempt_id=secrets.token_hex(16),
+        proc = subprocess.Popen(
+            cmd, env=env, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
+            preexec_fn=_new_process_group,
         )
-        if results_dir is not None:
-            from orze.engine.accounting import record_compute_start
-            record_compute_start(
-                handle, Path(results_dir) / idea_id, phase="pre_script")
         _, stderr = proc.communicate(timeout=pre_timeout)
         if proc.returncode == 0:
             logger.info("Pre-script OK for %s", idea_id)
-            if results_dir is not None:
-                from orze.engine.accounting import record_compute_terminal
-                record_compute_terminal(
-                    handle, Path(results_dir) / idea_id, "completed",
-                    "pre_script_completed", phase="pre_script",
-                    return_code=proc.returncode)
             return True
         logger.warning("Pre-script failed for %s (exit %d): %s",
                        idea_id, proc.returncode,
                        stderr[-200:] if stderr else "")
-        if results_dir is not None:
-            from orze.engine.accounting import record_compute_terminal
-            record_compute_terminal(
-                handle, Path(results_dir) / idea_id, "failed",
-                "pre_script_nonzero", phase="pre_script",
-                return_code=proc.returncode)
         return False
     except subprocess.TimeoutExpired:
         logger.warning("Pre-script timed out for %s after %ds",
                        idea_id, pre_timeout)
         _terminate_and_reap(proc, f"pre-script {idea_id}")
-        if results_dir is not None:
-            from orze.engine.accounting import record_compute_terminal
-            record_compute_terminal(
-                handle, Path(results_dir) / idea_id, "interrupted",
-                "pre_script_timeout", phase="pre_script",
-                return_code=proc.poll())
         return False
     except Exception as e:
         if proc is not None and proc.poll() is None:
             _terminate_and_reap(proc, f"pre-script {idea_id}", timeout=3)
-        if results_dir is not None and handle is not None:
-            from orze.engine.accounting import record_compute_terminal
-            record_compute_terminal(
-                handle, Path(results_dir) / idea_id, "failed",
-                "pre_script_error", phase="pre_script",
-                return_code=proc.poll())
-        elif results_dir is not None:
-            from orze.engine.accounting import record_zero_gpu_outcome
-            record_zero_gpu_outcome(
-                idea_id, Path(results_dir) / idea_id, gpu, "rejected",
-                "pre_script_popen_failed", phase="pre_script")
         logger.warning("Pre-script error for %s: %s", idea_id, e)
         return False
 

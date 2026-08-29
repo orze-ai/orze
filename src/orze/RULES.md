@@ -83,7 +83,7 @@ QUEUED → CLAIMED → [PRE-CHECK] → TRAINING → COMPLETED or FAILED → [EVA
 
 1. **QUEUED**: Idea exists in ideas.md, no `results/{idea_id}/` directory
 2. **CLAIMED**: `results/{idea_id}/` created (atomic mkdir), `claim.json` written
-3. **PRE-CHECK**: Optional `pre_script` runs (e.g., verify features exist)
+3. **PRE-CHECK**: Optional CPU-only `pre_script` runs (e.g., verify features exist)
 4. **TRAINING**: Subprocess running, writing to `train_output.log`
 5. **COMPLETED**: `metrics.json` written with `status: COMPLETED`
 6. **FAILED**: `metrics.json` written with `status: FAILED` (by script or orze)
@@ -182,7 +182,7 @@ If your project uses pre-extracted features (frozen backbone → .pt files), use
    Another agent is extracting. Once it appears, proceed.
 ```
 
-Orze's `pre_script` hook can automate this check. If features are missing and no one is extracting, the pre-script can trigger extraction before training starts.
+Orze's CPU-only `pre_script` hook can automate the readiness check. GPU feature extraction must be submitted as an accounted training job; the pre-script must not start it.
 
 ## Garbage Collection & Cleanup
 
@@ -470,9 +470,9 @@ max_idea_failures: 3    # skip after N failures
 min_disk_gb: 20         # pause if disk < 20GB free
 orphan_timeout_hours: 6 # reclaim stale claims
 
-# Pre-training hook (optional, runs before each training launch)
+# CPU-only pre-training hook (optional, runs before each training launch)
 pre_script: check_features.py
-pre_args: ["--idea-id", "{idea_id}", "--gpu", "{gpu}"]
+pre_args: ["--idea-id", "{idea_id}"]
 pre_timeout: 3600
 
 # Post-training evaluation (optional)
@@ -538,13 +538,13 @@ This reads `results/{idea_id}/eval_report.json` → `metrics` → `auc_roc`.
 
 ## Pre-Script Contract (Optional)
 
-If `pre_script` is configured, it runs before each training launch on the claimed GPU.
+If `pre_script` is configured, it runs before final launch admission without accelerator access.
 
-**Input**: The command from `pre_args` with `{idea_id}` and `{gpu}` substituted, plus `CUDA_VISIBLE_DEVICES`
+**Input**: The command from `pre_args` with `{idea_id}` substituted. For compatibility, `{gpu}` expands to `-1`; CUDA/NVIDIA/HIP/ROCm visibility is empty.
 **Success**: Exit code 0 — training proceeds
 **Failure**: Non-zero exit code — idea marked FAILED, training skipped
 
-Use cases: verify features exist, check disk space, validate configs.
+Use cases: verify features exist, check disk space, validate configs. Accelerator setup belongs in an accounted training/evaluation job, not this hook.
 
 ## Evaluation Script Contract (Optional)
 

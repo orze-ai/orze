@@ -48,6 +48,7 @@ from orze.engine.launcher import (
 from orze.engine.process import run_artifact_preflight, run_pre_script
 from orze.engine.accounting import (
     ComputeAccountingError,
+    finalize_failed_launch_accounting,
     record_compute_terminal,
     record_zero_gpu_outcome,
 )
@@ -1622,6 +1623,8 @@ class OrzePhaseMixin:
                                     lake=self.lake, idea_id=idea_id, cfg=cfg)
                                 _record_failure(
                                     self.failure_counts, idea_id)
+                                account_zero_gpu(
+                                    "rejected", "pre_script_failed_after_fix")
                                 continue
                         else:
                             _write_failure(
@@ -1629,6 +1632,8 @@ class OrzePhaseMixin:
                                 lake=self.lake, idea_id=idea_id, cfg=cfg)
                             _record_failure(
                                 self.failure_counts, idea_id)
+                            account_zero_gpu(
+                                "rejected", "pre_script_failed")
                             continue
 
                     logger.info("Launching %s on GPU %s: %s",
@@ -1690,6 +1695,12 @@ class OrzePhaseMixin:
                                 logger.error(
                                     "[FIX-RETRY] %s relaunch failed: %s",
                                     idea_id, e2)
+                                finalize_failed_launch_accounting(
+                                    idea_id,
+                                    self.results_dir / idea_id,
+                                    int(gpu),
+                                    "launch_failed_after_fix",
+                                )
                                 _write_failure(
                                     self.results_dir / idea_id,
                                     f"Launch error after fix: {e2}",
@@ -1698,6 +1709,12 @@ class OrzePhaseMixin:
                                     self.failure_counts, idea_id)
                                 continue
                         else:
+                            finalize_failed_launch_accounting(
+                                idea_id,
+                                self.results_dir / idea_id,
+                                int(gpu),
+                                "launch_failed",
+                            )
                             _write_failure(self.results_dir / idea_id,
                                            error_msg,
                                            lake=self.lake, idea_id=idea_id, cfg=cfg)

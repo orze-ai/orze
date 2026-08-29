@@ -18,7 +18,7 @@ from orze.core.gpu_lease import (
     run_with_gpu_leases,
     safe_gpu_lease_reason,
 )
-from orze.engine.smoke_test import _find_free_gpu
+from orze.engine.smoke_test import _find_free_gpu, run_smoke_test
 from orze.engine import launcher
 from orze.hardware.gpu import detect_all_gpus
 
@@ -239,22 +239,12 @@ def test_external_wrapper_rejects_occupied_gpu_before_command(
     assert not marker.exists()
 
 
-def test_smoke_gpu_probe_is_restricted_to_explicit_scope(monkeypatch):
-    observed = {}
-
-    def fake_run(command, **_kwargs):
-        observed["command"] = command
-        return subprocess.CompletedProcess(
-            command, 0, stdout="4, 80000\n7, 79000\n", stderr="")
-
-    monkeypatch.setattr("subprocess.run", fake_run)
-    selected = _find_free_gpu({
-        "_managed_gpu_ids": [4, 7],
-        "gpu_mem_threshold": 40000,
-    })
-
-    assert selected == 4
-    assert observed["command"][0:3] == ["nvidia-smi", "-i", "4,7"]
+def test_smoke_gpu_probe_is_disabled_even_with_explicit_scope(monkeypatch):
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *args, **kwargs: pytest.fail("CPU smoke must not query GPUs"),
+    )
+    assert _find_free_gpu({"_managed_gpu_ids": [4, 7]}) is None
 
 
 def test_smoke_gpu_probe_without_explicit_scope_uses_no_telemetry(monkeypatch):
@@ -265,19 +255,49 @@ def test_smoke_gpu_probe_without_explicit_scope_uses_no_telemetry(monkeypatch):
     assert _find_free_gpu({}) is None
 
 
-def test_smoke_gpu_probe_rejects_out_of_scope_before_telemetry(monkeypatch):
+def test_smoke_gpu_probe_ignores_out_of_scope_ids_without_telemetry(monkeypatch):
     monkeypatch.setattr(
         "subprocess.run",
         lambda *args, **kwargs: pytest.fail("must reject before telemetry"),
     )
-    with pytest.raises(Exception, match="outside_managed_scope:0"):
-        _find_free_gpu({
-            "_managed_gpu_ids": [0],
-            "gpu_scheduling": {
-                "allowed_gpus": [4, 5, 6, 7],
-                "reserved_gpus": [0, 1, 2, 3],
-            },
-        })
+    assert _find_free_gpu({
+        "_managed_gpu_ids": [0],
+        "gpu_scheduling": {
+            "allowed_gpus": [4, 5, 6, 7],
+            "reserved_gpus": [0, 1, 2, 3],
+        },
+    }) is None
+
+
+def test_smoke_test_forces_cpu_visibility(tmp_path, monkeypatch):
+    observed = {}
+
+    def fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["env"] = kwargs["env"]
+        smoke_dir = tmp_path / "_smoke_test"
+        (smoke_dir / "metrics.json").write_text(
+            '{"status":"COMPLETED"}', encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("orze.engine.smoke_test.subprocess.run", fake_run)
+    train = tmp_path / "train.py"
+    base = tmp_path / "base.yaml"
+    train.write_text("# not executed\n", encoding="utf-8")
+    base.write_text("{}\n", encoding="utf-8")
+    passed, errors = run_smoke_test({
+        "train_script": str(train),
+        "base_config": str(base),
+        "_managed_gpu_ids": [4, 5, 6, 7],
+    }, tmp_path)
+
+    assert passed is True
+    assert errors == []
+    for key in (
+            "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES",
+            "HIP_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES"):
+        assert observed["env"][key] == ""
+    assert observed["command"][0] != "nvidia-smi"
 
 
 def test_process_watchdog_telemetry_is_restricted_to_assigned_gpu(monkeypatch):

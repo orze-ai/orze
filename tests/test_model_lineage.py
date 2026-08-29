@@ -418,7 +418,7 @@ def test_launch_wires_parent_attestation_before_compute_start(
     assert (attempt / "start.json").is_file()
 
 
-def test_launch_terminates_unattested_child_before_compute_start(
+def test_launch_accounts_then_terminates_unattested_child(
         tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     results = tmp_path / "results"
@@ -472,7 +472,9 @@ def test_launch_terminates_unattested_child_before_compute_start(
     assert terminated == [process.pid]
     receipt_dirs = list((idea_dir / "_compute_receipts").iterdir())
     assert len(receipt_dirs) == 1
-    assert not (receipt_dirs[0] / "start.json").exists()
+    start = json.loads((receipt_dirs[0] / "start.json").read_text())
+    assert start["phase"] == "training"
+    assert start["process_pid"] == process.pid
     terminal = json.loads((receipt_dirs[0] / "terminal.json").read_text())
     assert terminal["outcome"] == "failed"
     assert terminal["reason_code"] == "training_launch_initialization_failed"

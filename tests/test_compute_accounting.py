@@ -2,6 +2,7 @@
 
 import json
 import stat
+import subprocess
 import sys
 import time
 
@@ -10,6 +11,7 @@ import pytest
 from orze.engine.accounting import (
     audit_campaign_compute_receipts,
     ComputeAccountingError,
+    finalize_failed_launch_accounting,
     record_compute_start,
     record_compute_terminal,
     record_zero_gpu_outcome,
@@ -249,7 +251,8 @@ def test_compute_summary_uses_receipts_and_reports_invalid_evidence(tmp_path):
     assert summary["by_phase"]["admission"]["allocated_gpu_seconds"] == 0.0
 
 
-def test_pre_script_allocation_has_its_own_receipt(tmp_path):
+def test_pre_script_is_cpu_only_and_creates_no_compute_receipt(
+        tmp_path, monkeypatch):
     results = tmp_path / "results"
     idea_dir = results / "idea-accounting"
     assert claim("idea-accounting", results, 4)
@@ -259,39 +262,112 @@ def test_pre_script_allocation_has_its_own_receipt(tmp_path):
     script = tmp_path / "prepare.py"
     script.write_text("raise SystemExit(0)\n", encoding="utf-8")
 
+    observed = {}
+    real_popen = subprocess.Popen
+
+    def capture_popen(*args, **kwargs):
+        observed["cmd"] = args[0]
+        observed["env"] = kwargs["env"]
+        observed["pass_fds"] = kwargs.get("pass_fds")
+        return real_popen(*args, **kwargs)
+
+    monkeypatch.setattr("orze.engine.process.subprocess.Popen", capture_popen)
     assert run_pre_script("idea-accounting", 4, {
         "pre_script": str(script),
         "python": sys.executable,
         "pre_timeout": 5,
+        "pre_args": ["--gpu", "{gpu}"],
+        "train_extra_env": {"CUDA_VISIBLE_DEVICES": "4"},
     }, results)
 
     receipts = list((idea_dir / "_compute_receipts").glob("*"))
-    assert len(receipts) == 1
-    assert receipts[0].name != claim_attempt
-    start = json.loads((receipts[0] / "start.json").read_text())
-    terminal = json.loads((receipts[0] / "terminal.json").read_text())
-    assert start["phase"] == "pre_script"
-    assert terminal["outcome"] == "completed"
-    assert terminal["reason_code"] == "pre_script_completed"
+    assert receipts == []
+    assert claim_attempt
+    assert observed["cmd"][-2:] == ["--gpu", "-1"]
+    assert observed["pass_fds"] is None
+    for key in (
+            "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES",
+            "HIP_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES"):
+        assert observed["env"][key] == ""
 
 
-def test_pre_script_rejects_out_of_scope_gpu_before_process_start(
-        tmp_path, monkeypatch):
-    started = []
-    monkeypatch.setattr(
-        "orze.engine.process.subprocess.Popen",
-        lambda *args, **kwargs: started.append(True),
+def test_pre_script_does_not_observe_or_validate_gpu_scope(tmp_path):
+    script = tmp_path / "prepare.py"
+    script.write_text("raise SystemExit(0)\n", encoding="utf-8")
+    assert run_pre_script("idea-scope", 0, {
+        "pre_script": str(script),
+        "python": sys.executable,
+        "gpu_scheduling": {
+            "allowed_gpus": [4, 5, 6, 7],
+            "reserved_gpus": [0, 1, 2, 3],
+        },
+        "_managed_gpu_ids": [4, 5, 6, 7],
+    }, tmp_path)
+
+
+def test_final_launch_failure_is_zero_gpu_only_without_allocation(tmp_path):
+    results = tmp_path / "results"
+    assert claim("idea-launch-failure", results, 4)
+
+    terminal = finalize_failed_launch_accounting(
+        "idea-launch-failure", results / "idea-launch-failure", 4,
+        "launch_failed",
     )
-    with pytest.raises(Exception, match="outside_managed_scope:0"):
-        run_pre_script("idea-scope", 0, {
-            "pre_script": "/usr/bin/true",
-            "gpu_scheduling": {
-                "allowed_gpus": [4, 5, 6, 7],
-                "reserved_gpus": [0, 1, 2, 3],
-            },
-            "_managed_gpu_ids": [4, 5, 6, 7],
-        }, tmp_path)
-    assert started == []
+
+    assert terminal["phase"] == "admission"
+    assert terminal["allocated_gpu_seconds"] == 0.0
+    assert terminal["reason_code"] == "launch_failed"
+
+
+def test_final_launch_failure_preserves_paired_gpu_allocation(tmp_path):
+    results = tmp_path / "results"
+    assert claim("idea-launch-paired", results, 4)
+    claim_data = json.loads(
+        (results / "idea-launch-paired" / "claim.json").read_text())
+    tp = _tp(tmp_path, attempt_id=claim_data["attempt_id"])
+    tp.idea_id = "idea-launch-paired"
+    tp.gpu = 4
+    idea_dir = results / tp.idea_id
+    record_compute_start(tp, idea_dir)
+    expected = record_compute_terminal(
+        tp, idea_dir, "failed", "training_launch_initialization_failed",
+        return_code=-15,
+    )
+
+    observed = finalize_failed_launch_accounting(
+        tp.idea_id, idea_dir, 4, "launch_failed",
+    )
+
+    assert observed == expected
+    assert observed["phase"] == "training"
+    assert observed["allocated_gpu_seconds"] >= 0.0
+
+
+@pytest.mark.parametrize("missing", ["start", "terminal"])
+def test_final_launch_failure_rejects_half_written_allocation(
+        tmp_path, missing):
+    results = tmp_path / "results"
+    assert claim("idea-launch-incomplete", results, 4)
+    claim_data = json.loads(
+        (results / "idea-launch-incomplete" / "claim.json").read_text())
+    tp = _tp(tmp_path, attempt_id=claim_data["attempt_id"])
+    tp.idea_id = "idea-launch-incomplete"
+    tp.gpu = 4
+    idea_dir = results / tp.idea_id
+    record_compute_start(tp, idea_dir)
+    record_compute_terminal(
+        tp, idea_dir, "failed", "training_launch_initialization_failed",
+        return_code=-15,
+    )
+    (idea_dir / "_compute_receipts" / tp.attempt_id
+     / f"{missing}.json").unlink()
+
+    with pytest.raises(
+            ComputeAccountingError,
+            match="failed_launch_receipt_pair_incomplete"):
+        finalize_failed_launch_accounting(
+            tp.idea_id, idea_dir, 4, "launch_failed",
+        )
 
 
 def test_completed_process_gets_framework_terminal_receipt(tmp_path):

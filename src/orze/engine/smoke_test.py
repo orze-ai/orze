@@ -28,8 +28,6 @@ import time
 import yaml
 from pathlib import Path
 
-from orze.core.gpu_lease import gpu_execution_lease
-
 logger = logging.getLogger("orze")
 
 _SMOKE_ID = "_smoke_test"
@@ -39,38 +37,7 @@ _TIMEOUT = 300
 
 
 def _find_free_gpu(cfg: dict):
-    """Find a permitted GPU with enough free memory, or return None."""
-    scheduling = cfg.get("gpu_scheduling") or {}
-    scope = cfg.get("_managed_gpu_ids") or scheduling.get("allowed_gpus") or []
-    if not scope:
-        return None
-    if (not isinstance(scope, list)
-            or any(isinstance(gpu, bool) or not isinstance(gpu, int)
-                   or gpu < 0 for gpu in scope)):
-        return None
-    from orze.engine.launcher import (
-        _assert_controller_runtime_attested,
-        _assert_gpu_authorized,
-    )
-    for gpu in scope:
-        _assert_gpu_authorized(gpu, cfg)
-    _assert_controller_runtime_attested(cfg)
-    try:
-        import subprocess as _sp
-        result = _sp.run(
-            ["nvidia-smi", "-i", ",".join(str(gpu) for gpu in scope),
-             "--query-gpu=index,memory.free",
-             "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=5)
-        threshold = cfg.get("gpu_mem_threshold", 40000)
-        for line in result.stdout.strip().split("\n"):
-            parts = line.split(",")
-            if len(parts) == 2:
-                gpu_id, free_mb = int(parts[0].strip()), int(parts[1].strip())
-                if free_mb > threshold:
-                    return gpu_id
-    except Exception:
-        pass
+    """Deprecated compatibility hook; startup smoke tests are CPU-only."""
     return None
 
 
@@ -98,7 +65,10 @@ def run_smoke_test(cfg: dict, results_dir: Path) -> tuple:
         (idea_dir / "idea_config.yaml").write_text(
             yaml.dump(idea_cfg, default_flow_style=False))
 
-        # Launch train.py on CPU
+        # This contract check precedes campaign admission and is deliberately
+        # CPU-only. GPU smoke work would be invisible after this temporary
+        # directory is removed and would waste accelerator time on invalid
+        # startup configurations.
         cmd = [
             cfg.get("python", sys.executable),
             cfg["train_script"],
@@ -108,20 +78,14 @@ def run_smoke_test(cfg: dict, results_dir: Path) -> tuple:
             "--config", base_path,
         ]
         env = dict(os.environ)
-        # Try to find a free GPU; fall back to CPU
-        free_gpu = _find_free_gpu(cfg)
-        if free_gpu is not None:
-            from orze.engine.launcher import _authorized_gpu_environment
-            env = _authorized_gpu_environment(free_gpu, cfg, env)
-            logger.info("[SMOKE] Running 1-sample test on GPU %d...", free_gpu)
-        else:
-            env["CUDA_VISIBLE_DEVICES"] = ""
-            logger.info("[SMOKE] Running 1-sample test on CPU (no free GPU)...")
+        env["CUDA_VISIBLE_DEVICES"] = ""
+        env["NVIDIA_VISIBLE_DEVICES"] = ""
+        env["HIP_VISIBLE_DEVICES"] = ""
+        env["ROCR_VISIBLE_DEVICES"] = ""
+        logger.info("[SMOKE] Running 1-sample contract test on CPU...")
         t0 = time.time()
-        with gpu_execution_lease(free_gpu, require_idle=True) as lease_fds:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=_TIMEOUT,
-                env=env, pass_fds=lease_fds)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=_TIMEOUT, env=env)
         elapsed = time.time() - t0
 
         # Check exit code

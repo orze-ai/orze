@@ -1674,6 +1674,11 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     # only the orchestrator PID makes crash recovery unsafe (it can relaunch
     # while the original trainer still writes effects).
     try:
+        # Popen is the allocation boundary. Persist its start before lineage,
+        # claim, or FSM initialization so every process that briefly owns a
+        # GPU is paired with a terminal receipt on initialization failure.
+        from orze.engine.accounting import record_compute_start
+        record_compute_start(tp, results_dir / idea_id, phase="training")
         receive_model_lineage_attestation(
             lineage_context, process_pid=proc.pid)
         if claim_path.exists():
@@ -1687,9 +1692,6 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
                 "trainer_started_at": now,
             })
             atomic_write(claim_path, json.dumps(claim_data, indent=2))
-
-        from orze.engine.accounting import record_compute_start
-        record_compute_start(tp, results_dir / idea_id, phase="training")
 
         # Record FSM transition: CLAIMED → IN_PROGRESS using the process
         # whose effects recovery must mediate.

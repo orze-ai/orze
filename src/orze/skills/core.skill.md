@@ -69,7 +69,7 @@ QUEUED → CLAIMED → [PRE-CHECK] → TRAINING → COMPLETED or FAILED → [EVA
 
 1. **QUEUED**: Idea exists in ideas.md, no `results/{idea_id}/` directory
 2. **CLAIMED**: `results/{idea_id}/` created (atomic mkdir), `claim.json` written
-3. **PRE-CHECK**: Optional `pre_script` runs (e.g., verify features exist)
+3. **PRE-CHECK**: Optional CPU-only `pre_script` runs (e.g., verify features exist)
 4. **TRAINING**: Subprocess running, writing to `train_output.log`
 5. **COMPLETED**: `metrics.json` written with `status: COMPLETED`
 6. **FAILED**: `metrics.json` written with `status: FAILED` (by script or orze)
@@ -129,13 +129,13 @@ This keeps orze generic — it doesn't need to understand your config schema.
 
 ## Pre-Script Contract (Optional)
 
-If `pre_script` is configured, it runs before each training launch on the claimed GPU.
+If `pre_script` is configured, it runs before final launch admission without accelerator access.
 
-**Input**: The command from `pre_args` with `{idea_id}` and `{gpu}` substituted, plus `CUDA_VISIBLE_DEVICES`
+**Input**: The command from `pre_args` with `{idea_id}` substituted. For compatibility, `{gpu}` expands to `-1`; CUDA/NVIDIA/HIP/ROCm visibility is empty.
 **Success**: Exit code 0 — training proceeds
 **Failure**: Non-zero exit code — idea marked FAILED, training skipped
 
-Use cases: verify features exist, check disk space, validate configs.
+Use cases: verify features exist, check disk space, validate configs. Accelerator setup belongs in an accounted training/evaluation job, not this hook.
 
 ## Evaluation Script Contract (Optional)
 

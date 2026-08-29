@@ -30,11 +30,13 @@ _BOUNDARIES = {
             "_authorized_gpu_environment",
             "_assert_controller_runtime_attested",
             "gpu_execution_lease",
+            "record_compute_start",
         }),
         "launch": frozenset({
             "_authorized_gpu_environment",
             "_assert_controller_runtime_attested",
             "gpu_execution_lease",
+            "record_compute_start",
         }),
     },
     "engine/evaluator.py": {
@@ -42,34 +44,21 @@ _BOUNDARIES = {
             "_authorized_gpu_environment",
             "_assert_controller_runtime_attested",
             "gpu_execution_lease",
+            "record_compute_start",
         }),
         "run_post_scripts": frozenset({
             "_authorized_gpu_environment",
             "_assert_controller_runtime_attested",
             "gpu_execution_lease",
-        }),
-    },
-    "engine/process.py": {
-        "run_pre_script": frozenset({
-            "_authorized_gpu_environment",
-            "_assert_controller_runtime_attested",
-            "gpu_execution_lease",
-        }),
-    },
-    "engine/smoke_test.py": {
-        "_find_free_gpu": frozenset({
-            "_assert_gpu_authorized",
-            "_assert_controller_runtime_attested",
-        }),
-        "run_smoke_test": frozenset({
-            "_authorized_gpu_environment",
-            "gpu_execution_lease",
+            "record_compute_start",
+            "record_compute_terminal",
         }),
     },
 }
 _EXPECTED_CUDA_WRITES = frozenset({
     ("engine/launcher.py", "_authorized_gpu_environment", "dynamic"),
     ("engine/process.py", "run_artifact_preflight", "empty"),
+    ("engine/process.py", "run_pre_script", "empty"),
     ("engine/smoke_test.py", "run_smoke_test", "empty"),
 })
 

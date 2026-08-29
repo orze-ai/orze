@@ -1,6 +1,7 @@
 import ast
 from pathlib import Path
 
+import pytest
 import yaml
 
 import orze.engine.gpu_scope_audit as scope_module
@@ -22,6 +23,19 @@ def _config(tmp_path, *, allowed=None, reserved=None):
     return path
 
 
+def _copy_audited_sources(package):
+    relative_paths = set(scope_module._BOUNDARIES)
+    relative_paths.update(
+        relative for relative, _function, _kind
+        in scope_module._EXPECTED_CUDA_WRITES
+    )
+    for relative in relative_paths:
+        source = Path(scope_module.__file__).resolve().parents[1] / relative
+        target = package / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+
+
 def test_gpu_scope_audit_verifies_production_sources_and_no_cuda_children(
         tmp_path):
     receipt = audit_gpu_scope(
@@ -32,7 +46,7 @@ def test_gpu_scope_audit_verifies_production_sources_and_no_cuda_children(
     assert receipt["status"] == "VERIFIED"
     assert receipt["accelerator_access"] == "none"
     assert receipt["counts"] == {
-        "production_boundaries": 7,
+        "production_boundaries": 4,
         "authorized_child_launches": 4,
         "forbidden_ids_rejected": 4,
     }
@@ -72,11 +86,7 @@ def test_cuda_writer_scan_detects_new_dynamic_bypass():
 
 def test_source_boundary_audit_rejects_missing_guard(tmp_path):
     package = tmp_path / "orze"
-    for relative in scope_module._BOUNDARIES:
-        source = Path(scope_module.__file__).resolve().parents[1] / relative
-        target = package / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(source.read_bytes())
+    _copy_audited_sources(package)
     launcher = package / "engine/launcher.py"
     launcher.write_text(
         launcher.read_text().replace(
@@ -105,11 +115,7 @@ def test_source_boundary_audit_rejects_missing_guard(tmp_path):
 
 def test_source_boundary_audit_rejects_lease_without_idle_attestation(tmp_path):
     package = tmp_path / "orze"
-    for relative in scope_module._BOUNDARIES:
-        source = Path(scope_module.__file__).resolve().parents[1] / relative
-        target = package / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(source.read_bytes())
+    _copy_audited_sources(package)
     launcher = package / "engine/launcher.py"
     launcher.write_text(
         launcher.read_text().replace(
@@ -126,6 +132,23 @@ def test_source_boundary_audit_rejects_lease_without_idle_attestation(tmp_path):
         assert str(exc) == "gpu_scope_boundary_guard_missing"
     else:
         raise AssertionError("lease without idle attestation was accepted")
+
+
+def test_source_boundary_audit_rejects_unaccounted_gpu_child(tmp_path):
+    package = tmp_path / "orze"
+    _copy_audited_sources(package)
+    evaluator = package / "engine/evaluator.py"
+    evaluator.write_text(
+        evaluator.read_text().replace(
+            "record_compute_start(", "unaccounted_compute_start(",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+            scope_module.GpuScopeAuditError,
+            match="gpu_scope_boundary_guard_missing"):
+        audit_source_boundaries(package)
 
 
 def test_gpu_scope_audit_rejects_input_mutation(tmp_path, monkeypatch):

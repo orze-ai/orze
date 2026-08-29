@@ -19,7 +19,10 @@ from typing import Optional
 
 
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
-_PHASES = {"training", "posthoc", "evaluation", "pre_script", "admission"}
+_PHASES = {
+    "training", "posthoc", "evaluation", "post_script", "pre_script",
+    "admission",
+}
 _OUTCOMES = {
     "started", "completed", "failed", "interrupted", "rejected", "requeued",
 }
@@ -215,6 +218,62 @@ def record_zero_gpu_outcome(
     }
     return _write_once(
         _receipt_path(idea_dir, attempt_id, "terminal"), payload)
+
+
+def finalize_failed_launch_accounting(
+    idea_id: str,
+    idea_dir: Path,
+    physical_gpu: int,
+    reason_code: str,
+) -> dict:
+    """Close a final launch failure without misclassifying GPU allocation.
+
+    ``launch()`` can fail either before Popen or during initialization after a
+    child has started.  The former needs a zero-GPU admission terminal; the
+    latter must already have a paired allocation receipt. Any half-written or
+    contradictory state fails closed instead of being relabelled zero-GPU.
+    """
+    idea_id = _token(idea_id, "idea_id")
+    idea_dir = Path(idea_dir)
+    try:
+        claim = json.loads(
+            (idea_dir / "claim.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ComputeAccountingError("claim_receipt_missing_or_invalid") from exc
+    if not isinstance(claim, dict):
+        raise ComputeAccountingError("claim_receipt_missing_or_invalid")
+    attempt_id = _token(claim.get("attempt_id", ""), "attempt_id")
+    if claim.get("gpu") != physical_gpu:
+        raise ComputeAccountingError("physical_gpu_claim_mismatch")
+    start_path = _receipt_path(idea_dir, attempt_id, "start")
+    terminal_path = _receipt_path(idea_dir, attempt_id, "terminal")
+    start_exists = start_path.exists()
+    terminal_exists = terminal_path.exists()
+    if start_exists != terminal_exists:
+        raise ComputeAccountingError("failed_launch_receipt_pair_incomplete")
+    if not start_exists:
+        return record_zero_gpu_outcome(
+            idea_id, idea_dir, physical_gpu, "rejected", reason_code,
+            phase="admission",
+        )
+    try:
+        start = json.loads(start_path.read_text(encoding="utf-8"))
+        terminal = json.loads(terminal_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ComputeAccountingError("failed_launch_receipt_unreadable") from exc
+    if (not isinstance(start, dict) or not isinstance(terminal, dict)
+            or start.get("idea_id") != idea_id
+            or terminal.get("idea_id") != idea_id
+            or start.get("attempt_id") != attempt_id
+            or terminal.get("attempt_id") != attempt_id
+            or start.get("event") != "start"
+            or terminal.get("event") != "terminal"
+            or start.get("physical_gpu") != physical_gpu
+            or terminal.get("physical_gpu") != physical_gpu
+            or start.get("phase") not in {"training", "posthoc"}
+            or terminal.get("phase") != start.get("phase")):
+        raise ComputeAccountingError("failed_launch_receipt_contradictory")
+    return terminal
 
 
 def record_recovered_compute_terminal(
