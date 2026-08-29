@@ -174,6 +174,21 @@ def reconcile_stale_running(cfg: dict) -> None:
         live_legacy = _running_idea_pids()
         evaluation_required = bool(cfg.get("eval_script"))
 
+        def _lifecycle_version(idea_id):
+            """Return the active state and immutable transition identity."""
+            row = lake.conn.execute(
+                "SELECT s.current_state, t.id, t.to_state "
+                "FROM idea_state AS s LEFT JOIN idea_transitions AS t "
+                "ON t.id = (SELECT MAX(id) FROM idea_transitions "
+                "WHERE idea_id = s.idea_id) WHERE s.idea_id = ?",
+                (idea_id,),
+            ).fetchone()
+            if (row is None or row[0] not in ("CLAIMED", "IN_PROGRESS")
+                    or isinstance(row[1], bool) or not isinstance(row[1], int)
+                    or row[1] <= 0 or row[2] != row[0]):
+                return None
+            return row[0], row[1]
+
         def _metrics_target(idea_id):
             metrics_path = results_dir / idea_id / "metrics.json"
             if not metrics_path.exists():
@@ -253,6 +268,14 @@ def reconcile_stale_running(cfg: dict) -> None:
                         )
                         others.append(idea_id)
                         continue
+                    lifecycle_version = _lifecycle_version(idea_id)
+                    if lifecycle_version is None:
+                        logger.error(
+                            "Cannot recover %s: active lifecycle identity is "
+                            "missing or contradictory", idea_id,
+                        )
+                        others.append(idea_id)
+                        continue
                     # New execution-identity admission retains ownership until
                     # this immutable terminal receipt exists.  Only emit it
                     # after the process group has been proven empty above.
@@ -282,6 +305,8 @@ def reconcile_stale_running(cfg: dict) -> None:
                         results_dir / idea_id / "recovery.json",
                         json.dumps({
                             "idea_id": idea_id,
+                            "lifecycle_state": lifecycle_version[0],
+                            "lifecycle_transition_id": lifecycle_version[1],
                             "owner_pid": claim_pid,
                             "trainer_pid": trainer_pid,
                             "trainer_pgid": trainer_pgid,
@@ -310,14 +335,31 @@ def reconcile_stale_running(cfg: dict) -> None:
                             recovery_path.read_text(encoding="utf-8"))
                         recovery_pgid = recovery.get("trainer_pgid")
                         target = recovery.get("target_state")
-                        if (recovery.get("trainer_proven_stopped") is not True
+                        lifecycle_version = _lifecycle_version(idea_id)
+                        recovery_transition_id = recovery.get(
+                            "lifecycle_transition_id"
+                        )
+                        if (recovery.get("idea_id") != idea_id
+                                or recovery.get(
+                                    "trainer_proven_stopped") is not True
                                 or target not in (
                                     "QUEUED", "EVALUATION_PENDING", "COMPLETE",
                                     "FAILED",
                                 )
+                                or lifecycle_version is None
+                                or isinstance(recovery_transition_id, bool)
+                                or not isinstance(recovery_transition_id, int)
+                                or recovery_transition_id <= 0
+                                or recovery.get("lifecycle_state")
+                                != lifecycle_version[0]
+                                or recovery_transition_id
+                                != lifecycle_version[1]
                                 or (recovery_pgid is not None
                                     and process_group_members(int(recovery_pgid)))):
-                            raise ValueError("recovery WAL does not prove a stopped trainer")
+                            raise ValueError(
+                                "recovery WAL is stale or does not prove a "
+                                "stopped trainer"
+                            )
                         recoveries.append((idea_id, target))
                         continue
                     except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:

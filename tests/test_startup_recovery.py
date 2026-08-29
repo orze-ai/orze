@@ -9,6 +9,7 @@ from orze.engine.process import (
     capture_process_identity, process_group_members, process_is_running,
     terminate_recorded_process_group,
 )
+from orze.engine.recovery_audit import audit_recovery_state
 from orze.idea_lake import IdeaLake
 
 
@@ -42,6 +43,9 @@ def test_dead_local_in_progress_claim_is_audited_and_released(tmp_path):
     assert not (idea_dir / "claim.json").exists()
     assert list(idea_dir.glob("claim.recovered.*.json"))
     lake.close()
+    audit = audit_recovery_state(db_path, results)
+    assert audit["status"] == "VERIFIED"
+    assert audit["counts"]["stage_conflicts"] == 0
 
 
 def test_recovery_closes_compute_ledger_for_identity_retry(tmp_path):
@@ -166,6 +170,8 @@ def test_orphan_trainer_group_is_proven_stopped_before_requeue(tmp_path):
         recovery = json.loads((idea_dir / "recovery.json").read_text())
         assert recovery["termination_attempted"] is True
         assert recovery["trainer_proven_stopped"] is True
+        assert recovery["lifecycle_state"] == "IN_PROGRESS"
+        assert isinstance(recovery["lifecycle_transition_id"], int)
         lake = IdeaLake(str(db_path))
         assert lake.get_fsm_state("idea-0001") == "QUEUED"
         assert lake.get_fsm_history("idea-0001")[-1]["reason"] == (
@@ -241,11 +247,18 @@ def test_no_claim_recovery_wal_is_consumed_after_rename_crash(tmp_path):
     lake.insert("idea-0001", "test", "{}", "", status="queued")
     assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
+    transition_id = lake.conn.execute(
+        "SELECT MAX(id) FROM idea_transitions WHERE idea_id = ?",
+        ("idea-0001",),
+    ).fetchone()[0]
     lake.close()
     (idea_dir / "recovery.json").write_text(json.dumps({
+        "idea_id": "idea-0001",
         "trainer_proven_stopped": True,
         "trainer_pgid": None,
         "target_state": "QUEUED",
+        "lifecycle_state": "IN_PROGRESS",
+        "lifecycle_transition_id": transition_id,
     }))
 
     reconcile_stale_running({
@@ -256,6 +269,44 @@ def test_no_claim_recovery_wal_is_consumed_after_rename_crash(tmp_path):
     lake = IdeaLake(str(db_path))
     assert lake.get("idea-0001")["status"] == "queued"
     assert lake.get_fsm_state("idea-0001") == "QUEUED"
+    lake.close()
+
+
+def test_stale_recovery_wal_cannot_requeue_a_new_attempt(tmp_path):
+    """A prior recovery receipt must not authorize mutation of a new run."""
+    results = tmp_path / "results"
+    idea_dir = results / "idea-0001"
+    idea_dir.mkdir(parents=True)
+    db_path = tmp_path / "ideas.db"
+    lake = IdeaLake(str(db_path))
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
+    assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
+    assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
+    stale_transition_id = lake.conn.execute(
+        "SELECT MAX(id) FROM idea_transitions WHERE idea_id = ?",
+        ("idea-0001",),
+    ).fetchone()[0]
+    assert lake.record_state_transition("idea-0001", "IN_PROGRESS", "QUEUED")
+    assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
+    assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
+    lake.close()
+    (idea_dir / "recovery.json").write_text(json.dumps({
+        "idea_id": "idea-0001",
+        "trainer_proven_stopped": True,
+        "trainer_pgid": None,
+        "target_state": "QUEUED",
+        "lifecycle_state": "IN_PROGRESS",
+        "lifecycle_transition_id": stale_transition_id,
+    }))
+
+    reconcile_stale_running({
+        "results_dir": str(results),
+        "idea_lake_db": str(db_path),
+    })
+
+    lake = IdeaLake(str(db_path))
+    assert lake.get("idea-0001")["status"] == "running"
+    assert lake.get_fsm_state("idea-0001") == "IN_PROGRESS"
     lake.close()
 
 
