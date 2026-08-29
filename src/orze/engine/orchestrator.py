@@ -313,7 +313,10 @@ class Orze(OrzePhaseMixin):
 
     def _atexit_cleanup(self):
         try:
-            atexit_cleanup(self.active, self.active_evals, self.active_roles)
+            atexit_cleanup(
+                self.active, self.active_evals, self.active_roles,
+                self.results_dir,
+            )
         finally:
             self._release_gpu_leases()
 

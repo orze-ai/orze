@@ -505,6 +505,50 @@ def test_controller_shutdown_closes_eval_compute_and_requeues_stage(
         reopened.close()
 
 
+def test_atexit_closes_every_tracked_gpu_allocation(tmp_path, monkeypatch):
+    from orze.engine import lifecycle
+
+    results = tmp_path / "results"
+    training_dir = results / "idea-atexit-training"
+    evaluation_dir = results / "idea-atexit-evaluation"
+    training_dir.mkdir(parents=True)
+    evaluation_dir.mkdir(parents=True)
+    training = _tp(tmp_path, attempt_id="a" * 32)
+    training.idea_id = training_dir.name
+    evaluation = EvalProcess(
+        idea_id=evaluation_dir.name,
+        gpu=5,
+        process=FinishedProcess(return_code=None),
+        start_time=time.time() - 2,
+        log_path=evaluation_dir / "eval.log",
+        timeout=60,
+        attempt_id="b" * 32,
+    )
+    record_compute_start(training, training_dir, phase="training")
+    record_compute_start(evaluation, evaluation_dir, phase="evaluation")
+
+    def kill(process, _signal):
+        process.return_code = -9
+
+    monkeypatch.setattr(lifecycle, "_kill_pg", kill)
+    lifecycle.atexit_cleanup(
+        {4: training}, {5: evaluation}, {}, results,
+    )
+
+    training_terminal = json.loads((
+        training_dir / "_compute_receipts" / training.attempt_id
+        / "terminal.json"
+    ).read_text())
+    evaluation_terminal = json.loads((
+        evaluation_dir / "_compute_receipts" / evaluation.attempt_id
+        / "terminal.json"
+    ).read_text())
+    assert training_terminal["outcome"] == "interrupted"
+    assert training_terminal["reason_code"] == "training_atexit_cleanup"
+    assert evaluation_terminal["outcome"] == "interrupted"
+    assert evaluation_terminal["reason_code"] == "evaluation_atexit_cleanup"
+
+
 def test_campaign_compute_audit_verifies_closed_scoped_exact_ideas(tmp_path):
     results = tmp_path / "results"
     now = time.time()
