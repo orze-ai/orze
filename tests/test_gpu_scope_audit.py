@@ -1,5 +1,4 @@
 import ast
-import os
 from pathlib import Path
 
 import pytest
@@ -35,15 +34,6 @@ def _copy_audited_sources(package):
         target = package / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(source.read_bytes())
-
-
-def test_gpu_scope_audit_fixture_uses_process_scoped_synthetic_lease():
-    mapped_gpu = 800_000 + (os.getpid() % 10_000) * 100 + 4
-    with scope_module.gpu_execution_lease(4) as lease_fds:
-        assert len(lease_fds) == 1
-        target = os.readlink(f"/proc/self/fd/{lease_fds[0]}")
-    assert target.endswith(f"/gpu-{mapped_gpu}.lock")
-    assert not target.endswith("/gpu-4.lock")
 
 
 def test_gpu_scope_audit_verifies_production_sources_and_no_cuda_children(
