@@ -352,7 +352,9 @@ def _detect_zombie(tp) -> bool:
     - No GPU memory usage (parent and children)
     - No log file growth
     All three must be true to avoid false positives.
-    Requires 3 consecutive positive detections (~90s at 30s poll).
+    Requires both 3 consecutive positive detections and 90 seconds of
+    continuously positive evidence. The time floor keeps behavior invariant
+    when the scheduler poll interval changes.
     """
     pid = tp.process.pid
 
@@ -366,8 +368,12 @@ def _detect_zombie(tp) -> bool:
         if prev is not None:
             dt = tp._zombie_cpu[0] - prev[0]
             dcpu = tp._zombie_cpu[1] - prev[1]
-            if dt > 30 and dcpu > 10:  # any meaningful CPU in last 30s
+            # Preserve the historical 10-jiffy-per-30-second activity floor as
+            # a rate. Requiring ``dt > 30`` made every five-second sample look
+            # idle regardless of actual CPU progress.
+            if dt > 0 and (dcpu / dt) > (10.0 / 30.0):
                 tp._zombie_count = 0
+                tp._zombie_since = None
                 return False
     except (OSError, IndexError, ValueError):
         return False  # can't check (incl. racy /proc ProcessLookupError) — assume alive
@@ -387,6 +393,7 @@ def _detect_zombie(tp) -> bool:
             parts = [p.strip() for p in line.split(",")]
             if len(parts) >= 2 and int(parts[0]) == pid:
                 tp._zombie_count = 0
+                tp._zombie_since = None
                 return False  # process has GPU memory allocated
 
         # Check child process PIDs
@@ -398,6 +405,7 @@ def _detect_zombie(tp) -> bool:
                     parts = [p.strip() for p in line.split(",")]
                     if len(parts) >= 2 and int(parts[0]) == cpid:
                         tp._zombie_count = 0
+                        tp._zombie_since = None
                         return False  # child has GPU memory
         except (FileNotFoundError, ValueError, OSError):
             pass  # can't read children, continue with other checks
@@ -412,15 +420,23 @@ def _detect_zombie(tp) -> bool:
             tp._zombie_log_size = current_size
             if current_size > prev_size:
                 tp._zombie_count = 0
+                tp._zombie_since = None
                 return False  # log is growing
         except OSError:
             pass
 
     # All checks failed — this process looks stuck.
-    # Require 3 consecutive detections to avoid transient false positives.
+    # Require count and elapsed-time floors. A shorter scheduler poll must not
+    # turn the historical ~90-second confirmation window into ~15 seconds.
+    now = time.time()
+    if getattr(tp, '_zombie_since', None) is None:
+        tp._zombie_since = now
     zombie_count = getattr(tp, '_zombie_count', 0) + 1
     tp._zombie_count = zombie_count
-    return zombie_count >= 3  # 3 consecutive checks (~90s at 30s poll)
+    return (
+        zombie_count >= 3
+        and now - tp._zombie_since >= ZOMBIE_CONFIRM_SECONDS
+    )
 
 
 # --------------------------------------------------------------------- #
@@ -437,6 +453,10 @@ def _detect_zombie(tp) -> bool:
 # Test override via env vars so unit tests don't have to wait minutes.
 WATCHDOG_GRACE_MIN = int(os.environ.get("ORZE_WD_GRACE_MIN", "60"))
 WATCHDOG_CONSECUTIVE = int(os.environ.get("ORZE_WD_CONSECUTIVE", "15"))
+WATCHDOG_CONFIRM_SECONDS = float(
+    os.environ.get("ORZE_WD_CONFIRM_SECONDS", "450"))
+ZOMBIE_CONFIRM_SECONDS = float(
+    os.environ.get("ORZE_ZOMBIE_CONFIRM_SECONDS", "90"))
 WATCHDOG_GPU_UTIL_THRESHOLD = int(os.environ.get("ORZE_WD_GPU_UTIL", "5"))
 WATCHDOG_CPU_DELTA_JIFFIES = int(
     os.environ.get("ORZE_WD_CPU_DELTA_JIFFIES", "100"))  # ~1s @ HZ=100
@@ -513,8 +533,8 @@ def _gpu_util_for_pid(pid: int, gpu: int) -> Optional[int]:
 
 
 def _watchdog_check(tp) -> bool:
-    """True once the training process has been stuck for
-    WATCHDOG_CONSECUTIVE consecutive samples post-grace.
+    """True once the training process has been continuously stuck for both
+    the configured consecutive-sample and elapsed-time floors post-grace.
     Mutates ``tp`` to keep watchdog state.
     """
     now = time.time()
@@ -550,20 +570,36 @@ def _watchdog_check(tp) -> bool:
     if prev is None:
         # Need a baseline sample first.
         tp._wd_bad_count = 0
+        tp._wd_bad_since = None
         return False
 
-    _, prev_mtime, prev_jiffies, _ = prev
+    prev_at, prev_mtime, prev_jiffies, _ = prev
     log_unchanged = log_mtime <= prev_mtime
     cpu_delta = cpu_jiffies - prev_jiffies
-    cpu_idle = cpu_delta < WATCHDOG_CPU_DELTA_JIFFIES
+    sample_seconds = max(now - prev_at, 0.0)
+    # WATCHDOG_CPU_DELTA_JIFFIES was calibrated for the historical 30-second
+    # poll. Scale it by elapsed time so a faster poll does not misclassify the
+    # same CPU rate as idle.
+    cpu_idle = cpu_delta < (
+        WATCHDOG_CPU_DELTA_JIFFIES * sample_seconds / 30.0
+    )
     gpu_idle = (gpu_util is not None and gpu_util < WATCHDOG_GPU_UTIL_THRESHOLD)
 
     if log_unchanged and cpu_idle and gpu_idle:
+        if getattr(tp, "_wd_bad_since", None) is None:
+            # The previous sample is the beginning of this observed interval.
+            tp._wd_bad_since = prev_at
         tp._wd_bad_count = getattr(tp, "_wd_bad_count", 0) + 1
     else:
         tp._wd_bad_count = 0
+        tp._wd_bad_since = None
 
-    return tp._wd_bad_count >= WATCHDOG_CONSECUTIVE
+    bad_since = getattr(tp, "_wd_bad_since", None)
+    return (
+        tp._wd_bad_count >= WATCHDOG_CONSECUTIVE
+        and bad_since is not None
+        and now - bad_since >= WATCHDOG_CONFIRM_SECONDS
+    )
 
 
 # --------------------------------------------------------------------- #

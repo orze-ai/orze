@@ -15,6 +15,8 @@ from orze.engine import launcher as L
 def _shrink_watchdog(monkeypatch):
     monkeypatch.setattr(L, "WATCHDOG_GRACE_MIN", 0)
     monkeypatch.setattr(L, "WATCHDOG_CONSECUTIVE", 3)
+    monkeypatch.setattr(L, "WATCHDOG_CONFIRM_SECONDS", 0)
+    monkeypatch.setattr(L, "ZOMBIE_CONFIRM_SECONDS", 0)
     monkeypatch.setattr(L, "WATCHDOG_GPU_UTIL_THRESHOLD", 5)
     monkeypatch.setattr(L, "WATCHDOG_CPU_DELTA_JIFFIES", 100)
 
@@ -70,6 +72,77 @@ def test_watchdog_grace_period_blocks_kill(tmp_path, monkeypatch):
     monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: 100)
     for _ in range(L.WATCHDOG_CONSECUTIVE + 5):
         assert L._watchdog_check(tp) is False
+
+
+def test_watchdog_elapsed_floor_is_invariant_to_fast_poll(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "WATCHDOG_CONSECUTIVE", 3)
+    monkeypatch.setattr(L, "WATCHDOG_CONFIRM_SECONDS", 90)
+    clock = [1_000.0]
+    monkeypatch.setattr(L.time, "time", lambda: clock[0])
+    tp = _mk_tp(tmp_path)
+    tp.start_time = 0
+    monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid, gpu: 0)
+    monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: 100)
+
+    assert L._watchdog_check(tp) is False  # baseline
+    for _ in range(17):
+        clock[0] += 5
+        assert L._watchdog_check(tp) is False
+    clock[0] += 5
+    assert L._watchdog_check(tp) is True
+
+
+def test_watchdog_cpu_rate_is_invariant_to_fast_poll(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "WATCHDOG_CONFIRM_SECONDS", 0)
+    clock = [1_500.0]
+    monkeypatch.setattr(L.time, "time", lambda: clock[0])
+    cpu = [100]
+    monkeypatch.setattr(L, "_gpu_util_for_pid", lambda pid, gpu: 0)
+    monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: cpu[0])
+    tp = _mk_tp(tmp_path)
+
+    assert L._watchdog_check(tp) is False
+    for _ in range(10):
+        clock[0] += 5
+        cpu[0] += 20  # 4 jiffies/s: above the historical 100/30 floor.
+        assert L._watchdog_check(tp) is False
+    assert tp._wd_bad_count == 0
+
+
+def test_zombie_elapsed_floor_is_invariant_to_fast_poll(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "ZOMBIE_CONFIRM_SECONDS", 90)
+    clock = [2_000.0]
+    monkeypatch.setattr(L.time, "time", lambda: clock[0])
+    monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: 0)
+    monkeypatch.setattr(
+        L.subprocess, "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, ""),
+    )
+    tp = _mk_tp(tmp_path)
+
+    for _ in range(18):
+        assert L._detect_zombie(tp) is False
+        clock[0] += 5
+    assert L._detect_zombie(tp) is True
+
+
+def test_zombie_activity_resets_elapsed_floor(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "ZOMBIE_CONFIRM_SECONDS", 90)
+    clock = [3_000.0]
+    monkeypatch.setattr(L.time, "time", lambda: clock[0])
+    cpu = [0]
+    monkeypatch.setattr(L, "_tree_cpu_jiffies", lambda pid: cpu[0])
+    monkeypatch.setattr(
+        L.subprocess, "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, ""),
+    )
+    tp = _mk_tp(tmp_path)
+
+    assert L._detect_zombie(tp) is False
+    clock[0] += 5
+    cpu[0] += 2  # 0.4 jiffies/s: above the historical 10/30 floor.
+    assert L._detect_zombie(tp) is False
+    assert tp._zombie_since is None
 
 
 def test_watchdog_first_batch_marker_activates(tmp_path, monkeypatch):
