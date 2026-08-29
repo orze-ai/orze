@@ -38,6 +38,9 @@ def test_recovery_audit_verifies_consistent_terminal_pipeline(tmp_path):
     assert receipt["status"] == "VERIFIED"
     assert receipt["counts"]["ideas"] == 2
     assert receipt["counts"]["active_states"] == 0
+    assert receipt["checks"]["global_state_universe_exact"]["passed"] is True
+    assert receipt["counts"]["missing_global_states"] == 0
+    assert receipt["counts"]["orphan_global_states"] == 0
     assert receipt["contradiction_idea_ids"] == []
     assert receipt["evidence_gap_idea_ids"] == []
     assert receipt["rank_claim_proven"] is False
@@ -133,6 +136,51 @@ def test_recovery_audit_rejects_transition_ledger_divergence(tmp_path):
         "passed"
     ] is False
     assert receipt["contradiction_idea_ids"] == ["idea-complete"]
+
+
+def test_recovery_audit_rejects_orphan_global_state_row(tmp_path):
+    db_path = _terminal_lake(tmp_path)
+    connection = __import__("sqlite3").connect(db_path)
+    connection.execute(
+        "INSERT INTO idea_state (idea_id, current_state) VALUES (?, ?)",
+        ("idea-orphan-state", "COMPLETE"),
+    )
+    connection.commit()
+    connection.close()
+
+    receipt = audit_recovery_state(db_path, tmp_path / "results")
+
+    assert receipt["status"] == "FAILED"
+    assert receipt["checks"]["global_state_universe_exact"][
+        "passed"
+    ] is False
+    assert receipt["checks"]["global_state_universe_exact"][
+        "orphan_idea_ids"
+    ] == ["idea-orphan-state"]
+    assert receipt["counts"]["orphan_global_states"] == 1
+    assert receipt["contradiction_idea_ids"] == ["idea-orphan-state"]
+
+
+def test_recovery_audit_rejects_missing_global_state_row(tmp_path):
+    db_path = _terminal_lake(tmp_path)
+    connection = __import__("sqlite3").connect(db_path)
+    connection.execute(
+        "DELETE FROM idea_state WHERE idea_id = ?", ("idea-complete",)
+    )
+    connection.commit()
+    connection.close()
+
+    receipt = audit_recovery_state(db_path, tmp_path / "results")
+
+    assert receipt["status"] == "FAILED"
+    assert receipt["checks"]["global_state_universe_exact"][
+        "passed"
+    ] is False
+    assert receipt["checks"]["global_state_universe_exact"][
+        "missing_idea_ids"
+    ] == ["idea-complete"]
+    assert receipt["counts"]["missing_global_states"] == 1
+    assert "idea-complete" in receipt["contradiction_idea_ids"]
 
 
 def test_recovery_audit_rejects_auditor_source_change(tmp_path, monkeypatch):

@@ -64,7 +64,10 @@ python -m orze.engine.recovery_audit \
 `VERIFIED` requires the current and immutable global/stage ledgers to agree,
 legacy status mirrors to agree with the global FSM, every local active claim to
 name a live exact `(pid, start_ticks)` identity, and no terminal row to retain a
-live owner or trainer. A missing deployed stage schema/history, redirected or
+live owner or trainer. The `ideas` and `idea_state` tables must also contain the
+exact same idea-ID universe in both directions; a missing or orphan current
+state is a contradiction, even when no transition refers to it. A missing
+deployed stage schema/history, redirected or
 hard-linked database/claim, remote owner that cannot be checked locally, or
 unstable evidence is `UNVERIFIED`. A directly observed state/process or
 current/transition contradiction is `FAILED`. The receipt binds the database

@@ -208,6 +208,8 @@ def audit_recovery_state(
     stage_conflicts = set()
     stage_missing = set()
     transition_conflicts = set()
+    missing_global_states = set()
+    orphan_global_states = set()
     active_count = 0
     live_terminal_count = 0
     dead_active_count = 0
@@ -240,6 +242,17 @@ def audit_recovery_state(
             receipt["reason"] = "recovery_lifecycle_rows_incomplete"
             return receipt
         idea_ids = {str(row["idea_id"]) for row in rows}
+        state_rows = connection.execute(
+            "SELECT idea_id FROM idea_state ORDER BY idea_id"
+        ).fetchall()
+        if len(state_rows) > _MAX_ROWS:
+            receipt["reason"] = "recovery_row_limit_exceeded"
+            return receipt
+        state_ids = {str(row["idea_id"]) for row in state_rows}
+        missing_global_states.update(idea_ids - state_ids)
+        orphan_global_states.update(state_ids - idea_ids)
+        contradictions.update(missing_global_states)
+        contradictions.update(orphan_global_states)
 
         transition_count = connection.execute(
             "SELECT COUNT(*) FROM idea_transitions"
@@ -393,6 +406,13 @@ def audit_recovery_state(
             "passed": not status_conflicts,
             "idea_ids": sorted(status_conflicts),
         },
+        "global_state_universe_exact": {
+            "passed": (
+                not missing_global_states and not orphan_global_states
+            ),
+            "missing_idea_ids": sorted(missing_global_states),
+            "orphan_idea_ids": sorted(orphan_global_states),
+        },
         "pipeline_stage_truth_complete": {
             "passed": not stage_missing and not stage_conflicts,
             "missing_idea_ids": sorted(stage_missing),
@@ -416,6 +436,8 @@ def audit_recovery_state(
         "live_process_terminal_states": live_terminal_count,
         "dead_process_active_states": dead_active_count,
         "status_conflicts": len(status_conflicts),
+        "missing_global_states": len(missing_global_states),
+        "orphan_global_states": len(orphan_global_states),
         "stage_conflicts": len(stage_conflicts),
         "stage_evidence_missing": len(stage_missing),
         "transition_conflicts": len(transition_conflicts),
