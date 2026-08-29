@@ -18,7 +18,9 @@ import logging
 import os
 import re
 import sqlite3
+import threading
 import time
+from collections import OrderedDict
 from typing import Any, Dict, Iterable, List, Optional, Set
 
 import yaml
@@ -27,6 +29,82 @@ from orze.core.integrity import hash_config
 from orze.core.sqlite_policy import apply_shared_database_policy
 
 logger = logging.getLogger("idea_lake")
+
+
+# A daemon opens the same lake through several production boundaries. Replaying
+# every idempotent CREATE/ALTER/migration statement on every connection is both
+# unnecessary and expensive on a shared filesystem. This cache is deliberately
+# process-local: a new process or code deployment always performs one complete
+# bootstrap. Entries are accepted only when the database file identity and a
+# digest of its complete schema plus content-bearing bootstrap invariants still
+# match. The bound prevents long-lived administrative processes from retaining
+# an unbounded set of one-off database paths.
+_SCHEMA_BOOTSTRAP_CACHE_MAX = 128
+_schema_bootstrap_cache = OrderedDict()
+_schema_bootstrap_cache_lock = threading.Lock()
+
+
+def _schema_bootstrap_cache_key(db_path: str):
+    if db_path == ":memory:" or db_path.startswith("file:"):
+        return None
+    try:
+        resolved = os.path.realpath(db_path)
+        info = os.stat(resolved)
+    except OSError:
+        return None
+    return (resolved, info.st_dev, info.st_ino)
+
+
+def _schema_bootstrap_identity(conn: sqlite3.Connection):
+    """Hash schema and the few data rows whose absence triggers bootstrap."""
+    try:
+        schema_rows = [
+            tuple(row) for row in conn.execute(
+                "SELECT type, name, tbl_name, sql FROM sqlite_master "
+                "WHERE type IN ('table', 'index', 'trigger') "
+                "ORDER BY type, name, tbl_name"
+            ).fetchall()
+        ]
+        migration_names = [
+            row[0] for row in conn.execute(
+                "SELECT name FROM schema_migrations ORDER BY name"
+            ).fetchall()
+        ]
+        sequence_rows = conn.execute(
+            "SELECT COUNT(*) FROM id_sequence"
+        ).fetchone()[0]
+    except (sqlite3.DatabaseError, TypeError):
+        return None
+    payload = json.dumps(
+        {
+            "schema": schema_rows,
+            "migration_names": migration_names,
+            "id_sequence_rows": sequence_rows,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _schema_bootstrap_cache_hit(key, identity) -> bool:
+    if key is None or identity is None:
+        return False
+    with _schema_bootstrap_cache_lock:
+        if _schema_bootstrap_cache.get(key) != identity:
+            return False
+        _schema_bootstrap_cache.move_to_end(key)
+        return True
+
+
+def _remember_schema_bootstrap(key, identity) -> None:
+    if key is None or identity is None:
+        return
+    with _schema_bootstrap_cache_lock:
+        _schema_bootstrap_cache[key] = identity
+        _schema_bootstrap_cache.move_to_end(key)
+        while len(_schema_bootstrap_cache) > _SCHEMA_BOOTSTRAP_CACHE_MAX:
+            _schema_bootstrap_cache.popitem(last=False)
 
 
 def flatten_config(config: dict, prefix: str = "", max_depth: int = 2) -> Dict[str, Any]:
@@ -295,6 +373,7 @@ class IdeaLake:
 
     def __init__(self, db_path: str):
         self.db_path = str(db_path)
+        self.schema_bootstrap_cache_hit = False
         self.conn = sqlite3.connect(self.db_path, timeout=30)
         self.conn.row_factory = sqlite3.Row
         # Multi-host Orze supports only verified rollback journaling. WAL needs
@@ -309,7 +388,20 @@ class IdeaLake:
             raise
 
     def _ensure_schema(self):
-        self.conn.executescript(_SCHEMA_SQL)
+        cache_key = _schema_bootstrap_cache_key(self.db_path)
+        identity = _schema_bootstrap_identity(self.conn)
+        if _schema_bootstrap_cache_hit(cache_key, identity):
+            self.schema_bootstrap_cache_hit = True
+            return
+
+        try:
+            self.conn.executescript(
+                "BEGIN IMMEDIATE;\n" + _SCHEMA_SQL + "\nCOMMIT;"
+            )
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
         # Normalize the original audited-FSM column names before any index or
         # writer assumes the current schema. Some deployed databases use
         # transitioned_at/transitioned_by_* with NOT NULL constraints.
@@ -324,11 +416,18 @@ class IdeaLake:
         # Trigger consumption ledger (resolves c1005 / DEC-009). Owned by
         # orze.engine.trigger_ledger but the table is materialised here
         # so it exists from first connect, before any consumer runs.
+        trigger_schema_complete = True
         try:
             from orze.engine.trigger_ledger import init_schema as _init_trig
             _init_trig(self.conn)
         except Exception as e:
+            trigger_schema_complete = False
             logger.warning("trigger_ledger schema init failed: %s", e)
+        if trigger_schema_complete:
+            _remember_schema_bootstrap(
+                _schema_bootstrap_cache_key(self.db_path),
+                _schema_bootstrap_identity(self.conn),
+            )
 
     def _ensure_harness_efficiency_schema(self) -> None:
         """Add exact scheduler-demand evidence without rewriting old rows."""

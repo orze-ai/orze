@@ -25,13 +25,17 @@ def test_small_run_is_diagnostic_but_exercises_real_control_plane(tmp_path):
     assert receipt["metrics"]["queue_order_stable"] is True
     assert receipt["metrics"]["lifecycle_states_exact"] is True
     assert receipt["metrics"]["atomic_claim_successes"] == 1
+    assert receipt["metrics"]["schema_bootstrap_cache_hits"] == 3
+    assert receipt["targets"]["invariants"][
+        "schema_bootstrap_cache_hits_exact"
+    ] == {"observed": True, "passed": True}
     assert receipt["targets"]["passed"] is True
     assert receipt["targets"]["throughput"]["passed"] is True
 
 
 def test_target_evaluation_fails_closed_on_latency_and_gpu_use():
     metric_names = {
-        "cold_open": 1.0,
+        "connection_reopen": 1.0,
         "admitted_identity_lookup": 1.0,
         "queue_query": 1.0,
         "warm_queue_sync": 1.0,
@@ -52,6 +56,8 @@ def test_target_evaluation_fails_closed_on_latency_and_gpu_use():
         "queue_order_stable": True,
         "lifecycle_states_exact": True,
         "atomic_claim_successes": 1,
+        "schema_bootstrap_cache_hits": 3,
+        "iterations": 3,
         "gpu_compute_requested": True,
     })
     targets = {key: 0.5 for key in DEFAULT_TARGETS_MS}

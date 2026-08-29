@@ -30,7 +30,7 @@ from orze.engine.scheduler import claim, get_unclaimed
 from orze.idea_lake import IdeaLake
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MIN_ACCEPTANCE_IDEAS = 10_000
 # A nearest-rank p95 needs at least 20 observations; with 15, p95 is the
 # single maximum and one unrelated filesystem scheduling pause determines the
@@ -39,7 +39,7 @@ MIN_ACCEPTANCE_IDEAS = 10_000
 MIN_ACCEPTANCE_ITERATIONS = 20
 MIN_BULK_INSERT_ROWS_PER_SECOND = 1_000.0
 DEFAULT_TARGETS_MS = {
-    "cold_open_p95_ms": 75.0,
+    "connection_reopen_p95_ms": 75.0,
     "admitted_identity_lookup_p95_ms": 50.0,
     "queue_query_p95_ms": 60.0,
     "warm_queue_sync_p95_ms": 120.0,
@@ -85,7 +85,9 @@ def evaluate_targets(metrics: dict, targets: Optional[dict] = None) -> dict:
     """Evaluate latency targets and non-latency correctness invariants."""
     limits = dict(DEFAULT_TARGETS_MS if targets is None else targets)
     actuals = {
-        "cold_open_p95_ms": metrics["cold_open"]["p95_ms"],
+        "connection_reopen_p95_ms": metrics[
+            "connection_reopen"
+        ]["p95_ms"],
         "admitted_identity_lookup_p95_ms": metrics[
             "admitted_identity_lookup"
         ]["p95_ms"],
@@ -126,6 +128,9 @@ def evaluate_targets(metrics: dict, targets: Optional[dict] = None) -> dict:
         "atomic_claim_single_winner": metrics[
             "atomic_claim_successes"
         ] == 1,
+        "schema_bootstrap_cache_hits_exact": metrics[
+            "schema_bootstrap_cache_hits"
+        ] == metrics["iterations"],
         "gpu_compute_requested": metrics["gpu_compute_requested"],
     }
     # gpu_compute_requested is the sole negative invariant.
@@ -201,10 +206,14 @@ def run_benchmark(
         _, insert_ms = _timed(lambda: lake.bulk_insert(rows))
         lake.close()
 
-        cold_open_samples = []
+        connection_reopen_samples = []
+        schema_bootstrap_cache_hits = 0
         for _ in range(iterations):
             opened, elapsed = _timed(lambda: IdeaLake(db_path))
-            cold_open_samples.append(elapsed)
+            connection_reopen_samples.append(elapsed)
+            schema_bootstrap_cache_hits += int(
+                opened.schema_bootstrap_cache_hit
+            )
             opened.close()
 
         lake = IdeaLake(db_path)
@@ -327,7 +336,8 @@ def run_benchmark(
         "bulk_insert_rows_per_second": round(
             idea_count / (insert_ms / 1000.0), 3
         ),
-        "cold_open": _latency_summary(cold_open_samples),
+        "connection_reopen": _latency_summary(connection_reopen_samples),
+        "schema_bootstrap_cache_hits": schema_bootstrap_cache_hits,
         "admitted_identity_lookup": _latency_summary(identity_samples),
         "queue_query": _latency_summary(queue_samples),
         "warm_queue_sync": _latency_summary(sync_samples),
