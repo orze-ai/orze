@@ -2577,6 +2577,17 @@ class IdeaLake:
         canonical = lambda value: json.dumps(
             value, sort_keys=True, separators=(",", ":"))
 
+        normalized_campaign_id = campaign_id.strip() if campaign_id else None
+        values = (
+            normalized_campaign_id,
+            controller_id.strip(), host.strip(), iteration,
+            float(observed_at_epoch), observed_at, float(poll_seconds),
+            canonical(scope), canonical(clean_telemetry),
+            int(telemetry_complete), canonical(training),
+            canonical(evaluation), remaining_training,
+            remaining_evaluation, int(launcher_paused), int(disk_ok),
+        )
+
         def _insert():
             cursor = self.conn.execute(
                 "INSERT OR IGNORE INTO harness_efficiency_samples "
@@ -2587,18 +2598,27 @@ class IdeaLake:
                 "active_evaluation_gpus_json, remaining_training, "
                 "remaining_evaluation, launcher_paused, disk_ok) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    campaign_id.strip() if campaign_id else None,
-                    controller_id.strip(), host.strip(), iteration,
-                    float(observed_at_epoch), observed_at, float(poll_seconds),
-                    canonical(scope), canonical(clean_telemetry),
-                    int(telemetry_complete), canonical(training),
-                    canonical(evaluation), remaining_training,
-                    remaining_evaluation, int(launcher_paused), int(disk_ok),
-                ),
+                values,
             )
             self.conn.commit()
-            return cursor.rowcount == 1
+            if cursor.rowcount == 1:
+                return True
+            existing = self.conn.execute(
+                "SELECT campaign_id, controller_id, host, iteration, "
+                "observed_at_epoch, observed_at, poll_seconds, "
+                "physical_scope_json, gpu_telemetry_json, "
+                "telemetry_complete, active_training_gpus_json, "
+                "active_evaluation_gpus_json, remaining_training, "
+                "remaining_evaluation, launcher_paused, disk_ok "
+                "FROM harness_efficiency_samples "
+                "WHERE campaign_id IS ? AND controller_id = ? "
+                "AND iteration = ?",
+                (normalized_campaign_id, controller_id.strip(), iteration),
+            ).fetchone()
+            if existing is None or tuple(existing) != values:
+                raise OSError(
+                    "campaign_efficiency_database_identity_conflict")
+            return True
 
         return bool(_retry_on_busy(_insert))
 

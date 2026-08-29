@@ -1,9 +1,16 @@
+import ast
 import datetime
+import inspect
 import json
+import textwrap
+import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
+import orze.engine.orchestrator as orchestrator_module
+import orze.engine.phases as phases_module
 from orze.engine.campaign_efficiency import (
     DEFAULT_CAMPAIGN_TARGETS,
     DEFAULT_OUTCOME_TARGETS,
@@ -14,6 +21,8 @@ from orze.engine.campaign_efficiency import (
     require_active_campaign_registration,
 )
 from orze.engine.reproducibility import config_identity_sha256
+from orze.engine.orchestrator import Orze
+from orze.engine.phases import OrzePhaseMixin
 from orze.idea_lake import IdeaLake
 from orze.core.config import _validate_config
 
@@ -160,6 +169,209 @@ def test_capture_queries_only_explicit_physical_scope(tmp_path):
     assert row["telemetry_complete"] == 1
     assert row["physical_scope_json"] == "[4,5,6,7]"
     lake.close()
+
+
+def test_campaign_sample_duplicate_must_be_content_identical(tmp_path):
+    lake = IdeaLake(str(tmp_path / "lake.db"))
+    sample = {
+        "campaign_id": "campaign-identity",
+        "controller_id": "controller-a",
+        "host": "host-a",
+        "iteration": 1,
+        "observed_at_epoch": 1000.0,
+        "poll_seconds": 10.0,
+        "physical_scope": [4, 5, 6, 7],
+        "gpu_telemetry": _telemetry([4, 5, 6, 7]),
+        "active_training_gpus": [4],
+        "active_evaluation_gpus": [],
+        "remaining_training": 1,
+        "remaining_evaluation": 0,
+        "launcher_paused": False,
+        "disk_ok": True,
+    }
+
+    assert lake.record_harness_efficiency_sample(**sample) is True
+    assert lake.record_harness_efficiency_sample(**sample) is True
+    with pytest.raises(
+            OSError, match="campaign_efficiency_database_identity_conflict"):
+        lake.record_harness_efficiency_sample(
+            **{**sample, "remaining_training": 2}
+        )
+    lake.close()
+
+
+def test_required_campaign_sample_retains_but_rejects_incomplete_telemetry(
+        tmp_path):
+    lake = IdeaLake(str(tmp_path / "lake.db"))
+    with pytest.raises(
+            OSError, match="campaign_efficiency_telemetry_incomplete"):
+        capture_campaign_efficiency_sample(
+            lake,
+            campaign_id="campaign-required",
+            controller_id="controller-a",
+            host="host-a",
+            iteration=1,
+            poll_seconds=10,
+            physical_scope=[4, 5, 6, 7],
+            active_training_gpus=[4],
+            active_evaluation_gpus=[],
+            remaining_training=1,
+            remaining_evaluation=0,
+            launcher_paused=False,
+            disk_ok=True,
+            observed_at_epoch=1000,
+            require_complete_telemetry=True,
+            telemetry_query=lambda scope: [],
+        )
+    row = lake.conn.execute(
+        "SELECT telemetry_complete FROM harness_efficiency_samples"
+    ).fetchone()
+    assert row["telemetry_complete"] == 0
+    lake.close()
+
+
+def test_required_campaign_sample_failure_persistently_halts_controller(
+        tmp_path, monkeypatch):
+    runner = Orze.__new__(Orze)
+    runner.cfg = {
+        "poll": 10,
+        "campaign_efficiency": {
+            "enabled": True,
+            "required_for_launch": True,
+            "campaign_id": "campaign-required",
+        },
+        "launcher": {"paused": False},
+    }
+    runner.results_dir = tmp_path / "results"
+    runner.lake = object()
+    runner.gpu_ids = [4, 5, 6, 7]
+    runner.slot_mgr = SimpleNamespace(gpu_ids_in_use=lambda: {4})
+    runner.active_evals = {}
+    runner.pending_evals = []
+    runner._instance_uuid = "controller-a"
+    runner._hostname = "host-a"
+    runner.iteration = 3
+    runner.running = True
+    runner._stop_event = threading.Event()
+    monkeypatch.setattr(
+        orchestrator_module,
+        "capture_campaign_efficiency_sample",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("write failed")),
+    )
+
+    assert runner._capture_campaign_efficiency_evidence([], [], True) is False
+
+    pause = runner.results_dir / "_launcher_paused.flag"
+    payload = json.loads(pause.read_text(encoding="utf-8"))
+    assert payload["status"] == "FAILED"
+    assert payload["reason"] == "campaign_efficiency_sample_failed"
+    assert payload["campaign_id"] == "campaign-required"
+    assert payload["iteration"] == 3
+    assert runner.running is False
+    assert runner._stop_kill_all is True
+    assert runner._stop_event.is_set()
+
+
+def test_required_campaign_sample_passes_complete_contract_to_sampler(
+        tmp_path, monkeypatch):
+    observed = {}
+    runner = Orze.__new__(Orze)
+    runner.cfg = {
+        "poll": 10,
+        "campaign_efficiency": {
+            "enabled": True,
+            "required_for_launch": True,
+            "campaign_id": "campaign-required",
+        },
+        "launcher": {"paused": False},
+    }
+    runner.results_dir = tmp_path / "results"
+    runner.lake = object()
+    runner.gpu_ids = [4, 5, 6, 7]
+    runner.slot_mgr = SimpleNamespace(gpu_ids_in_use=lambda: {4})
+    runner.active_evals = {
+        5: SimpleNamespace(idea_id="idea-eval-active")
+    }
+    runner.pending_evals = ["idea-eval-pending"]
+    runner._instance_uuid = "controller-a"
+    runner._hostname = "host-a"
+    runner.iteration = 4
+
+    def capture(*args, **kwargs):
+        observed.update(kwargs)
+        return True
+
+    monkeypatch.setattr(
+        orchestrator_module, "capture_campaign_efficiency_sample", capture
+    )
+
+    assert runner._capture_campaign_efficiency_evidence(
+        ["idea-train-pending"],
+        [(1, "idea-eval-active"), (2, "idea-eval-backlog")],
+        True,
+    ) is True
+    assert observed["physical_scope"] == [4, 5, 6, 7]
+    assert observed["active_training_gpus"] == [4]
+    assert observed["active_evaluation_gpus"] == [5]
+    assert observed["remaining_training"] == 1
+    assert observed["remaining_evaluation"] == 2
+    assert observed["require_complete_telemetry"] is True
+
+
+def test_required_campaign_progress_failure_halts_dispatch(tmp_path, monkeypatch):
+    halted = []
+    runner = SimpleNamespace(
+        cfg={
+            "campaign_efficiency": {
+                "enabled": True,
+                "required_for_launch": True,
+                "campaign_id": "campaign-required",
+            },
+            "launcher": {"paused": False},
+            "report": {"primary_metric": "score"},
+        },
+        lake=object(),
+        results_dir=tmp_path / "results",
+        active_evals={},
+        active={},
+        pending_evals=[],
+        _instance_uuid="controller-a",
+        _hostname="host-a",
+        iteration=2,
+        _halt_required_campaign_evidence=halted.append,
+    )
+    monkeypatch.setattr(
+        phases_module,
+        "capture_campaign_progress_update",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("write failed")),
+    )
+
+    progress = OrzePhaseMixin._capture_campaign_progress_evidence(
+        runner, [], [], True, []
+    )
+
+    assert progress["status"] == "UNAVAILABLE"
+    assert halted == ["campaign_progress_update_failed"]
+
+
+def test_managed_campaign_iterations_emit_matching_progress_evidence():
+    tree = ast.parse(textwrap.dedent(inspect.getsource(Orze._run_leased)))
+    managed_branches = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Name)
+        and node.test.id == "managed_idea"
+    ]
+    assert any(
+        any(
+            isinstance(call.func, ast.Attribute)
+            and call.func.attr == "_capture_campaign_progress_evidence"
+            for statement in branch.body
+            for call in ast.walk(statement)
+            if isinstance(call, ast.Call)
+        )
+        for branch in managed_branches
+    )
 
 
 def test_progress_update_is_visible_content_bound_and_persistent(tmp_path):

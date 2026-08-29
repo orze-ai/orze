@@ -1806,11 +1806,77 @@ class OrzePhaseMixin:
 
         return free
 
+    def _capture_campaign_progress_evidence(
+            self, completed_rows, unclaimed, disk_ok, backlog):
+        """Persist the progress row paired with this iteration's sample."""
+        cfg = self.cfg
+        campaign_cfg = cfg.get("campaign_efficiency") or {}
+        if (self.lake is None
+                or not campaign_cfg.get("enabled", False)):
+            return None
+        was_paused = _is_launcher_paused(cfg, self.results_dir)
+        if was_paused:
+            progress_blocker = "launcher_paused"
+        elif not disk_ok:
+            progress_blocker = "disk_unavailable"
+        elif self.active_evals:
+            progress_blocker = "evaluation_active"
+        elif self.active:
+            progress_blocker = "training_active"
+        elif self.pending_evals or backlog:
+            progress_blocker = "evaluation_queued"
+        elif unclaimed:
+            progress_blocker = "eligible_queue_waiting"
+        else:
+            progress_blocker = "no_eligible_work"
+        try:
+            campaign_progress = capture_campaign_progress_update(
+                self.lake,
+                results_dir=self.results_dir,
+                campaign_id=campaign_cfg.get("campaign_id"),
+                controller_id=self._instance_uuid,
+                host=self._hostname,
+                iteration=self.iteration,
+                completed_rows=completed_rows or [],
+                primary_metric=cfg["report"].get(
+                    "primary_metric", "test_accuracy"
+                ),
+                blocker_code=progress_blocker,
+            )
+            if campaign_progress is None:
+                if (campaign_cfg.get("required_for_launch", False)
+                        and not was_paused):
+                    self._halt_required_campaign_evidence(
+                        "campaign_progress_window_inactive")
+                return {
+                    "status": "INACTIVE",
+                    "campaign_id": campaign_cfg.get("campaign_id"),
+                }
+            return campaign_progress
+        except Exception as exc:
+            logger.warning(
+                "campaign operator progress update failed: %s",
+                type(exc).__name__,
+            )
+            if campaign_cfg.get("required_for_launch", False):
+                self._halt_required_campaign_evidence(
+                    "campaign_progress_update_failed")
+            return {
+                "status": "UNAVAILABLE",
+                "campaign_id": campaign_cfg.get("campaign_id"),
+                "reason": "campaign_progress_update_failed",
+            }
+
     def _report_and_notify(self, completed_rows, ideas, counts,
                            eval_finished, free, unclaimed, skipped,
                            disk_ok, backlog):
         """Phase: heartbeat, notifications, status.json, admin cache, save state."""
         cfg = self.cfg
+        campaign_progress = self._capture_campaign_progress_evidence(
+            completed_rows, unclaimed, disk_ok, backlog
+        )
+        if not self.running:
+            return
 
         # 9a. Retrospection hook (use completed_rows from report, not counts)
         try:
@@ -1821,54 +1887,6 @@ class OrzePhaseMixin:
         # 9b. Notifications (fires for eval-finished ideas, metrics available)
         self._process_notifications(
             eval_finished, completed_rows or [], ideas, counts)
-
-        campaign_progress = None
-        campaign_cfg = cfg.get("campaign_efficiency") or {}
-        if (self.lake is not None
-                and campaign_cfg.get("enabled", False)):
-            if _is_launcher_paused(cfg, self.results_dir):
-                progress_blocker = "launcher_paused"
-            elif not disk_ok:
-                progress_blocker = "disk_unavailable"
-            elif self.active_evals:
-                progress_blocker = "evaluation_active"
-            elif self.active:
-                progress_blocker = "training_active"
-            elif self.pending_evals or backlog:
-                progress_blocker = "evaluation_queued"
-            elif unclaimed:
-                progress_blocker = "eligible_queue_waiting"
-            else:
-                progress_blocker = "no_eligible_work"
-            try:
-                campaign_progress = capture_campaign_progress_update(
-                    self.lake,
-                    results_dir=self.results_dir,
-                    campaign_id=campaign_cfg.get("campaign_id"),
-                    controller_id=self._instance_uuid,
-                    host=self._hostname,
-                    iteration=self.iteration,
-                    completed_rows=completed_rows or [],
-                    primary_metric=cfg["report"].get(
-                        "primary_metric", "test_accuracy"
-                    ),
-                    blocker_code=progress_blocker,
-                )
-                if campaign_progress is None:
-                    campaign_progress = {
-                        "status": "INACTIVE",
-                        "campaign_id": campaign_cfg.get("campaign_id"),
-                    }
-            except Exception as exc:
-                logger.warning(
-                    "campaign operator progress update failed: %s",
-                    type(exc).__name__,
-                )
-                campaign_progress = {
-                    "status": "UNAVAILABLE",
-                    "campaign_id": campaign_cfg.get("campaign_id"),
-                    "reason": "campaign_progress_update_failed",
-                }
 
         # 8b. Heartbeat (rate-controlled, default 1800s = 30 min)
         heartbeat_interval = (cfg.get("notifications") or {}).get(

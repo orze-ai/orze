@@ -70,6 +70,7 @@ def capture_campaign_efficiency_sample(
     launcher_paused: bool,
     disk_ok: bool,
     observed_at_epoch: Optional[float] = None,
+    require_complete_telemetry: bool = False,
     telemetry_query: Callable[[Optional[List[int]]], List[dict]] = (
         _query_gpu_details
     ),
@@ -86,7 +87,9 @@ def capture_campaign_efficiency_sample(
         telemetry = []
     if not isinstance(telemetry, list):
         telemetry = []
-    return lake.record_harness_efficiency_sample(
+    if not isinstance(require_complete_telemetry, bool):
+        raise ValueError("require_complete_telemetry must be a boolean")
+    persisted = lake.record_harness_efficiency_sample(
         campaign_id=campaign_id,
         controller_id=controller_id,
         host=host,
@@ -104,6 +107,17 @@ def capture_campaign_efficiency_sample(
         launcher_paused=launcher_paused,
         disk_ok=disk_ok,
     )
+    if not persisted:
+        raise OSError("campaign_efficiency_sample_not_persisted")
+    if require_complete_telemetry:
+        row = lake.conn.execute(
+            "SELECT telemetry_complete FROM harness_efficiency_samples "
+            "WHERE campaign_id IS ? AND controller_id = ? AND iteration = ?",
+            (campaign_id, controller_id.strip(), iteration),
+        ).fetchone()
+        if row is None or not bool(row["telemetry_complete"]):
+            raise OSError("campaign_efficiency_telemetry_incomplete")
+    return True
 
 
 def _qualified_artifact_identity(

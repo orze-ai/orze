@@ -29,7 +29,7 @@ from orze.engine.scheduler import (
 )
 from orze.engine.launcher import (
     launch, check_active, _get_checkpoint_dir, _write_failure,
-    _is_launcher_paused,
+    _is_launcher_paused, _resolve_pause_flag_path,
 )
 from orze.engine.campaign_efficiency import (
     capture_campaign_efficiency_sample,
@@ -407,6 +407,111 @@ class Orze(OrzePhaseMixin):
         logger.info("Received signal %d, shutting down...", signum)
         self.running = False
         self._stop_event.set()  # wake from poll sleep instantly
+
+    def _halt_required_campaign_evidence(self, reason_code: str) -> None:
+        """Persistently pause and terminate work after evidence loss.
+
+        The active campaign contract promises measurable GPU work. Once a
+        required scheduler sample or operator update cannot be persisted, new
+        dispatch must stay paused across restarts and already-started children
+        must be closed instead of consuming unreportable compute.
+        """
+        if (not isinstance(reason_code, str)
+                or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", reason_code) is None):
+            reason_code = "campaign_evidence_failure"
+        payload = {
+            "schema_version": 1,
+            "status": "FAILED",
+            "reason": reason_code,
+            "campaign_id": (
+                (self.cfg.get("campaign_efficiency") or {}).get(
+                    "campaign_id")
+            ),
+            "controller_id": self._instance_uuid,
+            "iteration": self.iteration,
+            "recorded_at": datetime.datetime.now(
+                datetime.timezone.utc
+            ).isoformat(),
+        }
+        pause_path = _resolve_pause_flag_path(self.cfg, self.results_dir)
+        try:
+            pause_path.parent.mkdir(parents=True, exist_ok=True)
+            encoded = (
+                json.dumps(payload, sort_keys=True, separators=(",", ":"))
+                + "\n"
+            ).encode("utf-8")
+            try:
+                fd = os.open(
+                    pause_path,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                )
+            except FileExistsError:
+                fd = None
+            if fd is not None:
+                try:
+                    os.write(fd, encoded)
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+        except OSError:
+            logger.critical(
+                "required campaign evidence failed and pause latch could not "
+                "be persisted"
+            )
+        logger.error(
+            "required campaign evidence failed: %s; stopping all scoped work",
+            reason_code,
+        )
+        self._stop_kill_all = True
+        self.running = False
+        stop_event = getattr(self, "_stop_event", None)
+        if stop_event is not None:
+            stop_event.set()
+
+    def _capture_campaign_efficiency_evidence(
+            self, unclaimed, backlog, disk_ok: bool) -> bool:
+        """Capture one complete required sample or stop all scoped work."""
+        cfg = self.cfg
+        campaign = cfg.get("campaign_efficiency") or {}
+        if self.lake is None or not campaign.get("enabled", False):
+            return False
+        required = campaign.get("required_for_launch", False) is True
+        try:
+            active_eval_ids = {
+                process.idea_id for process in self.active_evals.values()
+            }
+            backlog_remaining = sum(
+                1 for _, idea_id in backlog
+                if idea_id not in active_eval_ids
+            )
+            capture_campaign_efficiency_sample(
+                self.lake,
+                campaign_id=campaign.get("campaign_id"),
+                controller_id=self._instance_uuid,
+                host=self._hostname,
+                iteration=self.iteration,
+                poll_seconds=cfg["poll"],
+                physical_scope=list(self.gpu_ids),
+                active_training_gpus=list(
+                    self.slot_mgr.gpu_ids_in_use()),
+                active_evaluation_gpus=list(self.active_evals.keys()),
+                remaining_training=len(unclaimed),
+                remaining_evaluation=(
+                    len(self.pending_evals) + backlog_remaining
+                ),
+                launcher_paused=_is_launcher_paused(
+                    cfg, self.results_dir),
+                disk_ok=bool(disk_ok),
+                require_complete_telemetry=required,
+            )
+            return True
+        except Exception as exc:
+            logger.warning("campaign efficiency sample failed: %s", exc)
+            if required:
+                self._halt_required_campaign_evidence(
+                    "campaign_efficiency_sample_failed")
+            return False
 
     def _graceful_shutdown(self, kill_all=False):
         managed = bool(self.cfg.get("_managed_idea_id"))
@@ -1274,45 +1379,18 @@ class Orze(OrzePhaseMixin):
 
             # 7b. Persist one local, privacy-safe scheduler/GPU observation.
             # The sampler queries exactly this controller's physical scope;
-            # failures are retained as incomplete evidence and never retried
-            # with an unscoped all-GPU query.
-            campaign_efficiency_cfg = cfg.get("campaign_efficiency") or {}
-            if (self.lake is not None
-                    and campaign_efficiency_cfg.get("enabled", False)):
-                try:
-                    active_eval_ids = {
-                        process.idea_id for process in self.active_evals.values()
-                    }
-                    backlog_remaining = sum(
-                        1 for _, idea_id in backlog
-                        if idea_id not in active_eval_ids
-                    )
-                    capture_campaign_efficiency_sample(
-                        self.lake,
-                        campaign_id=campaign_efficiency_cfg.get("campaign_id"),
-                        controller_id=self._instance_uuid,
-                        host=self._hostname,
-                        iteration=self.iteration,
-                        poll_seconds=cfg["poll"],
-                        physical_scope=list(self.gpu_ids),
-                        active_training_gpus=list(
-                            self.slot_mgr.gpu_ids_in_use()),
-                        active_evaluation_gpus=list(self.active_evals.keys()),
-                        remaining_training=len(unclaimed),
-                        remaining_evaluation=(
-                            len(self.pending_evals) + backlog_remaining
-                        ),
-                        launcher_paused=_is_launcher_paused(
-                            cfg, self.results_dir),
-                        disk_ok=bool(disk_ok),
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "campaign efficiency sample failed: %s", exc)
+            # failures are retained as incomplete evidence, never retried with
+            # an unscoped query, and halt required-evidence campaigns.
+            self._capture_campaign_efficiency_evidence(
+                unclaimed, backlog, disk_ok
+            )
 
             # 8. Update report
             if managed_idea:
                 completed_rows = []
+                self._capture_campaign_progress_evidence(
+                    completed_rows, unclaimed, disk_ok, backlog
+                )
             else:
                 completed_rows = update_report(
                     self.results_dir, ideas, cfg, lake=self.lake,
