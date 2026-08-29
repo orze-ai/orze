@@ -41,6 +41,10 @@ def _forbid_live_gpu_ownership_queries(monkeypatch):
     monkeypatch.setattr(
         "orze.engine.evaluator.gpu_execution_lease", isolated_gpu_lease,
     )
+    monkeypatch.setattr(
+        "orze.engine.gpu_scope_audit.gpu_execution_lease",
+        isolated_gpu_lease,
+    )
 
 
 @pytest.fixture
