@@ -14,7 +14,7 @@ from typing import Mapping
 import yaml
 
 from orze.core.ideas import IDEA_ID_PATTERN
-from orze.core.integrity import hash_config
+from orze.core.integrity import canonical_config_for_execution, hash_config
 from orze.core.sqlite_policy import (
     SQLitePolicyError,
     inspect_shared_database_policy,
@@ -35,6 +35,9 @@ _MAX_TOTAL_CONFIG_BYTES = 64 * 1024 * 1024
 _QUALIFIED_REASONS = frozenset({
     "authoritative_local_evidence_verified",
     "benchmark_evidence_verified",
+})
+_REPLICATION_METADATA_FIELDS = frozenset({
+    "_replicate_of", "replication_role", "replication_index",
 })
 
 
@@ -242,8 +245,9 @@ def audit_campaign_reproducibility(
     if config_error:
         receipt["reason"] = config_error
         return receipt
-    full_identities = {
-        idea_id: _canonical(config) for idea_id, config in configs.items()
+    execution_identities = {
+        idea_id: _canonical(canonical_config_for_execution(config))
+        for idea_id, config in configs.items()
     }
     current_identity_sha256 = {
         idea_id: config_identity_sha256(config)
@@ -271,9 +275,21 @@ def audit_campaign_reproducibility(
         for group in contract.get("groups", [])
         for idea_id in group["idea_ids"]
     }
+    declared_replica_ids = {
+        idea_id for idea_id, config in configs.items()
+        if _REPLICATION_METADATA_FIELDS.intersection(config)
+    }
+    unpreregistered_replica_ids = sorted(
+        declared_replica_ids - declared_ids
+    )
+    receipt["checks"]["declared_replicas_preregistered"] = {
+        "passed": not unpreregistered_replica_ids,
+        "declared_idea_ids": sorted(declared_replica_ids),
+        "unpreregistered_idea_ids": unpreregistered_replica_ids,
+    }
     exact_duplicates = []
     by_identity = {}
-    for idea_id, identity in full_identities.items():
+    for idea_id, identity in execution_identities.items():
         by_identity.setdefault(identity, []).append(idea_id)
     for idea_ids in by_identity.values():
         if len(idea_ids) > 1:
@@ -283,12 +299,15 @@ def audit_campaign_reproducibility(
         "idea_id_groups": exact_duplicates,
     }
     if contract["mode"] == "not_applicable":
-        receipt["status"] = "VERIFIED" if not exact_duplicates else "FAILED"
-        receipt["reason"] = (
-            "no_replicates_declared_or_detected"
-            if receipt["status"] == "VERIFIED"
-            else "exact_duplicate_configs_detected"
-        )
+        if unpreregistered_replica_ids:
+            receipt["status"] = "FAILED"
+            receipt["reason"] = "declared_replicas_without_question"
+        elif exact_duplicates:
+            receipt["status"] = "FAILED"
+            receipt["reason"] = "exact_duplicate_configs_detected"
+        else:
+            receipt["status"] = "VERIFIED"
+            receipt["reason"] = "no_replicates_declared_or_detected"
         return receipt
 
     lifecycle = {}
@@ -309,7 +328,7 @@ def audit_campaign_reproducibility(
         return receipt
 
     evidence_complete = True
-    targets_pass = not exact_duplicates
+    targets_pass = not exact_duplicates and not unpreregistered_replica_ids
     for group in contract["groups"]:
         idea_ids = group["idea_ids"]
         normalized = []
@@ -320,14 +339,16 @@ def audit_campaign_reproducibility(
                 config = copy.deepcopy(configs[idea_id])
                 for path in group["varying_config_paths"]:
                     varying_values[path].append(_canonical(_pop_path(config, path)))
-                normalized.append(_canonical(config))
+                normalized.append(_canonical(
+                    canonical_config_for_execution(config)
+                ))
         except (KeyError, TypeError, ValueError):
             isolation_complete = False
         only_declared_variables_changed = (
             isolation_complete
             and len(set(normalized)) == 1
             and all(len(set(values)) > 1 for values in varying_values.values())
-            and len({full_identities[idea_id] for idea_id in idea_ids})
+            and len({execution_identities[idea_id] for idea_id in idea_ids})
             == len(idea_ids)
         )
 

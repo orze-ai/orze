@@ -50,11 +50,11 @@ def _group_contract(*, tolerance=0.02, path="training.seed",
     }
 
 
-def _lake(tmp_path, configs, *, terminal_states=None):
+def _lake(tmp_path, configs, *, terminal_states=None, idea_ids=IDEA_IDS):
     db_path = tmp_path / "lake.db"
     lake = IdeaLake(str(db_path))
     terminal_states = terminal_states or ["COMPLETE"] * len(configs)
-    for idea_id, config, terminal in zip(IDEA_IDS, configs, terminal_states):
+    for idea_id, config, terminal in zip(idea_ids, configs, terminal_states):
         lake.insert(
             idea_id,
             "replica",
@@ -74,11 +74,15 @@ def _lake(tmp_path, configs, *, terminal_states=None):
 
 
 def _audit(tmp_path, monkeypatch, configs, *, contract=None, values=None,
-           terminal_states=None):
+           terminal_states=None, idea_ids=IDEA_IDS):
     db_path = _lake(
-        tmp_path, configs, terminal_states=terminal_states
+        tmp_path, configs, terminal_states=terminal_states,
+        idea_ids=idea_ids,
     )
-    values = values or dict(zip(IDEA_IDS, [0.80, 0.81]))
+    values = values or {
+        idea_id: 0.80 + index / 100
+        for index, idea_id in enumerate(idea_ids)
+    }
     monkeypatch.setattr(
         reproduction_module,
         "qualify_authoritative_report_evidence",
@@ -91,7 +95,7 @@ def _audit(tmp_path, monkeypatch, configs, *, contract=None, values=None,
         db_path,
         tmp_path / "results",
         {"report": {"primary_metric": "score"}},
-        expected_idea_ids=list(IDEA_IDS),
+        expected_idea_ids=list(idea_ids),
         contract=contract or _group_contract(configs=configs),
     )
 
@@ -125,6 +129,59 @@ def test_not_applicable_rejects_exact_duplicate_configs(tmp_path, monkeypatch):
     assert receipt["checks"]["no_exact_duplicate_configs"]["passed"] is False
 
 
+def test_not_applicable_rejects_explicit_seed_replicas_without_question(
+        tmp_path, monkeypatch):
+    configs = [
+        "training:\n  seed: 1\n"
+        "replication_role: seed_reproduction\n"
+        "replication_index: 1\n"
+        "_replicate_of: idea-root\n",
+        "training:\n  seed: 2\n"
+        "replication_role: seed_reproduction\n"
+        "replication_index: 2\n"
+        "_replicate_of: idea-root\n",
+    ]
+
+    receipt = _audit(
+        tmp_path,
+        monkeypatch,
+        configs,
+        contract=_not_applicable(configs),
+    )
+
+    assert receipt["status"] == "FAILED"
+    assert receipt["reason"] == "declared_replicas_without_question"
+    assert receipt["checks"]["declared_replicas_preregistered"][
+        "passed"
+    ] is False
+    assert receipt["checks"]["declared_replicas_preregistered"][
+        "unpreregistered_idea_ids"
+    ] == IDEA_IDS
+
+
+def test_not_applicable_rejects_metadata_relabelled_duplicate_configs(
+        tmp_path, monkeypatch):
+    configs = [
+        "training:\n  seed: 7\ntitle: first label\n",
+        "training:\n  seed: 7\ntitle: changed label\n"
+        "hypothesis: changed prose only\n",
+    ]
+
+    receipt = _audit(
+        tmp_path,
+        monkeypatch,
+        configs,
+        contract=_not_applicable(configs),
+    )
+
+    assert receipt["status"] == "FAILED"
+    assert receipt["reason"] == "exact_duplicate_configs_detected"
+    assert receipt["checks"]["no_exact_duplicate_configs"] == {
+        "passed": False,
+        "idea_id_groups": [IDEA_IDS],
+    }
+
+
 def test_group_verifies_only_declared_seed_and_metric_tolerance(
         tmp_path, monkeypatch):
     receipt = _audit(
@@ -139,6 +196,67 @@ def test_group_verifies_only_declared_seed_and_metric_tolerance(
     assert receipt["status"] == "VERIFIED"
     assert receipt["groups"][0]["only_declared_variables_changed"] is True
     assert receipt["groups"][0]["metric_delta"] == pytest.approx(0.01)
+
+
+def test_group_preregisters_explicit_replica_metadata(tmp_path, monkeypatch):
+    configs = [
+        "model: base\ntraining:\n  seed: 1\n  epochs: 2\n"
+        "replication_role: seed_reproduction\nreplication_index: 1\n"
+        "_replicate_of: idea-root\n",
+        "model: base\ntraining:\n  seed: 2\n  epochs: 2\n"
+        "replication_role: seed_reproduction\nreplication_index: 2\n"
+        "_replicate_of: idea-root\n",
+    ]
+
+    receipt = _audit(tmp_path, monkeypatch, configs)
+
+    assert receipt["status"] == "VERIFIED"
+    assert receipt["checks"]["declared_replicas_preregistered"] == {
+        "passed": True,
+        "declared_idea_ids": IDEA_IDS,
+        "unpreregistered_idea_ids": [],
+    }
+
+
+def test_group_rejects_explicit_replica_omitted_from_questions(
+        tmp_path, monkeypatch):
+    idea_ids = ["idea-replica-a", "idea-replica-b", "idea-control-c"]
+    configs = [
+        "training:\n  seed: 1\nreplication_role: seed_reproduction\n"
+        "replication_index: 1\n_replicate_of: idea-root\n",
+        "training:\n  seed: 2\nreplication_role: seed_reproduction\n"
+        "replication_index: 2\n_replicate_of: idea-root\n",
+        "training:\n  seed: 3\n",
+    ]
+    contract = {
+        "mode": "groups",
+        "expected_config_identity_sha256": _identities(
+            configs, idea_ids
+        ),
+        "groups": [{
+            "question": (
+                "Whether the declared seed change reproduces the metric."
+            ),
+            "idea_ids": [idea_ids[0], idea_ids[2]],
+            "varying_config_paths": ["training.seed"],
+            "max_absolute_metric_delta": 0.02,
+        }],
+    }
+
+    receipt = _audit(
+        tmp_path,
+        monkeypatch,
+        configs,
+        contract=contract,
+        idea_ids=idea_ids,
+    )
+
+    assert receipt["status"] == "FAILED"
+    assert receipt["checks"]["declared_replicas_preregistered"] == {
+        "passed": False,
+        "declared_idea_ids": idea_ids[:2],
+        "unpreregistered_idea_ids": [idea_ids[1]],
+    }
 
 
 @pytest.mark.parametrize(
