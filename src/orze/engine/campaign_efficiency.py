@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
-from orze.core.fs import atomic_write
+from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
 from orze.core.ideas import IDEA_ID_PATTERN
 from orze.engine.reproducibility import validate_reproducibility_contract
 from orze.hardware.gpu import _query_gpu_details
@@ -51,6 +51,20 @@ _PROGRESS_BLOCKERS = frozenset({
     "launcher_paused",
     "no_eligible_work",
     "training_active",
+})
+_PROGRESS_CORE_FIELDS = frozenset({
+    "schema_version",
+    "campaign_id",
+    "controller_id",
+    "host",
+    "iteration",
+    "observed_at_epoch",
+    "observed_at",
+    "last_valid_artifact_sha256",
+    "last_valid_artifact_idea_id",
+    "last_valid_artifact_at_epoch",
+    "blocker_code",
+    "next_deadline_epoch",
 })
 
 
@@ -179,6 +193,77 @@ def _progress_path_redirected(path: Path) -> bool:
     return False
 
 
+def _progress_payload_order(payload: object, campaign_id: str) -> tuple:
+    """Validate a published payload and return one deterministic order key."""
+    if (not isinstance(payload, dict)
+            or set(payload) != _PROGRESS_CORE_FIELDS | {"update_sha256"}
+            or payload.get("schema_version") != 1
+            or payload.get("campaign_id") != campaign_id
+            or not isinstance(payload.get("controller_id"), str)
+            or _CONTROLLER_RE.fullmatch(payload["controller_id"]) is None
+            or isinstance(payload.get("iteration"), bool)
+            or not isinstance(payload.get("iteration"), int)
+            or payload["iteration"] < 0
+            or isinstance(payload.get("observed_at_epoch"), bool)
+            or not isinstance(
+                payload.get("observed_at_epoch"), (int, float))
+            or not math.isfinite(float(payload["observed_at_epoch"]))
+            or not isinstance(payload.get("update_sha256"), str)
+            or re.fullmatch(
+                r"[0-9a-f]{64}", payload["update_sha256"]
+            ) is None):
+        raise OSError("campaign_progress_latest_invalid")
+    core = {key: payload[key] for key in _PROGRESS_CORE_FIELDS}
+    canonical = json.dumps(core, sort_keys=True, separators=(",", ":"))
+    if hashlib.sha256(canonical.encode("utf-8")).hexdigest() != payload[
+            "update_sha256"]:
+        raise OSError("campaign_progress_latest_identity_invalid")
+    return (
+        float(payload["observed_at_epoch"]),
+        payload["controller_id"],
+        payload["iteration"],
+        payload["update_sha256"],
+    )
+
+
+def _publish_latest_monotonic(progress_dir: Path, payload: dict) -> None:
+    """Serialize latest publication and never replace it with an older row."""
+    lock_dir = progress_dir / ".latest.lock"
+    acquired = False
+    for _ in range(200):
+        if _fs_lock(lock_dir, stale_seconds=30):
+            acquired = True
+            break
+        time.sleep(0.01)
+    if not acquired:
+        raise OSError("campaign_progress_latest_lock_unavailable")
+    try:
+        latest = progress_dir / "latest.json"
+        new_order = _progress_payload_order(payload, payload["campaign_id"])
+        if latest.exists() or latest.is_symlink():
+            try:
+                stat = latest.lstat()
+                if (latest.is_symlink() or not latest.is_file()
+                        or stat.st_nlink != 1
+                        or not 1 <= stat.st_size <= 64 * 1024):
+                    raise OSError("campaign_progress_latest_redirected")
+                existing = json.loads(latest.read_text(encoding="utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise OSError("campaign_progress_latest_invalid") from exc
+            if _progress_payload_order(
+                    existing, payload["campaign_id"]) >= new_order:
+                return
+        rendered = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+        atomic_write(latest, rendered)
+        stat = latest.lstat()
+        if latest.is_symlink() or stat.st_nlink != 1:
+            raise OSError("campaign_progress_latest_redirected")
+        if latest.read_text(encoding="utf-8") != rendered:
+            raise OSError("campaign_progress_latest_write_unverified")
+    finally:
+        _fs_unlock(lock_dir)
+
+
 def capture_campaign_progress_update(
     lake: IdeaLake,
     *,
@@ -282,14 +367,6 @@ def capture_campaign_progress_update(
         raise OSError("campaign_progress_directory_redirected")
     update_path = progress_dir / f"{controller_id}-{iteration:08d}.json"
     _write_progress_file(update_path, payload)
-    latest = progress_dir / "latest.json"
-    latest_rendered = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    atomic_write(latest, latest_rendered)
-    latest_stat = latest.lstat()
-    if latest.is_symlink() or latest_stat.st_nlink != 1:
-        raise OSError("campaign_progress_latest_redirected")
-    if latest.read_text(encoding="utf-8") != latest_rendered:
-        raise OSError("campaign_progress_latest_write_unverified")
     inserted = lake.record_harness_campaign_progress(
         campaign_id=campaign_id,
         controller_id=controller_id,
@@ -317,6 +394,7 @@ def capture_campaign_progress_update(
         observed = tuple(existing) if existing is not None else None
         if observed != expected:
             raise OSError("campaign_progress_database_identity_conflict")
+    _publish_latest_monotonic(progress_dir, payload)
     return payload
 
 

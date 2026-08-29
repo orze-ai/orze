@@ -454,6 +454,79 @@ def test_progress_update_identity_conflict_fails_closed(tmp_path):
     lake.close()
 
 
+def test_database_failure_cannot_publish_phantom_latest(
+        tmp_path, monkeypatch):
+    db_path = tmp_path / "lake.db"
+    results = tmp_path / "results"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    monkeypatch.setattr(
+        lake,
+        "record_harness_campaign_progress",
+        lambda **kwargs: (_ for _ in ()).throw(OSError("database failed")),
+    )
+
+    with pytest.raises(OSError, match="database failed"):
+        capture_campaign_progress_update(
+            lake,
+            results_dir=results,
+            campaign_id=manifest["campaign_id"],
+            controller_id="controller-a",
+            host="host-a",
+            iteration=1,
+            completed_rows=[],
+            primary_metric="score",
+            blocker_code="training_active",
+            observed_at_epoch=manifest["start_epoch"],
+        )
+
+    progress_dir = (
+        results / "_campaign_progress" / manifest["campaign_id"]
+    )
+    assert not (progress_dir / "latest.json").exists()
+    lake.close()
+
+
+def test_out_of_order_update_cannot_replace_newer_latest(tmp_path):
+    db_path = tmp_path / "lake.db"
+    results = tmp_path / "results"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    newer = capture_campaign_progress_update(
+        lake,
+        results_dir=results,
+        campaign_id=manifest["campaign_id"],
+        controller_id="controller-b",
+        host="host-a",
+        iteration=2,
+        completed_rows=[],
+        primary_metric="score",
+        blocker_code="evaluation_active",
+        observed_at_epoch=manifest["start_epoch"] + 10,
+    )
+    capture_campaign_progress_update(
+        lake,
+        results_dir=results,
+        campaign_id=manifest["campaign_id"],
+        controller_id="controller-a",
+        host="host-a",
+        iteration=1,
+        completed_rows=[],
+        primary_metric="score",
+        blocker_code="training_active",
+        observed_at_epoch=manifest["start_epoch"],
+    )
+
+    latest = json.loads((
+        results / "_campaign_progress" / manifest["campaign_id"]
+        / "latest.json"
+    ).read_text(encoding="utf-8"))
+    assert latest == newer
+    lake.close()
+
+
 def test_progress_update_rejects_redirected_output_directory(tmp_path):
     db_path = tmp_path / "lake.db"
     manifest = _manifest()
