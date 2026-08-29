@@ -7,6 +7,7 @@ import time
 from types import SimpleNamespace
 
 import orze.engine.campaign_efficiency as campaign_module
+import orze.engine.research_outcomes as outcome_module
 from orze.core.data_separation import ensure_data_separation
 from orze.core.decision_batches import (
     admit_decision_contract,
@@ -25,6 +26,7 @@ from orze.engine.campaign_efficiency import (
     preregister_campaign,
 )
 from orze.engine.research_outcomes import analyze_research_outcomes
+from orze.engine.reproducibility import config_identity_sha256
 from orze.idea_lake import IdeaLake
 
 
@@ -149,6 +151,16 @@ def _build_campaign(
         "outcome_contract": {
             "expected_decision_identity_sha256": [identity],
             "artifact_relation": "any",
+            "reproducibility_contract": {
+                "mode": "not_applicable",
+                "rationale": (
+                    "This single-idea campaign has no replication question."
+                ),
+                "expected_config_identity_sha256": {
+                    expected_id: config_identity_sha256({"seed": 1})
+                    for expected_id in (expected_idea_ids or [idea_id])
+                },
+            },
             "targets": dict(DEFAULT_OUTCOME_TARGETS),
         },
     }
@@ -307,3 +319,56 @@ def test_research_outcome_rejects_decision_universe_mismatch(
         "passed"
     ] is False
     assert receipt["lineage_evidence"]["status"] == "UNVERIFIED"
+
+
+def test_research_outcome_propagates_complete_reproduction_failure(
+        tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path, monkeypatch, qualified=True
+    )
+    monkeypatch.setattr(
+        outcome_module,
+        "audit_campaign_reproducibility",
+        lambda *_args, **_kwargs: {
+            "status": "FAILED",
+            "reason": "reproducibility_targets_failed",
+            "groups": [],
+            "rank_claim_proven": False,
+        },
+    )
+
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
+    )
+
+    assert receipt["status"] == "FAILED"
+    assert receipt["checks"]["reproducibility_evidence_complete"][
+        "passed"
+    ] is True
+    assert receipt["checks"]["reproducibility"]["passed"] is False
+
+
+def test_research_outcome_propagates_incomplete_reproduction_evidence(
+        tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path, monkeypatch, qualified=True
+    )
+    monkeypatch.setattr(
+        outcome_module,
+        "audit_campaign_reproducibility",
+        lambda *_args, **_kwargs: {
+            "status": "UNVERIFIED",
+            "reason": "reproducibility_metric_audit_failed",
+            "groups": [],
+            "rank_claim_proven": False,
+        },
+    )
+
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["reproducibility_evidence_complete"][
+        "passed"
+    ] is False

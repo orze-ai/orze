@@ -67,6 +67,12 @@ end-to-end claim. Any target without this evidence remains open.
   analyzer validates resolved qualified-success identities, closed framework
   compute receipts, physical GPU scope, zero-GPU rejections, retry/duplicate
   counts, GPU-hours per success, decision latency, and current artifact lineage.
+  Its required reproduction contract either gives a bounded not-applicable
+  rationale or preregisters disjoint replica groups, the only scalar config
+  paths allowed to vary, and an absolute metric tolerance. The analyzer checks
+  every config against its immutable prospective canonical SHA-256, checks
+  stored config integrity, rejects exact duplicates and undeclared drift, and
+  accepts metric tolerance only from lifecycle-complete qualified evidence.
   The scheduler-efficiency analyzer scopes lifecycle latency to the exact
   preregistered idea universe, rejects any unexpected in-window allocation, and
   requires one physical host so cross-host GPU IDs cannot be conflated.

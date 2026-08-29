@@ -17,6 +17,7 @@ from orze.engine.campaign_efficiency import (
     _manifest_error,
     verify_campaign_registration,
 )
+from orze.engine.reproducibility import audit_campaign_reproducibility
 
 
 def analyze_research_outcomes(
@@ -140,6 +141,23 @@ def analyze_research_outcomes(
         }
     receipt["lineage_evidence"] = lineage
 
+    try:
+        reproduction = audit_campaign_reproducibility(
+            db_path,
+            results_dir,
+            cfg,
+            expected_idea_ids=expected_idea_ids,
+            contract=outcome["reproducibility_contract"],
+        )
+    except Exception as exc:
+        reproduction = {
+            "schema_version": 1,
+            "status": "UNVERIFIED",
+            "reason": f"reproducibility_audit_error:{type(exc).__name__}",
+            "rank_claim_proven": False,
+        }
+    receipt["reproducibility_evidence"] = reproduction
+
     successes = decision.get("qualified_success_count")
     admitted = decision.get("admitted_count")
     gpu_seconds = compute.get("allocated_gpu_seconds_total")
@@ -171,6 +189,7 @@ def analyze_research_outcomes(
             "duplicate_training_attempts"
         ),
         "zero_gpu_rejection_rate": compute.get("zero_gpu_rejection_rate"),
+        "reproducibility_groups": len(reproduction.get("groups") or []),
     }
 
     evidence_checks = {
@@ -182,6 +201,12 @@ def analyze_research_outcomes(
             "VERIFIED", "NOT_APPLICABLE",
         },
         "official_rank_not_inferred": lineage.get("rank_claim_proven") is False,
+        "reproducibility_evidence_complete": reproduction.get("status") in {
+            "VERIFIED", "FAILED",
+        },
+        "reproducibility_rank_not_inferred": (
+            reproduction.get("rank_claim_proven") is False
+        ),
     }
     for name, passed in evidence_checks.items():
         receipt["checks"][name] = {"passed": passed}
@@ -217,6 +242,7 @@ def analyze_research_outcomes(
             and compute["zero_gpu_rejection_rate"]
             >= targets["min_zero_gpu_rejection_rate"]
         ),
+        "reproducibility": reproduction.get("status") == "VERIFIED",
     }
     for name, passed in target_checks.items():
         receipt["checks"][name] = {"passed": passed}
@@ -227,6 +253,7 @@ def analyze_research_outcomes(
         "accounting": Path(__file__).with_name("accounting.py"),
         "decision_batches": Path(__file__).parents[1] / "core/decision_batches.py",
         "model_lineage": Path(__file__).parents[1] / "core/model_lineage.py",
+        "reproducibility": Path(__file__).with_name("reproducibility.py"),
     }
     receipt["source_sha256"] = {
         name: hashlib.sha256(path.read_bytes()).hexdigest()

@@ -12,6 +12,7 @@ from orze.engine.campaign_efficiency import (
     capture_campaign_progress_update,
     preregister_campaign,
 )
+from orze.engine.reproducibility import config_identity_sha256
 from orze.idea_lake import IdeaLake
 from orze.core.config import _validate_config
 
@@ -300,6 +301,18 @@ def test_registration_rejects_weakened_outcome_targets(tmp_path):
     manifest["outcome_contract"] = {
         "expected_decision_identity_sha256": ["a" * 64],
         "artifact_relation": "identical",
+        "reproducibility_contract": {
+            "mode": "not_applicable",
+            "rationale": (
+                "This synthetic campaign does not ask a replication question."
+            ),
+            "expected_config_identity_sha256": {
+                idea_id: config_identity_sha256({"seed": index})
+                for index, idea_id in enumerate(
+                    manifest["expected_idea_ids"], start=1
+                )
+            },
+        },
         "targets": dict(DEFAULT_OUTCOME_TARGETS),
     }
     manifest["outcome_contract"]["targets"][

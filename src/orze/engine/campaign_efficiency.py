@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from orze.core.fs import atomic_write
 from orze.core.ideas import IDEA_ID_PATTERN
+from orze.engine.reproducibility import validate_reproducibility_contract
 from orze.hardware.gpu import _query_gpu_details
 from orze.idea_lake import IdeaLake
 
@@ -407,6 +408,7 @@ def _manifest_error(
                 or set(outcome) != {
                     "expected_decision_identity_sha256",
                     "artifact_relation",
+                    "reproducibility_contract",
                     "targets",
                 }):
             return "outcome_contract fields are invalid"
@@ -420,6 +422,12 @@ def _manifest_error(
         if outcome.get("artifact_relation") not in {
                 "identical", "distinct", "any"}:
             return "outcome_contract artifact_relation is invalid"
+        reproduction_error = validate_reproducibility_contract(
+            outcome.get("reproducibility_contract"),
+            manifest["expected_idea_ids"],
+        )
+        if reproduction_error:
+            return reproduction_error
         outcome_targets = outcome.get("targets")
         if (not isinstance(outcome_targets, dict)
                 or set(outcome_targets) != set(DEFAULT_OUTCOME_TARGETS)

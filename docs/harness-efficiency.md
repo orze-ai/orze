@@ -138,7 +138,25 @@ used as a substitute for allocation duty cycle or official benchmark evidence.
 For a research campaign, the same preregistered manifest may include an
 `outcome_contract` containing the exact prospective decision-receipt SHA-256
 identities, the expected qualified-artifact relation (`identical`, `distinct`,
-or `any`), and every target in `DEFAULT_OUTCOME_TARGETS`. The defaults require:
+or `any`), a `reproducibility_contract`, and every target in
+`DEFAULT_OUTCOME_TARGETS`. A campaign with no reproduction question must say
+`mode: not_applicable` and provide a bounded rationale. Otherwise, each
+preregistered reproduction group names two or more exact idea IDs, the scalar
+dotted config paths allowed to vary, and a maximum absolute primary-metric
+delta. In both modes, `expected_config_identity_sha256` maps every expected
+idea ID to the SHA-256 of its canonical JSON config, computed by
+`orze.engine.reproducibility.config_identity_sha256`. Group membership is
+disjoint and bound to `expected_idea_ids`.
+
+The analyzer loads stored configs read-only, verifies their stored source and
+canonical hashes, rejects exact duplicates, removes only the declared varying
+paths, and requires the remaining configs to be identical. Every declared path
+must actually vary. It then uses only lifecycle-complete, contract-qualified
+metrics to check the preregistered tolerance. Missing or contradictory config,
+lifecycle, or metric evidence is `UNVERIFIED`; observed non-reproduction or a
+missed tolerance is `FAILED`. Neither result proves an official rank.
+
+The default campaign outcome thresholds require:
 
 Stage the prospective decision contracts to obtain their identities, register
 the campaign manifest before its future start, and admit those exact contracts
