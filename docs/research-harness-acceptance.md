@@ -42,6 +42,23 @@ passes a positive case, rejects the corresponding injected fault, and writes a
 durable receipt. Unit tests of helper functions alone are insufficient for an
 end-to-end claim. Any target without this evidence remains open.
 
+The aggregate acceptance matrix is intentionally stricter than an individual
+green gate. Its requirement universe is owned by Orze source, not by the input
+manifest, so a project cannot become green by omitting recovery, campaign, or
+official-result rows. Each declared proof binds an exact single-link JSON
+receipt SHA-256, a receipt-owned status pointer, and scope assertions. Missing,
+rewritten, redirected, hard-linked, contradictory, or concurrently changing
+evidence is `UNVERIFIED`; a receipt-owned `FAILED` result remains `FAILED`.
+Only when every required dimension is independently `VERIFIED` is the aggregate
+status `VERIFIED`. In particular, a readiness receipt cannot prove research
+yield or an official leaderboard outcome.
+
+```bash
+python -m orze.engine.acceptance_matrix \
+  --manifest /path/to/acceptance-manifest.json \
+  --output /path/to/acceptance-receipt.json
+```
+
 ## Current implementation status
 
 - Evaluation code identity: implementation present. The launcher executes a

@@ -4,6 +4,11 @@ Orze treats harness efficiency as a set of separately verifiable properties.
 A fast model run does not prove a fast scheduler, and a fast scheduler does not
 prove high GPU utilization, research yield, or leaderboard rank.
 
+For an overall claim, use `orze.engine.acceptance_matrix`. It aggregates exact
+pinned receipts against Orze's complete, code-owned requirement universe. Its
+status remains `UNVERIFIED` while any required campaign or external result is
+missing, even when all CPU/readiness controls are green.
+
 ## CPU control-plane acceptance
 
 Run the production APIs against a disposable database on the same filesystem
