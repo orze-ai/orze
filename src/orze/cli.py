@@ -7,6 +7,7 @@ Calling spec:
     orze init [path]                            # initialize new project
     orze start / stop / restart                 # daemon management
     orze --check                                # validate config
+    orze --launch-status                        # fast stop/pause policy JSON
     orze --admin                                # launch admin panel
 
 This module contains only:
@@ -30,7 +31,7 @@ from orze import __version__
 from orze.cli_pro import pro_activate, pro_status, pro_deactivate
 from orze.cli_setup import (
     do_uninstall, stop_running_instance, do_upgrade, do_reinstall,
-    do_init, do_check,
+    do_init, do_check, do_launch_status,
 )
 from orze.cli_star import maybe_star
 from orze.core.config import load_project_config
@@ -84,8 +85,6 @@ def _run_sop_subcommand(args) -> int:
 
 def main():
     from orze.extensions import _find_pro_key
-    if not _find_pro_key():
-        maybe_star()
 
     parser = argparse.ArgumentParser(
         description="orze: GPU experiment orchestrator",
@@ -156,6 +155,10 @@ Examples:
                         help="Skip restart after --reinstall")
     parser.add_argument("--check", action="store_true",
                         help="Validate config, check files, API keys, GPUs, .env — then exit")
+    parser.add_argument(
+        "--launch-status", action="store_true",
+        help="Report stop/pause launch policy as JSON without GPU access, then exit",
+    )
     parser.add_argument("--uninstall", action="store_true",
                         help="Full uninstall: stop orze, remove runtime files, "
                              "pip uninstall — keeps only research results")
@@ -485,6 +488,18 @@ Examples:
     args = parser.parse_args()
 
     setup_logging(args.verbose)
+
+    # A blocked operator needs a conclusive answer without the network prompt,
+    # migration, idea parsing, filesystem writes, or GPU inventory performed by
+    # broader CLI paths.  This is intentionally a policy-only result: an
+    # allowed result still requires the ordinary full preflight at launch.
+    if args.launch_status:
+        cfg = load_project_config(args.config_file)
+        cfg["_config_path"] = args.config_file or "orze.yaml"
+        return do_launch_status(cfg)
+
+    if not _find_pro_key():
+        maybe_star()
 
     # --- subcommand dispatch ---
     command = getattr(args, "command", None)

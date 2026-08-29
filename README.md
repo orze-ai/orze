@@ -92,6 +92,7 @@ orze start                    # start as background daemon
 orze stop                     # stop gracefully
 orze restart                  # stop + start
 orze --check                  # validate config, files, GPUs, API keys
+orze --launch-status          # fast stop/pause policy JSON; no GPU access
 orze --uninstall              # full cleanup, preserves research results
 
 # Operations

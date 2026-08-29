@@ -1,10 +1,12 @@
-"""The diagnostic config check must be side-effect-free and stop-aware."""
+"""Diagnostic config and fast launch-policy status contracts."""
 
+import json
 from pathlib import Path
 
 import pytest
 
 import orze.cli_setup as cli_setup
+import orze.cli as cli
 import orze.extensions as extensions
 
 
@@ -142,3 +144,85 @@ def test_check_rejects_controller_runtime_drift(
     output = capsys.readouterr().out
     assert "runtime_package_sha256_drift:orze" in output
     assert "Ready to run" not in output
+
+
+def test_launch_policy_status_is_conclusive_without_expensive_checks(
+        tmp_path, monkeypatch):
+    cfg = _case(tmp_path)
+    cfg["gpu_scheduling"] = {"allowed_gpus": [4, 5, 6, 7]}
+    (Path(cfg["results_dir"]) / ".orze_disabled").touch()
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("fast policy status crossed the preflight boundary")
+
+    monkeypatch.setattr("orze.core.config._validate_config", forbidden)
+    monkeypatch.setattr("orze.hardware.gpu.detect_all_gpus", forbidden)
+    monkeypatch.setattr("orze.core.gpu_lease.assert_gpu_scope_idle", forbidden)
+    monkeypatch.setattr("orze.core.gpu_lease.acquire_gpu_leases", forbidden)
+
+    receipt = cli_setup.build_launch_policy_status(cfg)
+
+    assert receipt == {
+        "schema_version": 1,
+        "status": "BLOCKED",
+        "launch_allowed_by_policy": False,
+        "blockers": ["sentinel:.orze_disabled"],
+        "configured_physical_scope": [4, 5, 6, 7],
+        "checks": {
+            "stop_pause_policy": "complete",
+            "full_preflight": "not_run",
+        },
+        "accelerator_access": "none",
+        "accelerator_compute_access": "none",
+    }
+
+
+def test_launch_policy_status_allowed_does_not_claim_readiness(tmp_path):
+    cfg = _case(tmp_path)
+
+    receipt = cli_setup.build_launch_policy_status(cfg)
+
+    assert receipt["status"] == "POLICY_ALLOWS_LAUNCH"
+    assert receipt["launch_allowed_by_policy"] is True
+    assert receipt["checks"]["full_preflight"] == "not_run"
+    assert "ready" not in json.dumps(receipt).lower()
+
+
+def test_launch_policy_status_does_not_write_project_files(tmp_path):
+    cfg = _case(tmp_path)
+    before = sorted(
+        (path.relative_to(tmp_path).as_posix(), path.read_bytes())
+        for path in tmp_path.rglob("*") if path.is_file()
+    )
+
+    cli_setup.build_launch_policy_status(cfg)
+
+    after = sorted(
+        (path.relative_to(tmp_path).as_posix(), path.read_bytes())
+        for path in tmp_path.rglob("*") if path.is_file()
+    )
+    assert after == before
+
+
+def test_cli_launch_status_bypasses_prompt_migration_and_gpu(
+        tmp_path, monkeypatch, capsys):
+    cfg = _case(tmp_path)
+    cfg["gpu_scheduling"] = {"allowed_gpus": [4, 5, 6, 7]}
+    (Path(cfg["results_dir"]) / ".orze_disabled").touch()
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("launch-status performed unrelated work")
+
+    monkeypatch.setattr(cli, "load_project_config", lambda _path: cfg)
+    monkeypatch.setattr(cli, "maybe_star", forbidden)
+    monkeypatch.setattr("orze.engine.migrate._ensure_migrated", forbidden)
+    monkeypatch.setattr("orze.hardware.gpu.detect_all_gpus", forbidden)
+    monkeypatch.setattr(
+        "sys.argv", ["orze", "-c", str(tmp_path / "orze.yaml"),
+                     "--launch-status"],
+    )
+
+    assert cli.main() == 2
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["status"] == "BLOCKED"
+    assert receipt["configured_physical_scope"] == [4, 5, 6, 7]

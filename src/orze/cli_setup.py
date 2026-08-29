@@ -4,7 +4,7 @@ Calling spec:
     from orze.cli_setup import (
         do_uninstall, stop_running_instance, do_upgrade,
         find_shared_mounts, resolve_init_path,
-        do_init, do_check,
+        do_init, do_check, do_launch_status,
         IDEA_KEEP, RESULTS_KEEP,
     )
 
@@ -15,6 +15,7 @@ Calling spec:
     resolve_init_path(path)    # resolve init target directory
     do_init(init_arg)          # scaffold a new orze project
     do_check(cfg)              # validate config/environment; no installs
+    do_launch_status(cfg)      # fast stop/pause policy status; JSON, no writes
 
 Pure functions: find_shared_mounts, resolve_init_path.
 Diagnostic: do_check (transient writability probe; no installs or launches).
@@ -22,6 +23,7 @@ Side-effectful: do_uninstall, stop_running_instance, do_upgrade, do_init.
 """
 
 import base64
+import json
 import os
 import shutil
 import subprocess
@@ -1474,6 +1476,47 @@ def _runnable_blockers(cfg: dict) -> list[str]:
     except OSError:
         reasons.append("launcher_pause_flag_unreadable")
     return reasons
+
+
+def build_launch_policy_status(cfg: dict) -> dict:
+    """Return a cheap, read-only stop/pause policy decision.
+
+    This deliberately is *not* a readiness check.  It runs no config
+    validation, controller-runtime audit, idea parsing, filesystem probe, GPU
+    inventory, or lease acquisition.  A policy-allowed result therefore says
+    that full preflight is still required; a blocked result is conclusive and
+    can be produced without accelerator access.
+    """
+    blockers = _runnable_blockers(cfg)
+    scheduling = cfg.get("gpu_scheduling")
+    raw_scope = (scheduling.get("allowed_gpus")
+                 if isinstance(scheduling, dict) else None)
+    scope = None
+    if (isinstance(raw_scope, list) and raw_scope
+            and all(isinstance(gpu, int) and not isinstance(gpu, bool)
+                    and gpu >= 0 for gpu in raw_scope)
+            and len(raw_scope) == len(set(raw_scope))):
+        scope = list(raw_scope)
+    return {
+        "schema_version": 1,
+        "status": "BLOCKED" if blockers else "POLICY_ALLOWS_LAUNCH",
+        "launch_allowed_by_policy": not blockers,
+        "blockers": blockers,
+        "configured_physical_scope": scope,
+        "checks": {
+            "stop_pause_policy": "complete",
+            "full_preflight": "not_run",
+        },
+        "accelerator_access": "none",
+        "accelerator_compute_access": "none",
+    }
+
+
+def do_launch_status(cfg: dict) -> int:
+    """Print machine-readable launch-policy status and return a stable code."""
+    receipt = build_launch_policy_status(cfg)
+    print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
+    return 2 if receipt["status"] == "BLOCKED" else 0
 
 
 def do_check(cfg: dict):
