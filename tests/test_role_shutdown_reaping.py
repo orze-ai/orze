@@ -294,7 +294,7 @@ def test_nonce_mismatch_never_authorizes_signal(tmp_path):
 
 
 def test_nonce_scan_recovers_unobserved_fast_escape(tmp_path):
-    nonce = "c" * 64
+    nonce = hashlib.sha256(str(tmp_path).encode("utf-8")).hexdigest()
     env = dict(os.environ)
     env["ORZE_ROLE_PROCESS_NONCE"] = nonce
     sleeper = subprocess.Popen(
