@@ -80,6 +80,34 @@ def test_decision_identity_covers_benchmark_and_exposure_evidence(tmp_path):
         prior = current
 
 
+def test_tainted_training_access_log_rejects_and_changes_decision_identity(
+        tmp_path):
+    results = tmp_path / "results"
+    idea_dir = _write_result(
+        results,
+        "idea-tainted",
+        {"status": "COMPLETED", "score": 1.0, "tainted_leakage": False},
+    )
+    cfg = _cfg()
+    cfg["managed_run"] = {"require_clean_training_access_log": True}
+    before_paths = report_evidence_paths("idea-tainted", results, cfg)
+    before = evidence_content_sha256(before_paths)
+    (idea_dir / "_access_log.tsv").write_text(
+        "WATCH\t/private/eval\t/private/eval/sample.arrow\n",
+        encoding="utf-8",
+    )
+
+    _, _, value, reason, after = (
+        qualify_authoritative_report_evidence_with_identity(
+            "idea-tainted", results, cfg, {"idea-tainted"},
+        )
+    )
+
+    assert value is None
+    assert reason == "training_access_log_not_clean"
+    assert after != before
+
+
 @pytest.mark.parametrize("redirect", ["idea_symlink", "metrics_hardlink"])
 def test_decision_identity_never_reads_redirected_or_hardlinked_evidence(
         tmp_path, redirect):

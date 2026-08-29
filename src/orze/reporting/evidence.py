@@ -494,6 +494,13 @@ def qualify_authoritative_report_evidence(
         return metrics, values, None, reason
     if metrics.get("tainted_leakage"):
         return metrics, values, None, "local_evidence_tainted_leakage"
+    managed_policy = cfg.get("managed_run") or {}
+    if (isinstance(managed_policy, Mapping)
+            and managed_policy.get("require_clean_training_access_log") is True):
+        from orze.data_boundaries import audit_training_access_log
+        access_log = audit_training_access_log(idea_dir)
+        if access_log.get("status") != "CLEAN":
+            return metrics, values, None, "training_access_log_not_clean"
 
     report = cfg.get("report") or {}
     if isinstance(report, Mapping) and report.get("benchmark_contract"):
@@ -543,6 +550,10 @@ def report_evidence_paths(
     if not isinstance(report, Mapping):
         raise ValueError("report_config_invalid")
     paths = local_report_evidence_paths(idea_dir, report)
+    managed_policy = cfg.get("managed_run") or {}
+    if (isinstance(managed_policy, Mapping)
+            and managed_policy.get("require_clean_training_access_log") is True):
+        paths.append(idea_dir / "_access_log.tsv")
     lineage = cfg.get("model_lineage") if isinstance(cfg, Mapping) else None
     if isinstance(lineage, Mapping) and lineage.get("enabled") is True:
         from orze.core.model_lineage import LINEAGE_FILE

@@ -86,6 +86,7 @@ def test_managed_run_requires_exact_runtime_pin(managed_case):
     "require_model_lineage",
     "require_benchmark_contract",
     "require_explicit_untainted_metrics",
+    "require_clean_training_access_log",
 ])
 def test_managed_evidence_policy_requires_booleans(key):
     errors, _ = _validate_config({"managed_run": {key: "yes"}})
@@ -543,6 +544,50 @@ def test_managed_outcome_requires_completed_untainted_evidence(
 
     assert report["completed"] is True
     assert report["evaluation_required"] is False
+
+
+def test_managed_outcome_rejects_tainted_access_log_despite_false_metric(
+        tmp_path, monkeypatch):
+    results = tmp_path / "results"
+    idea_dir = results / "idea-managed"
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "metrics.json").write_text(
+        '{"status":"COMPLETED","tainted_leakage":false}',
+        encoding="utf-8",
+    )
+    (idea_dir / "_access_log.tsv").write_text(
+        "WATCH\t/evaluation/private\t/evaluation/private/sample.arrow\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "orze.reporting.evidence.authoritative_idea_lifecycle",
+        lambda path, ids: ({
+            ids[0]: {"state": "COMPLETE", "family": "architecture"},
+        }, "authoritative_lifecycle_loaded"),
+    )
+
+    with pytest.raises(
+            ManagedRunError, match="training_access_log_not_clean"):
+        verify_managed_idea_outcome({
+            "results_dir": str(results),
+            "managed_run": {
+                "require_explicit_untainted_metrics": True,
+                "require_model_lineage": True,
+                "require_clean_training_access_log": True,
+            },
+            "model_lineage": {"enabled": True},
+        }, "idea-managed")
+
+
+def test_clean_access_log_policy_requires_model_lineage():
+    errors, _ = _validate_config({
+        "managed_run": {"require_clean_training_access_log": True},
+    })
+
+    assert (
+        "managed_run.require_clean_training_access_log: requires "
+        "require_model_lineage: true"
+    ) in errors
 
 
 @pytest.mark.parametrize("metrics,reason", [

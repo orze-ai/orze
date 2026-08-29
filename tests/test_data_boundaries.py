@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 import orze.data_boundaries.wrap as boundary_wrap
+from orze.data_boundaries import audit_training_access_log
 from orze.core.config import _validate_config
 from orze.engine.launcher import (
     LaunchIntegrityError,
@@ -56,6 +57,38 @@ def launch_case(tmp_path):
 def test_data_boundary_config_validation(boundaries, expected):
     errors, _ = _validate_config({"data_boundaries": boundaries})
     assert any(expected in error for error in errors)
+
+
+def test_training_access_log_audit_is_content_safe_and_fail_closed(tmp_path):
+    idea_dir = tmp_path / "idea-boundary"
+    idea_dir.mkdir()
+    assert audit_training_access_log(idea_dir) == {
+        "status": "CLEAN",
+        "log_present": False,
+        "entries": 0,
+        "watch_entries": 0,
+        "forbidden_entries": 0,
+    }
+
+    access_log = idea_dir / "_access_log.tsv"
+    access_log.write_text(
+        "WATCH\t/private/eval\t/private/eval/one.arrow\n"
+        "FORBIDDEN\t/private/test\t/private/test/two.arrow\n",
+        encoding="utf-8",
+    )
+    assert audit_training_access_log(idea_dir) == {
+        "status": "TAINTED",
+        "log_present": True,
+        "entries": 2,
+        "watch_entries": 1,
+        "forbidden_entries": 1,
+    }
+
+    access_log.write_text("WATCH\t/private/eval\t/outside/one.arrow\n")
+    assert audit_training_access_log(idea_dir) == {
+        "status": "UNVERIFIED",
+        "reason": "access_log_invalid",
+    }
 
 
 @pytest.mark.parametrize("kind", ["missing", "redirected"])

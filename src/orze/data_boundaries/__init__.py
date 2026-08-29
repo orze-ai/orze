@@ -81,9 +81,13 @@ Scope limitations:
 """
 import builtins
 import os
+from pathlib import Path
+import stat
 from typing import List, Optional
 
-__all__ = ["OrzeLeakageError", "activate", "is_active"]
+__all__ = [
+    "OrzeLeakageError", "activate", "audit_training_access_log", "is_active",
+]
 
 
 class OrzeLeakageError(RuntimeError):
@@ -192,3 +196,55 @@ def activate() -> bool:
 
 def is_active() -> bool:
     return _ACTIVE
+
+
+def audit_training_access_log(
+    idea_dir: str | os.PathLike,
+    *,
+    max_bytes: int = 16 * 1024 * 1024,
+    max_entries: int = 100_000,
+) -> dict:
+    """Fail closed on watched/forbidden training reads without exposing paths."""
+    path = Path(idea_dir) / "_access_log.tsv"
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return {
+            "status": "CLEAN",
+            "log_present": False,
+            "entries": 0,
+            "watch_entries": 0,
+            "forbidden_entries": 0,
+        }
+    except OSError:
+        return {"status": "UNVERIFIED", "reason": "access_log_unavailable"}
+    if (path.is_symlink() or not stat.S_ISREG(info.st_mode)
+            or info.st_nlink != 1 or not 0 <= info.st_size <= max_bytes):
+        return {"status": "UNVERIFIED", "reason": "access_log_unsafe"}
+
+    counts = {"WATCH": 0, "FORBIDDEN": 0}
+    try:
+        with path.open("rb") as handle:
+            for index, raw in enumerate(handle, 1):
+                if index > max_entries or len(raw) > 8192:
+                    raise ValueError("access log limit exceeded")
+                fields = raw.decode("utf-8").rstrip("\n").split("\t")
+                if len(fields) != 3 or fields[0] not in counts:
+                    raise ValueError("access log row invalid")
+                tag, prefix, accessed = fields
+                if (not os.path.isabs(prefix) or not os.path.isabs(accessed)
+                        or not (accessed == prefix or accessed.startswith(
+                            prefix.rstrip(os.sep) + os.sep))):
+                    raise ValueError("access log path invalid")
+                counts[tag] += 1
+    except (OSError, UnicodeDecodeError, ValueError):
+        return {"status": "UNVERIFIED", "reason": "access_log_invalid"}
+
+    entries = counts["WATCH"] + counts["FORBIDDEN"]
+    return {
+        "status": "TAINTED" if entries else "CLEAN",
+        "log_present": True,
+        "entries": entries,
+        "watch_entries": counts["WATCH"],
+        "forbidden_entries": counts["FORBIDDEN"],
+    }

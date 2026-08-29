@@ -26,6 +26,7 @@ _EVIDENCE_REQUIREMENTS = (
     "require_model_lineage",
     "require_benchmark_contract",
     "require_explicit_untainted_metrics",
+    "require_clean_training_access_log",
 )
 
 
@@ -57,6 +58,10 @@ def _require_evidence_contracts(cfg: Mapping) -> Mapping:
             and (not isinstance(report, Mapping)
                  or not isinstance(report.get("benchmark_contract"), Mapping))):
         raise ManagedRunError("managed_run_benchmark_contract_required")
+    if (policy.get("require_clean_training_access_log") is True
+            and policy.get("require_model_lineage") is not True):
+        raise ManagedRunError(
+            "managed_run_clean_access_log_requires_model_lineage")
     return policy
 
 
@@ -187,6 +192,13 @@ def verify_managed_idea_outcome(cfg: Mapping, idea_id: str) -> dict:
             and metrics.get("tainted_leakage") is not False):
         raise ManagedRunError(
             "managed_run_explicit_untainted_metrics_required")
+    access_log = None
+    if policy.get("require_clean_training_access_log") is True:
+        from orze.data_boundaries import audit_training_access_log
+        access_log = audit_training_access_log(idea_dir)
+        if access_log.get("status") != "CLEAN":
+            raise ManagedRunError(
+                "managed_run_training_access_log_not_clean")
 
     lake_path = Path(cfg.get("idea_lake_db") or results_dir / "idea_lake.db")
     from orze.reporting.evidence import authoritative_idea_lifecycle
@@ -258,4 +270,7 @@ def verify_managed_idea_outcome(cfg: Mapping, idea_id: str) -> dict:
             isinstance(lineage, Mapping) and lineage.get("enabled") is True),
         "explicit_untainted_metrics_required": bool(
             policy.get("require_explicit_untainted_metrics") is True),
+        "clean_training_access_log_required": bool(
+            policy.get("require_clean_training_access_log") is True),
+        "training_access_log": access_log,
     }

@@ -235,6 +235,7 @@ DEFAULT_CONFIG = {
         "require_model_lineage": False,
         "require_benchmark_contract": False,
         "require_explicit_untainted_metrics": False,
+        "require_clean_training_access_log": False,
     },
     "pre_script": None,
     "pre_args": [],
@@ -833,6 +834,7 @@ def _validate_config(cfg: dict) -> tuple:
         "require_model_lineage",
         "require_benchmark_contract",
         "require_explicit_untainted_metrics",
+        "require_clean_training_access_log",
     )
     if not isinstance(managed_run, dict):
         errors.append("managed_run: must be a mapping")
@@ -866,6 +868,11 @@ def _validate_config(cfg: dict) -> tuple:
             errors.append(
                 "managed_run.require_benchmark_contract: requires "
                 "report.benchmark_contract")
+        if (managed_run.get("require_clean_training_access_log") is True
+                and managed_run.get("require_model_lineage") is not True):
+            errors.append(
+                "managed_run.require_clean_training_access_log: requires "
+                "require_model_lineage: true")
 
     # Validate eval config consistency
     if cfg.get("eval_script") and not cfg.get("eval_output"):

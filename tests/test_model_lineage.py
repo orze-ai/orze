@@ -412,6 +412,20 @@ def test_evaluation_rejects_redirected_compute_start_receipt(tmp_path):
         validate_model_lineage_for_evaluation(idea_dir, cfg)
 
 
+def test_evaluation_rejects_tainted_training_access_log(tmp_path):
+    cfg, idea_dir, _, _ = _completed_lineage(tmp_path)
+    cfg["managed_run"] = {"require_clean_training_access_log": True}
+    (idea_dir / "_access_log.tsv").write_text(
+        "WATCH\t/private/eval\t/private/eval/sample.arrow\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+            ModelLineageError,
+            match="model_lineage_training_access_log_not_clean"):
+        validate_model_lineage_for_evaluation(idea_dir, cfg)
+
+
 def test_single_file_rewrite_during_hash_is_detected(tmp_path, monkeypatch):
     artifact = tmp_path / "model.bin"
     artifact.write_bytes(b"a" * (1024 * 1024 + 1))

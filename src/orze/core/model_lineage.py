@@ -509,6 +509,13 @@ def validate_model_lineage_for_evaluation(
         raise ModelLineageError("model_lineage_disabled")
     if validate_model_lineage_config(cfg):
         raise ModelLineageError("model_lineage_policy_invalid")
+    managed_policy = cfg.get("managed_run") or {}
+    if (isinstance(managed_policy, Mapping)
+            and managed_policy.get("require_clean_training_access_log") is True):
+        from orze.data_boundaries import audit_training_access_log
+        if audit_training_access_log(idea_dir).get("status") != "CLEAN":
+            raise ModelLineageError(
+                "model_lineage_training_access_log_not_clean")
     lineage, lineage_sha256 = _read_envelope(
         _idea_path(idea_dir, LINEAGE_FILE), _LINEAGE_KEYS)
     if (lineage.get("schema_version") != 1
