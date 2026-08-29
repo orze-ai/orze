@@ -240,6 +240,34 @@ def _cuda_writes(
     return writes
 
 
+def capture_source_universe_identity(package_root: str | Path) -> dict:
+    """Cryptographically reread the complete Python source universe.
+
+    This is the post-audit stability pass. It deliberately retains the same
+    no-follow, single-link, bounded-read, namespace-rebind, UTF-8, filename,
+    and content-hash checks as the AST audit, but does not rebuild ASTs whose
+    policy result has already been computed from those exact bytes.
+    """
+    root = Path(package_root).absolute()
+    python_paths = sorted(
+        root.rglob("*.py"), key=lambda path: path.relative_to(root).as_posix()
+    )
+    if not python_paths:
+        raise GpuScopeAuditError("gpu_scope_source_universe_empty")
+    universe_digest = hashlib.sha256()
+    for path in python_paths:
+        relative = path.relative_to(root).as_posix()
+        _text, digest = _read_source(path)
+        encoded = relative.encode()
+        universe_digest.update(len(encoded).to_bytes(8, "big"))
+        universe_digest.update(encoded)
+        universe_digest.update(bytes.fromhex(digest))
+    return {
+        "python_source_count": len(python_paths),
+        "python_source_universe_sha256": universe_digest.hexdigest(),
+    }
+
+
 def audit_source_boundaries(package_root: str | Path) -> dict:
     """Verify every GPU-visible subprocess path uses the shared boundary."""
     root = Path(package_root).absolute()
@@ -414,9 +442,12 @@ def audit_gpu_scope(
             else:
                 raise GpuScopeTargetError("gpu_scope_forbidden_id_authorized")
 
-        source_after = audit_source_boundaries(source_root)
+        source_after = capture_source_universe_identity(source_root)
         config_text_after, config_digest_after = _read_source(config_file)
-        if (source_before != source_after
+        if (source_before["python_source_count"]
+                != source_after["python_source_count"]
+                or source_before["python_source_universe_sha256"]
+                != source_after["python_source_universe_sha256"]
                 or config_digest != config_digest_after
                 or config_text_before != config_text_after):
             raise GpuScopeAuditError("gpu_scope_inputs_changed_during_audit")

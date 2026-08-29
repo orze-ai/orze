@@ -153,19 +153,15 @@ def test_source_boundary_audit_rejects_unaccounted_gpu_child(tmp_path):
 
 def test_gpu_scope_audit_rejects_input_mutation(tmp_path, monkeypatch):
     config = _config(tmp_path)
-    original = scope_module.audit_source_boundaries
-    calls = 0
+    original = scope_module.capture_source_universe_identity
 
     def changed_after_start(root):
-        nonlocal calls
         report = original(root)
-        calls += 1
-        if calls > 1:
-            report["source_sha256"]["engine/launcher.py"] = "0" * 64
+        report["python_source_universe_sha256"] = "0" * 64
         return report
 
     monkeypatch.setattr(
-        scope_module, "audit_source_boundaries", changed_after_start
+        scope_module, "capture_source_universe_identity", changed_after_start
     )
     receipt = audit_gpu_scope(
         config,
@@ -174,6 +170,34 @@ def test_gpu_scope_audit_rejects_input_mutation(tmp_path, monkeypatch):
     )
     assert receipt["status"] == "UNVERIFIED"
     assert receipt["reason"] == "gpu_scope_inputs_changed_during_audit"
+
+
+def test_gpu_scope_audit_uses_one_ast_pass_and_one_cryptographic_rehash(
+        tmp_path, monkeypatch):
+    original_audit = scope_module.audit_source_boundaries
+    original_identity = scope_module.capture_source_universe_identity
+    calls = {"ast_audit": 0, "identity_rehash": 0}
+
+    def counted_audit(root):
+        calls["ast_audit"] += 1
+        return original_audit(root)
+
+    def counted_identity(root):
+        calls["identity_rehash"] += 1
+        return original_identity(root)
+
+    monkeypatch.setattr(scope_module, "audit_source_boundaries", counted_audit)
+    monkeypatch.setattr(
+        scope_module, "capture_source_universe_identity", counted_identity,
+    )
+    receipt = audit_gpu_scope(
+        _config(tmp_path),
+        physical_scope=[4, 5, 6, 7],
+        forbidden_scope=[0, 1, 2, 3],
+    )
+
+    assert receipt["status"] == "VERIFIED"
+    assert calls == {"ast_audit": 1, "identity_rehash": 1}
 
 
 def test_gpu_scope_audit_rejects_parent_symlinked_config(tmp_path):
