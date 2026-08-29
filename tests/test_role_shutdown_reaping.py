@@ -205,7 +205,7 @@ def test_crash_recovery_reaps_nonce_bound_root_and_setsid_child(tmp_path):
         "lock = Path(os.environ['LOCK_DIR']); lock.mkdir(parents=True)\n"
         "(lock / 'lock.json').write_text(json.dumps({"
         "'host': os.uname().nodename, 'pid': os.getpid(), 'time': time.time()}))\n"
-        "nonce = 'b' * 64\n"
+        "nonce = os.environ['ROLE_NONCE']\n"
         "env = dict(os.environ); env['ORZE_ROLE_PROCESS_NONCE'] = nonce\n"
         "proc = subprocess.Popen([sys.executable, os.environ['ROLE_SCRIPT']], "
         "env=env, start_new_session=True, stdout=subprocess.DEVNULL, "
@@ -221,11 +221,13 @@ def test_crash_recovery_reaps_nonce_bound_root_and_setsid_child(tmp_path):
         encoding="utf-8",
     )
     env = dict(os.environ)
+    nonce = hashlib.sha256(str(lock_dir).encode("utf-8")).hexdigest()
     env.update({
         "LOCK_DIR": str(lock_dir),
         "ROLE_SCRIPT": str(role_script),
         "CHILD_PATH": str(child_path),
         "ROOT_PATH": str(root_path),
+        "ROLE_NONCE": nonce,
     })
     source_root = str(Path(__file__).parents[1] / "src")
     env["PYTHONPATH"] = os.pathsep.join(
@@ -238,7 +240,7 @@ def test_crash_recovery_reaps_nonce_bound_root_and_setsid_child(tmp_path):
     child_pid = int(child_path.read_text())
     receipt_path = lock_dir / "role-process.json"
     receipt_text = receipt_path.read_text(encoding="utf-8")
-    assert "b" * 64 not in receipt_text
+    assert nonce not in receipt_text
     assert receipt_path.stat().st_mode & 0o077 == 0
     try:
         report = reconcile_orphaned_role_receipts(
