@@ -12,11 +12,13 @@ import datetime as _datetime
 import hashlib
 import json
 import math
+import os
 import re
+import stat as statlib
 from pathlib import Path
 from typing import Mapping
 
-from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
+from orze.core.fs import _fs_lock, _fs_unlock, atomic_create, atomic_write
 from orze.core.ideas import IDEA_ID_PATTERN
 from orze.core.research_policy import (
     AUTONOMOUS_APPROACH_FAMILIES,
@@ -28,7 +30,12 @@ from orze.core.research_policy import (
 
 _MAX_RECEIPTS = 4096
 _MAX_RECEIPT_BYTES = 65536
-_CURRENT_SCHEMA = 2
+_CURRENT_SCHEMA = 3
+_SUPPORTED_SCHEMAS = frozenset({1, 2, _CURRENT_SCHEMA})
+_RESOLUTION_EVENT_FIELDS = frozenset({
+    "schema_version", "identity_sha256", "admitted_at", "resolved_at",
+    "resolved_receipt_sha256", "event_sha256",
+})
 _TERMINAL_STATES = frozenset({"COMPLETE", "FAILED", "SKIPPED", "ARCHIVED"})
 _RESOLVED_STATUSES = frozenset({
     "succeeded", "failed_redirect", "failed_stopped",
@@ -83,8 +90,12 @@ def _resolution_hash(payload: Mapping) -> str:
         "qualified_success_count": payload.get("qualified_success_count"),
         "blocked_families": payload.get("blocked_families"),
     }
-    if payload.get("schema") == _CURRENT_SCHEMA:
-        resolution["schema"] = _CURRENT_SCHEMA
+    schema = payload.get("schema")
+    if schema in {2, _CURRENT_SCHEMA}:
+        resolution["schema"] = schema
+    if schema == _CURRENT_SCHEMA:
+        resolution["admitted_at"] = payload.get("admitted_at")
+        resolution["resolved_at"] = payload.get("resolved_at")
     if "qualified_success_idea_ids" in payload:
         resolution["qualified_success_idea_ids"] = payload.get(
             "qualified_success_idea_ids")
@@ -137,7 +148,7 @@ def _safe_families(value) -> list[str] | None:
 
 def _validate_receipt(payload, path: Path, cfg: Mapping) -> str | None:
     if (not isinstance(payload, dict)
-            or payload.get("schema") not in {1, _CURRENT_SCHEMA}):
+            or payload.get("schema") not in _SUPPORTED_SCHEMAS):
         return "decision_receipt_schema_invalid"
     status = payload.get("status")
     if status not in _RECEIPT_STATUSES:
@@ -149,7 +160,7 @@ def _validate_receipt(payload, path: Path, cfg: Mapping) -> str | None:
         expected_fields.update(_RESOLUTION_FIELDS)
     allowed_fields = {frozenset(expected_fields)}
     if status in _RESOLVED_STATUSES:
-        if payload["schema"] == _CURRENT_SCHEMA:
+        if payload["schema"] in {2, _CURRENT_SCHEMA}:
             allowed_fields = {
                 frozenset(
                     expected_fields
@@ -237,7 +248,7 @@ def _validate_receipt(payload, path: Path, cfg: Mapping) -> str | None:
                     or any(not isinstance(value, str) for value in success_ids)
                     or not set(success_ids).issubset(idea_ids)):
                 return "decision_receipt_qualified_ids_invalid"
-        if payload["schema"] == _CURRENT_SCHEMA:
+        if payload["schema"] in {2, _CURRENT_SCHEMA}:
             evidence = payload.get("decision_evidence")
             if (not isinstance(evidence, list)
                     or len(evidence) != len(idea_ids)
@@ -309,6 +320,123 @@ def _write_verified(path: Path, payload: dict) -> None:
         raise OSError("decision_receipt_write_unverified")
 
 
+def _resolved_receipt_sha256(payload: Mapping) -> str:
+    try:
+        canonical = json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError("decision_resolution_receipt_invalid") from exc
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _resolution_event_path(directory: Path, identity: str) -> Path:
+    if (not isinstance(identity, str)
+            or re.fullmatch(r"[0-9a-f]{64}", identity) is None):
+        raise ValueError("decision_resolution_identity_invalid")
+    root = directory / "_resolution_events"
+    if _redirected(root):
+        raise OSError("decision_resolution_event_directory_redirected")
+    return root / f"{identity}.json"
+
+
+def _resolution_event_payload(payload: Mapping) -> dict:
+    core = {
+        "schema_version": 1,
+        "identity_sha256": payload.get("identity_sha256"),
+        "admitted_at": payload.get("admitted_at"),
+        "resolved_at": payload.get("resolved_at"),
+        "resolved_receipt_sha256": _resolved_receipt_sha256(payload),
+    }
+    canonical = json.dumps(core, sort_keys=True, separators=(",", ":"))
+    return {
+        **core,
+        "event_sha256": hashlib.sha256(
+            canonical.encode("utf-8")
+        ).hexdigest(),
+    }
+
+
+def _load_resolution_event(path: Path) -> dict:
+    descriptor = None
+    try:
+        descriptor = os.open(
+            path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        )
+        info = os.fstat(descriptor)
+        if (not statlib.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or not 1 <= info.st_size <= 4096):
+            raise OSError("unsafe event")
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = None
+            raw = handle.read(4097)
+        if len(raw) > 4096:
+            raise OSError("oversized event")
+        event = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("decision_resolution_event_invalid") from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    if not isinstance(event, dict):
+        raise ValueError("decision_resolution_event_invalid")
+    return event
+
+
+def _read_resolution_event(path: Path, payload: Mapping) -> dict:
+    event = _load_resolution_event(path)
+    if (not isinstance(event, dict)
+            or set(event) != _RESOLUTION_EVENT_FIELDS
+            or event.get("schema_version") != 1
+            or event.get("identity_sha256") != payload.get("identity_sha256")
+            or event.get("admitted_at") != payload.get("admitted_at")
+            or event.get("resolved_at") != payload.get("resolved_at")
+            or _parse_time(event.get("admitted_at")) is None
+            or _parse_time(event.get("resolved_at")) is None
+            or event.get("resolved_receipt_sha256")
+            != _resolved_receipt_sha256(payload)):
+        raise ValueError("decision_resolution_event_invalid")
+    core = {key: event[key] for key in event if key != "event_sha256"}
+    canonical = json.dumps(core, sort_keys=True, separators=(",", ":"))
+    if event.get("event_sha256") != hashlib.sha256(
+            canonical.encode("utf-8")).hexdigest():
+        raise ValueError("decision_resolution_event_invalid")
+    return event
+
+
+def _bind_resolution_event(directory: Path, payload: dict) -> dict:
+    """Create once, or resume the exact event after a mid-publish crash."""
+    path = _resolution_event_path(directory, payload["identity_sha256"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if _redirected(path.parent):
+        raise OSError("decision_resolution_event_directory_redirected")
+    created = False
+    if not path.exists() and not path.is_symlink():
+        event = _resolution_event_payload(payload)
+        rendered = json.dumps(event, indent=2, sort_keys=True) + "\n"
+        created = atomic_create(path, rendered)
+    if created:
+        _read_resolution_event(path, payload)
+        return payload
+    event = _load_resolution_event(path)
+    candidate = dict(payload)
+    candidate["resolved_at"] = event.get("resolved_at")
+    candidate["resolution_sha256"] = _resolution_hash(candidate)
+    _read_resolution_event(path, candidate)
+    return candidate
+
+
+def _resolution_event_matches(directory: Path, payload: Mapping) -> bool:
+    try:
+        path = _resolution_event_path(
+            directory, str(payload.get("identity_sha256", ""))
+        )
+        _read_resolution_event(path, payload)
+        return True
+    except (OSError, TypeError, ValueError):
+        return False
+
+
 def _load_receipts_locked(
     directory: Path,
     cfg: Mapping,
@@ -332,6 +460,10 @@ def _load_receipts_locked(
         error = _validate_receipt(payload, path, cfg)
         if error:
             return [], error
+        if (payload["status"] in _RESOLVED_STATUSES
+                and payload["schema"] == _CURRENT_SCHEMA
+                and not _resolution_event_matches(directory, payload)):
+            return [], "decision_resolution_event_invalid"
         receipts.append((path, payload))
     return receipts, None
 
@@ -578,6 +710,10 @@ def reconcile_decision_batches(
                 stop_active = True
             resolved["resolution_sha256"] = _resolution_hash(resolved)
             if apply:
+                resolved = _bind_resolution_event(directory, resolved)
+                error = _validate_receipt(resolved, path, cfg)
+                if error:
+                    raise ValueError(error)
                 _write_verified(path, resolved)
             resolved_count += 1
 

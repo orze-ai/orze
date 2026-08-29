@@ -543,6 +543,17 @@ def report_evidence_paths(
     if not isinstance(report, Mapping):
         raise ValueError("report_config_invalid")
     paths = local_report_evidence_paths(idea_dir, report)
+    lineage = cfg.get("model_lineage") if isinstance(cfg, Mapping) else None
+    if isinstance(lineage, Mapping) and lineage.get("enabled") is True:
+        from orze.core.model_lineage import LINEAGE_FILE
+        lineage_receipt = _safe_source_path(idea_dir, LINEAGE_FILE)
+        if lineage_receipt is None:
+            raise ValueError("model_lineage_evidence_path_invalid")
+        # Qualification validates the receipt against the current artifact.
+        # Binding the compact receipt here makes a coherent post-decision
+        # artifact+receipt replacement change the decision input identity
+        # without hashing model bytes again during evidence capture.
+        paths.append(lineage_receipt)
     contract = report.get("benchmark_contract")
     if isinstance(contract, Mapping):
         from orze.core.benchmark_contract import (

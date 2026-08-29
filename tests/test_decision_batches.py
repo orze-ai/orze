@@ -236,7 +236,7 @@ def test_campaign_decision_audit_verifies_exact_resolved_receipt(tmp_path):
     assert audit["terminal_count"] == 2
     assert audit["time_to_first_decision_seconds"] >= 0
     receipt = json.loads(path.read_text(encoding="utf-8"))
-    assert receipt["schema"] == 2
+    assert receipt["schema"] == 3
     assert receipt["decision_evidence"] == [
         {
             "idea_id": "idea-alpha",
@@ -258,6 +258,101 @@ def test_campaign_decision_audit_verifies_exact_resolved_receipt(tmp_path):
         },
     ]
     assert len(receipt["decision_evidence"][0]["evidence_sha256"]) == 64
+
+
+def test_missing_resolution_event_fails_closed_without_recreating_it(
+        tmp_path):
+    start = time.time() - 1
+    db_path = _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "running", "data", "IN_PROGRESS"),
+    ])
+    results_dir, cfg, path = _stage_and_admit(tmp_path, threshold=0.7)
+    identity = json.loads(path.read_text())[
+        "identity_sha256"
+    ]
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "failed", "data", "FAILED"),
+    ])
+    _write_score(results_dir, "idea-alpha", 0.8)
+    assert reconcile_decision_batches(results_dir, cfg)[
+        "allow_new_batch"
+    ] is True
+    event_path = (
+        path.parent / "_resolution_events" / f"{identity}.json"
+    )
+    assert event_path.is_file()
+    event_path.unlink()
+
+    audit = audit_campaign_decision_receipts(
+        results_dir,
+        cfg,
+        expected_identity_sha256=[identity],
+        start_epoch=start,
+        end_epoch=time.time() + 1,
+    )
+
+    assert audit == {
+        "schema_version": 1,
+        "status": "UNVERIFIED",
+        "reason": "decision_resolution_event_invalid",
+        "rank_claim_proven": False,
+    }
+    assert not event_path.exists()
+    assert reconcile_decision_batches(results_dir, cfg, apply=False)[
+        "reason"
+    ] == "decision_resolution_event_invalid"
+    assert not event_path.exists()
+
+
+def test_resolution_event_recovers_exact_receipt_after_publish_failure(
+        tmp_path, monkeypatch):
+    db_path = _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "running", "data", "IN_PROGRESS"),
+    ])
+    results_dir, cfg, path = _stage_and_admit(tmp_path, threshold=0.7)
+    identity = json.loads(path.read_text())[
+        "identity_sha256"
+    ]
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "failed", "data", "FAILED"),
+    ])
+    _write_score(results_dir, "idea-alpha", 0.8)
+    original_write = decision_module._write_verified
+
+    def fail_resolved_receipt(candidate_path, payload):
+        if payload.get("status") in decision_module._RESOLVED_STATUSES:
+            raise OSError("synthetic_publish_failure")
+        original_write(candidate_path, payload)
+
+    monkeypatch.setattr(
+        decision_module, "_write_verified", fail_resolved_receipt
+    )
+    failed = reconcile_decision_batches(results_dir, cfg)
+
+    assert failed["allow_new_batch"] is False
+    assert failed["reason"] == "decision_contract_reconciliation_failed"
+    assert json.loads(path.read_text())["status"] == "admitted"
+    event_path = (
+        path.parent / "_resolution_events" / f"{identity}.json"
+    )
+    event = json.loads(event_path.read_text(encoding="utf-8"))
+
+    monkeypatch.setattr(
+        decision_module, "_write_verified", original_write
+    )
+    recovered = reconcile_decision_batches(results_dir, cfg)
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+
+    assert recovered["allow_new_batch"] is True
+    assert receipt["status"] == "succeeded"
+    assert receipt["resolved_at"] == event["resolved_at"]
+    assert event["resolved_receipt_sha256"] == (
+        decision_module._resolved_receipt_sha256(receipt)
+    )
 
 
 def test_campaign_decision_audit_rejects_metric_rewrite_after_resolution(
@@ -429,6 +524,39 @@ def test_legacy_resolved_receipt_is_loadable_but_not_campaign_verified(
     receipt = json.loads(path.read_text(encoding="utf-8"))
     receipt["schema"] = 1
     receipt.pop("decision_evidence")
+    receipt["resolution_sha256"] = decision_module._resolution_hash(receipt)
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    audit = audit_campaign_decision_receipts(
+        results_dir,
+        cfg,
+        expected_identity_sha256=[identity],
+        start_epoch=start,
+        end_epoch=time.time() + 1,
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["legacy_evidence_identity_sha256"] == [identity]
+
+
+def test_schema_two_receipt_is_loadable_but_not_campaign_verified(tmp_path):
+    start = time.time() - 1
+    db_path = _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "running", "data", "IN_PROGRESS"),
+    ])
+    results_dir, cfg, path = _stage_and_admit(tmp_path, threshold=0.7)
+    identity = json.loads(path.read_text())["identity_sha256"]
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "failed", "data", "FAILED"),
+    ])
+    _write_score(results_dir, "idea-alpha", 0.8)
+    assert reconcile_decision_batches(results_dir, cfg)[
+        "allow_new_batch"
+    ] is True
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["schema"] = 2
     receipt["resolution_sha256"] = decision_module._resolution_hash(receipt)
     path.write_text(json.dumps(receipt), encoding="utf-8")
 

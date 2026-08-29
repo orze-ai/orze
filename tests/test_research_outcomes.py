@@ -6,6 +6,7 @@ import os
 import time
 from types import SimpleNamespace
 
+import orze.core.decision_batches as decision_module
 import orze.engine.campaign_efficiency as campaign_module
 import orze.engine.research_outcomes as outcome_module
 from orze.core.data_separation import ensure_data_separation
@@ -328,6 +329,71 @@ def test_research_outcome_receipt_is_unverified_when_compute_is_incomplete(
     assert receipt["checks"]["compute_evidence_complete"]["passed"] is False
     assert receipt["compute_evidence"]["incomplete_started_attempts"] == 1
     assert receipt["lineage_evidence"]["status"] == "UNVERIFIED"
+
+
+def test_post_decision_model_and_lineage_replacement_invalidates_outcome(
+        tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path, monkeypatch, qualified=True
+    )
+    idea_dir = results / "idea-outcome"
+    artifact = idea_dir / "model.bin"
+    original = artifact.read_bytes()
+    replacement = bytes([original[0] ^ 1]) + original[1:]
+    artifact.write_bytes(replacement)
+    lineage_path = idea_dir / "_model_lineage.json"
+    envelope = json.loads(lineage_path.read_text(encoding="utf-8"))
+    envelope["payload"]["artifact_sha256"] = hashlib.sha256(
+        replacement
+    ).hexdigest()
+    canonical = json.dumps(
+        envelope["payload"], sort_keys=True, separators=(",", ":"),
+        allow_nan=False,
+    )
+    envelope["payload_sha256"] = hashlib.sha256(
+        canonical.encode("utf-8")
+    ).hexdigest()
+    lineage_path.write_text(
+        json.dumps(envelope, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["decision_input_evidence_complete"][
+        "passed"
+    ] is False
+    assert receipt["decision_evidence"]["evidence_mismatch_idea_ids"] == [
+        "idea-outcome"
+    ]
+
+
+def test_post_decision_resolution_time_rewrite_invalidates_outcome(
+        tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path, monkeypatch, qualified=True
+    )
+    receipt_path = next(
+        (tmp_path / ".orze" / "policy" / "decision_contracts").glob(
+            "cycle-*.json"
+        )
+    )
+    decision = json.loads(receipt_path.read_text(encoding="utf-8"))
+    decision["resolved_at"] = decision["admitted_at"]
+    decision["resolution_sha256"] = decision_module._resolution_hash(
+        decision
+    )
+    receipt_path.write_text(json.dumps(decision), encoding="utf-8")
+
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["decision_evidence_complete"]["passed"] is False
 
 
 def test_research_outcome_rejects_decision_universe_mismatch(
