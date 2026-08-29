@@ -1,4 +1,5 @@
 """Shared fixtures for orze tests."""
+import contextlib
 import os
 import shutil
 import textwrap
@@ -9,7 +10,9 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _forbid_live_gpu_ownership_queries(monkeypatch):
-    """Unit tests use injected telemetry; never inspect the host GPU fleet."""
+    """Unit tests use process-scoped leases and never inspect the host fleet."""
+    from orze.core.gpu_lease import gpu_execution_lease as real_gpu_lease
+
     monkeypatch.setattr(
         "orze.core.gpu_lease.assert_gpu_scope_idle",
         lambda gpu_ids: {
@@ -18,6 +21,25 @@ def _forbid_live_gpu_ownership_queries(monkeypatch):
             "accelerator_access": "none",
             "accelerator_compute_access": "none",
         },
+    )
+
+    @contextlib.contextmanager
+    def isolated_gpu_lease(gpu, *, require_idle=False):
+        if gpu is None or gpu < 0:
+            mapped_gpu = gpu
+        else:
+            # Separate concurrently sharded pytest processes while retaining
+            # the real lease/file-descriptor semantics under test by launchers.
+            mapped_gpu = 800_000 + (os.getpid() % 10_000) * 100 + gpu
+        with real_gpu_lease(
+                mapped_gpu, require_idle=require_idle) as lease_fds:
+            yield lease_fds
+
+    monkeypatch.setattr(
+        "orze.engine.launcher.gpu_execution_lease", isolated_gpu_lease,
+    )
+    monkeypatch.setattr(
+        "orze.engine.evaluator.gpu_execution_lease", isolated_gpu_lease,
     )
 
 
