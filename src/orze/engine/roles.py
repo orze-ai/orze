@@ -116,10 +116,11 @@ def _is_role_stalled(rp: "RoleProcess", stall_minutes: int) -> bool:
     early as soon as the child writes its first stdout byte —
     ``current_size > 0`` is the signal.
     """
+    now = time.time()
+    rp._last_observed_at = now
     effective = _effective_stall_minutes(rp, stall_minutes)
     if effective <= 0:
         return False
-    now = time.time()
     try:
         current_size = rp.log_path.stat().st_size
     except OSError:
@@ -155,6 +156,7 @@ def _is_role_stalled(rp: "RoleProcess", stall_minutes: int) -> bool:
 
     if progress_kinds:
         rp._last_progress_kinds = tuple(progress_kinds)
+        rp._last_progress_at = now
         rp._stall_since = 0.0
         return False
     if rp._stall_since == 0.0:

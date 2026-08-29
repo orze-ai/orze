@@ -19,7 +19,8 @@ CALLING SPEC:
                       active: Dict[int, TrainingProcess], free_gpus: List[int],
                       queue_depth: int, completed_count: int, failed_count: int,
                       skipped_count: int, top_results: list, cfg: dict,
-                      role_states: Optional[dict] = None) -> None
+                      role_states: Optional[dict] = None,
+                      active_roles: Optional[dict] = None) -> None
         Write machine-readable status.json merging heartbeats from all hosts.
         Includes per-role status, disk info, and combined multi-machine view.
 
@@ -508,6 +509,126 @@ def build_role_health_block(cfg: dict,
     return out
 
 
+def build_active_role_status(active_roles: Optional[dict],
+                             global_stall_minutes: float,
+                             now: Optional[float] = None) -> dict:
+    """Return privacy-safe, deadline-aware status for live agent roles.
+
+    The snapshot intentionally publishes no PID, command, prompt, log path,
+    artifact path, or file content. It derives only bounded timestamps,
+    durations, progress-signal labels, and monitored-path counts from the
+    framework-owned ``RoleProcess`` objects.
+    """
+    if not isinstance(active_roles, dict):
+        return {}
+    observed_now = float(time.time() if now is None else now)
+    if not math.isfinite(observed_now) or observed_now <= 0:
+        raise ValueError("active role status clock invalid")
+
+    def finite_nonnegative(value, default=0.0) -> float:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return float(default)
+        return parsed if math.isfinite(parsed) and parsed >= 0 else float(default)
+
+    rows = {}
+    for role_name, rp in active_roles.items():
+        if not isinstance(role_name, str) or not role_name:
+            continue
+        start = finite_nonnegative(getattr(rp, "start_time", 0.0))
+        if start <= 0:
+            continue
+        timeout = finite_nonnegative(getattr(rp, "timeout", 0.0))
+        override = getattr(rp, "stall_minutes_override", None)
+        stall_minutes = finite_nonnegative(
+            global_stall_minutes if override is None else override)
+        stall_seconds = stall_minutes * 60.0
+        warmup_seconds = finite_nonnegative(
+            getattr(rp, "stall_warmup_seconds", 0.0))
+        stall_since = finite_nonnegative(getattr(rp, "_stall_since", 0.0))
+        last_progress = finite_nonnegative(
+            getattr(rp, "_last_progress_at", start), default=start)
+        if last_progress <= 0:
+            last_progress = start
+        last_observed = finite_nonnegative(
+            getattr(rp, "_last_observed_at", start), default=start)
+        if last_observed <= 0:
+            last_observed = start
+        log_bytes = 0
+        try:
+            log_bytes = max(0, int(getattr(rp, "_last_log_size", 0)))
+        except (TypeError, ValueError):
+            pass
+
+        warmup_deadline = start + warmup_seconds
+        warmup_active = (
+            warmup_seconds > 0
+            and log_bytes == 0
+            and observed_now < warmup_deadline
+        )
+        if stall_seconds <= 0:
+            stall_timer_state = "disabled"
+            stall_deadline = None
+        elif warmup_active:
+            stall_timer_state = "warmup"
+            stall_deadline = None
+        elif stall_since > 0:
+            stall_timer_state = "counting"
+            stall_deadline = stall_since + stall_seconds
+        else:
+            stall_timer_state = "armed"
+            stall_deadline = None
+
+        wall_deadline = start + timeout if timeout > 0 else None
+        deadlines = [value for value in (wall_deadline, stall_deadline)
+                     if value is not None]
+        progress_kinds = [
+            kind for kind in getattr(rp, "_last_progress_kinds", ())
+            if kind in {"log", "cpu", "artifact"}
+        ]
+        progress_paths = getattr(rp, "progress_paths", ())
+        try:
+            progress_path_count = min(256, max(0, len(progress_paths)))
+        except TypeError:
+            progress_path_count = 0
+        sources = ["log", "process_tree_cpu"]
+        if progress_path_count:
+            sources.append("declared_artifact_metadata")
+
+        rows[role_name] = {
+            "state": "RUNNING",
+            "cycle": max(0, int(getattr(rp, "cycle_num", 0) or 0)),
+            "started_at_epoch": round(start, 3),
+            "elapsed_seconds": round(max(0.0, observed_now - start), 3),
+            "last_observed_at_epoch": round(last_observed, 3),
+            "last_progress_at_epoch": round(last_progress, 3),
+            "last_progress_age_seconds": round(
+                max(0.0, observed_now - last_progress), 3),
+            "last_progress_kinds": progress_kinds,
+            "observable_progress_sources": sources,
+            "declared_progress_path_count": progress_path_count,
+            "wall_timeout_seconds": round(timeout, 3),
+            "wall_deadline_epoch": (
+                round(wall_deadline, 3) if wall_deadline is not None else None),
+            "wall_remaining_seconds": (
+                round(max(0.0, wall_deadline - observed_now), 3)
+                if wall_deadline is not None else None),
+            "stall_timeout_seconds": round(stall_seconds, 3),
+            "stall_timer_state": stall_timer_state,
+            "stall_warmup_deadline_epoch": (
+                round(warmup_deadline, 3) if warmup_active else None),
+            "stall_deadline_epoch": (
+                round(stall_deadline, 3) if stall_deadline is not None else None),
+            "stall_remaining_seconds": (
+                round(max(0.0, stall_deadline - observed_now), 3)
+                if stall_deadline is not None else None),
+            "next_termination_deadline_epoch": (
+                round(min(deadlines), 3) if deadlines else None),
+        }
+    return rows
+
+
 def write_status_json(results_dir: Path, iteration: int,
                       active: Dict[int, TrainingProcess],
                       free_gpus: List[int], queue_depth: int,
@@ -515,6 +636,7 @@ def write_status_json(results_dir: Path, iteration: int,
                       skipped_count: int, top_results: list,
                       cfg: dict,
                       role_states: Optional[dict] = None,
+                      active_roles: Optional[dict] = None,
                       notification_health: Optional[dict] = None,
                       campaign_progress: Optional[dict] = None):
     """Write machine-readable status.json for LLM agents.
@@ -542,12 +664,20 @@ def write_status_json(results_dir: Path, iteration: int,
     # Build per-role status
     role_states = role_states or {}
     roles_cfg = cfg.get("roles") or {}
+    active_role_status = build_active_role_status(
+        active_roles, cfg.get("role_stall_minutes", 0), now=now)
     roles_status = {}
-    for rname in roles_cfg:
+    role_names = list(dict.fromkeys((*roles_cfg.keys(), *active_role_status.keys())))
+    for rname in role_names:
         rs = role_states.get(rname, {})
         last_run = rs.get("last_run_time", 0.0)
+        role_cfg = roles_cfg.get(rname)
         roles_status[rname] = {
-            "enabled": True,
+            "enabled": not (
+                isinstance(role_cfg, dict) and role_cfg.get("enabled") is False
+            ),
+            "active": rname in active_role_status,
+            "active_run": active_role_status.get(rname),
             "cycles": rs.get("cycles", 0),
             "last_run_min_ago": (
                 round((now - last_run) / 60, 1) if last_run > 0 else None

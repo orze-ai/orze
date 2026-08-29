@@ -291,6 +291,8 @@ def test_role_stall_does_not_kill_active_role(tmp_path, caplog):
     assert finished == []  # still running
     assert "research" in active
     assert rp._stall_since == 0.0  # reset on progress
+    assert rp._last_progress_at >= rp.start_time
+    assert rp._last_observed_at >= rp._last_progress_at
 
 
 def test_silent_process_tree_cpu_progress_resets_stall(
@@ -313,6 +315,7 @@ def test_silent_process_tree_cpu_progress_resets_stall(
     assert "engineer" in active
     assert rp._stall_since == 0.0
     assert rp._last_progress_kinds == ("cpu",)
+    assert rp._last_progress_at >= rp.start_time
 
 
 def test_declared_output_metadata_progress_resets_stall(
@@ -339,6 +342,7 @@ def test_declared_output_metadata_progress_resets_stall(
     assert "professor" in active
     assert rp._stall_since == 0.0
     assert rp._last_progress_kinds == ("artifact",)
+    assert rp._last_progress_at >= rp.start_time
 
 
 def test_research_ideas_file_is_monitored_without_integration_wiring(

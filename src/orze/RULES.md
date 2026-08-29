@@ -133,11 +133,28 @@ Machine-readable status, updated every iteration:
   "failed": 3,
   "skipped": 2,
   "disk_free_gb": 1024.5,
+  "roles": {
+    "professor": {
+      "enabled": true,
+      "active": true,
+      "active_run": {
+        "last_progress_age_seconds": 12.4,
+        "last_progress_kinds": ["artifact"],
+        "wall_remaining_seconds": 1700.0,
+        "stall_timer_state": "armed",
+        "next_termination_deadline_epoch": 1770000000.0
+      }
+    }
+  },
   "top_results": [...]
 }
 ```
 
-Use this to monitor progress programmatically.
+Use this to monitor progress programmatically. Active role metadata contains
+only framework-owned timestamps, durations, signal labels, and counts; it does
+not expose role commands, prompts, PIDs, file paths, or file contents. Treat an
+expired `snapshot_valid_until_epoch` as stale rather than as evidence that a
+role is still running.
 
 ### Per-Idea Files
 Each `results/{idea_id}/` contains:

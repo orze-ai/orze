@@ -2118,6 +2118,7 @@ class OrzePhaseMixin:
             len(unclaimed), counts.get("COMPLETED", 0),
             counts.get("FAILED", 0), len(skipped), top_results, cfg,
             role_states=self.role_states,
+            active_roles=self.active_roles,
             notification_health=nh,
             campaign_progress=campaign_progress,
         )

@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Fixed
+- **Active agent roles now publish durable progress and deadlines.** Each
+  `status.json` role row exposes privacy-safe start/observation/progress ages,
+  the last watchdog signal labels, monitored-path count, and wall/stall
+  deadlines. It never publishes commands, prompts, PIDs, paths, or contents,
+  and stale status snapshots remain explicitly detectable by their validity
+  window.
 - **Physical GPU ownership is now exclusive across local controllers.** Each
   controller acquires an all-or-nothing kernel lease for its exact invocation
   scope before startup checks or GPU telemetry; overlapping controllers fail

@@ -789,6 +789,10 @@ class RoleProcess:
     _last_progress_fingerprint: Optional[str] = field(default=None, repr=False)
     _last_progress_kinds: tuple[str, ...] = field(
         default_factory=tuple, repr=False)
+    # Operator-visible progress timing. These are metadata-only epochs updated
+    # by the watchdog; no prompt, log, command, or artifact content is retained.
+    _last_progress_at: float = field(default=0.0, repr=False)
+    _last_observed_at: float = field(default=0.0, repr=False)
     # True for research-type roles whose job is to append to ideas.md.
     # False for strategy roles (professor, data_analyst, thinker,
     # engineer, code_evolution) that modify other files — skipping the
@@ -808,6 +812,10 @@ class RoleProcess:
     _receipt_error: bool = field(default=False, repr=False)
 
     def __post_init__(self):
+        if self._last_progress_at <= 0:
+            self._last_progress_at = float(self.start_time)
+        if self._last_observed_at <= 0:
+            self._last_observed_at = float(self.start_time)
         pid = getattr(self.process, "pid", None)
         if type(pid) is not int:
             return

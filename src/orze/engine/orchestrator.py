@@ -1535,6 +1535,7 @@ class Orze(OrzePhaseMixin):
                         once_counts.get("FAILED", 0),
                         once_counts.get("SKIPPED", 0), top_results, cfg,
                         role_states=self.role_states,
+                        active_roles=self.active_roles,
                         notification_health=self.notification_health,
                     )
                     save_state(self.results_dir, self._build_state_dict())
