@@ -1120,8 +1120,8 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
 
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not.
-    with gpu_execution_lease(gpu) as lease_fds:
-        _assert_controller_runtime_attested(cfg)
+    _assert_controller_runtime_attested(cfg)
+    with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
         _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
 
         log_fh = open(log_path, "a")
@@ -1635,8 +1635,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     # time (c1136). Raises GpuUnavailableError if not — handled in
     # phases.py as a requeue, not a code-fix retry.
     try:
-        with gpu_execution_lease(gpu) as lease_fds:
-            _assert_controller_runtime_attested(cfg)
+        _assert_controller_runtime_attested(cfg)
+        with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
             _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
 
             # Keep the log open for the subprocess lifetime.  The GPU lease

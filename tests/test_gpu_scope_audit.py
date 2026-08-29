@@ -103,6 +103,31 @@ def test_source_boundary_audit_rejects_missing_guard(tmp_path):
         raise AssertionError("new direct CUDA writer was accepted")
 
 
+def test_source_boundary_audit_rejects_lease_without_idle_attestation(tmp_path):
+    package = tmp_path / "orze"
+    for relative in scope_module._BOUNDARIES:
+        source = Path(scope_module.__file__).resolve().parents[1] / relative
+        target = package / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+    launcher = package / "engine/launcher.py"
+    launcher.write_text(
+        launcher.read_text().replace(
+            "gpu_execution_lease(gpu, require_idle=True)",
+            "gpu_execution_lease(gpu)",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        audit_source_boundaries(package)
+    except scope_module.GpuScopeAuditError as exc:
+        assert str(exc) == "gpu_scope_boundary_guard_missing"
+    else:
+        raise AssertionError("lease without idle attestation was accepted")
+
+
 def test_gpu_scope_audit_rejects_input_mutation(tmp_path, monkeypatch):
     config = _config(tmp_path)
     original = scope_module.audit_source_boundaries

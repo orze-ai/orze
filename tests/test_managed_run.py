@@ -14,6 +14,7 @@ import orze.cli as cli
 from orze.engine import lifecycle
 from orze.core import managed_run
 from orze.core.config import _validate_config
+from orze.core.gpu_lease import GpuLeaseError
 from orze.core.managed_run import (
     ManagedRunError,
     prepare_managed_idea_run,
@@ -228,6 +229,39 @@ def test_disabled_orchestrator_exits_before_gpu_lease_or_startup(
     assert calls == ["pid_write", "lake_close", "pid_remove"]
 
 
+def test_orchestrator_rejects_external_gpu_compute_before_startup(
+        tmp_path, monkeypatch):
+    calls = []
+
+    class Leases:
+        def close(self):
+            calls.append("lease_close")
+
+    runner = Orze.__new__(Orze)
+    runner.gpu_ids = [4, 5, 6, 7]
+    runner._gpu_leases = None
+    runner.lake = None
+    runner._write_pid_file = lambda: calls.append("pid_write")
+    runner._remove_pid_file = lambda: calls.append("pid_remove")
+    runner._check_disabled = lambda: False
+    runner._run_leased = lambda: pytest.fail("occupied scope started")
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.acquire_gpu_leases",
+        lambda ids: Leases(),
+    )
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.assert_gpu_scope_idle",
+        lambda ids: (_ for _ in ()).throw(GpuLeaseError(
+            "gpu_lease_external_compute_detected: physical_gpu=4"
+        )),
+    )
+
+    with pytest.raises(GpuLeaseError, match="external_compute_detected"):
+        runner.run()
+
+    assert calls == ["pid_write", "lease_close", "pid_remove"]
+
+
 def test_managed_orchestrator_skips_daemon_wide_hooks(
         tmp_path, monkeypatch):
     calls = []
@@ -327,6 +361,8 @@ def test_managed_orchestrator_skips_daemon_wide_hooks(
     monkeypatch.setattr(
         "orze.engine.orchestrator.save_state",
         lambda *args: pytest.fail("managed run saved daemon state"))
+    monkeypatch.setattr(
+        "orze.engine.orchestrator.assert_gpu_scope_idle", lambda ids: None)
 
     runner.run()
 

@@ -40,7 +40,7 @@ from orze.engine.failure import (
     _record_failure, get_skipped_ideas, _try_executor_fix, _reset_idea_for_retry,
 )
 from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
-from orze.core.gpu_lease import acquire_gpu_leases
+from orze.core.gpu_lease import acquire_gpu_leases, assert_gpu_scope_idle
 from orze.core.ideas import parse_ideas, expand_sweeps
 from orze.core.config import (
     _validate_config, reload_dotenv,
@@ -795,6 +795,7 @@ class Orze(OrzePhaseMixin):
                         pass
                 return
             self._gpu_leases = acquire_gpu_leases(self.gpu_ids)
+            assert_gpu_scope_idle(self.gpu_ids)
             result = self._run_leased()
             # Normal run paths already remove their PID as part of lifecycle
             # cleanup.  The wrapper owns cleanup only for early rejection or

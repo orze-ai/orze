@@ -19,6 +19,7 @@ from typing import Optional
 import yaml
 
 from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
+from orze.core.integrity import canonical_config_for_execution
 
 
 class DuplicateExecutionError(RuntimeError):
@@ -64,7 +65,9 @@ def compute_execution_identity(
         raise DuplicateExecutionError("execution_identity_env_not_mapping")
     payload = {
         "schema_version": 1,
-        "config": _canonical_yaml(Path(config_path)),
+        "config": canonical_config_for_execution(
+            _canonical_yaml(Path(config_path))
+        ),
         "base_config_sha256": _sha256_file(Path(base_config_path)),
         "train_script_sha256": _sha256_file(Path(train_script)),
         "python": str(python),

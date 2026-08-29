@@ -9,9 +9,11 @@ from types import SimpleNamespace
 import pytest
 
 import orze.lifecycle as lifecycle
+import orze.core.gpu_lease as gpu_lease_module
 from orze.core.gpu_lease import (
     GpuLeaseError,
     acquire_gpu_leases,
+    assert_gpu_scope_idle,
     gpu_execution_lease,
     run_with_gpu_leases,
     safe_gpu_lease_reason,
@@ -129,7 +131,11 @@ def test_external_scheduler_command_cannot_bypass_controller_lease(tmp_path):
     assert not marker.exists()
 
 
-def test_external_scheduler_command_runs_only_while_lease_is_held(tmp_path):
+def test_external_scheduler_command_runs_only_while_lease_is_held(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        gpu_lease_module, "assert_gpu_scope_idle", lambda _ids: None,
+    )
     marker = tmp_path / "ran"
     command = [
         sys.executable, "-c",
@@ -148,9 +154,9 @@ def test_external_child_inherits_lease_if_wrapper_is_killed(tmp_path):
         f"Path({str(ready)!r}).touch(); time.sleep(1.5)"
     )
     code = (
-        "import sys; "
-        "from orze.core.gpu_lease import run_with_gpu_leases; "
-        f"raise SystemExit(run_with_gpu_leases([{gpu}], "
+        "import sys; import orze.core.gpu_lease as g; "
+        "g.assert_gpu_scope_idle=lambda ids: None; "
+        f"raise SystemExit(g.run_with_gpu_leases([{gpu}], "
         f"[sys.executable, '-c', {child_code!r}]))"
     )
     wrapper = subprocess.Popen(
@@ -172,6 +178,65 @@ def test_external_child_inherits_lease_if_wrapper_is_killed(tmp_path):
         if wrapper.poll() is None:
             wrapper.kill()
             wrapper.wait(timeout=5)
+
+
+def test_idle_attestation_queries_only_explicit_physical_scope(monkeypatch):
+    calls = []
+
+    def fake_run(command, **_kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(gpu_lease_module.subprocess, "run", fake_run)
+    report = assert_gpu_scope_idle([7, 4])
+
+    assert [command[2] for command in calls] == ["4", "7"]
+    assert all(command[0:2] == ["nvidia-smi", "-i"] for command in calls)
+    assert report == {
+        "physical_scope": [4, 7],
+        "compute_processes": 0,
+        "accelerator_access": "metadata_only",
+        "accelerator_compute_access": "none",
+    }
+
+
+def test_idle_attestation_rejects_external_compute_without_detail_leak(
+        monkeypatch):
+    secret_process = "private-model-server"
+    completed = subprocess.CompletedProcess(
+        [], 0, stdout="123456\n", stderr=secret_process,
+    )
+    monkeypatch.setattr(
+        gpu_lease_module.subprocess, "run", lambda *args, **kwargs: completed,
+    )
+
+    with pytest.raises(GpuLeaseError) as captured:
+        assert_gpu_scope_idle([4])
+
+    assert str(captured.value) == (
+        "gpu_lease_external_compute_detected: physical_gpu=4"
+    )
+    assert secret_process not in str(captured.value)
+    assert safe_gpu_lease_reason(captured.value) == str(captured.value)
+
+
+def test_external_wrapper_rejects_occupied_gpu_before_command(
+        tmp_path, monkeypatch):
+    marker = tmp_path / "must-not-run"
+    monkeypatch.setattr(
+        gpu_lease_module,
+        "assert_gpu_scope_idle",
+        lambda _ids: (_ for _ in ()).throw(GpuLeaseError(
+            "gpu_lease_external_compute_detected: physical_gpu=4"
+        )),
+    )
+
+    with pytest.raises(GpuLeaseError, match="external_compute_detected"):
+        run_with_gpu_leases([_gpu(8)], [
+            sys.executable, "-c",
+            f"from pathlib import Path; Path({str(marker)!r}).touch()",
+        ])
+    assert not marker.exists()
 
 
 def test_smoke_gpu_probe_is_restricted_to_explicit_scope(monkeypatch):

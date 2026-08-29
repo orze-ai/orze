@@ -208,13 +208,27 @@ def validate_avg_metric(metrics: dict,
 # ---------------------------------------------------------------------------
 
 CACHE_FILENAME = "_config_hashes.json"
-_META_KEYS = frozenset({"parent", "Parent", "category", "hypothesis",
-                        "priority", "title"})
+_META_KEYS = frozenset({
+    "parent", "Parent", "category", "hypothesis", "priority", "title",
+    # These describe why/how many times a recipe was proposed; they do not
+    # change the trainer.  Treating them as execution inputs lets an exact
+    # duplicate bypass admission by changing only its replica label.
+    "replication_role", "replication_index",
+})
+
+
+def canonical_config_for_execution(config: dict) -> dict:
+    """Remove only code-owned non-execution metadata from an idea config."""
+    if not isinstance(config, dict):
+        raise TypeError("execution config must be a mapping")
+    return {
+        key: value for key, value in config.items()
+        if not str(key).startswith("_") and key not in _META_KEYS
+    }
 
 
 def hash_config(config: dict) -> str:
-    clean = {k: v for k, v in config.items()
-             if not k.startswith("_") and k not in _META_KEYS}
+    clean = canonical_config_for_execution(config)
     # Full SHA-256 avoids silently treating a truncated-hash collision as an
     # exact experiment duplicate.  This cache is rebuilt from result evidence
     # at startup, so changing the key format requires no in-place migration.

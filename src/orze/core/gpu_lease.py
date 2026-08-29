@@ -183,6 +183,58 @@ def acquire_gpu_leases(gpu_ids: Sequence[int]) -> GpuLeaseSet:
     return GpuLeaseSet(acquired)
 
 
+def assert_gpu_scope_idle(gpu_ids: Sequence[int]) -> dict:
+    """Reject pre-existing compute users after acquiring scoped leases.
+
+    Kernel leases coordinate participating Orze launchers.  They cannot stop
+    an unrelated container or scheduler that ignores the lease namespace, so
+    every new ownership epoch must also prove that its physical devices have
+    no existing compute process.  Queries are issued one GPU at a time and the
+    result deliberately contains counts only, never PIDs or process names.
+    """
+    if (isinstance(gpu_ids, (str, bytes))
+            or len(gpu_ids) != len(set(gpu_ids))):
+        raise GpuLeaseError("gpu_lease_scope_invalid")
+    ordered = sorted(_validate_gpu(gpu) for gpu in gpu_ids)
+    for gpu in ordered:
+        try:
+            completed = subprocess.run(
+                [
+                    "nvidia-smi", "-i", str(gpu),
+                    "--query-compute-apps=pid",
+                    "--format=csv,noheader,nounits",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise GpuLeaseError(
+                f"gpu_lease_compute_inventory_unavailable: physical_gpu={gpu}"
+            ) from exc
+        if completed.returncode != 0:
+            raise GpuLeaseError(
+                f"gpu_lease_compute_inventory_unavailable: physical_gpu={gpu}"
+            )
+        rows = [line.strip() for line in completed.stdout.splitlines()
+                if line.strip()]
+        if any(not row.isdigit() for row in rows):
+            raise GpuLeaseError(
+                f"gpu_lease_compute_inventory_invalid: physical_gpu={gpu}"
+            )
+        if rows:
+            raise GpuLeaseError(
+                f"gpu_lease_external_compute_detected: physical_gpu={gpu}"
+            )
+    return {
+        "physical_scope": ordered,
+        "compute_processes": 0,
+        "accelerator_access": "metadata_only",
+        "accelerator_compute_access": "none",
+    }
+
+
 def run_with_gpu_leases(
     gpu_ids: Sequence[int], command: Sequence[str], *,
     cwd: str | None = None, env: dict[str, str] | None = None,
@@ -210,6 +262,7 @@ def run_with_gpu_leases(
             pass
 
     try:
+        assert_gpu_scope_idle(gpu_ids)
         child = subprocess.Popen(
             list(command), cwd=cwd, env=env,
             pass_fds=leases.fds, start_new_session=True,
@@ -227,7 +280,9 @@ def run_with_gpu_leases(
 
 
 @contextlib.contextmanager
-def gpu_execution_lease(gpu: int | None) -> Iterator[tuple[int, ...]]:
+def gpu_execution_lease(
+    gpu: int | None, *, require_idle: bool = False,
+) -> Iterator[tuple[int, ...]]:
     """Yield lease FDs for one GPU-visible child launch.
 
     A controller lease is borrowed when present.  Direct launcher calls lazily
@@ -253,6 +308,8 @@ def gpu_execution_lease(gpu: int | None) -> Iterator[tuple[int, ...]]:
             temporary.close()
         raise
     try:
+        if require_idle and temporary is not None:
+            assert_gpu_scope_idle([gpu])
         yield (inherited_fd,)
     finally:
         os.close(inherited_fd)

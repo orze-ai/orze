@@ -118,7 +118,7 @@ def run_smoke_test(cfg: dict, results_dir: Path) -> tuple:
             env["CUDA_VISIBLE_DEVICES"] = ""
             logger.info("[SMOKE] Running 1-sample test on CPU (no free GPU)...")
         t0 = time.time()
-        with gpu_execution_lease(free_gpu) as lease_fds:
+        with gpu_execution_lease(free_gpu, require_idle=True) as lease_fds:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=_TIMEOUT,
                 env=env, pass_fds=lease_fds)

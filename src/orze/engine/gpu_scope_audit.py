@@ -166,6 +166,31 @@ def _called_names(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
     return names
 
 
+def _lease_calls_require_idle(
+    function: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    calls = []
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Call):
+            continue
+        name = None
+        if isinstance(node.func, ast.Name):
+            name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            name = node.func.attr
+        if name == "gpu_execution_lease":
+            calls.append(node)
+    return bool(calls) and all(
+        any(
+            keyword.arg == "require_idle"
+            and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value is True
+            for keyword in call.keywords
+        )
+        for call in calls
+    )
+
+
 def _subscript_key(node) -> str | None:
     if not isinstance(node, ast.Subscript):
         return None
@@ -266,11 +291,16 @@ def audit_source_boundaries(package_root: str | Path) -> dict:
                     f"gpu_scope_boundary_missing:{relative}:{function_name}"
                 )
             missing = sorted(required_calls - _called_names(function))
+            idle_required = "gpu_execution_lease" in required_calls
+            idle_guarded = (
+                _lease_calls_require_idle(function) if idle_required else None
+            )
             boundary_id = f"{relative}:{function_name}"
             boundary_checks[boundary_id] = {
                 "required_calls": sorted(required_calls),
                 "missing_calls": missing,
-                "passed": not missing,
+                "lease_idle_attestation": idle_guarded,
+                "passed": not missing and idle_guarded is not False,
             }
     if all_cuda_writes != _EXPECTED_CUDA_WRITES:
         raise GpuScopeTargetError("gpu_scope_cuda_writer_universe_invalid")

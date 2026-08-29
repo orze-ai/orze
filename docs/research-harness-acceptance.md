@@ -135,6 +135,27 @@ the child; killing only the wrapper cannot create an unleased detached job.
 GPU-capable commands that bypass this boundary remain outside Orze's ownership
 guarantee and must fail the project acceptance audit.
 
+Kernel leases coordinate only participants in the Orze protocol. After acquiring
+a new controller or external-wrapper lease, Orze also queries compute metadata on
+exactly the leased physical IDs and rejects any pre-existing compute process before
+starting a child. This catches Docker services and other schedulers that ignore the
+lease files. The rejection exposes only the physical GPU number, never the foreign
+PID, process name, command, or environment. A privileged scheduler can still race
+after this attestation; whole-host ownership therefore remains failed unless every
+scheduler participates in the lease protocol or an external platform enforces
+exclusive allocation.
+
+## Duplicate-training admission
+
+The final training boundary hashes the effective recipe, base config, trainer,
+Python command, extra arguments/environment, and data contracts, then atomically
+reserves that identity before GPU telemetry or process creation. Code-owned
+proposal metadata—titles, hypotheses, `_`-prefixed fields, and replication
+labels—does not change the identity. Consequently, renaming an exact recipe or
+changing only its replica index cannot bypass admission; concurrent equivalents
+have exactly one winner. A future exact-reproduction exception must be backed by
+an explicit preregistered contract rather than by weakening this default.
+
 ## GPU scope audit
 
 The scope auditor checks the complete code-owned subprocess boundary universe,

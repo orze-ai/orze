@@ -7,6 +7,20 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _forbid_live_gpu_ownership_queries(monkeypatch):
+    """Unit tests use injected telemetry; never inspect the host GPU fleet."""
+    monkeypatch.setattr(
+        "orze.core.gpu_lease.assert_gpu_scope_idle",
+        lambda gpu_ids: {
+            "physical_scope": sorted(gpu_ids),
+            "compute_processes": 0,
+            "accelerator_access": "none",
+            "accelerator_compute_access": "none",
+        },
+    )
+
+
 @pytest.fixture
 def tmp_project(tmp_path):
     """Create a minimal orze project directory and chdir into it."""

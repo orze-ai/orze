@@ -166,7 +166,7 @@ def test_eval_launcher_executes_frozen_entrypoint_and_child(
         evaluator_module, "_verify_gpu_free", lambda *args: None)
 
     @contextmanager
-    def fake_lease(_gpu):
+    def fake_lease(_gpu, **_kwargs):
         yield ()
 
     monkeypatch.setattr(evaluator_module, "gpu_execution_lease", fake_lease)

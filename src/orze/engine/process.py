@@ -1210,7 +1210,7 @@ def run_pre_script(idea_id: str, gpu: int, cfg: dict,
     proc = None
     handle = None
     try:
-        with gpu_execution_lease(gpu) as lease_fds:
+        with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
             proc = subprocess.Popen(
                 cmd, env=env, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, text=True,

@@ -48,6 +48,73 @@ def test_identity_is_full_sha256_and_seed_sensitive(tmp_path):
     assert first_id != second_id
 
 
+def test_identity_ignores_replica_labels_but_not_training_inputs(tmp_path):
+    base = tmp_path / "base.yaml"
+    base.write_text("model: example\n", encoding="utf-8")
+    train = tmp_path / "train.py"
+    train.write_text("# deterministic trainer\n", encoding="utf-8")
+    first = tmp_path / "first.yaml"
+    first.write_text(
+        "seed: 7\nlr: 0.001\nreplication_role: fixed_recipe_reproduction\n"
+        "replication_index: 1\n_replicate_of: idea-root\n"
+        "title: first label\n",
+        encoding="utf-8",
+    )
+    relabeled = tmp_path / "relabeled.yaml"
+    relabeled.write_text(
+        "seed: 7\nlr: 0.001\nreplication_role: rerun\n"
+        "replication_index: 99\n_replicate_of: different-root\n"
+        "title: changed label\nhypothesis: changed prose\n",
+        encoding="utf-8",
+    )
+    changed_seed = tmp_path / "changed-seed.yaml"
+    changed_seed.write_text(
+        "seed: 8\nlr: 0.001\nreplication_index: 99\n",
+        encoding="utf-8",
+    )
+
+    first_id = _identity(first, base, train)
+    assert _identity(relabeled, base, train) == first_id
+    assert _identity(changed_seed, base, train) != first_id
+
+
+def test_replica_metadata_cannot_bypass_concurrent_reservation(tmp_path):
+    base = tmp_path / "base.yaml"
+    base.write_text("model: example\n", encoding="utf-8")
+    train = tmp_path / "train.py"
+    train.write_text("# deterministic trainer\n", encoding="utf-8")
+    configs = []
+    for index in (1, 2):
+        path = tmp_path / f"replica-{index}.yaml"
+        path.write_text(
+            "seed: 7\nlr: 0.001\n"
+            f"replication_index: {index}\n_replicate_of: idea-root\n",
+            encoding="utf-8",
+        )
+        configs.append(path)
+    identities = [_identity(path, base, train) for path in configs]
+    assert identities[0] == identities[1]
+
+    results = tmp_path / "results"
+    results.mkdir()
+    barrier = threading.Barrier(2)
+
+    def admit(index):
+        barrier.wait()
+        try:
+            reserve_execution_identity(
+                results, {}, identities[index],
+                f"idea-{index}", f"attempt-{index}",
+            )
+            return "admitted"
+        except DuplicateExecutionError:
+            return "rejected"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(admit, (0, 1)))
+    assert sorted(outcomes) == ["admitted", "rejected"]
+
+
 def test_registry_never_serializes_environment_values(tmp_path):
     config, base, train = _inputs(tmp_path)
     secret = "credential-that-must-not-be-written"
@@ -211,6 +278,9 @@ def test_launcher_rejects_replica_before_gpu_telemetry(tmp_path, monkeypatch):
 @pytest.mark.parametrize("failure_point", ["gpu", "popen"])
 def test_preallocation_failure_releases_identity(
         tmp_path, monkeypatch, failure_point):
+    monkeypatch.setattr(
+        "orze.core.gpu_lease.assert_gpu_scope_idle", lambda ids: None,
+    )
     config, base, train = _inputs(tmp_path)
     results = tmp_path / "results"
     idea_dir = results / "idea-a"

@@ -259,8 +259,8 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
             "idea_id": idea_id, "gpu": 0, "physical_gpu": gpu,
         }))
         benchmark_env = prepare_benchmark_evaluation(idea_dir, cfg)
-        with gpu_execution_lease(gpu) as lease_fds:
-            _assert_controller_runtime_attested(cfg)
+        _assert_controller_runtime_attested(cfg)
+        with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
             _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
             if lake is not None:
                 training_stage = lake.get_stage_state(idea_id, "training")
@@ -684,7 +684,7 @@ def run_post_scripts(idea_id: str, gpu: int, results_dir: Path, cfg: dict):
         logger.info("Running %s for %s", name, idea_id)
 
         try:
-            with gpu_execution_lease(gpu) as lease_fds:
+            with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
                 _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
                 with open(log_path, "w", encoding="utf-8") as log_fh:
                     result = subprocess.run(
