@@ -62,8 +62,17 @@ end-to-end claim. Any target without this evidence remains open.
   both stages. Fault injection proves a failed stage-audit write rolls back the
   global launch edge. Project attainment still requires a production database
   reconciliation receipt after deployment.
-- Every other dimension: open until its required production-path evidence is
-  implemented and verified.
+- Campaign outcome efficiency: implementation present. A write-once
+  preregistered campaign binds the exact decision receipts and targets. The
+  analyzer validates resolved qualified-success identities, closed framework
+  compute receipts, physical GPU scope, zero-GPU rejections, retry/duplicate
+  counts, GPU-hours per success, decision latency, and current artifact lineage.
+  Missing evidence is `UNVERIFIED`; complete evidence that misses a target is
+  `FAILED`. Synthetic production-path tests cover passing, zero-yield, missing
+  terminal, scope, and artifact-relation cases. Project attainment remains open
+  until a real resumed campaign produces its receipt.
+- Official leaderboard outcome remains outside local verification and requires
+  an accepted public submission under the leaderboard's complete rules.
 
 ## External scheduler integration
 

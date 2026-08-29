@@ -15,6 +15,7 @@ import orze.data_boundaries.wrap as boundary_wrap
 from orze.core.config import _validate_config
 from orze.core.data_separation import ensure_data_separation
 from orze.core.model_lineage import (
+    audit_campaign_model_lineage,
     ModelLineageError,
     _artifact_digest,
     finalize_model_lineage,
@@ -122,12 +123,19 @@ def _write_boundary(idea_dir: Path, cfg: dict, tp) -> None:
     receive_model_lineage_attestation(context, process_pid=os.getpid())
 
 
-def _completed_lineage(tmp_path: Path):
-    cfg = _config(tmp_path)
-    idea_dir = tmp_path / "results" / "idea-lineage"
+def _completed_lineage(
+    tmp_path: Path,
+    *,
+    cfg=None,
+    idea_id="idea-lineage",
+    attempt_id="attempt-1",
+    artifact=b"one standalone model",
+):
+    cfg = _config(tmp_path) if cfg is None else cfg
+    idea_dir = tmp_path / "results" / idea_id
     idea_dir.mkdir(parents=True)
-    (idea_dir / "model.bin").write_bytes(b"one standalone model")
-    tp = _tp()
+    (idea_dir / "model.bin").write_bytes(artifact)
+    tp = _tp(idea_id=idea_id, attempt_id=attempt_id)
     _write_boundary(idea_dir, cfg, tp)
     record_compute_start(tp, idea_dir, phase="training")
     finalized = finalize_model_lineage(tp, idea_dir, cfg)
@@ -228,6 +236,51 @@ def test_completed_lineage_binds_artifact_attempt_and_policy_without_rank_claim(
         ])
     assert str(idea_dir / "model.bin") not in durable
     assert _fp("train-sample") not in durable
+
+
+def test_campaign_lineage_audit_proves_identical_replication_artifacts(
+        tmp_path):
+    cfg, _, _, _ = _completed_lineage(
+        tmp_path, idea_id="idea-replica-a", attempt_id="attempt-a"
+    )
+    _completed_lineage(
+        tmp_path, cfg=cfg, idea_id="idea-replica-b", attempt_id="attempt-b"
+    )
+
+    audit = audit_campaign_model_lineage(
+        tmp_path / "results",
+        cfg,
+        idea_ids=["idea-replica-a", "idea-replica-b"],
+        artifact_relation="identical",
+    )
+
+    assert audit["status"] == "VERIFIED"
+    assert audit["verified_lineage_count"] == 2
+    assert audit["unique_artifact_count"] == 1
+    assert audit["artifact_relation_passed"] is True
+    assert audit["rank_claim_proven"] is False
+
+
+def test_campaign_lineage_audit_rejects_wrong_artifact_relation(tmp_path):
+    cfg, _, _, _ = _completed_lineage(
+        tmp_path, idea_id="idea-distinct-a", attempt_id="attempt-a",
+        artifact=b"model-a",
+    )
+    _completed_lineage(
+        tmp_path, cfg=cfg, idea_id="idea-distinct-b", attempt_id="attempt-b",
+        artifact=b"model-b",
+    )
+
+    audit = audit_campaign_model_lineage(
+        tmp_path / "results",
+        cfg,
+        idea_ids=["idea-distinct-a", "idea-distinct-b"],
+        artifact_relation="identical",
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["unique_artifact_count"] == 2
+    assert audit["artifact_relation_passed"] is False
 
 
 def test_directory_artifact_hash_is_deterministic(tmp_path):

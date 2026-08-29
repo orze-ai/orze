@@ -80,6 +80,42 @@ def test_completed_training_without_claim_waits_for_required_evaluation(
     lake.close()
 
 
+def test_dead_interrupted_evaluation_is_returned_to_pending(
+        tmp_path, monkeypatch):
+    idea_id = "idea-eval-interrupted"
+    db = _make_lake_with_running(tmp_path, [idea_id])
+    lake = IdeaLake(str(db))
+    assert lake.record_stage_transition(
+        idea_id, "training", "NOT_STARTED", "COMPLETE", "trained")
+    assert lake.record_stage_transition(
+        idea_id, "evaluation", "NOT_STARTED", "IN_PROGRESS", "evaluating")
+    lake.close()
+    results_dir = tmp_path / "results"
+    idea_dir = results_dir / idea_id
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "metrics.json").write_text(
+        json.dumps({"status": "COMPLETED"}), encoding="utf-8")
+    cfg = {
+        "results_dir": str(results_dir),
+        "idea_lake_db": str(db),
+        "eval_script": "eval.py",
+    }
+    monkeypatch.setattr(
+        "orze.engine.lifecycle._running_idea_pids", lambda: set())
+
+    assert reconcile_running_dead_pids(cfg) == 1
+    lake = IdeaLake(str(db))
+    try:
+        assert lake.get_fsm_state(idea_id) == "IN_PROGRESS"
+        assert lake.get_stage_state(idea_id, "training") == "COMPLETE"
+        assert lake.get_stage_state(idea_id, "evaluation") == "PENDING"
+        assert lake.get_stage_history(idea_id)[-1]["reason"] == (
+            "reconcile_interrupted_evaluation_pending"
+        )
+    finally:
+        lake.close()
+
+
 def test_alive_running_not_touched(tmp_path, monkeypatch):
     db = _make_lake_with_running(tmp_path, ["idea-alive"])
     results_dir = tmp_path / "results"

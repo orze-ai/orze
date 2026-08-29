@@ -43,6 +43,7 @@ _RESOLUTION_FIELDS = frozenset({
     "resolved_at", "terminal_count", "qualified_success_count",
     "blocked_families", "resolution_sha256",
 })
+_QUALIFIED_ID_FIELDS = frozenset({"qualified_success_idea_ids"})
 
 
 def _now() -> str:
@@ -71,6 +72,9 @@ def _resolution_hash(payload: Mapping) -> str:
         "qualified_success_count": payload.get("qualified_success_count"),
         "blocked_families": payload.get("blocked_families"),
     }
+    if "qualified_success_idea_ids" in payload:
+        resolution["qualified_success_idea_ids"] = payload.get(
+            "qualified_success_idea_ids")
     canonical = json.dumps(resolution, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -127,7 +131,10 @@ def _validate_receipt(payload, path: Path, cfg: Mapping) -> str | None:
         expected_fields.update(_ADMISSION_FIELDS)
     if status in _RESOLVED_STATUSES:
         expected_fields.update(_RESOLUTION_FIELDS)
-    if set(payload) != expected_fields:
+    allowed_fields = {frozenset(expected_fields)}
+    if status in _RESOLVED_STATUSES:
+        allowed_fields.add(frozenset(expected_fields | _QUALIFIED_ID_FIELDS))
+    if frozenset(payload) not in allowed_fields:
         return "decision_receipt_fields_invalid"
 
     cycle = payload.get("cycle")
@@ -192,6 +199,17 @@ def _validate_receipt(payload, path: Path, cfg: Mapping) -> str | None:
             return "decision_receipt_resolution_invalid"
         if payload.get("resolution_sha256") != _resolution_hash(payload):
             return "decision_receipt_resolution_hash_invalid"
+        if "qualified_success_idea_ids" in payload:
+            success_ids = payload["qualified_success_idea_ids"]
+            if (not isinstance(success_ids, list)
+                    or len(success_ids) != successes
+                    or len(success_ids) != len(set(success_ids))
+                    or any(_IDEA_RE.fullmatch(value) is None
+                           for value in success_ids
+                           if isinstance(value, str))
+                    or any(not isinstance(value, str) for value in success_ids)
+                    or not set(success_ids).issubset(idea_ids)):
+                return "decision_receipt_qualified_ids_invalid"
     return None
 
 
@@ -414,6 +432,7 @@ def reconcile_decision_batches(
                 "resolved_at": _now(),
                 "terminal_count": len(states),
                 "qualified_success_count": len(successes),
+                "qualified_success_idea_ids": sorted(successes),
                 "blocked_families": [],
             })
             required_successes = contract.get("required_successes", 1)
@@ -456,6 +475,150 @@ def reconcile_decision_batches(
     finally:
         if lock is not None:
             _fs_unlock(lock)
+
+
+def audit_campaign_decision_receipts(
+    results_dir: Path,
+    cfg: Mapping,
+    *,
+    expected_identity_sha256: list[str],
+    start_epoch: float,
+    end_epoch: float,
+) -> dict:
+    """Verify the exact preregistered decision set for one closed campaign."""
+    import math
+
+    if (not isinstance(expected_identity_sha256, list)
+            or not expected_identity_sha256
+            or len(expected_identity_sha256)
+            != len(set(expected_identity_sha256))
+            or any(not isinstance(value, str)
+                   or re.fullmatch(r"[0-9a-f]{64}", value) is None
+                   for value in expected_identity_sha256)):
+        raise ValueError("campaign_decision_identities_invalid")
+    if (isinstance(start_epoch, bool) or isinstance(end_epoch, bool)
+            or not isinstance(start_epoch, (int, float))
+            or not isinstance(end_epoch, (int, float))
+            or not math.isfinite(float(start_epoch))
+            or not math.isfinite(float(end_epoch))
+            or not 0 <= start_epoch < end_epoch):
+        raise ValueError("campaign_decision_window_invalid")
+
+    directory = _control_dir(results_dir)
+    if _redirected(directory):
+        return {
+            "schema_version": 1,
+            "status": "UNVERIFIED",
+            "reason": "decision_receipt_directory_redirected",
+        }
+    receipts, error = _load_receipts_locked(directory, cfg)
+    if error:
+        return {
+            "schema_version": 1,
+            "status": "UNVERIFIED",
+            "reason": error,
+        }
+    by_identity = {
+        payload["identity_sha256"]: payload for _, payload in receipts
+    }
+    expected = set(expected_identity_sha256)
+    missing = sorted(expected - set(by_identity))
+    selected = [
+        by_identity[identity] for identity in expected_identity_sha256
+        if identity in by_identity
+    ]
+
+    def epoch(value) -> float | None:
+        parsed = _parse_time(value)
+        return parsed.timestamp() if parsed is not None else None
+
+    unexpected_in_window = []
+    for identity, payload in by_identity.items():
+        if identity in expected or payload.get("status") == "staged":
+            continue
+        admitted = epoch(payload.get("admitted_at"))
+        resolved = epoch(payload.get("resolved_at"))
+        if ((admitted is not None and start_epoch <= admitted <= end_epoch)
+                or (resolved is not None and start_epoch <= resolved <= end_epoch)):
+            unexpected_in_window.append(identity)
+
+    unresolved = []
+    outside_window = []
+    idea_ids = []
+    qualified_successes = 0
+    qualified_success_idea_ids = []
+    qualified_identity_complete = True
+    terminal_count = 0
+    admitted_count = 0
+    resolution_times = []
+    status_counts = {}
+    for payload in selected:
+        status = payload["status"]
+        status_counts[status] = status_counts.get(status, 0) + 1
+        if status != "staged":
+            admitted = epoch(payload.get("admitted_at"))
+            if admitted is None or admitted < start_epoch or admitted > end_epoch:
+                outside_window.append(payload["identity_sha256"])
+            idea_ids.extend(payload["idea_ids"])
+            admitted_count += payload["admitted_count"]
+        if status not in _RESOLVED_STATUSES:
+            unresolved.append(payload["identity_sha256"])
+            continue
+        resolved = epoch(payload["resolved_at"])
+        if resolved is None or resolved > end_epoch:
+            outside_window.append(payload["identity_sha256"])
+            continue
+        resolution_times.append(resolved)
+        terminal_count += payload["terminal_count"]
+        qualified_successes += payload["qualified_success_count"]
+        success_ids = payload.get("qualified_success_idea_ids")
+        if success_ids is None:
+            qualified_identity_complete = False
+        else:
+            qualified_success_idea_ids.extend(success_ids)
+
+    duplicate_idea_ids = len(idea_ids) - len(set(idea_ids))
+    complete = (
+        not missing
+        and not unexpected_in_window
+        and not unresolved
+        and not outside_window
+        and duplicate_idea_ids == 0
+        and len(selected) == len(expected)
+        and admitted_count == len(idea_ids)
+        and terminal_count == len(idea_ids)
+    )
+    return {
+        "schema_version": 1,
+        "status": "VERIFIED" if complete else "UNVERIFIED",
+        "reason": (
+            "campaign_decision_evidence_complete" if complete
+            else "campaign_decision_evidence_incomplete"
+        ),
+        "expected_receipts": len(expected),
+        "matched_receipts": len(selected),
+        "missing_identity_sha256": missing,
+        "unexpected_identity_sha256": sorted(unexpected_in_window),
+        "unresolved_identity_sha256": sorted(unresolved),
+        "outside_window_identity_sha256": sorted(outside_window),
+        "duplicate_idea_ids": duplicate_idea_ids,
+        "idea_ids": idea_ids,
+        "admitted_count": admitted_count,
+        "terminal_count": terminal_count,
+        "qualified_success_count": qualified_successes,
+        "qualified_success_idea_ids": qualified_success_idea_ids,
+        "qualified_success_identity_complete": qualified_identity_complete,
+        "qualified_success_rate": (
+            qualified_successes / admitted_count if admitted_count else None
+        ),
+        "time_to_first_decision_seconds": (
+            min(resolution_times) - start_epoch if resolution_times else None
+        ),
+        "time_to_all_decisions_seconds": (
+            max(resolution_times) - start_epoch if resolution_times else None
+        ),
+        "status_counts": dict(sorted(status_counts.items())),
+    }
 
 
 def stage_decision_contract(

@@ -140,25 +140,28 @@ def test_external_scheduler_command_runs_only_while_lease_is_held(tmp_path):
     assert _attempt_in_fresh_process(_gpu(6)).returncode == 0
 
 
-def test_external_child_inherits_lease_if_wrapper_is_killed():
+def test_external_child_inherits_lease_if_wrapper_is_killed(tmp_path):
     gpu = _gpu(7)
+    ready = tmp_path / "lease-child-ready"
+    child_code = (
+        "import time; from pathlib import Path; "
+        f"Path({str(ready)!r}).touch(); time.sleep(1.5)"
+    )
     code = (
         "import sys; "
         "from orze.core.gpu_lease import run_with_gpu_leases; "
         f"raise SystemExit(run_with_gpu_leases([{gpu}], "
-        "[sys.executable, '-c', 'import time; time.sleep(1.5)']))"
+        f"[sys.executable, '-c', {child_code!r}]))"
     )
     wrapper = subprocess.Popen(
         [sys.executable, "-c", code], env=_child_env())
     try:
         import time
         deadline = time.time() + 5
-        while time.time() < deadline:
-            if _attempt_in_fresh_process(gpu).returncode != 0:
-                break
-            time.sleep(0.02)
-        else:
-            pytest.fail("wrapper never acquired GPU lease")
+        while (not ready.exists() and wrapper.poll() is None
+               and time.time() < deadline):
+            time.sleep(0.01)
+        assert ready.exists(), "leased child never reached its ready marker"
         wrapper.kill()
         wrapper.wait(timeout=5)
         # The detached child inherited the descriptor and retains the lease.

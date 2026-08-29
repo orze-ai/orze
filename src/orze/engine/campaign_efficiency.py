@@ -25,6 +25,15 @@ DEFAULT_CAMPAIGN_TARGETS = {
     "max_terminal_to_next_claim_poll_intervals": 1.0,
 }
 
+DEFAULT_OUTCOME_TARGETS = {
+    "max_time_to_first_decision_seconds": 14_400.0,
+    "max_time_to_all_decisions_seconds": 86_400.0,
+    "min_qualified_success_rate": 0.25,
+    "max_gpu_hours_per_qualified_success": 8.0,
+    "max_duplicate_training_attempts": 0,
+    "min_zero_gpu_rejection_rate": 1.0,
+}
+
 
 def capture_campaign_efficiency_sample(
     lake: IdeaLake,
@@ -163,6 +172,51 @@ def _manifest_error(
     if (targets["min_allocation_duty_cycle"]
             < DEFAULT_CAMPAIGN_TARGETS["min_allocation_duty_cycle"]):
         return "min_allocation_duty_cycle cannot be weaker than the default target"
+    outcome = manifest.get("outcome_contract")
+    if outcome is not None:
+        if (not isinstance(outcome, dict)
+                or set(outcome) != {
+                    "expected_decision_identity_sha256",
+                    "artifact_relation",
+                    "targets",
+                }):
+            return "outcome_contract fields are invalid"
+        identities = outcome.get("expected_decision_identity_sha256")
+        if (not isinstance(identities, list) or not identities
+                or len(identities) != len(set(identities))
+                or any(not isinstance(value, str) or len(value) != 64
+                       or any(char not in "0123456789abcdef" for char in value)
+                       for value in identities)):
+            return "outcome_contract decision identities are invalid"
+        if outcome.get("artifact_relation") not in {
+                "identical", "distinct", "any"}:
+            return "outcome_contract artifact_relation is invalid"
+        outcome_targets = outcome.get("targets")
+        if (not isinstance(outcome_targets, dict)
+                or set(outcome_targets) != set(DEFAULT_OUTCOME_TARGETS)
+                or any(isinstance(value, bool)
+                       or not isinstance(value, (int, float))
+                       or not math.isfinite(float(value)) or value < 0
+                       for value in outcome_targets.values())):
+            return "outcome_contract targets are invalid"
+        duplicates = outcome_targets["max_duplicate_training_attempts"]
+        if isinstance(duplicates, bool) or not isinstance(duplicates, int):
+            return "outcome_contract max_duplicate_training_attempts must be integer"
+        for key in (
+            "max_time_to_first_decision_seconds",
+            "max_time_to_all_decisions_seconds",
+            "max_gpu_hours_per_qualified_success",
+            "max_duplicate_training_attempts",
+        ):
+            if outcome_targets[key] > DEFAULT_OUTCOME_TARGETS[key]:
+                return f"outcome_contract {key} cannot be weaker than default"
+        for key in (
+            "min_qualified_success_rate",
+            "min_zero_gpu_rejection_rate",
+        ):
+            if (not 0 <= outcome_targets[key] <= 1
+                    or outcome_targets[key] < DEFAULT_OUTCOME_TARGETS[key]):
+                return f"outcome_contract {key} cannot be weaker than default"
     return None
 
 
@@ -209,6 +263,37 @@ def preregister_campaign(
         "manifest_sha256": digest,
         "registered_at_epoch": registered_at_epoch,
         "registered_at": registered_at,
+    }
+
+
+def verify_campaign_registration(
+    db_path: str | Path,
+    manifest: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Verify the exact canonical manifest against its write-once DB row."""
+    canonical = _canonical_manifest(manifest)
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    lake = IdeaLake(str(db_path))
+    try:
+        row = lake.conn.execute(
+            "SELECT manifest_sha256, manifest_json, registered_at_epoch, "
+            "registered_at FROM harness_campaign_registrations "
+            "WHERE campaign_id = ?",
+            (manifest.get("campaign_id"),),
+        ).fetchone()
+    finally:
+        lake.close()
+    valid = bool(
+        row
+        and row["manifest_sha256"] == digest
+        and row["manifest_json"] == canonical
+        and row["registered_at_epoch"] <= manifest.get("start_epoch", -1)
+    )
+    return {
+        "valid": valid,
+        "manifest_sha256": digest,
+        "registered_at_epoch": row["registered_at_epoch"] if row else None,
+        "registered_at": row["registered_at"] if row else None,
     }
 
 

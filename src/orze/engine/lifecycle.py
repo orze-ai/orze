@@ -391,13 +391,17 @@ def reconcile_stale_running(cfg: dict) -> None:
                     if persisted:
                         evaluation_stage = lake.get_stage_state(
                             idea_id, "evaluation")
-                        if evaluation_stage == "NOT_STARTED":
+                        if evaluation_stage in ("NOT_STARTED", "IN_PROGRESS"):
                             persisted = lake.record_stage_transition(
                                 idea_id,
                                 stage="evaluation",
-                                from_state="NOT_STARTED",
+                                from_state=evaluation_stage,
                                 to_state="PENDING",
-                                reason="reconcile_evaluation_pending",
+                                reason=(
+                                    "reconcile_evaluation_pending"
+                                    if evaluation_stage == "NOT_STARTED" else
+                                    "reconcile_interrupted_evaluation_pending"
+                                ),
                                 host=hostname,
                                 pid=os.getpid(),
                             )
@@ -575,13 +579,17 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                     return False
                 evaluation_stage = lake.get_stage_state(
                     idea_id, "evaluation")
-                if evaluation_stage == "NOT_STARTED":
+                if evaluation_stage in ("NOT_STARTED", "IN_PROGRESS"):
                     return lake.record_stage_transition(
                         idea_id,
                         stage="evaluation",
-                        from_state="NOT_STARTED",
+                        from_state=evaluation_stage,
                         to_state="PENDING",
-                        reason="reconcile_evaluation_pending",
+                        reason=(
+                            "reconcile_evaluation_pending"
+                            if evaluation_stage == "NOT_STARTED" else
+                            "reconcile_interrupted_evaluation_pending"
+                        ),
                         host=hostname,
                         pid=os.getpid(),
                     )
@@ -811,6 +819,39 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     training_count = len(active)
     eval_count = len(active_evals)
 
+    def close_interrupted_evaluation(ep) -> None:
+        """Close compute/stage evidence after a controlled evaluator stop."""
+        try:
+            from orze.engine.accounting import record_compute_terminal
+            record_compute_terminal(
+                ep, results_dir / ep.idea_id, "interrupted",
+                "evaluation_controller_shutdown", phase="evaluation",
+                return_code=ep.process.poll(),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not persist evaluation interruption receipt for %s: %s",
+                ep.idea_id, type(exc).__name__,
+            )
+        if lake is not None:
+            try:
+                stage = lake.get_stage_state(ep.idea_id, "evaluation")
+                if stage == "IN_PROGRESS" and not lake.record_stage_transition(
+                    ep.idea_id,
+                    stage="evaluation",
+                    from_state="IN_PROGRESS",
+                    to_state="PENDING",
+                    reason="evaluation_controller_shutdown_retry",
+                    host=hostname,
+                    pid=os.getpid(),
+                ):
+                    raise RuntimeError("evaluation_stage_retry_rejected")
+            except Exception as exc:
+                logger.warning(
+                    "Could not reset evaluation stage for %s: %s",
+                    ep.idea_id, type(exc).__name__,
+                )
+
     # 0. Write "shutting_down" heartbeat so other nodes know our state
     if not managed:
         try:
@@ -867,20 +908,35 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                         "Could not persist interruption receipt for %s: %s",
                         proc.idea_id, type(exc).__name__,
                     )
+            else:
+                close_interrupted_evaluation(proc)
             if hasattr(proc, 'lock_dir') and proc.lock_dir:
                 _fs_unlock(proc.lock_dir)
     else:
-        # Default: detach training/eval, kill only roles
+        # Training has a durable process/claim recovery path and may safely
+        # detach. Evaluators do not: detaching left an unowned allocation that
+        # could never write its terminal receipt. Interrupt evals cleanly and
+        # return their stage to PENDING so the next controller can retry.
         for gpu, tp in active.items():
             logger.info("Detaching training %s on GPU %s (PID %d) "
                         "-- will finish in background",
                         tp.idea_id, gpu, tp.process.pid)
             tp.close_log()
         for gpu, ep in active_evals.items():
-            logger.info("Detaching eval %s on GPU %s (PID %d) "
-                        "-- will finish in background",
+            logger.info("Interrupting eval %s on GPU %s (PID %d) "
+                        "-- next controller will retry",
                         ep.idea_id, gpu, ep.process.pid)
+            _kill_pg(ep.process, signal.SIGTERM)
+            try:
+                ep.process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                _kill_pg(ep.process, signal.SIGKILL)
+                try:
+                    ep.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
             ep.close_log()
+            close_interrupted_evaluation(ep)
         for role_name, rp in active_roles.items():
             logger.info("Terminating role '%s' (PID %d)...",
                         role_name, rp.process.pid)
@@ -935,7 +991,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
 
     logger.info(
         "Shutdown complete%s after iteration %d. %d training and %d eval "
-        "process(es) detached.",
+        "process(es) handled.",
         " (managed; campaign state unchanged)" if managed else "; state saved",
         iteration, training_count if not kill_all else 0,
         eval_count if not kill_all else 0)

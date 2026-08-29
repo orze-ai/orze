@@ -6,6 +6,7 @@ import pytest
 
 from orze.engine.campaign_efficiency import (
     DEFAULT_CAMPAIGN_TARGETS,
+    DEFAULT_OUTCOME_TARGETS,
     analyze_campaign,
     capture_campaign_efficiency_sample,
     preregister_campaign,
@@ -94,6 +95,20 @@ def test_enabled_sampling_requires_campaign_id():
 def test_registration_rejects_weakened_targets(tmp_path):
     manifest = _manifest()
     manifest["targets"]["min_allocation_duty_cycle"] = 0.89
+    with pytest.raises(ValueError, match="cannot be weaker"):
+        preregister_campaign(tmp_path / "lake.db", manifest)
+
+
+def test_registration_rejects_weakened_outcome_targets(tmp_path):
+    manifest = _manifest()
+    manifest["outcome_contract"] = {
+        "expected_decision_identity_sha256": ["a" * 64],
+        "artifact_relation": "identical",
+        "targets": dict(DEFAULT_OUTCOME_TARGETS),
+    }
+    manifest["outcome_contract"]["targets"][
+        "max_gpu_hours_per_qualified_success"
+    ] = 8.1
     with pytest.raises(ValueError, match="cannot be weaker"):
         preregister_campaign(tmp_path / "lake.db", manifest)
 

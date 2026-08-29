@@ -8,6 +8,7 @@ import time
 import pytest
 
 from orze.engine.accounting import (
+    audit_campaign_compute_receipts,
     ComputeAccountingError,
     record_compute_start,
     record_compute_terminal,
@@ -18,9 +19,11 @@ from orze.engine.evaluator import check_active_evals, launch_eval
 from orze.engine.failure import _reset_idea_for_retry
 from orze.engine.launcher import check_active, launch
 from orze.engine.process import TrainingProcess
+from orze.engine.process import EvalProcess
 from orze.engine.process import run_pre_script
 from orze.engine.resume import write_interruption_receipt
 from orze.engine.scheduler import claim
+from orze.idea_lake import IdeaLake
 
 
 class FinishedProcess:
@@ -32,6 +35,15 @@ class FinishedProcess:
         return self.return_code
 
     def wait(self, timeout=None):
+        return self.return_code
+
+
+class InterruptibleProcess(FinishedProcess):
+    def __init__(self, pid=12346):
+        super().__init__(return_code=None, pid=pid)
+
+    def wait(self, timeout=None):
+        self.return_code = -15
         return self.return_code
 
 
@@ -207,6 +219,9 @@ def test_compute_summary_uses_receipts_and_reports_invalid_evidence(tmp_path):
         completed, completed_dir, "completed", "trainer_completed",
         return_code=0,
     )
+    receipt_dir = completed_dir / "_compute_receipts" / completed.attempt_id
+    (receipt_dir / "boundary.json").write_text(
+        '{"separately_validated":"model_lineage"}', encoding="utf-8")
     rejected_dir = results / "idea-rejected"
     assert claim("idea-rejected", results, 5)
     record_zero_gpu_outcome(
@@ -336,3 +351,177 @@ def test_evaluation_has_separate_validated_compute_receipt(
     assert terminal["phase"] == "evaluation"
     assert terminal["outcome"] == "completed"
     assert terminal["reason_code"] == "evaluation_validated"
+
+
+def test_controller_shutdown_closes_eval_compute_and_requeues_stage(
+        tmp_path, monkeypatch):
+    from orze.engine import lifecycle
+
+    results = tmp_path / "results"
+    idea_id = "idea-eval-shutdown"
+    idea_dir = results / idea_id
+    idea_dir.mkdir(parents=True)
+    lake_path = tmp_path / "lake.db"
+    lake = IdeaLake(str(lake_path))
+    lake.insert(idea_id, "eval shutdown", "{}", "", status="queued")
+    assert lake.record_state_transition(idea_id, "QUEUED", "CLAIMED")
+    assert lake.record_state_transition(idea_id, "CLAIMED", "IN_PROGRESS")
+    assert lake.record_stage_transition(
+        idea_id, "training", "IN_PROGRESS", "COMPLETE", "trained")
+    assert lake.record_stage_transition(
+        idea_id, "evaluation", "PENDING", "IN_PROGRESS", "evaluating")
+
+    process = InterruptibleProcess()
+    ep = EvalProcess(
+        idea_id=idea_id,
+        gpu=4,
+        process=process,
+        start_time=time.time() - 5,
+        log_path=idea_dir / "eval.log",
+        timeout=60,
+        attempt_id="d" * 32,
+    )
+    record_compute_start(ep, idea_dir, phase="evaluation")
+    active_evals = {4: ep}
+    signals = []
+    monkeypatch.setattr(
+        lifecycle, "_kill_pg", lambda proc, sig: signals.append(sig))
+    monkeypatch.setattr(lifecycle, "save_state", lambda *args: None)
+    monkeypatch.setattr(lifecycle, "notify", lambda *args: None)
+
+    lifecycle.graceful_shutdown(
+        results, {}, {}, active_evals, {}, 1, {}, lake,
+        "host", "instance", kill_all=False,
+    )
+
+    terminal = json.loads((
+        idea_dir / "_compute_receipts" / ep.attempt_id / "terminal.json"
+    ).read_text())
+    reopened = IdeaLake(str(lake_path))
+    try:
+        assert terminal["phase"] == "evaluation"
+        assert terminal["outcome"] == "interrupted"
+        assert terminal["reason_code"] == "evaluation_controller_shutdown"
+        assert reopened.get_stage_state(idea_id, "evaluation") == "PENDING"
+        assert reopened.get_fsm_state(idea_id) == "IN_PROGRESS"
+        assert active_evals == {}
+        assert signals
+    finally:
+        reopened.close()
+
+
+def test_campaign_compute_audit_verifies_closed_scoped_exact_ideas(tmp_path):
+    results = tmp_path / "results"
+    now = time.time()
+    trained = _tp(tmp_path, attempt_id="e" * 32)
+    trained.start_time = now - 5
+    trained_dir = results / trained.idea_id
+    record_compute_start(trained, trained_dir)
+    record_compute_terminal(
+        trained, trained_dir, "completed", "trainer_completed", return_code=0
+    )
+    (trained_dir / "_compute_receipts" / trained.attempt_id
+     / "boundary.json").write_text("{}", encoding="utf-8")
+    rejected_id = "idea-campaign-rejected"
+    assert claim(rejected_id, results, 5)
+    record_zero_gpu_outcome(
+        rejected_id, results / rejected_id, 5, "rejected",
+        "method_validator_rejected",
+    )
+
+    audit = audit_campaign_compute_receipts(
+        results,
+        idea_ids=[trained.idea_id, rejected_id],
+        start_epoch=now - 10,
+        end_epoch=now + 10,
+        physical_scope=[4, 5, 6, 7],
+    )
+
+    assert audit["status"] == "VERIFIED"
+    assert audit["invalid_receipts"] == 0
+    assert audit["out_of_scope_receipts"] == 0
+    assert audit["incomplete_started_attempts"] == 0
+    assert audit["zero_gpu_rejection_rate"] == 1.0
+    assert audit["duplicate_training_attempts"] == 0
+    assert audit["missing_terminal_ideas"] == []
+
+
+def test_campaign_compute_audit_fails_closed_on_scope_and_missing_terminal(
+        tmp_path):
+    results = tmp_path / "results"
+    now = time.time()
+    tp = _tp(tmp_path, attempt_id="f" * 32)
+    tp.start_time = now - 5
+    record_compute_start(tp, results / tp.idea_id)
+
+    audit = audit_campaign_compute_receipts(
+        results,
+        idea_ids=[tp.idea_id],
+        start_epoch=now - 10,
+        end_epoch=now + 10,
+        physical_scope=[5, 6, 7],
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["out_of_scope_receipts"] == 1
+    assert audit["incomplete_started_attempts"] == 1
+    assert audit["missing_terminal_ideas"] == [tp.idea_id]
+
+
+def test_campaign_compute_audit_rejects_redirected_receipt(tmp_path):
+    results = tmp_path / "results"
+    now = time.time()
+    tp = _tp(tmp_path, attempt_id="1" * 32)
+    tp.start_time = now - 5
+    idea_dir = results / tp.idea_id
+    record_compute_start(tp, idea_dir)
+    record_compute_terminal(
+        tp, idea_dir, "completed", "trainer_completed", return_code=0
+    )
+    terminal = idea_dir / "_compute_receipts" / tp.attempt_id / "terminal.json"
+    outside = tmp_path / "outside.json"
+    terminal.rename(outside)
+    terminal.symlink_to(outside)
+
+    audit = audit_campaign_compute_receipts(
+        results,
+        idea_ids=[tp.idea_id],
+        start_epoch=now - 10,
+        end_epoch=now + 10,
+        physical_scope=[4, 5, 6, 7],
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["invalid_receipts"] == 1
+    assert audit["incomplete_started_attempts"] == 1
+
+
+def test_campaign_compute_audit_cannot_hide_unregistered_losing_idea(tmp_path):
+    results = tmp_path / "results"
+    now = time.time()
+    expected = _tp(tmp_path, attempt_id="2" * 32)
+    expected.start_time = now - 5
+    record_compute_start(expected, results / expected.idea_id)
+    record_compute_terminal(
+        expected, results / expected.idea_id, "completed",
+        "trainer_completed", return_code=0,
+    )
+    hidden = _tp(tmp_path, attempt_id="3" * 32, return_code=1)
+    hidden.idea_id = "idea-hidden-loser"
+    hidden.start_time = now - 4
+    record_compute_start(hidden, results / hidden.idea_id)
+    record_compute_terminal(
+        hidden, results / hidden.idea_id, "failed",
+        "trainer_declared_failed", return_code=1,
+    )
+
+    audit = audit_campaign_compute_receipts(
+        results,
+        idea_ids=[expected.idea_id],
+        start_epoch=now - 10,
+        end_epoch=now + 10,
+        physical_scope=[4, 5, 6, 7],
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["unexpected_campaign_idea_ids"] == ["idea-hidden-loser"]

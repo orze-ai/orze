@@ -121,3 +121,41 @@ physical scope, sufficient lifecycle evidence and demand, and every target.
 Incomplete evidence is `UNVERIFIED`; complete evidence that misses a target is
 `FAILED`. Mean hardware utilization is reported as an observation, not silently
 used as a substitute for allocation duty cycle or official benchmark evidence.
+
+For a research campaign, the same preregistered manifest may include an
+`outcome_contract` containing the exact prospective decision-receipt SHA-256
+identities, the expected qualified-artifact relation (`identical`, `distinct`,
+or `any`), and every target in `DEFAULT_OUTCOME_TARGETS`. The defaults require:
+
+Stage the prospective decision contracts to obtain their identities, register
+the campaign manifest before its future start, and admit those exact contracts
+only inside the registered window. This ordering binds the complete experiment
+universe before any campaign allocation begins.
+
+| Outcome dimension | Maximum/minimum |
+|---|---:|
+| First valid decision | <= 4 hours |
+| All declared decisions | <= 24 hours |
+| Qualified success rate | >= 25% |
+| GPU-hours per qualified success | <= 8 |
+| Duplicate training attempts | 0 |
+| Zero-GPU rejection rate | 100% |
+
+These thresholds may be tightened before registration but not weakened. After
+the window closes, combine the validated decision, compute-allocation, and
+current artifact-lineage evidence:
+
+```bash
+python -m orze.engine.research_outcomes \
+  --db /path/to/project/.orze/idea_lake.db \
+  --results-dir /path/to/project/results \
+  --config /path/to/project/orze.yaml \
+  --manifest /path/to/campaign-manifest.json \
+  --output /path/to/research-outcome-receipt.json
+```
+
+The outcome receipt distinguishes three states: missing/contradictory evidence
+is `UNVERIFIED`, complete evidence that misses a preregistered target is
+`FAILED`, and only complete passing evidence is `VERIFIED`. It explicitly sets
+`rank_claim_proven: false`; local campaign success never proves an official
+leaderboard rank.

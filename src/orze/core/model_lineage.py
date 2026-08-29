@@ -548,6 +548,77 @@ def validate_model_lineage_for_evaluation(
     return lineage, lineage_sha256
 
 
+def audit_campaign_model_lineage(
+    results_dir: Path,
+    cfg: Mapping,
+    *,
+    idea_ids: list[str],
+    artifact_relation: str,
+) -> dict:
+    """Verify current artifacts for the exact qualified-success idea set.
+
+    ``identical`` is appropriate for deterministic replication; ``distinct``
+    detects redundant artifacts in a hypothesis batch; ``any`` validates each
+    lineage without making a cross-run artifact claim.
+    """
+    if (not isinstance(idea_ids, list) or not idea_ids
+            or len(idea_ids) != len(set(idea_ids))
+            or any(not isinstance(idea_id, str)
+                   or _TOKEN.fullmatch(idea_id) is None for idea_id in idea_ids)):
+        raise ModelLineageError("campaign_lineage_idea_ids_invalid")
+    if artifact_relation not in {"identical", "distinct", "any"}:
+        raise ModelLineageError("campaign_lineage_relation_invalid")
+    artifacts = {}
+    execution_identities = {}
+    receipt_hashes = {}
+    invalid_idea_ids = []
+    for idea_id in idea_ids:
+        try:
+            lineage, receipt_hash = validate_model_lineage_for_evaluation(
+                Path(results_dir) / idea_id, cfg
+            )
+            artifact_hash = lineage.get("artifact_sha256")
+            execution_hash = lineage.get("execution_identity_sha256")
+            if (_HEX64.fullmatch(str(artifact_hash)) is None
+                    or _HEX64.fullmatch(str(execution_hash)) is None
+                    or lineage.get("rank_claim_proven") is not False):
+                raise ModelLineageError("model_lineage_receipt_invalid")
+            artifacts[idea_id] = artifact_hash
+            execution_identities[idea_id] = execution_hash
+            receipt_hashes[idea_id] = receipt_hash
+        except (ModelLineageError, OSError, TypeError, ValueError):
+            invalid_idea_ids.append(idea_id)
+
+    unique_artifacts = len(set(artifacts.values()))
+    relation_passed = (
+        artifact_relation == "any"
+        or (artifact_relation == "identical" and unique_artifacts == 1)
+        or (artifact_relation == "distinct"
+            and unique_artifacts == len(idea_ids))
+    )
+    complete = (
+        not invalid_idea_ids
+        and len(artifacts) == len(idea_ids)
+        and relation_passed
+    )
+    return {
+        "schema_version": 1,
+        "status": "VERIFIED" if complete else "UNVERIFIED",
+        "expected_idea_count": len(idea_ids),
+        "verified_lineage_count": len(artifacts),
+        "invalid_idea_ids": sorted(invalid_idea_ids),
+        "artifact_relation": artifact_relation,
+        "artifact_relation_passed": relation_passed,
+        "unique_artifact_count": unique_artifacts,
+        "artifact_sha256_by_idea": dict(sorted(artifacts.items())),
+        "execution_identity_sha256_by_idea": dict(
+            sorted(execution_identities.items())
+        ),
+        "lineage_receipt_sha256_by_idea": dict(sorted(receipt_hashes.items())),
+        "rank_claim_proven": False,
+    }
+
+
 def model_lineage_evidence_paths(idea_dir: Path, cfg: Mapping) -> list[Path]:
     """Return metadata-tracked paths that can invalidate local lineage.
 

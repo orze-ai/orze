@@ -283,7 +283,31 @@ def summarize_compute_receipts(results_dir: Path) -> dict:
     total_seconds = 0.0
     by_phase = {}
 
-    for path in results_dir.glob("*/_compute_receipts/*/*.json"):
+    receipt_dirs = sorted(results_dir.glob("*/_compute_receipts/*"))
+    paths = []
+    for receipt_dir in receipt_dirs:
+        if not receipt_dir.is_dir():
+            invalid += 1
+            continue
+        try:
+            json_files = sorted(receipt_dir.glob("*.json"))
+        except OSError:
+            invalid += 1
+            continue
+        # ``boundary.json`` is the separately validated model-lineage launch
+        # envelope, not a compute event.  Counting it as malformed made every
+        # managed training attempt poison the accounting summary. Unknown JSON
+        # sidecars still fail closed.
+        for sidecar in json_files:
+            if sidecar.name not in {"start.json", "terminal.json", "boundary.json"}:
+                invalid += 1
+        paths.extend(
+            receipt_dir / name
+            for name in ("start.json", "terminal.json")
+            if (receipt_dir / name).exists()
+        )
+
+    for path in paths:
         try:
             receipt = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(receipt, dict):
@@ -344,3 +368,268 @@ def summarize_compute_receipts(results_dir: Path) -> dict:
         "invalid_receipts": invalid,
         "by_phase": dict(sorted(by_phase.items())),
     }
+
+
+def audit_campaign_compute_receipts(
+    results_dir: Path,
+    *,
+    idea_ids: list[str],
+    start_epoch: float,
+    end_epoch: float,
+    physical_scope: list[int],
+) -> dict:
+    """Audit exact campaign compute evidence without trusting trainer output.
+
+    Unlike the repository-wide operational summary, this verifier requires a
+    closed idea set and time/GPU scope. Every expected idea must have terminal
+    accounting, every allocated start must close, paired receipts must agree,
+    and zero-GPU outcomes must be genuine pre-allocation rejections/requeues.
+    """
+    if (not isinstance(idea_ids, list) or not idea_ids
+            or len(idea_ids) != len(set(idea_ids))):
+        raise ComputeAccountingError("campaign_idea_ids_invalid")
+    expected = {_token(idea_id, "idea_id") for idea_id in idea_ids}
+    if (isinstance(start_epoch, bool) or isinstance(end_epoch, bool)
+            or not isinstance(start_epoch, (int, float))
+            or not isinstance(end_epoch, (int, float))
+            or not math.isfinite(float(start_epoch))
+            or not math.isfinite(float(end_epoch))
+            or not 0 <= start_epoch < end_epoch):
+        raise ComputeAccountingError("campaign_window_invalid")
+    if (not isinstance(physical_scope, list) or not physical_scope
+            or len(physical_scope) != len(set(physical_scope))
+            or any(isinstance(gpu, bool) or not isinstance(gpu, int) or gpu < 0
+                   for gpu in physical_scope)):
+        raise ComputeAccountingError("campaign_physical_scope_invalid")
+    allowed = set(physical_scope)
+
+    invalid = 0
+    out_of_scope = 0
+    events = {}
+    unexpected_sidecars = 0
+    unexpected_ideas = set()
+    # The preregistered decision set is an exact compute universe, not a filter
+    # that may hide losing experiments. Any other framework allocation whose
+    # start/terminal falls inside the campaign window invalidates the receipt.
+    for path in Path(results_dir).glob("*/_compute_receipts/*/*.json"):
+        idea_id = path.parents[2].name
+        if idea_id in expected or path.name not in {"start.json", "terminal.json"}:
+            continue
+        at = None
+        try:
+            info = path.lstat()
+            if (path.is_symlink() or not path.is_file()
+                    or info.st_nlink != 1
+                    or not 1 <= info.st_size <= 1024 * 1024):
+                raise OSError("unsafe compute receipt")
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if path.name == "start.json":
+                at = payload.get("started_at_epoch")
+            else:
+                at = _parse_receipt_time(payload.get("finished_at"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError,
+                AttributeError, TypeError, ValueError):
+            # Modification time is only a conservative inclusion fallback; it
+            # can invalidate evidence but can never make it pass.
+            try:
+                at = path.lstat().st_mtime
+            except OSError:
+                at = start_epoch
+        if (isinstance(at, (int, float)) and not isinstance(at, bool)
+                and math.isfinite(float(at))
+                and start_epoch <= float(at) <= end_epoch):
+            unexpected_ideas.add(idea_id)
+
+    for idea_id in sorted(expected):
+        idea_dir = Path(results_dir) / idea_id
+        receipt_root = idea_dir / "_compute_receipts"
+        if not receipt_root.exists():
+            continue
+        if idea_dir.is_symlink() or receipt_root.is_symlink():
+            invalid += 1
+            continue
+        try:
+            receipt_dirs = sorted(receipt_root.iterdir())
+        except OSError:
+            invalid += 1
+            continue
+        for receipt_dir in receipt_dirs:
+            if not receipt_dir.is_dir() or receipt_dir.is_symlink():
+                invalid += 1
+                continue
+            attempt_id = receipt_dir.name
+            try:
+                _token(attempt_id, "attempt_id")
+                json_files = sorted(receipt_dir.glob("*.json"))
+            except (ComputeAccountingError, OSError):
+                invalid += 1
+                continue
+            for sidecar in json_files:
+                if sidecar.name not in {
+                    "start.json", "terminal.json", "boundary.json",
+                }:
+                    unexpected_sidecars += 1
+                    invalid += 1
+            for event in ("start", "terminal"):
+                path = receipt_dir / f"{event}.json"
+                if not path.exists():
+                    continue
+                try:
+                    info = path.lstat()
+                    if (path.is_symlink() or not path.is_file()
+                            or info.st_nlink != 1
+                            or not 1 <= info.st_size <= 1024 * 1024):
+                        raise OSError("unsafe compute receipt")
+                    receipt = json.loads(path.read_text(encoding="utf-8"))
+                    if (not isinstance(receipt, dict)
+                            or receipt.get("schema_version") != 1
+                            or receipt.get("idea_id") != idea_id
+                            or receipt.get("attempt_id") != attempt_id
+                            or receipt.get("event") != event):
+                        raise ValueError
+                    phase = _token(receipt.get("phase", ""), "phase")
+                    outcome = _token(receipt.get("outcome", ""), "outcome")
+                    if phase not in _PHASES or outcome not in _OUTCOMES:
+                        raise ValueError
+                    gpu = receipt.get("physical_gpu")
+                    if (isinstance(gpu, bool) or not isinstance(gpu, int)
+                            or gpu < 0):
+                        raise ValueError
+                    if gpu not in allowed:
+                        out_of_scope += 1
+                    if event == "start":
+                        if outcome != "started":
+                            raise ValueError
+                        at = receipt.get("started_at_epoch")
+                    else:
+                        if outcome == "started":
+                            raise ValueError
+                        seconds = receipt.get("allocated_gpu_seconds")
+                        if (isinstance(seconds, bool)
+                                or not isinstance(seconds, (int, float))
+                                or not math.isfinite(float(seconds))
+                                or seconds < 0):
+                            raise ValueError
+                        at = _parse_receipt_time(receipt.get("finished_at"))
+                    if (isinstance(at, bool)
+                            or not isinstance(at, (int, float))
+                            or not math.isfinite(float(at))
+                            or not start_epoch <= float(at) <= end_epoch):
+                        raise ValueError
+                    key = (idea_id, attempt_id)
+                    bucket = events.setdefault(key, {})
+                    if event in bucket:
+                        raise ValueError
+                    bucket[event] = receipt
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError,
+                        ComputeAccountingError, TypeError, ValueError):
+                    invalid += 1
+
+    incomplete = 0
+    zero_gpu = 0
+    zero_gpu_valid = 0
+    allocated_seconds = 0.0
+    terminal_ideas = set()
+    training_starts = {}
+    by_phase = {}
+    for (idea_id, _attempt_id), pair in events.items():
+        start = pair.get("start")
+        terminal = pair.get("terminal")
+        if start is not None:
+            if start["phase"] == "training":
+                training_starts[idea_id] = training_starts.get(idea_id, 0) + 1
+            if terminal is None:
+                incomplete += 1
+                continue
+        if terminal is None:
+            continue
+        terminal_ideas.add(idea_id)
+        seconds = float(terminal["allocated_gpu_seconds"])
+        allocated_seconds += seconds
+        phase = terminal["phase"]
+        phase_summary = by_phase.setdefault(phase, {
+            "attempts": 0,
+            "allocated_gpu_seconds": 0.0,
+            "outcomes": {},
+        })
+        phase_summary["attempts"] += 1
+        phase_summary["allocated_gpu_seconds"] += seconds
+        outcome = terminal["outcome"]
+        phase_summary["outcomes"][outcome] = (
+            phase_summary["outcomes"].get(outcome, 0) + 1
+        )
+        if start is None:
+            zero_gpu += 1
+            if (phase in {"admission", "pre_script"}
+                    and outcome in {"rejected", "requeued"}
+                    and seconds == 0.0
+                    and terminal.get("process_pid") is None
+                    and "started_at_epoch" not in terminal):
+                zero_gpu_valid += 1
+            else:
+                invalid += 1
+            continue
+        if (start["idea_id"] != terminal["idea_id"]
+                or start["attempt_id"] != terminal["attempt_id"]
+                or start["phase"] != terminal["phase"]
+                or start["physical_gpu"] != terminal["physical_gpu"]
+                or terminal.get("started_at_epoch")
+                != start.get("started_at_epoch")):
+            invalid += 1
+
+    for phase_summary in by_phase.values():
+        phase_summary["allocated_gpu_seconds"] = round(
+            phase_summary["allocated_gpu_seconds"], 3
+        )
+        phase_summary["outcomes"] = dict(sorted(
+            phase_summary["outcomes"].items()
+        ))
+    duplicate_training_attempts = sum(
+        max(0, count - 1) for count in training_starts.values()
+    )
+    missing_terminal_ideas = sorted(expected - terminal_ideas)
+    evidence_complete = (
+        invalid == 0
+        and out_of_scope == 0
+        and incomplete == 0
+        and not missing_terminal_ideas
+        and not unexpected_ideas
+        and zero_gpu == zero_gpu_valid
+    )
+    return {
+        "schema_version": 1,
+        "status": "VERIFIED" if evidence_complete else "UNVERIFIED",
+        "expected_idea_count": len(expected),
+        "ideas_with_terminal_evidence": len(terminal_ideas),
+        "missing_terminal_ideas": missing_terminal_ideas,
+        "unexpected_campaign_idea_ids": sorted(unexpected_ideas),
+        "attempts_started": sum(1 for pair in events.values() if "start" in pair),
+        "attempts_terminal": sum(
+            1 for pair in events.values() if "terminal" in pair
+        ),
+        "incomplete_started_attempts": incomplete,
+        "zero_gpu_terminal_attempts": zero_gpu,
+        "valid_zero_gpu_terminal_attempts": zero_gpu_valid,
+        "zero_gpu_rejection_rate": (
+            zero_gpu_valid / zero_gpu if zero_gpu else 1.0
+        ),
+        "out_of_scope_receipts": out_of_scope,
+        "invalid_receipts": invalid,
+        "unexpected_sidecars": unexpected_sidecars,
+        "allocated_gpu_seconds_total": round(allocated_seconds, 3),
+        "training_start_counts_by_idea": dict(sorted(training_starts.items())),
+        "duplicate_training_attempts": duplicate_training_attempts,
+        "by_phase": dict(sorted(by_phase.items())),
+    }
+
+
+def _parse_receipt_time(value) -> Optional[float]:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.timestamp()

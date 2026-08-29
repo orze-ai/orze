@@ -3,11 +3,13 @@
 import json
 import sqlite3
 import threading
+import time
 
 import pytest
 
 from orze.core.decision_batches import (
     admit_decision_contract,
+    audit_campaign_decision_receipts,
     reconcile_decision_batches,
     stage_decision_contract,
     validate_idea_decision_admission,
@@ -197,6 +199,60 @@ def test_qualified_threshold_success_releases_next_batch(tmp_path):
     with pytest.raises(ValueError, match="idea_reused"):
         stage_decision_contract(
             results_dir, cfg, 8, _contract(threshold=0.8), _ideas())
+
+
+def test_campaign_decision_audit_verifies_exact_resolved_receipt(tmp_path):
+    start = time.time() - 1
+    db_path = _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "running", "data", "IN_PROGRESS"),
+    ])
+    results_dir, cfg, path = _stage_and_admit(tmp_path, threshold=0.7)
+    identity = json.loads(path.read_text())["identity_sha256"]
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "failed", "data", "FAILED"),
+    ])
+    _write_score(results_dir, "idea-alpha", 0.8)
+    assert reconcile_decision_batches(results_dir, cfg)["allow_new_batch"] is True
+
+    audit = audit_campaign_decision_receipts(
+        results_dir,
+        cfg,
+        expected_identity_sha256=[identity],
+        start_epoch=start,
+        end_epoch=time.time() + 1,
+    )
+
+    assert audit["status"] == "VERIFIED"
+    assert audit["idea_ids"] == ["idea-alpha", "idea-beta"]
+    assert audit["qualified_success_count"] == 1
+    assert audit["qualified_success_idea_ids"] == ["idea-alpha"]
+    assert audit["qualified_success_identity_complete"] is True
+    assert audit["terminal_count"] == 2
+    assert audit["time_to_first_decision_seconds"] >= 0
+
+
+def test_campaign_decision_audit_fails_closed_while_batch_unresolved(tmp_path):
+    start = time.time() - 1
+    _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "queued", "data", "QUEUED"),
+    ])
+    results_dir, cfg, path = _stage_and_admit(tmp_path)
+    identity = json.loads(path.read_text())["identity_sha256"]
+
+    audit = audit_campaign_decision_receipts(
+        results_dir,
+        cfg,
+        expected_identity_sha256=[identity],
+        start_epoch=start,
+        end_epoch=time.time() + 1,
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["unresolved_identity_sha256"] == [identity]
+    assert audit["qualified_success_count"] == 0
 
 
 def test_required_successes_prevents_best_of_n_batch_success(tmp_path):
