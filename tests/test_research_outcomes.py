@@ -118,6 +118,7 @@ def _cfg(tmp_path):
 def _build_campaign(
     tmp_path, monkeypatch, *, qualified=True, expected_idea_ids=None,
     observe_rejection=True, expected_rejections=None,
+    outcome_target_overrides=None,
 ):
     now = time.time()
     start = now - 10
@@ -176,7 +177,10 @@ def _build_campaign(
                     for expected_id in (expected_idea_ids or [idea_id])
                 },
             },
-            "targets": dict(DEFAULT_OUTCOME_TARGETS),
+            "targets": {
+                **DEFAULT_OUTCOME_TARGETS,
+                **(outcome_target_overrides or {}),
+            },
         },
     }
     # Registration is prospectively enforced in production. Move only its
@@ -470,6 +474,70 @@ def test_post_decision_resolution_time_rewrite_invalidates_outcome(
     )
 
     assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["decision_evidence_complete"]["passed"] is False
+
+
+def test_backdated_resolution_content_cannot_hide_late_decision(
+        tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path,
+        monkeypatch,
+        qualified=True,
+        outcome_target_overrides={
+            "max_time_to_first_decision_seconds": 15.0,
+            "max_time_to_all_decisions_seconds": 15.0,
+        },
+    )
+    contracts = tmp_path / ".orze" / "policy" / "decision_contracts"
+    receipt_path = next(contracts.glob("cycle-*.json"))
+    identity = json.loads(receipt_path.read_text(encoding="utf-8"))[
+        "identity_sha256"
+    ]
+    event_path = contracts / "_resolution_events" / f"{identity}.json"
+    published_at = end + 30
+    for path in (event_path, receipt_path):
+        os.utime(path, (published_at, published_at))
+
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 60
+    )
+
+    assert receipt["status"] == "FAILED", receipt["checks"]
+    assert receipt["metrics"][
+        "reported_time_to_first_decision_seconds"
+    ] < 15
+    assert abs(
+        receipt["metrics"]["time_to_first_decision_seconds"] - 50
+    ) < 1e-5
+    assert abs(
+        receipt["metrics"]["time_to_all_decisions_seconds"] - 50
+    ) < 1e-5
+    assert receipt["checks"]["time_to_first_decision"]["passed"] is False
+    assert receipt["checks"]["time_to_all_decisions"]["passed"] is False
+
+
+def test_future_resolution_publication_is_unverified(tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path, monkeypatch, qualified=True
+    )
+    contracts = tmp_path / ".orze" / "policy" / "decision_contracts"
+    receipt_path = next(contracts.glob("cycle-*.json"))
+    identity = json.loads(receipt_path.read_text(encoding="utf-8"))[
+        "identity_sha256"
+    ]
+    event_path = contracts / "_resolution_events" / f"{identity}.json"
+    future = end + 30
+    for path in (event_path, receipt_path):
+        os.utime(path, (future, future))
+
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["decision_evidence"][
+        "resolution_publication_timing_invalid_identity_sha256"
+    ] == [identity]
     assert receipt["checks"]["decision_evidence_complete"]["passed"] is False
 
 

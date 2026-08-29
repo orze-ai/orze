@@ -66,6 +66,7 @@ def analyze_research_outcomes(
             ],
             start_epoch=manifest["start_epoch"],
             end_epoch=manifest["end_epoch"],
+            now_epoch=now,
         )
     except Exception as exc:
         decision = {
@@ -186,6 +187,12 @@ def analyze_research_outcomes(
         ),
         "time_to_all_decisions_seconds": decision.get(
             "time_to_all_decisions_seconds"
+        ),
+        "reported_time_to_first_decision_seconds": decision.get(
+            "reported_time_to_first_decision_seconds"
+        ),
+        "reported_time_to_all_decisions_seconds": decision.get(
+            "reported_time_to_all_decisions_seconds"
         ),
         "duplicate_training_attempts": compute.get(
             "duplicate_training_attempts"

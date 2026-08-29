@@ -15,6 +15,7 @@ import math
 import os
 import re
 import stat as statlib
+import time
 from pathlib import Path
 from typing import Mapping
 
@@ -437,6 +438,23 @@ def _resolution_event_matches(directory: Path, payload: Mapping) -> bool:
         return False
 
 
+def _publication_epoch(path: Path, *, max_bytes: int) -> float:
+    """Read one no-follow regular file's local publication timestamp."""
+    descriptor = None
+    try:
+        descriptor = os.open(
+            path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        )
+        info = os.fstat(descriptor)
+        if (not statlib.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or not 1 <= info.st_size <= max_bytes):
+            raise OSError("decision_publication_file_invalid")
+        return info.st_mtime_ns / 1_000_000_000.0
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
 def _load_receipts_locked(
     directory: Path,
     cfg: Mapping,
@@ -742,6 +760,7 @@ def audit_campaign_decision_receipts(
     expected_identity_sha256: list[str],
     start_epoch: float,
     end_epoch: float,
+    now_epoch: float | None = None,
 ) -> dict:
     """Verify the exact preregistered decision set for one closed campaign."""
     if (not isinstance(expected_identity_sha256, list)
@@ -759,6 +778,12 @@ def audit_campaign_decision_receipts(
             or not math.isfinite(float(end_epoch))
             or not 0 <= start_epoch < end_epoch):
         raise ValueError("campaign_decision_window_invalid")
+    audit_now = time.time() if now_epoch is None else now_epoch
+    if (isinstance(audit_now, bool)
+            or not isinstance(audit_now, (int, float))
+            or not math.isfinite(float(audit_now)) or audit_now <= 0):
+        raise ValueError("campaign_decision_audit_time_invalid")
+    audit_now = float(audit_now)
 
     directory = _control_dir(results_dir)
     if _redirected(directory):
@@ -778,6 +803,9 @@ def audit_campaign_decision_receipts(
         }
     by_identity = {
         payload["identity_sha256"]: payload for _, payload in receipts
+    }
+    path_by_identity = {
+        payload["identity_sha256"]: path for path, payload in receipts
     }
     expected = set(expected_identity_sha256)
     missing = sorted(expected - set(by_identity))
@@ -875,6 +903,9 @@ def audit_campaign_decision_receipts(
     terminal_count = 0
     admitted_count = 0
     resolution_times = []
+    reported_resolution_times = []
+    resolution_publication_events = []
+    resolution_publication_timing_invalid = []
     status_counts = {}
     for payload in selected:
         status = payload["status"]
@@ -892,7 +923,40 @@ def audit_campaign_decision_receipts(
         if resolved is None or resolved > end_epoch:
             outside_window.append(payload["identity_sha256"])
             continue
-        resolution_times.append(resolved)
+        reported_resolution_times.append(resolved)
+        identity = payload["identity_sha256"]
+        try:
+            event_published = _publication_epoch(
+                _resolution_event_path(directory, identity), max_bytes=4096,
+            )
+            receipt_published = _publication_epoch(
+                path_by_identity[identity], max_bytes=_MAX_RECEIPT_BYTES,
+            )
+        except (OSError, TypeError, ValueError):
+            resolution_publication_timing_invalid.append(identity)
+            decision_evidence_complete = False
+            continue
+        tolerance = 1.0
+        if (event_published < resolved - tolerance
+                or receipt_published < resolved - tolerance
+                or receipt_published < event_published - tolerance
+                or event_published > audit_now + tolerance
+                or receipt_published > audit_now + tolerance):
+            resolution_publication_timing_invalid.append(identity)
+            decision_evidence_complete = False
+            continue
+        effective_resolution = max(
+            resolved, event_published, receipt_published,
+        )
+        resolution_times.append(effective_resolution)
+        resolution_publication_events.append({
+            "identity_sha256": identity,
+            "reported_resolved_at_epoch": resolved,
+            "resolution_event_published_at_epoch": event_published,
+            "resolved_receipt_published_at_epoch": receipt_published,
+            "effective_resolved_at_epoch": effective_resolution,
+            "publication_delay_seconds": effective_resolution - resolved,
+        })
         terminal_count += payload["terminal_count"]
         qualified_successes += payload["qualified_success_count"]
         success_ids = payload.get("qualified_success_idea_ids")
@@ -940,6 +1004,16 @@ def audit_campaign_decision_receipts(
         "evidence_mismatch_idea_ids": sorted(
             set(evidence_mismatch_idea_ids)
         ),
+        "resolution_publication_events": resolution_publication_events,
+        "resolution_publication_timing_invalid_identity_sha256": sorted(
+            set(resolution_publication_timing_invalid)
+        ),
+        "max_resolution_publication_delay_seconds": (
+            max(
+                event["publication_delay_seconds"]
+                for event in resolution_publication_events
+            ) if resolution_publication_events else None
+        ),
         "qualified_success_rate": (
             qualified_successes / admitted_count if admitted_count else None
         ),
@@ -948,6 +1022,14 @@ def audit_campaign_decision_receipts(
         ),
         "time_to_all_decisions_seconds": (
             max(resolution_times) - start_epoch if resolution_times else None
+        ),
+        "reported_time_to_first_decision_seconds": (
+            min(reported_resolution_times) - start_epoch
+            if reported_resolution_times else None
+        ),
+        "reported_time_to_all_decisions_seconds": (
+            max(reported_resolution_times) - start_epoch
+            if reported_resolution_times else None
         ),
         "status_counts": dict(sorted(status_counts.items())),
         "rank_claim_proven": False,
