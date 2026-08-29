@@ -10,8 +10,9 @@ _CLOCKS = (
 
 def _state(lake: IdeaLake, idea_id: str) -> dict:
     row = lake.conn.execute(
-        "SELECT updated_at, queued_at, claimed_at, started_at, terminal_at, "
-        "completed_at FROM idea_state WHERE idea_id = ?",
+        "SELECT updated_at, first_queued_at, queued_at, claimed_at, "
+        "started_at, terminal_at, completed_at FROM idea_state "
+        "WHERE idea_id = ?",
         (idea_id,),
     ).fetchone()
     assert row is not None
@@ -25,6 +26,7 @@ def test_accepted_edges_atomically_stamp_state_and_audit(tmp_path):
 
     admitted = _state(lake, idea_id)
     assert admitted["queued_at"] is not None
+    assert admitted["first_queued_at"] == admitted["queued_at"]
     assert all(admitted[name] is None for name in _CLOCKS[1:])
 
     assert lake.record_state_transition(idea_id, "QUEUED", "CLAIMED")
@@ -105,10 +107,12 @@ def test_requeue_resets_current_attempt_but_ledger_retains_history(tmp_path):
     assert lake.record_state_transition(idea_id, "QUEUED", "CLAIMED")
     assert lake.record_state_transition(idea_id, "CLAIMED", "IN_PROGRESS")
     assert lake.record_state_transition(idea_id, "IN_PROGRESS", "FAILED")
+    first_queued = _state(lake, idea_id)["first_queued_at"]
     first_terminal = _state(lake, idea_id)["terminal_at"]
 
     assert lake.record_state_transition(idea_id, "FAILED", "QUEUED")
     requeued = _state(lake, idea_id)
+    assert requeued["first_queued_at"] == first_queued
     assert requeued["queued_at"] == lake.get_fsm_history(idea_id)[-1]["ts"]
     assert requeued["claimed_at"] is None
     assert requeued["started_at"] is None
@@ -122,6 +126,7 @@ def test_legacy_and_imported_rows_are_not_given_fabricated_history(tmp_path):
     db_path = tmp_path / "lake.db"
     lake = IdeaLake(db_path)
     lake.insert("idea-imported", "old", "{}", "", status="completed")
+    assert _state(lake, "idea-imported")["first_queued_at"] is None
     assert all(_state(lake, "idea-imported")[name] is None for name in _CLOCKS)
 
     lake.conn.execute(

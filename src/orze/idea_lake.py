@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS idea_state (
     idea_id TEXT PRIMARY KEY,
     current_state TEXT NOT NULL DEFAULT 'QUEUED',
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    first_queued_at TEXT,
     queued_at TEXT,
     claimed_at TEXT,
     started_at TEXT,
@@ -552,8 +553,8 @@ class IdeaLake:
         }
         missing = [
             name for name in (
-                "queued_at", "claimed_at", "started_at", "terminal_at",
-                "completed_at",
+                "first_queued_at", "queued_at", "claimed_at", "started_at",
+                "terminal_at", "completed_at",
             )
             if name not in columns
         ]
@@ -600,9 +601,10 @@ class IdeaLake:
         """
         if to_state == "QUEUED":
             return (
+                "first_queued_at = COALESCE(first_queued_at, ?), "
                 "queued_at = ?, claimed_at = NULL, started_at = NULL, "
                 "terminal_at = NULL, completed_at = NULL",
-                1,
+                2,
             )
         if to_state == "CLAIMED":
             return (
@@ -692,11 +694,11 @@ class IdeaLake:
         conn.execute(
             "INSERT INTO idea_state "
             "(idea_id, current_state, updated_by_host, updated_by_pid, sop_type, "
-            "updated_at, queued_at, claimed_at, started_at, terminal_at, "
-            "completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "updated_at, first_queued_at, queued_at, claimed_at, started_at, "
+            "terminal_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
-                idea_id, state, host, pid, sop_type, at, queued_at, claimed_at,
-                started_at, terminal_at, completed_at,
+                idea_id, state, host, pid, sop_type, at, queued_at, queued_at,
+                claimed_at, started_at, terminal_at, completed_at,
             ),
         )
 

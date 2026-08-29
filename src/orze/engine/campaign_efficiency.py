@@ -649,11 +649,12 @@ def analyze_campaign(
             ),
         ).fetchall()
         transitions = lake.conn.execute(
-            "SELECT idea_id, to_state, ts FROM idea_transitions "
+            "SELECT idea_id, from_state, to_state, ts FROM idea_transitions "
             "WHERE ts IS NOT NULL ORDER BY ts, id"
         ).fetchall()
         states = lake.conn.execute(
-            "SELECT idea_id, queued_at, claimed_at FROM idea_state"
+            "SELECT idea_id, first_queued_at, queued_at, claimed_at "
+            "FROM idea_state"
         ).fetchall()
         registration = lake.conn.execute(
             "SELECT * FROM harness_campaign_registrations "
@@ -857,7 +858,8 @@ def analyze_campaign(
             telemetry_by_gpu[gpu] for gpu in active if gpu in telemetry_by_gpu
         )
 
-    state_ids = {str(state["idea_id"]) for state in states}
+    state_by_id = {str(state["idea_id"]): state for state in states}
+    state_ids = set(state_by_id)
     missing_lifecycle_idea_ids = sorted(expected_idea_set - state_ids)
     unexpected_lifecycle_idea_ids = set()
     for state in states:
@@ -876,16 +878,76 @@ def analyze_campaign(
                 and transition["idea_id"] not in expected_idea_set):
             unexpected_lifecycle_idea_ids.add(str(transition["idea_id"]))
 
+    # Reconstruct every immutable claim from the transition ledger.  The
+    # current-attempt clocks are only a compatibility fallback for rows that
+    # predate claim transitions; retries overwrite them and therefore cannot
+    # be the primary latency source. ``first_queued_at`` is write-once for new
+    # lifecycle rows, while each later retry has an explicit QUEUED edge.
+    transitions_by_idea = {idea_id: [] for idea_id in expected_idea_ids}
+    for transition in transitions:
+        idea_id = str(transition["idea_id"])
+        if idea_id in expected_idea_set:
+            transitions_by_idea[idea_id].append(transition)
+
     queue_to_claim = []
-    for state in states:
-        if state["idea_id"] not in expected_idea_set:
+    claim_event_count = 0
+    unmatched_claim_events = []
+    for idea_id in expected_idea_ids:
+        state = state_by_id.get(idea_id)
+        if state is None:
             continue
-        queued = _epoch(state["queued_at"])
-        claimed = _epoch(state["claimed_at"])
-        if (queued is not None and claimed is not None
-                and manifest["start_epoch"] <= claimed <= manifest["end_epoch"]
-                and claimed >= queued):
-            queue_to_claim.append(claimed - queued)
+        current_queued = _epoch(state["queued_at"])
+        current_claimed = _epoch(state["claimed_at"])
+        available_at = _epoch(state["first_queued_at"])
+        ledger_claims = []
+        for transition in transitions_by_idea[idea_id]:
+            at = _epoch(transition["ts"])
+            if at is None:
+                continue
+            to_state = transition["to_state"]
+            if to_state == "QUEUED":
+                available_at = at
+                continue
+            if to_state != "CLAIMED":
+                continue
+            ledger_claims.append(at)
+            in_window = (
+                manifest["start_epoch"] <= at <= manifest["end_epoch"]
+            )
+            if in_window:
+                claim_event_count += 1
+            queue_origin = available_at
+            if (queue_origin is None
+                    and current_queued is not None
+                    and current_claimed is not None
+                    and abs(current_claimed - at) <= 1e-6):
+                queue_origin = current_queued
+            if in_window:
+                if queue_origin is not None and queue_origin <= at:
+                    queue_to_claim.append(at - queue_origin)
+                else:
+                    unmatched_claim_events.append({
+                        "idea_id": idea_id,
+                        "claimed_at_epoch": at,
+                    })
+            available_at = None
+
+        if (current_claimed is not None
+                and manifest["start_epoch"]
+                <= current_claimed <= manifest["end_epoch"]
+                and not any(
+                    abs(current_claimed - at) <= 1e-6
+                    for at in ledger_claims
+                )):
+            claim_event_count += 1
+            if (current_queued is not None
+                    and current_queued <= current_claimed):
+                queue_to_claim.append(current_claimed - current_queued)
+            else:
+                unmatched_claim_events.append({
+                    "idea_id": idea_id,
+                    "claimed_at_epoch": current_claimed,
+                })
 
     timeline = []
     for transition in transitions:
@@ -955,6 +1017,9 @@ def analyze_campaign(
             if allocated_utilization else None
         ),
         "queue_to_claim_count": len(queue_to_claim),
+        "claim_event_count": claim_event_count,
+        "unmatched_queue_to_claim_count": len(unmatched_claim_events),
+        "unmatched_queue_to_claim_events": unmatched_claim_events,
         "queue_to_claim_p95_seconds": queue_p95,
         "terminal_to_next_claim_count": len(release_to_claim),
         "terminal_to_next_claim_p95_seconds": release_p95,
@@ -983,6 +1048,7 @@ def analyze_campaign(
             and not unexpected_lifecycle_idea_ids
         ),
         "minimum_claims": len(queue_to_claim) >= manifest["minimum_claims"],
+        "queue_claim_history_complete": not unmatched_claim_events,
         "minimum_release_to_claim_pairs": (
             len(release_to_claim) >= manifest["minimum_release_to_claim_pairs"]
         ),

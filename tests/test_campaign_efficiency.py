@@ -765,6 +765,82 @@ def test_one_claim_cannot_fill_multiple_terminal_latency_samples(tmp_path):
     assert receipt["metrics"]["unmatched_terminal_release_count"] == 1
 
 
+def test_retry_cannot_hide_an_earlier_slow_queue_to_claim(tmp_path):
+    """Every immutable claim must retain its own eligible-queue latency."""
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute("DELETE FROM idea_transitions")
+    lake.conn.execute("DELETE FROM idea_state")
+    for idea_id in manifest["expected_idea_ids"]:
+        lake.insert(
+            idea_id, "test", "{}", "", status="queued",
+            created_at=_iso(manifest["start_epoch"]),
+        )
+    lake.conn.execute(
+        "UPDATE idea_state SET current_state = 'CLAIMED', queued_at = ?, "
+        "claimed_at = ? WHERE idea_id = 'idea-001'",
+        (
+            _iso(manifest["start_epoch"] + 32),
+            _iso(manifest["start_epoch"] + 33),
+        ),
+    )
+    lake.conn.execute(
+        "UPDATE idea_state SET current_state = 'CLAIMED', queued_at = ?, "
+        "claimed_at = ? WHERE idea_id = 'idea-002'",
+        (
+            _iso(manifest["start_epoch"] + 15),
+            _iso(manifest["start_epoch"] + 20),
+        ),
+    )
+    lake.conn.executemany(
+        "INSERT INTO idea_transitions "
+        "(idea_id, from_state, to_state, ts) VALUES (?, ?, ?, ?)",
+        [
+            ("idea-002", "QUEUED", "CLAIMED",
+             _iso(manifest["start_epoch"] + 20)),
+            ("idea-001", "QUEUED", "CLAIMED",
+             _iso(manifest["start_epoch"] + 30)),
+            ("idea-001", "CLAIMED", "IN_PROGRESS",
+             _iso(manifest["start_epoch"] + 30.5)),
+            ("idea-001", "IN_PROGRESS", "FAILED",
+             _iso(manifest["start_epoch"] + 31)),
+            ("idea-001", "FAILED", "QUEUED",
+             _iso(manifest["start_epoch"] + 32)),
+            ("idea-001", "QUEUED", "CLAIMED",
+             _iso(manifest["start_epoch"] + 33)),
+        ],
+    )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["metrics"]["queue_to_claim_count"] == 3
+    assert receipt["metrics"]["queue_to_claim_p95_seconds"] > 20.0
+    assert receipt["checks"]["queue_to_claim"]["passed"] is False
+
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "UPDATE idea_state SET first_queued_at = NULL "
+        "WHERE idea_id = 'idea-001'"
+    )
+    lake.conn.commit()
+    lake.close()
+    incomplete = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+    assert incomplete["status"] == "UNVERIFIED"
+    assert incomplete["metrics"]["unmatched_queue_to_claim_count"] == 1
+    assert incomplete["checks"]["queue_claim_history_complete"][
+        "passed"
+    ] is False
+
+
 def test_unrelated_lifecycle_rows_cannot_improve_campaign_latency(tmp_path):
     db_path = tmp_path / "lake.db"
     manifest = _manifest()
