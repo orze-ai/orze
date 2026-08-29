@@ -550,6 +550,46 @@ class Orze(OrzePhaseMixin):
                     "campaign_efficiency_sample_failed")
             return False
 
+    def _capture_managed_wait_campaign_evidence(
+            self, disk_ok: bool) -> bool:
+        """Publish one paired evidence row during a managed ``--once`` wait.
+
+        Managed runs remain inside the training/evaluation wait loops instead
+        of returning to the ordinary scheduler loop.  Each child-health check
+        is therefore its own evidence iteration.  Without this boundary a
+        multi-hour child could be alive and checked every five seconds while
+        both the campaign sampler and operator view remained silent.
+        """
+        campaign = self.cfg.get("campaign_efficiency") or {}
+        if not campaign.get("enabled", False):
+            return True
+        required = campaign.get("required_for_launch", False) is True
+        self.iteration += 1
+        sampled = self._capture_campaign_efficiency_evidence(
+            [], [], disk_ok
+        )
+        if not sampled:
+            if required and self.running:
+                self._halt_required_campaign_evidence(
+                    "campaign_efficiency_sample_failed"
+                )
+            return not required and self.running
+        try:
+            self._capture_campaign_progress_evidence(
+                [], [], disk_ok, []
+            )
+        except Exception as exc:
+            logger.warning(
+                "managed wait operator progress failed: %s",
+                type(exc).__name__,
+            )
+            if required:
+                self._halt_required_campaign_evidence(
+                    "campaign_progress_update_failed"
+                )
+            return not required and self.running
+        return self.running
+
     def _graceful_shutdown(self, kill_all=False):
         managed = bool(self.cfg.get("_managed_idea_id"))
         graceful_shutdown(
@@ -1485,8 +1525,13 @@ class Orze(OrzePhaseMixin):
                                 except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                                     pass
                             all_once_finished.append((idea_id, gpu))
+                        if managed_idea and not (
+                                self._capture_managed_wait_campaign_evidence(
+                                    disk_ok
+                                )):
+                            break
                 # Wait for active evals (launched this iteration or earlier)
-                if self.active_evals:
+                if self.active_evals and self.running:
                     logger.info("--once mode: waiting for %d active evals...",
                                 len(self.active_evals))
                     while self.active_evals:
@@ -1502,6 +1547,11 @@ class Orze(OrzePhaseMixin):
                                 idea_id, gpu, self.results_dir, cfg,
                                 lake=self.lake)
                             all_once_finished.append((idea_id, gpu))
+                        if managed_idea and not (
+                                self._capture_managed_wait_campaign_evidence(
+                                    disk_ok
+                                )):
+                            break
                 if all_once_finished and not managed_idea:
                     ideas = parse_ideas(cfg["ideas_file"])
                     once_rows = update_report(

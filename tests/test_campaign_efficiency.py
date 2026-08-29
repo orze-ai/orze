@@ -602,6 +602,147 @@ def test_managed_campaign_iterations_emit_matching_progress_evidence():
     )
 
 
+def test_managed_once_wait_loops_publish_after_each_child_check():
+    tree = ast.parse(textwrap.dedent(inspect.getsource(Orze._run_leased)))
+    wait_loops = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.While):
+            continue
+        test = node.test
+        if (not isinstance(test, ast.Attribute)
+                or not isinstance(test.value, ast.Name)
+                or test.value.id != "self"
+                or test.attr not in {"active", "active_evals"}):
+            continue
+        calls = [
+            call for statement in node.body for call in ast.walk(statement)
+            if isinstance(call, ast.Call)
+        ]
+        wait_loops[test.attr] = calls
+
+    assert set(wait_loops) == {"active", "active_evals"}
+    for child_check, loop_name in (
+            ("check_active", "active"),
+            ("check_active_evals", "active_evals")):
+        calls = wait_loops[loop_name]
+        check_lines = [
+            call.lineno for call in calls
+            if isinstance(call.func, ast.Name)
+            and call.func.id == child_check
+        ]
+        publish_lines = [
+            call.lineno for call in calls
+            if isinstance(call.func, ast.Attribute)
+            and call.func.attr
+            == "_capture_managed_wait_campaign_evidence"
+        ]
+        assert len(check_lines) == 1
+        assert len(publish_lines) == 1
+        assert publish_lines[0] > check_lines[0]
+
+
+def test_managed_wait_evidence_pairs_unique_iteration_in_order():
+    calls = []
+    runner = SimpleNamespace(
+        cfg={
+            "campaign_efficiency": {
+                "enabled": True,
+                "required_for_launch": True,
+                "campaign_id": "campaign-required",
+            },
+        },
+        iteration=7,
+        running=True,
+        _capture_campaign_efficiency_evidence=lambda *args: (
+            calls.append(("sample", args)) or True
+        ),
+        _capture_campaign_progress_evidence=lambda *args: (
+            calls.append(("progress", args)) or {"status": "ACTIVE"}
+        ),
+        _halt_required_campaign_evidence=lambda reason: pytest.fail(
+            f"unexpected evidence halt: {reason}"
+        ),
+    )
+
+    assert Orze._capture_managed_wait_campaign_evidence(runner, True) is True
+    assert runner.iteration == 8
+    assert calls == [
+        ("sample", ([], [], True)),
+        ("progress", ([], [], True, [])),
+    ]
+
+
+def test_managed_wait_required_sample_failure_halts_before_progress():
+    calls = []
+    runner = SimpleNamespace(
+        cfg={
+            "campaign_efficiency": {
+                "enabled": True,
+                "required_for_launch": True,
+            },
+        },
+        iteration=3,
+        running=True,
+        _capture_campaign_efficiency_evidence=lambda *args: False,
+        _capture_campaign_progress_evidence=lambda *args: pytest.fail(
+            "progress published without its scheduler sample"
+        ),
+    )
+
+    def halt(reason):
+        calls.append(reason)
+        runner.running = False
+
+    runner._halt_required_campaign_evidence = halt
+    assert Orze._capture_managed_wait_campaign_evidence(runner, True) is False
+    assert calls == ["campaign_efficiency_sample_failed"]
+    assert runner.iteration == 4
+
+
+def test_managed_wait_required_progress_exception_halts():
+    calls = []
+    runner = SimpleNamespace(
+        cfg={
+            "campaign_efficiency": {
+                "enabled": True,
+                "required_for_launch": True,
+            },
+        },
+        iteration=5,
+        running=True,
+        _capture_campaign_efficiency_evidence=lambda *args: True,
+        _capture_campaign_progress_evidence=lambda *args: (
+            _ for _ in ()
+        ).throw(OSError("publication failed")),
+    )
+
+    def halt(reason):
+        calls.append(reason)
+        runner.running = False
+
+    runner._halt_required_campaign_evidence = halt
+    assert Orze._capture_managed_wait_campaign_evidence(runner, True) is False
+    assert calls == ["campaign_progress_update_failed"]
+    assert runner.iteration == 6
+
+
+def test_managed_wait_campaign_disabled_is_a_noop():
+    runner = SimpleNamespace(
+        cfg={"campaign_efficiency": {"enabled": False}},
+        iteration=11,
+        running=True,
+        _capture_campaign_efficiency_evidence=lambda *args: pytest.fail(
+            "disabled campaign sampled"
+        ),
+        _capture_campaign_progress_evidence=lambda *args: pytest.fail(
+            "disabled campaign published"
+        ),
+    )
+
+    assert Orze._capture_managed_wait_campaign_evidence(runner, True) is True
+    assert runner.iteration == 11
+
+
 def test_progress_update_is_visible_content_bound_and_persistent(tmp_path):
     db_path = tmp_path / "lake.db"
     results = tmp_path / "results"
