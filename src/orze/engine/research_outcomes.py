@@ -75,6 +75,7 @@ def analyze_research_outcomes(
             "idea_ids": [],
             "qualified_success_idea_ids": [],
             "qualified_success_identity_complete": False,
+            "rank_claim_proven": False,
         }
     receipt["decision_evidence"] = decision
     decision_idea_ids = decision.get("idea_ids") or []
@@ -194,6 +195,12 @@ def analyze_research_outcomes(
 
     evidence_checks = {
         "decision_evidence_complete": decision.get("status") == "VERIFIED",
+        "decision_input_evidence_complete": (
+            decision.get("decision_input_evidence_complete") is True
+        ),
+        "decision_rank_not_inferred": (
+            decision.get("rank_claim_proven") is False
+        ),
         "exact_preregistered_idea_universe": idea_universe_matches,
         "compute_evidence_complete": compute.get("status") == "VERIFIED",
         "qualified_success_identity_complete": success_identity_complete,
@@ -253,6 +260,9 @@ def analyze_research_outcomes(
         "accounting": Path(__file__).with_name("accounting.py"),
         "decision_batches": Path(__file__).parents[1] / "core/decision_batches.py",
         "model_lineage": Path(__file__).parents[1] / "core/model_lineage.py",
+        "reporting_evidence": (
+            Path(__file__).parents[1] / "reporting/evidence.py"
+        ),
         "reproducibility": Path(__file__).with_name("reproducibility.py"),
     }
     receipt["source_sha256"] = {

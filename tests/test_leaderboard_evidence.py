@@ -5,6 +5,11 @@ import pytest
 
 import orze.reporting.leaderboard as leaderboard_module
 from orze.reporting.leaderboard import update_report
+from orze.reporting.evidence import (
+    evidence_content_sha256,
+    qualify_authoritative_report_evidence_with_identity,
+    report_evidence_paths,
+)
 
 
 def _cfg(*, source=False):
@@ -41,6 +46,71 @@ def _ranked_report(results):
     ):
         ranked = ranked.split(marker, 1)[0]
     return ranked
+
+
+def test_decision_identity_covers_benchmark_and_exposure_evidence(tmp_path):
+    results = tmp_path / "results"
+    _write_result(
+        results,
+        "idea-benchmark",
+        {"status": "COMPLETED", "score": 1.0},
+    )
+    cfg = _cfg()
+    cfg["_project_root"] = str(tmp_path)
+    cfg["_orze_dir"] = str(tmp_path / ".orze")
+    cfg["report"]["benchmark_contract"] = {
+        "receipt": "benchmark.json",
+    }
+    (tmp_path / ".orze").mkdir()
+    paths = report_evidence_paths("idea-benchmark", results, cfg)
+    names = {path.name for path in paths}
+
+    assert {
+        "metrics.json",
+        "benchmark.json",
+        "_benchmark_evaluation.json",
+        "_benchmark_exposures.jsonl",
+    }.issubset(names)
+    prior = evidence_content_sha256(paths)
+    for index, path in enumerate(paths):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"evidence-{index}\n", encoding="utf-8")
+        current = evidence_content_sha256(paths)
+        assert current != prior
+        prior = current
+
+
+@pytest.mark.parametrize("redirect", ["idea_symlink", "metrics_hardlink"])
+def test_decision_identity_never_reads_redirected_or_hardlinked_evidence(
+        tmp_path, redirect):
+    results = tmp_path / "results"
+    results.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_metrics = outside / "metrics.json"
+    outside_metrics.write_text(
+        json.dumps({"status": "COMPLETED", "score": 999.0}),
+        encoding="utf-8",
+    )
+    idea_dir = results / "idea-redirected"
+    if redirect == "idea_symlink":
+        idea_dir.symlink_to(outside, target_is_directory=True)
+    else:
+        idea_dir.mkdir()
+        os.link(outside_metrics, idea_dir / "metrics.json")
+
+    _, _, value, reason, digest = (
+        qualify_authoritative_report_evidence_with_identity(
+            "idea-redirected",
+            results,
+            _cfg(),
+            {"idea-redirected"},
+        )
+    )
+
+    assert value is None
+    assert reason == "report_evidence_identity_unavailable"
+    assert digest is None
 
 
 def test_local_cache_invalidates_on_same_size_backdated_source_rewrite(

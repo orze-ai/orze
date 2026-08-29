@@ -1,10 +1,13 @@
 """Shared qualification rules for locally comparable metric evidence."""
 from __future__ import annotations
 
-import math
+import hashlib
 import json
+import math
+import os
 import re
 import sqlite3
+import stat
 from pathlib import Path
 from typing import Mapping
 
@@ -524,3 +527,102 @@ def local_report_evidence_paths(idea_dir: Path,
         if path is not None and path not in paths:
             paths.append(path)
     return paths
+
+
+def report_evidence_paths(
+    idea_id: str,
+    results_dir: Path,
+    cfg: Mapping,
+) -> list[Path]:
+    """Return every content path that can qualify one decision metric."""
+    if (not isinstance(idea_id, str) or idea_id in ("", ".", "..")
+            or Path(idea_id).parts != (idea_id,)):
+        raise ValueError("idea_id_invalid")
+    idea_dir = Path(results_dir) / idea_id
+    report = cfg.get("report") if isinstance(cfg, Mapping) else None
+    if not isinstance(report, Mapping):
+        raise ValueError("report_config_invalid")
+    paths = local_report_evidence_paths(idea_dir, report)
+    contract = report.get("benchmark_contract")
+    if isinstance(contract, Mapping):
+        from orze.core.benchmark_contract import (
+            PROVENANCE_FILE,
+            benchmark_exposure_evidence_paths,
+        )
+        receipt = _safe_source_path(idea_dir, contract.get("receipt", ""))
+        provenance = _safe_source_path(idea_dir, PROVENANCE_FILE)
+        if receipt is None or provenance is None:
+            raise ValueError("benchmark_evidence_path_invalid")
+        paths.extend((receipt, provenance))
+        paths.extend(benchmark_exposure_evidence_paths(results_dir, cfg))
+    if any(_evidence_path_unsafe(path) for path in paths):
+        raise ValueError("report_evidence_path_unsafe")
+    return paths
+
+
+def _evidence_path_unsafe(path: Path) -> bool:
+    absolute = Path(path).absolute()
+    current = Path(absolute.anchor)
+    try:
+        for part in absolute.parts[1:]:
+            current = current / part
+            if current.is_symlink():
+                return True
+        if absolute.exists():
+            info = absolute.stat()
+            return not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+    except OSError:
+        return True
+    return False
+
+
+def evidence_content_sha256(paths) -> str:
+    """Hash regular single-link evidence without following redirects."""
+    digest = hashlib.sha256()
+    for path in sorted(set(map(Path, paths)), key=lambda item: str(item)):
+        digest.update(str(path).encode("utf-8"))
+        if _evidence_path_unsafe(path):
+            digest.update(b"<unsafe-or-redirected>")
+            continue
+        descriptor = None
+        try:
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(path, flags)
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                digest.update(b"<unsafe-or-redirected>")
+                continue
+            with os.fdopen(descriptor, "rb") as handle:
+                descriptor = None
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        except OSError:
+            digest.update(b"<missing-or-unreadable>")
+        finally:
+            if descriptor is not None:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+    return digest.hexdigest()
+
+
+def qualify_authoritative_report_evidence_with_identity(
+    idea_id: str,
+    results_dir: Path,
+    cfg: Mapping,
+    completed_idea_ids: set[str],
+) -> tuple[dict, dict, float | None, str, str | None]:
+    """Qualify one metric and bind the exact stable evidence contents."""
+    try:
+        paths = report_evidence_paths(idea_id, results_dir, cfg)
+        before = evidence_content_sha256(paths)
+        metrics, values, value, reason = qualify_authoritative_report_evidence(
+            idea_id, results_dir, cfg, completed_idea_ids,
+        )
+        after = evidence_content_sha256(paths)
+    except Exception:
+        return {}, {}, None, "report_evidence_identity_unavailable", None
+    if before != after:
+        return {}, {}, None, "report_evidence_changed_during_read", None
+    return metrics, values, value, reason, after

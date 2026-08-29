@@ -82,19 +82,8 @@ _RESULT_CACHE_SCHEMA_VERSION = 4
 
 def _evidence_content_hash(paths) -> str:
     """Hash evidence at constant memory without following leaf symlinks."""
-    digest = hashlib.sha256()
-    for path in sorted(set(map(Path, paths)), key=lambda item: str(item)):
-        digest.update(str(path).encode("utf-8"))
-        if path.is_symlink():
-            digest.update(b"<symlink>")
-            continue
-        try:
-            with path.open("rb") as handle:
-                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                    digest.update(chunk)
-        except OSError:
-            digest.update(b"<missing-or-unreadable>")
-    return digest.hexdigest()
+    from orze.reporting.evidence import evidence_content_sha256
+    return evidence_content_sha256(paths)
 
 
 def _evidence_metadata_signature(paths) -> str:

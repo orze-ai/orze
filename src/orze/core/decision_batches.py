@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as _datetime
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 from typing import Mapping
@@ -27,6 +28,7 @@ from orze.core.research_policy import (
 
 _MAX_RECEIPTS = 4096
 _MAX_RECEIPT_BYTES = 65536
+_CURRENT_SCHEMA = 2
 _TERMINAL_STATES = frozenset({"COMPLETE", "FAILED", "SKIPPED", "ARCHIVED"})
 _RESOLVED_STATUSES = frozenset({
     "succeeded", "failed_redirect", "failed_stopped",
@@ -44,6 +46,15 @@ _RESOLUTION_FIELDS = frozenset({
     "blocked_families", "resolution_sha256",
 })
 _QUALIFIED_ID_FIELDS = frozenset({"qualified_success_idea_ids"})
+_DECISION_EVIDENCE_FIELDS = frozenset({"decision_evidence"})
+_EVIDENCE_ROW_FIELDS = frozenset({
+    "idea_id", "lifecycle_state", "qualification_reason",
+    "primary_metric_value", "evidence_sha256",
+})
+_QUALIFIED_REASONS = frozenset({
+    "authoritative_local_evidence_verified",
+    "benchmark_evidence_verified",
+})
 
 
 def _now() -> str:
@@ -72,9 +83,13 @@ def _resolution_hash(payload: Mapping) -> str:
         "qualified_success_count": payload.get("qualified_success_count"),
         "blocked_families": payload.get("blocked_families"),
     }
+    if payload.get("schema") == _CURRENT_SCHEMA:
+        resolution["schema"] = _CURRENT_SCHEMA
     if "qualified_success_idea_ids" in payload:
         resolution["qualified_success_idea_ids"] = payload.get(
             "qualified_success_idea_ids")
+    if "decision_evidence" in payload:
+        resolution["decision_evidence"] = payload.get("decision_evidence")
     canonical = json.dumps(resolution, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -121,7 +136,8 @@ def _safe_families(value) -> list[str] | None:
 
 
 def _validate_receipt(payload, path: Path, cfg: Mapping) -> str | None:
-    if not isinstance(payload, dict) or payload.get("schema") != 1:
+    if (not isinstance(payload, dict)
+            or payload.get("schema") not in {1, _CURRENT_SCHEMA}):
         return "decision_receipt_schema_invalid"
     status = payload.get("status")
     if status not in _RECEIPT_STATUSES:
@@ -133,7 +149,18 @@ def _validate_receipt(payload, path: Path, cfg: Mapping) -> str | None:
         expected_fields.update(_RESOLUTION_FIELDS)
     allowed_fields = {frozenset(expected_fields)}
     if status in _RESOLVED_STATUSES:
-        allowed_fields.add(frozenset(expected_fields | _QUALIFIED_ID_FIELDS))
+        if payload["schema"] == _CURRENT_SCHEMA:
+            allowed_fields = {
+                frozenset(
+                    expected_fields
+                    | _QUALIFIED_ID_FIELDS
+                    | _DECISION_EVIDENCE_FIELDS
+                )
+            }
+        else:
+            allowed_fields.add(
+                frozenset(expected_fields | _QUALIFIED_ID_FIELDS)
+            )
     if frozenset(payload) not in allowed_fields:
         return "decision_receipt_fields_invalid"
 
@@ -210,6 +237,49 @@ def _validate_receipt(payload, path: Path, cfg: Mapping) -> str | None:
                     or any(not isinstance(value, str) for value in success_ids)
                     or not set(success_ids).issubset(idea_ids)):
                 return "decision_receipt_qualified_ids_invalid"
+        if payload["schema"] == _CURRENT_SCHEMA:
+            evidence = payload.get("decision_evidence")
+            if (not isinstance(evidence, list)
+                    or len(evidence) != len(idea_ids)
+                    or [row.get("idea_id") if isinstance(row, dict) else None
+                        for row in evidence] != idea_ids):
+                return "decision_receipt_evidence_invalid"
+            for row in evidence:
+                if (set(row) != _EVIDENCE_ROW_FIELDS
+                        or row.get("lifecycle_state") not in _TERMINAL_STATES):
+                    return "decision_receipt_evidence_invalid"
+                reason = row.get("qualification_reason")
+                value = row.get("primary_metric_value")
+                digest = row.get("evidence_sha256")
+                if (not isinstance(reason, str) or not 1 <= len(reason) <= 128
+                        or any(ord(character) < 32 for character in reason)):
+                    return "decision_receipt_evidence_invalid"
+                if row["lifecycle_state"] == "COMPLETE":
+                    if (not isinstance(digest, str)
+                            or re.fullmatch(r"[0-9a-f]{64}", digest) is None):
+                        return "decision_receipt_evidence_invalid"
+                    if reason in _QUALIFIED_REASONS:
+                        if (isinstance(value, bool)
+                                or not isinstance(value, (int, float))
+                                or not math.isfinite(float(value))):
+                            return "decision_receipt_evidence_invalid"
+                    elif value is not None:
+                        return "decision_receipt_evidence_invalid"
+                elif (reason != "lifecycle_not_complete"
+                      or value is not None or digest is not None):
+                    return "decision_receipt_evidence_invalid"
+            derived_successes = sorted(
+                row["idea_id"] for row in evidence
+                if row["qualification_reason"] in _QUALIFIED_REASONS
+                and _passes(
+                    row["primary_metric_value"], contract["comparator"],
+                    float(contract["threshold"]),
+                )
+            )
+            if (payload.get("qualified_success_idea_ids")
+                    != derived_successes
+                    or successes != len(derived_successes)):
+                return "decision_receipt_evidence_outcome_mismatch"
     return None
 
 
@@ -309,6 +379,59 @@ def _passes(value: float, comparator: str, threshold: float) -> bool:
     return value >= threshold
 
 
+def _capture_decision_evidence(
+    idea_ids: list[str],
+    lifecycle: Mapping,
+    completed_ids: set[str],
+    results_dir: Path,
+    cfg: Mapping,
+) -> tuple[list[dict] | None, str | None]:
+    """Capture every terminal input that determines one batch resolution."""
+    from orze.reporting.evidence import (
+        qualify_authoritative_report_evidence_with_identity,
+    )
+
+    rows = []
+    for idea_id in idea_ids:
+        state = lifecycle[idea_id]["state"]
+        if state != "COMPLETE":
+            rows.append({
+                "idea_id": idea_id,
+                "lifecycle_state": state,
+                "qualification_reason": "lifecycle_not_complete",
+                "primary_metric_value": None,
+                "evidence_sha256": None,
+            })
+            continue
+        _, _, value, reason, digest = (
+            qualify_authoritative_report_evidence_with_identity(
+                idea_id, Path(results_dir), cfg, completed_ids,
+            )
+        )
+        if (not isinstance(digest, str)
+                or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+                or not isinstance(reason, str)
+                or not 1 <= len(reason) <= 128
+                or any(ord(character) < 32 for character in reason)):
+            return None, "decision_evidence_identity_unavailable"
+        if reason in _QUALIFIED_REASONS:
+            if (isinstance(value, bool)
+                    or not isinstance(value, (int, float))
+                    or not math.isfinite(float(value))):
+                return None, "decision_evidence_metric_invalid"
+            value = float(value)
+        else:
+            value = None
+        rows.append({
+            "idea_id": idea_id,
+            "lifecycle_state": state,
+            "qualification_reason": reason,
+            "primary_metric_value": value,
+            "evidence_sha256": digest,
+        })
+    return rows, None
+
+
 def reconcile_decision_batches(
     results_dir: Path,
     cfg: Mapping,
@@ -379,7 +502,6 @@ def reconcile_decision_batches(
         from orze.reporting.evidence import (
             authoritative_completed_idea_ids,
             authoritative_idea_lifecycle,
-            qualify_authoritative_report_evidence,
         )
         db_path = _database_path(results_dir, cfg)
         lifecycle, lifecycle_reason = authoritative_idea_lifecycle(
@@ -395,22 +517,6 @@ def reconcile_decision_batches(
                 False, complete_reason, blocked=blocked,
                 pending=len(admitted), resolved=resolved_count)
 
-        qualified_values = {}
-        for idea_id in unresolved_ids:
-            if lifecycle[idea_id]["state"] != "COMPLETE":
-                continue
-            try:
-                _, _, value, evidence_reason = (
-                    qualify_authoritative_report_evidence(
-                        idea_id, Path(results_dir), cfg, completed_ids)
-                )
-            except Exception:
-                continue
-            if evidence_reason in {
-                    "authoritative_local_evidence_verified",
-                    "benchmark_evidence_verified"}:
-                qualified_values[idea_id] = float(value)
-
         pending_count = 0
         stop_active = False
         for path, payload in admitted:
@@ -421,6 +527,20 @@ def reconcile_decision_batches(
                 pending_count += 1
                 continue
             contract = payload["contract"]
+            decision_evidence, evidence_error = _capture_decision_evidence(
+                payload["idea_ids"], lifecycle, completed_ids,
+                Path(results_dir), cfg,
+            )
+            if evidence_error:
+                return _gate(
+                    False, evidence_error, blocked=blocked,
+                    pending=len(admitted), resolved=resolved_count,
+                )
+            qualified_values = {
+                row["idea_id"]: row["primary_metric_value"]
+                for row in decision_evidence
+                if row["qualification_reason"] in _QUALIFIED_REASONS
+            }
             successes = [
                 idea_id for idea_id in payload["idea_ids"]
                 if idea_id in qualified_values and _passes(
@@ -429,10 +549,12 @@ def reconcile_decision_batches(
             ]
             resolved = dict(payload)
             resolved.update({
+                "schema": _CURRENT_SCHEMA,
                 "resolved_at": _now(),
                 "terminal_count": len(states),
                 "qualified_success_count": len(successes),
                 "qualified_success_idea_ids": sorted(successes),
+                "decision_evidence": decision_evidence,
                 "blocked_families": [],
             })
             required_successes = contract.get("required_successes", 1)
@@ -486,8 +608,6 @@ def audit_campaign_decision_receipts(
     end_epoch: float,
 ) -> dict:
     """Verify the exact preregistered decision set for one closed campaign."""
-    import math
-
     if (not isinstance(expected_identity_sha256, list)
             or not expected_identity_sha256
             or len(expected_identity_sha256)
@@ -510,6 +630,7 @@ def audit_campaign_decision_receipts(
             "schema_version": 1,
             "status": "UNVERIFIED",
             "reason": "decision_receipt_directory_redirected",
+            "rank_claim_proven": False,
         }
     receipts, error = _load_receipts_locked(directory, cfg)
     if error:
@@ -517,6 +638,7 @@ def audit_campaign_decision_receipts(
             "schema_version": 1,
             "status": "UNVERIFIED",
             "reason": error,
+            "rank_claim_proven": False,
         }
     by_identity = {
         payload["identity_sha256"]: payload for _, payload in receipts
@@ -527,6 +649,72 @@ def audit_campaign_decision_receipts(
         by_identity[identity] for identity in expected_identity_sha256
         if identity in by_identity
     ]
+
+    resolved_selected = [
+        payload for payload in selected
+        if payload.get("status") in _RESOLVED_STATUSES
+    ]
+    decision_evidence_complete = (
+        bool(selected) and len(resolved_selected) == len(selected)
+    )
+    legacy_evidence_identities = []
+    evidence_mismatch_idea_ids = []
+    resolved_idea_ids = [
+        idea_id
+        for payload in resolved_selected
+        for idea_id in payload["idea_ids"]
+    ]
+    if resolved_idea_ids and len(resolved_idea_ids) == len(set(resolved_idea_ids)):
+        try:
+            from orze.reporting.evidence import (
+                authoritative_completed_idea_ids,
+                authoritative_idea_lifecycle,
+            )
+            db_path = _database_path(results_dir, cfg)
+            lifecycle = {}
+            for offset in range(0, len(resolved_idea_ids), 64):
+                current, reason = authoritative_idea_lifecycle(
+                    db_path, resolved_idea_ids[offset:offset + 64],
+                )
+                if reason != "authoritative_lifecycle_loaded":
+                    raise ValueError(reason)
+                lifecycle.update(current)
+            completed_ids, reason = authoritative_completed_idea_ids(db_path)
+            if reason != "authoritative_lifecycle_loaded":
+                raise ValueError(reason)
+            for payload in resolved_selected:
+                if payload.get("schema") != _CURRENT_SCHEMA:
+                    legacy_evidence_identities.append(
+                        payload["identity_sha256"]
+                    )
+                    decision_evidence_complete = False
+                    continue
+                current, error = _capture_decision_evidence(
+                    payload["idea_ids"], lifecycle, completed_ids,
+                    Path(results_dir), cfg,
+                )
+                if error:
+                    evidence_mismatch_idea_ids.extend(payload["idea_ids"])
+                    decision_evidence_complete = False
+                    continue
+                recorded = payload.get("decision_evidence")
+                if current != recorded:
+                    recorded_by_id = {
+                        row.get("idea_id"): row
+                        for row in recorded
+                        if isinstance(row, dict)
+                    }
+                    evidence_mismatch_idea_ids.extend(
+                        row["idea_id"] for row in current
+                        if recorded_by_id.get(row["idea_id"]) != row
+                    )
+                    decision_evidence_complete = False
+        except (OSError, TypeError, ValueError):
+            decision_evidence_complete = False
+            evidence_mismatch_idea_ids.extend(resolved_idea_ids)
+    elif resolved_idea_ids:
+        decision_evidence_complete = False
+        evidence_mismatch_idea_ids.extend(resolved_idea_ids)
 
     def epoch(value) -> float | None:
         parsed = _parse_time(value)
@@ -587,6 +775,7 @@ def audit_campaign_decision_receipts(
         and len(selected) == len(expected)
         and admitted_count == len(idea_ids)
         and terminal_count == len(idea_ids)
+        and decision_evidence_complete
     )
     return {
         "schema_version": 1,
@@ -608,6 +797,13 @@ def audit_campaign_decision_receipts(
         "qualified_success_count": qualified_successes,
         "qualified_success_idea_ids": qualified_success_idea_ids,
         "qualified_success_identity_complete": qualified_identity_complete,
+        "decision_input_evidence_complete": decision_evidence_complete,
+        "legacy_evidence_identity_sha256": sorted(
+            set(legacy_evidence_identities)
+        ),
+        "evidence_mismatch_idea_ids": sorted(
+            set(evidence_mismatch_idea_ids)
+        ),
         "qualified_success_rate": (
             qualified_successes / admitted_count if admitted_count else None
         ),
@@ -618,6 +814,7 @@ def audit_campaign_decision_receipts(
             max(resolution_times) - start_epoch if resolution_times else None
         ),
         "status_counts": dict(sorted(status_counts.items())),
+        "rank_claim_proven": False,
     }
 
 
@@ -697,7 +894,7 @@ def stage_decision_contract(
         if path.exists() or path.is_symlink():
             raise ValueError("decision_contract_receipt_exists")
         payload = {
-            "schema": 1,
+            "schema": _CURRENT_SCHEMA,
             "status": "staged",
             "cycle": cycle,
             "created_at": _now(),

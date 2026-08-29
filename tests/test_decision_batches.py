@@ -7,6 +7,8 @@ import time
 
 import pytest
 
+import orze.core.decision_batches as decision_module
+import orze.reporting.evidence as evidence_module
 from orze.core.decision_batches import (
     admit_decision_contract,
     audit_campaign_decision_receipts,
@@ -229,8 +231,217 @@ def test_campaign_decision_audit_verifies_exact_resolved_receipt(tmp_path):
     assert audit["qualified_success_count"] == 1
     assert audit["qualified_success_idea_ids"] == ["idea-alpha"]
     assert audit["qualified_success_identity_complete"] is True
+    assert audit["decision_input_evidence_complete"] is True
+    assert audit["evidence_mismatch_idea_ids"] == []
     assert audit["terminal_count"] == 2
     assert audit["time_to_first_decision_seconds"] >= 0
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    assert receipt["schema"] == 2
+    assert receipt["decision_evidence"] == [
+        {
+            "idea_id": "idea-alpha",
+            "lifecycle_state": "COMPLETE",
+            "qualification_reason": (
+                "authoritative_local_evidence_verified"
+            ),
+            "primary_metric_value": 0.8,
+            "evidence_sha256": receipt["decision_evidence"][0][
+                "evidence_sha256"
+            ],
+        },
+        {
+            "idea_id": "idea-beta",
+            "lifecycle_state": "FAILED",
+            "qualification_reason": "lifecycle_not_complete",
+            "primary_metric_value": None,
+            "evidence_sha256": None,
+        },
+    ]
+    assert len(receipt["decision_evidence"][0]["evidence_sha256"]) == 64
+
+
+def test_campaign_decision_audit_rejects_metric_rewrite_after_resolution(
+        tmp_path):
+    start = time.time() - 1
+    db_path = _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "running", "data", "IN_PROGRESS"),
+    ])
+    results_dir, cfg, path = _stage_and_admit(tmp_path, threshold=0.7)
+    identity = json.loads(path.read_text())["identity_sha256"]
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "failed", "data", "FAILED"),
+    ])
+    _write_score(results_dir, "idea-alpha", 0.8)
+    assert reconcile_decision_batches(results_dir, cfg)[
+        "allow_new_batch"
+    ] is True
+    _write_score(results_dir, "idea-alpha", 0.9)
+
+    audit = audit_campaign_decision_receipts(
+        results_dir,
+        cfg,
+        expected_identity_sha256=[identity],
+        start_epoch=start,
+        end_epoch=time.time() + 1,
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["decision_input_evidence_complete"] is False
+    assert audit["evidence_mismatch_idea_ids"] == ["idea-alpha"]
+
+
+def test_campaign_decision_audit_rejects_lifecycle_rewrite_after_resolution(
+        tmp_path):
+    start = time.time() - 1
+    db_path = _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "running", "data", "IN_PROGRESS"),
+    ])
+    results_dir, cfg, path = _stage_and_admit(tmp_path, threshold=0.7)
+    identity = json.loads(path.read_text())["identity_sha256"]
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "failed", "data", "FAILED"),
+    ])
+    _write_score(results_dir, "idea-alpha", 0.8)
+    assert reconcile_decision_batches(results_dir, cfg)[
+        "allow_new_batch"
+    ] is True
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "skipped", "data", "SKIPPED"),
+    ])
+
+    audit = audit_campaign_decision_receipts(
+        results_dir,
+        cfg,
+        expected_identity_sha256=[identity],
+        start_epoch=start,
+        end_epoch=time.time() + 1,
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["evidence_mismatch_idea_ids"] == ["idea-beta"]
+
+
+def test_recomputed_receipt_hash_cannot_forge_success_evidence(tmp_path):
+    db_path = _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "running", "data", "IN_PROGRESS"),
+    ])
+    results_dir, cfg, path = _stage_and_admit(tmp_path, threshold=0.7)
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "failed", "data", "FAILED"),
+    ])
+    _write_score(results_dir, "idea-alpha", 0.8)
+    assert reconcile_decision_batches(results_dir, cfg)[
+        "allow_new_batch"
+    ] is True
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["decision_evidence"][0]["primary_metric_value"] = 0.1
+    receipt["resolution_sha256"] = decision_module._resolution_hash(receipt)
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    gate = reconcile_decision_batches(results_dir, cfg)
+
+    assert gate["allow_new_batch"] is False
+    assert gate["reason"] == "decision_receipt_evidence_outcome_mismatch"
+
+
+def test_resolution_waits_when_metric_evidence_identity_is_unavailable(
+        tmp_path, monkeypatch):
+    db_path = _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "running", "data", "IN_PROGRESS"),
+    ])
+    results_dir, cfg, path = _stage_and_admit(tmp_path, threshold=0.7)
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "failed", "data", "FAILED"),
+    ])
+    _write_score(results_dir, "idea-alpha", 0.8)
+    monkeypatch.setattr(
+        evidence_module,
+        "qualify_authoritative_report_evidence_with_identity",
+        lambda *_args, **_kwargs: (
+            {}, {}, None, "report_evidence_changed_during_read", None,
+        ),
+    )
+
+    gate = reconcile_decision_batches(results_dir, cfg)
+
+    assert gate["allow_new_batch"] is False
+    assert gate["reason"] == "decision_evidence_identity_unavailable"
+    assert json.loads(path.read_text(encoding="utf-8"))["status"] == (
+        "admitted"
+    )
+
+
+def test_metric_change_during_qualification_has_no_usable_identity(
+        tmp_path, monkeypatch):
+    results_dir = tmp_path / "results"
+    _write_score(results_dir, "idea-alpha", 0.8)
+    cfg = _cfg(tmp_path)
+    original = evidence_module.qualify_authoritative_report_evidence
+
+    def mutate_after_read(*args, **kwargs):
+        outcome = original(*args, **kwargs)
+        _write_score(results_dir, "idea-alpha", 0.9)
+        return outcome
+
+    monkeypatch.setattr(
+        evidence_module,
+        "qualify_authoritative_report_evidence",
+        mutate_after_read,
+    )
+
+    _, _, value, reason, digest = (
+        evidence_module.qualify_authoritative_report_evidence_with_identity(
+            "idea-alpha", results_dir, cfg, {"idea-alpha"},
+        )
+    )
+
+    assert value is None
+    assert reason == "report_evidence_changed_during_read"
+    assert digest is None
+
+
+def test_legacy_resolved_receipt_is_loadable_but_not_campaign_verified(
+        tmp_path):
+    start = time.time() - 1
+    db_path = _create_lake(tmp_path, [
+        ("idea-alpha", "running", "architecture", "IN_PROGRESS"),
+        ("idea-beta", "running", "data", "IN_PROGRESS"),
+    ])
+    results_dir, cfg, path = _stage_and_admit(tmp_path, threshold=0.7)
+    identity = json.loads(path.read_text())["identity_sha256"]
+    _replace_lifecycle(db_path, [
+        ("idea-alpha", "completed", "architecture", "COMPLETE"),
+        ("idea-beta", "failed", "data", "FAILED"),
+    ])
+    _write_score(results_dir, "idea-alpha", 0.8)
+    assert reconcile_decision_batches(results_dir, cfg)[
+        "allow_new_batch"
+    ] is True
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["schema"] = 1
+    receipt.pop("decision_evidence")
+    receipt["resolution_sha256"] = decision_module._resolution_hash(receipt)
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    audit = audit_campaign_decision_receipts(
+        results_dir,
+        cfg,
+        expected_identity_sha256=[identity],
+        start_epoch=start,
+        end_epoch=time.time() + 1,
+    )
+
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["legacy_evidence_identity_sha256"] == [identity]
 
 
 def test_campaign_decision_audit_fails_closed_while_batch_unresolved(tmp_path):

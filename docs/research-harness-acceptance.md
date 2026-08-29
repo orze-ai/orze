@@ -15,7 +15,7 @@ and an executable verifier.
 | GPU scope | 100% launches within allowlist | Launch receipts with physical GPU IDs; forbidden-ID negative tests |
 | Evaluation code identity | 0 mixed-version executions | Content-addressed bundle manifest, receipt binding, concurrent-mutation fault test |
 | Data separation | 0 forbidden sample identities | Signed exact-row manifests and overlap verifier output |
-| Result honesty | 100% ranked rows contract-qualified | Benchmark receipt, exposure ledger, lineage, and report qualification audit |
+| Result honesty | 100% ranked rows and decisions contract-qualified | Benchmark receipt, exposure ledger, lineage, report qualification audit, and decision-input content identity |
 | Model eligibility | 1 model, 1 pass, no routing | Receipt fields and artifact lineage verifier |
 | Reproduction efficiency | No redundant replicas without declared question | Batch contract declaring seeds/replicate purpose and unique-artifact accounting |
 | Recovery correctness | 0 live process / terminal-state contradictions | Process-bound FSM receipts and stale-process fault tests |
@@ -73,6 +73,15 @@ end-to-end claim. Any target without this evidence remains open.
   every config against its immutable prospective canonical SHA-256, checks
   stored config integrity, rejects exact duplicates and undeclared drift, and
   accepts metric tolerance only from lifecycle-complete qualified evidence.
+  Decision receipt schema 2 also records, for every terminal idea, the exact
+  lifecycle state, qualification reason, finite primary value when qualified,
+  and one content SHA-256 covering every file that affected qualification. Evidence is
+  hashed before and after qualification, so concurrent rewrites cannot produce
+  a decision. The closed-campaign audit requalifies those inputs and rejects a
+  later metric, lifecycle, benchmark-receipt, provenance, or exposure-ledger
+  rewrite as `UNVERIFIED`. Redirected or hard-linked evidence is rejected
+  without following it. Legacy resolved receipts remain readable but cannot
+  prove a current campaign outcome because they lack this input identity.
   The scheduler-efficiency analyzer scopes lifecycle latency to the exact
   preregistered idea universe, rejects any unexpected in-window allocation, and
   requires one physical host so cross-host GPU IDs cannot be conflated.

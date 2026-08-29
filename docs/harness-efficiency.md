@@ -164,6 +164,16 @@ only inside the registered window. Their combined idea IDs must exactly equal
 the manifest's `expected_idea_ids`. This ordering binds the complete experiment
 universe before any campaign allocation begins.
 
+Resolved decision receipts bind more than a success count. Schema 2 records the
+terminal lifecycle state and qualification reason for every idea, plus the exact
+finite primary value and content SHA-256 for each lifecycle-complete result.
+Qualification is bracketed by two evidence hashes; a concurrent rewrite leaves
+the batch admitted instead of manufacturing a failure or success. The campaign
+audit requalifies every recorded decision input and returns `UNVERIFIED` after
+any metric, lifecycle, benchmark, provenance, or exposure-evidence drift. Schema
+1 receipts remain loadable for operational continuity but cannot verify a new
+campaign outcome.
+
 | Outcome dimension | Maximum/minimum |
 |---|---:|
 | First valid decision | <= 4 hours |
