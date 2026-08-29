@@ -581,8 +581,62 @@ def test_campaign_compute_audit_verifies_closed_scoped_exact_ideas(tmp_path):
     assert audit["out_of_scope_receipts"] == 0
     assert audit["incomplete_started_attempts"] == 0
     assert audit["zero_gpu_rejection_rate"] == 1.0
+    assert audit["rejection_attempts"] == 1
+    assert audit["zero_gpu_rejection_attempts"] == 1
     assert audit["duplicate_training_attempts"] == 0
     assert audit["missing_terminal_ideas"] == []
+
+
+def test_campaign_compute_audit_does_not_invent_unobserved_rejection_rate(
+        tmp_path):
+    results = tmp_path / "results"
+    now = time.time()
+    trained = _tp(tmp_path, attempt_id="7" * 32)
+    trained.start_time = now - 5
+    record_compute_start(trained, results / trained.idea_id)
+    record_compute_terminal(
+        trained, results / trained.idea_id, "completed", "trainer_completed",
+        return_code=0,
+    )
+
+    audit = audit_campaign_compute_receipts(
+        results,
+        idea_ids=[trained.idea_id],
+        start_epoch=now - 10,
+        end_epoch=now + 10,
+        physical_scope=[4, 5, 6, 7],
+    )
+
+    assert audit["status"] == "VERIFIED"
+    assert audit["rejection_attempts"] == 0
+    assert audit["zero_gpu_rejection_attempts"] == 0
+    assert audit["zero_gpu_rejection_rate"] is None
+
+
+def test_campaign_compute_audit_counts_allocated_rejection_in_denominator(
+        tmp_path):
+    results = tmp_path / "results"
+    now = time.time()
+    rejected = _tp(tmp_path, attempt_id="8" * 32)
+    rejected.start_time = now - 5
+    record_compute_start(rejected, results / rejected.idea_id)
+    record_compute_terminal(
+        rejected, results / rejected.idea_id, "rejected",
+        "late_policy_rejection", return_code=1,
+    )
+
+    audit = audit_campaign_compute_receipts(
+        results,
+        idea_ids=[rejected.idea_id],
+        start_epoch=now - 10,
+        end_epoch=now + 10,
+        physical_scope=[4, 5, 6, 7],
+    )
+
+    assert audit["status"] == "VERIFIED"
+    assert audit["rejection_attempts"] == 1
+    assert audit["zero_gpu_rejection_attempts"] == 0
+    assert audit["zero_gpu_rejection_rate"] == 0.0
 
 
 def test_campaign_compute_audit_fails_closed_on_scope_and_missing_terminal(

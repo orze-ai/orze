@@ -880,17 +880,25 @@ def analyze_campaign(
         at = _epoch(transition["ts"])
         if at is not None:
             timeline.append((at, transition["to_state"], transition["idea_id"]))
+    # One claim can refill only one released slot.  Sort equal-time terminal
+    # events before claims so concurrent database writers cannot make the
+    # pairing depend on insertion order.
+    terminal_states = {"COMPLETE", "FAILED", "SKIPPED"}
+    timeline.sort(key=lambda event: (
+        event[0], 0 if event[1] in terminal_states else 1
+    ))
     release_to_claim = []
-    for index, (released_at, state, _) in enumerate(timeline):
-        if (state not in {"COMPLETE", "FAILED", "SKIPPED"}
-                or not manifest["start_epoch"] <= released_at <= manifest["end_epoch"]):
+    unmatched_releases = []
+    terminal_release_count = 0
+    for at, state, _ in timeline:
+        if not manifest["start_epoch"] <= at <= manifest["end_epoch"]:
             continue
-        for claimed_at, later_state, _ in timeline[index + 1:]:
-            if claimed_at > manifest["end_epoch"]:
-                break
-            if later_state == "CLAIMED":
-                release_to_claim.append(claimed_at - released_at)
-                break
+        if state in terminal_states:
+            terminal_release_count += 1
+            unmatched_releases.append(at)
+        elif state == "CLAIMED" and unmatched_releases:
+            released_at = unmatched_releases.pop(0)
+            release_to_claim.append(at - released_at)
 
     allocation_duty = (
         sum(allocation_ratios) / len(allocation_ratios)
@@ -936,6 +944,8 @@ def analyze_campaign(
         "queue_to_claim_p95_seconds": queue_p95,
         "terminal_to_next_claim_count": len(release_to_claim),
         "terminal_to_next_claim_p95_seconds": release_p95,
+        "terminal_release_count": terminal_release_count,
+        "unmatched_terminal_release_count": len(unmatched_releases),
     }
 
     evidence_checks = {

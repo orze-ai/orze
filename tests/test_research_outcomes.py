@@ -19,7 +19,11 @@ from orze.core.model_lineage import (
     prepare_model_lineage_launch,
     receive_model_lineage_attestation,
 )
-from orze.engine.accounting import record_compute_start, record_compute_terminal
+from orze.engine.accounting import (
+    record_compute_start,
+    record_compute_terminal,
+    record_zero_gpu_outcome,
+)
 from orze.engine.campaign_efficiency import (
     DEFAULT_CAMPAIGN_TARGETS,
     DEFAULT_OUTCOME_TARGETS,
@@ -27,6 +31,7 @@ from orze.engine.campaign_efficiency import (
 )
 from orze.engine.research_outcomes import analyze_research_outcomes
 from orze.engine.reproducibility import config_identity_sha256
+from orze.engine.scheduler import claim
 from orze.idea_lake import IdeaLake
 
 
@@ -110,7 +115,8 @@ def _cfg(tmp_path):
 
 
 def _build_campaign(
-    tmp_path, monkeypatch, *, qualified=True, expected_idea_ids=None
+    tmp_path, monkeypatch, *, qualified=True, expected_idea_ids=None,
+    observe_rejection=True,
 ):
     now = time.time()
     start = now - 10
@@ -179,6 +185,15 @@ def _build_campaign(
 
     idea_dir = results / idea_id
     idea_dir.mkdir(exist_ok=True)
+    if observe_rejection:
+        assert claim(idea_id, results, 4)
+        record_zero_gpu_outcome(
+            idea_id,
+            idea_dir,
+            4,
+            "rejected",
+            "synthetic_preallocation_rejection",
+        )
     artifact = idea_dir / "model.bin"
     artifact.write_bytes(b"one standalone research model")
     process = SimpleNamespace(pid=os.getpid())
@@ -279,14 +294,30 @@ def test_research_outcome_receipt_reports_complete_zero_yield_as_failed(
     assert receipt["lineage_evidence"]["status"] == "NOT_APPLICABLE"
 
 
+def test_research_outcome_does_not_pass_unobserved_rejection_target(
+        tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path, monkeypatch, qualified=True, observe_rejection=False
+    )
+
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
+    )
+
+    assert receipt["status"] == "FAILED"
+    assert receipt["metrics"]["zero_gpu_rejection_rate"] is None
+    assert receipt["checks"]["zero_gpu_rejection_rate"]["passed"] is False
+
+
 def test_research_outcome_receipt_is_unverified_when_compute_is_incomplete(
         tmp_path, monkeypatch):
     cfg, results, manifest, end = _build_campaign(
         tmp_path, monkeypatch, qualified=True
     )
-    terminal = next(results.glob(
-        "idea-outcome/_compute_receipts/*/terminal.json"
-    ))
+    terminal = (
+        results / "idea-outcome" / "_compute_receipts" / ("a" * 32)
+        / "terminal.json"
+    )
     terminal.unlink()
 
     receipt = analyze_research_outcomes(

@@ -527,6 +527,32 @@ def test_preregistered_complete_campaign_can_be_verified(tmp_path):
     assert receipt["metrics"]["terminal_to_next_claim_p95_seconds"] == 5.0
 
 
+def test_one_claim_cannot_fill_multiple_terminal_latency_samples(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "INSERT INTO idea_transitions "
+        "(idea_id, from_state, to_state, ts) VALUES (?, ?, ?, ?)",
+        (
+            "idea-002", "IN_PROGRESS", "FAILED",
+            _iso(manifest["start_epoch"] + 16),
+        ),
+    )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["metrics"]["terminal_release_count"] == 2
+    assert receipt["metrics"]["terminal_to_next_claim_count"] == 1
+    assert receipt["metrics"]["unmatched_terminal_release_count"] == 1
+
+
 def test_unrelated_lifecycle_rows_cannot_improve_campaign_latency(tmp_path):
     db_path = tmp_path / "lake.db"
     manifest = _manifest()

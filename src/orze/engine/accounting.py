@@ -587,6 +587,8 @@ def audit_campaign_compute_receipts(
     incomplete = 0
     zero_gpu = 0
     zero_gpu_valid = 0
+    rejection_attempts = 0
+    zero_gpu_rejections = 0
     allocated_seconds = 0.0
     terminal_ideas = set()
     training_starts = {}
@@ -614,6 +616,8 @@ def audit_campaign_compute_receipts(
         phase_summary["attempts"] += 1
         phase_summary["allocated_gpu_seconds"] += seconds
         outcome = terminal["outcome"]
+        if outcome == "rejected":
+            rejection_attempts += 1
         phase_summary["outcomes"][outcome] = (
             phase_summary["outcomes"].get(outcome, 0) + 1
         )
@@ -625,6 +629,8 @@ def audit_campaign_compute_receipts(
                     and terminal.get("process_pid") is None
                     and "started_at_epoch" not in terminal):
                 zero_gpu_valid += 1
+                if outcome == "rejected":
+                    zero_gpu_rejections += 1
             else:
                 invalid += 1
             continue
@@ -669,8 +675,11 @@ def audit_campaign_compute_receipts(
         "incomplete_started_attempts": incomplete,
         "zero_gpu_terminal_attempts": zero_gpu,
         "valid_zero_gpu_terminal_attempts": zero_gpu_valid,
+        "rejection_attempts": rejection_attempts,
+        "zero_gpu_rejection_attempts": zero_gpu_rejections,
         "zero_gpu_rejection_rate": (
-            zero_gpu_valid / zero_gpu if zero_gpu else 1.0
+            zero_gpu_rejections / rejection_attempts
+            if rejection_attempts else None
         ),
         "out_of_scope_receipts": out_of_scope,
         "invalid_receipts": invalid,
