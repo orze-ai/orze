@@ -41,6 +41,7 @@ def test_recovery_audit_verifies_consistent_terminal_pipeline(tmp_path):
     assert receipt["checks"]["global_state_universe_exact"]["passed"] is True
     assert receipt["counts"]["missing_global_states"] == 0
     assert receipt["counts"]["orphan_global_states"] == 0
+    assert receipt["counts"]["global_transition_history_missing"] == 0
     assert receipt["contradiction_idea_ids"] == []
     assert receipt["evidence_gap_idea_ids"] == []
     assert receipt["rank_claim_proven"] is False
@@ -136,6 +137,30 @@ def test_recovery_audit_rejects_transition_ledger_divergence(tmp_path):
         "passed"
     ] is False
     assert receipt["contradiction_idea_ids"] == ["idea-complete"]
+
+
+def test_recovery_audit_requires_terminal_global_transition_history(tmp_path):
+    db_path = _terminal_lake(tmp_path)
+    connection = __import__("sqlite3").connect(db_path)
+    connection.execute(
+        "DELETE FROM idea_transitions WHERE idea_id = ?",
+        ("idea-complete",),
+    )
+    connection.commit()
+    connection.close()
+
+    receipt = audit_recovery_state(db_path, tmp_path / "results")
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["transition_ledgers_match_current_state"][
+        "passed"
+    ] is False
+    assert receipt["checks"]["transition_ledgers_match_current_state"][
+        "missing_idea_ids"
+    ] == ["idea-complete"]
+    assert receipt["counts"]["global_transition_history_missing"] == 1
+    assert receipt["contradiction_idea_ids"] == []
+    assert receipt["evidence_gap_idea_ids"] == ["idea-complete"]
 
 
 def test_recovery_audit_rejects_orphan_global_state_row(tmp_path):

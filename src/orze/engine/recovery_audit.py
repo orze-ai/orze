@@ -208,6 +208,7 @@ def audit_recovery_state(
     stage_conflicts = set()
     stage_missing = set()
     transition_conflicts = set()
+    global_transition_missing = set()
     missing_global_states = set()
     orphan_global_states = set()
     active_count = 0
@@ -326,7 +327,8 @@ def audit_recovery_state(
             if last_global is not None and last_global != state:
                 transition_conflicts.add(idea_id)
                 contradictions.add(idea_id)
-            elif last_global is None and state in _ACTIVE_STATES:
+            elif last_global is None and state != "QUEUED":
+                global_transition_missing.add(idea_id)
                 gaps.add(idea_id)
 
             stage_rows = stages.get(idea_id, {})
@@ -419,8 +421,11 @@ def audit_recovery_state(
             "conflicting_idea_ids": sorted(stage_conflicts),
         },
         "transition_ledgers_match_current_state": {
-            "passed": not transition_conflicts,
+            "passed": (
+                not transition_conflicts and not global_transition_missing
+            ),
             "idea_ids": sorted(transition_conflicts),
+            "missing_idea_ids": sorted(global_transition_missing),
         },
         "process_state_has_no_contradictions": {
             "passed": not contradictions,
@@ -441,6 +446,9 @@ def audit_recovery_state(
         "stage_conflicts": len(stage_conflicts),
         "stage_evidence_missing": len(stage_missing),
         "transition_conflicts": len(transition_conflicts),
+        "global_transition_history_missing": len(
+            global_transition_missing
+        ),
         "evidence_gaps": len(gaps),
     }
     receipt["contradiction_idea_ids"] = sorted(contradictions)
