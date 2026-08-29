@@ -12,6 +12,7 @@ import argparse
 import datetime
 import hashlib
 import json
+import math
 import os
 import re
 import stat
@@ -280,30 +281,157 @@ def _requirement_status(evidence_statuses: list[str]) -> str:
 
 def _validate_official_rank_evidence(payload: Mapping) -> None:
     """Require an explicit public single-model proof for a green rank row."""
+    from orze.engine import public_rank
+
     if payload.get("rank_claim_proven") is not True:
         raise AcceptanceManifestError("official_rank_proof_missing")
-    if payload.get("verification_method") != "public_endpoint":
+    if (payload.get("schema_version") != public_rank.SCHEMA_VERSION
+            or payload.get("verification_method")
+            != public_rank.VERIFICATION_METHOD):
         raise AcceptanceManifestError("official_rank_verification_method_invalid")
+    verifier_path = Path(public_rank.__file__).resolve(strict=True)
+    if payload.get("verifier_source_sha256") != hashlib.sha256(
+            verifier_path.read_bytes()).hexdigest():
+        raise AcceptanceManifestError("official_rank_verifier_identity_invalid")
+    verified_at = payload.get("verified_at")
+    try:
+        observed_at = datetime.datetime.fromisoformat(verified_at)
+    except (TypeError, ValueError) as exc:
+        raise AcceptanceManifestError("official_rank_time_invalid") from exc
+    if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+        raise AcceptanceManifestError("official_rank_time_invalid")
+    age = datetime.datetime.now(datetime.timezone.utc) - observed_at.astimezone(
+        datetime.timezone.utc)
+    if age < datetime.timedelta(minutes=-5) or age > datetime.timedelta(hours=24):
+        raise AcceptanceManifestError("official_rank_evidence_stale")
     for key in ("public_submission_url", "public_leaderboard_url"):
         value = payload.get(key)
         parsed = urlsplit(value) if isinstance(value, str) else None
         if (parsed is None or parsed.scheme != "https" or not parsed.hostname
                 or parsed.username is not None or parsed.password is not None):
             raise AcceptanceManifestError("official_rank_public_url_invalid")
+    if payload.get("public_leaderboard_url") != public_rank.LEADERBOARD_PUBLIC_URL:
+        raise AcceptanceManifestError("official_rank_leaderboard_url_invalid")
     if (payload.get("model_form") != "single_model_single_pass"
             or payload.get("ensemble") is not False
             or payload.get("routing") is not False):
         raise AcceptanceManifestError("official_rank_model_eligibility_invalid")
+    eligibility = payload.get("eligibility_evidence")
+    eligibility_fields = {
+        "receipt_sha256", "verification_method", "model_artifact_sha256",
+        "model_lineage_sha256", "benchmark_receipt_sha256",
+        "evaluation_bundle_sha256", "verifier_source_sha256",
+    }
+    if (not isinstance(eligibility, Mapping)
+            or set(eligibility) != eligibility_fields
+            or eligibility.get("verification_method")
+            != public_rank.ELIGIBILITY_METHOD
+            or eligibility.get("verifier_source_sha256")
+            != payload.get("verifier_source_sha256")
+            or any(_SHA256_RE.fullmatch(eligibility.get(key, "")) is None
+                   for key in eligibility_fields - {"verification_method"})):
+        raise AcceptanceManifestError("official_rank_model_eligibility_invalid")
+    model_id = payload.get("model_id")
+    if (not isinstance(model_id, str)
+            or public_rank._MODEL_ID_RE.fullmatch(model_id) is None):
+        raise AcceptanceManifestError("official_rank_model_id_invalid")
+    default_columns = payload.get("default_dataset_columns")
+    if (not isinstance(default_columns, list) or not default_columns
+            or any(not isinstance(item, str) for item in default_columns)
+            or len(set(default_columns)) != len(default_columns)
+            or not set(public_rank.DEFAULT_TRACK_COLUMNS.values()).issubset(
+                default_columns)):
+        raise AcceptanceManifestError("official_rank_default_columns_invalid")
+    for key in ("landing_rank", "ranked_models"):
+        value = payload.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise AcceptanceManifestError("official_rank_landing_invalid")
+    average = payload.get("landing_average_wer")
+    if (isinstance(average, bool) or not isinstance(average, (int, float))
+            or not math.isfinite(float(average)) or float(average) < 0
+            or payload["landing_rank"] > payload["ranked_models"]):
+        raise AcceptanceManifestError("official_rank_landing_invalid")
+
+    endpoint_evidence = payload.get("public_endpoint_evidence")
+    expected_endpoints = {
+        "submission": ("GET", payload["public_submission_url"]),
+        "leaderboard_info": ("GET", public_rank.LEADERBOARD_INFO_URL),
+        "leaderboard_call": ("POST", public_rank.LEADERBOARD_CALL_URL),
+    }
+    if (not isinstance(endpoint_evidence, Mapping)
+            or set(endpoint_evidence) != {
+                *expected_endpoints, "leaderboard_result",
+            }):
+        raise AcceptanceManifestError("official_rank_endpoint_evidence_invalid")
+    for name, (method, request_url) in expected_endpoints.items():
+        evidence = endpoint_evidence[name]
+        required = {
+            "method", "request_url", "final_url", "http_status",
+            "content_type", "response_bytes", "response_sha256",
+        }
+        if method == "POST":
+            required.add("request_sha256")
+        if (not isinstance(evidence, Mapping) or set(evidence) != required
+                or evidence.get("method") != method
+                or evidence.get("request_url") != request_url
+                or evidence.get("http_status") != 200
+                or not isinstance(evidence.get("final_url"), str)
+                or evidence.get("final_url") != request_url
+                or not isinstance(evidence.get("content_type"), str)
+                or (name != "submission" and not evidence[
+                    "content_type"].startswith("application/json"))
+                or isinstance(evidence.get("response_bytes"), bool)
+                or not isinstance(evidence.get("response_bytes"), int)
+                or not 1 <= evidence["response_bytes"] <= 8 * 1024 * 1024
+                or _SHA256_RE.fullmatch(evidence.get("response_sha256", ""))
+                is None
+                or (method == "POST" and _SHA256_RE.fullmatch(
+                    evidence.get("request_sha256", "")) is None)):
+            raise AcceptanceManifestError(
+                "official_rank_endpoint_evidence_invalid")
+    result = endpoint_evidence["leaderboard_result"]
+    required_result = {
+        "method", "request_url", "final_url", "http_status", "content_type",
+        "response_bytes", "response_sha256",
+    }
+    if (not isinstance(result, Mapping) or set(result) != required_result
+            or result.get("method") != "GET"
+            or not isinstance(result.get("request_url"), str)
+            or not result["request_url"].startswith(
+                public_rank.LEADERBOARD_CALL_URL + "/")
+            or result.get("final_url") != result.get("request_url")
+            or result.get("http_status") != 200
+            or not isinstance(result.get("final_url"), str)
+            or not isinstance(result.get("content_type"), str)
+            or not result["content_type"].startswith("text/event-stream")
+            or isinstance(result.get("response_bytes"), bool)
+            or not isinstance(result.get("response_bytes"), int)
+            or not 1 <= result["response_bytes"] <= 8 * 1024 * 1024
+            or _SHA256_RE.fullmatch(result.get("response_sha256", "")) is None):
+        raise AcceptanceManifestError("official_rank_endpoint_evidence_invalid")
     tracks = payload.get("default_tracks")
-    if not isinstance(tracks, Mapping):
+    if (not isinstance(tracks, Mapping)
+            or set(tracks) != set(public_rank.DEFAULT_TRACK_COLUMNS)):
         raise AcceptanceManifestError("official_rank_default_tracks_missing")
-    for track_id in ("private_scripted", "private_conversational"):
+    for track_id, column in public_rank.DEFAULT_TRACK_COLUMNS.items():
         track = tracks.get(track_id)
         if (not isinstance(track, Mapping)
+                or set(track) != {
+                    "accepted", "column", "rank", "score", "ranked_models",
+                }
                 or track.get("accepted") is not True
+                or track.get("column") != column
                 or isinstance(track.get("rank"), bool)
                 or not isinstance(track.get("rank"), int)
-                or track["rank"] <= 0):
+                or track["rank"] <= 0
+                or isinstance(track.get("ranked_models"), bool)
+                or not isinstance(track.get("ranked_models"), int)
+                or track["ranked_models"] <= 0
+                or track["rank"] > track["ranked_models"]
+                or isinstance(track.get("score"), bool)
+                or not isinstance(track.get("score"), (int, float))
+                or not math.isfinite(float(track["score"]))
+                or float(track["score"]) < 0):
             raise AcceptanceManifestError("official_rank_default_track_invalid")
 
 

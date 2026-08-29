@@ -1,8 +1,11 @@
+import datetime
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import orze.engine.acceptance_matrix as acceptance_module
+import orze.engine.public_rank as public_rank
 from orze.engine.acceptance_matrix import (
     REQUIRED_TARGETS,
     audit_acceptance_matrix,
@@ -13,6 +16,84 @@ def _write_json(path, payload):
     data = (json.dumps(payload, sort_keys=True) + "\n").encode()
     path.write_bytes(data)
     return hashlib.sha256(data).hexdigest()
+
+
+def _endpoint(method, url, *, post=False, content_type="application/json"):
+    result = {
+        "method": method,
+        "request_url": url,
+        "final_url": url,
+        "http_status": 200,
+        "content_type": content_type,
+        "response_bytes": 100,
+        "response_sha256": "a" * 64,
+    }
+    if post:
+        result["request_sha256"] = "b" * 64
+    return result
+
+
+def _official_receipt(receipt_status):
+    submission_url = "https://huggingface.co/org/standalone-asr"
+    result_url = public_rank.LEADERBOARD_CALL_URL + "/0123456789abcdef"
+    return {
+        "schema_version": 1,
+        "status": receipt_status,
+        "rank_claim_proven": True,
+        "verification_method": public_rank.VERIFICATION_METHOD,
+        "verifier_source_sha256": hashlib.sha256(
+            Path(public_rank.__file__).read_bytes()).hexdigest(),
+        "verified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "public_submission_url": submission_url,
+        "public_leaderboard_url": public_rank.LEADERBOARD_PUBLIC_URL,
+        "model_id": "org/standalone-asr",
+        "model_form": "single_model_single_pass",
+        "ensemble": False,
+        "routing": False,
+        "eligibility_evidence": {
+            "receipt_sha256": "e" * 64,
+            "verification_method": (
+                "managed_model_lineage_and_single_pass_preflight_v1"),
+            "verifier_source_sha256": hashlib.sha256(
+                Path(public_rank.__file__).read_bytes()).hexdigest(),
+            "model_artifact_sha256": "a" * 64,
+            "model_lineage_sha256": "b" * 64,
+            "benchmark_receipt_sha256": "c" * 64,
+            "evaluation_bundle_sha256": "d" * 64,
+        },
+        "landing_rank": 2,
+        "landing_average_wer": 5.0,
+        "ranked_models": 3,
+        "default_dataset_columns": [
+            "AMI-Cleaned", "Private (scripted)",
+            "Private (conversational)",
+        ],
+        "default_tracks": {
+            "private_scripted": {
+                "accepted": True,
+                "column": "Private (scripted)",
+                "rank": 1,
+                "score": 2.0,
+                "ranked_models": 3,
+            },
+            "private_conversational": {
+                "accepted": True,
+                "column": "Private (conversational)",
+                "rank": 3,
+                "score": 10.0,
+                "ranked_models": 3,
+            },
+        },
+        "public_endpoint_evidence": {
+            "submission": _endpoint("GET", submission_url),
+            "leaderboard_info": _endpoint(
+                "GET", public_rank.LEADERBOARD_INFO_URL),
+            "leaderboard_call": _endpoint(
+                "POST", public_rank.LEADERBOARD_CALL_URL, post=True),
+            "leaderboard_result": _endpoint(
+                "GET", result_url, content_type="text/event-stream"),
+        },
+    }
 
 
 def _manifest(tmp_path, *, receipt_status="VERIFIED"):
@@ -35,20 +116,8 @@ def _manifest(tmp_path, *, receipt_status="VERIFIED"):
             }],
         }
     official_path = tmp_path / "official.json"
-    official_digest = _write_json(official_path, {
-        "status": receipt_status,
-        "rank_claim_proven": True,
-        "verification_method": "public_endpoint",
-        "public_submission_url": "https://example.test/submission",
-        "public_leaderboard_url": "https://example.test/leaderboard",
-        "model_form": "single_model_single_pass",
-        "ensemble": False,
-        "routing": False,
-        "default_tracks": {
-            "private_scripted": {"accepted": True, "rank": 1},
-            "private_conversational": {"accepted": True, "rank": 2},
-        },
-    })
+    official_digest = _write_json(
+        official_path, _official_receipt(receipt_status))
     requirements["official_leaderboard_outcome"] = {
         "evidence": [{
             "path": str(official_path),
@@ -146,6 +215,85 @@ def test_acceptance_matrix_rejects_generic_green_as_rank_proof(tmp_path):
         "evidence"
     ][0]
     assert evidence["reason"] == "official_rank_proof_missing"
+
+
+def test_acceptance_matrix_rejects_hand_authored_public_endpoint_rank(tmp_path):
+    manifest_path, _ = _manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text())
+    official_path = tmp_path / "official.json"
+    fabricated = {
+        "status": "VERIFIED",
+        "rank_claim_proven": True,
+        "verification_method": "public_endpoint",
+        "public_submission_url": "https://example.test/submission",
+        "public_leaderboard_url": "https://example.test/leaderboard",
+        "model_form": "single_model_single_pass",
+        "ensemble": False,
+        "routing": False,
+        "default_tracks": {
+            "private_scripted": {"accepted": True, "rank": 1},
+            "private_conversational": {"accepted": True, "rank": 1},
+        },
+    }
+    digest = _write_json(official_path, fabricated)
+    manifest["requirements"]["official_leaderboard_outcome"]["evidence"][0][
+        "sha256"
+    ] = digest
+    _write_json(manifest_path, manifest)
+
+    receipt = audit_acceptance_matrix(manifest_path)
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["rank_claim_proven"] is False
+    evidence = receipt["requirements"]["official_leaderboard_outcome"][
+        "evidence"
+    ][0]
+    assert evidence["reason"] == "official_rank_verification_method_invalid"
+
+
+def test_acceptance_matrix_rejects_stale_public_rank_receipt(tmp_path):
+    manifest_path, _ = _manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text())
+    official_path = tmp_path / "official.json"
+    payload = json.loads(official_path.read_text())
+    payload["verified_at"] = (
+        datetime.datetime.now(datetime.timezone.utc)
+        - datetime.timedelta(hours=25)
+    ).isoformat()
+    digest = _write_json(official_path, payload)
+    manifest["requirements"]["official_leaderboard_outcome"]["evidence"][0][
+        "sha256"
+    ] = digest
+    _write_json(manifest_path, manifest)
+
+    receipt = audit_acceptance_matrix(manifest_path)
+
+    evidence = receipt["requirements"]["official_leaderboard_outcome"][
+        "evidence"
+    ][0]
+    assert evidence["status"] == "UNVERIFIED"
+    assert evidence["reason"] == "official_rank_evidence_stale"
+
+
+def test_acceptance_matrix_rejects_public_rank_verifier_drift(tmp_path):
+    manifest_path, _ = _manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text())
+    official_path = tmp_path / "official.json"
+    payload = json.loads(official_path.read_text())
+    payload["verifier_source_sha256"] = "0" * 64
+    digest = _write_json(official_path, payload)
+    manifest["requirements"]["official_leaderboard_outcome"]["evidence"][0][
+        "sha256"
+    ] = digest
+    _write_json(manifest_path, manifest)
+
+    receipt = audit_acceptance_matrix(manifest_path)
+
+    evidence = receipt["requirements"]["official_leaderboard_outcome"][
+        "evidence"
+    ][0]
+    assert evidence["status"] == "UNVERIFIED"
+    assert evidence["reason"] == "official_rank_verifier_identity_invalid"
 
 
 def test_acceptance_matrix_rejects_receipt_rewrite(tmp_path):
