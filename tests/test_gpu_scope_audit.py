@@ -84,6 +84,38 @@ def test_cuda_writer_scan_detects_new_dynamic_bypass():
     }
 
 
+def test_cuda_writer_single_pass_preserves_nested_attribution_semantics():
+    tree = ast.parse(
+        "def outer(env, gpu):\n"
+        "    @env.update({'CUDA_VISIBLE_DEVICES': ''})\n"
+        "    async def inner():\n"
+        "        env['CUDA_VISIBLE_DEVICES']: str = str(gpu)\n"
+        "        env.update(CUDA_VISIBLE_DEVICES='')\n"
+        "    return inner\n"
+    )
+
+    assert _cuda_writes(tree, "engine/nested.py") == {
+        ("engine/nested.py", "outer", "empty"),
+        ("engine/nested.py", "outer", "dynamic"),
+        ("engine/nested.py", "inner", "empty"),
+        ("engine/nested.py", "inner", "dynamic"),
+    }
+
+
+def test_cuda_writer_scan_does_not_use_recursive_ast_walk(monkeypatch):
+    tree = ast.parse(
+        "def guarded(env):\n"
+        "    env['CUDA_VISIBLE_DEVICES'] = ''\n"
+    )
+    monkeypatch.setattr(scope_module.ast, "walk", lambda _node: (
+        _ for _ in ()
+    ))
+
+    assert _cuda_writes(tree, "engine/guarded.py") == {
+        ("engine/guarded.py", "guarded", "empty")
+    }
+
+
 def test_source_boundary_audit_rejects_missing_guard(tmp_path):
     package = tmp_path / "orze"
     _copy_audited_sources(package)

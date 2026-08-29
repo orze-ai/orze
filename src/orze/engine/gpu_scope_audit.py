@@ -204,23 +204,50 @@ def _cuda_writes(
     tree: ast.AST,
     relative: str,
 ) -> set[tuple[str, str, str]]:
+    """Find direct CUDA visibility writes in one AST traversal.
+
+    A write inside a nested function is attributed to that function and every
+    enclosing function. This deliberately preserves the previous nested
+    ``ast.walk(function)`` behavior without walking the same subtree once per
+    ancestor function.
+    """
     writes = set()
-    for function in (
-        node for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    ):
-        for node in ast.walk(function):
-            if isinstance(node, (ast.Assign, ast.AnnAssign)):
-                targets = (
-                    node.targets if isinstance(node, ast.Assign)
-                    else [node.target]
-                )
-                if any(
-                        _subscript_key(target) == "CUDA_VISIBLE_DEVICES"
-                        for target in targets):
-                    writes.add((relative, function.name, _value_kind(node.value)))
-            elif (isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Attribute)
+
+    class WriterVisitor(ast.NodeVisitor):
+        def __init__(self) -> None:
+            self.function_names: list[str] = []
+
+        def _record(self, kind: str) -> None:
+            for function_name in self.function_names:
+                writes.add((relative, function_name, kind))
+
+        def _visit_function(
+            self, node: ast.FunctionDef | ast.AsyncFunctionDef,
+        ) -> None:
+            self.function_names.append(node.name)
+            self.generic_visit(node)
+            self.function_names.pop()
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            self._visit_function(node)
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            self._visit_function(node)
+
+        def visit_Assign(self, node: ast.Assign) -> None:
+            if any(
+                    _subscript_key(target) == "CUDA_VISIBLE_DEVICES"
+                    for target in node.targets):
+                self._record(_value_kind(node.value))
+            self.generic_visit(node)
+
+        def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+            if _subscript_key(node.target) == "CUDA_VISIBLE_DEVICES":
+                self._record(_value_kind(node.value))
+            self.generic_visit(node)
+
+        def visit_Call(self, node: ast.Call) -> None:
+            if (isinstance(node.func, ast.Attribute)
                     and node.func.attr == "update"):
                 for argument in node.args:
                     if not isinstance(argument, ast.Dict):
@@ -228,15 +255,13 @@ def _cuda_writes(
                     for key, value in zip(argument.keys, argument.values):
                         if (isinstance(key, ast.Constant)
                                 and key.value == "CUDA_VISIBLE_DEVICES"):
-                            writes.add((
-                                relative, function.name, _value_kind(value),
-                            ))
+                            self._record(_value_kind(value))
                 for keyword in node.keywords:
                     if keyword.arg == "CUDA_VISIBLE_DEVICES":
-                        writes.add((
-                            relative, function.name,
-                            _value_kind(keyword.value),
-                        ))
+                        self._record(_value_kind(keyword.value))
+            self.generic_visit(node)
+
+    WriterVisitor().visit(tree)
     return writes
 
 
