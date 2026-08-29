@@ -290,14 +290,24 @@ def _publish_latest_monotonic(progress_dir: Path, payload: dict) -> None:
         _fs_unlock(lock_dir)
 
 
-def _read_published_progress(path: Path) -> dict:
-    """Read one operator receipt without accepting redirects or ambiguity."""
+def _read_published_progress(path: Path) -> tuple[dict, float]:
+    """Read one stable operator receipt and its filesystem publication time."""
     try:
-        stat = path.lstat()
-        if (path.is_symlink() or not path.is_file() or stat.st_nlink != 1
-                or not 1 <= stat.st_size <= 64 * 1024):
+        before = path.lstat()
+        if (path.is_symlink() or not path.is_file() or before.st_nlink != 1
+                or not 1 <= before.st_size <= 64 * 1024):
             raise OSError("campaign_progress_publication_invalid")
         raw = path.read_text(encoding="utf-8")
+        after = path.lstat()
+        identity_fields = (
+            "st_dev", "st_ino", "st_mode", "st_nlink", "st_size",
+            "st_mtime_ns",
+        )
+        if any(
+            getattr(before, field) != getattr(after, field)
+            for field in identity_fields
+        ):
+            raise OSError("campaign_progress_publication_unstable")
 
         def strict_object(pairs):
             result = {}
@@ -313,11 +323,11 @@ def _read_published_progress(path: Path) -> dict:
         raise OSError("campaign_progress_publication_invalid") from exc
     if not isinstance(payload, dict):
         raise OSError("campaign_progress_publication_invalid")
-    return payload
+    return payload, after.st_mtime_ns / 1_000_000_000.0
 
 
 def _audit_progress_publication(
-    manifest: dict, progress_rows: list[dict]
+    manifest: dict, progress_rows: list[dict], *, now_epoch: float,
 ) -> dict:
     """Reconcile immutable DB evidence with the exact operator-visible files."""
     root = Path(manifest["operator_progress_root"])
@@ -328,6 +338,11 @@ def _audit_progress_publication(
         "reason": "operator_progress_publication_unavailable",
         "published_update_count": 0,
         "latest_valid": False,
+        "publication_timestamps_valid": False,
+        "publication_events": [],
+        "publication_deadline_misses": [],
+        "max_publication_delay_seconds": None,
+        "max_publication_gap_seconds": None,
     }
     if (_progress_path_redirected(root)
             or _progress_path_redirected(directory)
@@ -375,30 +390,94 @@ def _audit_progress_publication(
     if observed_names != expected_names:
         result["reason"] = "operator_progress_publication_universe_mismatch"
         return result
+    publication_timestamps_valid = True
+    clock_tolerance = 1.0
+
+    def record_publication(
+        filename: str, expected: dict, published_at_epoch: float,
+    ) -> None:
+        nonlocal publication_timestamps_valid
+        observed_at_epoch = float(expected["observed_at_epoch"])
+        deadline_epoch = float(expected["next_deadline_epoch"])
+        delay_seconds = published_at_epoch - observed_at_epoch
+        event = {
+            "filename": filename,
+            "observed_at_epoch": observed_at_epoch,
+            "published_at_epoch": published_at_epoch,
+            "publication_delay_seconds": delay_seconds,
+            "next_deadline_epoch": deadline_epoch,
+        }
+        result["publication_events"].append(event)
+        if (published_at_epoch < observed_at_epoch - clock_tolerance
+                or published_at_epoch > now_epoch + clock_tolerance):
+            publication_timestamps_valid = False
+        if published_at_epoch > deadline_epoch + clock_tolerance:
+            result["publication_deadline_misses"].append(event)
+
     try:
         for filename, expected in expected_payloads.items():
-            observed = _read_published_progress(directory / filename)
+            observed, published_at_epoch = _read_published_progress(
+                directory / filename
+            )
             if observed != expected:
                 result["reason"] = "operator_progress_publication_mismatch"
                 return result
             _progress_payload_order(observed, campaign_id)
+            record_publication(filename, expected, published_at_epoch)
             result["published_update_count"] += 1
-        latest = _read_published_progress(directory / "latest.json")
+        latest, latest_published_at_epoch = _read_published_progress(
+            directory / "latest.json"
+        )
         _progress_payload_order(latest, campaign_id)
-        expected_latest = max(
-            expected_payloads.values(),
-            key=lambda item: _progress_payload_order(item, campaign_id),
+        expected_latest_filename, expected_latest = max(
+            expected_payloads.items(),
+            key=lambda item: _progress_payload_order(item[1], campaign_id),
         )
         if latest != expected_latest:
             result["reason"] = "operator_progress_latest_mismatch"
             return result
+        record_publication(
+            "latest.json", expected_latest, latest_published_at_epoch,
+        )
+        expected_latest_event = next(
+            event for event in result["publication_events"]
+            if event["filename"] == expected_latest_filename
+        )
+        if (latest_published_at_epoch
+                < expected_latest_event["published_at_epoch"]
+                - clock_tolerance):
+            publication_timestamps_valid = False
     except (OSError, ValueError):
         result["reason"] = "operator_progress_publication_invalid"
         return result
+    update_publication_epochs = sorted(
+        min(
+            max(event["published_at_epoch"], float(manifest["start_epoch"])),
+            float(manifest["end_epoch"]),
+        )
+        for event in result["publication_events"]
+        if event["filename"] != "latest.json"
+    )
+    publication_boundaries = [
+        float(manifest["start_epoch"]),
+        *update_publication_epochs,
+        float(manifest["end_epoch"]),
+    ]
+    max_publication_gap = max(
+        right - left for left, right in zip(
+            publication_boundaries, publication_boundaries[1:]
+        )
+    )
     result.update({
         "complete": True,
         "reason": "operator_progress_publication_complete",
         "latest_valid": True,
+        "publication_timestamps_valid": publication_timestamps_valid,
+        "max_publication_delay_seconds": max(
+            event["publication_delay_seconds"]
+            for event in result["publication_events"]
+        ),
+        "max_publication_gap_seconds": max_publication_gap,
     })
     return result
 
@@ -1138,7 +1217,9 @@ def analyze_campaign(
         max(progress_gaps) if progress_gaps
         else manifest["end_epoch"] - manifest["start_epoch"]
     )
-    publication = _audit_progress_publication(manifest, parsed_progress)
+    publication = _audit_progress_publication(
+        manifest, parsed_progress, now_epoch=now,
+    )
     samples_by_iteration = {
         (row["controller_id"], row["iteration"]): row
         for row in parsed_rows
@@ -1588,6 +1669,24 @@ def analyze_campaign(
         ],
         "operator_publication_reason": publication["reason"],
         "operator_latest_valid": publication["latest_valid"],
+        "operator_publication_timestamps_valid": publication[
+            "publication_timestamps_valid"
+        ],
+        "operator_publication_event_count": len(
+            publication["publication_events"]
+        ),
+        "operator_publication_deadline_miss_count": len(
+            publication["publication_deadline_misses"]
+        ),
+        "operator_publication_deadline_misses": publication[
+            "publication_deadline_misses"
+        ],
+        "max_operator_publication_delay_seconds": publication[
+            "max_publication_delay_seconds"
+        ],
+        "max_operator_publication_gap_seconds": publication[
+            "max_publication_gap_seconds"
+        ],
         "max_operator_update_gap_seconds": max_progress_gap,
         "operator_blocker_counts": dict(sorted({
             code: sum(1 for row in parsed_progress
@@ -1671,6 +1770,9 @@ def analyze_campaign(
             and operator_updates_match_samples
         ),
         "operator_publication_complete": publication["complete"],
+        "operator_publication_timestamps_valid": publication[
+            "publication_timestamps_valid"
+        ],
         "operator_blockers_match_scheduler": (
             operator_updates_match_samples
             and not operator_blocker_mismatches
@@ -1728,6 +1830,14 @@ def analyze_campaign(
         ),
         "operator_update_gap": (
             max_progress_gap
+            <= manifest["targets"]["max_operator_update_gap_seconds"]
+        ),
+        "operator_publication_timely": (
+            publication["complete"]
+            and publication["publication_timestamps_valid"]
+            and not publication["publication_deadline_misses"]
+            and publication["max_publication_gap_seconds"] is not None
+            and publication["max_publication_gap_seconds"]
             <= manifest["targets"]["max_operator_update_gap_seconds"]
         ),
     }

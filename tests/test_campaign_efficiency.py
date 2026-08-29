@@ -2,6 +2,7 @@ import ast
 import datetime
 import inspect
 import json
+import os
 import shutil
 import textwrap
 import threading
@@ -108,7 +109,7 @@ def _outcome_contract(manifest):
 def _record_progress(
         lake, manifest, *, controller, host, iteration, at,
         blocker_code="training_active"):
-    return capture_campaign_progress_update(
+    payload = capture_campaign_progress_update(
         lake,
         results_dir=Path(manifest["operator_progress_root"]).parent,
         campaign_id=manifest["campaign_id"],
@@ -120,6 +121,18 @@ def _record_progress(
         blocker_code=blocker_code,
         observed_at_epoch=at,
     )
+    if payload is not None:
+        progress_dir = (
+            Path(manifest["operator_progress_root"])
+            / manifest["campaign_id"]
+        )
+        timestamp_ns = int(float(at) * 1_000_000_000)
+        update_path = progress_dir / f"{controller}-{iteration:08d}.json"
+        os.utime(update_path, ns=(timestamp_ns, timestamp_ns))
+        latest_path = progress_dir / "latest.json"
+        if json.loads(latest_path.read_text(encoding="utf-8")) == payload:
+            os.utime(latest_path, ns=(timestamp_ns, timestamp_ns))
+    return payload
 
 
 def _populate_complete_campaign(
@@ -1542,6 +1555,77 @@ def test_operator_update_sla_miss_is_a_failed_target(tmp_path):
     assert receipt["checks"]["operator_updates_complete"]["passed"] is True
     assert receipt["checks"]["operator_update_gap"]["passed"] is False
     assert receipt["metrics"]["max_operator_update_gap_seconds"] == 10.0
+
+
+def test_backdated_content_cannot_hide_late_operator_publication(tmp_path):
+    """Embedded observation times do not prove when files became visible."""
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    progress_dir = (
+        Path(manifest["operator_progress_root"]) / manifest["campaign_id"]
+    )
+    published_at = manifest["end_epoch"] + 30
+    for path in progress_dir.glob("*.json"):
+        os.utime(path, (published_at, published_at))
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 60
+    )
+
+    assert receipt["status"] == "FAILED", receipt["checks"]
+    assert receipt["checks"]["operator_publication_timely"]["passed"] is False
+    assert receipt["metrics"]["operator_publication_deadline_miss_count"] == 6
+    assert receipt["metrics"]["max_operator_publication_delay_seconds"] == 70
+
+
+def test_impossibly_early_operator_publication_is_unverified(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    latest = (
+        Path(manifest["operator_progress_root"]) / manifest["campaign_id"]
+        / "latest.json"
+    )
+    before_campaign = manifest["start_epoch"] - 10
+    os.utime(latest, (before_campaign, before_campaign))
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["operator_publication_timestamps_valid"][
+        "passed"
+    ] is False
+    assert receipt["checks"]["operator_publication_timely"]["passed"] is False
+
+
+def test_staggered_deadlines_cannot_hide_operator_publication_gap(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest(tmp_path)
+    manifest["targets"]["max_operator_update_gap_seconds"] = 10.0
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    progress_dir = (
+        Path(manifest["operator_progress_root"]) / manifest["campaign_id"]
+    )
+    publication_offsets = [0, 20, 20, 40, 40]
+    for iteration, offset in enumerate(publication_offsets, start=1):
+        published_at = manifest["start_epoch"] + offset
+        path = progress_dir / f"controller-a-{iteration:08d}.json"
+        os.utime(path, (published_at, published_at))
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "FAILED", receipt["checks"]
+    assert receipt["metrics"]["operator_publication_deadline_miss_count"] == 0
+    assert receipt["metrics"]["max_operator_publication_gap_seconds"] == 20
+    assert receipt["checks"]["operator_publication_timely"]["passed"] is False
 
 
 def test_operator_deadline_tamper_fails_closed(tmp_path):
