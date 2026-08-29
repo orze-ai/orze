@@ -632,6 +632,10 @@ def test_cross_idea_execution_duplicate_is_counted(tmp_path):
     assert audit["training_start_counts_by_execution_identity"] == {
         execution_identity: 2,
     }
+    assert audit["training_attempt_identities_by_idea"] == {
+        first.idea_id: {first.attempt_id: execution_identity},
+        second.idea_id: {second.attempt_id: execution_identity},
+    }
 
 
 def test_campaign_training_without_execution_identity_is_unverified(tmp_path):

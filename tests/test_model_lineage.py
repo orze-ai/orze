@@ -238,6 +238,67 @@ def test_completed_lineage_binds_artifact_attempt_and_policy_without_rank_claim(
     assert _fp("train-sample") not in durable
 
 
+def test_lineage_audit_rejects_compute_execution_identity_mismatch(tmp_path):
+    cfg, idea_dir, tp, _ = _completed_lineage(tmp_path)
+    replacement_identity = "d" * 64
+    receipt_dir = idea_dir / "_compute_receipts" / tp.attempt_id
+
+    boundary_path = receipt_dir / "boundary.json"
+    boundary = json.loads(boundary_path.read_text(encoding="utf-8"))
+    boundary["payload"]["execution_identity_sha256"] = replacement_identity
+    boundary["payload_sha256"] = lineage_module._canonical_hash(
+        boundary["payload"])
+    boundary_path.write_text(
+        json.dumps(boundary, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    lineage_path = idea_dir / "_model_lineage.json"
+    lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
+    lineage["payload"]["execution_identity_sha256"] = replacement_identity
+    lineage["payload"]["boundary_receipt_sha256"] = boundary[
+        "payload_sha256"]
+    lineage["payload_sha256"] = lineage_module._canonical_hash(
+        lineage["payload"])
+    lineage_path.write_text(
+        json.dumps(lineage, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    audit = audit_campaign_model_lineage(
+        idea_dir.parent,
+        cfg,
+        idea_ids=[tp.idea_id],
+        artifact_relation="any",
+    )
+
+    assert json.loads(
+        (receipt_dir / "start.json").read_text(encoding="utf-8")
+    )["execution_identity_sha256"] == "c" * 64
+    assert lineage["payload"][
+        "execution_identity_sha256"] == replacement_identity
+    assert audit["execution_identity_sha256_by_idea"] == {}
+    assert audit["status"] == "UNVERIFIED"
+    assert audit["invalid_idea_ids"] == [tp.idea_id]
+
+
+def test_lineage_finalization_rejects_compute_start_identity_mismatch(
+        tmp_path):
+    cfg = _config(tmp_path)
+    idea_dir = tmp_path / "results" / "idea-lineage"
+    idea_dir.mkdir(parents=True)
+    (idea_dir / "model.bin").write_bytes(b"one standalone model")
+    lineage_tp = _tp()
+    lineage_tp.execution_identity = "d" * 64
+    _write_boundary(idea_dir, cfg, lineage_tp)
+    compute_tp = _tp()
+    record_compute_start(compute_tp, idea_dir, phase="training")
+
+    with pytest.raises(
+            ModelLineageError, match="model_lineage_compute_start_invalid"):
+        finalize_model_lineage(lineage_tp, idea_dir, cfg)
+
+
 def test_campaign_lineage_audit_proves_identical_replication_artifacts(
         tmp_path):
     cfg, _, _, _ = _completed_lineage(
@@ -257,6 +318,10 @@ def test_campaign_lineage_audit_proves_identical_replication_artifacts(
     assert audit["status"] == "VERIFIED"
     assert audit["verified_lineage_count"] == 2
     assert audit["unique_artifact_count"] == 1
+    assert audit["attempt_id_by_idea"] == {
+        "idea-replica-a": "attempt-a",
+        "idea-replica-b": "attempt-b",
+    }
     assert audit["artifact_relation_passed"] is True
     assert audit["rank_claim_proven"] is False
 
@@ -330,6 +395,21 @@ def test_artifact_hash_rejects_redirects_empty_and_limits(
 
     with pytest.raises(ModelLineageError, match=expected):
         _artifact_digest(artifact, max_files, max_bytes)
+
+
+def test_evaluation_rejects_redirected_compute_start_receipt(tmp_path):
+    cfg, idea_dir, tp, _ = _completed_lineage(tmp_path)
+    start_path = (
+        idea_dir / "_compute_receipts" / tp.attempt_id / "start.json"
+    )
+    redirected = tmp_path / "redirected-start.json"
+    redirected.write_bytes(start_path.read_bytes())
+    start_path.unlink()
+    start_path.symlink_to(redirected)
+
+    with pytest.raises(
+            ModelLineageError, match="model_lineage_compute_start_invalid"):
+        validate_model_lineage_for_evaluation(idea_dir, cfg)
 
 
 def test_single_file_rewrite_during_hash_is_detected(tmp_path, monkeypatch):

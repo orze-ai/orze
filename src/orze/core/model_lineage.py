@@ -163,6 +163,21 @@ def _read_envelope(path: Path, expected_keys: set[str]) -> tuple[dict, str]:
     return payload, actual
 
 
+def _read_compute_receipt(path: Path, reason: str) -> dict:
+    """Read one local immutable receipt without following redirected files."""
+    try:
+        info = path.lstat()
+        if (path.is_symlink() or not stat.S_ISREG(info.st_mode)
+                or info.st_nlink != 1 or not 1 <= info.st_size <= 1024 * 1024):
+            raise OSError("unsafe compute receipt")
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ModelLineageError(reason) from exc
+    if not isinstance(payload, dict):
+        raise ModelLineageError(reason)
+    return payload
+
+
 def _receipt_dir(idea_dir: Path, attempt_id: str) -> Path:
     if not isinstance(attempt_id, str) or _TOKEN.fullmatch(attempt_id) is None:
         raise ModelLineageError("model_lineage_attempt_id_invalid")
@@ -454,13 +469,12 @@ def finalize_model_lineage(tp, idea_dir: Path, cfg: Mapping) -> dict:
            for key, value in expected_boundary.items()):
         raise ModelLineageError("model_lineage_boundary_receipt_mismatch")
     start_path = receipt_dir / "start.json"
-    try:
-        start = json.loads(start_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ModelLineageError("model_lineage_compute_start_invalid") from exc
+    start = _read_compute_receipt(
+        start_path, "model_lineage_compute_start_invalid")
     if (not isinstance(start, dict)
             or start.get("idea_id") != getattr(tp, "idea_id", None)
             or start.get("attempt_id") != attempt_id
+            or start.get("execution_identity_sha256") != execution_identity
             or start.get("phase") != "training"
             or start.get("event") != "start"
             or start.get("outcome") != "started"):
@@ -525,19 +539,34 @@ def validate_model_lineage_for_evaluation(
             or boundary.get("data_boundary_policy_sha256") != _canonical_hash(
                 dict(cfg.get("data_boundaries") or {}))):
         raise ModelLineageError("model_lineage_policy_evidence_mismatch")
+    start_path = receipt_dir / "start.json"
+    start = _read_compute_receipt(
+        start_path, "model_lineage_compute_start_invalid")
+    if (not isinstance(start, dict)
+            or start.get("idea_id") != lineage["idea_id"]
+            or start.get("attempt_id") != lineage["attempt_id"]
+            or start.get("execution_identity_sha256")
+            != lineage["execution_identity_sha256"]
+            or start.get("phase") != "training"
+            or start.get("event") != "start"
+            or start.get("outcome") != "started"):
+        raise ModelLineageError("model_lineage_compute_start_invalid")
     terminal_path = receipt_dir / "terminal.json"
-    try:
-        terminal = json.loads(terminal_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ModelLineageError("model_lineage_terminal_receipt_invalid") from exc
+    terminal = _read_compute_receipt(
+        terminal_path, "model_lineage_terminal_receipt_invalid")
     if (not isinstance(terminal, dict)
             or terminal.get("idea_id") != lineage["idea_id"]
             or terminal.get("attempt_id") != lineage["attempt_id"]
+            or terminal.get("execution_identity_sha256")
+            != lineage["execution_identity_sha256"]
             or terminal.get("phase") != "training"
             or terminal.get("event") != "terminal"
             or terminal.get("outcome") != "completed"
             or terminal.get("reason_code") != "trainer_completed"
-            or terminal.get("return_code") != 0):
+            or terminal.get("return_code") != 0
+            or terminal.get("started_at_epoch")
+            != start.get("started_at_epoch")
+            or terminal.get("physical_gpu") != start.get("physical_gpu")):
         raise ModelLineageError("model_lineage_terminal_receipt_invalid")
     artifact = _artifact_digest(
         _idea_path(idea_dir, str(spec["artifact"])),
@@ -570,6 +599,7 @@ def audit_campaign_model_lineage(
         raise ModelLineageError("campaign_lineage_relation_invalid")
     artifacts = {}
     execution_identities = {}
+    attempt_ids = {}
     receipt_hashes = {}
     invalid_idea_ids = []
     for idea_id in idea_ids:
@@ -585,6 +615,7 @@ def audit_campaign_model_lineage(
                 raise ModelLineageError("model_lineage_receipt_invalid")
             artifacts[idea_id] = artifact_hash
             execution_identities[idea_id] = execution_hash
+            attempt_ids[idea_id] = lineage["attempt_id"]
             receipt_hashes[idea_id] = receipt_hash
         except (ModelLineageError, OSError, TypeError, ValueError):
             invalid_idea_ids.append(idea_id)
@@ -614,6 +645,7 @@ def audit_campaign_model_lineage(
         "execution_identity_sha256_by_idea": dict(
             sorted(execution_identities.items())
         ),
+        "attempt_id_by_idea": dict(sorted(attempt_ids.items())),
         "lineage_receipt_sha256_by_idea": dict(sorted(receipt_hashes.items())),
         "rank_claim_proven": False,
     }

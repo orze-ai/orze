@@ -287,6 +287,42 @@ def test_research_outcome_receipt_verifies_yield_compute_and_lineage(
     assert receipt["metrics"]["zero_gpu_rejection_rate"] == 1.0
     assert receipt["lineage_evidence"]["status"] == "VERIFIED"
     assert receipt["lineage_evidence"]["rank_claim_proven"] is False
+    assert receipt["checks"][
+        "lineage_compute_execution_identity_complete"] == {"passed": True}
+    assert len(receipt["source_sha256"]["model_lineage"]) == 64
+
+
+def test_outcome_rejects_cross_evidence_execution_identity_mismatch(
+        tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path, monkeypatch, qualified=True
+    )
+    original_audit = outcome_module.audit_campaign_model_lineage
+
+    def divergent_lineage(*args, **kwargs):
+        audit = original_audit(*args, **kwargs)
+        assert audit["status"] == "VERIFIED"
+        audit["execution_identity_sha256_by_idea"] = {
+            "idea-outcome": "d" * 64,
+        }
+        return audit
+
+    monkeypatch.setattr(
+        outcome_module,
+        "audit_campaign_model_lineage",
+        divergent_lineage,
+    )
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
+    )
+
+    assert receipt["compute_evidence"][
+        "training_start_counts_by_execution_identity"] == {"c" * 64: 1}
+    assert receipt["lineage_evidence"][
+        "execution_identity_sha256_by_idea"] == {"idea-outcome": "d" * 64}
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"][
+        "lineage_compute_execution_identity_complete"] == {"passed": False}
 
 
 def test_research_outcome_receipt_reports_complete_zero_yield_as_failed(

@@ -637,6 +637,7 @@ def audit_campaign_compute_receipts(
     terminal_ideas = set()
     training_starts = {}
     training_execution_starts = {}
+    training_attempt_identities_by_idea = {}
     by_phase = {}
     for (idea_id, _attempt_id), pair in events.items():
         start = pair.get("start")
@@ -648,6 +649,9 @@ def audit_campaign_compute_receipts(
                 training_execution_starts[execution_identity] = (
                     training_execution_starts.get(execution_identity, 0) + 1
                 )
+                training_attempt_identities_by_idea.setdefault(
+                    idea_id, {}
+                )[_attempt_id] = execution_identity
             if terminal is None:
                 incomplete += 1
                 continue
@@ -835,6 +839,12 @@ def audit_campaign_compute_receipts(
         "training_start_counts_by_execution_identity": dict(sorted(
             training_execution_starts.items()
         )),
+        "training_attempt_identities_by_idea": {
+            idea_id: dict(sorted(attempts.items()))
+            for idea_id, attempts in sorted(
+                training_attempt_identities_by_idea.items()
+            )
+        },
         "duplicate_training_attempts": duplicate_training_attempts,
         "by_phase": dict(sorted(by_phase.items())),
     }

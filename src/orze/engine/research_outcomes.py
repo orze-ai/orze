@@ -161,6 +161,27 @@ def analyze_research_outcomes(
         }
     receipt["reproducibility_evidence"] = reproduction
 
+    lineage_identities = lineage.get(
+        "execution_identity_sha256_by_idea") or {}
+    lineage_attempt_ids = lineage.get("attempt_id_by_idea") or {}
+    compute_attempt_identities = compute.get(
+        "training_attempt_identities_by_idea") or {}
+    lineage_compute_identity_complete = (
+        not success_ids
+        or (
+            lineage.get("status") == "VERIFIED"
+            and all(
+                isinstance(lineage_identities.get(idea_id), str)
+                and isinstance(lineage_attempt_ids.get(idea_id), str)
+                and isinstance(compute_attempt_identities.get(idea_id), dict)
+                and compute_attempt_identities[idea_id].get(
+                    lineage_attempt_ids[idea_id]
+                ) == lineage_identities[idea_id]
+                for idea_id in success_ids
+            )
+        )
+    )
+
     successes = decision.get("qualified_success_count")
     admitted = decision.get("admitted_count")
     gpu_seconds = compute.get("allocated_gpu_seconds_total")
@@ -221,6 +242,9 @@ def analyze_research_outcomes(
         "lineage_evidence_complete": lineage.get("status") in {
             "VERIFIED", "NOT_APPLICABLE",
         },
+        "lineage_compute_execution_identity_complete": (
+            lineage_compute_identity_complete
+        ),
         "official_rank_not_inferred": lineage.get("rank_claim_proven") is False,
         "reproducibility_evidence_complete": reproduction.get("status") in {
             "VERIFIED", "FAILED",
