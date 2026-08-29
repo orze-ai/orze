@@ -78,7 +78,8 @@ configuration inspection, or a CPU benchmark cannot close them.
 
 Before a campaign starts, write a JSON manifest with a unique `campaign_id`,
 future `start_epoch` and `end_epoch`, the exact physical `physical_scope`, the
-configured `poll_seconds`, minimum evidence counts, and all four targets from
+configured `poll_seconds`, the complete `expected_idea_ids` experiment
+universe, minimum evidence counts, and all four targets from
 `DEFAULT_CAMPAIGN_TARGETS`. Thresholds may be stricter than the defaults but
 cannot be weakened. Register it once in the same IdeaLake used by the daemon:
 
@@ -117,7 +118,12 @@ python -m orze.engine.campaign_efficiency analyze \
 ```
 
 `VERIFIED` requires an exact preregistered-manifest match, complete samples and
-physical scope, sufficient lifecycle evidence and demand, and every target.
+physical scope on exactly one host, no missing or unexpected
+in-window lifecycle allocation, sufficient lifecycle evidence and demand, and
+every target. Queue-to-claim and terminal-to-next-claim metrics use only the
+preregistered idea IDs; unrelated work in the same Idea Lake cannot improve a
+campaign receipt. Sequential controller identities are retained as an
+observation and allowed so a verified restart does not erase campaign evidence.
 Incomplete evidence is `UNVERIFIED`; complete evidence that misses a target is
 `FAILED`. Mean hardware utilization is reported as an observation, not silently
 used as a substitute for allocation duty cycle or official benchmark evidence.
@@ -129,7 +135,8 @@ or `any`), and every target in `DEFAULT_OUTCOME_TARGETS`. The defaults require:
 
 Stage the prospective decision contracts to obtain their identities, register
 the campaign manifest before its future start, and admit those exact contracts
-only inside the registered window. This ordering binds the complete experiment
+only inside the registered window. Their combined idea IDs must exactly equal
+the manifest's `expected_idea_ids`. This ordering binds the complete experiment
 universe before any campaign allocation begins.
 
 | Outcome dimension | Maximum/minimum |

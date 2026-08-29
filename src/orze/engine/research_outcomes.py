@@ -76,12 +76,17 @@ def analyze_research_outcomes(
             "qualified_success_identity_complete": False,
         }
     receipt["decision_evidence"] = decision
-    idea_ids = decision.get("idea_ids") or []
-    if idea_ids:
+    decision_idea_ids = decision.get("idea_ids") or []
+    expected_idea_ids = list(manifest["expected_idea_ids"])
+    idea_universe_matches = (
+        len(decision_idea_ids) == len(expected_idea_ids)
+        and set(decision_idea_ids) == set(expected_idea_ids)
+    )
+    if expected_idea_ids:
         try:
             compute = audit_campaign_compute_receipts(
                 Path(results_dir),
-                idea_ids=idea_ids,
+                idea_ids=expected_idea_ids,
                 start_epoch=manifest["start_epoch"],
                 end_epoch=manifest["end_epoch"],
                 physical_scope=manifest["physical_scope"],
@@ -103,6 +108,8 @@ def analyze_research_outcomes(
     success_ids = decision.get("qualified_success_idea_ids") or []
     success_identity_complete = (
         decision.get("qualified_success_identity_complete") is True
+        and idea_universe_matches
+        and set(success_ids).issubset(expected_idea_ids)
     )
     if success_ids and success_identity_complete:
         try:
@@ -168,6 +175,7 @@ def analyze_research_outcomes(
 
     evidence_checks = {
         "decision_evidence_complete": decision.get("status") == "VERIFIED",
+        "exact_preregistered_idea_universe": idea_universe_matches,
         "compute_evidence_complete": compute.get("status") == "VERIFIED",
         "qualified_success_identity_complete": success_identity_complete,
         "lineage_evidence_complete": lineage.get("status") in {

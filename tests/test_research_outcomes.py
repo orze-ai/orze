@@ -107,7 +107,9 @@ def _cfg(tmp_path):
     }
 
 
-def _build_campaign(tmp_path, monkeypatch, *, qualified=True):
+def _build_campaign(
+    tmp_path, monkeypatch, *, qualified=True, expected_idea_ids=None
+):
     now = time.time()
     start = now - 10
     end = now + 10
@@ -135,6 +137,7 @@ def _build_campaign(tmp_path, monkeypatch, *, qualified=True):
     identity = staged["identity_sha256"]
     manifest = {
         "campaign_id": "research-outcome-test",
+        "expected_idea_ids": expected_idea_ids or [idea_id],
         "start_epoch": start,
         "end_epoch": end,
         "physical_scope": [4, 5, 6, 7],
@@ -281,4 +284,26 @@ def test_research_outcome_receipt_is_unverified_when_compute_is_incomplete(
     assert receipt["status"] == "UNVERIFIED"
     assert receipt["checks"]["compute_evidence_complete"]["passed"] is False
     assert receipt["compute_evidence"]["incomplete_started_attempts"] == 1
+    assert receipt["lineage_evidence"]["status"] == "UNVERIFIED"
+
+
+def test_research_outcome_rejects_decision_universe_mismatch(
+        tmp_path, monkeypatch):
+    cfg, results, manifest, end = _build_campaign(
+        tmp_path,
+        monkeypatch,
+        qualified=True,
+        expected_idea_ids=["idea-other"],
+    )
+
+    receipt = analyze_research_outcomes(
+        cfg["idea_lake_db"], results, cfg, manifest, now_epoch=end + 1
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["registration"]["valid"] is True
+    assert receipt["checks"]["decision_evidence_complete"]["passed"] is True
+    assert receipt["checks"]["exact_preregistered_idea_universe"][
+        "passed"
+    ] is False
     assert receipt["lineage_evidence"]["status"] == "UNVERIFIED"

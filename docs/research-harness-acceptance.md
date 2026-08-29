@@ -67,6 +67,9 @@ end-to-end claim. Any target without this evidence remains open.
   analyzer validates resolved qualified-success identities, closed framework
   compute receipts, physical GPU scope, zero-GPU rejections, retry/duplicate
   counts, GPU-hours per success, decision latency, and current artifact lineage.
+  The scheduler-efficiency analyzer scopes lifecycle latency to the exact
+  preregistered idea universe, rejects any unexpected in-window allocation, and
+  requires one physical host so cross-host GPU IDs cannot be conflated.
   Missing evidence is `UNVERIFIED`; complete evidence that misses a target is
   `FAILED`. Synthetic production-path tests cover passing, zero-yield, missing
   terminal, scope, and artifact-relation cases. Project attainment remains open

@@ -10,10 +10,12 @@ import datetime
 import hashlib
 import json
 import math
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
+from orze.core.ideas import IDEA_ID_PATTERN
 from orze.hardware.gpu import _query_gpu_details
 from orze.idea_lake import IdeaLake
 
@@ -33,6 +35,9 @@ DEFAULT_OUTCOME_TARGETS = {
     "max_duplicate_training_attempts": 0,
     "min_zero_gpu_rejection_rate": 1.0,
 }
+
+_IDEA_RE = re.compile(IDEA_ID_PATTERN)
+_MAX_CAMPAIGN_IDEAS = 4096
 
 
 def capture_campaign_efficiency_sample(
@@ -125,11 +130,20 @@ def _manifest_error(
         "campaign_id", "start_epoch", "end_epoch",
         "physical_scope", "poll_seconds", "minimum_samples",
         "minimum_claims", "minimum_release_to_claim_pairs", "targets",
+        "expected_idea_ids",
     }
     if not isinstance(manifest, dict) or not required.issubset(manifest):
         return "manifest is missing required fields"
     if not isinstance(manifest["campaign_id"], str) or not manifest["campaign_id"]:
         return "campaign_id must be a non-empty string"
+    idea_ids = manifest["expected_idea_ids"]
+    if (not isinstance(idea_ids, list)
+            or not 1 <= len(idea_ids) <= _MAX_CAMPAIGN_IDEAS
+            or len(idea_ids) != len(set(idea_ids))
+            or any(not isinstance(idea_id, str)
+                   or _IDEA_RE.fullmatch(idea_id) is None
+                   for idea_id in idea_ids)):
+        return "expected_idea_ids must contain unique valid idea IDs"
     numeric = ("start_epoch", "end_epoch", "poll_seconds")
     if any(isinstance(manifest[key], bool)
            or not isinstance(manifest[key], (int, float))
@@ -341,8 +355,7 @@ def analyze_campaign(
             "WHERE ts IS NOT NULL ORDER BY ts, id"
         ).fetchall()
         states = lake.conn.execute(
-            "SELECT queued_at, claimed_at FROM idea_state "
-            "WHERE queued_at IS NOT NULL AND claimed_at IS NOT NULL"
+            "SELECT idea_id, queued_at, claimed_at FROM idea_state"
         ).fetchall()
         registration = lake.conn.execute(
             "SELECT * FROM harness_campaign_registrations "
@@ -353,6 +366,8 @@ def analyze_campaign(
         lake.close()
 
     scope = sorted(manifest["physical_scope"])
+    expected_idea_ids = list(manifest["expected_idea_ids"])
+    expected_idea_set = set(expected_idea_ids)
     poll = float(manifest["poll_seconds"])
     canonical = _canonical_manifest(manifest)
     manifest_sha256 = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -455,8 +470,29 @@ def analyze_campaign(
             telemetry_by_gpu[gpu] for gpu in active if gpu in telemetry_by_gpu
         )
 
+    state_ids = {str(state["idea_id"]) for state in states}
+    missing_lifecycle_idea_ids = sorted(expected_idea_set - state_ids)
+    unexpected_lifecycle_idea_ids = set()
+    for state in states:
+        claimed = _epoch(state["claimed_at"])
+        if (claimed is not None
+                and manifest["start_epoch"] <= claimed <= manifest["end_epoch"]
+                and state["idea_id"] not in expected_idea_set):
+            unexpected_lifecycle_idea_ids.add(str(state["idea_id"]))
+    for transition in transitions:
+        at = _epoch(transition["ts"])
+        if (at is not None
+                and manifest["start_epoch"] <= at <= manifest["end_epoch"]
+                and transition["to_state"] in {
+                    "CLAIMED", "IN_PROGRESS", "COMPLETE", "FAILED", "SKIPPED",
+                }
+                and transition["idea_id"] not in expected_idea_set):
+            unexpected_lifecycle_idea_ids.add(str(transition["idea_id"]))
+
     queue_to_claim = []
     for state in states:
+        if state["idea_id"] not in expected_idea_set:
+            continue
         queued = _epoch(state["queued_at"])
         claimed = _epoch(state["claimed_at"])
         if (queued is not None and claimed is not None
@@ -466,6 +502,8 @@ def analyze_campaign(
 
     timeline = []
     for transition in transitions:
+        if transition["idea_id"] not in expected_idea_set:
+            continue
         at = _epoch(transition["ts"])
         if at is not None:
             timeline.append((at, transition["to_state"], transition["idea_id"]))
@@ -491,6 +529,12 @@ def analyze_campaign(
         "sample_count": len(parsed_rows),
         "malformed_sample_count": malformed_rows,
         "controller_count": len({row["controller_id"] for row in parsed_rows}),
+        "host_count": len({row["host"] for row in parsed_rows}),
+        "expected_idea_count": len(expected_idea_ids),
+        "missing_lifecycle_idea_ids": missing_lifecycle_idea_ids,
+        "unexpected_lifecycle_idea_ids": sorted(
+            unexpected_lifecycle_idea_ids
+        ),
         "demand_sample_count": demand_samples,
         "max_sample_gap_seconds": max_gap,
         "max_sample_gap_poll_intervals": max_gap / poll,
@@ -512,6 +556,13 @@ def analyze_campaign(
         "exact_physical_scope": bool(parsed_rows) and exact_scope,
         "exact_poll_seconds": bool(parsed_rows) and exact_poll,
         "telemetry_complete": bool(parsed_rows) and telemetry_complete,
+        "single_physical_host": (
+            len({row["host"] for row in parsed_rows}) == 1
+        ),
+        "exact_campaign_idea_universe": (
+            not missing_lifecycle_idea_ids
+            and not unexpected_lifecycle_idea_ids
+        ),
         "minimum_claims": len(queue_to_claim) >= manifest["minimum_claims"],
         "minimum_release_to_claim_pairs": (
             len(release_to_claim) >= manifest["minimum_release_to_claim_pairs"]
