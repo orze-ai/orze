@@ -162,6 +162,25 @@ CREATE TABLE IF NOT EXISTS harness_campaign_registrations (
     registered_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS harness_campaign_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id TEXT NOT NULL,
+    controller_id TEXT NOT NULL,
+    host TEXT NOT NULL,
+    iteration INTEGER NOT NULL,
+    observed_at_epoch REAL NOT NULL,
+    observed_at TEXT NOT NULL,
+    last_valid_artifact_sha256 TEXT,
+    last_valid_artifact_idea_id TEXT,
+    last_valid_artifact_at_epoch REAL,
+    blocker_code TEXT NOT NULL,
+    next_deadline_epoch REAL NOT NULL,
+    UNIQUE(campaign_id, controller_id, iteration)
+);
+
+CREATE INDEX IF NOT EXISTS idx_harness_campaign_progress_observed
+ON harness_campaign_progress(campaign_id, observed_at_epoch);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     name TEXT PRIMARY KEY,
     applied_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -2576,6 +2595,92 @@ class IdeaLake:
                     int(telemetry_complete), canonical(training),
                     canonical(evaluation), remaining_training,
                     remaining_evaluation, int(launcher_paused), int(disk_ok),
+                ),
+            )
+            self.conn.commit()
+            return cursor.rowcount == 1
+
+        return bool(_retry_on_busy(_insert))
+
+    def record_harness_campaign_progress(
+        self,
+        *,
+        campaign_id: str,
+        controller_id: str,
+        host: str,
+        iteration: int,
+        observed_at_epoch: float,
+        last_valid_artifact_sha256: Optional[str],
+        last_valid_artifact_idea_id: Optional[str],
+        last_valid_artifact_at_epoch: Optional[float],
+        blocker_code: str,
+        next_deadline_epoch: float,
+    ) -> bool:
+        """Persist one content-safe operator progress update."""
+        import math
+
+        text_fields = {
+            "campaign_id": campaign_id,
+            "controller_id": controller_id,
+            "host": host,
+            "blocker_code": blocker_code,
+        }
+        if any(not isinstance(value, str) or not value.strip()
+               or any(ord(char) < 32 for char in value)
+               for value in text_fields.values()):
+            raise ValueError("campaign progress text fields must be non-empty")
+        if (isinstance(iteration, bool) or not isinstance(iteration, int)
+                or iteration < 0):
+            raise ValueError("campaign progress iteration must be non-negative")
+        numeric = (observed_at_epoch, next_deadline_epoch)
+        if any(isinstance(value, bool) or not isinstance(value, (int, float))
+               or not math.isfinite(float(value)) for value in numeric):
+            raise ValueError("campaign progress timestamps must be finite")
+        if observed_at_epoch <= 0 or next_deadline_epoch < observed_at_epoch:
+            raise ValueError("campaign progress deadline is invalid")
+        artifact_values = (
+            last_valid_artifact_sha256,
+            last_valid_artifact_idea_id,
+            last_valid_artifact_at_epoch,
+        )
+        if any(value is None for value in artifact_values):
+            if not all(value is None for value in artifact_values):
+                raise ValueError("campaign progress artifact fields must be paired")
+        else:
+            if (not isinstance(last_valid_artifact_sha256, str)
+                    or re.fullmatch(r"[0-9a-f]{64}",
+                                    last_valid_artifact_sha256) is None
+                    or not isinstance(last_valid_artifact_idea_id, str)
+                    or re.fullmatch(r"idea-[a-z0-9][a-z0-9-]*",
+                                    last_valid_artifact_idea_id) is None
+                    or isinstance(last_valid_artifact_at_epoch, bool)
+                    or not isinstance(last_valid_artifact_at_epoch, (int, float))
+                    or not math.isfinite(float(last_valid_artifact_at_epoch))
+                    or not 0 < last_valid_artifact_at_epoch <= observed_at_epoch):
+                raise ValueError("campaign progress artifact identity is invalid")
+        if re.fullmatch(r"[a-z][a-z0-9_]{0,63}", blocker_code) is None:
+            raise ValueError("campaign progress blocker code is invalid")
+
+        observed_at = datetime.datetime.fromtimestamp(
+            float(observed_at_epoch), datetime.timezone.utc
+        ).isoformat()
+
+        def _insert():
+            cursor = self.conn.execute(
+                "INSERT OR IGNORE INTO harness_campaign_progress "
+                "(campaign_id, controller_id, host, iteration, "
+                "observed_at_epoch, observed_at, "
+                "last_valid_artifact_sha256, last_valid_artifact_idea_id, "
+                "last_valid_artifact_at_epoch, blocker_code, "
+                "next_deadline_epoch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    campaign_id.strip(), controller_id.strip(), host.strip(),
+                    iteration, float(observed_at_epoch), observed_at,
+                    last_valid_artifact_sha256,
+                    last_valid_artifact_idea_id,
+                    (float(last_valid_artifact_at_epoch)
+                     if last_valid_artifact_at_epoch is not None else None),
+                    blocker_code, float(next_deadline_epoch),
                 ),
             )
             self.conn.commit()

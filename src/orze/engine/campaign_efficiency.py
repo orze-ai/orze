@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
+from orze.core.fs import atomic_write
 from orze.core.ideas import IDEA_ID_PATTERN
 from orze.hardware.gpu import _query_gpu_details
 from orze.idea_lake import IdeaLake
@@ -25,6 +26,7 @@ DEFAULT_CAMPAIGN_TARGETS = {
     "min_allocation_duty_cycle": 0.90,
     "max_queue_to_claim_poll_intervals": 2.0,
     "max_terminal_to_next_claim_poll_intervals": 1.0,
+    "max_operator_update_gap_seconds": 600.0,
 }
 
 DEFAULT_OUTCOME_TARGETS = {
@@ -37,7 +39,18 @@ DEFAULT_OUTCOME_TARGETS = {
 }
 
 _IDEA_RE = re.compile(IDEA_ID_PATTERN)
+_CAMPAIGN_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,127}")
+_CONTROLLER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 _MAX_CAMPAIGN_IDEAS = 4096
+_PROGRESS_BLOCKERS = frozenset({
+    "disk_unavailable",
+    "eligible_queue_waiting",
+    "evaluation_active",
+    "evaluation_queued",
+    "launcher_paused",
+    "no_eligible_work",
+    "training_active",
+})
 
 
 def capture_campaign_efficiency_sample(
@@ -92,6 +105,206 @@ def capture_campaign_efficiency_sample(
     )
 
 
+def _qualified_artifact_identity(
+    completed_rows: Iterable[dict], primary_metric: str
+) -> tuple[Optional[str], Optional[str]]:
+    """Return a content identity for the current best qualified result row."""
+    if not isinstance(primary_metric, str) or not primary_metric:
+        return None, None
+    for row in completed_rows:
+        if not isinstance(row, dict) or row.get("evidence_qualified") is not True:
+            continue
+        idea_id = row.get("id")
+        value = row.get("primary_val")
+        reason = row.get("evidence_reason")
+        evidence_sha = row.get("evidence_sha256")
+        if (_IDEA_RE.fullmatch(idea_id) is None
+                if isinstance(idea_id, str) else True):
+            continue
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                or not isinstance(reason, str) or not reason
+                or not isinstance(evidence_sha, str)
+                or re.fullmatch(r"[0-9a-f]{64}", evidence_sha) is None):
+            continue
+        return idea_id, evidence_sha
+    return None, None
+
+
+def _write_progress_file(path: Path, payload: dict) -> None:
+    rendered = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    if path.exists():
+        try:
+            stat = path.lstat()
+            if path.is_symlink() or stat.st_nlink != 1:
+                raise OSError("campaign_progress_file_redirected")
+            if path.read_text(encoding="utf-8") != rendered:
+                raise OSError("campaign_progress_identity_conflict")
+            return
+        except UnicodeDecodeError as exc:
+            raise OSError("campaign_progress_file_invalid") from exc
+    atomic_write(path, rendered)
+    stat = path.lstat()
+    if path.is_symlink() or stat.st_nlink != 1:
+        raise OSError("campaign_progress_file_redirected")
+    if path.read_text(encoding="utf-8") != rendered:
+        raise OSError("campaign_progress_write_unverified")
+
+
+def _progress_path_redirected(path: Path) -> bool:
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current = current / part
+        try:
+            if current.exists() and current.is_symlink():
+                return True
+        except OSError:
+            return True
+    return False
+
+
+def capture_campaign_progress_update(
+    lake: IdeaLake,
+    *,
+    results_dir: str | Path,
+    campaign_id: str,
+    controller_id: str,
+    host: str,
+    iteration: int,
+    completed_rows: Iterable[dict],
+    primary_metric: str,
+    blocker_code: str,
+    observed_at_epoch: Optional[float] = None,
+) -> Optional[dict]:
+    """Publish one operator-visible update and its immutable DB evidence."""
+    if (_CAMPAIGN_RE.fullmatch(campaign_id) is None
+            if isinstance(campaign_id, str) else True):
+        raise ValueError("campaign progress campaign_id is invalid")
+    if (_CONTROLLER_RE.fullmatch(controller_id) is None
+            if isinstance(controller_id, str) else True):
+        raise ValueError("campaign progress controller_id is invalid")
+    if (not isinstance(host, str) or not host.strip()
+            or any(ord(char) < 32 for char in host)):
+        raise ValueError("campaign progress host is invalid")
+    if (isinstance(iteration, bool) or not isinstance(iteration, int)
+            or iteration < 0):
+        raise ValueError("campaign progress iteration is invalid")
+    if blocker_code not in _PROGRESS_BLOCKERS:
+        raise ValueError("campaign progress blocker_code is invalid")
+    now = time.time() if observed_at_epoch is None else observed_at_epoch
+    if (isinstance(now, bool) or not isinstance(now, (int, float))
+            or not math.isfinite(float(now)) or now <= 0):
+        raise ValueError("campaign progress observed_at_epoch is invalid")
+    row = lake.conn.execute(
+        "SELECT manifest_json FROM harness_campaign_registrations "
+        "WHERE campaign_id = ?", (campaign_id,),
+    ).fetchone()
+    if row is None:
+        raise ValueError("campaign progress registration is missing")
+    try:
+        manifest = json.loads(row["manifest_json"])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("campaign progress registration is invalid") from exc
+    manifest_validation_epoch = float(manifest.get("start_epoch", 0)) - 1.0
+    if _manifest_error(
+            manifest, manifest_validation_epoch, require_ended=False) is not None:
+        raise ValueError("campaign progress manifest is invalid")
+    start = float(manifest["start_epoch"])
+    end = float(manifest["end_epoch"])
+    if not start <= float(now) <= end:
+        return None
+    max_gap = float(manifest["targets"]["max_operator_update_gap_seconds"])
+    next_deadline = min(end, float(now) + max_gap)
+    artifact_id, artifact_sha = _qualified_artifact_identity(
+        completed_rows, primary_metric
+    )
+    artifact_at = None
+    if artifact_sha is not None:
+        prior = lake.conn.execute(
+            "SELECT last_valid_artifact_sha256, "
+            "last_valid_artifact_at_epoch FROM harness_campaign_progress "
+            "WHERE campaign_id = ? ORDER BY observed_at_epoch DESC, id DESC "
+            "LIMIT 1", (campaign_id,),
+        ).fetchone()
+        artifact_at = (
+            float(prior["last_valid_artifact_at_epoch"])
+            if prior is not None
+            and prior["last_valid_artifact_sha256"] == artifact_sha
+            and prior["last_valid_artifact_at_epoch"] is not None
+            else float(now)
+        )
+    core = {
+        "schema_version": 1,
+        "campaign_id": campaign_id,
+        "controller_id": controller_id,
+        "host": host,
+        "iteration": iteration,
+        "observed_at_epoch": float(now),
+        "observed_at": datetime.datetime.fromtimestamp(
+            float(now), datetime.timezone.utc
+        ).isoformat(),
+        "last_valid_artifact_sha256": artifact_sha,
+        "last_valid_artifact_idea_id": artifact_id,
+        "last_valid_artifact_at_epoch": artifact_at,
+        "blocker_code": blocker_code,
+        "next_deadline_epoch": next_deadline,
+    }
+    canonical = json.dumps(core, sort_keys=True, separators=(",", ":"))
+    payload = {
+        **core,
+        "update_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+    }
+    results_path = Path(results_dir).absolute()
+    if _progress_path_redirected(results_path):
+        raise OSError("campaign_progress_directory_redirected")
+    progress_root = results_path / "_campaign_progress"
+    if _progress_path_redirected(progress_root):
+        raise OSError("campaign_progress_directory_redirected")
+    progress_dir = progress_root / campaign_id
+    progress_dir.mkdir(parents=True, exist_ok=True)
+    if _progress_path_redirected(progress_dir):
+        raise OSError("campaign_progress_directory_redirected")
+    update_path = progress_dir / f"{controller_id}-{iteration:08d}.json"
+    _write_progress_file(update_path, payload)
+    latest = progress_dir / "latest.json"
+    latest_rendered = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    atomic_write(latest, latest_rendered)
+    latest_stat = latest.lstat()
+    if latest.is_symlink() or latest_stat.st_nlink != 1:
+        raise OSError("campaign_progress_latest_redirected")
+    if latest.read_text(encoding="utf-8") != latest_rendered:
+        raise OSError("campaign_progress_latest_write_unverified")
+    inserted = lake.record_harness_campaign_progress(
+        campaign_id=campaign_id,
+        controller_id=controller_id,
+        host=host,
+        iteration=iteration,
+        observed_at_epoch=float(now),
+        last_valid_artifact_sha256=artifact_sha,
+        last_valid_artifact_idea_id=artifact_id,
+        last_valid_artifact_at_epoch=artifact_at,
+        blocker_code=blocker_code,
+        next_deadline_epoch=next_deadline,
+    )
+    if not inserted:
+        existing = lake.conn.execute(
+            "SELECT observed_at_epoch, last_valid_artifact_sha256, "
+            "last_valid_artifact_idea_id, last_valid_artifact_at_epoch, "
+            "blocker_code, next_deadline_epoch FROM harness_campaign_progress "
+            "WHERE campaign_id = ? AND controller_id = ? AND iteration = ?",
+            (campaign_id, controller_id, iteration),
+        ).fetchone()
+        expected = (
+            float(now), artifact_sha, artifact_id, artifact_at,
+            blocker_code, next_deadline,
+        )
+        observed = tuple(existing) if existing is not None else None
+        if observed != expected:
+            raise OSError("campaign_progress_database_identity_conflict")
+    return payload
+
+
 def _percentile(values: List[float], percentile: float) -> Optional[float]:
     if not values:
         return None
@@ -134,8 +347,9 @@ def _manifest_error(
     }
     if not isinstance(manifest, dict) or not required.issubset(manifest):
         return "manifest is missing required fields"
-    if not isinstance(manifest["campaign_id"], str) or not manifest["campaign_id"]:
-        return "campaign_id must be a non-empty string"
+    if (not isinstance(manifest["campaign_id"], str)
+            or _CAMPAIGN_RE.fullmatch(manifest["campaign_id"]) is None):
+        return "campaign_id must be a safe non-empty identifier"
     idea_ids = manifest["expected_idea_ids"]
     if (not isinstance(idea_ids, list)
             or not 1 <= len(idea_ids) <= _MAX_CAMPAIGN_IDEAS
@@ -180,6 +394,7 @@ def _manifest_error(
         "max_sample_gap_poll_intervals",
         "max_queue_to_claim_poll_intervals",
         "max_terminal_to_next_claim_poll_intervals",
+        "max_operator_update_gap_seconds",
     ):
         if targets[key] > DEFAULT_CAMPAIGN_TARGETS[key]:
             return f"{key} cannot be weaker than the default target"
@@ -350,6 +565,16 @@ def analyze_campaign(
                 manifest["end_epoch"],
             ),
         ).fetchall()
+        progress_rows = lake.conn.execute(
+            "SELECT * FROM harness_campaign_progress "
+            "WHERE campaign_id = ? AND observed_at_epoch >= ? "
+            "AND observed_at_epoch <= ? "
+            "ORDER BY observed_at_epoch, id",
+            (
+                manifest["campaign_id"], manifest["start_epoch"],
+                manifest["end_epoch"],
+            ),
+        ).fetchall()
         transitions = lake.conn.execute(
             "SELECT idea_id, to_state, ts FROM idea_transitions "
             "WHERE ts IS NOT NULL ORDER BY ts, id"
@@ -436,12 +661,101 @@ def analyze_campaign(
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             malformed_rows += 1
 
+    parsed_progress = []
+    malformed_progress_rows = 0
+    progress_deadlines_valid = True
+    for row in progress_rows:
+        try:
+            parsed = dict(row)
+            observed = float(parsed["observed_at_epoch"])
+            deadline = float(parsed["next_deadline_epoch"])
+            recorded_epoch = _epoch(parsed["observed_at"])
+            if (not math.isfinite(observed) or not math.isfinite(deadline)
+                    or recorded_epoch is None
+                    or abs(recorded_epoch - observed) > 1e-6
+                    or isinstance(parsed["iteration"], bool)
+                    or not isinstance(parsed["iteration"], int)
+                    or parsed["iteration"] < 0
+                    or _CONTROLLER_RE.fullmatch(parsed["controller_id"]) is None
+                    or not isinstance(parsed["host"], str)
+                    or not parsed["host"].strip()
+                    or parsed["blocker_code"] not in _PROGRESS_BLOCKERS):
+                raise ValueError
+            artifact = (
+                parsed["last_valid_artifact_sha256"],
+                parsed["last_valid_artifact_idea_id"],
+                parsed["last_valid_artifact_at_epoch"],
+            )
+            if any(value is None for value in artifact):
+                if not all(value is None for value in artifact):
+                    raise ValueError
+            else:
+                artifact_at = float(parsed["last_valid_artifact_at_epoch"])
+                if (not isinstance(parsed["last_valid_artifact_sha256"], str)
+                        or re.fullmatch(
+                            r"[0-9a-f]{64}",
+                            parsed["last_valid_artifact_sha256"],
+                        ) is None
+                        or parsed["last_valid_artifact_idea_id"]
+                        not in expected_idea_set
+                        or not math.isfinite(artifact_at)
+                        or not 0 < artifact_at <= observed):
+                    raise ValueError
+                parsed["last_valid_artifact_at_epoch"] = artifact_at
+            if (deadline < observed
+                    or deadline > min(
+                        float(manifest["end_epoch"]),
+                        observed + float(manifest["targets"][
+                            "max_operator_update_gap_seconds"
+                        ]),
+                    ) + 1e-9):
+                progress_deadlines_valid = False
+            parsed_progress.append(parsed)
+        except (KeyError, TypeError, ValueError):
+            malformed_progress_rows += 1
+
     timestamps = [float(row["observed_at_epoch"]) for row in parsed_rows]
     boundary_timestamps = [manifest["start_epoch"], *timestamps, manifest["end_epoch"]]
     gaps = [right - left for left, right in zip(
         boundary_timestamps, boundary_timestamps[1:]
     )]
     max_gap = max(gaps) if gaps else manifest["end_epoch"] - manifest["start_epoch"]
+    progress_timestamps = [
+        float(row["observed_at_epoch"]) for row in parsed_progress
+    ]
+    progress_boundaries = [
+        manifest["start_epoch"], *progress_timestamps, manifest["end_epoch"]
+    ]
+    progress_gaps = [
+        right - left for left, right in zip(
+            progress_boundaries, progress_boundaries[1:]
+        )
+    ]
+    max_progress_gap = (
+        max(progress_gaps) if progress_gaps
+        else manifest["end_epoch"] - manifest["start_epoch"]
+    )
+    samples_by_iteration = {
+        (row["controller_id"], row["iteration"]): row
+        for row in parsed_rows
+    }
+    progress_by_iteration = {
+        (row["controller_id"], row["iteration"]): row
+        for row in parsed_progress
+    }
+    operator_updates_match_samples = (
+        len(samples_by_iteration) == len(parsed_rows)
+        and len(progress_by_iteration) == len(parsed_progress)
+        and set(samples_by_iteration) == set(progress_by_iteration)
+        and all(
+            progress_by_iteration[key]["host"] == sample["host"]
+            and abs(
+                float(progress_by_iteration[key]["observed_at_epoch"])
+                - float(sample["observed_at_epoch"])
+            ) <= 1e-6
+            for key, sample in samples_by_iteration.items()
+        )
+    )
     exact_scope = all(row["scope"] == scope for row in parsed_rows)
     exact_poll = all(abs(float(row["poll_seconds"]) - poll) <= 1e-9
                      for row in parsed_rows)
@@ -528,6 +842,22 @@ def analyze_campaign(
     receipt["metrics"] = {
         "sample_count": len(parsed_rows),
         "malformed_sample_count": malformed_rows,
+        "operator_update_count": len(parsed_progress),
+        "malformed_operator_update_count": malformed_progress_rows,
+        "max_operator_update_gap_seconds": max_progress_gap,
+        "operator_blocker_counts": dict(sorted({
+            code: sum(1 for row in parsed_progress
+                      if row["blocker_code"] == code)
+            for code in {row["blocker_code"] for row in parsed_progress}
+        }.items())),
+        "last_valid_artifact_sha256": (
+            parsed_progress[-1]["last_valid_artifact_sha256"]
+            if parsed_progress else None
+        ),
+        "last_valid_artifact_idea_id": (
+            parsed_progress[-1]["last_valid_artifact_idea_id"]
+            if parsed_progress else None
+        ),
         "controller_count": len({row["controller_id"] for row in parsed_rows}),
         "host_count": len({row["host"] for row in parsed_rows}),
         "expected_idea_count": len(expected_idea_ids),
@@ -556,6 +886,12 @@ def analyze_campaign(
         "exact_physical_scope": bool(parsed_rows) and exact_scope,
         "exact_poll_seconds": bool(parsed_rows) and exact_poll,
         "telemetry_complete": bool(parsed_rows) and telemetry_complete,
+        "operator_updates_complete": (
+            bool(parsed_progress)
+            and malformed_progress_rows == 0
+            and operator_updates_match_samples
+        ),
+        "operator_update_deadlines_valid": progress_deadlines_valid,
         "single_physical_host": (
             len({row["host"] for row in parsed_rows}) == 1
         ),
@@ -591,6 +927,10 @@ def analyze_campaign(
             release_p95 is not None
             and release_p95 / poll
             <= manifest["targets"]["max_terminal_to_next_claim_poll_intervals"]
+        ),
+        "operator_update_gap": (
+            max_progress_gap
+            <= manifest["targets"]["max_operator_update_gap_seconds"]
         ),
     }
     for name, passed in target_checks.items():

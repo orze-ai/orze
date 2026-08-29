@@ -51,6 +51,7 @@ from orze.engine.accounting import (
     record_compute_terminal,
     record_zero_gpu_outcome,
 )
+from orze.engine.campaign_efficiency import capture_campaign_progress_update
 from orze.engine.scheduler import claim, get_unclaimed, _count_statuses
 from orze.hardware.gpu import get_gpu_memory_used, _eval_already_running
 from orze.reporting.leaderboard import update_report, write_admin_cache
@@ -1804,6 +1805,54 @@ class OrzePhaseMixin:
         self._process_notifications(
             eval_finished, completed_rows or [], ideas, counts)
 
+        campaign_progress = None
+        campaign_cfg = cfg.get("campaign_efficiency") or {}
+        if (self.lake is not None
+                and campaign_cfg.get("enabled", False)):
+            if _is_launcher_paused(cfg, self.results_dir):
+                progress_blocker = "launcher_paused"
+            elif not disk_ok:
+                progress_blocker = "disk_unavailable"
+            elif self.active_evals:
+                progress_blocker = "evaluation_active"
+            elif self.active:
+                progress_blocker = "training_active"
+            elif self.pending_evals or backlog:
+                progress_blocker = "evaluation_queued"
+            elif unclaimed:
+                progress_blocker = "eligible_queue_waiting"
+            else:
+                progress_blocker = "no_eligible_work"
+            try:
+                campaign_progress = capture_campaign_progress_update(
+                    self.lake,
+                    results_dir=self.results_dir,
+                    campaign_id=campaign_cfg.get("campaign_id"),
+                    controller_id=self._instance_uuid,
+                    host=self._hostname,
+                    iteration=self.iteration,
+                    completed_rows=completed_rows or [],
+                    primary_metric=cfg["report"].get(
+                        "primary_metric", "test_accuracy"
+                    ),
+                    blocker_code=progress_blocker,
+                )
+                if campaign_progress is None:
+                    campaign_progress = {
+                        "status": "INACTIVE",
+                        "campaign_id": campaign_cfg.get("campaign_id"),
+                    }
+            except Exception as exc:
+                logger.warning(
+                    "campaign operator progress update failed: %s",
+                    type(exc).__name__,
+                )
+                campaign_progress = {
+                    "status": "UNAVAILABLE",
+                    "campaign_id": campaign_cfg.get("campaign_id"),
+                    "reason": "campaign_progress_update_failed",
+                }
+
         # 8b. Heartbeat (rate-controlled, default 1800s = 30 min)
         heartbeat_interval = (cfg.get("notifications") or {}).get(
             "heartbeat_interval", 1800)
@@ -2007,6 +2056,7 @@ class OrzePhaseMixin:
             counts.get("FAILED", 0), len(skipped), top_results, cfg,
             role_states=self.role_states,
             notification_health=nh,
+            campaign_progress=campaign_progress,
         )
 
         # Compute efficiency is separate from the genealogy-based Evo Score.

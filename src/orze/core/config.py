@@ -756,10 +756,12 @@ def _validate_config(cfg: dict) -> tuple:
             errors.append("campaign_efficiency.enabled: must be true or false")
         if campaign_id is not None and (
                 not isinstance(campaign_id, str) or not campaign_id.strip()
-                or any(ord(char) < 32 for char in campaign_id)):
+                or re.fullmatch(
+                    r"[a-z0-9][a-z0-9._-]{0,127}", campaign_id
+                ) is None):
             errors.append(
                 "campaign_efficiency.campaign_id: must be null or a "
-                "non-empty string without control characters")
+                "safe non-empty identifier")
         if campaign_enabled and not campaign_id:
             errors.append(
                 "campaign_efficiency.campaign_id: required when enabled")

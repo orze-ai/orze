@@ -70,6 +70,11 @@ end-to-end claim. Any target without this evidence remains open.
   The scheduler-efficiency analyzer scopes lifecycle latency to the exact
   preregistered idea universe, rejects any unexpected in-window allocation, and
   requires one physical host so cross-host GPU IDs cannot be conflated.
+  Each scheduler observation is paired with a durable, operator-visible
+  progress update containing the current qualified-artifact identity (or null),
+  a categorical blocker, and the next deadline. Missing updates are
+  `UNVERIFIED`; a complete campaign exceeding the 10-minute default SLA is
+  `FAILED`.
   Missing evidence is `UNVERIFIED`; complete evidence that misses a target is
   `FAILED`. Synthetic production-path tests cover passing, zero-yield, missing
   terminal, scope, and artifact-relation cases. Project attainment remains open

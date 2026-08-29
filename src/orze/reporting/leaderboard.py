@@ -77,7 +77,7 @@ _CMP_OPS = {
 }
 
 _REPORT_UPDATED_TOKEN = "__ORZE_UPDATED_AT__"
-_RESULT_CACHE_SCHEMA_VERSION = 3
+_RESULT_CACHE_SCHEMA_VERSION = 4
 
 
 def _evidence_content_hash(paths) -> str:
@@ -624,6 +624,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             "evidence_reason": final_reason,
             "benchmark_contract_ok": contract_ok,
             "benchmark_contract_reason": contract_reason,
+            "evidence_sha256": evidence_hash,
         }
         rows.append(row_data)
         cache[idea_id] = {

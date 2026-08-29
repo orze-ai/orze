@@ -64,6 +64,7 @@ separate preregistered run with real workload evidence:
 | Eligible queue to claim latency | p95 <= two configured poll intervals while a permitted slot is free |
 | Terminal result to next claim | p95 <= one poll interval while eligible work remains |
 | GPU duty cycle | >= 90% while eligible work exists, measured only on explicitly permitted physical GPUs |
+| Operator visibility | update gap <= 10 minutes with last valid artifact, blocker, and next deadline |
 | Zero-compute rejection | 100% of invalid/ineligible proposals rejected before GPU allocation |
 | Duplicate compute | zero duplicate config or claim launches |
 | Time to decision | preregistered per campaign, measured from admission through valid screen/full decision |
@@ -79,7 +80,7 @@ configuration inspection, or a CPU benchmark cannot close them.
 Before a campaign starts, write a JSON manifest with a unique `campaign_id`,
 future `start_epoch` and `end_epoch`, the exact physical `physical_scope`, the
 configured `poll_seconds`, the complete `expected_idea_ids` experiment
-universe, minimum evidence counts, and all four targets from
+universe, minimum evidence counts, and all five targets from
 `DEFAULT_CAMPAIGN_TARGETS`. Thresholds may be stricter than the defaults but
 cannot be weakened. Register it once in the same IdeaLake used by the daemon:
 
@@ -124,6 +125,12 @@ every target. Queue-to-claim and terminal-to-next-claim metrics use only the
 preregistered idea IDs; unrelated work in the same Idea Lake cannot improve a
 campaign receipt. Sequential controller identities are retained as an
 observation and allowed so a verified restart does not erase campaign evidence.
+Every scheduler sample must have a matching immutable operator-progress update.
+The latest update is published under `results/_campaign_progress/<campaign>/`
+and in `status.json`; it carries the current qualified-result identity (or an
+explicit null before one exists), a categorical blocker, and the next update
+deadline. The default maximum update gap is 600 seconds and may only be
+tightened.
 Incomplete evidence is `UNVERIFIED`; complete evidence that misses a target is
 `FAILED`. Mean hardware utilization is reported as an observation, not silently
 used as a substitute for allocation duty cycle or official benchmark evidence.

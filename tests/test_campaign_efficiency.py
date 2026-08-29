@@ -9,6 +9,7 @@ from orze.engine.campaign_efficiency import (
     DEFAULT_OUTCOME_TARGETS,
     analyze_campaign,
     capture_campaign_efficiency_sample,
+    capture_campaign_progress_update,
     preregister_campaign,
 )
 from orze.idea_lake import IdeaLake
@@ -77,6 +78,21 @@ def _populate_complete_campaign(
             launcher_paused=False,
             disk_ok=True,
         )
+        lake.record_harness_campaign_progress(
+            campaign_id=manifest["campaign_id"],
+            controller_id=controller,
+            host=host,
+            iteration=iteration,
+            observed_at_epoch=at,
+            last_valid_artifact_sha256=None,
+            last_valid_artifact_idea_id=None,
+            last_valid_artifact_at_epoch=None,
+            blocker_code="training_active",
+            next_deadline_epoch=min(
+                manifest["end_epoch"],
+                at + manifest["targets"]["max_operator_update_gap_seconds"],
+            ),
+        )
     lake.conn.executemany(
         "INSERT INTO idea_state "
         "(idea_id, current_state, queued_at, claimed_at) VALUES (?, ?, ?, ?)",
@@ -144,11 +160,132 @@ def test_capture_queries_only_explicit_physical_scope(tmp_path):
     lake.close()
 
 
+def test_progress_update_is_visible_content_bound_and_persistent(tmp_path):
+    db_path = tmp_path / "lake.db"
+    results = tmp_path / "results"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    row = {
+        "id": "idea-001",
+        "primary_val": 0.75,
+        "evidence_qualified": True,
+        "evidence_reason": "benchmark_evidence_verified",
+        "evidence_sha256": "e" * 64,
+    }
+    first = capture_campaign_progress_update(
+        lake,
+        results_dir=results,
+        campaign_id=manifest["campaign_id"],
+        controller_id="controller-a",
+        host="host-a",
+        iteration=1,
+        completed_rows=[row],
+        primary_metric="score",
+        blocker_code="training_active",
+        observed_at_epoch=manifest["start_epoch"],
+    )
+    second = capture_campaign_progress_update(
+        lake,
+        results_dir=results,
+        campaign_id=manifest["campaign_id"],
+        controller_id="controller-a",
+        host="host-a",
+        iteration=2,
+        completed_rows=[row],
+        primary_metric="score",
+        blocker_code="evaluation_active",
+        observed_at_epoch=manifest["start_epoch"] + 10,
+    )
+
+    assert first["last_valid_artifact_sha256"] == (
+        second["last_valid_artifact_sha256"]
+    )
+    assert second["last_valid_artifact_at_epoch"] == manifest["start_epoch"]
+    latest = json.loads((
+        results / "_campaign_progress" / manifest["campaign_id"] / "latest.json"
+    ).read_text(encoding="utf-8"))
+    assert latest == second
+    assert latest["blocker_code"] == "evaluation_active"
+    assert latest["next_deadline_epoch"] <= manifest["end_epoch"]
+    assert lake.conn.execute(
+        "SELECT COUNT(*) FROM harness_campaign_progress"
+    ).fetchone()[0] == 2
+    lake.close()
+
+
+def test_progress_update_identity_conflict_fails_closed(tmp_path):
+    db_path = tmp_path / "lake.db"
+    results = tmp_path / "results"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    kwargs = {
+        "results_dir": results,
+        "campaign_id": manifest["campaign_id"],
+        "controller_id": "controller-a",
+        "host": "host-a",
+        "iteration": 1,
+        "completed_rows": [],
+        "primary_metric": "score",
+        "observed_at_epoch": manifest["start_epoch"],
+    }
+    capture_campaign_progress_update(
+        lake, blocker_code="training_active", **kwargs
+    )
+    with pytest.raises(OSError, match="identity_conflict"):
+        capture_campaign_progress_update(
+            lake, blocker_code="evaluation_active", **kwargs
+        )
+    lake.close()
+
+
+def test_progress_update_rejects_redirected_output_directory(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    results = tmp_path / "results"
+    results.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (results / "_campaign_progress").symlink_to(outside)
+
+    with pytest.raises(OSError, match="directory_redirected"):
+        capture_campaign_progress_update(
+            lake,
+            results_dir=results,
+            campaign_id=manifest["campaign_id"],
+            controller_id="controller-a",
+            host="host-a",
+            iteration=1,
+            completed_rows=[],
+            primary_metric="score",
+            blocker_code="training_active",
+            observed_at_epoch=manifest["start_epoch"],
+        )
+    assert lake.conn.execute(
+        "SELECT COUNT(*) FROM harness_campaign_progress"
+    ).fetchone()[0] == 0
+    assert list(outside.iterdir()) == []
+    lake.close()
+
+
 def test_enabled_sampling_requires_campaign_id():
     errors, _ = _validate_config({
         "campaign_efficiency": {"enabled": True},
     })
     assert "campaign_efficiency.campaign_id: required when enabled" in errors
+
+
+def test_campaign_id_must_be_safe_for_operator_receipt_path():
+    errors, _ = _validate_config({
+        "campaign_efficiency": {
+            "enabled": True,
+            "campaign_id": "../redirect",
+        },
+    })
+    assert any("safe non-empty identifier" in error for error in errors)
 
 
 def test_registration_rejects_weakened_targets(tmp_path):
@@ -195,6 +332,21 @@ def test_incomplete_telemetry_is_retained_and_fails_closed(tmp_path):
             launcher_paused=False,
             disk_ok=True,
         )
+        lake.record_harness_campaign_progress(
+            campaign_id=manifest["campaign_id"],
+            controller_id="controller-a",
+            host="host-a",
+            iteration=iteration,
+            observed_at_epoch=at,
+            last_valid_artifact_sha256=None,
+            last_valid_artifact_idea_id=None,
+            last_valid_artifact_at_epoch=None,
+            blocker_code="training_active",
+            next_deadline_epoch=min(
+                manifest["end_epoch"],
+                at + manifest["targets"]["max_operator_update_gap_seconds"],
+            ),
+        )
     lake.close()
 
     receipt = analyze_campaign(
@@ -226,6 +378,21 @@ def test_preregistered_complete_campaign_can_be_verified(tmp_path):
             remaining_evaluation=0,
             launcher_paused=False,
             disk_ok=True,
+        )
+        lake.record_harness_campaign_progress(
+            campaign_id=manifest["campaign_id"],
+            controller_id="controller-a",
+            host="host-a",
+            iteration=iteration,
+            observed_at_epoch=at,
+            last_valid_artifact_sha256=None,
+            last_valid_artifact_idea_id=None,
+            last_valid_artifact_at_epoch=None,
+            blocker_code="training_active",
+            next_deadline_epoch=min(
+                manifest["end_epoch"],
+                at + manifest["targets"]["max_operator_update_gap_seconds"],
+            ),
         )
     lake.conn.execute(
         "INSERT INTO idea_state "
@@ -358,6 +525,99 @@ def test_multiple_physical_hosts_fail_closed(tmp_path):
     assert receipt["checks"]["single_physical_host"]["passed"] is False
 
 
+def test_missing_operator_update_fails_closed(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "DELETE FROM harness_campaign_progress WHERE iteration = 3"
+    )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["operator_updates_complete"]["passed"] is False
+    assert receipt["metrics"]["operator_update_count"] == 4
+
+
+def test_operator_update_sla_miss_is_a_failed_target(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest()
+    manifest["targets"]["max_operator_update_gap_seconds"] = 5.0
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "FAILED"
+    assert receipt["checks"]["operator_updates_complete"]["passed"] is True
+    assert receipt["checks"]["operator_update_gap"]["passed"] is False
+    assert receipt["metrics"]["max_operator_update_gap_seconds"] == 10.0
+
+
+def test_operator_deadline_tamper_fails_closed(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "UPDATE harness_campaign_progress SET next_deadline_epoch = ? "
+        "WHERE iteration = 2",
+        (manifest["end_epoch"] + 1,),
+    )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["operator_update_deadlines_valid"][
+        "passed"
+    ] is False
+
+
+def test_operator_update_must_match_scheduler_sample_identity(tmp_path):
+    db_path = tmp_path / "lake.db"
+    manifest = _manifest()
+    preregister_campaign(db_path, manifest)
+    _populate_complete_campaign(db_path, manifest)
+    shifted = manifest["start_epoch"] + 11
+    lake = IdeaLake(str(db_path))
+    lake.conn.execute(
+        "UPDATE harness_campaign_progress SET observed_at_epoch = ?, "
+        "observed_at = ?, next_deadline_epoch = ? WHERE iteration = 2",
+        (
+            shifted,
+            _iso(shifted),
+            min(
+                manifest["end_epoch"],
+                shifted
+                + manifest["targets"]["max_operator_update_gap_seconds"],
+            ),
+        ),
+    )
+    lake.conn.commit()
+    lake.close()
+
+    receipt = analyze_campaign(
+        db_path, manifest, now_epoch=manifest["end_epoch"] + 10
+    )
+
+    assert receipt["status"] == "UNVERIFIED"
+    assert receipt["checks"]["operator_updates_complete"]["passed"] is False
+
+
 def test_registration_rejects_invalid_campaign_idea_universe(tmp_path):
     manifest = _manifest()
     manifest["expected_idea_ids"] = ["idea-001", "idea-001"]
@@ -387,6 +647,21 @@ def test_complete_evidence_with_missed_target_is_failed(tmp_path):
             remaining_evaluation=0,
             launcher_paused=False,
             disk_ok=True,
+        )
+        lake.record_harness_campaign_progress(
+            campaign_id=manifest["campaign_id"],
+            controller_id="controller-a",
+            host="host-a",
+            iteration=iteration,
+            observed_at_epoch=at,
+            last_valid_artifact_sha256=None,
+            last_valid_artifact_idea_id=None,
+            last_valid_artifact_at_epoch=None,
+            blocker_code="eligible_queue_waiting",
+            next_deadline_epoch=min(
+                manifest["end_epoch"],
+                at + manifest["targets"]["max_operator_update_gap_seconds"],
+            ),
         )
     lake.conn.execute(
         "INSERT INTO idea_state "

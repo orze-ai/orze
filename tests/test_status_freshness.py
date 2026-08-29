@@ -50,12 +50,16 @@ def test_write_status_declares_validity_window(tmp_path, monkeypatch):
         tmp_path, iteration=7, active={}, free_gpus=[4, 5], queue_depth=3,
         completed_count=2, failed_count=1, skipped_count=0, top_results=[],
         cfg={"poll": 30, "roles": {}},
+        campaign_progress={
+            "status": "ACTIVE", "blocker_code": "training_active"
+        },
     )
 
     written = json.loads((tmp_path / "status.json").read_text())
     assert written["snapshot_epoch"] == 1_000.0
     assert written["snapshot_ttl_seconds"] == 300
     assert written["snapshot_valid_until_epoch"] == 1_300.0
+    assert written["campaign_progress"]["blocker_code"] == "training_active"
 
 
 def test_admin_status_dynamically_marks_stale(tmp_path, monkeypatch):

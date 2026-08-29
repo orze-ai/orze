@@ -515,7 +515,8 @@ def write_status_json(results_dir: Path, iteration: int,
                       skipped_count: int, top_results: list,
                       cfg: dict,
                       role_states: Optional[dict] = None,
-                      notification_health: Optional[dict] = None):
+                      notification_health: Optional[dict] = None,
+                      campaign_progress: Optional[dict] = None):
     """Write machine-readable status.json for LLM agents.
     Merges heartbeats from all hosts for a combined multi-machine view."""
     disk_free_gb = 0.0
@@ -598,6 +599,8 @@ def write_status_json(results_dir: Path, iteration: int,
     # status surface humans and LLM agents already watch.
     if notification_health is not None:
         status["notification_health"] = notification_health
+    if campaign_progress is not None:
+        status["campaign_progress"] = campaign_progress
 
     atomic_write(results_dir / "status.json", json.dumps(status, indent=2))
 
