@@ -1,5 +1,6 @@
 """F7: dead-PID reconciler for 'running' idea rows."""
 import json
+import os
 import sqlite3
 from pathlib import Path
 
@@ -272,12 +273,13 @@ def test_submission_file_alone_cannot_complete_dead_training(
     lake.close()
 
 
-def test_running_idea_pids_finds_self(tmp_path):
+def test_running_idea_pids_finds_self(tmp_path, monkeypatch):
     """Sanity: _running_idea_pids should find a real process whose cmdline
     contains '--idea-id <id>'. We launch a short sleep with such cmdline.
     """
     import subprocess
     import sys
+    monkeypatch.setenv("ORZE_PROCESS_SCAN_NAMESPACE", "current-test")
     proc = subprocess.Popen(
         [sys.executable, "-c",
          "import sys, time; sys.argv = ['x', '--idea-id', 'idea-self-test']; "
@@ -297,11 +299,26 @@ def test_running_idea_pids_finds_self(tmp_path):
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         try:
+            other_environment = os.environ.copy()
+            other_environment["ORZE_PROCESS_SCAN_NAMESPACE"] = "other-test"
+            proc3 = subprocess.Popen(
+                [sys.executable, "-c", "import time; time.sleep(2)",
+                 "--idea-id", "idea-other-test"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                env=other_environment,
+            )
             import time as _t
             _t.sleep(0.2)
             ids = _running_idea_pids()
             assert "idea-self-test" in ids
+            assert "idea-other-test" not in ids
         finally:
+            if "proc3" in locals():
+                proc3.terminate()
+                try:
+                    proc3.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc3.kill()
             proc2.terminate()
             try:
                 proc2.wait(timeout=5)

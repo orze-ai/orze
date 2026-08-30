@@ -494,6 +494,12 @@ def _running_idea_pids() -> set:
     skips reconcile to avoid false orphan-marks).
     """
     found = set()
+    namespace_key = "ORZE_PROCESS_SCAN_NAMESPACE"
+    namespace = os.environ.get(namespace_key)
+
+    def _same_namespace_from_mapping(environment) -> bool:
+        return namespace is None or environment.get(namespace_key) == namespace
+
     try:
         import psutil  # type: ignore
     except ImportError:
@@ -503,7 +509,13 @@ def _running_idea_pids() -> set:
         for p in psutil.process_iter(["pid", "cmdline"]):
             try:
                 cmd = p.info.get("cmdline") or []
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                if namespace is not None and not _same_namespace_from_mapping(
+                        p.environ()):
+                    continue
+            except (
+                psutil.NoSuchProcess, psutil.AccessDenied,
+                psutil.ZombieProcess,
+            ):
                 continue
             for i, tok in enumerate(cmd):
                 if tok == "--idea-id" and i + 1 < len(cmd):
@@ -520,6 +532,17 @@ def _running_idea_pids() -> set:
                 with open(f"/proc/{entry}/cmdline", "rb") as f:
                     raw = f.read().split(b"\x00")
                 cmd = [x.decode("utf-8", errors="replace") for x in raw if x]
+                if namespace is not None:
+                    with open(f"/proc/{entry}/environ", "rb") as f:
+                        environment = {}
+                        for item in f.read().split(b"\x00"):
+                            key, separator, value = item.partition(b"=")
+                            if separator:
+                                environment[key.decode(
+                                    "utf-8", errors="replace"
+                                )] = value.decode("utf-8", errors="replace")
+                    if not _same_namespace_from_mapping(environment):
+                        continue
             except (OSError, IOError):
                 continue
             for i, tok in enumerate(cmd):
