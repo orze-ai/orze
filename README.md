@@ -160,6 +160,9 @@ ssh node2 "cd /nfs/project && orze start"
 
 - **Measured control-plane scaling** — indexed queue/config-identity paths with
   a reproducible [efficiency acceptance receipt](docs/harness-efficiency.md)
+- **4C qualification boundary** — a public
+  [terrain, anti-gaming rule, and promotion contract](docs/4c-qualification.md)
+  that separates source evidence from task-proven research yield
 - **Config Inheritance** — Child ideas inherit parent configs; specify only what changes
 - **HP Sweep** — `lr: [1e-4, 3e-4]` auto-expands into all combinations
 - **Failure Protection** — Stops automatically when failure rates spike

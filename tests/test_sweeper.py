@@ -3,7 +3,16 @@ import os
 import time
 from pathlib import Path
 
-from orze_pro.engine.role_runner import sweep_stray, RoleContext
+import pytest
+
+
+# The sweeper is an Orze-Pro feature.  Keep its integration coverage when the
+# private extension is installed, but do not make the open-source Orze suite
+# depend on a commercial package or license just to collect tests.
+role_runner = pytest.importorskip(
+    "orze_pro.engine.role_runner", exc_type=ImportError)
+RoleContext = role_runner.RoleContext
+sweep_stray = role_runner.sweep_stray
 
 
 def test_sweep_stray_moves_new_files(tmp_path):

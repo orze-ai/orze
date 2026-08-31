@@ -225,7 +225,9 @@ class TestIdeaLakeMigration:
 
 class TestCodeEvolution:
     def test_build_context(self, tmp_path):
-        from orze_pro.agents.code_evolution import build_evolution_context
+        module = pytest.importorskip(
+            "orze_pro.agents.code_evolution", exc_type=ImportError)
+        build_evolution_context = module.build_evolution_context
         results = tmp_path / "results"
         results.mkdir()
         ideas = tmp_path / "ideas.md"
@@ -234,7 +236,9 @@ class TestCodeEvolution:
         assert "Code Evolution Context" in ctx
 
     def test_build_prompt(self):
-        from orze_pro.agents.code_evolution import build_evolution_prompt
+        module = pytest.importorskip(
+            "orze_pro.agents.code_evolution", exc_type=ImportError)
+        build_evolution_prompt = module.build_evolution_prompt
         prompt = build_evolution_prompt("ctx", "plateau", "print(42)", ["eval.py"])
         assert "plateau" in prompt
         assert "print(42)" in prompt
@@ -248,7 +252,9 @@ class TestCodeEvolution:
 
 class TestMetaResearch:
     def test_build_strategy_prompt(self):
-        from orze_pro.agents.meta_research import build_strategy_prompt
+        module = pytest.importorskip(
+            "orze_pro.agents.meta_research", exc_type=ImportError)
+        build_strategy_prompt = module.build_strategy_prompt
         stats = {
             "architecture": {"count": 50, "share": 0.25, "mean": 0.85, "best": 0.92},
             "training_config": {"count": 100, "share": 0.50, "mean": 0.80, "best": 0.88},
