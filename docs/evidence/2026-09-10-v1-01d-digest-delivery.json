@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "item": "V1-01D",
+  "status": "mechanism_verified",
+  "claim": "A lifecycle-qualified bounded digest reaches the real research CLI/prompt, is requalified at consumption, and never replaces authored notes; failed publication remains retryable",
+  "baseline": {
+    "core": "822c30be147203c2ff50a391ad3946b9c438dacb",
+    "pro": "139d4049ea213f83d2d5ee3a13d934f1b0d4f144"
+  },
+  "fix": {
+    "core": "8802d033f010279c6dff08e49524cf7e8d5cba3c",
+    "pro": "d0d27f103efbda043de6607224d33e3323c17ba4"
+  },
+  "remote_verification": "git ls-remote origin refs/heads/feat/autoresearch-v1 matched both full fix SHAs after successful pushes",
+  "red": [
+    {
+      "repo": "core", "test_file": "tests/test_digest_authority_contract.py",
+      "sha256": "509582cb2813492e9f6bf8bf81315250057ba5270d9d153671f8598da5ba37c6",
+      "failed": 8, "passed": 0, "exit_code": 1,
+      "cause": "Digest ranks raw artifacts without authoritative lifecycle, shared secondary ordering or correctly scoped database resolution"
+    },
+    {
+      "repo": "core", "test_file": "tests/test_digest_publication_contract.py",
+      "sha256": "45007c279b62097fd6863ca7621c51112893710ef171be5183dda0e21512d3ef",
+      "failed": 4, "passed": 3, "exit_code": 1,
+      "cause": "Periodic generation replaces notes and consumes its interval even when publication fails"
+    },
+    {
+      "repo": "core", "test_file": "tests/test_digest_input_contract.py",
+      "sha256": "79d3f5d008aa637bfba7172f22600ceafd9fa596209378f129eb8fd6569a06a5",
+      "failed": 9, "passed": 0, "exit_code": 1,
+      "cause": "Nonterminal artifacts appear as failures, raw failures lack qualification labels and malformed objective declarations acquire guessed defaults"
+    },
+    {
+      "repo": "pro", "test_file": "tests/test_digest_delivery_contract.py",
+      "sha256": "737f1c42d64ba7ccbe46596738c5c7a6f859e232a2b3a5803ac28048790a22ec",
+      "failed": 7, "passed": 1, "exit_code": 1,
+      "cause": "Actual role command, CLI and prompt do not deliver the current qualified automatic digest independently of historical notes"
+    },
+    {
+      "repo": "pro", "test_file": "tests/test_digest_consumption_boundaries.py",
+      "sha256": "870c83609a14d90c9559c7e68782f61c52d3eb41282fe914419db0be2071b680",
+      "failed": 1, "passed": 6, "exit_code": 1,
+      "cause": "Explicit knowledge-directory loading duplicates stale automatic digest text as historical notes"
+    },
+    {
+      "repo": "pro", "test_file": "tests/test_digest_knowledge_alias.py",
+      "sha256": "609a464bde977d399efa533eade0123d260a14c6a150be53164b54bb9a45d394",
+      "failed": 2, "passed": 0, "exit_code": 1,
+      "cause": "Parent-relative and symlink directory aliases bypass automatic digest exclusion"
+    }
+  ],
+  "red_command": "Run each named file with python3 -m pytest -q TEST_FILE --tb=short from its checkout; Pro uses both source paths and explicit test-only license substitutes",
+  "green": "All six frozen test files pass unchanged; legacy context-builder fixtures now supply real lifecycle authority while retaining their original assertions",
+  "final_core_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0, "passed": 1368, "skipped": 6, "elapsed_seconds": 91.91,
+    "skip_scope": "Optional Pro tests in the core-only source environment"
+  },
+  "final_pro_regression": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+    "exit_code": 0, "passed": 394, "skipped": 0, "elapsed_seconds": 32.13
+  },
+  "final_cross_repository_regression": {
+    "command": "Both src paths and the same test-only license patch; pytest -q tests/test_evolution.py tests/test_sweeper.py tests/test_skill_registry.py --tb=short -rs from core",
+    "exit_code": 0, "passed": 30, "skipped": 0, "elapsed_seconds": 0.55
+  },
+  "independent_review": "Separate core and Pro reviewers approved the final scoped diff; independent boundary tests found and verified fixes for invalid objective inputs and knowledge-path aliases",
+  "verified_boundaries": [
+    "Current source metrics, taint and lifecycle changes after publication affect the actual prompt without rewriting the stored digest or notes",
+    "Periodic output is knowledge/research_digest.md; knowledge/retrospection.md and _retrospection.txt bytes are preserved",
+    "Publication uses the existing atomic helper and confirms actual bytes before advancing the interval; exceptions and silent no-op writes remain retryable",
+    "Automatic role delivery respects disabled retrospection; an explicit CLI digest request remains supported",
+    "Oversized, symlinked and wrong-project digest selections fail closed without file creation or fallback to stale text",
+    "Real producer, role-command builder, argparse, run_research_cycle and prompt builder execute in dry-run tests with a tripwire against LLM calls"
+  ],
+  "limits": [
+    "This proves bounded local evidence delivery, not statistical significance, research efficiency gains or a globally atomic snapshot",
+    "Legacy SOP writers/readers of _retrospection.txt are not all migrated; preserving those notes is not proof that every historical-note producer reaches every consumer",
+    "Whole-prompt budgeting, notification/steering state, champion guard policy, evaluation admission and attempt fencing remain separate open work",
+    "No production license activation, paid provider, real GPU, package publication, deployment or live campaign mutation exercised"
+  ]
+}
