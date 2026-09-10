@@ -1037,6 +1037,15 @@ def _validate_config(cfg: dict) -> tuple:
     if not isinstance(report_cfg, dict):
         errors.append("report: must be a mapping")
     else:
+        if report_cfg.get("sort", "descending") not in ("ascending", "descending"):
+            errors.append("report.sort: must be 'ascending' or 'descending'")
+        if "primary_metric" in report_cfg:
+            primary = report_cfg["primary_metric"]
+            if not isinstance(primary, str) or not primary.strip():
+                errors.append("report.primary_metric: must be a non-empty string")
+        secondary = report_cfg.get("secondary_metric")
+        if secondary is not None and not isinstance(secondary, str):
+            errors.append("report.secondary_metric: must be a string or null")
         target = report_cfg.get("target")
         if (target is not None and (
                 isinstance(target, bool)

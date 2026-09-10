@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from orze.reporting.state import load_state, save_state
+from orze.reporting.objective import objective_sort_key
 
 logger = logging.getLogger("orze")
 
@@ -225,7 +226,7 @@ def rebuild_best_from_evidence(results_dir: Path, cfg: dict,
 
     candidates = []
     for idea_id in sorted(completed):
-        _, _, value, _, _ = qualify_authoritative_report_evidence_with_identity(
+        _, values, value, _, _ = qualify_authoritative_report_evidence_with_identity(
             idea_id, results_dir, scoped_cfg, completed)
         if value is None:
             continue
@@ -233,13 +234,13 @@ def rebuild_best_from_evidence(results_dir: Path, cfg: dict,
             mtime = (results_dir / idea_id / "metrics.json").stat().st_mtime
         except OSError:
             continue
-        candidates.append((idea_id, value, mtime))
+        candidates.append((idea_id, value, mtime, values))
     if not candidates:
         return None, 0
-    lower_is_better = str(report.get("sort", "descending")).lower().startswith("asc")
-    candidates.sort(key=lambda item: item[1], reverse=not lower_is_better)
-    best_id, _, best_mtime = candidates[0]
-    return best_id, sum(mtime > best_mtime for _, _, mtime in candidates)
+    candidates.sort(key=lambda item: objective_sort_key(
+        item[1], item[3], report, item[0]))
+    best_id, _, best_mtime, _ = candidates[0]
+    return best_id, sum(mtime > best_mtime for _, _, mtime, _ in candidates)
 
 
 def restore_reporter_from_evidence(reporter, results_dir: Path, cfg: dict,

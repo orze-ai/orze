@@ -211,9 +211,12 @@ def load_local_report_evidence(
             values[key] = _deep_value(document, dotpath)
         else:
             values[key] = _deep_value(metrics, key)
-    primary = report_cfg.get("primary_metric")
-    if isinstance(primary, str) and primary and primary not in values:
-        values[primary] = _deep_value(metrics, primary)
+    # Ranking keys need not be display columns. A declared source, including
+    # a missing or zero source value, always takes precedence over raw metrics.
+    for field in ("primary_metric", "secondary_metric"):
+        key = report_cfg.get(field)
+        if isinstance(key, str) and key and key not in values:
+            values[key] = _deep_value(metrics, key)
     return metrics, values, "local_evidence_loaded"
 
 

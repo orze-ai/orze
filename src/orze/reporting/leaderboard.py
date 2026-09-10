@@ -27,7 +27,6 @@ import datetime
 import hashlib
 import json
 import logging
-import math
 import os
 import re
 import socket
@@ -50,6 +49,7 @@ from orze.core.benchmark_contract import (
     validate_benchmark_receipt,
 )
 from orze.reporting.state import _read_all_heartbeats
+from orze.reporting.objective import objective_sort_key
 
 
 def notify(event, data, cfg):
@@ -77,7 +77,7 @@ _CMP_OPS = {
 }
 
 _REPORT_UPDATED_TOKEN = "__ORZE_UPDATED_AT__"
-_RESULT_CACHE_SCHEMA_VERSION = 4
+_RESULT_CACHE_SCHEMA_VERSION = 5
 
 
 def _evidence_content_hash(paths) -> str:
@@ -327,7 +327,6 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     benchmark_contract = get_benchmark_contract(cfg)
     exposure_summary = benchmark_exposure_summary(results_dir, cfg)
     primary_metric = report_cfg.get("primary_metric") or "test_accuracy"
-    sort_order = report_cfg.get("sort") or "descending"
     mh_columns = (cfg.get("metric_harvest") or {}).get("columns")
     user_columns = report_cfg.get("columns")
     if mh_columns and user_columns == DEFAULT_CONFIG["report"]["columns"]:
@@ -342,6 +341,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         {
             "columns": columns,
             "primary_metric": primary_metric,
+            "secondary_metric": report_cfg.get("secondary_metric"),
             "min_datasets": report_cfg.get("min_datasets", 0),
             "metric_validation": cfg.get("metric_validation", {}),
             "benchmark_contract": benchmark_contract,
@@ -353,35 +353,9 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         sort_keys=True, default=str,
     ).encode()).hexdigest()
     title = report_cfg.get("title") or "Orze Report"
-    reverse = sort_order == "descending"
-    _sentinel = float("-inf") if reverse else float("inf")
-
-    def _safe_float(v):
-        if isinstance(v, bool):
-            return _sentinel
-        try:
-            value = float(v)
-        except (ValueError, TypeError):
-            return _sentinel
-        return value if math.isfinite(value) else _sentinel
-
-    # Tie-breaker: use secondary_metric from config, else just primary
-    secondary_metric = report_cfg.get("secondary_metric")
-
-    # Medal-tier ordering (highest first when reverse=True). Single source
-    # of truth: orze.core.medal — used by auto_ideas, code_evolution, etc.
-    from orze.core.medal import MEDAL_RANK as _MEDAL_RANK, medal_rank as _medal_rank  # noqa: F401
-
     def _get_tiebreaker_sort_key(r):
-        pv = _safe_float(r.get("primary_val"))
-        if secondary_metric:
-            sv = _safe_float(
-                r.get("values", {}).get(secondary_metric)
-                or deep_get(r.get("metrics", {}), secondary_metric)
-                or 0.0)
-        else:
-            sv = _safe_float(0.0)
-        return (_medal_rank(r), pv, sv)
+        return objective_sort_key(
+            r.get("primary_val"), r.get("values", {}), report_cfg, r["id"])
 
     # --- Load results cache ---
     cache_path = results_dir / "_results_cache.json"
@@ -772,7 +746,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     qualification_lines.extend(["", "## Results", ""])
     lines[-2:] = qualification_lines
 
-    completed.sort(key=_get_tiebreaker_sort_key, reverse=reverse)
+    completed.sort(key=_get_tiebreaker_sort_key)
 
     # --- Sweep grouping: split into standalone + sweep groups ---
     standalone = []
@@ -792,14 +766,12 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     # Build main table: standalone + best of each sweep group
     main_rows = list(standalone)
     for parent_id, children in sweep_groups.items():
-        children.sort(key=_get_tiebreaker_sort_key,
-                      reverse=reverse)
+        children.sort(key=_get_tiebreaker_sort_key)
         best = dict(children[0])
         best["title"] = f"{best['title']} (best of {len(children)})"
         main_rows.append(best)
 
-    main_rows.sort(key=_get_tiebreaker_sort_key,
-                   reverse=reverse)
+    main_rows.sort(key=_get_tiebreaker_sort_key)
 
     if main_rows:
         header = "| Local Rank | Idea | Title"
@@ -865,8 +837,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         lines.append("")
         for parent_id in sorted(sweep_groups.keys(), key=_id_sort_key):
             children = sweep_groups[parent_id]
-            children.sort(key=lambda r: _safe_float(r.get("primary_val")),
-                          reverse=reverse)
+            children.sort(key=_get_tiebreaker_sort_key)
             lines.append(f"### {parent_id} ({len(children)} variants)")
             lines.append(f"| Local Rank | Sub-run | {primary_metric} |")
             lines.append("|------------|---------|" + "-" * max(6, len(primary_metric)) + "|")
@@ -1466,7 +1437,9 @@ class NotificationProcessor:
     def _notify_completed(self, idea_id, title, m, cfg, primary,
                           row_lookup, rank_lookup, leaderboard, view_lbs):
         row = row_lookup.get(idea_id, {})
-        metric_val = row.get("primary_val") or m.get(primary)
+        metric_val = row.get("primary_val")
+        if metric_val is None:
+            metric_val = m.get(primary)
         if metric_val is None:
             eval_file = cfg.get("eval_output", "eval_report.json")
             eval_path = self.results_dir / idea_id / eval_file

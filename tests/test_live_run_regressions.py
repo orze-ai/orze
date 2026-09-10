@@ -21,7 +21,7 @@ from orze.reporting.state import load_state
 def test_source_checkout_version_wins_over_installed_metadata():
     pyproject = Path(orze.__file__).resolve().parents[2] / "pyproject.toml"
     assert pyproject.exists()
-    assert orze.__version__ == "4.6.1"
+    assert orze.__version__ == "4.6.2"
 
 
 def test_missing_sentinel_does_not_consume_pypi_advisory(tmp_path):
