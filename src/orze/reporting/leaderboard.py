@@ -1220,7 +1220,7 @@ _format_report_text = format_report_text
 # ---------------------------------------------------------------------------
 
 class NotificationProcessor:
-    """Fires notifications for finished experiments.
+    """Updates qualified completion bookkeeping and optionally sends events.
 
     Owns plateau-detection counters and periodic-report timing so that
     the orchestrator can persist / restore them across restarts.
@@ -1252,19 +1252,31 @@ class NotificationProcessor:
     def process(self, finished: list, completed_rows: list, ideas: dict,
                 counts: dict, active_count: int,
                 save_config_hash_fn, build_machine_status_fn):
-        """Fire notifications for finished experiments. Never raises."""
+        """Consume a finished batch independently of delivery settings.
+
+        Repeated batches and progress semantics retain their legacy behavior;
+        this boundary does not promise exactly-once observations or delivery.
+        """
         try:
             cfg = self.cfg
             ncfg = cfg.get("notifications") or {}
-            if not ncfg.get("enabled", False):
-                logger.debug("Notifications disabled")
-                return
             if not finished:
                 return
 
-            logger.info("Processing notifications for %d finished items",
+            logger.info("Processing completion evidence for %d finished items",
                         len(finished))
-            primary = cfg["report"].get("primary_metric", "test_accuracy")
+            from orze.reporting.notification_evidence import (
+                qualified_notification_rows,
+            )
+            candidates = list(completed_rows)
+            candidates.extend({"id": idea_id,
+                               "title": ideas.get(idea_id, {}).get("title", idea_id)}
+                              for idea_id, _ in finished)
+            if self._best_idea_id:
+                candidates.append({"id": self._best_idea_id})
+            completed_rows = qualified_notification_rows(
+                self.results_dir, cfg, candidates, self.lake)
+            primary = (cfg.get("report") or {}).get("primary_metric")
 
             # Build rank lookup and top-10 leaderboard
             rank_lookup, leaderboard = {}, []
@@ -1275,51 +1287,53 @@ class NotificationProcessor:
                                         "title": r.get("title", r["id"]),
                                         "value": r.get("primary_val")})
 
-            view_lbs = self._build_view_leaderboards(cfg)
+            view_lbs = self._build_view_leaderboards(cfg, completed_rows)
             row_lookup = {r["id"]: r for r in completed_rows}
 
             for idea_id, gpu in finished:
-                self._notify_finished(
-                    idea_id, gpu, cfg, primary, row_lookup, rank_lookup,
-                    leaderboard, view_lbs, ideas, save_config_hash_fn)
+                try:
+                    self._notify_finished(
+                        idea_id, gpu, cfg, primary, row_lookup, rank_lookup,
+                        leaderboard, view_lbs, ideas, save_config_hash_fn)
+                except Exception as exc:
+                    logger.warning("Completion diagnostic skipped for %s: %s",
+                                   idea_id, type(exc).__name__)
 
             # New best detection + plateau tracking
             new_best = self._check_new_best(
                 completed_rows, primary, leaderboard, view_lbs, cfg)
-            n_completed = self._count_completed_in_batch(finished)
+            n_completed = len({idea_id for idea_id, _ in finished
+                               if idea_id in row_lookup})
             if new_best:
                 self._completions_since_best = 0
                 self._plateau_notified = False
             else:
                 self._completions_since_best += n_completed
 
-            self._check_plateau(completed_rows, cfg)
-            self._periodic_report(ncfg, cfg, primary, counts, active_count,
-                                  leaderboard, view_lbs, build_machine_status_fn)
+            if ncfg.get("enabled", False):
+                self._check_plateau(completed_rows, cfg)
+                self._periodic_report(ncfg, cfg, primary, counts, active_count,
+                                      leaderboard, view_lbs, build_machine_status_fn)
         except Exception as e:
             logger.warning("Notification processing error: %s", e)
 
     # -- internal helpers ------------------------------------------------
 
-    def _build_view_leaderboards(self, cfg: dict) -> dict:
+    def _build_view_leaderboards(self, cfg: dict, completed_rows: list) -> dict:
+        """Filter the same qualified rows; never revive cached view scores."""
         view_leaderboards = {}
         for view in (cfg.get("report", {}).get("views") or []):
             vname = view.get("name")
-            if not vname:
+            vfilter = view.get("filter")
+            if not vname or not vfilter:
                 continue
-            vpath = self.results_dir / f"_leaderboard_{vname}.json"
-            if not vpath.exists():
-                continue
-            try:
-                vdata = json.loads(vpath.read_text(encoding="utf-8"))
-                vtop = [{"id": e.get("idea_id", "?"), "title": e.get("title", ""),
-                         "value": e.get("metric_value")}
-                        for e in (vdata.get("top") or [])[:10]]
-                if vtop:
-                    view_leaderboards[vname] = {
-                        "title": vdata.get("title", vname), "entries": vtop}
-            except (json.JSONDecodeError, OSError):
-                pass
+            vtop = [{"id": row["id"], "title": row["title"],
+                     "value": row["primary_val"]}
+                    for row in completed_rows
+                    if _matches_view_filter(self.results_dir, row["id"], vfilter)][:10]
+            if vtop:
+                view_leaderboards[vname] = {
+                    "title": view.get("title", vname), "entries": vtop}
         return view_leaderboards
 
     def _recover_overrides(self, idea_id, cfg):
@@ -1373,41 +1387,58 @@ class NotificationProcessor:
     def _notify_finished(self, idea_id, gpu, cfg, primary, row_lookup,
                          rank_lookup, leaderboard, view_lbs, ideas,
                          save_config_hash_fn):
-        m_path = self.results_dir / idea_id / "metrics.json"
-        if not m_path.exists():
+        if (not isinstance(idea_id, str) or idea_id in ("", ".", "..")
+                or Path(idea_id).parts != (idea_id,)):
             return
-        try:
-            m = json.loads(m_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        row = row_lookup.get(idea_id, {})
+        m = row.get("metrics")
+        if m is None:
+            m_path = self.results_dir / idea_id / "metrics.json"
+            if m_path.is_symlink() or m_path.parent.is_symlink():
+                return
+            try:
+                m = json.loads(m_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                return
+        if not isinstance(m, dict):
             return
 
         status = m.get("status", "UNKNOWN")
         title = ideas.get(idea_id, {}).get("title", idea_id)
 
         if status == "COMPLETED":
+            if not row or row.get("primary_val") is None:
+                return
             self._notify_completed(idea_id, title, m, cfg, primary,
                                    row_lookup, rank_lookup,
                                    leaderboard, view_lbs)
         elif status == "FAILED":
-            error_msg = m.get("error", "unknown")
+            error_msg = m.get("error")
+            if not isinstance(error_msg, str):
+                error_msg = "unclassified failure"
             # Suppress notifications for config/argparse errors (exit code 2)
             # and fast crashes (<10s, typically import errors). These are
             # research-agent-generated junk, not worth spamming Telegram.
             is_config_error = "code 2" in error_msg or "code 1" in error_msg
-            training_time = m.get("training_time", 999)
-            if is_config_error and training_time < 10:
+            training_time = m.get("training_time")
+            fast_crash = (
+                isinstance(training_time, (int, float))
+                and not isinstance(training_time, bool)
+                and 0 <= training_time < 10
+            )
+            if is_config_error and fast_crash:
                 logger.info("Suppressed notification for %s: config error (%s)",
                             idea_id, error_msg)
             else:
                 notify("failed", {"idea_id": idea_id, "title": title,
                                   "error": error_msg,
+                                  "evidence_scope": "artifact_observed_unverified",
                                   "leaderboard": leaderboard,
                                   "view_leaderboards": view_lbs}, cfg)
 
-        if self.lake and status in ("COMPLETED", "FAILED"):
-            self._archive_to_lake(idea_id, status, ideas, cfg)
-
         if status == "COMPLETED":
+            from orze.reporting.notification_evidence import refresh_metric_snapshot
+            refresh_metric_snapshot(self.lake, row)
             try:
                 # Config dedup hash MUST be over the same canonical key-set
                 # that ingest checks (engine/phases.py: _config_override_hash
@@ -1439,26 +1470,7 @@ class NotificationProcessor:
         row = row_lookup.get(idea_id, {})
         metric_val = row.get("primary_val")
         if metric_val is None:
-            metric_val = m.get(primary)
-        if metric_val is None:
-            eval_file = cfg.get("eval_output", "eval_report.json")
-            eval_path = self.results_dir / idea_id / eval_file
-            if eval_path.exists():
-                try:
-                    ed = json.loads(eval_path.read_text(encoding="utf-8"))
-                    metric_val = _resolve_primary_metric(cfg, eval_file, ed)
-                except (json.JSONDecodeError, OSError,
-                        KeyError, UnicodeDecodeError):
-                    pass
-
-        if metric_val is None:
-            logger.warning(
-                "Notification for %s has metric_val=None "
-                "(row_pv=%s, m.get(%s)=%s, eval_exists=%s)",
-                idea_id, row_lookup.get(idea_id, {}).get("primary_val"),
-                primary, m.get(primary),
-                (self.results_dir / idea_id /
-                 cfg.get("eval_output", "eval_report.json")).exists())
+            return
 
         t_time = m.get("training_time") or None
         fmt_val = (f"{metric_val:.4f}"
@@ -1487,82 +1499,12 @@ class NotificationProcessor:
             "summary_only": summary_only,
         }, cfg)
 
-    def _archive_to_lake(self, idea_id, status, ideas, cfg):
-        try:
-            idea_data = ideas.get(idea_id, {})
-            # If the in-memory ideas dict doesn't have this idea (common:
-            # ideas.md was wiped after ingestion), preserve the row that's
-            # already in the lake rather than blanking config/raw_markdown.
-            # Previously INSERT OR REPLACE would overwrite valid config with
-            # empty strings, orphaning the idea on any retry.
-            existing = None
-            if not idea_data:
-                try:
-                    existing = self.lake.get(idea_id) if hasattr(
-                        self.lake, "get") else None
-                except Exception:
-                    existing = None
-            config_yaml = ""
-            raw_md = idea_data.get("raw", "") if idea_data else (
-                (existing or {}).get("raw_markdown", "") if existing else "")
-            if idea_data.get("config"):
-                config_yaml = yaml.dump(idea_data["config"],
-                                        default_flow_style=False)
-            elif existing and existing.get("config"):
-                # Reuse stored config so we don't wipe it on status updates.
-                config_yaml = existing["config"]
-            eval_metrics = {}
-            eval_file = cfg.get("eval_output", "eval_report.json")
-            eval_path = self.results_dir / idea_id / eval_file
-            if eval_path.exists():
-                try:
-                    ed = json.loads(eval_path.read_text(encoding="utf-8"))
-                    em = ed.get("metrics", {})
-                    for col in cfg.get("report", {}).get("columns", []):
-                        src, key = col.get("source", ""), col.get("key", "")
-                        if ":" in src:
-                            src_file, json_path = src.split(":", 1)
-                            if src_file == eval_file:
-                                val = deep_get(ed, json_path)
-                                if val is not None:
-                                    eval_metrics[key] = val
-                        elif key and key in em:
-                            eval_metrics[key] = em[key]
-                except (json.JSONDecodeError, OSError):
-                    pass
-            # Fallback: read metrics.json directly (flat format from train.py)
-            if not eval_metrics:
-                metrics_path = self.results_dir / idea_id / "metrics.json"
-                if metrics_path.exists():
-                    try:
-                        md = json.loads(metrics_path.read_text(encoding="utf-8"))
-                        for k, v in md.items():
-                            if isinstance(v, (int, float)) and k != "num_eval_tasks":
-                                eval_metrics[k] = v
-                    except (json.JSONDecodeError, OSError):
-                        pass
-
-            def _raw_field(field):
-                match = re.search(
-                    rf"\*\*{re.escape(field)}\*\*:\s*(.+)", raw_md)
-                return match.group(1).strip() if match else None
-
-            self.lake.insert(
-                idea_id, idea_data.get("title", idea_id),
-                config_yaml, raw_md,
-                eval_metrics=eval_metrics or None,
-                status=status.lower(),
-                priority=idea_data.get("priority", "medium"),
-                category=_raw_field("Category"),
-                parent=_raw_field("Parent"),
-                hypothesis=_raw_field("Hypothesis"),
-                approach_family=idea_data.get("approach_family", _raw_field("Approach Family") or "other"))
-        except Exception as exc:
-            logger.warning("Failed to archive %s to lake: %s", idea_id, exc)
-
     def _check_new_best(self, completed_rows, primary, leaderboard,
                         view_lbs, cfg) -> bool:
         if not completed_rows:
+            self._best_idea_id = None
+            self._completions_since_best = 0
+            self._plateau_notified = False
             return False
         current_best = completed_rows[0]["id"]
         fired = False
@@ -1622,20 +1564,6 @@ class NotificationProcessor:
             fired = True
         self._best_idea_id = current_best
         return fired
-
-    def _count_completed_in_batch(self, finished: list) -> int:
-        n = 0
-        for idea_id, _ in finished:
-            mp = self.results_dir / idea_id / "metrics.json"
-            if not mp.exists():
-                continue
-            try:
-                if json.loads(mp.read_text(encoding="utf-8")
-                              ).get("status") == "COMPLETED":
-                    n += 1
-            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-                continue
-        return n
 
     def _check_plateau(self, completed_rows, cfg):
         threshold = cfg.get("plateau_threshold", 50)

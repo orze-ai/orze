@@ -62,7 +62,10 @@ def test_completion_stores_override_hash_matching_ingest(tmp_path):
     ideas = {idea_id: {"title": "t", "config": dict(overrides)}}
     rep._notify_finished(
         idea_id, 0, {"base_config": "nonexistent.yaml"}, "wer",
-        row_lookup={}, rank_lookup={}, leaderboard=[], view_lbs={},
+        # The public consumer supplies qualified rows; this unit isolates the
+        # override-key contract after that admission boundary.
+        row_lookup={idea_id: {"primary_val": 0.0}}, rank_lookup={},
+        leaderboard=[], view_lbs={},
         ideas=ideas, save_config_hash_fn=save_hash_fn)
 
     # The ingest side hashes the OVERRIDES.
@@ -99,7 +102,8 @@ def test_completion_recovers_overrides_when_idea_config_absent(tmp_path):
     ideas = {idea_id: {"title": "t"}}
     rep._notify_finished(
         idea_id, 0, {"base_config": str(base_path)}, "wer",
-        row_lookup={}, rank_lookup={}, leaderboard=[], view_lbs={},
+        row_lookup={idea_id: {"primary_val": 0.0}}, rank_lookup={},
+        leaderboard=[], view_lbs={},
         ideas=ideas, save_config_hash_fn=save_hash_fn)
 
     assert idea_id in stored, (
