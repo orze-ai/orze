@@ -8,7 +8,8 @@ CALLING SPEC:
         cfg: dict — requires 'eval_script'; optional 'eval_args', 'eval_timeout', 'eval_output',
                      'python', 'train_extra_env'
         returns: EvalProcess if launched, None if eval_script missing, already evaluated,
-                 or training status != COMPLETED
+                 or admission rejected. None never itself proves completion;
+                 scheduling callers must inspect evaluation/global stage state.
         side effects: spawns subprocess, creates results_dir/idea_id/eval_output.log
 
     check_active_evals(active_evals, results_dir, cfg) -> list[(idea_id, gpu)]
@@ -61,10 +62,10 @@ from orze.core.evaluation_bundle import (
 )
 from orze.core.benchmark_contract import (
     BenchmarkContractError,
-    load_benchmark_values,
     prepare_benchmark_evaluation,
-    validate_benchmark_receipt,
 )
+from orze.engine.evaluation_contract import validate_evaluation_result
+from orze.reporting.evaluation_output import evaluation_output_path
 from orze.engine.accounting import (
     ComputeAccountingError, record_compute_start, record_compute_terminal,
 )
@@ -136,10 +137,6 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
 
     eval_output = cfg.get("eval_output") or "eval_report.json"
     idea_dir = results_dir / idea_id
-    managed_lineage = (
-        isinstance(cfg.get("model_lineage"), dict)
-        and cfg["model_lineage"].get("enabled") is True
-    )
 
     def reject_ineligible() -> bool:
         eligible, eligibility_reason = is_training_complete_for_downstream(
@@ -151,11 +148,21 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         _record_eval_audit(idea_dir, "skip", eligibility_reason)
         return True
 
-    if managed_lineage and reject_ineligible():
+    if reject_ineligible():
         return None
 
-    output_path = results_dir / idea_id / eval_output
-    if output_path.exists():
+    output_path = evaluation_output_path(idea_dir, cfg)
+    if output_path is None:
+        _record_eval_audit(idea_dir, "reject", "evaluation_output_path_invalid")
+        return None
+    # With legacy in-place evaluators, the training artifact already exists.
+    # Presence is not evidence that evaluation has run; only its stage can
+    # authorize reconciliation instead of a new launch.
+    aliases_training = output_path == idea_dir / "metrics.json"
+    evaluated_alias = (lake is not None and
+                       lake.get_stage_state(idea_id, "evaluation") == "COMPLETE")
+    if output_path.exists() and (not aliases_training or evaluated_alias):
+        contract_ok, contract_reason = validate_evaluation_result(idea_dir, cfg)
         if lake is not None and lake.get_fsm_state(idea_id) == "IN_PROGRESS":
             training_stage = lake.get_stage_state(idea_id, "training")
             if training_stage != "COMPLETE" and training_stage in (
@@ -169,18 +176,6 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
                     host=socket.gethostname(),
                     pid=os.getpid(),
                 )
-            contract_ok, contract_reason = validate_benchmark_receipt(
-                idea_dir, cfg, values=load_benchmark_values(idea_dir, cfg),
-            )
-            try:
-                existing_report = json.loads(
-                    output_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-                existing_report = None
-            if (isinstance(existing_report, dict)
-                    and existing_report.get("status") == "FAILED"):
-                contract_ok = False
-                contract_reason = "evaluation_report_declared_failed"
             evaluation_stage = lake.get_stage_state(idea_id, "evaluation")
             target_stage = "COMPLETE" if contract_ok else "FAILED"
             if evaluation_stage != target_stage:
@@ -234,9 +229,6 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
             results_dir / idea_id, "skip", "output_exists",
             output_path=str(output_path),
         )
-        return None
-
-    if not managed_lineage and reject_ineligible():
         return None
 
     python = cfg.get("python", sys.executable)
@@ -376,74 +368,66 @@ def run_eval(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None):
     if ep is None:
         return
     eval_output = cfg.get("eval_output") or "eval_report.json"
-    reason = ""
-    outcome = "failed"
-    reason_code = "evaluation_error"
     try:
         ep.process.wait(timeout=ep.timeout)
-        if ep.process.returncode == 0:
-            contract_ok, contract_reason = validate_benchmark_receipt(
-                results_dir / idea_id, cfg,
-                values=load_benchmark_values(results_dir / idea_id, cfg),
-            )
-            if contract_ok:
-                logger.info("Eval completed for %s", idea_id)
-                outcome = "completed"
-                reason_code = "evaluation_process_completed"
-            else:
-                reason = f"Benchmark contract failed: {contract_reason}"
-                reason_code = "evaluation_benchmark_contract_failed"
-                logger.error("Eval contract failed for %s: %s",
-                             idea_id, contract_reason)
-                _record_eval_audit(
-                    results_dir / idea_id, "reject",
-                    "benchmark_contract_validation_failed",
-                    detail=contract_reason,
-                )
-        else:
-            reason = f"Exit code {ep.process.returncode}"
-            reason_code = "evaluation_process_nonzero"
-            logger.warning("Eval failed for %s (exit %d)",
-                           idea_id, ep.process.returncode)
     except subprocess.TimeoutExpired:
         reason = f"Timed out after {ep.timeout}s"
         outcome = "interrupted"
         reason_code = "evaluation_timeout"
-        logger.warning("Eval timed out for %s after %ds",
-                       idea_id, ep.timeout)
-        _terminate_and_reap(ep.process, f"eval {idea_id}")
     except Exception as e:
-        reason = str(e)
-        logger.warning("Eval error for %s: %s", idea_id, e)
-    finally:
-        ep.close_log()
-        from orze.engine.accounting import record_compute_terminal
-        record_compute_terminal(
-            ep, results_dir / idea_id, outcome, reason_code,
-            phase="evaluation", return_code=ep.process.poll())
-        if reason:
-            _write_eval_failure_marker(results_dir, idea_id, eval_output, reason, lake=lake)
+        reason = f"Evaluation wait failed: {type(e).__name__}"
+        outcome = "failed"
+        reason_code = "evaluation_error"
+    else:
+        # Normal exits (including nonzero) use the exact asynchronous closure:
+        # sealed/source validation, one receipt, and the pipeline transition.
+        # Do not catch closure/storage errors and reinterpret them as a second
+        # process failure or write a contradictory terminal receipt.
+        check_active_evals({gpu: ep}, results_dir, cfg, lake=lake)
+        return
+    logger.warning("Eval error for %s: %s", idea_id, reason)
+    _terminate_and_reap(ep.process, f"eval {idea_id}")
+    if ep.process.returncode is None:
+        raise RuntimeError("evaluation_termination_unconfirmed")
+    ep.close_log()
+    _write_eval_failure_marker(
+        results_dir, idea_id, eval_output, reason, lake=lake)
+    record_compute_terminal(
+        ep, results_dir / idea_id, outcome, reason_code,
+        phase="evaluation", return_code=ep.process.poll())
 
 
 def _write_eval_failure_marker(results_dir: Path, idea_id: str,
                                eval_output: str, reason: str, lake=None) -> None:
     """Safety net: write failure marker if eval process died without one.
 
-    The marker file is the eval_output itself so the backlog scanner
-    won't re-queue this idea.  The eval script is responsible for
-    writing domain-specific reports; this is a generic fallback.
+    The fallback never overwrites existing output, training metrics, or an
+    unsafe path. Lifecycle failure is independent of whether a marker can be
+    written. The evaluator remains responsible for its domain report.
 
     Args:
         lake: IdeaLake instance for FSM transition recording (optional)
     """
-    report_path = results_dir / idea_id / eval_output
-    if not report_path.exists():
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(json.dumps({
-            "status": "FAILED",
-            "reason": reason[:500],
-        }, indent=2))
-        logger.info("Wrote eval failure marker for %s", idea_id)
+    report_path = evaluation_output_path(
+        results_dir / idea_id, {"eval_output": eval_output})
+    if (report_path is not None and
+            report_path != results_dir / idea_id / "metrics.json" and
+            not report_path.exists()):
+        try:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            # Exclusive creation also preserves output that appears between
+            # the presence check and this best-effort fallback.
+            with report_path.open("x", encoding="utf-8") as handle:
+                json.dump({"status": "FAILED", "reason": reason[:500]},
+                          handle, indent=2)
+            logger.info("Wrote eval failure marker for %s", idea_id)
+        except OSError as exc:
+            logger.warning("Could not write eval failure marker for %s: %s",
+                           idea_id, type(exc).__name__)
+            _record_eval_audit(
+                results_dir / idea_id, "diagnostic",
+                "evaluation_failure_marker_unavailable",
+                error_type=type(exc).__name__)
 
     # A script may have written its own failed report before exiting. The
     # lifecycle transition is independent evidence and must still be closed.
@@ -476,7 +460,25 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
     finished = []
     for gpu in list(active_evals.keys()):
         ep = active_evals[gpu]
-        ret = ep.process.poll()
+        try:
+            ret = ep.process.poll()
+        except OSError as exc:
+            # A failed process observation is not a successful evaluation.
+            # Reap this owned child before closing its accounting/lifecycle.
+            _terminate_and_reap(ep.process, f"eval {ep.idea_id}")
+            if ep.process.returncode is None:
+                raise RuntimeError("evaluation_termination_unconfirmed") from exc
+            ep.close_log()
+            _write_eval_failure_marker(
+                results_dir, ep.idea_id, eval_output,
+                "Evaluation process observation failed", lake=lake)
+            record_compute_terminal(
+                ep, results_dir / ep.idea_id, "failed",
+                "evaluation_process_observation_failed", phase="evaluation",
+                return_code=ep.process.returncode)
+            del active_evals[gpu]
+            finished.append((ep.idea_id, gpu))
+            continue
         elapsed = time.time() - ep.start_time
 
         if ret is None:
@@ -485,6 +487,8 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                 logger.warning("[EVAL TIMEOUT] %s after %.0fm — killing",
                                ep.idea_id, elapsed / 60)
                 _terminate_and_reap(ep.process, f"eval {ep.idea_id}")
+                if ep.process.returncode is None:
+                    raise RuntimeError("evaluation_termination_unconfirmed")
                 ep.close_log()
                 _write_eval_failure_marker(
                     results_dir, ep.idea_id, eval_output,
@@ -503,90 +507,24 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
         if ret == 0:
             logger.info("[EVAL OK] %s on GPU %s in %.1fm",
                         ep.idea_id, gpu, elapsed / 60)
-            # Verify sealed files and validate metrics
-            sealed_ok = True
-            sealed_files = cfg.get("sealed_files", [])
-            if sealed_files:
-                from orze.engine.sealed import load_sealed_manifest, verify_sealed_files
-                manifest = load_sealed_manifest(results_dir)
-                changed = verify_sealed_files(sealed_files, manifest)
-                if changed:
-                    sealed_ok = False
-                    logger.error("[SEALED VIOLATION] %s modified sealed files: %s",
-                                 ep.idea_id, changed)
-                    from orze.engine.failure_analysis import write_failure_analysis
-                    write_failure_analysis(
-                        results_dir / ep.idea_id, "sealed_violation",
-                        f"Sealed files modified: {', '.join(changed)}")
-                    _write_eval_failure_marker(
-                        results_dir, ep.idea_id, eval_output,
-                        f"Sealed file violation: {', '.join(changed)}", lake=lake)
-            if sealed_ok:
-                # Validate metric values (NaN, inf, range)
-                metrics_path = results_dir / ep.idea_id / "metrics.json"
-                if metrics_path.exists():
-                    try:
-                        import json as _json
-                        metrics = _json.loads(metrics_path.read_text(encoding="utf-8"))
-                        from orze.engine.sealed import validate_metrics
-                        valid, reason = validate_metrics(metrics, cfg)
-                        if not valid:
-                            logger.warning("[METRIC INVALID] %s: %s", ep.idea_id, reason)
-                            from orze.engine.failure_analysis import write_failure_analysis
-                            write_failure_analysis(
-                                results_dir / ep.idea_id, "eval_failure", reason)
-                            # Durably fail the idea, SYMMETRICALLY with the
-                            # sealed-violation path above: write the eval_output
-                            # marker so the backlog scanner (engine/phases.py
-                            # ~line 631: metrics.json present + eval_output absent
-                            # => re-queue) does NOT re-queue this idea forever.
-                            # Invalid metrics are deterministic for a given
-                            # checkpoint, so re-evaluating never resolves them.
-                            _write_eval_failure_marker(
-                                results_dir, ep.idea_id, eval_output,
-                                f"Metric validation failed: {reason}", lake=lake)
-                        else:
-                            contract_ok, contract_reason = (
-                                validate_benchmark_receipt(
-                                    results_dir / ep.idea_id, cfg,
-                                    values=load_benchmark_values(
-                                        results_dir / ep.idea_id, cfg),
-                                )
-                            )
-                            if contract_ok:
-                                eval_success = True
-                            else:
-                                logger.error(
-                                    "[BENCHMARK CONTRACT INVALID] %s: %s",
-                                    ep.idea_id, contract_reason,
-                                )
-                                from orze.engine.failure_analysis import (
-                                    write_failure_analysis,
-                                )
-                                write_failure_analysis(
-                                    results_dir / ep.idea_id, "eval_failure",
-                                    f"Benchmark contract failed: {contract_reason}",
-                                )
-                                _record_eval_audit(
-                                    results_dir / ep.idea_id, "reject",
-                                    "benchmark_contract_validation_failed",
-                                    detail=contract_reason,
-                                )
-                                _write_eval_failure_marker(
-                                    results_dir, ep.idea_id, eval_output,
-                                    "Benchmark contract failed: "
-                                    f"{contract_reason}", lake=lake,
-                                )
-                    except Exception as exc:
-                        _write_eval_failure_marker(
-                            results_dir, ep.idea_id, eval_output,
-                            "Metric validation could not read a valid metrics "
-                            f"document: {type(exc).__name__}", lake=lake)
-                else:
-                    _write_eval_failure_marker(
-                        results_dir, ep.idea_id, eval_output,
-                        "Evaluation process exited successfully without "
-                        "metrics.json", lake=lake)
+            eval_success, reason = validate_evaluation_result(
+                results_dir / ep.idea_id, cfg)
+            if not eval_success:
+                logger.warning("[EVAL EVIDENCE INVALID] %s: %s",
+                               ep.idea_id, reason)
+                from orze.engine.failure_analysis import write_failure_analysis
+                write_failure_analysis(
+                    results_dir / ep.idea_id,
+                    ("sealed_violation" if reason == "evaluation_sealed_files_changed"
+                     else "eval_failure"), reason)
+                _record_eval_audit(
+                    results_dir / ep.idea_id, "reject",
+                    ("benchmark_contract_validation_failed"
+                     if reason.startswith("benchmark_") else
+                     "evaluation_evidence_validation_failed"), detail=reason)
+                _write_eval_failure_marker(
+                    results_dir, ep.idea_id, eval_output,
+                    f"Evaluation evidence validation failed: {reason}", lake=lake)
         else:
             # Log tail of eval output for diagnosis
             eval_tail = tail_file(ep.log_path, 2048).strip()

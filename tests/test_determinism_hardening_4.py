@@ -75,6 +75,8 @@ def test_eval_skip_records_audit_and_logs_structured(tmp_path, caplog):
     caplog.set_level(logging.INFO, logger="orze")
     idea_id = "idea-eval-skip"
     idea_dir = _make_idea_dir(tmp_path, idea_id)
+    # This test checks skip instrumentation, not a training-admission bypass.
+    (idea_dir / "metrics.json").write_text('{"status":"COMPLETED"}')
     (idea_dir / "eval_report.json").write_text('{"wer": 0.05}')
 
     cfg = {"eval_script": "/usr/bin/true"}

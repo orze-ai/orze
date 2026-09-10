@@ -77,7 +77,7 @@ _CMP_OPS = {
 }
 
 _REPORT_UPDATED_TOKEN = "__ORZE_UPDATED_AT__"
-_RESULT_CACHE_SCHEMA_VERSION = 6
+_RESULT_CACHE_SCHEMA_VERSION = 7
 
 
 def _evidence_content_hash(paths) -> str:
@@ -344,6 +344,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             "secondary_metric": report_cfg.get("secondary_metric"),
             "min_datasets": report_cfg.get("min_datasets", 0),
             "metric_validation": cfg.get("metric_validation", {}),
+            "eval_output": cfg.get("eval_output") or "eval_report.json",
+            "evaluation_enabled": bool(cfg.get("eval_script")),
             "benchmark_contract": benchmark_contract,
             "model_lineage": cfg.get("model_lineage", {}),
             "data_boundaries": cfg.get("data_boundaries", {}),
@@ -495,7 +497,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         # rewrite. Unsafe configured source paths are never added to the read
         # set and will fail qualification below.
         from orze.reporting.evidence import local_report_evidence_paths
-        evidence_paths = local_report_evidence_paths(idea_dir, evidence_report)
+        evidence_paths = local_report_evidence_paths(
+            idea_dir, evidence_report, evidence_cfg)
         if benchmark_contract:
             for evidence_name in (
                 benchmark_contract["receipt"], PROVENANCE_FILE,

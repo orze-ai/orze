@@ -51,6 +51,8 @@ def objective_scope(cfg: dict) -> str:
         "sources": sources,
         "min_datasets": report.get("min_datasets", 0),
         "benchmark_contract": report.get("benchmark_contract"),
+        "eval_output": cfg.get("eval_output") or "eval_report.json",
+        "evaluation_enabled": bool(cfg.get("eval_script")),
         "qualification": {
             key: cfg.get(key) for key in (
                 "metric_validation", "model_lineage", "data_boundaries",

@@ -237,6 +237,8 @@ def load_local_report_evidence(
 def qualify_local_report_evidence(
     idea_dir: Path,
     cfg: Mapping,
+    *,
+    require_primary: bool = True,
 ) -> tuple[dict, dict, float | None, str]:
     """Qualify one local result against the complete report policy.
 
@@ -248,6 +250,13 @@ def qualify_local_report_evidence(
     metrics, values, reason = load_local_report_evidence(idea_dir, report)
     if reason != "local_evidence_loaded":
         return metrics, values, None, reason
+    from orze.reporting.evaluation_output import (
+        evaluation_output_has_contract, validate_evaluation_output,
+    )
+    if evaluation_output_has_contract(cfg):
+        valid, reason = validate_evaluation_output(idea_dir, cfg)
+        if not valid:
+            return metrics, values, None, reason
     # This optional adapter declaration can veto ranking, never prove validity.
     # Missing is supported; true still has to pass every other evidence check.
     if "honest" in metrics:
@@ -265,9 +274,9 @@ def qualify_local_report_evidence(
         valid = False
     if not valid:
         return metrics, values, None, "local_metric_validation_failed"
-    primary = report.get("primary_metric", "score")
+    primary = report.get("primary_metric", "score" if require_primary else None)
     value = values.get(primary) if isinstance(primary, str) else None
-    if not _finite_number(value):
+    if (require_primary or "primary_metric" in report) and not _finite_number(value):
         return metrics, values, None, "primary_metric_missing_or_nonfinite"
     coverage_ok, observed, required = minimum_dataset_coverage(
         report, values=values, metrics=metrics)
@@ -287,7 +296,8 @@ def qualify_local_report_evidence(
             validate_model_lineage_for_evaluation(Path(idea_dir), cfg)
         except Exception:
             return metrics, values, None, "local_model_lineage_invalid"
-    return metrics, values, float(value), "local_evidence_verified"
+    return (metrics, values, float(value) if _finite_number(value) else None,
+            "local_evidence_verified")
 
 
 _SAFE_FAMILY_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
@@ -512,8 +522,25 @@ def qualify_authoritative_report_evidence(
         return {}, {}, None, "authoritative_lifecycle_not_complete"
 
     idea_dir = Path(results_dir) / idea_id
+    metrics, values, value, reason = qualify_result_artifacts(idea_dir, cfg)
+    if reason == "local_artifacts_verified":
+        reason = "authoritative_local_evidence_verified"
+    return metrics, values, value, reason
+
+
+def qualify_result_artifacts(
+    idea_dir: Path,
+    cfg: Mapping,
+    *,
+    require_primary: bool = True,
+) -> tuple[dict, dict, float | None, str]:
+    """Validate result contents, NOT lifecycle completion or ranking authority.
+
+    Evaluators may accept zero observations when no primary was declared.
+    Steering consumers must additionally require agreed lifecycle completion.
+    """
     metrics, values, value, reason = qualify_local_report_evidence(
-        idea_dir, cfg)
+        idea_dir, cfg, require_primary=require_primary)
     if reason != "local_evidence_verified":
         return metrics, values, None, reason
     if metrics.get("tainted_leakage"):
@@ -539,11 +566,12 @@ def qualify_authoritative_report_evidence(
                 benchmark_reason or "benchmark_receipt_invalid")
         return metrics, values, value, "benchmark_evidence_verified"
 
-    return metrics, values, value, "authoritative_local_evidence_verified"
+    return metrics, values, value, "local_artifacts_verified"
 
 
 def local_report_evidence_paths(idea_dir: Path,
-                                report_cfg: Mapping) -> list[Path]:
+                                report_cfg: Mapping,
+                                cfg: Mapping | None = None) -> list[Path]:
     """Return only safe paths that can affect local report qualification."""
     idea_dir = Path(idea_dir)
     paths = [idea_dir / "metrics.json"]
@@ -557,6 +585,13 @@ def local_report_evidence_paths(idea_dir: Path,
         path = _safe_source_path(idea_dir, filename)
         if path is not None and path not in paths:
             paths.append(path)
+    if cfg is not None:
+        from orze.reporting.evaluation_output import evaluation_output_has_contract
+        if evaluation_output_has_contract(cfg):
+            path = _safe_source_path(
+                idea_dir, cfg.get("eval_output") or "eval_report.json")
+            if path is not None and path not in paths:
+                paths.append(path)
     return paths
 
 
@@ -573,7 +608,7 @@ def report_evidence_paths(
     report = cfg.get("report") if isinstance(cfg, Mapping) else None
     if not isinstance(report, Mapping):
         raise ValueError("report_config_invalid")
-    paths = local_report_evidence_paths(idea_dir, report)
+    paths = local_report_evidence_paths(idea_dir, report, cfg)
     managed_policy = cfg.get("managed_run") or {}
     if (isinstance(managed_policy, Mapping)
             and managed_policy.get("require_clean_training_access_log") is True):
