@@ -1,0 +1,219 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2d1",
+  "role": "Root author of caller/input tests and old timeout fixture migration; independent reader of other agents' production and tests",
+  "whole_v1_complete": false,
+  "baseline": {
+    "core_head": "070c38deb1f00f48e62c57c956d2dc0a938a1d76",
+    "pro_head": "03917e83162f34548b5db8fae862a11713483a1a",
+    "scope": "Preceding implementation-branch commit, not a released package or a whole-old-checkout replay."
+  },
+  "own_cases": {
+    "count": 14,
+    "preceding_commit_behavior_failures": 2,
+    "preceding_commit_controls": 1,
+    "new_invalid_budget_requirements": 7,
+    "new_input_capture_mechanisms": 4,
+    "files": [
+      "tests/test_post_script_launch_inputs.py",
+      "tests/test_post_script_skip_hold.py",
+      "tests/test_post_script_input_pinning.py"
+    ],
+    "note": "The seven invalid-budget cases are newly specified public-entry requirements with explicit completed-process doubles, not seven observed production incidents. Two skip behavior failures share a pending-action visibility cause. No observed second process launch is inferred from the skip-only cases."
+  },
+  "baseline_runs": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_post_script_launch_inputs.py --tb=short",
+      "exit_code": 1,
+      "footer": "7 failed in 3.44s",
+      "test_sha256": "54cec29535deee8292e9cd70afcdf26801218bc5bcd520a8f66da53f4dbad094",
+      "note": "Initial test had one redundant blank line at EOF; only that blank line was removed before freezing the rerun below. Assertion text/AST unchanged."
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_post_script_launch_inputs.py --tb=short",
+      "exit_code": 1,
+      "footer": "7 failed in 3.39s",
+      "test_sha256": "b95c345c57a3d851edd18775ff8c41103f1c3f115023be1b575615ec037501e6",
+      "note": "Frozen final budget requirements, no production native-post-script change yet."
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_post_script_skip_hold.py --tb=short",
+      "exit_code": 1,
+      "footer": "3 failed in 1.89s",
+      "test_sha256": "694dfdb90c7392f27be70e785fff72eb0db0cb92f986bc08db5a6659871e12c3",
+      "classification": "Two actual HOLD behavior failures and one invalid control-test premise; not three product defects.",
+      "complete_initial_test": "docs/evidence/snapshots/v1-05c2d1-initial-skip-test-control-premise.py",
+      "premise": "Initial control incorrectly assumed source setup created no _eval_audit.jsonl; actual accepted evaluation already writes it. Full initial test snapshot retained; corrected only control to compare pre/post bytes. Initial 3-failure run includes 2 genuine HOLD behavior failures plus 1 invalid test premise; not acceptance or 3 product regressions."
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_post_script_skip_hold.py --tb=short",
+      "exit_code": 1,
+      "footer": "2 failed, 1 passed in 1.33s",
+      "test_sha256": "b8421db23331a337d29678bc69f80ff9baa0154b11120cff80d8b78d6bc38fca",
+      "note": "The control now compares pre/post existing audit bytes; one redundant EOF blank line was also removed. Both HOLD regression assertions are unchanged; frozen final test."
+    }
+  ],
+  "complete_baseline_replay": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.engine import evaluator, native_post_script\nfor module, filename in (\n    (evaluator, \"v1-05c2d1-before-evaluator.py\"),\n    (native_post_script, \"v1-05c2d1-before-native-post-script.py\"),\n):\n    path = Path(\"docs/evidence/snapshots\") / filename\n    exec(compile(path.read_bytes(), str(path), \"exec\"), module.__dict__)\nraise SystemExit(pytest.main([\"-q\", \"tests/test_post_script_launch_inputs.py\",\n    \"tests/test_post_script_skip_hold.py\", \"--tb=short\"]))\nPY",
+    "exit_code": 1,
+    "footer": "9 failed, 1 passed in 4.28s",
+    "classification": "Seven new invalid-budget requirements plus two old skip/HOLD behavior failures, one control.",
+    "scope": "Complete fixed evaluator and native_post_script modules executed into their real module dictionaries; other dependencies are current. All ten final test bytes are unchanged red-to-green.",
+    "snapshots": [
+      "docs/evidence/snapshots/v1-05c2d1-before-evaluator.py",
+      "docs/evidence/snapshots/v1-05c2d1-before-native-post-script.py"
+    ]
+  },
+  "caller_fix": {
+    "path": "src/orze/engine/evaluator.py",
+    "sha256": "3e06a2181e69aa62bc972c7ec0ac4667307f0be2adf8dad663978d1384c181c1",
+    "change": "Native-only current post_script pending check precedes eligibility and output-exists skips. Actual admission still repeats pending checks under its writer; this read grants no execution authority.",
+    "first_green": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_post_script_skip_hold.py tests/test_completion_skip_audit_races.py --tb=short",
+      "exit_code": 0,
+      "footer": "5 passed in 2.22s"
+    }
+  },
+  "fixture_migration": {
+    "path": "tests/test_completion_event_authority.py",
+    "complete_old": "docs/evidence/snapshots/v1-05c2d1-before-post-script-timeout-fixture.py",
+    "old_sha256": "9de206b5b0b3caf7b3b3a61ff2f763b37984798009a01241a879d0751bbd6bbc",
+    "new_sha256": "d65531352a67768c2e6106b08d748a432e728f86c544afffaabae0cd936f02aa",
+    "change": "Only timeout literal 0 -> 0.001. Existing explicit OwnedProcess.wait raises TimeoutExpired for any timeout while returncode is None, so this preserves the intended unconfirmed-stop fault rather than accepting an invalid execution budget.",
+    "assertions": 31,
+    "mock_assertions": 2,
+    "raises": 7,
+    "ast_preserved": true,
+    "baseline_byte_equal": true,
+    "audit_command": "python3 - <<'PY'\nimport ast,hashlib,subprocess\nfrom pathlib import Path\nold=Path(\"docs/evidence/snapshots/v1-05c2d1-before-post-script-timeout-fixture.py\").read_bytes()\nnew=Path(\"tests/test_completion_event_authority.py\").read_bytes()\nassert old==subprocess.check_output([\"git\",\"show\",\"070c38deb1f00f48e62c57c956d2dc0a938a1d76:tests/test_completion_event_authority.py\"])\ndef nodes(raw):\n    tree=ast.parse(raw)\n    assertions=[ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Assert)]\n    mocks=[ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr.startswith(\"assert_\")]\n    raises=[ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr==\"raises\"]\n    return assertions,mocks,raises\na,b=nodes(old),nodes(new)\nassert a==b\nassert old.replace(b'\"timeout\": 0}',b'\"timeout\": 0.001}',1)==new\nprint({\"old_sha256\":hashlib.sha256(old).hexdigest(),\"new_sha256\":hashlib.sha256(new).hexdigest(),\"assertions\":len(a[0]),\"mock_assertions\":len(a[1]),\"raises\":len(a[2]),\"unchanged\":True})\nPY",
+    "audit_exit_code": 0,
+    "first_failure_provenance": "Core author actually observed 1 failed, 70 passed in 12.72s before migration, at post_script_timeout_invalid before intended reaper. See author JSON; this is not a product defect or a full-suite failed epoch.",
+    "verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_completion_event_authority.py tests/test_post_script_compute_context.py tests/test_post_script_skip_hold.py --tb=short",
+      "exit_code": 0,
+      "footer": "14 passed in 5.86s"
+    }
+  },
+  "source_review": {
+    "reviewed_by": "root",
+    "native_sha256": "221ce74cf75a600a789d2782d312b7b24b1bea399d66c5563aa677ff32d7b024",
+    "files": [
+      "src/orze/engine/native_post_script.py",
+      "src/orze/engine/evaluator.py",
+      "src/orze/engine/post_script_supervision.py",
+      "src/orze/engine/process_supervision.py"
+    ],
+    "scope": "Full native adapter/thin wrapper plus complete shared proof and caller diff reviewed; typed process_pid omission independently identified by root and core author, two draft tests now cover GO and terminal."
+  },
+  "static_audit": {
+    "command": "python3 - <<'PY'\nimport ast, hashlib, json, pathlib, subprocess\nroot = pathlib.Path(\".\")\nsha = lambda b: hashlib.sha256(b).hexdigest()\nrows = []\nfor p in sorted(root.glob(\"docs/evidence/snapshots/v1-05c2d1-*.py\")):\n    raw=p.read_bytes()\n    ast.parse(raw)\n    assert raw and raw.endswith(b\"\\n\")\n    rows.append({\"path\":str(p),\"sha256\":sha(raw),\"bytes\":len(raw)})\nbaseline = [\n (\"src/orze/engine/evaluator.py\",\"before-evaluator\"),\n (\"src/orze/engine/native_post_script.py\",\"before-native-post-script\"),\n (\"src/orze/engine/process_supervision.py\",\"before-post-script-process-supervision\"),\n (\"tests/test_completion_event_authority.py\",\"before-post-script-timeout-fixture\"),\n]\nfor source,label in baseline:\n    raw = subprocess.check_output([\"git\",\"show\",\"070c38deb1f00f48e62c57c956d2dc0a938a1d76:\"+source])\n    assert raw == (root/(\"docs/evidence/snapshots/v1-05c2d1-\"+label+\".py\")).read_bytes()\ntests=[]\nfor filename in (\n \"test_native_post_script_tree_completion.py\", \"test_post_script_launch_inputs.py\",\n \"test_post_script_skip_hold.py\", \"test_post_script_input_pinning.py\",\n \"test_post_script_supervision_binding.py\", \"test_post_script_process_identity.py\",\n \"test_post_script_ready_go.py\",\n):\n    p=root/\"tests\"/filename\n    raw=p.read_bytes()\n    assertions=[ast.dump(n,include_attributes=False) for n in ast.walk(ast.parse(raw)) if isinstance(n,ast.Assert)]\n    tests.append({\"path\":str(p),\"sha256\":sha(raw),\"assert_count\":len(assertions),\n        \"assert_ast_sha256\":sha(\"\\n\".join(assertions).encode())})\nprint(json.dumps({\"snapshots\":rows,\"baseline_byte_equal\":len(baseline),\"tests\":tests},indent=2))\nPY",
+    "exit_code": 0,
+    "assert_ast_encoding": "SHA256 of UTF8 newline-joined ast.dump(include_attributes=False) for ast.Assert nodes in ast.walk order, without a final newline.",
+    "snapshots": [
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d1-before-evaluator.py",
+        "sha256": "33e50632a1a1e48325572f92d4bee6b71d3b120b686077d8978f0d7a6307891c",
+        "bytes": 43606
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d1-before-native-post-script.py",
+        "sha256": "f5fdb1bce78335bf445c070bb20402b63c4cae3d25301019e00d0b25f5489130",
+        "bytes": 7227
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d1-before-post-script-process-id-fence.py",
+        "sha256": "3454cd37fe90514e9014c24ac81497deee4034fbdf3660421d484947bf860b25",
+        "bytes": 11145
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d1-before-post-script-process-supervision.py",
+        "sha256": "cf670c844f80d2be5de99f7d2a6f305ebd9d35bf7227cc8217867e31b168ed1e",
+        "bytes": 6844
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d1-before-post-script-timeout-fixture.py",
+        "sha256": "9de206b5b0b3caf7b3b3a61ff2f763b37984798009a01241a879d0751bbd6bbc",
+        "bytes": 7599
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d1-initial-process-id-test-json-premise.py",
+        "sha256": "0bd2ce67bf9126497cf9061b5abd38a03d96de678449892b59eff1c8bd7140f3",
+        "bytes": 3233
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d1-initial-skip-test-control-premise.py",
+        "sha256": "694dfdb90c7392f27be70e785fff72eb0db0cb92f986bc08db5a6659871e12c3",
+        "bytes": 2554
+      }
+    ],
+    "baseline_byte_equal": 4,
+    "tests": [
+      {
+        "path": "tests/test_native_post_script_tree_completion.py",
+        "sha256": "43eb83d367ae6ea0e65d9a8926ba625bbbd7b5c3bc52c8d317400d855c94fc6a",
+        "assert_count": 39,
+        "assert_ast_sha256": "002e8dc2ad79c8ec399b202859b732e420f4c8e1f0681b8b1ee7479b00beaae7"
+      },
+      {
+        "path": "tests/test_post_script_launch_inputs.py",
+        "sha256": "b95c345c57a3d851edd18775ff8c41103f1c3f115023be1b575615ec037501e6",
+        "assert_count": 3,
+        "assert_ast_sha256": "701725ac4db05ee7132e59a431f1d855a217882db981b4b000ed1e64d5f3101e"
+      },
+      {
+        "path": "tests/test_post_script_skip_hold.py",
+        "sha256": "b8421db23331a337d29678bc69f80ff9baa0154b11120cff80d8b78d6bc38fca",
+        "assert_count": 7,
+        "assert_ast_sha256": "13aac3c1960d7ca32d663e42e097a3877f2eb9022ae9dcb76ef46833f0416094"
+      },
+      {
+        "path": "tests/test_post_script_input_pinning.py",
+        "sha256": "af983eed91012d5ab121e8edf0b33b6964fc335901cded744e8c685ccd9d6efb",
+        "assert_count": 29,
+        "assert_ast_sha256": "df90a5953deeb1be6e2484ddc353a1c15b8417d20db6ee427051aa68d5ccb973"
+      },
+      {
+        "path": "tests/test_post_script_supervision_binding.py",
+        "sha256": "8e0c4b86da5bf259d749c4bb674f4a320b988db0f00195977ae18581ffb55d3f",
+        "assert_count": 7,
+        "assert_ast_sha256": "99d44534eb0e259913718d2177bb6a1b1fee2f824df996a6baa6cb2059a37e42"
+      },
+      {
+        "path": "tests/test_post_script_process_identity.py",
+        "sha256": "72168316ecc58820f5a2f5aa3ba4ee27c6d172a7ed13845fcd1030fc63b9b97f",
+        "assert_count": 9,
+        "assert_ast_sha256": "d1c4042fe7978079f340dc45e2b2dcef55e64804fac6632b88fe190385e7820e"
+      },
+      {
+        "path": "tests/test_post_script_ready_go.py",
+        "sha256": "fb5a7a82393e7990bc6db1751ca9783b966fa34158d1e90d5a7e3779c3400c7a",
+        "assert_count": 48,
+        "assert_ast_sha256": "dfe2b5a036138562bdcacccf005235841a2d957ebc771a4db217c1ba10325d83"
+      }
+    ]
+  },
+  "current_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_native_post_script_tree_completion.py tests/test_post_script_launch_inputs.py tests/test_post_script_skip_hold.py tests/test_post_script_input_pinning.py tests/test_post_script_supervision_binding.py tests/test_post_script_process_identity.py tests/test_post_script_ready_go.py --tb=short",
+    "exit_code": 0,
+    "footer": "34 passed in 29.60s",
+    "note": "Contains all C2d1 cases and overlaps every author/reviewer target. Not the Core full-suite outcome; that final epoch belongs to the canonical evidence."
+  },
+  "limits": [
+    "Actual post-script proof does not isolate arbitrary script outputs or establish scientific validity.",
+    "No tokenless/pre-script/fixer/Director/adoption/CPU research framework completion.",
+    "No real GPU/model/provider workload or holdout plaintext access.",
+    "Only exact commands, observed exits/footers and file hashes are retained; not every stdout chunk is claimed as archived."
+  ],
+  "format_validation": {
+    "full_cached": {
+      "command": "git diff --cached --check",
+      "exit_code": 2,
+      "only_diagnostic": "docs/evidence/snapshots/v1-05c2d1-initial-skip-test-control-premise.py:60: new blank line at EOF."
+    },
+    "active_and_other_archived_files": {
+      "command": "git diff --cached --check -- . ':(exclude)docs/evidence/snapshots/v1-05c2d1-initial-skip-test-control-premise.py'",
+      "exit_code": 0
+    },
+    "exception": "One original failed-control test snapshot retains its exact original EOF bytes (SHA694df...), including one blank line. No active source/test/document formatting error is accepted. Earlier unstaged git diff checks did not include newly added untracked snapshot files."
+  }
+}
