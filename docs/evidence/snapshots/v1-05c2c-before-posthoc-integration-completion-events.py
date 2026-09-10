@@ -103,11 +103,11 @@ def require_completion(event, lake, results_dir, *, phase=None):
     ref = getattr(event, "attempt_ref", None)
     if ref is None:
         if lake is not None and any(current_attempt(lake.conn, event[0], p) is not None
-                                    for p in ("training", "evaluation", "posthoc")):
+                                    for p in ("training", "evaluation")):
             raise StaleAttempt("completion_native_reference_required")
         return None
     if (type(event) is not CompletionEvent or not isinstance(ref, AttemptRef)
-            or ref.task_id != event[0] or ref.phase not in ("training", "evaluation", "posthoc")
+            or ref.task_id != event[0] or ref.phase not in ("training", "evaluation")
             or (phase is not None and ref.phase != phase) or lake is None):
         raise AttemptEffectBusy("completion_reference_scope_invalid")
     row = current_attempt(lake.conn, ref.task_id, ref.phase)

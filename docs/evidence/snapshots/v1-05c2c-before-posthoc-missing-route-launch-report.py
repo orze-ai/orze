@@ -22,8 +22,7 @@ from orze.engine.attempt_effect_lock import AttemptEffectBusy
 from orze.engine.execution_authority import (
     canonical_identity_equal, execution_transaction, lifecycle_fence,
 )
-from orze.engine.training_attempts import _launch_state, _read
-from orze.engine.posthoc_attempts import require_catalog
+from orze.engine.training_attempts import _launch_state, _read, require_catalog
 
 
 def bind_launch_error(error, ref):

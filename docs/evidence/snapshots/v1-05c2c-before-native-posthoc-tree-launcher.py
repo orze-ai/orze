@@ -1116,18 +1116,11 @@ def _close_launch_log(log_fh) -> None:
 def _cleanup_failed_launch(tp, idea_dir: Path, phase: str, log_fh, *, lake=None) -> None:
     """Any known-created child needs stop authority, including lease exit."""
     try:
-        ref = getattr(tp, "attempt_ref", None)
-        if ref is not None and (ref.phase != phase or phase not in ("training", "posthoc")):
-            from orze.engine.attempt_effect_lock import AttemptEffectBusy
-            raise AttemptEffectBusy("launch_cleanup_phase_mismatch")
         return_code = terminate_execution(
             tp, idea_dir, phase=phase, reaper=_terminate_and_reap, timeout=3,
         )
         if getattr(tp, "attempt_ref", None) is not None:
-            if phase == "posthoc":
-                from orze.engine.posthoc_attempts import failed_launch
-            else:
-                from orze.engine.training_attempts import failed_launch
+            from orze.engine.training_attempts import failed_launch
             failed_launch(lake, tp, idea_dir, return_code)
             return
         try:
@@ -1184,12 +1177,6 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
     """Run a post-hoc idea in a subprocess and return a TrainingProcess-like
     handle so the rest of the scheduler (check_active etc.) is unchanged.
     """
-    from orze.engine.posthoc_attempts import require_catalog
-    require_catalog(lake, Path(results_dir) / idea_id, cfg)
-    if lake is not None:
-        from orze.engine.native_posthoc import launch as native_launch
-        return native_launch(idea_id, gpu, results_dir, cfg, kind=kind,
-                             idea_cfg_path=idea_cfg_path, lake=lake)
     import yaml
 
     idea_dir = Path(results_dir) / idea_id
@@ -1581,8 +1568,6 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     _assert_launch_authorized(idea_id, results_dir, cfg)
     from orze.engine.training_attempts import require_catalog
     require_catalog(lake, results_dir / idea_id, cfg)
-    from orze.engine.posthoc_attempts import require_catalog as require_posthoc_catalog
-    require_posthoc_catalog(lake, results_dir / idea_id, cfg)
     require_no_unconfirmed_stop(results_dir / idea_id)
     _assert_campaign_evidence_authorized(cfg, lake)
     from orze.core.decision_batches import validate_idea_decision_admission
@@ -2160,15 +2145,6 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
         tp = active[gpu]
         from orze.engine.training_attempts import require_catalog
         require_catalog(lake, results_dir / tp.idea_id, cfg, handle=tp)
-        from orze.engine.posthoc_attempts import require_catalog as require_posthoc_catalog
-        require_posthoc_catalog(lake, results_dir / tp.idea_id, cfg, handle=tp)
-        native_posthoc = getattr(getattr(tp, "attempt_ref", None), "phase", None) == "posthoc"
-        if native_posthoc:
-            from orze.engine.posthoc_attempts import current as posthoc_current
-            if not posthoc_current(lake, tp, results_dir / tp.idea_id):
-                if active.get(gpu) is tp:
-                    del active[gpu]
-                continue
         if lake is not None and not getattr(tp, "is_posthoc", False):
             from orze.engine.training_attempts import current
             if not current(lake, tp, results_dir / tp.idea_id):
@@ -2197,16 +2173,6 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
 
         # --- Still running ---
         if ret is None:
-            if native_posthoc:
-                from orze.engine.posthoc_completion import poll as posthoc_poll
-                event = posthoc_poll(lake, tp, gpu, results_dir / tp.idea_id,
-                                     cfg, failure_counts, stall_minutes)
-                if event is not None:
-                    tp.close_log()
-                    if active.get(gpu) is tp:
-                        del active[gpu]
-                    finished.append(event)
-                continue
             if lake is not None and not getattr(tp, "is_posthoc", False):
                 from orze.engine.training_monitor import poll
                 event = poll(lake, tp, gpu, results_dir / tp.idea_id, cfg, ret,
@@ -2377,15 +2343,6 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
         except Exception:
             pass
         tp.close_log()
-        if native_posthoc:
-            from orze.engine.posthoc_completion import finish as posthoc_finish
-            event = posthoc_finish(lake, tp, gpu, results_dir / tp.idea_id,
-                                  cfg, ret, failure_counts)
-            if active.get(gpu) is tp:
-                del active[gpu]
-            if event is not None:
-                finished.append(event)
-            continue
         if lake is not None and not getattr(tp, "is_posthoc", False):
             from orze.engine.training_completion import finish
             event = finish(lake, tp, gpu, results_dir / tp.idea_id,

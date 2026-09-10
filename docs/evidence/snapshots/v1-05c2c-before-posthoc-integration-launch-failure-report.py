@@ -22,21 +22,20 @@ from orze.engine.attempt_effect_lock import AttemptEffectBusy
 from orze.engine.execution_authority import (
     canonical_identity_equal, execution_transaction, lifecycle_fence,
 )
-from orze.engine.training_attempts import _launch_state, _read
-from orze.engine.posthoc_attempts import require_catalog
+from orze.engine.training_attempts import _launch_state, _read, require_catalog
 
 
 def bind_launch_error(error, ref):
     """Preserve the original exception class and the already captured ref."""
     if ref is not None:
-        if not isinstance(ref, AttemptRef) or ref.phase not in ("training", "posthoc"):
+        if not isinstance(ref, AttemptRef) or ref.phase != "training":
             raise AttemptEffectBusy("launch_failure_reference_invalid")
         error._orze_launch_attempt_ref = ref
 
 
 def _source(tx, ref):
     row = require_current(tx.conn, ref, states=("TERMINAL", "NOT_STARTED"))
-    if (row["binding"].get("origin") != "native_" + ref.phase
+    if (row["binding"].get("origin") != "native_training"
             or (row["terminal"] or {}).get("outcome") not in ("failed", "not_started")):
         raise AttemptEffectBusy("launch_failure_source_not_failed_launch")
     tx.watch_dependency(ref)
@@ -64,11 +63,10 @@ def report_launch_failure(lake, idea_dir, error, failure_counts, cfg):
     if ref is None:
         from orze.engine.execution_catalog import declared_catalog
         if (declared_catalog(folder) is not None
-                or (lake is not None and any(current_attempt(lake.conn, folder.name, phase) is not None
-                                            for phase in ("training", "posthoc")))):
+                or (lake is not None and current_attempt(lake.conn, folder.name, "training") is not None)):
             raise AttemptEffectBusy("launch_failure_native_reference_required")
         return None
-    if (lake is None or not isinstance(ref, AttemptRef) or ref.phase not in ("training", "posthoc")
+    if (lake is None or not isinstance(ref, AttemptRef) or ref.phase != "training"
             or ref.task_id != folder.name):
         raise AttemptEffectBusy("launch_failure_reference_invalid")
     source_identity = asdict(ref)
@@ -135,7 +133,7 @@ def report_launch_failure(lake, idea_dir, error, failure_counts, cfg):
                 finally:
                     os.close(directory)
                 if not lake._record_state_transition_in_tx(
-                        ref.task_id, from_state, "FAILED", reason=ref.phase + "_launch_failed",
+                        ref.task_id, from_state, "FAILED", reason="training_launch_failed",
                         host=socket.gethostname(), pid=os.getpid(), sop_type="training"):
                     raise AttemptAuthorityError("launch_failure_lifecycle_rejected")
                 terminal = {

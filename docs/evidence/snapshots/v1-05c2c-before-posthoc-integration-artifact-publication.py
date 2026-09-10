@@ -13,8 +13,7 @@ CALLING SPEC:
 Snapshots use new inodes, never links/renames of worker files. Read-only mode
 is a cooperative-writer boundary, not a sandbox against a hostile same UID.
 Default source_dir preserves the training contract. Explicit evaluation input
-is restricted to idea_dir/_evaluation_attempts/<attempt_id>/work; posthoc
-uses the corresponding exact _posthoc_attempts/<attempt_id>/work directory.
+is restricted to idea_dir/_evaluation_attempts/<attempt_id>/work.
 """
 from __future__ import annotations
 
@@ -105,9 +104,8 @@ def _binding(binding, ref, idea_dir, source_dir=None):
             raise AttemptEffectBusy("artifact_source_directory_required")
     else:
         source = Path(source_dir).absolute()
-        roots = {"evaluation": "_evaluation_attempts", "posthoc": "_posthoc_attempts"}
-        if (ref.phase not in roots or source !=
-                folder / roots[ref.phase] / ref.attempt_id / "work"):
+        if (ref.phase != "evaluation" or source !=
+                folder / "_evaluation_attempts" / ref.attempt_id / "work"):
             raise AttemptEffectBusy("artifact_source_directory_invalid")
     return normalized, folder, source
 

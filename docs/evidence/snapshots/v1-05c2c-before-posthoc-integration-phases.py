@@ -822,12 +822,6 @@ class OrzePhaseMixin:
                 continue
             if idea_id in attempted_ids:
                 continue
-            if getattr(getattr(event, "attempt_ref", None), "phase", None) == "posthoc":
-                # This inference adapter already completed its action. It is
-                # not a training source and grants no extra evaluation work.
-                attempted_ids.add(idea_id)
-                deliver(idea_id, gpu, event)
-                continue
             metrics_path = self.results_dir / idea_id / "metrics.json"
             if metrics_path.exists():
                 try:
@@ -900,10 +894,6 @@ class OrzePhaseMixin:
                 continue
             if p_idea in attempted_ids:
                 still_pending.append(pending)
-                continue
-            if getattr(getattr(source_event, "attempt_ref", None), "phase", None) == "posthoc":
-                attempted_ids.add(p_idea)
-                deliver(p_idea, p_gpu, source_event)
                 continue
             if not cfg.get("eval_script"):
                 attempted_ids.add(p_idea)
@@ -1763,20 +1753,14 @@ class OrzePhaseMixin:
                             "and deferring idea", idea_id, gpu, slot_err)
                         from orze.engine.process import _terminate_and_reap
                         execution_phase = (
-                            getattr(getattr(tp, "attempt_ref", None), "phase", None)
-                            or ("posthoc" if getattr(tp, "is_posthoc", False) else "training"))
-                        if execution_phase == "posthoc":
-                            from orze.engine.posthoc_attempts import require_catalog
-                            require_catalog(self.lake, self.results_dir / idea_id, cfg, handle=tp)
+                            "posthoc" if getattr(tp, "is_posthoc", False)
+                            else "training")
                         return_code = terminate_execution(
                             tp, self.results_dir / idea_id,
                             phase=execution_phase, reaper=_terminate_and_reap)
                         tp.close_log()
                         if getattr(tp, "attempt_ref", None) is not None:
-                            if execution_phase == "posthoc":
-                                from orze.engine.posthoc_completion import requeue
-                            else:
-                                from orze.engine.training_completion import requeue
+                            from orze.engine.training_completion import requeue
                             requeue(self.lake, tp, gpu, self.results_dir / idea_id,
                                     cfg, return_code, "scheduler_slot_race")
                             continue

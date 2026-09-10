@@ -78,8 +78,6 @@ def handle_shutdown(tracked, results_dir, phase, stop, *, lake=None, cfg=None):
         route = declared_catalog(folder)
         if lake is None:
             if route is None:
-                from orze.engine.posthoc_attempts import require_catalog
-                require_catalog(None, folder, cfg or {}, handle=tracked)
                 if getattr(tracked, "attempt_ref", None) is not None:
                     raise AttemptEffectBusy("shutdown_native_catalog_required")
                 return None

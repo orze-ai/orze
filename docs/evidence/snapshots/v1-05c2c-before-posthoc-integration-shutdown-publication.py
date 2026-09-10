@@ -22,13 +22,9 @@ logger = logging.getLogger("orze")
 
 
 def _current(lake, tracked, folder, phase, cfg):
-    from orze.engine.posthoc_attempts import require_catalog as posthoc_catalog
-    posthoc_catalog(lake, folder, cfg, handle=tracked)
     if phase == "training":
         from orze.engine.training_attempts import require_catalog, current
         require_catalog(lake, folder, cfg, handle=tracked)
-    elif phase == "posthoc":
-        from orze.engine.posthoc_attempts import current
     else:
         from orze.engine.native_evaluation import require_catalog, is_current as current
         require_catalog(lake, folder.name, folder.parent, cfg, handle=tracked)
@@ -45,14 +41,11 @@ def _current(lake, tracked, folder, phase, cfg):
         return False
     if row["state"] in ("TERMINAL", "NOT_STARTED"):
         return False
-    accepted = current(lake, tracked, folder) if phase in ("training", "posthoc") else current(lake, tracked)
+    accepted = current(lake, tracked, folder) if phase == "training" else current(lake, tracked)
     if not accepted or row["state"] != "RUNNING":
         raise AttemptEffectBusy("shutdown_native_attempt_not_owned")
     if phase == "evaluation":
         from orze.engine.evaluation_supervision import bound_binding
-        bound_binding(tracked, row, folder)
-    elif phase == "posthoc":
-        from orze.engine.posthoc_supervision import bound_binding
         bound_binding(tracked, row, folder)
     elif row["binding"].get("origin") == "native_training":
         from orze.engine.training_supervision import bound_binding
@@ -67,7 +60,7 @@ def handle_shutdown(tracked, results_dir, phase, stop, *, lake=None, cfg=None):
     an already closed/replaced attempt must not signal or mutate another one.
     The catalog declaration is only a route; the exact attempt is revalidated.
     """
-    if results_dir is None or phase not in ("training", "evaluation", "posthoc"):
+    if results_dir is None or phase not in ("training", "evaluation"):
         if getattr(tracked, "attempt_ref", None) is not None:
             return False
         return None
@@ -78,8 +71,6 @@ def handle_shutdown(tracked, results_dir, phase, stop, *, lake=None, cfg=None):
         route = declared_catalog(folder)
         if lake is None:
             if route is None:
-                from orze.engine.posthoc_attempts import require_catalog
-                require_catalog(None, folder, cfg or {}, handle=tracked)
                 if getattr(tracked, "attempt_ref", None) is not None:
                     raise AttemptEffectBusy("shutdown_native_catalog_required")
                 return None
@@ -102,10 +93,6 @@ def handle_shutdown(tracked, results_dir, phase, stop, *, lake=None, cfg=None):
                                      folder, ret)
         elif phase == "training":
             from orze.engine.training_supervision import require_closed
-            closure = require_closed(tracked, current_attempt(lake.conn, folder.name, phase),
-                                     folder, ret)
-        elif phase == "posthoc":
-            from orze.engine.posthoc_supervision import require_closed
             closure = require_closed(tracked, current_attempt(lake.conn, folder.name, phase),
                                      folder, ret)
         interruption = None
@@ -149,10 +136,7 @@ def handle_shutdown(tracked, results_dir, phase, stop, *, lake=None, cfg=None):
                 raise AttemptAuthorityError("shutdown_lifecycle_rejected")
             terminal = {"outcome": "interrupted", "reason_code": reason,
                         "return_code": ret, "effect_receipt_sha256": digest,
-                        "lifecycle": lifecycle_fence(lake, folder.name,
-                                                     "training" if phase == "posthoc" else phase)}
-            if phase == "posthoc":
-                terminal["lifecycle_phase"] = "training"
+                        "lifecycle": lifecycle_fence(lake, folder.name, phase)}
             if closure is not None:
                 terminal["process_tree"] = closure
             if finish_attempt(tx.conn, ref, terminal) != "committed":

@@ -1,7 +1,7 @@
 """Shared native process-tree publication proof; no OS ownership discovery.
 
 CALLING SPEC: the six adapter operations accept explicit keyword-only
-phase='training', 'evaluation' or 'posthoc'. Callers establish current attempt authority
+phase='training' or 'evaluation'. Callers establish current attempt authority
 and their own transaction; this module only validates the same READY/closure
 schema. Historical native rows cannot acquire proof from a raw PID or integer.
 Pre-native compatibility belongs to the caller, not a bypass in this module.
@@ -21,7 +21,7 @@ _HEX = re.compile(r"[0-9a-f]{64}")
 
 
 def _phase(phase):
-    if phase not in ("training", "evaluation", "posthoc"):
+    if phase not in ("training", "evaluation"):
         raise ValueError("process_supervision_phase_invalid")
     return phase
 

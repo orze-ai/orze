@@ -145,7 +145,7 @@ def test_training_normal_closed_zero_binding_is_detached(tmp_path):
 def test_shared_adapter_does_not_authorize_an_unsupported_phase(tmp_path):
     tp, _, folder = case(tmp_path)
     with pytest.raises(ValueError, match="^process_supervision_phase_invalid$"):
-        process_supervision.identity(tp, folder, phase="unsupported_phase")
+        process_supervision.identity(tp, folder, phase="posthoc")
 
 
 def test_extracted_evaluation_public_signatures_and_errors_match_complete_old_module(tmp_path):
