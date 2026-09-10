@@ -27,7 +27,7 @@ Core 在真实 trigger 终态提交**之前**验证结果并形成结论。Pro �
 - `run_research_cycle` 保留整数返回 API，增加可选 `result_out`。独立 CLI 也依据详细结果选择退出码，但没有原生控制器引用时不生成结果文件。
 - 旧 generic script 角色保留原兼容检查。原生 research 不再生成旧的逐技能 mtime 输出证明，并清理其临时快照；技能的启动/激活 ACK 仍保留。这些旧证明不能继续被当作原生角色的执行来源。
 - 回执最多 64 KiB、512 个 accepted ID，拒绝原因和字段也有界；过大的批次在原生写入前拒绝。没有自动回执清理或全局 exactly-once 外部副作用承诺。
-- 当前字符串 provider API 对“真正空响应”与被后端吞掉的传输错误不能可靠细分，明确记为 `provider_response_unknown`。不把自由文本猜作官方 refusal，也不声称已完成所有 provider 的结构化拒绝/截断集成。
+- D 当时的字符串 provider API 无法可靠细分空响应与传输失败。后续 [V1-03F](provider-outcomes.md) 为已有后端增加逐调用状态，接入已知拒绝、截断、完整空响应及传输失败；缺少终止元数据的兼容响应仍为 `provider_response_unknown`，不从自由文本猜拒绝，不声称所有 provider 协议或线上服务已验证。
 - 结果文件是框架子进程的操作性回执，身份绑定不证明提案的科学质量，也不抵御可任意改写控制目录的恶意外部 writer。
 - 本项不重建控制器重启后丢失的 `RoleProcess` 引用，不授权自动重放。usage 追加仍是 best-effort，不与 SQLite 终态作跨存储原子提交。接口属于本开发分支，提交和推送不代表已发布。
 
