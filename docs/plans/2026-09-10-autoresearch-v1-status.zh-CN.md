@@ -36,7 +36,9 @@
 | V1-03E：可选角色预设 | 已修复、机制已验证 | Core `7741e23` / Pro `64684d8` 已推送并读回；46 新用例为 15 旧公共行为 red、10 旧控制、21 新机制。冻结源码最终 Core 2588 passed / 7 optional Pro skips、Pro 830 passed、真实配对 60 passed；484/188 文件 SHA 前后一致。[证据](../evidence/2026-09-10-v1-03e-optional-presets.json)及[契约](../optional-role-presets.md)覆盖真实配置→派发及跨项目隔离；两份旧测试显式迁移，42 条原 assert AST 相同且保留原快照 |
 | V1-03F：Provider 返回分类 | 已修复、机制已验证 | Core 契约 `f3a6612` / Pro `28ac911` 已推送并读回；25 新用例区分 9 旧公共行为 red、3 新稳定原因要求失败、3 旧控制、4 新逐调用机制及 6 草稿 red。固定旧两模块重放为 12 failed / 3 passed。最终 Pro 855 passed、真实配对 60 passed；Core 484 文件与 E 完全相同，明确复用 E 的 2588 passed / 7 optional Pro skips，Pro 194 文件全量前后相同。[证据](../evidence/2026-09-10-v1-03f-provider-outcomes.json)及[契约](../provider-outcomes.md)连接真实响应解析→cycle→CLI→持久终态→usage；缺终止元数据仍为 legacy unknown |
 | V1-03 整体 | 本版机制已验收 | A1 关闭同控制器共享配额记账，B 关闭持久需求消费者，C 关闭预算准入边界，D 关闭本批提案结果与共享 inbox 误归属，E 关闭默认凭据/GOAL 扩组和隐式停滞触发，F 关闭已支持结构化 provider 拒绝/截断/完整空响应与传输失败的实际分类。按主机保存不等于跨主机共享配额；角色预设不等于热撤销或通用策略闭环；离线机制不是线上 provider 验收或研究收益，整个 V1 尚未完成 |
-| V1-04 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
+| V1-04A：方法状态、来源与默认策略 | 已修复、机制已验证 | Core 契约 `588f606` / Pro `d1f17e7` 已推送并读回；43 新用例为 22 旧公共行为 red、7 旧控制、11 新机制、3 草稿 red。固定旧四模块重放 21 failed / 7 passed / 1 新机制排除，另 mixed-key 旧行为 1 failed。最终 Pro 898 passed、真实配对 60 passed；Core 484 文件不变，明确复用 E 的 2588 passed / 7 optional Pro skips，Pro 205 文件前后相同。[证据](../evidence/2026-09-10-v1-04a-method-context.json)及[契约](../method-context.md)保留真实原生交付、候选失效历史与严格来源/验证区分。旧 70% 分支已不可达，只作死代码清理 |
+| V1-04 整体 | 进行中 | A 关闭方法笔记的退役配方、错误 proven 标签、max-mtime 缓存及默认强制家族/ML 策略；B 仍需整份 prompt 的 UTF-8 字节预算、必需契约完整性、可选源清单及实际发送内容绑定。方法片段限长不等于全部上下文 I/O 或完整提示词已 bounded |
+| V1-05 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
 
 [V1-02D1 机器可读证据](../evidence/2026-09-10-v1-02d1-termination-authority.json)与[执行停止契约](../execution-termination-authority.md)在两仓各保留一份。固定旧代码重放证明主进程退出被误当作停止确认、失败初始化/槽位注册释放权限，以及补评接受残留写入者产物的路径；修复要求持久请求、停止器严格 True 和整数退出码，再发布绑定请求哈希的确认。未确认停止跨对象丢失和已接线恢复入口保持 HOLD，不自动重试。四个草稿边界红测及四份兼容 fixture 原始快照均可重放。首次 start/stop 均未落盘时的崩溃/存储故障、普通自然退出的完整后代证明、stale-attempt CAS 和产物代际隔离仍未完成；仍不代表整个 V1 已完成。
 
