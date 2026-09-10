@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "milestone": "V1-05B2",
+  "component": "generic observation metadata store",
+  "author": "/root/pro_review",
+  "date_utc": "2026-09-10",
+  "repository_head_at_target_run": "3f33f02891dcad276f5a36e641fac90a7aa35114",
+  "classification": "34 initial-green new mechanisms plus one working-draft query-count regression. No old-release or API-absence red claimed.",
+  "initial_candidate_sha256": "53285cdb60694e439d31e48457cc2484cf4c2603e50beb3eaabb9832114a2e18",
+  "owned_files": {
+    "src/orze/core/research_observations.py": {
+      "sha256": "82596eceb7f6f4493d9f2cd2b71b574117175ea9d7e75f0bf6d013b2f8bc30fc",
+      "lines": 358
+    },
+    "tests/test_research_observation_store.py": {
+      "sha256": "4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2",
+      "cases": 34
+    },
+    "tests/test_observation_dependency_reads.py": {
+      "sha256": "452367278caca59dd9132784bb0c7115a322c5870b34c1d6e1925dd5da367cf7",
+      "cases": 1
+    },
+    "docs/evidence/snapshots/v1-05b2-before-dependency-read-cache.py": {
+      "sha256": "6eb3ab858a70d9de62632c95cb171c5c3d7ab9c38d2a3c18925009603d3e2277",
+      "scope": "Complete original _dependencies function; AST source segment plus newline was verified byte-identical before the fix. Not a complete historical module."
+    }
+  },
+  "shared_dependency_at_runs": {
+    "src/orze/core/observation_contract.py": "60906b19ed280b0a43a00c6f48e88a851b63dbe9d8cde114b705f7ddc86d1a40"
+  },
+  "runs": [
+    {
+      "kind": "first new mechanism run",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_research_observation_store.py --tb=short",
+      "result": {
+        "passed": 34,
+        "failed": 0,
+        "duration_seconds": 1.2,
+        "exit_code": 0
+      },
+      "notes": "Initial candidate 53285cdb complete run passed; no fixture correction, import-absence failure, or product red was recorded."
+    },
+    {
+      "kind": "initial candidate author bounded neighboring regression",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_research_observation_store.py tests/test_research_artifact_store.py tests/test_execution_attempts.py --tb=short",
+      "result": {
+        "passed": 118,
+        "failed": 0,
+        "duration_seconds": 2.48,
+        "exit_code": 0
+      },
+      "notes": "Owned source/test and shared binding validator hashes matched the initial-run hashes after this target. This precedes the read-cache optimization and is not the final target."
+    },
+    {
+      "kind": "working-draft query-count behavior red",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_observation_dependency_reads.py --tb=short",
+      "result": {"passed": 0, "failed": 1, "duration_seconds": 0.27, "exit_code": 1},
+      "observed": "32 observations sharing one result caused 66 artifact metadata lookups instead of four. The original 34 tests remained frozen and unchanged."
+    },
+    {
+      "kind": "in-memory complete original helper replay on final module",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.core import research_observations as store\nsnapshot = Path('docs/evidence/snapshots/v1-05b2-before-dependency-read-cache.py')\nexec(compile(snapshot.read_text(), str(snapshot), 'exec'), store.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_observation_dependency_reads.py', '--tb=short']))\nPY",
+      "result": {"passed": 0, "failed": 1, "duration_seconds": 0.23, "exit_code": 1},
+      "notes": "Same 66-versus-four assertion; no source files changed during replay. Working-draft function replay, not a historical released module."
+    },
+    {
+      "kind": "final owned mechanism target",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_observation_dependency_reads.py tests/test_research_observation_store.py --tb=short",
+      "result": {"passed": 35, "failed": 0, "duration_seconds": 1.08, "exit_code": 0},
+      "notes": "The query-count test also performs a real SQL-trigger mutation of input artifact metadata and confirms fresh post-write validation rejects it."
+    },
+    {
+      "kind": "final source bounded neighboring regression",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_observation_dependency_reads.py tests/test_research_observation_store.py tests/test_research_artifact_store.py tests/test_execution_attempts.py --tb=short",
+      "result": {"passed": 119, "failed": 0, "duration_seconds": 2.54, "exit_code": 0},
+      "notes": "Final owned source and both owned test hashes were identical before/after this target. Not a full repository suite; overlapping targets are not additive."
+    }
+  ],
+  "covered": [
+    "Publication requires caller transaction and exact current RUNNING AttemptRef; no internal BEGIN/COMMIT/ROLLBACK/SAVEPOINT, and caller-wide rollback includes created table and caller writes.",
+    "Zero observations create neither a synthetic zero score nor an otherwise unnecessary observation table.",
+    "Multiple named records preserve valid/invalid/unknown adapter claims, distinct comparison scopes, null comparison scope, finite zero/negative values and bounded JSON metadata.",
+    "Subject specification, evaluator AttemptRef, occurrence ID, input artifact IDs and result artifact IDs remain separate. New evaluator attempts over the same inputs and values produce separate records.",
+    "Input artifact metadata must exist with matching scope/subject specification; nonempty result artifact IDs must refer to this evaluator's registered artifacts and scope, not necessarily the subject's specification.",
+    "Exact replay is write-free; same-name or same-ID conflicts cannot replace prior records. Detached preflight validation does not grant publication authority.",
+    "Malformed fields, nonfinite numbers, oversized Unicode values, recursive/deep JSON, duplicate names/IDs, and batch capacity violations reject before insertion.",
+    "Main-table/BINARY identities avoid TEMP shadowing or case-folded aliases; incompatible schema and corrupt stored JSON are rejected without repair.",
+    "Publication rechecks exact batch contents, current attempt metadata and referenced artifacts. IGNORE, row mutation and dependency deletion cause errors requiring caller rollback.",
+    "Historical reads survive later attempts and use no current-owner checks, DDL or file reads.",
+    "Each dependency-validation pass caches by artifact ID locally; the post-write pass always starts fresh. For 32 observations sharing a single result, total artifact metadata lookups fall from 66 to four without weakening the final check."
+  ],
+  "limits": [
+    "The store is metadata-only; independent snapshot creation, filesystem integrity, evaluator scratch isolation and real native adapter wiring are separate components and tests.",
+    "validation.status records the named adapter's declared judgment; it is not a core scientific verdict, ranking grant, statistical independence test or comparison result.",
+    "No phase or adapter implementation is hard-coded in the generic store. Native JSON adapter support/qualification restrictions are owned elsewhere.",
+    "Empty batches are no observations. Invalid or unknown observations are retained as such; no score fallback or winner selection is performed.",
+    "Any write failure requires the caller to roll back the whole transaction. The store cannot establish the caller's SQLite lock mode from in_transaction.",
+    "The caller must recheck cross-table metadata after subsequent terminal/lifecycle writes; the store cannot pre-verify future caller trigger effects.",
+    "API insert-only behavior is not resistance to arbitrary direct SQL/filesystem tampering.",
+    "No complete observation-backed ranking/report migration, explicit replication authorization, new research strategy platform, real GPU/provider run, science benefit or release readiness is claimed."
+  ],
+  "independent_review": "/root/core_review read the complete initial source and reported no store-mechanism blocker; actual native integration and final review evidence are separate.",
+  "mutations": "Only the owned source, two new owned tests, one complete-helper draft snapshot and this author JSON were authored here. No existing tests or other production files were edited; no commit/push by this author."
+}
