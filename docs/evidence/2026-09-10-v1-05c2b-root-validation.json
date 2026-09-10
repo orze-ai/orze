@@ -1,0 +1,434 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2b",
+  "role": "root integration and final acceptance",
+  "whole_v1_complete": false,
+  "final_verification": {
+    "epoch": 2,
+    "freeze_utc": "2026-09-10 21:07:19 UTC",
+    "checked_utc": "2026-09-10 21:18:27 UTC",
+    "core": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "exit_code": 0,
+      "footer": "3010 passed, 7 skipped in 427.65s (0:07:07)"
+    },
+    "pro": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "exit_code": 0,
+      "footer": "944 passed in 171.15s (0:02:51)"
+    },
+    "paired": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "exit_code": 0,
+      "footer": "60 passed in 1.08s"
+    },
+    "new_48": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_native_training_tree_completion.py tests/test_supervised_worker_fds.py tests/test_training_supervision_binding.py tests/test_training_ready_go_boundary.py tests/test_training_supervision_lifecycle.py tests/test_training_phase_routing.py tests/test_training_resume_go.py tests/test_training_lineage_supervision.py tests/test_training_supervision_start_and_monitor.py tests/test_training_launch_failure_supervision.py --tb=short",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "exit_code": 0,
+      "footer": "48 passed in 19.12s"
+    },
+    "source_test_files_pre_post_equal": {
+      "core": 564,
+      "pro": 214
+    },
+    "optional_pro_skips": "All seven Core optional-Pro skips are exercised by the fresh paired-source 60-test run. Pro license boundary patched only in offline tests; production gate unchanged.",
+    "evidence_granularity": "Commands, observed exits/footers and file inventories retained; no claim to have archived every stdout chunk. Concurrent run totals overlap and are not summed as distinct tests."
+  },
+  "supporting_report_audit": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,shlex,subprocess\nfrom pathlib import Path\npaths=[Path(\"docs/evidence/2026-09-10-v1-05c2b-\"+name+\".json\") for name in (\"supervisor-fds-author\",\"shared-supervision-author\",\"training-routing-review\",\"native-training-tree-review\")]\nrecords=[]; allsnaps={}\nfor path in paths:\n commands=[]; snaps={}\n def visit(v):\n  if isinstance(v,dict):\n   for k,x in v.items():\n    if k==\"command\" and isinstance(x,str): commands.append(x)\n    if isinstance(k,str) and k.startswith(\"docs/evidence/snapshots/\") and isinstance(x,str) and len(x)==64: snaps[k]=x\n    if k==\"snapshot\" and isinstance(x,str):\n     digest=v.get(\"snapshot_sha256\",v.get(\"sha256\"))\n     if digest: snaps[x]=digest\n    if k==\"path\" and isinstance(x,str) and x.startswith(\"docs/evidence/snapshots/\") and \"sha256\" in v: snaps[x]=v[\"sha256\"]\n    visit(x)\n  elif isinstance(v,list):\n   for x in v: visit(x)\n visit(json.loads(path.read_bytes()))\n for cmd in commands:\n  if \"<<'PY'\" in cmd:\n   assert cmd.endswith(\"\\nPY\"),cmd\n   ast.parse(cmd.split(\"\\n\",1)[1].rsplit(\"\\nPY\",1)[0])\n  else:\n   argv=shlex.split(cmd)\n   if \"-c\" in argv: ast.parse(argv[argv.index(\"-c\")+1])\n for snap,sha in snaps.items():\n  raw=Path(snap).read_bytes()\n  assert hashlib.sha256(raw).hexdigest()==sha,snap\n  ast.parse(raw)\n  assert snap not in allsnaps or allsnaps[snap]==sha\n  allsnaps[snap]=sha\n records.append(dict(path=str(path),sha256=hashlib.sha256(path.read_bytes()).hexdigest(),commands_parsed=len(commands),snapshot_links_hash_matched=len(snaps)))\nruntime=json.loads(paths[-1].read_bytes())\nfor entry in runtime[\"baseline\"][\"sources\"]:\n assert subprocess.check_output([\"git\",\"show\",\"d915139:\"+entry[\"path\"]])==Path(entry[\"snapshot\"]).read_bytes()\nsnapshots=[]\nfor path in sorted(Path(\"docs/evidence/snapshots\").glob(\"v1-05c2b-*.py\")):\n raw=path.read_bytes(); ast.parse(raw)\n snapshots.append(dict(path=str(path),sha256=hashlib.sha256(raw).hexdigest(),bytes=len(raw),extent=\"complete source or test file\"))\nprint(json.dumps(dict(reports=records,commands_parsed=sum(x[\"commands_parsed\"] for x in records),unique_report_snapshot_links=len(allsnaps),all_snapshots=snapshots,all_snapshot_count=len(snapshots)),indent=2))\nPY",
+    "exit_code": 0,
+    "reports": [
+      {
+        "path": "docs/evidence/2026-09-10-v1-05c2b-supervisor-fds-author.json",
+        "sha256": "3eb57a5a6749eeacd84ac2910d8915e2a455be9d87d9a466790f25645b2218c3",
+        "commands_parsed": 1,
+        "snapshot_links_hash_matched": 2
+      },
+      {
+        "path": "docs/evidence/2026-09-10-v1-05c2b-shared-supervision-author.json",
+        "sha256": "919e7e362fb316af4ccb993e9f86727bd3c8433abb8e82184ac5b89ed71ac690",
+        "commands_parsed": 9,
+        "snapshot_links_hash_matched": 8
+      },
+      {
+        "path": "docs/evidence/2026-09-10-v1-05c2b-training-routing-review.json",
+        "sha256": "6a99624638fd46584e71f82f4202a61251e353bbc2d48572bf903171d28d0282",
+        "commands_parsed": 7,
+        "snapshot_links_hash_matched": 5
+      },
+      {
+        "path": "docs/evidence/2026-09-10-v1-05c2b-native-training-tree-review.json",
+        "sha256": "f4a17c587e9cfb92625faced0d2f0cefdcf78944a982f06dc4228ff73e23445d",
+        "commands_parsed": 8,
+        "snapshot_links_hash_matched": 9
+      }
+    ],
+    "commands_parsed": 25,
+    "unique_report_snapshot_links": 24,
+    "all_snapshots": [
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-launch-failure-lifecycle-report.py",
+        "sha256": "c35998c0389d949b55b52ce78f7b6b33bcf0cf7250c6623583bca310d255fda9",
+        "bytes": 7944,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-native-training-tree-launcher.py",
+        "sha256": "ff1dd6442e6af2ba71f4ab3dbb4af4863b00cd52530d5893a6dd677fa845c5be",
+        "bytes": 110194,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-native-training-tree-process.py",
+        "sha256": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+        "bytes": 52254,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-native-training-tree-training-attempts.py",
+        "sha256": "62b0c0d1805c8cd21755ec6deb6a47073aa6b4f6f49646eb6f69a9ea4b5e5647",
+        "bytes": 17257,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-native-training-tree-training-completion.py",
+        "sha256": "1aeb2728c388c42cdbe2c8cf3efa5451d654782469c4597741d54f0d164a1dd9",
+        "bytes": 13016,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-optional-go-launcher.py",
+        "sha256": "2d1cf18784285bce643172f02b6ef80fa3ef122d102917a5d18bd32b1b99f38d",
+        "bytes": 114643,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-ready-ticks-supervision-fixture.py",
+        "sha256": "e512d3de9f1d6506beb527763e3bf2ad9aa22bc83cf7dc7e3b6f98d09184c557",
+        "bytes": 6349,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-shared-evaluation-supervision.py",
+        "sha256": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485",
+        "bytes": 6061,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-started-launch-failure-launch-failure-report.py",
+        "sha256": "c35998c0389d949b55b52ce78f7b6b33bcf0cf7250c6623583bca310d255fda9",
+        "bytes": 7944,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-started-launch-failure-launcher.py",
+        "sha256": "5562e31474b10483531fa8b2f1a9828c7647a8eacebd1df204f74c3c02901265",
+        "bytes": 115456,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-started-launch-failure-training-attempts.py",
+        "sha256": "9354a4f0899a53cdb15a5a6bb42054f1f0a72b0da8e5fb527a3cd0939b9c6afd",
+        "bytes": 20875,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-training-phase-routing-attempts.py",
+        "sha256": "10976baefd09d0636d1e6358bf178176abf1e9821987de185de2b5a7e824272f",
+        "bytes": 18851,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-training-phase-routing-launcher.py",
+        "sha256": "159aa29e0d2180ae19fd2cd5f96646e7bdc22f6d259bd66ee739bdf4741de96f",
+        "bytes": 114872,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-worker-fds-supervised-process.py",
+        "sha256": "6c9532709481c0bdd44b5b9e58c32f24875b7fb1668715f2bdb60ed1feffdb42",
+        "bytes": 12793,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-before-worker-fds-supervisor-worker.py",
+        "sha256": "5afd66706db4f6d524b693161774d81eced2f96dc97175c995fad2d8f9cf05cc",
+        "bytes": 9385,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-launch-failure-test-initial.py",
+        "sha256": "b59be50a5319c5ace4b1b4106a00db84696cf170fe259b341fa1eddfe240021f",
+        "bytes": 4513,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-original-supervision-fixture.py",
+        "sha256": "81483eda1696873dd66a200ff3b06605903e70e3858c59df0dbff7f005cdf7bd",
+        "bytes": 4412,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-original-test-launch-failure-report-contract.py",
+        "sha256": "c25bef0fa232f1ad2f99075fa1d53c420573d68d838a898c754404f3fd21e6ae",
+        "bytes": 4015,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-original-test-launch-failure-report.py",
+        "sha256": "a34b4ac4c5b27dfc28470ba87ef16f6b73c2b2ae050450cf8b286c641f995199",
+        "bytes": 3976,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-original-test-native-training-caller-boundaries.py",
+        "sha256": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+        "bytes": 7080,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-original-test-native-training-shutdown-boundaries.py",
+        "sha256": "26b2453c10d1eddd02868ff544a776bb000136a68cff1c87fc9e55d215eb5c5b",
+        "bytes": 7781,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-original-test-resume-publication-contract.py",
+        "sha256": "4af439019f9967f6e221d239b7c54e0e698213c36672c340bb2871aea6b40ec3",
+        "bytes": 4867,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-original-test-startup-native-admission-race.py",
+        "sha256": "af472ec7456d2db96163ad3cae459e487c2596b655db867b79492695a10ee008",
+        "bytes": 3238,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-original-test-training-launch-termination-handoff.py",
+        "sha256": "b1d916e76aae4f2f806b7c253a0c5b04fa1e9c9fce8fa88fb230a83c3570f331",
+        "bytes": 6085,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-original-test-training-lease-exit-authority.py",
+        "sha256": "0de8645e7cb92e0493bb1b65f29c9b859a16c4ef5ef415aca00eabe8746dddc5",
+        "bytes": 3655,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-original-test-training-termination-authority.py",
+        "sha256": "69306fd640246c9a5c5aaccef672c1a3c820b32676e60c59a94c6c361e5c0376",
+        "bytes": 8082,
+        "extent": "complete source or test file"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2b-unfrozen-start-monitor-json-fixture.py",
+        "sha256": "805232ce807ab141a5690a334843d6f3031e1ff7d4a622f5df90a291b09de5fb",
+        "bytes": 3453,
+        "extent": "complete source or test file"
+      }
+    ],
+    "all_snapshot_count": 27
+  },
+  "fixture_migration": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,subprocess\nfrom pathlib import Path\npaths=[\"tests/supervision_fixture.py\",\"tests/test_launch_failure_report.py\",\"tests/test_native_training_caller_boundaries.py\",\"tests/test_native_training_shutdown_boundaries.py\",\"tests/test_resume_publication_contract.py\",\"tests/test_startup_native_admission_race.py\",\"tests/test_training_launch_termination_handoff.py\",\"tests/test_training_lease_exit_authority.py\",\"tests/test_training_termination_authority.py\"]\nassert len(paths)==9,paths\nsnapshots={hashlib.sha256(p.read_bytes()).hexdigest():str(p) for p in Path('docs/evidence/snapshots').glob('v1-05c2b-*.py')}\nrecords=[]\nfor p in paths:\n old=subprocess.check_output(['git','show','d915139:'+p]); new=Path(p).read_bytes(); ot,nt=ast.parse(old),ast.parse(new)\n oa=[ast.dump(n) for n in ast.walk(ot) if isinstance(n,ast.Assert)];na=[ast.dump(n) for n in ast.walk(nt) if isinstance(n,ast.Assert)]\n assert oa==na,p\n mock=lambda tree,raw:[ast.get_source_segment(raw.decode(),n) for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr.startswith('assert_')]\n om,nm=mock(ot,old),mock(nt,new); assert om==nm,p\n sha=hashlib.sha256(old).hexdigest();assert sha in snapshots,p\n if p=='tests/supervision_fixture.py':\n  defs=lambda tree:{n.name:ast.dump(n) for n in tree.body if isinstance(n,(ast.FunctionDef,ast.ClassDef))}\n  assert all(defs(nt)[k]==v for k,v in defs(ot).items())\n records.append(dict(path=p,old_sha256=sha,snapshot=snapshots[sha],new_sha256=hashlib.sha256(new).hexdigest(),original_asserts=len(oa),original_mock_asserts=len(om)))\nprint(json.dumps({'files':records,'original_asserts':sum(x['original_asserts'] for x in records),'original_mock_asserts':sum(x['original_mock_asserts'] for x in records)},indent=2))\nPY",
+    "exit_code": 0,
+    "files": [
+      {
+        "path": "tests/supervision_fixture.py",
+        "old_sha256": "81483eda1696873dd66a200ff3b06605903e70e3858c59df0dbff7f005cdf7bd",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-supervision-fixture.py",
+        "new_sha256": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f",
+        "original_asserts": 1,
+        "original_mock_asserts": 0
+      },
+      {
+        "path": "tests/test_launch_failure_report.py",
+        "old_sha256": "a34b4ac4c5b27dfc28470ba87ef16f6b73c2b2ae050450cf8b286c641f995199",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-launch-failure-report.py",
+        "new_sha256": "80cad6d5bb810a480a31d389a5e4ead896ef0be76a2f227a572c14a724853f23",
+        "original_asserts": 14,
+        "original_mock_asserts": 2
+      },
+      {
+        "path": "tests/test_native_training_caller_boundaries.py",
+        "old_sha256": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-native-training-caller-boundaries.py",
+        "new_sha256": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516",
+        "original_asserts": 31,
+        "original_mock_asserts": 0
+      },
+      {
+        "path": "tests/test_native_training_shutdown_boundaries.py",
+        "old_sha256": "26b2453c10d1eddd02868ff544a776bb000136a68cff1c87fc9e55d215eb5c5b",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-native-training-shutdown-boundaries.py",
+        "new_sha256": "97f38baf61934028324b77109105edd74386d2c54b66d90de312b2f3c48cef7d",
+        "original_asserts": 34,
+        "original_mock_asserts": 0
+      },
+      {
+        "path": "tests/test_resume_publication_contract.py",
+        "old_sha256": "4af439019f9967f6e221d239b7c54e0e698213c36672c340bb2871aea6b40ec3",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-resume-publication-contract.py",
+        "new_sha256": "0697c624125beb6f1c45525c828dc4f8c1e24e1a10a678ac13ee5f32c1cff4f6",
+        "original_asserts": 14,
+        "original_mock_asserts": 0
+      },
+      {
+        "path": "tests/test_startup_native_admission_race.py",
+        "old_sha256": "af472ec7456d2db96163ad3cae459e487c2596b655db867b79492695a10ee008",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-startup-native-admission-race.py",
+        "new_sha256": "d2ba252132437fd443606591010f226efb977e7301fe16997f0d5a4124f111f2",
+        "original_asserts": 5,
+        "original_mock_asserts": 0
+      },
+      {
+        "path": "tests/test_training_launch_termination_handoff.py",
+        "old_sha256": "b1d916e76aae4f2f806b7c253a0c5b04fa1e9c9fce8fa88fb230a83c3570f331",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-training-launch-termination-handoff.py",
+        "new_sha256": "8e1782ff07a6ba1a33b08ec04e2107d25e763343e765eb5aed5802a675d1837c",
+        "original_asserts": 19,
+        "original_mock_asserts": 3
+      },
+      {
+        "path": "tests/test_training_lease_exit_authority.py",
+        "old_sha256": "0de8645e7cb92e0493bb1b65f29c9b859a16c4ef5ef415aca00eabe8746dddc5",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-training-lease-exit-authority.py",
+        "new_sha256": "640aeb2a4bfbae6170da2009da5bddd057148af2feb6218173e08348c1fbd3ab",
+        "original_asserts": 16,
+        "original_mock_asserts": 0
+      },
+      {
+        "path": "tests/test_training_termination_authority.py",
+        "old_sha256": "69306fd640246c9a5c5aaccef672c1a3c820b32676e60c59a94c6c361e5c0376",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-training-termination-authority.py",
+        "new_sha256": "75c894f5e5550470c1229d3e48ac226cc3a844b5e5faa50ad1b120ea13641ec5",
+        "original_asserts": 38,
+        "original_mock_asserts": 0
+      }
+    ],
+    "original_asserts": 172,
+    "original_mock_asserts": 5,
+    "interpretation": "Nine explicit old fixture migrations, not unchanged whole tests. Original ordered Assert AST and five mock assertion source calls remain exact. Original helper definitions and evaluation simulation remain AST-identical. Full original files preserved.",
+    "fault_seam": "test_launch_failure_report._fail_initialization moved from receive_model_lineage_attestation to post-Popen TrainingProcess construction to preserve its original pre-RUNNING claim/late-B/rollback premises. test_training_launch_termination_handoff retains the actual original receive failure after GO; it exposed the real stale reporting defect. ready_start_ticks=2 only declares simulated READY before the unchanged later failed_identity hook, independently observed executing twice in the 18-case target.",
+    "real_cpu_fixture": "cpu_training restores actual prepare_supervised, Popen, capture_process_identity and owned reaper after inherited simulation setup. No simulated tree receipt is used as real CPU closure proof."
+  },
+  "root_tests": [
+    {
+      "path": "tests/test_training_lineage_supervision.py",
+      "cases": 2,
+      "first_green": "2 passed in 1.27s",
+      "classification": "New mechanism acceptance, no old-code red claimed.",
+      "proof": "Actual nonce pipe, controlled CPU worker PID and compute receipt, GO before receive; invalid nonce EOF while adopted child lives then actual owned STOP. Kernel namespace entry and accelerator boundaries explicitly stubbed; not kernel isolation or model-training proof."
+    },
+    {
+      "path": "tests/test_training_supervision_start_and_monitor.py",
+      "cases": 2,
+      "classification": "New mechanism acceptance, no old-code red claimed.",
+      "proof": "Real blocked READY worker plus historical unbound LAUNCHING row refuses start before compute/claim mutation. Actual leader exits with detached child alive; root-based zombie/watchdog sampler tripwires not invoked and no STOP sent.",
+      "fixture_trial": "Initial 1 failed,1 passed in 0.98s was a noncanonical JSON fixture, not a product red. Complete initial fixture 805232ce... retained; corrected canonical compact sorted encoding before freeze."
+    }
+  ],
+  "historical_verification": {
+    "epoch_1": {
+      "freeze": {
+        "current_time": "2026-09-10 20:54:17 UTC"
+      },
+      "checked_at": {
+        "current_time": "2026-09-10 21:02:12 UTC"
+      },
+      "core": {
+        "chunk_id": "ebbfd7",
+        "wall_time_seconds": 0.000001267,
+        "exit_code": 1,
+        "original_token_count": 3391,
+        "output": ".................... [ 93%]\n........................FFFF............................................ [ 95%]\n....FF.................................................................. [ 97%]\n...............................................................          [100%]\n=================================== FAILURES ===================================\n__ test_confirmed_native_launch_failure_reports_once_without_inline_provider ___\nsrc/orze/engine/launcher.py:1849: in launch\n    proc = prepare_supervised(\nsrc/orze/engine/supervised_process.py:316: in prepare_supervised\n    raise SupervisionUncertain(\"supervisor_prepare_uncertain\", process=handle) from None\nE   orze.engine.supervised_process.SupervisionUncertain: supervisor_prepare_uncertain\n\nThe above exception was the direct cause of the following exception:\ntests/test_launch_failure_report.py:41: in test_confirmed_native_launch_failure_reports_once_without_inline_provider\n    _phase(runner)\ntests/test_launch_failure_report.py:29: in _phase\n    phases.OrzePhaseMixin._launch_training(runner, [\"idea-handoff\"], True,\nsrc/orze/engine/phases.py:1642: in _launch_training\n    tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)\nsrc/orze/engine/launcher.py:1871: in launch\n    raise TerminationUnconfirmed(\"training_supervision_unconfirmed\") from launch_error\nE   orze.engine.termination_hold.TerminationUnconfirmed: training_supervision_unconfirmed\n_______ test_late_a_launch_error_cannot_report_or_spend_budget_for_new_b _______\ntests/test_launch_failure_report.py:89: in test_late_a_launch_error_cannot_report_or_spend_budget_for_new_b\n    assert captured, \"the actual log-close boundary must advance B before A error delivery\"\nE   AssertionError: the actual log-close boundary must advance B before A error delivery\nE   assert {}\n------------------------------ Captured log call -------------------------------\nWARNING  orze:launcher.py:1113 Launch log close failed: AttemptEffectBusy\n_ test_duplicate_report_does_not_rewrite_or_recount_and_reprojects_local_state _\nsrc/orze/engine/launcher.py:1849: in launch\n    proc = prepare_supervised(\nsrc/orze/engine/supervised_process.py:316: in prepare_supervised\n    raise SupervisionUncertain(\"supervisor_prepare_uncertain\", process=handle) from None\nE   orze.engine.supervised_process.SupervisionUncertain: supervisor_prepare_uncertain\n\nThe above exception was the direct cause of the following exception:\ntests/test_launch_failure_report_contract.py:18: in test_duplicate_report_does_not_rewrite_or_recount_and_reprojects_local_state\n    _phase(runner)\ntests/test_launch_failure_report.py:29: in _phase\n    phases.OrzePhaseMixin._launch_training(runner, [\"idea-handoff\"], True,\nsrc/orze/engine/phases.py:1642: in _launch_training\n    tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)\nsrc/orze/engine/launcher.py:1871: in launch\n    raise TerminationUnconfirmed(\"training_supervision_unconfirmed\") from launch_error\nE   orze.engine.termination_hold.TerminationUnconfirmed: training_supervision_unconfirmed\n____ test_native_report_never_looks_up_a_missing_authority_token[reference] ____\nsrc/orze/engine/launcher.py:1849: in launch\n    proc = prepare_supervised(\nsrc/orze/engine/supervised_process.py:316: in prepare_supervised\n    raise SupervisionUncertain(\"supervisor_prepare_uncertain\", process=handle) from None\nE   orze.engine.supervised_process.SupervisionUncertain: supervisor_prepare_uncertain\n\nThe above exception was the direct cause of the following exception:\ntests/test_launch_failure_report_contract.py:37: in test_native_report_never_looks_up_a_missing_authority_token\n    _phase(runner)\ntests/test_launch_failure_report.py:29: in _phase\n    phases.OrzePhaseMixin._launch_training(runner, [\"idea-handoff\"], True,\nsrc/orze/engine/phases.py:1642: in _launch_training\n    tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)\nsrc/orze/engine/launcher.py:1871: in launch\n    raise TerminationUnconfirmed(\"training_supervision_unconfirmed\") from launch_error\nE   orze.engine.termination_hold.TerminationUnconfirmed: training_supervision_unconfirmed\n______ test_native_report_never_looks_up_a_missing_authority_token[lake] _______\nsrc/orze/engine/launcher.py:1849: in launch\n    proc = prepare_supervised(\nsrc/orze/engine/supervised_process.py:316: in prepare_supervised\n    raise SupervisionUncertain(\"supervisor_prepare_uncertain\", process=handle) from None\nE   orze.engine.supervised_process.SupervisionUncertain: supervisor_prepare_uncertain\n\nThe above exception was the direct cause of the following exception:\ntests/test_launch_failure_report_contract.py:37: in test_native_report_never_looks_up_a_missing_authority_token\n    _phase(runner)\ntests/test_launch_failure_report.py:29: in _phase\n    phases.OrzePhaseMixin._launch_training(runner, [\"idea-handoff\"], True,\nsrc/orze/engine/phases.py:1642: in _launch_training\n    tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)\nsrc/orze/engine/launcher.py:1871: in launch\n    raise TerminationUnconfirmed(\"training_supervision_unconfirmed\") from launch_error\nE   orze.engine.termination_hold.TerminationUnconfirmed: training_supervision_unconfirmed\n____ test_report_sql_failure_holds_partial_files_and_does_not_publish_count ____\nsrc/orze/engine/launcher.py:1849: in launch\n    proc = prepare_supervised(\nsrc/orze/engine/supervised_process.py:316: in prepare_supervised\n    raise SupervisionUncertain(\"supervisor_prepare_uncertain\", process=handle) from None\nE   orze.engine.supervised_process.SupervisionUncertain: supervisor_prepare_uncertain\n\nThe above exception was the direct cause of the following exception:\ntests/test_launch_failure_report_contract.py:56: in test_report_sql_failure_holds_partial_files_and_does_not_publish_count\n    _phase(runner)\ntests/test_launch_failure_report.py:29: in _phase\n    phases.OrzePhaseMixin._launch_training(runner, [\"idea-handoff\"], True,\nsrc/orze/engine/phases.py:1642: in _launch_training\n    tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)\nsrc/orze/engine/launcher.py:1871: in launch\n    raise TerminationUnconfirmed(\"training_supervision_unconfirmed\") from launch_error\nE   orze.engine.termination_hold.TerminationUnconfirmed: training_supervision_unconfirmed\n______ test_duplicate_projection_rejects_postcommit_action_receipt_change ______\nsrc/orze/engine/launcher.py:1849: in launch\n    proc = prepare_supervised(\nsrc/orze/engine/supervised_process.py:316: in prepare_supervised\n    raise SupervisionUncertain(\"supervisor_prepare_uncertain\", process=handle) from None\nE   orze.engine.supervised_process.SupervisionUncertain: supervisor_prepare_uncertain\n\nThe above exception was the direct cause of the following exception:\ntests/test_launch_failure_report_contract.py:75: in test_duplicate_projection_rejects_postcommit_action_receipt_change\n    _phase(runner)\ntests/test_launch_failure_report.py:29: in _phase\n    phases.OrzePhaseMixin._launch_training(runner, [\"idea-handoff\"], True,\nsrc/orze/engine/phases.py:1642: in _launch_training\n    tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)\nsrc/orze/engine/launcher.py:1871: in launch\n    raise TerminationUnconfirmed(\"training_supervision_unconfirmed\") from launch_error\nE   orze.engine.termination_hold.TerminationUnconfirmed: training_supervision_unconfirmed\n_ test_actual_native_started_consumes_prepared_request_inside_its_attempt_transaction _\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_resume_publication_contract.py:36: in test_actual_native_started_consumes_prepared_request_inside_its_attempt_transaction\n    training_attempts.started(lake, tp, folder,\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/engine/training_attempts.py:299: in started\n    supervision = ready_binding(tp, idea_dir)\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/engine/training_supervision.py:18: in ready_binding\n    return _shared.ready_binding(ep, idea_dir, phase=\"training\")\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/engine/process_supervision.py:52: in ready_binding\n    raise AttemptEffectBusy(f\"{phase}_supervised_process_required\")\nE   orze.engine.attempt_effect_lock.AttemptEffectBusy: training_supervised_process_required\n_ test_native_admission_after_legacy_read_is_rechecked_before_any_publication[startup] _\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_startup_native_admission_race.py:68: in test_native_admission_after_legacy_read_is_rechecked_before_any_publication\n    assert snapshot() == captured[\"snapshot\"]\nE   KeyError: 'snapshot'\n------------------------------ Captured log call -------------------------------\nWARNING  orze:lifecycle.py:500 Failed to reconcile stale ideas: training_supervised_process_required\n_ test_native_admission_after_legacy_read_is_rechecked_before_any_publication[dead_pid] _\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_startup_native_admission_race.py:68: in test_native_admission_after_legacy_read_is_rechecked_before_any_publication\n    assert snapshot() == captured[\"snapshot\"]\nE   KeyError: 'snapshot'\n------------------------------ Captured log call -------------------------------\nWARNING  orze:lifecycle.py:789 Failed to reconcile dead-PID rows: training_supervised_process_required\n__ test_phase_never_releases_unknown_started_execution[initialization-False] ___\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_training_launch_termination_handoff.py:115: in test_phase_never_releases_unknown_started_execution\n    assert stops == [child.pid], \"the actual post-launch cleanup seam must execute\"\nE   AssertionError: the actual post-launch cleanup seam must execute\nE   assert [] == [987654301]\nE     \nE     Right contains one more item: 987654301\nE     Use -v to get more diff\n___ test_phase_never_releases_unknown_started_execution[initialization-True] ___\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_training_launch_termination_handoff.py:115: in test_phase_never_releases_unknown_started_execution\n    assert stops == [child.pid], \"the actual post-launch cleanup seam must execute\"\nE   AssertionError: the actual post-launch cleanup seam must execute\nE   assert [] == [987654301]\nE     \nE     Right contains one more item: 987654301\nE     Use -v to get more diff\n_ test_phase_never_releases_unknown_started_execution[slot_registration-False] _\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_training_launch_termination_handoff.py:115: in test_phase_never_releases_unknown_started_execution\n    assert stops == [child.pid], \"the actual post-launch cleanup seam must execute\"\nE   AssertionError: the actual post-launch cleanup seam must execute\nE   assert [] == [987654301]\nE     \nE     Right contains one more item: 987654301\nE     Use -v to get more diff\n_ test_phase_never_releases_unknown_started_execution[slot_registration-True] __\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_training_launch_termination_handoff.py:115: in test_phase_never_releases_unknown_started_execution\n    assert stops == [child.pid], \"the actual post-launch cleanup seam must execute\"\nE   AssertionError: the actual post-launch cleanup seam must execute\nE   assert [] == [987654301]\nE     \nE     Right contains one more item: 987654301\nE     Use -v to get more diff\n_ test_launch_initialization_failure_needs_confirmed_cleanup_before_terminal[False] _\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_training_termination_authority.py:219: in test_launch_initialization_failure_needs_confirmed_cleanup_before_terminal\n    assert popen_calls == reaper_calls == [True]\nE   assert [True] == []\nE     \nE     Left contains one more item: True\nE     Use -v to get more diff\n_ test_launch_initialization_failure_needs_confirmed_cleanup_before_terminal[True] _\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_training_termination_authority.py:219: in test_launch_initialization_failure_needs_confirmed_cleanup_before_terminal\n    assert popen_calls == reaper_calls == [True]\nE   assert [True] == []\nE     \nE     Left contains one more item: True\nE     Use -v to get more diff\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n16 failed, 2993 passed, 7 skipped in 420.71s (0:07:00)\n"
+      },
+      "pro": {
+        "chunk_id": "55fa21",
+        "wall_time_seconds": 0.000002568,
+        "exit_code": 0,
+        "original_token_count": 61,
+        "output": "............................................ [ 91%]\n........................................................................ [ 99%]\n........                                                                 [100%]\n944 passed in 161.52s (0:02:41)\n"
+      },
+      "paired": {
+        "exit_code": 0,
+        "result": "60 passed in 0.91s",
+        "session_id": 40174
+      },
+      "new47": {
+        "exit_code": 0,
+        "result": "47 passed in 11.75s",
+        "session_id": 59311
+      },
+      "accepted": false,
+      "reason": "16 old-fixture failures; complete 16 failed,2993 passed,7 skipped/420.71s. Excluded as final acceptance. Followup required for 6 old test files/derived scenario and started lifecycle launch-failure reporting.",
+      "inventory_reference": "2026-09-10-v1-05c2b-file-inventory.json"
+    },
+    "optional_none_draft": {
+      "initial_footer": "5 failed, 2 passed in 2.70s",
+      "cause": "Strict canonical identity comparison is dict-only, so optional None/None was incorrectly rejected by new root final launch checks. One draft cause, not five independent defects.",
+      "snapshot": "docs/evidence/snapshots/v1-05c2b-before-optional-go-launcher.py",
+      "replay": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'from pathlib import Path; import pytest; from orze.engine import launcher; path=Path(\"docs/evidence/snapshots/v1-05c2b-before-optional-go-launcher.py\"); exec(compile(path.read_bytes(),str(path),\"exec\"),vars(launcher)); raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_native_training_tree_completion.py\",\"tests/test_training_ready_go_boundary.py\",\"--tb=short\"]))'",
+        "exit_code": 1,
+        "footer": "5 failed, 2 passed in 4.60s"
+      },
+      "candidate_green": "7 passed in 3.06s"
+    },
+    "preliminary_fixture_probe": {
+      "footer": "40 failed, 8 passed in 13.83s",
+      "classification": "Unfrozen inherited fixtures using fake PID and raw-Popen assumptions under the newly real supervisor. Not 40 distinct product defects. Final explicit nine-file migrations and assertion audit recorded above."
+    },
+    "lease_receipt_regression": {
+      "footer": "2 failed, 66 passed in 20.20s",
+      "cause": "Real allocation receipt was moved too late and lost on lease-exit failure. record_ready_start restores actual allocation before lease exit while keeping worker blocked; existing start==1 assertions preserved. Not new cases in the 48."
+    },
+    "launch_report_probe": {
+      "footer": "7 failed, 1 passed in 4.31s",
+      "classification": "Epoch-1 follow-up fixture probe; not seven independent source defects."
+    },
+    "launch_report_defect": {
+      "reference": "2026-09-10-v1-05c2b-native-training-tree-review.json#/started_launch_failure_regression",
+      "cause": "Retaining launch_lifecycle in started binding exposed report consumer's wrong CLAIMED precedence. Use present running lifecycle first, never fall back on invalid running fence.",
+      "existing_test_replay": "Shared-author report records complete old report module replay: 1 failed, 11 passed in 5.33s. Actual native CPU case independently replays 1 failed in 0.73s against three complete draft modules; same cause, not another defect.",
+      "excluded_initial_cpu_fixture": "1 failed in 0.71s before report assertion: already-exited worker made STOP transport uncertain. Safe HOLD remained; explicit live-worker handshake fixes premise, original 26 Assert nodes preserved plus one handshake assertion."
+    },
+    "mistyped_target": {
+      "invalid_target_in_attempted_group": "tests/test_supervised_process_handoff.py",
+      "exit_code": 4,
+      "footer": "no tests ran in 0.01s",
+      "classification": "Incorrect filename, not a product red. Correct existing file test_supervisor_preparation_handoff.py covered by final full suite and independent bounded tests."
+    },
+    "epoch_2_repair_probe": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_launch_failure_report.py tests/test_launch_failure_report_contract.py tests/test_training_launch_termination_handoff.py tests/test_training_launch_failure_supervision.py tests/test_resume_publication_contract.py tests/test_startup_native_admission_race.py tests/test_training_termination_authority.py --tb=short",
+      "exit_code": 0,
+      "footer": "31 passed in 10.09s"
+    }
+  },
+  "scope_limits": [
+    "New native training only; actual model/GPU/provider runs, posthoc, pre/post scripts, director OS control and generic CPU research loop remain outside this slice.",
+    "READY/GO and exact tree closure use existing local Linux supervisor; unsupported platforms refuse before exec, no PGID discovery fallback for supervised handles.",
+    "Natural worker-root exit is not tree closure. Explicit STOP with root code zero cannot produce successful artifacts or automatic VRAM retry.",
+    "Unknown supervisor/process side effects remain HOLD without NOT_STARTED, release or blind retry. No persistent supervisor reconnect, restart adoption or verifiable-crash reconciliation is implemented.",
+    "Final source/config checks are outside the writer and not an atomic filesystem snapshot or protection against external post-GO writes.",
+    "Lineage CPU fixtures exercise the nonce/receipt mechanism but stub kernel namespace enforcement and GPU allocation; FD flock test is not an actual GPU lease campaign.",
+    "Worker-only FDs are bounded private inherited launch inputs, not durable recovery authority. Caller must not concurrently reassign them during preparation.",
+    "Observation selection, durable consumer ACK, cross-host ownership and quantitative research-efficiency gains are unproven."
+  ],
+  "protected_workspace": {
+    "time": {
+      "current_time": "2026-09-10 20:58:43 UTC"
+    },
+    "original_worktree_status_line_count": 281,
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+    "holdout_plaintext_read": false
+  },
+  "documentation_hash_note": "Final native-training-supervision.md is b7f8a36d20712d8a68a8cd1d891593ab59a20720860cd08237660c7ee7e2acfc. During independent epoch-2 bounded tests only this document changed from 2342cc69...; reviewers read final full text and bind post-only hash, not false pre/post doc equality.",
+  "diff_check": {"production_tests_contract_exit_code": 0, "preserved_snapshots_exit_code": 2, "reason": "The complete unchanged d915 test_launch_failure_report_contract.py snapshot preserves original trailing whitespace on line 83. Its source hash is unchanged; the evidence snapshot was not silently normalized."}
+}

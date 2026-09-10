@@ -1,0 +1,529 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2b",
+  "author": "pro_review",
+  "status": "bounded_shared_adapter_and_fixture_validation_passed",
+  "ownership": {
+    "authored_production": [
+      "src/orze/engine/process_supervision.py",
+      "src/orze/engine/training_supervision.py",
+      "src/orze/engine/evaluation_supervision.py"
+    ],
+    "authored_new_test": "tests/test_training_supervision_binding.py",
+    "fixture_migrations": [
+      "tests/supervision_fixture.py",
+      "tests/test_native_training_caller_boundaries.py",
+      "tests/test_native_training_shutdown_boundaries.py",
+      "tests/test_training_lease_exit_authority.py",
+      "tests/test_training_launch_termination_handoff.py",
+      "tests/test_launch_failure_report.py"
+    ],
+    "other_production": "launcher/training_attempts/training_completion/training_monitor/shutdown changes are owned by root; supervised_process/supervisor_worker FD extensions by core_review. This report is author evidence for the shared adapters, not independent review of those authored adapters. The final launch_failure_report lifecycle-priority fix and explicit ready_start_ticks fixture extension are also owned by root.",
+    "no_production_unwrap_or_fallback": true,
+    "no_old_assertion_edits": true,
+    "no_commit_by_author": true
+  },
+  "baseline": {
+    "core_commit": "d915139b8b1e04b3de92682a5f2622ad45ddf2e7",
+    "before_shared_evaluation": {
+      "path": "docs/evidence/snapshots/v1-05c2b-before-shared-evaluation-supervision.py",
+      "sha256": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485",
+      "provenance": "Complete original evaluation_supervision.py preserved byte-for-byte with apply_patch before extraction; no old production module was replaced on disk for testing."
+    }
+  },
+  "shared_adapter": {
+    "operations": [
+      "identity",
+      "ready_binding",
+      "bound_binding",
+      "require_closed",
+      "failure_override",
+      "bind_launch_cleanup"
+    ],
+    "protocol": "orze.linux_subreaper.v1",
+    "phases": [
+      "training",
+      "evaluation"
+    ],
+    "semantics": [
+      "Shared implementation validates the same bounded READY and TREE_CLOSED schema. Evaluation public signatures, exception strings and representative old-module outcomes are preserved by a full-snapshot comparison test.",
+      "Training identity requires an actual matching AttemptRef for task/attempt/phase. Historical native rows without protocol cannot obtain ownership merely from a raw process or return code.",
+      "Normal publication requires an exact persisted supervision binding. LAUNCHING initialization cleanup may acquire its first bound READY only with explicit confirmed STOP closure; historical missing-protocol rows remain rejected.",
+      "Worker returncode remains the real code. stop_requested or forced_cleanup blocks completed outcome; training fallback reason is training_process_tree_stopped. Explicit interrupted outcomes remain interrupted.",
+      "The shared adapter is a metadata/protocol checker, not an attempt-authority transaction, OS discovery, recovery mechanism or supervisor implementation."
+    ],
+    "new_test_sha256": "d36f1fba1e64149f4ebc87c1ed282c314dea2e0d90120bcf06bafb318f0f4109",
+    "distinct_new_cases": 18,
+    "classification": {
+      "new_mechanisms_first_green": 18,
+      "old_release_behavior_red": 0,
+      "new_api_absence_counted_as_red": 0,
+      "working_draft_red_in_owned_new_file": 0
+    },
+    "old_evaluation_controls": 13,
+    "case_groups": {
+      "identity": 4,
+      "binding_and_strict_closure": 5,
+      "provisional_cleanup": 3,
+      "stop_or_forced_zero": 2,
+      "uncertainty_latch": 1,
+      "detached_normal_zero": 1,
+      "unsupported_shared_phase": 1,
+      "complete_old_evaluation_module_equivalence": 1
+    },
+    "source_sha256": {
+      "src/orze/engine/process_supervision.py": "1fbf3dd94275722c9aa4e2e95bc581b2292c2880ed72ec5753df4ac3c49b25d3",
+      "src/orze/engine/training_supervision.py": "c3caa92b45ca88f21bb3e275e50b83d6cce7f38e0a31f737d088c4afd451b1c8",
+      "src/orze/engine/evaluation_supervision.py": "524d630ce2397f41e5b8a0fada2e10d538333923c93b97260bf78a0e5f743496",
+      "docs/evidence/snapshots/v1-05c2b-before-shared-evaluation-supervision.py": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485"
+    }
+  },
+  "fixture_migration": {
+    "classification": "Explicit test-only compatibility migration, not an old release bug and not evidence of real OS tree closure.",
+    "files": [
+      {
+        "path": "tests/supervision_fixture.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-supervision-fixture.py",
+        "old_sha256": "81483eda1696873dd66a200ff3b06605903e70e3858c59df0dbff7f005cdf7bd",
+        "snapshot_sha256": "81483eda1696873dd66a200ff3b06605903e70e3858c59df0dbff7f005cdf7bd",
+        "new_sha256": "e512d3de9f1d6506beb527763e3bf2ad9aa22bc83cf7dc7e3b6f98d09184c557",
+        "snapshot_byte_exact_baseline": true,
+        "old_assert_count": 1,
+        "assert_ast_unchanged": true,
+        "old_mock_assert_count": 0,
+        "mock_assert_source_unchanged": true,
+        "change": "Only append explicit install_training and adapt_training_reaper helpers; old SimulatedSupervisedProcess and evaluation install definitions are AST-identical."
+      },
+      {
+        "path": "tests/test_native_training_caller_boundaries.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-native-training-caller-boundaries.py",
+        "old_sha256": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+        "snapshot_sha256": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+        "new_sha256": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516",
+        "snapshot_byte_exact_baseline": true,
+        "old_assert_count": 31,
+        "assert_ast_unchanged": true,
+        "old_mock_assert_count": 0,
+        "mock_assert_source_unchanged": true,
+        "change": "Append import/install_training at the fixture boundary. Preserve the original worker start_ticks=12001 and every assertion."
+      },
+      {
+        "path": "tests/test_native_training_shutdown_boundaries.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-native-training-shutdown-boundaries.py",
+        "old_sha256": "26b2453c10d1eddd02868ff544a776bb000136a68cff1c87fc9e55d215eb5c5b",
+        "snapshot_sha256": "26b2453c10d1eddd02868ff544a776bb000136a68cff1c87fc9e55d215eb5c5b",
+        "new_sha256": "97f38baf61934028324b77109105edd74386d2c54b66d90de312b2f3c48cef7d",
+        "snapshot_byte_exact_baseline": true,
+        "old_assert_count": 34,
+        "assert_ast_unchanged": true,
+        "old_mock_assert_count": 0,
+        "mock_assert_source_unchanged": true,
+        "change": "Append explicit adapter after the selected process._terminate_and_reap override; preserve raw fake-child identity assertions and strict stop True/False."
+      },
+      {
+        "path": "tests/test_training_lease_exit_authority.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-training-lease-exit-authority.py",
+        "old_sha256": "0de8645e7cb92e0493bb1b65f29c9b859a16c4ef5ef415aca00eabe8746dddc5",
+        "snapshot_sha256": "0de8645e7cb92e0493bb1b65f29c9b859a16c4ef5ef415aca00eabe8746dddc5",
+        "new_sha256": "640aeb2a4bfbae6170da2009da5bddd057148af2feb6218173e08348c1fbd3ab",
+        "snapshot_byte_exact_baseline": true,
+        "old_assert_count": 16,
+        "assert_ast_unchanged": true,
+        "old_mock_assert_count": 0,
+        "mock_assert_source_unchanged": true,
+        "change": "Opt in only the training parameter and declare fake process identity. Raw posthoc control unchanged; preserve original start receipt, terminal and HOLD assertions."
+      }
+    ],
+    "total_old_asserts": 82,
+    "total_old_mock_assert_calls": 0,
+    "verification": "Compared full original bytes with git show d915139 and each saved snapshot; compared ast.dump of every Assert and source text of every assert_* call in corresponding AST traversal order. Existing helper class/function ASTs also match exactly. All assertions and old helper definitions are unchanged.",
+    "original_evaluation_behavior_unchanged": true,
+    "no_autouse_or_global_fallback": true,
+    "real_cpu_boundary": [
+      "tests/test_native_training_tree_completion.py::cpu_training explicitly restores real launcher.prepare_supervised, process.capture_process_identity and process._terminate_and_reap after inherited native_case setup, and uses actual subprocess.Popen/pidfds.",
+      "tests/test_training_ready_go_boundary.py imports that real CPU fixture and interleaves only real READY return/runtime attestation seams.",
+      "The existing native evaluation CPU fixture explicitly restores evaluator.prepare_supervised and actual Popen after B2 setup. Its prerequisite training remains the declared offline fixture, not a claimed real training execution.",
+      "No changes were made to those actual CPU test files by this author."
+    ],
+    "lease_start_regression": {
+      "initial": "After the explicit fixture migration, both existing training lease-exit parameters failed their original len(start_receipts)==1 assertion; Popen and stop calls had actually occurred. This was not a missing-API error or an assertion migration.",
+      "resolution": "Root retained the old allocation evidence contract: record_ready_start checks current LAUNCHING, protocol, READY, claim/revision, writes and verifies compute start inside the GPU-lease boundary. started rechecks proof and receipt before RUNNING. The two original assertions pass unchanged.",
+      "classification": "Working C2b integration regression exposed by existing tests; not additional newly authored distinct cases."
+    },
+    "epoch": "Initial four-file migration, captured with helper e512d3de; retained as epoch-1 history. See epoch2_followup for the final six-file migration and helper bc6c8df6."
+  },
+  "runs": [
+    {
+      "name": "shared_first_green",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_evaluation_supervision_binding.py tests/test_training_supervision_binding.py --tb=short",
+      "exit_code": 0,
+      "footer": "31 passed in 0.30s",
+      "classification": "18 new mechanisms plus 13 unchanged evaluation controls. Before a docstring-only correction from seven to six adapter operations; use the following captured-hash run for frozen source attribution."
+    },
+    {
+      "name": "shared_and_primitive_bounded",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_evaluation_supervision_binding.py tests/test_training_supervision_binding.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py --tb=short",
+      "exit_code": 0,
+      "footer": "54 passed in 1.67s",
+      "pre_sha256": {
+        "src/orze/engine/process_supervision.py": "1fbf3dd94275722c9aa4e2e95bc581b2292c2880ed72ec5753df4ac3c49b25d3",
+        "src/orze/engine/training_supervision.py": "c3caa92b45ca88f21bb3e275e50b83d6cce7f38e0a31f737d088c4afd451b1c8",
+        "src/orze/engine/evaluation_supervision.py": "524d630ce2397f41e5b8a0fada2e10d538333923c93b97260bf78a0e5f743496",
+        "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+        "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+        "tests/test_training_supervision_binding.py": "d36f1fba1e64149f4ebc87c1ed282c314dea2e0d90120bcf06bafb318f0f4109",
+        "tests/test_evaluation_supervision_binding.py": "e695ef536a80065d8ce22bf46c232ac50bbb930939606e5c1a25de29be2a305a",
+        "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+        "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+        "tests/test_supervised_worker_fds.py": "3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7",
+        "docs/evidence/snapshots/v1-05c2b-before-shared-evaluation-supervision.py": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485"
+      },
+      "post_sha256": {
+        "src/orze/engine/process_supervision.py": "1fbf3dd94275722c9aa4e2e95bc581b2292c2880ed72ec5753df4ac3c49b25d3",
+        "src/orze/engine/training_supervision.py": "c3caa92b45ca88f21bb3e275e50b83d6cce7f38e0a31f737d088c4afd451b1c8",
+        "src/orze/engine/evaluation_supervision.py": "524d630ce2397f41e5b8a0fada2e10d538333923c93b97260bf78a0e5f743496",
+        "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+        "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+        "tests/test_training_supervision_binding.py": "d36f1fba1e64149f4ebc87c1ed282c314dea2e0d90120bcf06bafb318f0f4109",
+        "tests/test_evaluation_supervision_binding.py": "e695ef536a80065d8ce22bf46c232ac50bbb930939606e5c1a25de29be2a305a",
+        "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+        "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+        "tests/test_supervised_worker_fds.py": "3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7",
+        "docs/evidence/snapshots/v1-05c2b-before-shared-evaluation-supervision.py": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485"
+      },
+      "all_pre_post_identical": true,
+      "classification": "Bounded author test run; includes non-authored primitive/FD tests, overlaps other targets, not a full-suite result."
+    },
+    {
+      "name": "fixture_first_candidate",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_native_training_caller_boundaries.py tests/test_artifact_snapshot_contract.py tests/test_native_training_shutdown_boundaries.py tests/test_training_lease_exit_authority.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_evaluation_supervision_binding.py tests/test_native_eval_tree_completion.py tests/test_evaluation_supervision_protocol.py tests/test_evaluation_ready_go_boundary.py tests/test_evaluation_ready_go_attestation.py tests/test_evaluation_supervision_shutdown.py --tb=short",
+      "exit_code": 1,
+      "footer": "2 failed, 66 passed in 20.20s",
+      "failures": [
+        "tests/test_training_lease_exit_authority.py::test_created_child_requires_cleanup_after_lease_exit_failure[False-training]",
+        "tests/test_training_lease_exit_authority.py::test_created_child_requires_cleanup_after_lease_exit_failure[True-training]"
+      ],
+      "classification": "Working production was not globally frozen. Both original start==1 assertions failed with zero actual start receipts; remaining C2a40/native caller/artifact/shutdown/posthoc cases passed. This candidate result is not replaced by the final run."
+    },
+    {
+      "name": "additional_candidate",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_native_artifact_publication.py tests/test_training_intent_cleanup.py tests/test_native_training_tree_completion.py tests/test_training_ready_go_boundary.py --tb=short",
+      "exit_code": 0,
+      "footer": "27 passed in 9.71s",
+      "classification": "Native artifact/intent plus actual CPU training4 and GO3; candidate production, not a full freeze. Included again in final95."
+    },
+    {
+      "name": "inherited_candidate",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_bound_artifact_root.py tests/test_cleanup_framework_authority.py tests/test_completion_event_authority.py tests/test_completion_event_consumers.py tests/test_completion_event_loop_branches.py tests/test_gc_native_authority.py tests/test_native_interruption_wrapper.py tests/test_native_startup_recovery.py tests/test_native_training_repair_status.py tests/test_observation_snapshot_contract.py tests/test_replication_execution_slots.py tests/test_replication_native_dispatch.py tests/test_replication_optional_category.py tests/test_replication_requests.py tests/test_replication_scope_binding.py tests/test_training_private_failure_authority.py --tb=short",
+      "exit_code": 0,
+      "footer": "81 passed in 39.34s",
+      "test_files": 16,
+      "classification": "Remaining inherited consumer fixtures passed without further edits; no per-run source inventory was captured. Not a final full-suite result or additional new tests."
+    },
+    {
+      "name": "final_bounded_fixture_and_cpu",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_native_training_caller_boundaries.py tests/test_artifact_snapshot_contract.py tests/test_native_training_shutdown_boundaries.py tests/test_training_lease_exit_authority.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_evaluation_supervision_binding.py tests/test_native_eval_tree_completion.py tests/test_evaluation_supervision_protocol.py tests/test_evaluation_ready_go_boundary.py tests/test_evaluation_ready_go_attestation.py tests/test_evaluation_supervision_shutdown.py tests/test_native_artifact_publication.py tests/test_training_intent_cleanup.py tests/test_native_training_tree_completion.py tests/test_training_ready_go_boundary.py --tb=short",
+      "exit_code": 0,
+      "footer": "95 passed in 30.33s",
+      "pre_sha256": {
+        "src/orze/engine/process_supervision.py": "1fbf3dd94275722c9aa4e2e95bc581b2292c2880ed72ec5753df4ac3c49b25d3",
+        "src/orze/engine/training_supervision.py": "c3caa92b45ca88f21bb3e275e50b83d6cce7f38e0a31f737d088c4afd451b1c8",
+        "src/orze/engine/evaluation_supervision.py": "524d630ce2397f41e5b8a0fada2e10d538333923c93b97260bf78a0e5f743496",
+        "src/orze/engine/launcher.py": "5562e31474b10483531fa8b2f1a9828c7647a8eacebd1df204f74c3c02901265",
+        "src/orze/engine/training_attempts.py": "9354a4f0899a53cdb15a5a6bb42054f1f0a72b0da8e5fb527a3cd0939b9c6afd",
+        "src/orze/engine/training_completion.py": "6546f9773f6b890d3200786d0596cd2662f402ac5c425c68e6f5d1b45f63a31c",
+        "src/orze/engine/training_monitor.py": "3100c1ef2e3f0722489f424241f9a547da566d54e88e73b88cee313f48ae2abf",
+        "src/orze/engine/shutdown_publication.py": "e78ffe9d29405fd0e55e361af5f01cbf70b830a840896234744652063789a51f",
+        "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+        "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+        "tests/supervision_fixture.py": "e512d3de9f1d6506beb527763e3bf2ad9aa22bc83cf7dc7e3b6f98d09184c557",
+        "tests/test_native_training_caller_boundaries.py": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516",
+        "tests/test_artifact_snapshot_contract.py": "00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359",
+        "tests/test_native_training_shutdown_boundaries.py": "97f38baf61934028324b77109105edd74386d2c54b66d90de312b2f3c48cef7d",
+        "tests/test_training_lease_exit_authority.py": "640aeb2a4bfbae6170da2009da5bddd057148af2feb6218173e08348c1fbd3ab",
+        "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+        "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+        "tests/test_evaluation_supervision_binding.py": "e695ef536a80065d8ce22bf46c232ac50bbb930939606e5c1a25de29be2a305a",
+        "tests/test_native_eval_tree_completion.py": "a4eb67edd8da6f821bd74690acc03117cdf4a9d4b92c2336e560184d712ae03e",
+        "tests/test_evaluation_supervision_protocol.py": "8b5f4b67d5dd1ff504814485efd5a088b616591a2a3384377b7549afa3251731",
+        "tests/test_evaluation_ready_go_boundary.py": "30a57eb26b5afe44b593aa66171debedaa9dc099d36ed6cf50e2c9448740f7ac",
+        "tests/test_evaluation_ready_go_attestation.py": "c1a769a70b4429c5d1b6735fb6684b757be8dfd12254dc4be6c5297e525d161c",
+        "tests/test_evaluation_supervision_shutdown.py": "4ae1848681e3c31d18e17addc0c3e76721afc40e7c1370a6171c4788b7c38e0b",
+        "tests/test_native_artifact_publication.py": "911a949f083c43a94cc45bb9e781f377289e53b2269a1ee1d58de8cdba892643",
+        "tests/test_training_intent_cleanup.py": "3f3963a89837bb0477f51b4a432645820b92a8039de26bb48fad71cfd3c996ef",
+        "tests/test_native_training_tree_completion.py": "3ce22b8d37c29e918b7da69c02f973cfe993b943304f9b312232bf4c019138eb",
+        "tests/test_training_ready_go_boundary.py": "3f76dbf2aed733f817ce907e79afceff81f03e3138430935fdadc0b29df1b9d7"
+      },
+      "post_sha256": {
+        "src/orze/engine/process_supervision.py": "1fbf3dd94275722c9aa4e2e95bc581b2292c2880ed72ec5753df4ac3c49b25d3",
+        "src/orze/engine/training_supervision.py": "c3caa92b45ca88f21bb3e275e50b83d6cce7f38e0a31f737d088c4afd451b1c8",
+        "src/orze/engine/evaluation_supervision.py": "524d630ce2397f41e5b8a0fada2e10d538333923c93b97260bf78a0e5f743496",
+        "src/orze/engine/launcher.py": "5562e31474b10483531fa8b2f1a9828c7647a8eacebd1df204f74c3c02901265",
+        "src/orze/engine/training_attempts.py": "9354a4f0899a53cdb15a5a6bb42054f1f0a72b0da8e5fb527a3cd0939b9c6afd",
+        "src/orze/engine/training_completion.py": "6546f9773f6b890d3200786d0596cd2662f402ac5c425c68e6f5d1b45f63a31c",
+        "src/orze/engine/training_monitor.py": "3100c1ef2e3f0722489f424241f9a547da566d54e88e73b88cee313f48ae2abf",
+        "src/orze/engine/shutdown_publication.py": "e78ffe9d29405fd0e55e361af5f01cbf70b830a840896234744652063789a51f",
+        "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+        "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+        "tests/supervision_fixture.py": "e512d3de9f1d6506beb527763e3bf2ad9aa22bc83cf7dc7e3b6f98d09184c557",
+        "tests/test_native_training_caller_boundaries.py": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516",
+        "tests/test_artifact_snapshot_contract.py": "00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359",
+        "tests/test_native_training_shutdown_boundaries.py": "97f38baf61934028324b77109105edd74386d2c54b66d90de312b2f3c48cef7d",
+        "tests/test_training_lease_exit_authority.py": "640aeb2a4bfbae6170da2009da5bddd057148af2feb6218173e08348c1fbd3ab",
+        "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+        "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+        "tests/test_evaluation_supervision_binding.py": "e695ef536a80065d8ce22bf46c232ac50bbb930939606e5c1a25de29be2a305a",
+        "tests/test_native_eval_tree_completion.py": "a4eb67edd8da6f821bd74690acc03117cdf4a9d4b92c2336e560184d712ae03e",
+        "tests/test_evaluation_supervision_protocol.py": "8b5f4b67d5dd1ff504814485efd5a088b616591a2a3384377b7549afa3251731",
+        "tests/test_evaluation_ready_go_boundary.py": "30a57eb26b5afe44b593aa66171debedaa9dc099d36ed6cf50e2c9448740f7ac",
+        "tests/test_evaluation_ready_go_attestation.py": "c1a769a70b4429c5d1b6735fb6684b757be8dfd12254dc4be6c5297e525d161c",
+        "tests/test_evaluation_supervision_shutdown.py": "4ae1848681e3c31d18e17addc0c3e76721afc40e7c1370a6171c4788b7c38e0b",
+        "tests/test_native_artifact_publication.py": "911a949f083c43a94cc45bb9e781f377289e53b2269a1ee1d58de8cdba892643",
+        "tests/test_training_intent_cleanup.py": "3f3963a89837bb0477f51b4a432645820b92a8039de26bb48fad71cfd3c996ef",
+        "tests/test_native_training_tree_completion.py": "3ce22b8d37c29e918b7da69c02f973cfe993b943304f9b312232bf4c019138eb",
+        "tests/test_training_ready_go_boundary.py": "3f76dbf2aed733f817ce907e79afceff81f03e3138430935fdadc0b29df1b9d7"
+      },
+      "all_pre_post_identical": true,
+      "inventory_files": 27,
+      "classification": "Bounded validation on unchanged final candidate sources (launcher5562e314/training_attempts9354a4f0). Includes complete C2a40, actual training CPU4 and GO3, original two lease allocation assertions and related consumers. Not the main agent's Core/Pro/paired full suites. This is now explicitly the epoch-1 bounded candidate, superseded by the epoch-2 107-case result below; its original hashes and outcome are retained unchanged."
+    }
+  ],
+  "read_only_review_of_other_authors": {
+    "checks": [
+      "The worker-only FD extension validates descriptors before Popen and closes supervisor copies within owned-drain handling before READY; shared lease descriptors remain held. No protocol shape is broadened.",
+      "record_ready_start validates protocol/READY/current claim/revision before allocation evidence, without advertising IN_PROGRESS or GO. started retains exact worker PID/start_ticks validation and final receipt checking.",
+      "Training native current/finish/failed-launch/requeue/shutdown paths select the training adapter; new native historical bindings are not upgraded from raw return codes. Actual legal GO and closure behavior is tested separately by root/runtime authors.",
+      "The specific shutdown second-check import concern raised during an earlier visual read was withdrawn after exact source re-read: it reuses the phase-selected require_closed and only imports canonical_identity_equal. It was not a reproduced defect and is not counted as a draft red."
+    ],
+    "conclusion": "No remaining blocker identified within the executed shared-adapter/explicit-fixture scope. Full integration and final whole-repository validation remain owned by the main agent."
+  },
+  "limitations": [
+    "New shared18 use explicit protocol doubles and real metadata checks, not actual OS supervision proof.",
+    "Training/evaluation supervisor extension does not imply generic CPU policy loop, automatic restart recovery, natural closure of legacy processes, or director/posthoc/pre/post-script supervision.",
+    "No GPU, scientific workload, provider call, holdout access or real user process signalling was used. Real subprocess tests are only isolated temporary CPU fixtures.",
+    "Run counts overlap and must not be added as distinct regressions. This report does not claim whole-suite final results or remote release completion."
+  ],
+  "epoch2_followup": {
+    "status": "passed_bounded_final_source_review_not_whole_suite",
+    "cause": "The main agent's epoch-1 whole-suite run uncovered additional old OS-double fixtures and a real C2b binding-shape integration regression in an unchanged consumer. This author did not run or claim that whole suite.",
+    "fixture_migration": {
+      "edited_files": [
+        {
+          "path": "tests/supervision_fixture.py",
+          "snapshot": "docs/evidence/snapshots/v1-05c2b-original-supervision-fixture.py",
+          "old_sha256": "81483eda1696873dd66a200ff3b06605903e70e3858c59df0dbff7f005cdf7bd",
+          "snapshot_sha256": "81483eda1696873dd66a200ff3b06605903e70e3858c59df0dbff7f005cdf7bd",
+          "new_sha256": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f",
+          "snapshot_byte_exact_baseline": true,
+          "old_assert_count": 1,
+          "assert_ast_unchanged": true,
+          "old_mock_assert_count": 0,
+          "mock_assert_source_unchanged": true,
+          "change": "Only append explicit install_training and adapt_training_reaper helpers; old SimulatedSupervisedProcess and evaluation install definitions are AST-identical. Root subsequently added optional ready_start_ticks solely for an explicit later-failing identity fixture; the default still reads the existing capture stub. The original evaluation helper definitions remain unchanged."
+        },
+        {
+          "path": "tests/test_native_training_caller_boundaries.py",
+          "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-native-training-caller-boundaries.py",
+          "old_sha256": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+          "snapshot_sha256": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+          "new_sha256": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516",
+          "snapshot_byte_exact_baseline": true,
+          "old_assert_count": 31,
+          "assert_ast_unchanged": true,
+          "old_mock_assert_count": 0,
+          "mock_assert_source_unchanged": true,
+          "change": "Append import/install_training at the fixture boundary. Preserve the original worker start_ticks=12001 and every assertion."
+        },
+        {
+          "path": "tests/test_native_training_shutdown_boundaries.py",
+          "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-native-training-shutdown-boundaries.py",
+          "old_sha256": "26b2453c10d1eddd02868ff544a776bb000136a68cff1c87fc9e55d215eb5c5b",
+          "snapshot_sha256": "26b2453c10d1eddd02868ff544a776bb000136a68cff1c87fc9e55d215eb5c5b",
+          "new_sha256": "97f38baf61934028324b77109105edd74386d2c54b66d90de312b2f3c48cef7d",
+          "snapshot_byte_exact_baseline": true,
+          "old_assert_count": 34,
+          "assert_ast_unchanged": true,
+          "old_mock_assert_count": 0,
+          "mock_assert_source_unchanged": true,
+          "change": "Append explicit adapter after the selected process._terminate_and_reap override; preserve raw fake-child identity assertions and strict stop True/False."
+        },
+        {
+          "path": "tests/test_training_lease_exit_authority.py",
+          "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-training-lease-exit-authority.py",
+          "old_sha256": "0de8645e7cb92e0493bb1b65f29c9b859a16c4ef5ef415aca00eabe8746dddc5",
+          "snapshot_sha256": "0de8645e7cb92e0493bb1b65f29c9b859a16c4ef5ef415aca00eabe8746dddc5",
+          "new_sha256": "640aeb2a4bfbae6170da2009da5bddd057148af2feb6218173e08348c1fbd3ab",
+          "snapshot_byte_exact_baseline": true,
+          "old_assert_count": 16,
+          "assert_ast_unchanged": true,
+          "old_mock_assert_count": 0,
+          "mock_assert_source_unchanged": true,
+          "change": "Opt in only the training parameter and declare fake process identity. Raw posthoc control unchanged; preserve original start receipt, terminal and HOLD assertions."
+        },
+        {
+          "path": "tests/test_training_launch_termination_handoff.py",
+          "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-training-launch-termination-handoff.py",
+          "old_sha256": "b1d916e76aae4f2f806b7c253a0c5b04fa1e9c9fce8fa88fb230a83c3570f331",
+          "snapshot_sha256": "b1d916e76aae4f2f806b7c253a0c5b04fa1e9c9fce8fa88fb230a83c3570f331",
+          "new_sha256": "8e1782ff07a6ba1a33b08ec04e2107d25e763343e765eb5aed5802a675d1837c",
+          "snapshot_byte_exact_baseline": true,
+          "old_assert_count": 19,
+          "assert_ast_unchanged": true,
+          "old_mock_assert_count": 3,
+          "mock_assert_source_unchanged": true,
+          "change": "Add install_training at the scenario boundary, and explicitly adapt both post-fixture raw launcher/process reapers. Keep the existing initialization receive failure after GO, so its original FAILED assertion still exposes the real failure-report consumer regression."
+        },
+        {
+          "path": "tests/test_launch_failure_report.py",
+          "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-launch-failure-report.py",
+          "old_sha256": "a34b4ac4c5b27dfc28470ba87ef16f6b73c2b2ae050450cf8b286c641f995199",
+          "snapshot_sha256": "a34b4ac4c5b27dfc28470ba87ef16f6b73c2b2ae050450cf8b286c641f995199",
+          "new_sha256": "80cad6d5bb810a480a31d389a5e4ead896ef0be76a2f227a572c14a724853f23",
+          "snapshot_byte_exact_baseline": true,
+          "old_assert_count": 14,
+          "assert_ast_unchanged": true,
+          "old_mock_assert_count": 2,
+          "mock_assert_source_unchanged": true,
+          "change": "Add explicit launcher reaper adaptation. Move _fail_initialization injection from parent receive_model_lineage_attestation to the public post-Popen TrainingProcess constructor, preserving its original pre-RUNNING/CLAIMED initialization-failure and rollover contract. This is a disclosed fault-seam migration, not byte-identical test preservation."
+        }
+      ],
+      "edited_file_count": 6,
+      "total_old_asserts": 115,
+      "total_old_mock_assert_calls": 5,
+      "all_assert_ast_and_mock_source_preserved": true,
+      "all_original_snapshots_byte_exact_d915": true,
+      "unchanged_control": {
+        "path": "tests/test_launch_failure_report_contract.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2b-original-test-launch-failure-report-contract.py",
+        "sha256": "c25bef0fa232f1ad2f99075fa1d53c420573d68d838a898c754404f3fd21e6ae",
+        "old_assert_count": 16,
+        "old_mock_assert_count": 2,
+        "file_byte_identical": true,
+        "note": "Audited and run as a control; not counted as a seventh migrated file."
+      },
+      "root_other_migrations": "Root separately owns the resume_publication_contract/startup_native_admission_race/training_termination_authority fixture migrations. Their whole-slice nine-file count is not derived from or independently re-audited in this report.",
+      "test_only_scope": "No production unwrap/autouse/raw-process fallback. Real CPU fixtures still explicitly restore production prepare/capture/reaper; old evaluation SimulatedSupervisedProcess and install definitions remain AST-identical."
+    },
+    "consumer_regression": {
+      "path": "src/orze/engine/launch_failure_report.py",
+      "original_sha256": "c35998c0389d949b55b52ce78f7b6b33bcf0cf7250c6623583bca310d255fda9",
+      "final_sha256": "cdc786d595f45b51613106594ee60d85cbeee19ba0440bf602406c768fe335c4",
+      "snapshot": "docs/evidence/snapshots/v1-05c2b-before-launch-failure-lifecycle-report.py",
+      "snapshot_complete_original_module": true,
+      "explanation": "C2b started now preserves prelaunch launch_lifecycle and claim_sha256 alongside the published running lifecycle. The old report function selected CLAIMED solely on launch_lifecycle presence, returning stale for the actual already-started and confirmed-failed source. Its task remained IN_PROGRESS despite a failed compute terminal.",
+      "fix_review": "Root now checks key presence of lifecycle first and requires exact current IN_PROGRESS fence equality. Malformed/changed lifecycle is rejected with no fallback to CLAIMED; only an absent lifecycle allows the old exact claim+launch-lifecycle path. No provider is introduced and the existing source/dependency/action receipt checks remain.",
+      "classification": "Working C2b integration regression exercised by an unchanged existing assertion. This is not a claim that the complete d915 release exhibited the same problem, and is not an additional newly authored test."
+    },
+    "runs": [
+      {
+        "name": "migrated_existing_consumer_before_fix",
+        "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_training_launch_termination_handoff.py tests/test_launch_failure_report.py tests/test_launch_failure_report_contract.py --tb=short",
+        "exit_code": 1,
+        "footer": "1 failed, 11 passed in 5.93s",
+        "test_sha256": {
+          "tests/test_training_launch_termination_handoff.py": "8e1782ff07a6ba1a33b08ec04e2107d25e763343e765eb5aed5802a675d1837c",
+          "tests/test_launch_failure_report.py": "80cad6d5bb810a480a31d389a5e4ead896ef0be76a2f227a572c14a724853f23",
+          "tests/test_launch_failure_report_contract.py": "c25bef0fa232f1ad2f99075fa1d53c420573d68d838a898c754404f3fd21e6ae"
+        },
+        "report_source_sha256": "c35998c0389d949b55b52ce78f7b6b33bcf0cf7250c6623583bca310d255fda9",
+        "failure": "test_phase_never_releases_unknown_started_execution[initialization-True]: IN_PROGRESS != FAILED",
+        "note": "After the explicit fixture migration, only the actual GO-after-start failure-report consumer assertion failed. Not a missing-API or raw-fake-PID failure."
+      },
+      {
+        "name": "complete_original_report_in_memory_replay",
+        "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nimport orze.engine.launch_failure_report as report\nsnapshot = Path('docs/evidence/snapshots/v1-05c2b-before-launch-failure-lifecycle-report.py')\nexec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), report.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_training_launch_termination_handoff.py', 'tests/test_launch_failure_report.py', 'tests/test_launch_failure_report_contract.py', '--tb=short']))\nPY",
+        "exit_code": 1,
+        "footer": "1 failed, 11 passed in 5.33s",
+        "snapshot_sha256": "c35998c0389d949b55b52ce78f7b6b33bcf0cf7250c6623583bca310d255fda9",
+        "failure": "test_phase_never_releases_unknown_started_execution[initialization-True]: IN_PROGRESS != FAILED",
+        "disk_report_sha256_before_and_after": "cdc786d595f45b51613106594ee60d85cbeee19ba0440bf602406c768fe335c4",
+        "note": "Executes the complete old report module in its imported namespace before test collection, while retaining current C2b dependencies and explicitly migrated fixtures. No disk production module replacement and no claim of a full old-release replay."
+      },
+      {
+        "name": "final_epoch2_bounded",
+        "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_native_training_caller_boundaries.py tests/test_artifact_snapshot_contract.py tests/test_native_training_shutdown_boundaries.py tests/test_training_lease_exit_authority.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_evaluation_supervision_binding.py tests/test_native_eval_tree_completion.py tests/test_evaluation_supervision_protocol.py tests/test_evaluation_ready_go_boundary.py tests/test_evaluation_ready_go_attestation.py tests/test_evaluation_supervision_shutdown.py tests/test_native_artifact_publication.py tests/test_training_intent_cleanup.py tests/test_native_training_tree_completion.py tests/test_training_ready_go_boundary.py tests/test_training_launch_termination_handoff.py tests/test_launch_failure_report.py tests/test_launch_failure_report_contract.py --tb=short",
+        "exit_code": 0,
+        "footer": "107 passed in 67.96s (0:01:07)",
+        "pre_sha256": {
+          "src/orze/engine/process_supervision.py": "1fbf3dd94275722c9aa4e2e95bc581b2292c2880ed72ec5753df4ac3c49b25d3",
+          "src/orze/engine/training_supervision.py": "c3caa92b45ca88f21bb3e275e50b83d6cce7f38e0a31f737d088c4afd451b1c8",
+          "src/orze/engine/evaluation_supervision.py": "524d630ce2397f41e5b8a0fada2e10d538333923c93b97260bf78a0e5f743496",
+          "src/orze/engine/launcher.py": "5562e31474b10483531fa8b2f1a9828c7647a8eacebd1df204f74c3c02901265",
+          "src/orze/engine/training_attempts.py": "9354a4f0899a53cdb15a5a6bb42054f1f0a72b0da8e5fb527a3cd0939b9c6afd",
+          "src/orze/engine/training_completion.py": "6546f9773f6b890d3200786d0596cd2662f402ac5c425c68e6f5d1b45f63a31c",
+          "src/orze/engine/training_monitor.py": "3100c1ef2e3f0722489f424241f9a547da566d54e88e73b88cee313f48ae2abf",
+          "src/orze/engine/shutdown_publication.py": "e78ffe9d29405fd0e55e361af5f01cbf70b830a840896234744652063789a51f",
+          "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+          "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+          "tests/supervision_fixture.py": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f",
+          "tests/test_native_training_caller_boundaries.py": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516",
+          "tests/test_artifact_snapshot_contract.py": "00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359",
+          "tests/test_native_training_shutdown_boundaries.py": "97f38baf61934028324b77109105edd74386d2c54b66d90de312b2f3c48cef7d",
+          "tests/test_training_lease_exit_authority.py": "640aeb2a4bfbae6170da2009da5bddd057148af2feb6218173e08348c1fbd3ab",
+          "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+          "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+          "tests/test_evaluation_supervision_binding.py": "e695ef536a80065d8ce22bf46c232ac50bbb930939606e5c1a25de29be2a305a",
+          "tests/test_native_eval_tree_completion.py": "a4eb67edd8da6f821bd74690acc03117cdf4a9d4b92c2336e560184d712ae03e",
+          "tests/test_evaluation_supervision_protocol.py": "8b5f4b67d5dd1ff504814485efd5a088b616591a2a3384377b7549afa3251731",
+          "tests/test_evaluation_ready_go_boundary.py": "30a57eb26b5afe44b593aa66171debedaa9dc099d36ed6cf50e2c9448740f7ac",
+          "tests/test_evaluation_ready_go_attestation.py": "c1a769a70b4429c5d1b6735fb6684b757be8dfd12254dc4be6c5297e525d161c",
+          "tests/test_evaluation_supervision_shutdown.py": "4ae1848681e3c31d18e17addc0c3e76721afc40e7c1370a6171c4788b7c38e0b",
+          "tests/test_native_artifact_publication.py": "911a949f083c43a94cc45bb9e781f377289e53b2269a1ee1d58de8cdba892643",
+          "tests/test_training_intent_cleanup.py": "3f3963a89837bb0477f51b4a432645820b92a8039de26bb48fad71cfd3c996ef",
+          "tests/test_native_training_tree_completion.py": "3ce22b8d37c29e918b7da69c02f973cfe993b943304f9b312232bf4c019138eb",
+          "tests/test_training_ready_go_boundary.py": "3f76dbf2aed733f817ce907e79afceff81f03e3138430935fdadc0b29df1b9d7",
+          "src/orze/engine/launch_failure_report.py": "cdc786d595f45b51613106594ee60d85cbeee19ba0440bf602406c768fe335c4",
+          "tests/test_training_launch_termination_handoff.py": "8e1782ff07a6ba1a33b08ec04e2107d25e763343e765eb5aed5802a675d1837c",
+          "tests/test_launch_failure_report.py": "80cad6d5bb810a480a31d389a5e4ead896ef0be76a2f227a572c14a724853f23",
+          "tests/test_launch_failure_report_contract.py": "c25bef0fa232f1ad2f99075fa1d53c420573d68d838a898c754404f3fd21e6ae"
+        },
+        "post_sha256": {
+          "src/orze/engine/process_supervision.py": "1fbf3dd94275722c9aa4e2e95bc581b2292c2880ed72ec5753df4ac3c49b25d3",
+          "src/orze/engine/training_supervision.py": "c3caa92b45ca88f21bb3e275e50b83d6cce7f38e0a31f737d088c4afd451b1c8",
+          "src/orze/engine/evaluation_supervision.py": "524d630ce2397f41e5b8a0fada2e10d538333923c93b97260bf78a0e5f743496",
+          "src/orze/engine/launcher.py": "5562e31474b10483531fa8b2f1a9828c7647a8eacebd1df204f74c3c02901265",
+          "src/orze/engine/training_attempts.py": "9354a4f0899a53cdb15a5a6bb42054f1f0a72b0da8e5fb527a3cd0939b9c6afd",
+          "src/orze/engine/training_completion.py": "6546f9773f6b890d3200786d0596cd2662f402ac5c425c68e6f5d1b45f63a31c",
+          "src/orze/engine/training_monitor.py": "3100c1ef2e3f0722489f424241f9a547da566d54e88e73b88cee313f48ae2abf",
+          "src/orze/engine/shutdown_publication.py": "e78ffe9d29405fd0e55e361af5f01cbf70b830a840896234744652063789a51f",
+          "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+          "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+          "tests/supervision_fixture.py": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f",
+          "tests/test_native_training_caller_boundaries.py": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516",
+          "tests/test_artifact_snapshot_contract.py": "00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359",
+          "tests/test_native_training_shutdown_boundaries.py": "97f38baf61934028324b77109105edd74386d2c54b66d90de312b2f3c48cef7d",
+          "tests/test_training_lease_exit_authority.py": "640aeb2a4bfbae6170da2009da5bddd057148af2feb6218173e08348c1fbd3ab",
+          "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+          "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+          "tests/test_evaluation_supervision_binding.py": "e695ef536a80065d8ce22bf46c232ac50bbb930939606e5c1a25de29be2a305a",
+          "tests/test_native_eval_tree_completion.py": "a4eb67edd8da6f821bd74690acc03117cdf4a9d4b92c2336e560184d712ae03e",
+          "tests/test_evaluation_supervision_protocol.py": "8b5f4b67d5dd1ff504814485efd5a088b616591a2a3384377b7549afa3251731",
+          "tests/test_evaluation_ready_go_boundary.py": "30a57eb26b5afe44b593aa66171debedaa9dc099d36ed6cf50e2c9448740f7ac",
+          "tests/test_evaluation_ready_go_attestation.py": "c1a769a70b4429c5d1b6735fb6684b757be8dfd12254dc4be6c5297e525d161c",
+          "tests/test_evaluation_supervision_shutdown.py": "4ae1848681e3c31d18e17addc0c3e76721afc40e7c1370a6171c4788b7c38e0b",
+          "tests/test_native_artifact_publication.py": "911a949f083c43a94cc45bb9e781f377289e53b2269a1ee1d58de8cdba892643",
+          "tests/test_training_intent_cleanup.py": "3f3963a89837bb0477f51b4a432645820b92a8039de26bb48fad71cfd3c996ef",
+          "tests/test_native_training_tree_completion.py": "3ce22b8d37c29e918b7da69c02f973cfe993b943304f9b312232bf4c019138eb",
+          "tests/test_training_ready_go_boundary.py": "3f76dbf2aed733f817ce907e79afceff81f03e3138430935fdadc0b29df1b9d7",
+          "src/orze/engine/launch_failure_report.py": "cdc786d595f45b51613106594ee60d85cbeee19ba0440bf602406c768fe335c4",
+          "tests/test_training_launch_termination_handoff.py": "8e1782ff07a6ba1a33b08ec04e2107d25e763343e765eb5aed5802a675d1837c",
+          "tests/test_launch_failure_report.py": "80cad6d5bb810a480a31d389a5e4ead896ef0be76a2f227a572c14a724853f23",
+          "tests/test_launch_failure_report_contract.py": "c25bef0fa232f1ad2f99075fa1d53c420573d68d838a898c754404f3fd21e6ae"
+        },
+        "all_pre_post_identical": true,
+        "inventory_files": 31,
+        "note": "Deduplicated union of the previous 95 target and the 12 failure-report/handoff cases. Includes complete C2a40 and actual CPU training4/GO3. Does not include or stand in for the main agent's final Core/Pro/paired full runs."
+      }
+    ],
+    "conclusion": "The actual GO-after-start failure now reports FAILED and counts once; prior CLAIMED fault/duplicate/late-delivery/SQL-failure assertions remain intact. No remaining blocker identified in this bounded review."
+  }
+}

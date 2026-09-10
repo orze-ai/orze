@@ -1,0 +1,173 @@
+{
+  "schema": 1,
+  "milestone": "V1-05C2b",
+  "role": "independent review of root training wiring and sibling shared adapters",
+  "status": "Final epoch-2 bounded verification complete: 22 passed on the report-repaired source and explicitly migrated fixture helper. Epoch-1 57-test verification is retained as historical, not current whole-suite acceptance. Whole Core/Pro verification belongs to root.",
+  "scope": "Reviewer did not edit integration production, shared adapters or existing tests. Its separately authored two supervisor primitive modules remain frozen and are not represented as independently authored integration.",
+  "findings": [
+    {
+      "test": "tests/test_training_phase_routing.py",
+      "sha256": "fb0891dcbb0f2ddb3ff102db3a66b9aea21c06e33bc458bd1efa6e9f0b003a1a",
+      "cases": 2,
+      "classification": "New C2b draft routing regressions, not released early-artifact publication defects.",
+      "details": "Actual supervised native training leader exits 0 while an authenticated detached artifact writer remains alive. With is_posthoc=True and timeout 0, check_active bypasses native current/monitor and actually sends STOP using phase posthoc, creating a wrongly-labelled durable stop request. Both retained-ref and tokenless-existing-native cases fail before any later assertions. The real supervisor itself still blocks integer completion; tests do not claim artifact acceptance while the writer lives.",
+      "first_run": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_training_phase_routing.py --tb=short",
+        "exit_code": 1,
+        "failed": 2,
+        "seconds": 1.21
+      }
+    },
+    {
+      "test": "tests/test_training_resume_go.py",
+      "sha256": "2c13b2c996edffa5849e43a74af40ca4ad4c05e5aa7fe6d76515f13fa6b6be43",
+      "cases": 1,
+      "classification": "New C2b draft compatibility regression, not a missing-keyword/API-absence failure.",
+      "details": "Real legacy interruption receipt and checkpoint are admitted, validated, claimed and sent through native supervised CPU launch. READY succeeds, but canonical_identity_equal rejects two otherwise identical resume contexts because request_path is a Path, not JSON. The valid launch is rejected with training_resume_authorization_changed. Only accelerator allocation/telemetry is replaced; legacy evidence is explicitly unbound compatibility input, not fabricated native closure.",
+      "first_run": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_training_resume_go.py --tb=short",
+        "exit_code": 1,
+        "failed": 1,
+        "seconds": 0.66
+      }
+    }
+  ],
+  "snapshots": {
+    "provenance": "Both complete current draft modules captured directly via apply_patch before either finding was repaired; source hashes were verified equal to snapshots. Resume first run used the same unchanged launcher snapshot, no reconstruction.",
+    "files": {
+      "docs/evidence/snapshots/v1-05c2b-before-training-phase-routing-launcher.py": "159aa29e0d2180ae19fd2cd5f96646e7bdc22f6d259bd66ee739bdf4741de96f",
+      "docs/evidence/snapshots/v1-05c2b-before-training-phase-routing-attempts.py": "10976baefd09d0636d1e6358bf178176abf1e9821987de185de2b5a7e824272f"
+    }
+  },
+  "mechanical_replay": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.engine import launcher, training_attempts\nsnapshots = Path('docs/evidence/snapshots')\nfor module, name in ((launcher, 'v1-05c2b-before-training-phase-routing-launcher.py'),\n                     (training_attempts, 'v1-05c2b-before-training-phase-routing-attempts.py')):\n    path = snapshots / name\n    exec(compile(path.read_bytes(), str(path), 'exec'), vars(module))\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_training_phase_routing.py',\n                             'tests/test_training_resume_go.py', '--tb=short']))\nPY",
+    "exit_code": 1,
+    "failed": 3,
+    "seconds": 1.49,
+    "details": "Both complete captured modules loaded into their real module namespaces. The frozen three cases reproduce the same wrong-phase STOP and valid-resume rejection, not setup errors."
+  },
+  "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "readonly_review": {
+    "shared_source_sha256": {
+      "src/orze/engine/process_supervision.py": "1fbf3dd94275722c9aa4e2e95bc581b2292c2880ed72ec5753df4ac3c49b25d3",
+      "src/orze/engine/training_supervision.py": "c3caa92b45ca88f21bb3e275e50b83d6cce7f38e0a31f737d088c4afd451b1c8",
+      "src/orze/engine/evaluation_supervision.py": "524d630ce2397f41e5b8a0fada2e10d538333923c93b97260bf78a0e5f743496"
+    },
+    "conclusions": [
+      "Shared extraction keeps evaluation public signatures, phase-qualified errors and closure shape. The inlined identity check is equivalent to native_evaluation._ref task/attempt/phase validation.",
+      "Training ready/start ordering preserves real worker PID: create LAUNCHING intent, prepare blocked worker, publish started/compute/claim, final executable/config rehash outside SQL, GO, then receive lineage attestation.",
+      "SupervisionUncertain is caught before ordinary proc-is-None cleanup; no NOT_STARTED or execution reservation release is inferred. failed_launch explicitly rejects not_started when a process or uncertainty latch exists.",
+      "Training finish requires bound closure before metrics read, lineage hash or B1 artifact copy, and rechecks the exact receipt inside terminal publication. STOP with worker code 0 overrides success before automatic VRAM requeue; direct requeue rejects STOP except explicit scheduler_slot_race.",
+      "process._terminate_and_reap recognizes SupervisedProcess before any legacy PGID discovery/signaling. Shared GPU lease uses close, not LOCK_UN, preserving its inherited open-file-description lock.",
+      "Shutdown training checks closure before interruption preparation and rechecks inside terminal publication.",
+      "The legacy worker-rooted zombie/watchdog heuristics are bypassed for supervised handles; this avoids treating unknown adopted-child activity as inactivity. It is not a replacement whole-tree utilization metric."
+    ],
+    "bounded_followups": [
+      "Root repaired wrong-phase routing in require_catalog using the persisted native training row or a training AttemptRef, before any mutable posthoc branch. Both frozen cases now preserve the live tree, stop records, files, database and slot.",
+      "Root repaired the resume comparison by explicitly projecting only request_path to str. The shared strict JSON equality helper is unchanged; the real valid request now executes and is consumed by native started.",
+      "Root added an explicit closure gate before training_monitor.prepare_interruption; the real SupervisedProcess.stop already proves closure. No fake-reaper-only failure is classified here as a released native defect.",
+      "Existing replication_authorization requires CLAIMED and is checked before started; it cannot simply be moved after started. A separate bound-RUNNING source check would be needed for an additional source-change-during-final-hash window. This review did not reproduce that window and does not count it as a confirmed blocker."
+    ]
+  },
+  "repair_verification": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_training_phase_routing.py tests/test_training_resume_go.py tests/test_training_supervision_binding.py tests/test_evaluation_supervision_binding.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py --tb=short",
+    "exit_code": 0,
+    "passed": 57,
+    "seconds": 3.2,
+    "breakdown": "3 independently frozen integration draft regressions + 31 sibling shared-adapter mechanisms + 23 unchanged supervisor mechanisms/regressions. These are not 57 independently authored or released-red cases.",
+    "status": "Candidate, not final source/full-suite verification.",
+    "source_sha256": {
+      "src/orze/engine/launcher.py": "5562e31474b10483531fa8b2f1a9828c7647a8eacebd1df204f74c3c02901265",
+      "src/orze/engine/training_attempts.py": "9354a4f0899a53cdb15a5a6bb42054f1f0a72b0da8e5fb527a3cd0939b9c6afd",
+      "src/orze/engine/training_completion.py": "6546f9773f6b890d3200786d0596cd2662f402ac5c425c68e6f5d1b45f63a31c",
+      "src/orze/engine/training_monitor.py": "3100c1ef2e3f0722489f424241f9a547da566d54e88e73b88cee313f48ae2abf",
+      "src/orze/engine/shutdown_publication.py": "e78ffe9d29405fd0e55e361af5f01cbf70b830a840896234744652063789a51f",
+      "src/orze/engine/process.py": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+      "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b"
+    },
+    "additional_readonly_check": "record_ready_start validates LAUNCHING current ref, pinned supervision protocol, actual READY, exact claim digest and launch lifecycle inside its own short effect/SQL guard before record_start. It then verifies the real receipt and watches the attempt. This accounts for actual allocation before GPU lease exit without granting GO or IN_PROGRESS; the subsequent started repeats proof before publishing RUNNING. No protocol-before-write bypass was found in the recorded candidate."
+  },
+  "limits": [
+    "Only tiny CPU subprocesses and scoped fixture pidfds; no provider, GPU job, host-wide process scan or holdout reads.",
+    "Existing tests and their assertions were not modified.",
+    "This reviewer ran the recorded bounded targets, including final epoch-2 22 tests, not the whole Core or Pro suite.",
+    "Training-only scope excludes posthoc runner's inside-worker publication, pre/post scripts and restart adoption."
+  ],
+  "epoch_1_bounded_verification": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_training_phase_routing.py tests/test_training_resume_go.py tests/test_training_supervision_binding.py tests/test_evaluation_supervision_binding.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py --tb=short",
+    "exit_code": 0,
+    "passed": 57,
+    "seconds": 3.13,
+    "source_epoch": "Exactly the eight source hashes in repair_verification.source_sha256 plus the three shared source hashes in readonly_review.shared_source_sha256. All eleven source files were hashed immediately before and after this final run and remained unchanged.",
+    "test_sha256_pre_post_equal": {
+      "tests/test_training_phase_routing.py": "fb0891dcbb0f2ddb3ff102db3a66b9aea21c06e33bc458bd1efa6e9f0b003a1a",
+      "tests/test_training_resume_go.py": "2c13b2c996edffa5849e43a74af40ca4ad4c05e5aa7fe6d76515f13fa6b6be43",
+      "tests/test_training_supervision_binding.py": "d36f1fba1e64149f4ebc87c1ed282c314dea2e0d90120bcf06bafb318f0f4109",
+      "tests/test_evaluation_supervision_binding.py": "e695ef536a80065d8ce22bf46c232ac50bbb930939606e5c1a25de29be2a305a",
+      "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+      "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+      "tests/test_supervised_worker_fds.py": "3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7"
+    },
+    "documentation": {
+      "path": "docs/native-training-supervision.md",
+      "sha256_pre_post": "2342cc69b8d25cc6f113375f8ba91fef34b926d51659b1df9e22faf73a2db2e9",
+      "read": "Complete file read independently during final bounded verification; no edits.",
+      "assessment": "Matches observed READY allocation, actual worker PID, final local checks, GO-before-lineage, worker-only/shared FD split, closure-before-publication, stop outcome, legacy history gate and supervisor-loss HOLD. It explicitly disclaims an atomic input snapshot, post-GO external-write protection, true kernel isolation from the fixture, real GPU/training evidence, posthoc/pre/post-script completion and crash adoption. No inaccurate bounded-slice claim was found."
+    },
+    "classification": "Same 3 frozen independent draft regressions plus 31 sibling adapter mechanisms and 23 supervisor checks. Retains initial 3 draft failures and full-snapshot 3-failure replay above; neither the candidate nor final passing counts are added together as distinct coverage.",
+    "status": "Historical epoch 1. Its recorded 57 tests passed, but root's wider epoch-1 run found missed fixture migrations and a genuine post-GO failure-report consumer regression. Do not use this 57-pass record as final epoch-2 or whole-suite acceptance."
+  },
+  "fixture_migration_review": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nimport ast\nfrom pathlib import Path\nimport sys\nimport pytest\npairs = [\n ('tests/test_training_termination_authority.py', 'docs/evidence/snapshots/v1-05c2b-original-test-training-termination-authority.py'),\n ('tests/test_resume_publication_contract.py', 'docs/evidence/snapshots/v1-05c2b-original-test-resume-publication-contract.py'),\n ('tests/test_startup_native_admission_race.py', 'docs/evidence/snapshots/v1-05c2b-original-test-startup-native-admission-race.py'),\n]\nfor current, old in pairs:\n    def assertions(path):\n        tree = ast.parse(Path(path).read_bytes(), filename=path)\n        return [ast.dump(node, include_attributes=False) for node in ast.walk(tree) if isinstance(node, ast.Assert)]\n    before, after = assertions(old), assertions(current)\n    assert before == after, current\n    print('ASSERT_AST_UNCHANGED', current, len(after), flush=True)\nfault_calls = []\ndef profile(frame, event, arg):\n    if (event == 'call' and frame.f_code.co_name == 'failed_identity'\n            and frame.f_code.co_filename.endswith('/test_training_termination_authority.py')):\n        fault_calls.append(frame.f_locals.get('pid'))\nsys.setprofile(profile)\ntry:\n    code = pytest.main(['-q', '-p', 'no:cacheprovider', *(item[0] for item in pairs), '--tb=short'])\nfinally:\n    sys.setprofile(None)\nprint('ORIGINAL_FAILED_IDENTITY_FAULT_CALLS', len(fault_calls), flush=True)\nassert len(fault_calls) == 2, fault_calls\nraise SystemExit(code)\nPY",
+    "exit_code": 0,
+    "passed": 18,
+    "seconds": 5.68,
+    "assertion_ast_counts": {
+      "tests/test_training_termination_authority.py": 38,
+      "tests/test_resume_publication_contract.py": 14,
+      "tests/test_startup_native_admission_race.py": 5
+    },
+    "assertion_ast_unchanged": true,
+    "fault_observation": "sys.setprofile observed the existing failed_identity function execute exactly twice, once for each confirmed-cleanup parameter. This is additional observation of the same 18 tests, not extra tests or a replacement fault.",
+    "mechanism": "ready_start_ticks=2 explicitly supplies simulated READY identity while retaining the original post-Popen capture_process_identity failure at its later real call site. The resume/startup fixtures wrap their existing fake process with exact original PID and 1234 ticks; actual Lake/claim/consume/rollover logic remains real.",
+    "fixture_helper_sha256": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f",
+    "snapshots": {
+      "docs/evidence/snapshots/v1-05c2b-original-test-training-termination-authority.py": "69306fd640246c9a5c5aaccef672c1a3c820b32676e60c59a94c6c361e5c0376",
+      "docs/evidence/snapshots/v1-05c2b-original-test-resume-publication-contract.py": "4af439019f9967f6e221d239b7c54e0e698213c36672c340bb2871aea6b40ec3",
+      "docs/evidence/snapshots/v1-05c2b-original-test-startup-native-admission-race.py": "af472ec7456d2db96163ad3cae459e487c2596b655db867b79492695a10ee008"
+    },
+    "scope": "Read-only review and test execution. Reviewer did not author or edit these migrations."
+  },
+  "final_epoch_2_bounded_verification": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_training_launch_failure_supervision.py tests/test_training_phase_routing.py tests/test_training_resume_go.py tests/test_training_termination_authority.py tests/test_resume_publication_contract.py tests/test_startup_native_admission_race.py --tb=short",
+    "exit_code": 0,
+    "passed": 22,
+    "seconds": 13.15,
+    "breakdown": "1 runtime_evidence-authored actual post-GO report regression + this reviewer's 3 frozen phase/resume regressions + 18 explicitly migrated compatibility tests. Neither the 18-profile run nor epoch-1 57-pass run adds distinct tests.",
+    "source_sha256_pre_post_equal": {
+      "src/orze/engine/launch_failure_report.py": "cdc786d595f45b51613106594ee60d85cbeee19ba0440bf602406c768fe335c4",
+      "src/orze/engine/launcher.py": "5562e31474b10483531fa8b2f1a9828c7647a8eacebd1df204f74c3c02901265",
+      "src/orze/engine/training_attempts.py": "9354a4f0899a53cdb15a5a6bb42054f1f0a72b0da8e5fb527a3cd0939b9c6afd",
+      "src/orze/engine/training_completion.py": "6546f9773f6b890d3200786d0596cd2662f402ac5c425c68e6f5d1b45f63a31c"
+    },
+    "test_sha256_pre_post_equal": {
+      "tests/supervision_fixture.py": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f",
+      "tests/test_training_launch_failure_supervision.py": "9a6b95886eaded2065dbc40a5a310a2429ad8730b164a637a8ade14caa9e9422",
+      "tests/test_training_phase_routing.py": "fb0891dcbb0f2ddb3ff102db3a66b9aea21c06e33bc458bd1efa6e9f0b003a1a",
+      "tests/test_training_resume_go.py": "2c13b2c996edffa5849e43a74af40ca4ad4c05e5aa7fe6d76515f13fa6b6be43",
+      "tests/test_training_termination_authority.py": "75c894f5e5550470c1229d3e48ac226cc3a844b5e5faa50ad1b120ea13641ec5",
+      "tests/test_resume_publication_contract.py": "0697c624125beb6f1c45525c828dc4f8c1e24e1a10a678ac13ee5f32c1cff4f6",
+      "tests/test_startup_native_admission_race.py": "d2ba252132437fd443606591010f226efb977e7301fe16997f0d5a4124f111f2"
+    },
+    "report_diff_review": "Presence of lifecycle now takes precedence over retained launch_lifecycle: require IN_PROGRESS plus the exact running fence. Invalid or changed running identity never falls back to CLAIMED. Only an absent lifecycle uses prelaunch claim/fence, and neither available fence means stale. Current closed source/dependency watching, duplicate projection, exact current claim and once-only controller action remain unchanged. Actual post-GO CPU failure now reports once and duplicates do not increment or rewrite.",
+    "documentation": {
+      "path": "docs/native-training-supervision.md",
+      "old_epoch_1_sha256": "2342cc69b8d25cc6f113375f8ba91fef34b926d51659b1df9e22faf73a2db2e9",
+      "final_sha256": "b7f8a36d20712d8a68a8cd1d891593ab59a20720860cd08237660c7ee7e2acfc",
+      "provenance": "The document was updated separately during this epoch. Reviewer reread the complete final text after the 22-test target; this is not a matching before/after document hash claim.",
+      "assessment": "Added post-GO failure-report paragraph accurately states running-fence precedence, no fallback to old CLAIMED authority, and once-only duplicate reporting. Other explicitly bounded safety and unimplemented posthoc/recovery limits remain unchanged."
+    },
+    "conclusion": "No remaining blocker found in this bounded integration/fixture review. No whole Core/Pro suite was run by this reviewer."
+  }
+}

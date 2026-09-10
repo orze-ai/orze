@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "milestone": "V1-05C2b",
+  "component": "supervised worker-only descriptor ownership",
+  "role": "author",
+  "scope": "Only supervised_process.py, supervisor_worker.py and a new mechanism test file; training/evaluation wiring is owned by the parent.",
+  "baseline": {
+    "commit": "d915139b8b1e04b3de92682a5f2622ad45ddf2e7",
+    "snapshot_provenance": "Complete source bytes read and saved via apply_patch before production edits; hashes equal the two observed baseline modules. Not reconstructed after editing.",
+    "snapshots": {
+      "docs/evidence/snapshots/v1-05c2b-before-worker-fds-supervised-process.py": "6c9532709481c0bdd44b5b9e58c32f24875b7fb1668715f2bdb60ed1feffdb42",
+      "docs/evidence/snapshots/v1-05c2b-before-worker-fds-supervisor-worker.py": "5afd66706db4f6d524b693161774d81eced2f96dc97175c995fad2d8f9cf05cc"
+    }
+  },
+  "contract": {
+    "public_api": "prepare_supervised(..., pass_fds=(), worker_only_fds=())",
+    "shared": "pass_fds are inherited by the supervisor and worker. The supervisor retains these descriptors through descendant drain/closure.",
+    "worker_only": "The blocked worker inherits worker_only_fds. The supervisor closes its copies after fork, inside owned cleanup and before READY.",
+    "validation": "Both groups are list/tuple, at most 64 combined descriptors; exact int >= 3, no duplicates within/across groups; all fstat checks succeed before Popen. Rejection is SupervisionUnavailable.",
+    "caller_ownership": "Caller originals remain owned by the caller. Their inheritable flags are unchanged.",
+    "failure": "A post-fork worker-only close failure emits no READY, enters the existing owned emergency drain, and does not retry an uncertain descriptor close.",
+    "protocol": "Only the private setup frame gains an optional worker_only_fds list. Persistent schema 1 binding and orze.linux_subreaper.v1 closure shape remain unchanged. Local descriptor numbers are not persisted as recovery authority.",
+    "process_identity": "The public pid remains the real blocked/executing worker PID, distinct from the supervisor PID."
+  },
+  "test_classification": {
+    "new_file": "tests/test_supervised_worker_fds.py",
+    "sha256": "3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7",
+    "frozen_before_implementation": true,
+    "new_api_mechanisms": 10,
+    "released_behavior_reds": 0,
+    "draft_behavior_reds": 0,
+    "missing_api_runs": 0,
+    "first_run": "10 new mechanisms first passed within the 23-test combined run; no absent-keyword/import failure was used as a red.",
+    "details": [
+      "One actual CPU worker forks a surviving descendant. A pidfd observes real leader exit; the descendant closes its writer and lease copies. The parent observes attestation bytes then pipe EOF while poll/closure remain pending.",
+      "The same real-process test confirms an independent flock acquisition fails while the supervisor owns the shared lease, and succeeds after natural ECHILD_WALL closure; worker returncode remains 0 and exactly two children were reaped.",
+      "Eight parametrized invalid-descriptor mechanisms: bool, stdio FD, closed shared FD, closed worker-only FD, within-group duplicate, cross-group overlap, non-list/tuple container, and more than 64 combined FDs. Popen is a tripwire.",
+      "One stub-fork fault mechanism raises after the real worker-only close and verifies exactly one close attempt, owned drain, retained shared FD and ERROR without READY. This is exception-routing evidence, not real OS tree-closure evidence."
+    ],
+    "fixture_changes": "None after initial creation; no C2a or integration test/fixture assertions changed."
+  },
+  "verification": [
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_supervised_worker_fds.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py --tb=short",
+      "exit_code": 0,
+      "passed": 23,
+      "seconds": 1.51,
+      "breakdown": "10 new C2b FD mechanisms + 10 unchanged C2a supervisor mechanisms + 3 unchanged C2a preparation handoff regressions.",
+      "source_epoch": "Hashes below; production paused after this target for independent review. This is not a full Core/Pro verification."
+    }
+  ],
+  "source_sha256": {
+    "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+    "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b"
+  },
+  "unchanged_tests": {
+    "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+    "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77"
+  },
+  "limits": [
+    "New FD mechanisms do not establish native training/lineage wiring completion; the root owns those integrations and their acceptance.",
+    "No live GPU lease or real training/provider was used; the lease test is an actual local flock descriptor.",
+    "No hostile same-UID sandbox, process namespace escape containment or restart/adoption authority is claimed.",
+    "Parent-owned descriptors must not be concurrently closed/reassigned by the caller while prepare_supervised is acquiring them.",
+    "The inherited private supervisor socket and gate remain excluded from exec through the unchanged C2a implementation/test. Worker-only FDs intentionally survive exec."
+  ],
+  "independent_review": "pro_review read the final two-file diff and reported no bounded FD-ownership blocker: strict preflight, supervisor closes worker-only copies before READY inside owned drain, no close retry, persistent schema unchanged and caller retains original FD ownership. This was a read-only review; pro_review had not rerun the 23 tests at report time."
+}
