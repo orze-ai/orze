@@ -20,7 +20,8 @@
 | V1-01I3：lineage 观察者不补审 | 已修复、机制已验证 | Core `781fc31`；18 冻结公共入口测试旧模块 14 行为 red / 4 pass，另 19 新 API 边界，共 37 passed；最终 core 1786 passed / 6 optional Pro skips，Pro 428 passed，跨仓相关 30 passed |
 | V1-01J2：director 状态、目标与动作接线 | 已修复、机制已验证 | Pro `6f3915c`；50 冻结公共测试完整旧源码隔离重放 46 行为 red / 4 pass，另 10 草稿行为 red、12 新机制/兼容验收，共 72 passed；最终 core 1786 passed / 6 optional Pro skips，Pro 500 passed，跨仓相关 30 passed |
 | V1-01K1：显式、版本绑定的队列审核 | 已修复、机制已验证 | Core `5fe292b` / Pro `9e7df19`；13 旧行为 red、2 旧控制、8 草稿行为 red 与 89 新机制验收，共 112 项；最终 core 1847 passed / 7 optional Pro skips、Pro 550 passed、真实跨仓 31 passed；registry optional-dependency 测试声明修订保留原快照并重放，非产品红测 |
-| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、skills/thinker、其他消费者的阶段一致性仍待收口；J1 仅关闭 research 显式节奏，J2 不代表通用依赖和全部 director 资源安全已完成，K1 不代表统一审核预算或科学判断已完成 |
+| V1-01L1：thinker 观察与启动确认 | 已修复、机制已验证 | Pro `4ed67d1`；21 冻结公共行为旧源码重放 16 red / 5 pass，38 新机制及 1 草稿状态边界 red，共 60 passed；最终 Pro 610 passed，core 1847 passed / 7 optional Pro skips，真实跨仓 31 passed |
+| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、skills、其他消费者的阶段一致性仍待收口；J1/L1 仅关闭相应角色的显式证据节奏，J2 不代表通用依赖和全部 director 资源安全已完成，K1 不代表统一审核预算或科学判断已完成 |
 | V1-02 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
 
 [V1-01A 机器可读证据](../evidence/2026-09-10-v1-01a-champion-recovery.json)包含基线、修复提交、红测内容哈希、命令、退出码、通过/跳过数量和适用边界。方案定稿、代码推送、机制验证、真实研究收益是四种不同状态。
@@ -52,3 +53,5 @@ V1-01J1 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01j1-evide
 V1-01J2 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01j2-director-objectives.json`，语义见该仓 `docs/director-evidence.md`。完整旧 Pro worktree 实际提供被复制的 director 源码，不把当前新脚本伪装为旧复制路径；两份草稿快照分别重放控制目录/拒绝不 ACK/诊断链接与阶段交集缺口。无 objective 仍可读取合法排队工作，legacy 0 保持未知；自定义 PID/sentinel 路径一致，拒绝后可恢复重试。未具可信产物绑定的检测源切换已明确禁用，不宣称通用依赖已实现；真实进程 ownership/停止确认、持久 attempt/ACK 和全局原子性仍属后续条目。
 
 [V1-01K1 机器可读证据](../evidence/2026-09-10-v1-01k1-queue-review.json)在两仓各保留一份，记录固定旧 runner/插件行为重放、三份草稿快照、完整测试哈希、入口闭环和最终全量。[队列审核契约](../queue-review.md)说明显式 opt-in、canonical registry、只在内存传递配置、默认不连带启用其他 bundled 自动化，以及任务 revision/当前 queued 一致性/事务收据的执行权边界。相同配置/seed 和规则笔记不再自动删任务，审核不改 metrics。审核收据不等于科学结论；provider 调用预算、跨文件遥测原子性、策略版本迁移和独立 attempt/observation 身份仍未完成。
+
+V1-01L1 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01l1-thinker-evidence.json`，语义与限制见该仓 `docs/thinker-evidence.md`。thinker 不再数 Markdown 行或读写旧 best 字段；当前合格可比较 ID 的观察基线与启动确认分离，只有进程创建及登记成功才消费启动前 receipt。手动/周期/失败级联保留独立语义，失格或未知不冒充 plateau；陈旧 scope/reference/generation、预算/构建/登记失败不会覆盖或确认本次机会。同主机的有界状态并非共享 observation/attempt 账本，手动 trigger 的 claim-before-Popen 窗口及 L2 skill 门控仍待修复。
