@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "item": "V1-01I3",
+  "status": "mechanism_verified",
+  "claim": "Lineage qualification and managed outcome observers consume existing data-separation receipts without repairing evidence, rescanning manifests, creating audit locks/indexes, or recreating compute receipt directories.",
+  "baseline": {
+    "core": "7bddc0d14ad8c3a4e3079b6a7112409c15e52cb3",
+    "pro": "7ef7fbdc01dc8b834b14f9a693705b134bddf91a"
+  },
+  "frozen_tests": [
+    {
+      "file": "tests/test_lineage_observer_readonly.py",
+      "sha256": "ddd1523d84f9eea62657c9296ac9fffcdd1d2708cf6c56ffb50ff80f9fbbbda3",
+      "cases": 18,
+      "classification": "14 existing-public-entry behavioral failures plus 4 already-passing controls on the fixed baseline"
+    },
+    {
+      "file": "tests/test_data_separation_readonly.py",
+      "sha256": "74b64e31a232245376932d11ee66142e5bd60cb63be70d7f6cf9145207090148",
+      "cases": 19,
+      "classification": "New API mechanism acceptance; missing API is not counted as a behavioral red"
+    }
+  ],
+  "initial_baseline": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_lineage_observer_readonly.py --tb=short",
+    "exit_code": 1,
+    "failed": 14,
+    "passed": 4,
+    "elapsed_seconds": 3.31,
+    "scope": "Unmodified baseline production source with frozen public tests added; no dependency/import failures."
+  },
+  "reproducible_baseline_recheck": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'import importlib, subprocess, pytest\nfor name, path in [\n    (\"orze.core.model_lineage\", \"src/orze/core/model_lineage.py\"),\n    (\"orze.core.managed_run\", \"src/orze/core/managed_run.py\"),\n]:\n    module = importlib.import_module(name)\n    source = subprocess.check_output([\"git\", \"show\", \"7bddc0d14ad8c3a4e3079b6a7112409c15e52cb3:\" + path], text=True)\n    exec(compile(source, str(module.__file__), \"exec\"), module.__dict__)\nraise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_lineage_observer_readonly.py\", \"--tb=short\"]))\n'",
+    "exit_code": 1,
+    "failed": 14,
+    "passed": 4,
+    "elapsed_seconds": 5.34,
+    "scope": "Only model_lineage and managed_run modules from the fixed baseline are loaded in memory in an isolated process. The current shared data_separation producer retains the old behavior. No filesystem rollback or live project is used."
+  },
+  "targeted_green": {
+    "command": "python3 -m pytest -q tests/test_lineage_observer_readonly.py tests/test_data_separation_readonly.py --tb=short",
+    "exit_code": 0,
+    "passed": 37,
+    "elapsed_seconds": 3.27
+  },
+  "independent_review": [
+    {
+      "agent": "core_review",
+      "passed": 200,
+      "duration_seconds": 10.14,
+      "files": [
+        "tests/test_lineage_observer_readonly.py",
+        "tests/test_data_separation_readonly.py",
+        "tests/test_data_separation.py",
+        "tests/test_model_lineage.py",
+        "tests/test_managed_run.py",
+        "tests/test_benchmark_contract.py",
+        "tests/test_public_rank.py"
+      ],
+      "blocking_findings": 0
+    },
+    {
+      "agent": "runtime_evidence",
+      "target_passed": 37,
+      "target_duration_seconds": 6.34,
+      "related_passed": 145,
+      "related_duration_seconds": 3.92,
+      "blocking_findings": 0,
+      "public_test_sha256": "ddd1523d84f9eea62657c9296ac9fffcdd1d2708cf6c56ffb50ff80f9fbbbda3"
+    }
+  ],
+  "test_adaptations": [
+    "One existing managed-outcome unit test now spies on read_data_separation_receipt instead of ensure_data_separation. Its assertions were preserved; frozen real-Lake behavioral tests separately prove that branch rejects missing/corrupt receipts without repair."
+  ],
+  "verified_boundaries": [
+    "12 baseline data-separation miss cases each perform 2 manifest reads, 1 audit lock, 1 temporary index directory and 1 receipt publication. Two other baseline cases recreate a missing compute receipt directory. All 14 now reject without those side effects.",
+    "Tests compare the complete synthetic durable tree and exact bytes before checking rejection; spies wrap real audit/storage operations, not the qualifier.",
+    "Real local/shared qualification, campaign audit, benchmark receipt/ledger verification and the independent managed-outcome separation branch are exercised.",
+    "Valid existing receipts remain accepted; artifact, terminal and boundary-policy drift remain rejected.",
+    "Receipt-only API validates policy/envelope/hash/counts and before/after manifest metadata; valid reads never open manifest bodies. Missing directories, redirects, malformed policy and a concurrent metadata change reject without mkdir/audit.",
+    "Training launcher and model-lineage finalization retain their producer paths. Existing related tests preserve full artifact double hashes and benchmark binding."
+  ],
+  "limits": [
+    "V1-01 and V1 remain open. This is a corrective shared observer boundary slice discovered while checking the next consumer, not a completed general research framework.",
+    "I2 proved catalog/CLI non-migrating authority reads but did not cover this opt-in lineage audit side effect. This evidence supplements rather than retroactively expands the earlier tests.",
+    "Read-only refers to these evidence consumers; report/admin derived files may still be published and OS read atime is not frozen.",
+    "Model artifacts are still double-read and hashed. No claim that every evidence query is cheap or that research efficiency improved.",
+    "Existing metadata/receipt cache trust model remains; this is not protection against an attacker controlling the underlying filesystem and not a global filesystem/SQLite snapshot.",
+    "Legacy offline report warm cache may miss manifest metadata changes; native ranking requalifies every time. All old consumers are not migrated.",
+    "A regenerated receipt has a new digest and may not match historical attempt bindings. Observers do not fabricate or silently repair that provenance.",
+    "Only tiny synthetic manifests/models, real temporary SQLite, local pipe attestations and explicitly synthetic benchmark receipts were used. No actual training/GPU, paid provider, production license activation, package publication, deployment or live campaign writes."
+  ],
+  "fix": {
+    "core": "781fc31b66c4466431b2ed642f5ec0ccbd775b44",
+    "pro_unchanged": "7ef7fbdc01dc8b834b14f9a693705b134bddf91a"
+  },
+  "final_core_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0,
+    "passed": 1786,
+    "skipped": 6,
+    "elapsed_seconds": 162.88,
+    "skip_scope": "Existing optional Pro dependency skips in core-only source environment; paired-source related tests run separately."
+  },
+  "final_pro_regression": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+    "exit_code": 0,
+    "passed": 428,
+    "skipped": 0,
+    "elapsed_seconds": 41.7
+  },
+  "final_cross_repository_regression": {
+    "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"--tb=short\",\"-rs\"]))'",
+    "exit_code": 0,
+    "passed": 30,
+    "skipped": 0,
+    "elapsed_seconds": 0.46
+  },
+  "remote_verification": "Push succeeded; git ls-remote origin refs/heads/feat/autoresearch-v1 matched exactly 781fc31b66c4466431b2ed642f5ec0ccbd775b44. Pro branch remained clean and matched 7ef7fbdc01dc8b834b14f9a693705b134bddf91a. Both remote main refs remained at the frozen baselines."
+}
