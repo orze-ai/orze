@@ -140,7 +140,7 @@ def test_unknown_post_script_popen_effect_keeps_durable_hold_and_cannot_replay(p
 def test_post_script_unconfirmed_stop_keeps_nonterminal_and_never_reaps_twice(project):
     p = project
     folder, event = accepted(p)
-    p.cfg["post_scripts"] = [{"script": "post-running.py", "timeout": 0.001}]
+    p.cfg["post_scripts"] = [{"script": "post-running.py", "timeout": 0}]
     p.reaper.side_effect = lambda *a, **k: False
     with pytest.raises(AttemptEffectInDoubt):
         evaluator.run_post_scripts(folder.name, 0, p.results, p.cfg, lake=p.lake, source_event=event)

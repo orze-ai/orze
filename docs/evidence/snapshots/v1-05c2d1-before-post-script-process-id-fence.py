@@ -69,13 +69,6 @@ def _owned(conn, ref, expected, *, states):
     if not canonical_identity_equal(
             {key: row["binding"].get(key) for key in expected}, expected):
         raise AttemptAuthorityError("post_script_binding_changed")
-    if row["state"] == "RUNNING":
-        ready = row["binding"].get("supervision") or {}
-        worker = ready.get("worker") if type(ready) is dict else None
-        pid = row["binding"].get("process_pid")
-        if (type(pid) is not int or type(worker) is not dict
-                or type(worker.get("pid")) is not int or pid != worker["pid"]):
-            raise AttemptAuthorityError("post_script_process_identity_changed")
     return row
 
 

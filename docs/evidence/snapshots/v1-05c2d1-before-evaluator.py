@@ -807,15 +807,6 @@ def run_post_scripts(
     from orze.engine.completion_events import completion_is_current
     if not completion_is_current(source_event or (idea_id, gpu), lake, results_dir):
         return
-    if getattr(source_event, "attempt_ref", None) is not None:
-        from orze.core.execution_attempts import current_attempt
-        from orze.engine.attempt_effect_lock import AttemptEffectBusy
-        pending = current_attempt(lake.conn, idea_id, "post_script")
-        if pending is not None and pending["state"] not in ("TERMINAL", "NOT_STARTED"):
-            # An output-exists or eligibility skip cannot resolve an unknown
-            # prior action. The actual launch repeats this check under its
-            # writer for admission races; this read grants no execution right.
-            raise AttemptEffectBusy("post_script_previous_action_unclosed")
     eligible, eligibility_reason = is_training_complete_for_downstream(
         idea_dir, cfg)
     if not eligible:
