@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "item": "V1-01F",
+  "status": "mechanism_verified",
+  "claim": "Promotion always requalifies exact declared evidence; anomaly detection is explicit opt-in with objective-scoped distinct-idea history; optional honesty declarations are enforced consistently",
+  "baseline": {
+    "core": "c1f11b3bf83e287a7e43109dc64d70b16458a3a5",
+    "pro": "d0d27f103efbda043de6607224d33e3323c17ba4"
+  },
+  "fix": {"core": "2ef6b5b4d4c28c64c528c8d1860f6ea49b0032d8"},
+  "remote_verification": "Push succeeded and git ls-remote origin refs/heads/feat/autoresearch-v1 matched the full fix SHA",
+  "red": [
+    {
+      "file": "tests/test_champion_guard_authority.py",
+      "sha256": "e00a0acafb8e6a8cc03c6bcfac08795fd40eb432b8a518c2d58d6774e543c71f",
+      "failed": 20, "passed": 0, "exit_code": 1, "elapsed_seconds": 2.68,
+      "scope": "Exact arbitrary source, zero/negative/min/max, finite nonboolean exact claims, disabled cannot bypass authority, missing/source/lifecycle/taint rejection, source freshness, subprocess tripwire and actual notification caller fail-closed"
+    },
+    {
+      "file": "tests/test_champion_guard_history_contract.py",
+      "sha256": "1d117ee6f94b6962963f2ad972b98a24cac24b04368f562e6d428a8bddbb6d0e",
+      "failed": 10, "passed": 2, "exit_code": 1, "elapsed_seconds": 2.09,
+      "scope": "Old guard module substituted in-process: optional default/off, absolute anomaly in both directions, warn, objective/source/benchmark isolation, one ID versus revisions/shared exposure ledger, insufficient/flat history"
+    },
+    {
+      "file": "tests/test_declared_honesty_qualification.py",
+      "sha256": "bf4cde854d978e5fdf00a5a8a8d4cb5583e0faa3a98d60d14d4716460b8fde5e",
+      "failed": 18, "passed": 8, "exit_code": 1, "elapsed_seconds": 3.93,
+      "scope": "Shared qualifier/report/rebuild/digest reject false or malformed declarations; source zero remains valid when absent/true; true bypasses nothing; old accepted cache is requalified"
+    }
+  ],
+  "reproducible_frozen_baseline_recheck": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'import subprocess; import pytest; from orze.reporting import evidence, leaderboard; from orze.engine import champion_guard; modules = [(evidence, \"src/orze/reporting/evidence.py\"), (leaderboard, \"src/orze/reporting/leaderboard.py\"), (champion_guard, \"src/orze/engine/champion_guard.py\")]; rev = \"c1f11b3bf83e287a7e43109dc64d70b16458a3a5\"; [exec(compile(subprocess.run([\"git\", \"show\", rev + \":\" + path], check=True, capture_output=True, text=True).stdout, module.__file__, \"exec\"), module.__dict__) for module, path in modules]; raise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_champion_guard_authority.py\", \"tests/test_champion_guard_history_contract.py\", \"tests/test_declared_honesty_qualification.py\", \"--tb=no\"]))'",
+    "exit_code": 1, "failed": 48, "passed": 10, "elapsed_seconds": 8.39,
+    "scope": "Only the three changed baseline modules are substituted in an isolated Python process; final tests and other dependencies remain the paired feature checkout. No filesystem rollback. Failures are behavioral, not import/setup errors"
+  },
+  "new_mechanism_storage_regression": {
+    "file": "tests/test_champion_history_storage.py",
+    "sha256": "b2346d277c63f8d44bac90d58d8c25c06d830b20b8d422c33d8f0be16b02b807",
+    "exit_code": 0, "passed": 3, "elapsed_seconds": 0.62,
+    "scope": "Real concurrent SQLite connections through public guard; unique same-ID and retained distinct-ID writes; real SQLite abort trigger rejects promotion with unchanged history; missing databases and sidecars never created. These are new-mechanism checks, not old-version red claims"
+  },
+  "targeted_green": {
+    "command": "python3 -m pytest -q tests/test_champion_guard_authority.py tests/test_champion_guard_history_contract.py tests/test_declared_honesty_qualification.py tests/test_honest_eval.py tests/test_notification_authority_contract.py tests/test_notification_snapshot_boundary.py tests/test_notification_processing_boundaries.py --tb=short",
+    "exit_code": 0, "passed": 98, "skipped": 0, "elapsed_seconds": 16.54
+  },
+  "final_core_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0, "passed": 1460, "skipped": 6, "elapsed_seconds": 110.43,
+    "skip_scope": "Optional Pro tests in the core-only source environment"
+  },
+  "final_pro_regression": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+    "exit_code": 0, "passed": 394, "skipped": 0, "elapsed_seconds": 32.36
+  },
+  "final_cross_repository_regression": {
+    "command": "Both src paths and the same explicit test-only license patch; pytest -q tests/test_evolution.py tests/test_sweeper.py tests/test_skill_registry.py --tb=short -rs from core",
+    "exit_code": 0, "passed": 30, "skipped": 0, "elapsed_seconds": 0.62
+  },
+  "independent_review": "Three independent reviewers checked authority, history and shared-policy consumers; all frozen behavioral tests remained unchanged. New storage checks were persisted as tests rather than left as ad-hoc claims",
+  "compatibility": [
+    "See docs/champion-policy.md: qualification is mandatory; anomaly detection defaults off, explicit enabled=true keeps hold unless action=warn",
+    "The legacy verified field means current artifact qualification, never an independent replication; no shell reproducer is executed or stdout float guessed",
+    "Legacy bare-number history bytes remain untouched. SQLite history is scoped and has one row per retained idea ID; a revision updates its value without renewing its first-accepted window position",
+    "A shared benchmark exposure ledger changing an evidence snapshot does not manufacture another sample or invalidate an unchanged current metric",
+    "Explicit artifact honest=false vetoes qualification; nonboolean values are invalid; missing is supported and true grants no exemption. Cache schema 6 invalidates prior qualification decisions",
+    "The controller does not implicitly enqueue audits. An explicitly supplied low-level callback remains supported without an exactly-once guarantee",
+    "Existing honest-eval guard tests retain their assertions but now supply real completed lifecycle and declared objective fixtures"
+  ],
+  "limits": [
+    "History is a bounded mutable operational view, not an immutable observation/attempt ledger or a globally atomic decision transaction",
+    "The heuristic is not a statistical test, scientific progress judgment, or research-efficiency result",
+    "Champion selection versus improvement, duplicate finished-batch accounting, no-finished revocation, evaluation admission/source checks and remaining legacy consumers are still open",
+    "No production license activation, paid provider, real GPU, package publication, deployment or live campaign mutation exercised"
+  ]
+}
