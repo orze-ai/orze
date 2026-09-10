@@ -290,8 +290,6 @@ def test_metrics_output_alias_is_preserved_and_pending_retry_really_launches_eva
     monkeypatch.setattr(evaluator.subprocess, "Popen", popen)
     monkeypatch.setattr(evaluator, "gpu_execution_lease", lease)
     monkeypatch.setattr(evaluator, "_verify_gpu_free", gpu_check)
-    from supervision_fixture import install
-    install(monkeypatch)
 
     ep = evaluator.launch_eval(p.idea_id, 0, p.results, p.cfg, lake=p.lake)
 

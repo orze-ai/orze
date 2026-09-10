@@ -397,11 +397,6 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         else:
             # READY worker remains blocked until its exact identity and the
             # allocation start are durable and its public holder exists.
-            # READY can wait: the pre-prepare checks do not authorize inputs
-            # or a controller runtime that changed before this final gate.
-            _assert_controller_runtime_attested(cfg)
-            if prepared is not None:
-                verify_evaluation(prepared, idea_dir, cfg, lake, source_event)
             proc.start()
         return ep
     except SupervisionUncertain as exc:
@@ -419,22 +414,6 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         # A controller-identity failure is an authorization rejection, not a
         # best-effort evaluator failure. Let the scheduler stop rather than
         # silently continuing under a drifted runtime.
-        if proc is not None:
-            holder = ep if ep is not None else SimpleNamespace(
-                idea_id=idea_id, process=proc, gpu=gpu,
-                start_time=time.time(), attempt_id=attempt_id,
-                attempt_ref=attempt_ref)
-            try:
-                terminate_execution(holder, idea_dir, phase="evaluation",
-                                    reaper=_terminate_and_reap, timeout=3)
-            finally:
-                try:
-                    if log_fh is not None:
-                        log_fh.close()
-                except OSError:
-                    pass
-            # Preserve native intent for explicit recovery. Runtime rejection
-            # does not authorize result publication or an automatic retry.
         raise
     except Exception as e:
         if proc is not None:
@@ -471,15 +450,13 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
                             "evaluation_launch_preflight_rejected")
                 logger.warning("Evaluation not started for %s: %s", idea_id, e)
                 return None
-            try:
-                finish(lake, holder, idea_dir, cfg,
-                       proc.poll() if proc is not None else None,
-                       forced=("failed", "evaluation_launch_initialization_failed",
-                               f"Evaluation launch failed: {type(e).__name__}"),
-                       not_started=proc is None)
-            finally:
-                if ep is not None:
-                    ep.close_log()
+            finish(lake, holder, idea_dir, cfg,
+                   proc.poll() if proc is not None else None,
+                   forced=("failed", "evaluation_launch_initialization_failed",
+                           f"Evaluation launch failed: {type(e).__name__}"),
+                   not_started=proc is None)
+            if ep is not None:
+                ep.close_log()
             logger.warning("Failed to launch eval for %s: %s", idea_id, e)
             return None
         if isinstance(e, TerminationUnconfirmed):

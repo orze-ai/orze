@@ -44,6 +44,9 @@ def _current(lake, tracked, folder, phase, cfg):
     accepted = current(lake, tracked, folder) if phase == "training" else current(lake, tracked)
     if not accepted or row["state"] != "RUNNING":
         raise AttemptEffectBusy("shutdown_native_attempt_not_owned")
+    if phase == "evaluation":
+        from orze.engine.evaluation_supervision import bound_binding
+        bound_binding(tracked, row, folder)
     return True
 
 
@@ -80,6 +83,11 @@ def handle_shutdown(tracked, results_dir, phase, stop, *, lake=None, cfg=None):
         ret = tracked.process.poll()
         if type(ret) is not int:
             raise AttemptEffectBusy("shutdown_exit_unconfirmed")
+        closure = None
+        if phase == "evaluation":
+            from orze.engine.evaluation_supervision import require_closed
+            closure = require_closed(tracked, current_attempt(lake.conn, folder.name, phase),
+                                     folder, ret)
         interruption = None
         reason = phase + "_controller_shutdown"
         if phase == "training" and cfg is not None:
@@ -91,10 +99,17 @@ def handle_shutdown(tracked, results_dir, phase, stop, *, lake=None, cfg=None):
         with execution_transaction(lake, folder) as tx:
             if _current(lake, tracked, folder, phase, cfg or {}) is not True:
                 return True
+            if closure is not None:
+                from orze.engine.execution_authority import canonical_identity_equal
+                if not canonical_identity_equal(closure, require_closed(
+                        tracked, current_attempt(lake.conn, folder.name, phase), folder, ret)):
+                    raise AttemptEffectBusy("shutdown_process_tree_receipt_changed")
             ref = tracked.attempt_ref
-            digest = tx.prepare(ref, {"operation": "controller_shutdown",
-                                      "outcome": "interrupted", "return_code": ret,
-                                      "reason_code": reason})
+            plan = {"operation": "controller_shutdown", "outcome": "interrupted",
+                    "return_code": ret, "reason_code": reason}
+            if closure is not None:
+                plan["process_tree"] = closure
+            digest = tx.prepare(ref, plan)
             from orze.engine.compute_publication import verify_compute_receipt
             if interruption is not None:
                 from orze.engine.interruption_publication import publish_interruption
@@ -115,6 +130,8 @@ def handle_shutdown(tracked, results_dir, phase, stop, *, lake=None, cfg=None):
             terminal = {"outcome": "interrupted", "reason_code": reason,
                         "return_code": ret, "effect_receipt_sha256": digest,
                         "lifecycle": lifecycle_fence(lake, folder.name, phase)}
+            if closure is not None:
+                terminal["process_tree"] = closure
             if finish_attempt(tx.conn, ref, terminal) != "committed":
                 raise AttemptAuthorityError("shutdown_terminal_not_new")
         tracked.close_log()

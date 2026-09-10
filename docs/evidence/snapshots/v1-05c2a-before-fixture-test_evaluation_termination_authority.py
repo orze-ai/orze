@@ -85,8 +85,6 @@ def project(tmp_path, monkeypatch):
     monkeypatch.setattr(evaluator, "_terminate_and_reap", p.reap)
     monkeypatch.setattr(evaluator, "gpu_execution_lease", p.lease)
     monkeypatch.setattr(evaluator, "_verify_gpu_free", p.gpu_check)
-    from supervision_fixture import install
-    install(monkeypatch)
     try:
         yield p
     finally:

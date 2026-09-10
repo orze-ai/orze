@@ -77,7 +77,6 @@ from orze.engine.accounting import (
 from orze.engine.termination_hold import (
     TerminationUnconfirmed, require_no_unconfirmed_stop, terminate_execution,
 )
-from orze.engine.supervised_process import prepare_supervised, SupervisionUncertain
 
 logger = logging.getLogger("orze")
 
@@ -298,7 +297,6 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
 
     proc = None
     ep = None
-    log_fh = None
     stage_started = False
     attempt_id = secrets.token_hex(16)
     attempt_ref = None
@@ -357,19 +355,11 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
                 popen_extra["cwd"] = io["work"]
             log_fh = open(log_path, "w", encoding="utf-8")
             try:
-                if attempt_ref is not None:
-                    from dataclasses import asdict
-                    proc = prepare_supervised(
-                        cmd, identity={"attempt_ref": asdict(attempt_ref),
-                                       "scope": str(idea_dir.absolute())},
-                        env=env, stdout=log_fh, stderr=subprocess.STDOUT,
-                        pass_fds=lease_fds, **popen_extra)
-                else:
-                    proc = subprocess.Popen(
-                        cmd, env=env, stdout=log_fh,
-                        stderr=subprocess.STDOUT,
-                        preexec_fn=_new_process_group, pass_fds=lease_fds, **popen_extra,
-                    )
+                proc = subprocess.Popen(
+                    cmd, env=env, stdout=log_fh,
+                    stderr=subprocess.STDOUT,
+                    preexec_fn=_new_process_group, pass_fds=lease_fds, **popen_extra,
+                )
             except Exception:
                 log_fh.close()
                 raise
@@ -394,47 +384,11 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         )
         if lake is None:
             record_compute_start(ep, idea_dir, phase="evaluation")
-        else:
-            # READY worker remains blocked until its exact identity and the
-            # allocation start are durable and its public holder exists.
-            # READY can wait: the pre-prepare checks do not authorize inputs
-            # or a controller runtime that changed before this final gate.
-            _assert_controller_runtime_attested(cfg)
-            if prepared is not None:
-                verify_evaluation(prepared, idea_dir, cfg, lake, source_event)
-            proc.start()
         return ep
-    except SupervisionUncertain as exc:
-        # prepare may have created/forked processes before returning a handle.
-        # proc=None does not establish NOT_STARTED after that boundary.
-        if ep is not None:
-            ep._termination_unconfirmed = True
-        try:
-            if log_fh is not None:
-                log_fh.close()
-        except OSError:
-            pass
-        raise TerminationUnconfirmed("evaluation_supervision_unconfirmed") from exc
     except LaunchIntegrityError:
         # A controller-identity failure is an authorization rejection, not a
         # best-effort evaluator failure. Let the scheduler stop rather than
         # silently continuing under a drifted runtime.
-        if proc is not None:
-            holder = ep if ep is not None else SimpleNamespace(
-                idea_id=idea_id, process=proc, gpu=gpu,
-                start_time=time.time(), attempt_id=attempt_id,
-                attempt_ref=attempt_ref)
-            try:
-                terminate_execution(holder, idea_dir, phase="evaluation",
-                                    reaper=_terminate_and_reap, timeout=3)
-            finally:
-                try:
-                    if log_fh is not None:
-                        log_fh.close()
-                except OSError:
-                    pass
-            # Preserve native intent for explicit recovery. Runtime rejection
-            # does not authorize result publication or an automatic retry.
         raise
     except Exception as e:
         if proc is not None:
@@ -471,15 +425,13 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
                             "evaluation_launch_preflight_rejected")
                 logger.warning("Evaluation not started for %s: %s", idea_id, e)
                 return None
-            try:
-                finish(lake, holder, idea_dir, cfg,
-                       proc.poll() if proc is not None else None,
-                       forced=("failed", "evaluation_launch_initialization_failed",
-                               f"Evaluation launch failed: {type(e).__name__}"),
-                       not_started=proc is None)
-            finally:
-                if ep is not None:
-                    ep.close_log()
+            finish(lake, holder, idea_dir, cfg,
+                   proc.poll() if proc is not None else None,
+                   forced=("failed", "evaluation_launch_initialization_failed",
+                           f"Evaluation launch failed: {type(e).__name__}"),
+                   not_started=proc is None)
+            if ep is not None:
+                ep.close_log()
             logger.warning("Failed to launch eval for %s: %s", idea_id, e)
             return None
         if isinstance(e, TerminationUnconfirmed):
@@ -648,19 +600,11 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                 if active_evals.get(gpu) is ep:
                     del active_evals[gpu]
                 continue
-            if getattr(ep, "attempt_ref", None) is not None:
-                from orze.core.execution_attempts import current_attempt
-                from orze.engine.evaluation_supervision import bound_binding
-                bound_binding(ep, current_attempt(lake.conn, ep.idea_id, "evaluation"),
-                              results_dir / ep.idea_id)
         if getattr(ep, "_termination_unconfirmed", False):
             raise TerminationUnconfirmed("evaluation_termination_unconfirmed")
         require_no_unconfirmed_stop(results_dir / ep.idea_id)
         try:
             ret = ep.process.poll()
-        except SupervisionUncertain as exc:
-            ep._termination_unconfirmed = True
-            raise TerminationUnconfirmed("evaluation_supervision_unconfirmed") from exc
         except OSError:
             # A failed process observation is not a successful evaluation.
             # Reap this owned child before closing its accounting/lifecycle.

@@ -435,13 +435,6 @@ def finish_evaluation(lake, ep, idea_dir, cfg, ret, *, forced=None, not_started=
     from orze.engine.completion_events import CompletionEvent
 
     row = _owned(lake, ep, states=("LAUNCHING", "RUNNING"))
-    from orze.engine.evaluation_supervision import (
-        require_closed, failure_override, bind_launch_cleanup)
-    if not_started:
-        raise AttemptEffectBusy("evaluation_not_started_requires_admission_path")
-    closure = require_closed(ep, row, idea_dir, ret,
-                             allow_launch_cleanup=forced is not None)
-    forced = failure_override(closure, forced)
     io = validate_bound_execution(row, idea_dir, cfg)
     ref = _ref(ep)
     prepared = None
@@ -459,21 +452,17 @@ def finish_evaluation(lake, ep, idea_dir, cfg, ret, *, forced=None, not_started=
     try:
         with execution_transaction(lake, idea_dir) as tx:
             row = _owned(lake, ep, states=("LAUNCHING", "RUNNING"))
-            if not _same(closure, require_closed(ep, row, idea_dir, ret,
-                         allow_launch_cleanup=forced is not None)):
-                raise StaleAttempt("evaluation_process_tree_receipt_changed")
             validate_bound_execution(row, idea_dir, cfg)
             records, observations = [], []
             if prepared is not None:
                 records, observations = verify_observations(prepared, ref, idea_dir, cfg, row)
             plan = {"operation": "observation_evaluation_terminal", "outcome": outcome,
                     "return_code": ret, "reason_code": reason,
-                    "process_tree": closure,
                     "artifact_ids": [record["artifact_id"] for record in records],
                     "observation_ids": [record["observation_id"] for record in observations]}
             digest = tx.prepare(ref, plan)
             if row["state"] == "LAUNCHING" and not not_started:
-                mark_running(tx.conn, ref, binding=bind_launch_cleanup(row, closure))
+                mark_running(tx.conn, ref)
             artifact_ids = observation_ids = ()
             if prepared is not None:
                 verify_observations(prepared, ref, idea_dir, cfg, row)
@@ -497,7 +486,6 @@ def finish_evaluation(lake, ep, idea_dir, cfg, ret, *, forced=None, not_started=
                     host=socket.gethostname(), pid=os.getpid(), sop_type="training"):
                 raise AttemptAuthorityError("observation_terminal_lifecycle_rejected")
             terminal = {"outcome": outcome, "reason_code": reason, "return_code": ret,
-                "process_tree": closure,
                 "effect_receipt_sha256": digest, "artifact_ids": list(artifact_ids),
                 "observation_ids": list(observation_ids),
                 "lifecycle": lifecycle_fence(lake, ep.idea_id, "evaluation")}

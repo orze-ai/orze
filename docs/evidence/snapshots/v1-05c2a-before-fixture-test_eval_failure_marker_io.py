@@ -63,8 +63,6 @@ def project(tmp_path, monkeypatch):
     monkeypatch.setattr(evaluator, "gpu_execution_lease", lease)
     monkeypatch.setattr(evaluator, "_terminate_and_reap",
                         Mock(side_effect=AssertionError("No actual process to terminate")))
-    from supervision_fixture import install
-    install(monkeypatch)
     try:
         yield SimpleNamespace(
             results=results, folder=folder, idea_id=folder.name, lake=lake,

@@ -54,10 +54,6 @@ def test_native_started_rejects_running_trigger_changing_prior_stage(case):
     ref = native_evaluation.begin(lake, folder, "attempt-A", 0)
     ep = SimpleNamespace(idea_id=idea, attempt_id=ref.attempt_id, attempt_ref=ref,
                          gpu=0, start_time=1234.5, process=SimpleNamespace(pid=12345))
-    from dataclasses import asdict
-    from supervision_fixture import SimulatedSupervisedProcess
-    ep.process = SimulatedSupervisedProcess(
-        ep.process, {"attempt_ref": asdict(ref), "scope": str(folder.absolute())}, ["unused"])
     lake.conn.execute(
         "CREATE TRIGGER corrupt_started AFTER UPDATE ON execution_attempts "
         "WHEN NEW.state='RUNNING' BEGIN UPDATE idea_stage_state "

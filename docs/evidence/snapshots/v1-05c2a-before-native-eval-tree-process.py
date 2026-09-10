@@ -320,11 +320,6 @@ def _terminate_and_reap(proc: subprocess.Popen, label: str = "",
                         tracked_identities: Optional[list[dict]] = None,
                         discover_pgid: bool = True):
     """Terminate a process and every descendant in its dedicated group."""
-    from orze.engine.supervised_process import SupervisedProcess
-    if isinstance(proc, SupervisedProcess):
-        # Never discover a now-dead worker's PGID or fall back to raw PID
-        # signals. Only its prelaunch supervisor owns the full descendant set.
-        return proc.stop(timeout=timeout)
     escaped_descendants = list(tracked_identities or [])
     proc_pid = getattr(proc, "pid", None)
     if type(proc_pid) is int and discover_pgid:

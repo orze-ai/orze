@@ -99,8 +99,6 @@ def project(artifact_project, monkeypatch):
     monkeypatch.setattr(evaluator, "gpu_execution_lease", lambda *a, **k: nullcontext(()))
     monkeypatch.setattr(evaluator, "_verify_gpu_free", lambda *a, **k: None)
     monkeypatch.setattr(launcher, "launch", no_training)
-    from supervision_fixture import install
-    install(monkeypatch)
     try:
         yield c
     finally:

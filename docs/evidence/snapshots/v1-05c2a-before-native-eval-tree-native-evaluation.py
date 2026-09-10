@@ -129,9 +129,8 @@ def begin(lake, idea_dir: Path, attempt_id: str, gpu, *, source_event=None,
                 f"evaluation_launched on gpu {gpu}", socket.gethostname(), os.getpid(), at):
             raise AttemptAuthorityError("evaluation_stage_transition_rejected")
         fence = lifecycle_fence(lake, idea_id, "evaluation")
-        from orze.engine.evaluation_supervision import PROTOCOL
         binding = {"origin": "native_evaluation", "lifecycle": fence,
-                   "physical_gpu": gpu, "process_supervision_protocol": PROTOCOL}
+                   "physical_gpu": gpu}
         if prepared is not None:
             from orze.engine.observation_publication import verify_evaluation
             binding.update(verify_evaluation(prepared, idea_dir, cfg, lake, source))
@@ -179,12 +178,8 @@ def _verify_compute(idea_dir, payload, *, process=None, phase=None, event=None,
 
 def started(lake, ep, idea_dir, record_start):
     """Record observed process creation without holding a lock across Popen."""
-    from orze.engine.evaluation_supervision import ready_binding, PROTOCOL
-    supervision = ready_binding(ep, idea_dir)
     with execution_transaction(lake, idea_dir) as tx:
         row = _owned(lake, ep, states=("LAUNCHING",))
-        if row["binding"].get("process_supervision_protocol") != PROTOCOL:
-            raise AttemptEffectBusy("evaluation_supervision_unbound")
         # Failure leaves the already committed LAUNCHING intent. The launcher
         # must stop the known process; confirmed stop permits failed closure.
         receipt = record_start(ep, idea_dir, phase="evaluation")
@@ -192,7 +187,6 @@ def started(lake, ep, idea_dir, record_start):
                         event="start", outcome="started")
         binding = dict(row["binding"])
         binding["process_pid"] = getattr(getattr(ep, "process", None), "pid", None)
-        binding["supervision"] = supervision
         mark_running(lake.conn, _ref(ep), binding=binding)
         tx.watch_attempt(_ref(ep))
 
@@ -234,8 +228,6 @@ def _identities(paths):
 
 def not_started(lake, ep, idea_dir, reason):
     """Close admission only; a preflight rejection is not a failed evaluation."""
-    if getattr(ep, "process", None) is not None:
-        raise AttemptEffectBusy("evaluation_not_started_has_process")
     ref = _ref(ep)
     with execution_transaction(lake, idea_dir) as tx:
         _owned(lake, ep, states=("LAUNCHING",))
@@ -264,16 +256,9 @@ def finish(lake, ep, idea_dir, cfg, ret, *, forced=None, not_started=False):
 
     if not is_current(lake, ep):
         return None
-    if not_started:
-        raise AttemptEffectBusy("evaluation_not_started_requires_admission_path")
     if not not_started and type(ret) is not int:
         raise AttemptEffectBusy("evaluation_exit_unconfirmed")
     row = _owned(lake, ep, states=("LAUNCHING", "RUNNING"))
-    from orze.engine.evaluation_supervision import (
-        require_closed, failure_override, bind_launch_cleanup)
-    closure = require_closed(ep, row, idea_dir, ret,
-                             allow_launch_cleanup=forced is not None)
-    forced = failure_override(closure, forced)
     from orze.core.observation_contract import get_observation_contract
     if row["binding"].get("observation_publication") is not None:
         from orze.engine.observation_publication import finish_evaluation
@@ -301,22 +286,18 @@ def finish(lake, ep, idea_dir, cfg, ret, *, forced=None, not_started=False):
     try:
         with execution_transaction(lake, idea_dir) as tx:
             row = _owned(lake, ep, states=("LAUNCHING", "RUNNING"))
-            if not canonical_identity_equal(closure, require_closed(
-                    ep, row, idea_dir, ret, allow_launch_cleanup=forced is not None)):
-                raise StaleAttempt("evaluation_process_tree_receipt_changed")
             if identities != _identities(paths):
                 raise StaleAttempt("evaluation_evidence_changed_before_publication")
             digest = tx.prepare(ref, {
                 "operation": "evaluation_terminal", "outcome": outcome,
                 "reason_code": reason, "return_code": ret,
-                "process_tree": closure,
                 "input_identity_sha256": hashlib.sha256(
                     json.dumps(identities, separators=(",", ":")).encode()).hexdigest(),
             })
             if row["state"] == "LAUNCHING" and not not_started:
                 # Only a launcher with its actual Popen handle and confirmed
                 # cleanup takes this branch after initialization failed.
-                mark_running(lake.conn, ref, binding=bind_launch_cleanup(row, closure))
+                mark_running(lake.conn, ref)
             if not success:
                 evaluator._write_eval_failure_marker(
                     idea_dir.parent, ep.idea_id,
@@ -337,7 +318,6 @@ def finish(lake, ep, idea_dir, cfg, ret, *, forced=None, not_started=False):
                     reason=reason, host=socket.gethostname(), pid=os.getpid(), sop_type="training"):
                 raise AttemptAuthorityError("evaluation_terminal_lifecycle_rejected")
             terminal = {"outcome": outcome, "reason_code": reason, "return_code": ret,
-                        "process_tree": closure,
                         "effect_receipt_sha256": digest,
                         "lifecycle": lifecycle_fence(lake, ep.idea_id, "evaluation")}
             if finish_attempt(lake.conn, ref, terminal, not_started=not_started) != "committed":

@@ -79,8 +79,6 @@ def project(tmp_path, monkeypatch):
     monkeypatch.setattr(phases, "_eval_already_running", lambda *_args: False)
     monkeypatch.setattr(phases, "launch", p.training)
     monkeypatch.setattr(launcher, "launch", p.training)
-    from supervision_fixture import install
-    install(monkeypatch)
     try:
         yield p
     finally:

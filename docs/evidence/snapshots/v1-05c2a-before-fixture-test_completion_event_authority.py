@@ -69,8 +69,6 @@ def test_independent_eval_schedule_binds_current_accepted_native_training(traini
     monkeypatch.setattr(evaluator, "_verify_gpu_free", lambda *a, **k: None)
     monkeypatch.setattr(phases, "get_gpu_memory_used", lambda *a: 0)
     monkeypatch.setattr(phases, "_eval_already_running", lambda *a: False)
-    from supervision_fixture import install
-    install(monkeypatch)
     ctl = controller(c)
     if origin == "pending":
         ctl.pending_evals.append((c.idea, 0))

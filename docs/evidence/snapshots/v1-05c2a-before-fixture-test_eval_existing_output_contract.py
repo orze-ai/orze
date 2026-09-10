@@ -43,8 +43,6 @@ def project(tmp_path, monkeypatch):
         yield ()
 
     monkeypatch.setattr(evaluator, "gpu_execution_lease", fake_lease)
-    from supervision_fixture import install
-    install(monkeypatch)
     try:
         yield results, folder, idea_id, lake, cfg, gpu_check, popen
     finally:

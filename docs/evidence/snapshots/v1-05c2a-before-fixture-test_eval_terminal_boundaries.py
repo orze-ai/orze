@@ -97,8 +97,6 @@ def project(tmp_path, monkeypatch):
     p.terminal_writer = Mock(wraps=accounting.record_compute_terminal)
     monkeypatch.setattr(accounting, "record_compute_terminal", p.terminal_writer)
     monkeypatch.setattr(evaluator, "record_compute_terminal", p.terminal_writer)
-    from supervision_fixture import install
-    install(monkeypatch)
     try:
         yield p
     finally:
