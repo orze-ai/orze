@@ -131,12 +131,6 @@ def _load_config(path: Path) -> dict:
         os.chdir(path.parent)
         cfg = load_project_config(str(path))
         cfg["_config_path"] = str(path)
-        # Runtime defaults are not an operator-declared research objective.
-        report = raw.get("report", {})
-        if not isinstance(report, dict):
-            raise ValueError("fsm_report_not_mapping")
-        if "primary_metric" not in report:
-            cfg["report"].pop("primary_metric", None)
         for key in ("results_dir", "ideas_file", "idea_lake_db"):
             value = cfg.get(key)
             if not isinstance(value, str) or not value or "${" in value:

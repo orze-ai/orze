@@ -4,7 +4,7 @@ Define procedures as YAML. Guards and actions are Python functions
 registered via @guard and @action decorators.
 
 Usage:
-    from fsm.engine import FSM, guard, action
+    from orze.fsm.engine import FSM, guard, action
 
     @guard("is_plateau")
     def is_plateau(ctx):
@@ -134,16 +134,21 @@ class StateNode:
 class FSM:
     def __init__(self, name: str, states: Dict[str, StateNode],
                  initial: str, results_dir: Path,
-                 vars_defaults: Optional[dict] = None):
+                 vars_defaults: Optional[dict] = None, *,
+                 extras: Optional[dict] = None):
         self.name = name
         self.states = states
         self.initial = initial
         self.results_dir = results_dir
         self.state_file = results_dir / f"_fsm_{name}.json"
         self.vars_defaults = vars_defaults or {}
+        # Invocation-only context. Never insert full configuration or other
+        # extras into load/save state, transition history or activity events.
+        self.extras = dict(extras or {})
 
     @classmethod
-    def from_yaml(cls, yaml_path: str, results_dir: Path) -> "FSM":
+    def from_yaml(cls, yaml_path: str, results_dir: Path, *,
+                  extras: Optional[dict] = None) -> "FSM":
         """Load FSM definition from YAML file."""
         import yaml
         with open(yaml_path, encoding="utf-8") as f:
@@ -172,7 +177,7 @@ class FSM:
                 transitions=transitions,
             )
 
-        return cls(name, states, initial, results_dir, vars_defaults)
+        return cls(name, states, initial, results_dir, vars_defaults, extras=extras)
 
     def load(self) -> dict:
         """Load persisted state, failing closed if it is corrupt."""
@@ -230,6 +235,7 @@ class FSM:
             results_dir=self.results_dir,
             state=data,
             vars=data.setdefault("vars", dict(self.vars_defaults)),
+            extras=dict(self.extras),
         )
 
         # Run maintain actions (re-assert persistent side effects every tick)
