@@ -25,8 +25,11 @@
 | V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数仍待收口；共享完成阶段一致性由 V1-02B 补齐。J1/L1/L2 仅关闭相应角色/技能的显式证据节奏，J2 不代表通用依赖和全部 director 资源安全已完成，K1 不代表统一审核预算或科学判断已完成 |
 | V1-02A：持久触发交付 | 已实现、机制已验证 | Core `105c58e` / Pro `99f3489`；3 旧公共行为 red、2 草稿绑定 red 与 80 新机制，共 85 passed；最终 Core 1932 passed / 7 optional Pro skips、Pro 710 passed、真实跨仓 60 passed；旧 workflow fixture 显式版本化保留原快照，最终 v3 旧源码仍重现 2 red |
 | V1-02B：共享完成阶段一致性 | 已修复、机制已验证 | Core `3c92571` / Pro 验收 `4672fbb`；33 旧行为 red、1 新 helper 草稿 red、1 新并发事务机制与 18 兼容控制，共 53 passed；最终 Core 1975 passed / 7 optional Pro skips、Pro 720 passed、真实跨仓 60 passed |
-| V1-02 整体 | 进行中 | A 关闭触发请求的接收、精确 payload、lease/attempt 与保守启动恢复，B 关闭共享已记录阶段的完成资格；并发提案追加/消费及科学任务独立 attempt/observation 仍待收口 |
+| V1-02C：提案交接与不可覆盖入队 | 已修复、机制已验证 | Core `d869acf` / Pro 验收 `598905e`；22 旧行为 red、3 草稿 red、31 新机制与 3 兼容控制，共 59 passed；最终 Core 2031 passed / 7 optional Pro skips、Pro 723 passed、真实跨仓 60 passed。两套 source 测试夹具显式版本化，保留原快照 |
+| V1-02 整体 | 进行中 | A 关闭触发交付与保守启动恢复，B 关闭共享已记录阶段的完成资格，C 关闭原生提案源的并发交接/不可覆盖 admission；研究任务 stale-attempt 边界及科学任务独立 attempt/observation 仍待收口 |
 | V1-03 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
+
+[V1-02C 机器可读证据](../evidence/2026-09-10-v1-02c-proposal-handoff.json)与[提案源契约](../proposal-source-handoff.md)在两仓各保留一份。固定旧 fs/parser/IdeaLake/phase 重放与实际 Pro producer→Core consumer 重放证明追加丢失、同 ID 覆写、失败后不能 ACK、未完成 finalizer 被提前入库等缺陷。新入口只创建或精确重放，不把 config duplicate/解析失败当成删除源的权限；主文件原字节与未处理区块保留，已提交但删源失败可恢复。源 owner 不再按 60 秒年龄被抢占；磁盘错误恢复失败和二次 close 错误保留不确定 owner。marker/未知 owner 不提供自动恢复工具，其他 legacy/portfolio 写入口及科学复验语义没有被宣称已统一；仍不代表 V1 完成。
 
 [V1-02B 机器可读证据](../evidence/2026-09-10-v1-02b-stage-agreement.json)与[阶段资格契约](../completed-stage-agreement.md)在两仓各保留一份。真实缺失阶段历史保持兼容，已存在的 NULL/未知/非终态不能再混入已完成结果；SQL 与 Python 使用精确状态值，结构/身份歧义不被 set/dict 去重掩盖。通知缓存只在自有写事务内重新检查并更新，不提交调用者尚未提交的工作。冻结测试覆盖真实 report 热缓存撤销、Pro 排名/调度、两个 SQLite 连接及故障触发器。Pipeline 计数、其他扩展阶段和非 COMPLETE 生命周期语义未扩大；本项不是科学任务身份、不可变 observation 或科研收益验收。
 

@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "item": "V1-02C",
+  "status": "mechanism_verified",
+  "claim": "Native proposal producers and Core consume under source ownership. Fresh captured blocks are acknowledged only after immutable task admission or exact source replay. Concurrent winners, malformed/unadmitted blocks and failed publications are preserved; partial append rollback uncertainty retains the owner.",
+  "baseline": {
+    "core": "110d462a936bc84bb6d87bea845600d817e28d19",
+    "pro": "2128f5361abfafd919e718107cb494d3da50576b"
+  },
+  "fix_commits": {
+    "core": "d869acfb72ea890972b4561bed84f08a5b965a55",
+    "pro": "598905ec1f518ff266f57a33ae687083e699e9a3"
+  },
+  "frozen_tests": [
+    {
+      "repository": "orze",
+      "file": "tests/test_idea_ingress_contract.py",
+      "sha256": "8a767615506ad2a59d93e88384b866ba81501d940d4c30a9a3a87c2c7f228e61",
+      "cases": 7,
+      "old_failed": 6,
+      "old_passed": 1,
+      "old_seconds": 1.1
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_proposal_admission.py",
+      "sha256": "df96d73876bb7c70964ab8519ab823dbc76c7df04c585055580fd44943ca894f",
+      "cases": 20,
+      "classification": "new mechanism"
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_idea_ingress_lock_contract.py",
+      "sha256": "f95c8cbe61d1093797d072b36d15eb1df09e1ac63d39ad677dd968e9ab3c021c",
+      "cases": 5,
+      "old_failed": 4,
+      "old_passed": 1,
+      "old_seconds": 0.7
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_idea_ingress_source_boundaries.py",
+      "sha256": "6692bb63ba5faf05250eeb596cc873ce01368fc028984a18a967bb65ca748ad9",
+      "cases": 10,
+      "old_failed": 7,
+      "new_mechanism": 3,
+      "old_seconds": 1.02,
+      "fixture_version": 2
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_idea_source_lock.py",
+      "sha256": "a082c7b5eb12016db5abb4fa8b89effa82a4f594d152afe8c04744f6f3da05f8",
+      "cases": 8,
+      "draft_failed": 1,
+      "new_mechanism": 7
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_idea_append_io_atomicity.py",
+      "sha256": "8cc98901fca4914b4d072042a71e7316b40616533bab43db415a755a2d44058c",
+      "cases": 3,
+      "old_failed": 2,
+      "new_mechanism": 1
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_proposal_admission_identity_boundary.py",
+      "cases": 2,
+      "sha256": "44b5545d0eb5404d9010e6b5a007481449ec6f7be275a96e36a1a5f8bf36e41f",
+      "draft_failed": 1,
+      "controls": 1,
+      "draft_seconds": 0.86
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_idea_append_close_receipt.py",
+      "cases": 1,
+      "sha256": "432ce1a3663f6fba1fc5495f1c76823db4d2f4965726b55456540df01e102b39",
+      "draft_failed": 1,
+      "draft_seconds": 0.14
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_proposal_source_handoff.py",
+      "sha256": "acbeded5aac7d7e223c3c0955fbf490cacd52ab6afd39372756ee9250138f009",
+      "cases": 3,
+      "old_failed": 3
+    }
+  ],
+  "classification_totals": {
+    "target_cases": 59,
+    "old_behavior_reds": 22,
+    "draft_behavior_reds": 3,
+    "new_mechanism_acceptance": 31,
+    "compatibility_controls": 3
+  },
+  "old_rechecks": [
+    {
+      "repository": "orze",
+      "failed": 19,
+      "passed": 2,
+      "deselected": 3,
+      "seconds": 4.81,
+      "exit_code": 1,
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib\nimport subprocess\nimport pytest\nold = \"110d462a936bc84bb6d87bea845600d817e28d19\"\nfor name, path in (\n    (\"orze.core.fs\", \"src/orze/core/fs.py\"),\n    (\"orze.core.ideas\", \"src/orze/core/ideas.py\"),\n    (\"orze.idea_lake\", \"src/orze/idea_lake.py\"),\n    (\"orze.engine.phases\", \"src/orze/engine/phases.py\"),\n):\n    module = importlib.import_module(name)\n    source = subprocess.check_output([\"git\", \"show\", old + \":\" + path], text=True)\n    exec(compile(source, \"fixed-old:\" + path, \"exec\"), module.__dict__)\nfrom orze.engine.orchestrator import Orze\nOrze._sync_ideas = importlib.import_module(\"orze.engine.phases\").OrzePhaseMixin._sync_ideas\nraise SystemExit(pytest.main([\n    \"-q\", \"-p\", \"no:cacheprovider\",\n    \"tests/test_idea_ingress_contract.py\",\n    \"tests/test_idea_ingress_lock_contract.py\",\n    \"tests/test_idea_ingress_source_boundaries.py\",\n    \"tests/test_idea_append_io_atomicity.py::test_source_io_failure_restores_exact_prior_bytes\",\n    \"-k\", \"not new_mechanism\", \"--tb=short\",\n]))\nPY",
+      "notes": "Main loaded complete fixed-old fs, ideas parser, IdeaLake and phases modules, then rebound actual Orze._sync_ideas. 19 public behavior reds and 2 controls; 3 new source-budget/publication acceptance cases deselected. This is a specified-module replay, not an entire old checkout. No missing-API or fixture errors."
+    },
+    {
+      "repository": "orze-pro",
+      "failed": 3,
+      "passed": 0,
+      "seconds": 0.77,
+      "exit_code": 1,
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib\nfrom pathlib import Path\nimport subprocess\nfrom unittest.mock import patch\nimport pytest\npatch(\"orze_pro._gate.require_license\").start()\ntargets = (\n    (\"../orze\", \"110d462a936bc84bb6d87bea845600d817e28d19\", \"orze.core.fs\", \"src/orze/core/fs.py\"),\n    (\"../orze\", \"110d462a936bc84bb6d87bea845600d817e28d19\", \"orze.engine.phases\", \"src/orze/engine/phases.py\"),\n    (\".\", \"2128f5361abfafd919e718107cb494d3da50576b\", \"orze_pro.agents.research\", \"src/orze_pro/agents/research.py\"),\n)\nfor repo, revision, name, path in targets:\n    module = importlib.import_module(name)\n    source = subprocess.check_output([\"git\", \"-C\", repo, \"show\", revision + \":\" + path], text=True)\n    exec(compile(source, \"fixed-old:\" + name, \"exec\"), module.__dict__)\nfrom orze.engine.orchestrator import Orze\nOrze._sync_ideas = importlib.import_module(\"orze.engine.phases\").OrzePhaseMixin._sync_ideas\nraise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_proposal_source_handoff.py\", \"--tb=short\"]))\nPY",
+      "notes": "Main loaded fixed paired fs/phases/research modules and rebound actual Core entry. Native Pro formatting/append, real Lake and Core consumption run in-process. Provider and extension boundaries are excluded; actual old default IdeaLake insertion behavior is preserved by current optional-if_absent API."
+    }
+  ],
+  "draft_rechecks": [
+    {
+      "repository": "orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nmodule = importlib.import_module(\"orze.core.fs\")\nfor name in [\"v1-02c-before-source-protection-recheck.py\",\"v1-02c-before-append-io-rollback.py\"]:\n    path = Path(\"docs/evidence/snapshots\") / name\n    exec(compile(path.read_text(encoding=\"utf-8\"), str(path), \"exec\"), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_idea_source_lock.py\",\"tests/test_idea_append_io_atomicity.py\",\"--tb=short\"]))\nPY",
+      "failed": 4,
+      "passed": 7,
+      "seconds": 0.28,
+      "exit_code": 1,
+      "notes": "One new-helper draft marker recheck failure, two already-counted old append I/O failures, and one new rollback-uncertainty acceptance failure. Not four additional old/draft defects."
+    },
+    {
+      "repository": "orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nmodule = importlib.import_module(\"orze.core.fs\")\nfor name in [\"v1-02c-before-close-error-hold.py\"]:\n    path = Path(\"docs/evidence/snapshots\") / name\n    exec(compile(path.read_text(encoding=\"utf-8\"), str(path), \"exec\"), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_idea_append_close_receipt.py\",\"--tb=short\"]))\nPY",
+      "failed": 1,
+      "passed": 0,
+      "seconds": 0.1,
+      "exit_code": 1,
+      "notes": "After rollback failed, a later close error masked the uncertainty exception and incorrectly released the source owner."
+    },
+    {
+      "repository": "orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nmodule = importlib.import_module(\"orze.core.proposal_admission\")\nfor name in [\"v1-02c-before-exact-admission-id.py\"]:\n    path = Path(\"docs/evidence/snapshots\") / name\n    exec(compile(path.read_text(encoding=\"utf-8\"), str(path), \"exec\"), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_proposal_admission_identity_boundary.py\",\"--tb=short\"]))\nPY",
+      "failed": 1,
+      "passed": 1,
+      "seconds": 0.42,
+      "exit_code": 1,
+      "notes": "New if_absent API incorrectly acknowledged different byte IDs in a historical NOCASE primary-key table. Exact-byte replay control retained."
+    }
+  ],
+  "draft_snapshots": {
+    "docs/evidence/snapshots/v1-02c-before-append-io-rollback.py": "dd55dd479038719fbc8d6d3e7235a8bee5dfabc26aa5e0daafd8ca65c682d8c7",
+    "docs/evidence/snapshots/v1-02c-before-source-protection-recheck.py": "f6cc11f8bc0ef5432085c54ca1ccaf9073a00e1393bcd74ce33d9150b7c4070e",
+    "docs/evidence/snapshots/v1-02c-before-close-error-hold.py": "1f77edf5292e52d6b9bf16d2110ea0ea331b6f072924bf17573c229d24dc19d7",
+    "docs/evidence/snapshots/v1-02c-before-exact-admission-id.py": "d8c92dfacea2c8a15f22dfaadf9de3ad6c718c1a44c4a78ae84aef75d2b68dca"
+  },
+  "fixture_versions": {
+    "ingress_original": {
+      "path": "docs/evidence/snapshots/v1-02c-idea-ingress-test-original.py",
+      "sha256": "1f9db43a05ddee09f32f3315f201448347d4d7052b8653d1b4cf88805191b091",
+      "notes": "v1 original callback required competing append succeed and injected only Path.write_text. Final v2 preserves callback observation, allows strict lock refusal then actual retry, and injects source publication failure at Path.write_text or os.replace."
+    },
+    "source_original": {
+      "path": "docs/evidence/snapshots/v1-02c-source-boundaries-test-original.py",
+      "sha256": "f866fab685cad5c31d36f98bcaea29ce4274b8f9786f01cf7acfa13ee637f0a5",
+      "notes": "Only two optional-hook lock probes changed: generic _fs_lock no longer owns protected namespace, so final v2 verifies source owner directory gone and actual locked_append succeeds. Same ingested IDs and retained append assertions. Mixed old phase/current protected fs gave5red2pass; fixed old phase ANDfs gives7red; not counted mixed result as full old replay."
+    }
+  },
+  "verification": {
+    "target": {
+      "cwd": "orze-pro",
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_proposal_source_handoff.py\",\"../orze/tests/test_idea_ingress_contract.py\",\"../orze/tests/test_proposal_admission.py\",\"../orze/tests/test_idea_ingress_lock_contract.py\",\"../orze/tests/test_idea_ingress_source_boundaries.py\",\"../orze/tests/test_idea_source_lock.py\",\"../orze/tests/test_idea_append_io_atomicity.py\",\"../orze/tests/test_proposal_admission_identity_boundary.py\",\"../orze/tests/test_idea_append_close_receipt.py\",\"--tb=short\"]))'",
+      "passed": 59,
+      "seconds": 16.71,
+      "exit_code": 0
+    },
+    "core_full": {
+      "cwd": "orze",
+      "command": "python3 -m pytest -q tests --tb=short -rs",
+      "passed": 2031,
+      "skipped": 7,
+      "seconds": 225.87,
+      "exit_code": 0
+    },
+    "pro_full": {
+      "cwd": "orze-pro",
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "passed": 723,
+      "seconds": 113.62,
+      "exit_code": 0
+    },
+    "paired": {
+      "cwd": "orze",
+      "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "passed": 60,
+      "seconds": 0.96,
+      "exit_code": 0
+    },
+    "independent": [
+      "Separate source/parser/phase review: formal7+admission20+sidecar2+dedup/cache7 =36 passed in4.88s; limited pre-final production acceptance, not substituted for final full regression.",
+      "Final source-lock/append/ingress/admission neighborhood 62 passed in8.44s. Ordinary role lock expiry remains compatible. Independent final review found no further cooperative-writer data-loss/false-ACK gap.",
+      "Core source10+identity2 final12 passed in3.29s; admission20+identity2+source10 later32 passed in6.05s. Pro actual handoff3 passed in.75s, handoff+existing compatibility5 passed in1.55s.",
+      "20 new admission tests initially had one fixture error reading a nonexistent history API id key; corrected to actual SQL transition read before freeze. Not a behavior red. Source hook probes explicitly versioned after namespace protocol changed; remaining assertions retained."
+    ]
+  },
+  "final_source_sha256": {
+    "orze/src/orze/core/fs.py": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+    "orze/src/orze/core/ideas.py": "aae9b20e5b249dd7416287dba53adf1225619d570f892998a466adae57923c2f",
+    "orze/src/orze/core/idea_source_lock.py": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+    "orze/src/orze/core/proposal_admission.py": "4b68532044abbfa4c18b51e0f2d9ea991dedfaf9ceb8a6263ceb9a501c75fa1a",
+    "orze/src/orze/engine/idea_ingress.py": "3d9ea94d797073dfd3ba135802df41f958145b483dd4cefa0e37e73a34288c61",
+    "orze/src/orze/engine/phases.py": "c7f9100e574dc35e493fee855af03bb0a256b448b60ddf1f1195225c36046e9b",
+    "orze/src/orze/idea_lake.py": "504f80bcfc8e9bc1511a1a5429ac15016164a14da5fe1c5f0a54f2ab994de06f",
+    "orze-pro/src/orze_pro/agents/research.py": "d9da9e54c646f005775721e0b10fd9551207e02a9935921f3201b1ea6cd36d13"
+  },
+  "boundaries": [
+    "Only native ideas.md/sidecar ingestion uses the new explicit insert(if_absent=True) branch. Legacy import/update keeps its old replacement semantics; portfolio/direct legacy writers are not silently reclassified as immutable admission.",
+    "Exact source replay checks title, raw YAML/Markdown, priority/category/parent/hypothesis/family/kind; lifecycle/status/metrics/clocks can progress without being reset. Different byte IDs never gain exact ACK through historical NOCASE collation.",
+    "Main source max4MiB and max128 candidates/tick; a source-scoped in-memory cursor rotates live inspection. Sidecars retain legacy additive reading and are never consumed; full sidecar budgets and persistent fairness are not claimed.",
+    "Existing cross-ID config dedup policy remains. Config duplicates/conflicts/rejections do not authorize deleting their source. Explicit scientific replicates and independent task/attempt/observation identity remain later work.",
+    "SQLite admission and source ACK are not one atomic commit. DB commit precedes exact-block ACK, whose failed publication is retryable without replacing a task. Ignored/mismatching DML rolls back; orphan lifecycle and caller-owned transactions are not adopted.",
+    "Persistent namespace marker precedes source owner creation. Generic locks cannot own protected namespaces; source owners are nonce/directory/metadata-bound. Dead, remote-unknown, malformed or partial owners are conservatively held rather than age-reclaimed. No automatic uncertainty-resolution/cleanup tool in this slice.",
+    "Append short-write/fsync/finalizer failure rolls back original bytes; rollback uncertainty, including a subsequent close error, retains ownership. Non-cooperative file replacement/artificial lock deletion and all hostile-FS TOCTOU windows are outside this cooperative protocol claim.",
+    "Optional enrichment runs after source lock release for newly committed tasks; a source ACK publication failure does not undo admission, so enrichment may still run. No new default provider activation is authorized.",
+    "Pro functional append implementation is unchanged and reaches the new Core protocol; its docstring now describes exact-block consumption. Direct callers omitting results_dir retain adjacent-file fallback and must pass the consumer's same results_dir to coordinate.",
+    "New contracts use real temporary SQLite/files and public in-process consumers, with explicit file faults, fake clocks or OS/provider tripwires. No real training/GPU/paid provider, production license change, deployment or live campaign changes.",
+    "Original dirty workspace remains281 status entries; holdout SHA256 fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245 remains unchanged and unread by main.",
+    "V1-02 research-task stale-attempt validation and generation/observation identity remain open, as do V1-03 through V1-07. No general research-efficiency gain or entire V1 completion is claimed."
+  ]
+}
