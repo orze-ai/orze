@@ -1542,6 +1542,9 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         lake: IdeaLake instance for FSM transition recording (optional)
     """
     results_dir = Path(results_dir)
+    from orze.core.artifact_contract import get_artifact_contract
+    if get_artifact_contract(cfg) is not None and lake is None:
+        raise LaunchIntegrityError("training_artifact_native_catalog_required")
     _assert_launch_authorized(idea_id, results_dir, cfg)
     from orze.engine.training_attempts import require_catalog
     require_catalog(lake, results_dir / idea_id, cfg)
@@ -1773,7 +1776,11 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     if lake is not None:
         from orze.engine.training_attempts import begin
         try:
-            tp.attempt_ref = begin(lake, tp, results_dir / idea_id)
+            from orze.core.artifact_contract import get_artifact_contract
+            if get_artifact_contract(cfg) is None:
+                tp.attempt_ref = begin(lake, tp, results_dir / idea_id)
+            else:
+                tp.attempt_ref = begin(lake, tp, results_dir / idea_id, cfg=cfg)
         except BaseException as intent_error:
             _cleanup_rejected_training_intent(
                 tp, results_dir / idea_id, cfg, lake, lineage_context, intent_error)

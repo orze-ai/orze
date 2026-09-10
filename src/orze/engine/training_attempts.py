@@ -208,17 +208,23 @@ def _launch_state(lake, idea_id):
             "global_transition_id": row[0][2]}
 
 
-def begin(lake, tp, idea_dir):
+def begin(lake, tp, idea_dir, cfg=None):
     """Persist a native intent before Popen, without inventing a started stage."""
+    from orze.core.artifact_contract import artifact_publication_binding
+    artifact_binding = artifact_publication_binding(
+        cfg or {}, idea_dir, getattr(tp, "execution_identity", None))
     with execution_transaction(lake, idea_dir) as tx:
         from orze.engine.execution_catalog import bind_catalog
         bind_catalog(lake, idea_dir, tx.lease)
         _, claim_sha = _claim(tp, idea_dir, lake)
         launch_state = _launch_state(lake, tp.idea_id)
-        ref = create_attempt(tx.conn, tp.idea_id, "training", tp.attempt_id, {
+        binding = {
             "origin": "native_training", "claim_sha256": claim_sha,
             "launch_lifecycle": launch_state,
-        })
+        }
+        if artifact_binding is not None:
+            binding["artifact_publication"] = artifact_binding
+        ref = create_attempt(tx.conn, tp.idea_id, "training", tp.attempt_id, binding)
         if not canonical_identity_equal(_launch_state(lake, tp.idea_id), launch_state):
             raise AttemptAuthorityError("training_launch_lifecycle_changed")
         tx.watch_attempt(ref)
@@ -259,10 +265,13 @@ def started(lake, tp, idea_dir, process_identity, *, resume_context=None):
                     reason=f"training_launched on gpu {tp.gpu}", host=socket.gethostname(),
                     pid=tp.process.pid, sop_type="training"):
                 raise AttemptAuthorityError("training_started_lifecycle_rejected")
-            mark_running(tx.conn, tp.attempt_ref, binding={
+            binding = {
                 "origin": "native_training", "process_pid": tp.process.pid,
                 "lifecycle": lifecycle_fence(lake, tp.idea_id, "training"),
-            })
+            }
+            if "artifact_publication" in row["binding"]:
+                binding["artifact_publication"] = row["binding"]["artifact_publication"]
+            mark_running(tx.conn, tp.attempt_ref, binding=binding)
             if resume_context:
                 launcher.mark_resume_launched(resume_context, idea_dir / "claim.json", effect_lease=tx.lease)
             tx.watch_attempt(tp.attempt_ref)

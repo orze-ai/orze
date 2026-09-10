@@ -35,6 +35,7 @@ import yaml
 
 from orze.core.research_policy import validate_research_policy_config
 from orze.core.prompt_limits import DEFAULT_PROMPT_BYTES, prompt_byte_limit
+from orze.core.artifact_contract import get_artifact_contract
 from orze.core.role_presets import configured_role_presets, apply_environment_research
 
 logger = logging.getLogger("orze")
@@ -309,6 +310,9 @@ DEFAULT_CONFIG = {
     # Complete prompt text, including mandatory contracts and delimiters.
     # Provider token/output reservations remain a separate control.
     "research_prompt": {"max_bytes": DEFAULT_PROMPT_BYTES},
+    # Declared file outputs are independently snapshotted by native attempts.
+    # Disabled legacy projects are not silently given artifact provenance.
+    "artifact_contract": None,
     # Optional autonomous-proposal contract. ``single_model_single_pass``
     # rejects composite work before it can enter the experiment queue.
     "research_policy": {
@@ -411,6 +415,7 @@ def load_project_config(path: Optional[str] = None) -> dict:
     # same strict declaration through role_preset_enabled().
     configured_role_presets(cfg)
     prompt_byte_limit(cfg)
+    get_artifact_contract(cfg)
 
     # Loud-warn on unresolved ${VAR} placeholders. Calls relying on these
     # (notifications, webhooks) will silently fail at runtime — make the
@@ -554,6 +559,11 @@ def _validate_config(cfg: dict) -> tuple:
 
     try:
         prompt_byte_limit(cfg)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+    try:
+        get_artifact_contract(cfg)
     except ValueError as exc:
         errors.append(str(exc))
 

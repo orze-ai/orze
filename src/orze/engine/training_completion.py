@@ -19,14 +19,33 @@ from orze.engine.native_evaluation import CompletionEvent, _identities, _verify_
 from orze.engine.training_attempts import current, import_for_completion
 
 
+def _artifact_binding(candidate, tp, idea_dir, cfg):
+    from orze.core.artifact_contract import artifact_publication_binding
+    from orze.engine.execution_authority import canonical_identity_equal
+    try:
+        requested = artifact_publication_binding(
+            cfg, idea_dir, getattr(tp, "execution_identity", None))
+    except (ValueError, TypeError) as exc:
+        raise AttemptEffectBusy("training_artifact_contract_unbound_or_changed") from exc
+    captured = candidate.get("binding", {}).get("artifact_publication")
+    if requested is None and captured is None:
+        return None
+    if (candidate.get("legacy") or candidate.get("binding", {}).get("origin")
+            != "native_training" or not canonical_identity_equal(requested, captured)):
+        raise AttemptEffectBusy("training_artifact_contract_unbound_or_changed")
+    return captured
+
+
 def finish(lake, tp, slot, idea_dir, cfg, ret, failure_counts, *, forced=None, interruption=None):
     """Return only a newly accepted completion; stale/duplicate is a no-op."""
     from orze.engine import launcher
     from orze.engine.accounting import record_compute_terminal
     from orze.engine.failure_analysis import classify_failure, write_failure_analysis
 
-    if not current(lake, tp, idea_dir):
+    initial_candidate = current(lake, tp, idea_dir)
+    if not initial_candidate:
         return None
+    artifact_binding = _artifact_binding(initial_candidate, tp, idea_dir, cfg)
     if type(ret) is not int:
         raise AttemptEffectBusy("training_exit_unconfirmed")
     metrics_path = idea_dir / "metrics.json"
@@ -76,16 +95,33 @@ def finish(lake, tp, slot, idea_dir, cfg, ret, failure_counts, *, forced=None, i
             success, outcome, reason = False, "failed", "model_lineage_invalid"
             invalid, detail = True, "model_lineage_validation_failed"
     target_count = failure_counts.get(tp.idea_id, 0) + (0 if success else 1)
+    artifacts = None
+    if success and artifact_binding is not None:
+        from orze.engine.artifact_publication import prepare_artifacts
+        artifacts = prepare_artifacts(tp.attempt_ref, idea_dir, artifact_binding)
     try:
         with execution_transaction(lake, idea_dir) as tx:
             candidate = current(lake, tp, idea_dir)
             if not candidate or identities != _identities([metrics_path]):
                 return None
+            _artifact_binding(candidate, tp, idea_dir, cfg)
             ref = import_for_completion(tx, tp, candidate)
-            digest = tx.prepare(ref, {
+            plan = {
                 "operation": "training_terminal", "outcome": outcome,
                 "reason_code": reason, "return_code": ret,
-            })
+            }
+            artifact_records = None
+            if artifacts is not None:
+                from orze.engine.artifact_publication import verify_prepared_artifacts
+                artifact_records = verify_prepared_artifacts(
+                    artifacts, ref, idea_dir, artifact_binding)
+                plan["artifact_ids"] = [record["artifact_id"] for record in artifact_records]
+            digest = tx.prepare(ref, plan)
+            if artifact_records is not None:
+                # Recheck after the actual prepare seam before granting rows.
+                verify_prepared_artifacts(artifacts, ref, idea_dir, artifact_binding)
+                from orze.core.research_artifacts import register_artifacts
+                artifact_ids = register_artifacts(tx.conn, ref, list(artifact_records))
             if invalid:
                 prefix = "metrics.lineage_invalid" if reason == "model_lineage_invalid" else "metrics.invalid"
                 destination = metrics_path.with_name(f"{prefix}.{time.time_ns()}.json")
@@ -135,12 +171,24 @@ def finish(lake, tp, slot, idea_dir, cfg, ret, failure_counts, *, forced=None, i
                         "return_code": ret, "effect_receipt_sha256": digest,
                         "failure_count_after": target_count,
                         "lifecycle": lifecycle_fence(lake, tp.idea_id, "training")}
+            if artifact_records is not None:
+                verify_prepared_artifacts(artifacts, ref, idea_dir, artifact_binding)
+            if artifact_binding is not None:
+                terminal["artifact_ids"] = list(artifact_ids) if artifact_records is not None else []
             if not success:
                 terminal["repair_status"] = (
                     "pending_explicit_action" if cfg.get("max_fix_attempts", 0) > 0
                     else "not_requested")
             if finish_attempt(tx.conn, ref, terminal) != "committed":
                 raise AttemptAuthorityError("training_terminal_not_new")
+            if artifact_records is not None:
+                from orze.core.research_artifacts import artifacts_for_attempt
+                actual = artifacts_for_attempt(tx.conn, ref)
+                expected = sorted(artifact_records, key=lambda record: record["logical_name"])
+                canonical = lambda value: json.dumps(
+                    value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+                if canonical(actual) != canonical(expected):
+                    raise AttemptAuthorityError("training_artifact_final_readback_failed")
     except StaleAttempt:
         return None
     if not success:
