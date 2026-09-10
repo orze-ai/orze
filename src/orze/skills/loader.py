@@ -7,6 +7,11 @@ CALLING SPEC:
         template_vars:  dict of {key: value} for substitution, or None to skip
         returns:        composed prompt string
 
+    compose_skills_with_manifest(..., context_for_skill=None, strict=False)
+        Return text and the actual included source descriptors from one read.
+        The optional callback supplies per-source trigger context; no activation
+        state is written here. Strict native gating is explicitly opt-in.
+
     load_builtin(name) -> Skill
         name: one of 'core', 'research', 'ops', 'setup'
         returns: Skill namedtuple(name, content)
@@ -100,100 +105,21 @@ def _substitute(text: str, template_vars: Dict[str, str]) -> str:
 
 def compose_skills(role_cfg: dict, project_root: Path,
                    template_vars: Optional[Dict[str, str]] = None) -> str:
-    """Compose the prompt string from role_cfg['skills'].
+    """Legacy string API: preserve default warning/include gate semantics."""
+    return compose_skills_with_manifest(role_cfg, project_root, template_vars)["text"]
 
-    Returns "" when the role declares no skills. Every role that uses
-    a Claude or research-agent prompt must declare a skills list.
+
+def compose_skills_with_manifest(role_cfg: dict, project_root: Path,
+                                 template_vars=None, *, context_for_skill=None,
+                                 strict=False) -> dict:
+    """Compose once; describe only actual nonempty included source fragments.
+
+    Source hashes are provenance, not periodic activation keys. The caller owns
+    any successful-launch ACK. Strict mode excludes unknown/invalid gates and
+    unusable callback context; legacy manual/plateau_or_new/zero gates remain
+    explicitly diagnosed always-included compatibility aliases.
     """
-    if "skills" not in role_cfg:
-        return ""
-
-    # Skills path: compose from list, honoring frontmatter ``order`` and
-    # ``trigger`` gates.
-    skills_list = role_cfg["skills"]
-    if not isinstance(skills_list, list):
-        logger.warning("'skills' must be a list, got %s", type(skills_list).__name__)
-        return ""
-
-    loaded_with_meta: List[tuple] = []  # [(Skill, meta_dict)]
-    for ref in skills_list:
-        ref = str(ref).strip()
-        if ref.startswith("@sop:"):
-            # Bundled SOP from orze-pro (tier 1, static).
-            # Delegated import so orze (basic) has no hard dependency on
-            # orze-pro (pro feature).
-            name = ref[len("@sop:"):]
-            try:
-                from orze_pro.skills.bundled import load_bundled_skill
-            except ImportError:
-                logger.warning("Skill %s: orze-pro not installed, "
-                               "bundled SOPs unavailable", ref)
-                continue
-            try:
-                text, path = load_bundled_skill(name)
-                meta, body = parse_frontmatter(text)
-                skill = Skill(name=meta.get("name", path.stem.replace(
-                    ".skill", "")), content=body)
-                loaded_with_meta.append((skill, meta))
-            except FileNotFoundError as e:
-                logger.warning("Skill %s: %s", ref, e)
-        elif ref.startswith("@"):
-            name = ref[1:]
-            try:
-                loaded_with_meta.append((load_builtin(name), {}))
-            except FileNotFoundError as e:
-                logger.warning("Skill %s: %s", ref, e)
-        else:
-            path = Path(ref)
-            if not path.is_absolute():
-                path = project_root / path
-            if not path.exists():
-                logger.warning("Skill %s: file not found", ref)
-                continue
-            try:
-                text = path.read_text(encoding="utf-8")
-                meta, body = parse_frontmatter(text)
-                skill = Skill(name=meta.get("name", path.stem), content=body)
-                loaded_with_meta.append((skill, meta))
-            except OSError as e:
-                logger.warning("Skill %s: %s", ref, e)
-
-    # Trigger gating: skills whose trigger evaluates False are omitted.
-    # Role passes the evaluation context via role_cfg["_trigger_context"].
-    try:
-        from orze.skills.triggers import evaluate_trigger
-    except ImportError:  # should not happen, but fail open
-        evaluate_trigger = None  # type: ignore
-
-    trigger_ctx = role_cfg.get("_trigger_context", {}) or {}
-    gated: List[tuple] = []
-    for skill, meta in loaded_with_meta:
-        trig = meta.get("trigger") if meta else None
-        if evaluate_trigger is None or trig is None:
-            gated.append((skill, meta))
-            continue
-        try:
-            if evaluate_trigger(trig, trigger_ctx):
-                gated.append((skill, meta))
-            else:
-                logger.info("Skill %s gated out by trigger %r", skill.name, trig)
-        except ValueError as e:
-            logger.warning("Skill %s: unknown trigger %r (%s) — including",
-                           skill.name, trig, e)
-            gated.append((skill, meta))
-
-    # Order sorting — lower ``order`` composed first.
-    gated.sort(key=lambda pair: int((pair[1] or {}).get("order", 100)))
-
-    if not gated:
-        return ""
-
-    sections = [skill.content for skill, _ in gated]
-    composed = "\n\n---\n\n".join(sections)
-
-    if template_vars:
-        composed = _substitute(composed, template_vars)
-
-    logger.info("Composed %d skills: %s",
-                len(gated), ", ".join(s.name for s, _ in gated))
-    return composed
+    from orze.skills.composition import compose_with_manifest
+    return compose_with_manifest(
+        role_cfg, project_root, template_vars,
+        context_for_skill=context_for_skill, strict=strict)
