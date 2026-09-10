@@ -18,7 +18,8 @@
 | V1-01I2：只读 catalog 与任务状态显示 | 已修复、机制已验证 | Core `b5db211`；29 公共入口测试旧模块 25 行为 red + 1 新字段失败 / 3 pass，另 6 旧发布器 red、5 草稿边界 red 与 23 新机制验收，共 63 passed；最终 core 1749 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
 | V1-01J1：显式研究节奏的证据资格 | 已修复、机制已验证 | Pro `efa3329`；16 公共调度测试旧模块 15 行为 red / 1 pass，另 18 新机制/控制验收，共 34 passed；最终 core 1749 passed / 6 optional Pro skips，Pro 428 passed，跨仓相关 30 passed |
 | V1-01I3：lineage 观察者不补审 | 已修复、机制已验证 | Core `781fc31`；18 冻结公共入口测试旧模块 14 行为 red / 4 pass，另 19 新 API 边界，共 37 passed；最终 core 1786 passed / 6 optional Pro skips，Pro 428 passed，跨仓相关 30 passed |
-| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、旧 verifier、director、skills/thinker 及其他独立消费者仍待收口；J1 仅关闭 research 的显式 convergence_patience 分支 |
+| V1-01J2：director 状态、目标与动作接线 | 已修复、机制已验证 | Pro `6f3915c`；50 冻结公共测试完整旧源码隔离重放 46 行为 red / 4 pass，另 10 草稿行为 red、12 新机制/兼容验收，共 72 passed；最终 core 1786 passed / 6 optional Pro skips，Pro 500 passed，跨仓相关 30 passed |
+| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、旧 verifier、skills/thinker、其他消费者的阶段一致性仍待收口；J1 仅关闭 research 显式节奏，J2 不代表通用依赖和全部 director 资源安全已完成 |
 | V1-02 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
 
 [V1-01A 机器可读证据](../evidence/2026-09-10-v1-01a-champion-recovery.json)包含基线、修复提交、红测内容哈希、命令、退出码、通过/跳过数量和适用边界。方案定稿、代码推送、机制验证、真实研究收益是四种不同状态。
@@ -46,3 +47,5 @@ V1-01B 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01b-researc
 V1-01J1 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01j1-evidence-cadence.json`，语义见该仓 `docs/evidence-cadence.md`。真实调度在锁边界验证完整资格、声明源/方向、可比较 distinct task ID、缺失 secondary、逐主机状态恢复及停用/backoff；新基线不读写旧 `_best_metric_*`。这是一项默认关闭的操作性节奏策略，不是科学收敛、独立样本或共享 observation/attempt 账本，其他旧文本/计数消费者尚未统一。
 
 [V1-01I3 机器可读证据](../evidence/2026-09-10-v1-01i3-lineage-observers.json)补充审查 director 时发现的共享资格读写混用：原观察调用会重扫 manifest、写新收据或补建 compute receipt 目录。冻结公共入口红测真实记录文件树/字节及审计副作用，修复保留模型哈希、终态和 benchmark 绑定；生成路径仍由训练启动/封存负责。[语义与边界](../lineage-observer-boundary.md)明确 I2 当时未覆盖这个 opt-in 缺口、旧 offline warm cache 和元数据信任模型。该修正切片在 J2 前收口，不代表 director、V1-01 整体或 V1 已完成。
+
+V1-01J2 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01j2-director-objectives.json`，语义见该仓 `docs/director-evidence.md`。完整旧 Pro worktree 实际提供被复制的 director 源码，不把当前新脚本伪装为旧复制路径；两份草稿快照分别重放控制目录/拒绝不 ACK/诊断链接与阶段交集缺口。无 objective 仍可读取合法排队工作，legacy 0 保持未知；自定义 PID/sentinel 路径一致，拒绝后可恢复重试。未具可信产物绑定的检测源切换已明确禁用，不宣称通用依赖已实现；真实进程 ownership/停止确认、持久 attempt/ACK 和全局原子性仍属后续条目。
