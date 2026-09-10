@@ -15,7 +15,8 @@
 | V1-01G2 / V1-05A：显式补评 | 已实现、机制已验证 | Core `1f375c4`；73 新机制验收与 G1 的 87 测试合计 160 passed；另有 5 个草稿边界红测及 1 个旧发布函数行为红测可重放；最终 core 1620 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
 | V1-01H1：选择不等于局部改善 | 已修复、机制已验证 | Core `858dc31`；31 冻结测试旧模块 24 red / 7 pass，当前全绿；idle tick 重验/撤销，stable ID、缺测及失格替换不冒充改善；最终 core 1651 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
 | V1-01I1：native report 统一资格 | 已修复、机制已验证 | Core `7b76484`；35 冻结测试旧模块 26 行为 red + 4 新字段验收失败 / 5 pass，当前全绿；完整 cfg、逐行 identity、缓存不授予资格，旧 offline API 明确未验证；最终 core 1686 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
-| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、CLI report-only 非迁移读取/完整 catalog、admin queue 与旧 verifier、显式 convergence/director 消费者仍待收口 |
+| V1-01I2：只读 catalog 与任务状态显示 | 已修复、机制已验证 | Core `b5db211`；29 公共入口测试旧模块 25 行为 red + 1 新字段失败 / 3 pass，另 6 旧发布器 red、5 草稿边界 red 与 23 新机制验收，共 63 passed；最终 core 1749 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
+| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、旧 verifier、显式 convergence/director 及其他独立消费者仍待收口；I2 只关闭 report-only/catalog/admin queue 路径 |
 | V1-02 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
 
 [V1-01A 机器可读证据](../evidence/2026-09-10-v1-01a-champion-recovery.json)包含基线、修复提交、红测内容哈希、命令、退出码、通过/跳过数量和适用边界。方案定稿、代码推送、机制验证、真实研究收益是四种不同状态。
@@ -36,4 +37,6 @@ V1-01B 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01b-researc
 
 [V1-01H1 机器可读证据](../evidence/2026-09-10-v1-01h1-objective-progress.json)提供公共通知路径的冻结红绿重放、真实 guard history 边界与最终全量结果；[语义与限制](../objective-progress.md)区分当前局部比较、历史修订与科学判决。空闲 tick 重验增加读 I/O，不声称效率净收益；旧 mtime 恢复和逐 host 状态尚未改为唯一 observation 计数。
 
-[V1-01I1 机器可读证据](../evidence/2026-09-10-v1-01i1-native-report.json)记录 native authority、cache/identity 与旧离线兼容的冻结红绿测试和测试前提更正；[范围说明](../report-authority.md)区分原生排名、未验证离线展示及 Pipeline 覆盖。配置 DB 的直接 report 入口不会自动迁移，但旧 CLI 构造器仍待修复；不能把 API 验收当作 CLI 非迁移读或 admin 队列状态已完成。
+[V1-01I1 机器可读证据](../evidence/2026-09-10-v1-01i1-native-report.json)记录 native authority、cache/identity 与旧离线兼容的冻结红绿测试和测试前提更正；[范围说明](../report-authority.md)区分原生排名、未验证离线展示及 Pipeline 覆盖。I1 验收当时，配置 DB 的直接 report 入口不会自动迁移，但旧 CLI 构造器仍待修复；不能把当时的 API 验收当作 CLI 非迁移读或 admin 队列状态已完成。
+
+[V1-01I2 机器可读证据](../evidence/2026-09-10-v1-01i2-observer-catalog.json)补上 I1 当时未完成的真实 CLI 非迁移读取、完整目录和 admin producer→API 任务状态显示。原始公开入口红测、旧发布器在新 CLI 下的 red、未提交 CLI 草稿的控制根目录 red 分别登记，未混称旧版本行为。63 项最终测试哈希、单文件写后核实/故障恢复及两仓全量命令均可重放；[观察入口契约](../observer-catalog.md)明确默认路径兼容、配置读取预算、缓存 TTL 和非原子边界。完整 V1 仍在执行，不将只读观察修复冒充持久 attempt/observation 或研究效率收益。

@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "item": "V1-01I2",
+  "status": "mechanism_verified",
+  "claim": "Report-only observes a closed read-only project catalog without runtime/database bootstrap. Native admin queue task state uses agreed lifecycle and persistent catalog rather than training metrics. Observer publishers confirm current output bytes before acknowledging success.",
+  "baseline": {
+    "core": "cad5baac7d28d6555e3f4b8a15e5cf1b8b069088",
+    "pro": "d0d27f103efbda043de6607224d33e3323c17ba4"
+  },
+  "frozen_tests": [
+    {
+      "file": "tests/test_report_only_cli_authority.py",
+      "sha256": "1908ba2058c21a8b69fcea76bc9b74317fc27703ad23d07cee2f591bc7df1989"
+    },
+    {
+      "file": "tests/test_admin_queue_lifecycle.py",
+      "sha256": "a34345a4bab2ac77e444a79e62527d46a27d7da52d2edb65eeb88f23ec2372c1"
+    },
+    {
+      "file": "tests/test_report_catalog_discovery.py",
+      "sha256": "4ca0e2b21d3f0f48a1a56dd508f8595097b93cd5966406dc1ef060dc143143f4"
+    },
+    {
+      "file": "tests/test_admin_queue_diagnostics.py",
+      "sha256": "8bd9a6efd79db9f00a545f9b8f24ec331adb4820ea592eb99ac0592d93e14f39"
+    },
+    {
+      "file": "tests/test_catalog_snapshot.py",
+      "sha256": "ebf48b41df0172c48364b128b2dc780e51b2aa51dac3f731d968d79e7cef08a6"
+    },
+    {
+      "file": "tests/test_catalog_config_bounds.py",
+      "sha256": "d6d83dc778c782cbaa5a8c558e1a5885f8d95a34884f81d20ae2ddab3b1f0a4f"
+    },
+    {
+      "file": "tests/test_report_only_cli_routing.py",
+      "sha256": "43cc4f8490bb3277273994a2ca169583c1508427bd643a551163abc5c8675771"
+    },
+    {
+      "file": "tests/test_report_only_project_scope.py",
+      "sha256": "36cfec7bdf22a52bf1db7c5078b55a4f4551689351b5b2e42df1fbe6897f9757"
+    },
+    {
+      "file": "tests/test_observer_publication_receipt.py",
+      "sha256": "0b68949bc1d64bcbf8360acd71eb640712d2e05ca4a80ae011e86f3f7af4866c"
+    }
+  ],
+  "reproducible_public_baseline_recheck": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport subprocess\nimport pytest\nimport orze.cli as cli\nimport orze.reporting.leaderboard as leaderboard\nimport orze.reporting.native_report as native_report\nimport orze.admin.server as server\nbaseline = 'cad5baac7d28d6555e3f4b8a15e5cf1b8b069088'\nfor module, filename in [(cli, 'src/orze/cli.py'), (leaderboard, 'src/orze/reporting/leaderboard.py'), (native_report, 'src/orze/reporting/native_report.py'), (server, 'src/orze/admin/server.py')]:\n    source = subprocess.check_output(['git', 'show', baseline + ':' + filename], text=True)\n    exec(compile(source, module.__file__ + '@' + baseline, 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_report_only_cli_authority.py', 'tests/test_admin_queue_lifecycle.py', 'tests/test_report_catalog_discovery.py', 'tests/test_admin_queue_diagnostics.py', '--tb=short']))\nPY",
+    "exit_code": 1,
+    "failed": 26,
+    "behavior_failed": 25,
+    "new_field_failed": 1,
+    "passed": 3,
+    "elapsed_seconds": 6.82,
+    "scope": "Only the four fixed committed CLI, leaderboard, native_report and admin server modules are substituted in an isolated Python process. No filesystem rollback, dependency absence, production process, or live database is used.",
+    "classification": "25 behavioral failures plus one separate offline authority-label acceptance failure; three pre-existing positive cases pass. The 10 catalog, 8 configuration and 5 routing cases are new mechanism acceptance, not missing-API behavioral reds."
+  },
+  "reproducible_publisher_baseline_recheck": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport ast\nimport subprocess\nimport pytest\nimport orze.reporting.leaderboard as leaderboard\nbaseline = 'cad5baac7d28d6555e3f4b8a15e5cf1b8b069088'\nsource = subprocess.check_output(['git', 'show', baseline + ':src/orze/reporting/leaderboard.py'], text=True)\nnames = {'_atomic_write_if_changed', '_write_report_if_changed', 'write_admin_cache'}\ntree = ast.parse(source)\nfunctions = ast.Module(body=[node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in names], type_ignores=[])\nassert {node.name for node in functions.body} == names\nexec(compile(functions, leaderboard.__file__ + '@' + baseline, 'exec'), leaderboard.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_observer_publication_receipt.py', '--tb=short']))\nPY",
+    "exit_code": 1,
+    "failed": 6,
+    "passed": 0,
+    "elapsed_seconds": 1.87,
+    "scope": "Only three named leaderboard functions from the fixed committed baseline are substituted by AST. The current report-only CLI remains in place: this proves old publisher behavior under the new CLI, not old CLI routing. Silent-no-write is an explicit publication-boundary fault substitute for the existing swallowed-ENOSPC path; no real disk was filled."
+  },
+  "reproducible_draft_boundary_recheck": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nimport orze.reporting.report_cli as report_cli\nsnapshot = Path('docs/evidence/snapshots/v1-01i2-before-project-scope.py')\nexec(compile(snapshot.read_text(encoding='utf-8'), str(snapshot), 'exec'), report_cli.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_report_only_project_scope.py', '--tb=short']))\nPY",
+    "exit_code": 1,
+    "failed": 5,
+    "passed": 0,
+    "elapsed_seconds": 1.28,
+    "snapshot": "docs/evidence/snapshots/v1-01i2-before-project-scope.py",
+    "snapshot_sha256": "a400d63da5664efeac1cf458c97bf894497a63cbae855998bc6568d092c8e175",
+    "scope": "Saved uncommitted I2 report_cli draft only, not a released baseline. Four real benchmark control-root guard failures and one nonmapping-YAML loader failure were reproduced and corrected."
+  },
+  "targeted_green": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_report_only_cli_authority.py tests/test_admin_queue_lifecycle.py tests/test_report_catalog_discovery.py tests/test_admin_queue_diagnostics.py tests/test_catalog_snapshot.py tests/test_catalog_config_bounds.py tests/test_report_only_cli_routing.py tests/test_report_only_project_scope.py tests/test_observer_publication_receipt.py --tb=short",
+    "exit_code": 0,
+    "passed": 63,
+    "elapsed_seconds": 19.2
+  },
+  "final_pro_regression": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+    "exit_code": 0,
+    "passed": 394,
+    "skipped": 0,
+    "elapsed_seconds": 35.89
+  },
+  "final_cross_repository_regression": {
+    "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"--tb=short\",\"-rs\"]))'",
+    "exit_code": 0,
+    "passed": 30,
+    "skipped": 0,
+    "elapsed_seconds": 0.72
+  },
+  "independent_review": [
+    {
+      "scope": "Closed read-only catalog and bounded config acceptance; direct report discovery, real CLI/admin wiring; nested copy and output-directory checks",
+      "passed": 39,
+      "elapsed_seconds": 6.42,
+      "followup": "Nonmapping YAML error found by review was corrected and covered by the saved-draft boundary tests."
+    },
+    {
+      "scope": "Final publication helper and schema review; real CLI JSON/Markdown retry, admin lifecycle and diagnostic boundaries",
+      "passed": 25,
+      "elapsed_seconds": 7.67
+    },
+    {
+      "scope": "Final report-only paths, publisher regression and related native/offline report/admin suites",
+      "passed": 97,
+      "elapsed_seconds": 13.48
+    }
+  ],
+  "test_corrections": [
+    "The first observer publication test draft used queue.queue for the admin producer recovery postcondition; the existing producer schema is queue.items (the HTTP API uses queue). Corrected before final green and reran the fixed baseline with the final hash 0b68949bc1d64bcbf8360acd71eb640712d2e05ca4a80ae011e86f3f7af4866c. Initial hash 65caaeee8d17b7627440fefdb1bb7fa2ab1ad27b5a8b31e9917f16125ed204bb is not final evidence. All six final old-publisher failures occur at substantive lost-publication assertions."
+  ],
+  "verified_boundaries": [
+    "Real --report-only runs from an external cwd with complete config, real parser/reports/SQLite, no key/star/GPU/extension/process call; default/custom DB bytes and sidecars remain unchanged. Missing DB parents are not created; incompatible DB schema is not bootstrapped.",
+    "Configuration-only update_report discovers queued/failed/completed/archived catalog rows with empty inbox, keeps existing four-state pipeline accounting, ignores malformed legacy archived-index caches, and fails closed on malformed stage catalog.",
+    "Catalog schema and rows are read in a read-only transaction; all connections close before values are consumed. Missing/malformed/repeated-join identities and link redirection are rejected. Individual agreement conflicts remain UNKNOWN without dropping healthy rows. Existing FSM pipeline counts are not redefined as evidence counts.",
+    "Real admin producer and GET /api/queue show pending/in-progress/failed/completed evaluation task states correctly even when training metrics say COMPLETED. A durable evaluation-only retry remains visible with its configuration after the Lake closes and inbox empties.",
+    "Default report snapshots do not select, measure or parse the large configuration column. Opt-in persistent admin config is capped in SQL and during YAML/JSON conversion; config availability does not determine lifecycle state.",
+    "Malformed diagnostic-only metrics and generic non-dictionary backbone metadata no longer block actual queue publication/API delivery; legitimate failure alerts and original artifact bytes remain preserved.",
+    "Report JSON/Markdown and admin cache publishers read back exact output bytes; a silently lost write is not acknowledged. Missing/stale-output fault cases preserve prior bytes and recover after the injected fault is removed; unchanged reports keep timestamp/mtime.",
+    "Nested/external result roots retain the loader's default results-parent .orze/control-root pairing and pass the actual benchmark path guard. Relative custom DB paths are anchored to the selected config directory; explicit subcommands retain priority and conflicting global action flags are rejected."
+  ],
+  "limits": [
+    "See docs/observer-catalog.md and docs/report-authority.md. V1-01 and V1 as a whole remain open; this is the report-only/catalog/admin-queue reader slice.",
+    "Pipeline audited counts, agreed task status, and qualified ranking are distinct. Historical missing stage rows remain unrecorded; they are not manufactured as successful stage receipts.",
+    "Per-row qualification and per-file publication readback do not provide a globally atomic filesystem/database view, a multi-file publication transaction, immutable observations, historical progress, or stale-attempt fencing.",
+    "Admin still serves a derived cache with the existing TTL. This item does not establish real-time status or migrate every other admin endpoint, verifier, director, or convergence consumer.",
+    "Full catalog reads remain O(task count). Persistent configuration budgets are per-item, not a whole-catalog memory cap. These display constraints do not bound all inbox/parser/prompt ingestion paths.",
+    "Default .orze/inbox/DB locations remain results-parent based as in the existing loader; report-only does not relocate an existing authority or rewrite normal runtime CLI path semantics.",
+    "Report and admin output files are authorized derived writes. The global atomic_write behavior outside these verified observer wrappers is unchanged; a failed later output does not roll back earlier published files.",
+    "No actual GPU/evaluator subprocess, paid provider, production license activation, package publication, deployment, live campaign mutation, or research-efficiency claim. Pro regression bypasses only the license boundary inside its test process."
+  ],
+  "fix": {
+    "core": "b5db211f3a21ac54910344ff74b7d56ddd818b4a"
+  },
+  "final_core_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0,
+    "passed": 1749,
+    "skipped": 6,
+    "elapsed_seconds": 158.72,
+    "skip_scope": "Existing optional Pro tests in the core-only source environment; paired-source related tests run separately."
+  },
+  "remote_verification": "Push succeeded; git ls-remote origin refs/heads/feat/autoresearch-v1 matched exactly b5db211f3a21ac54910344ff74b7d56ddd818b4a."
+}
