@@ -368,15 +368,10 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
                 # A failed launcher cannot advertise this handle as active.
                 # Close only our log descriptor, never pretend the worker or
                 # its descendants stopped and never write terminal evidence.
-                try:
-                    if ep is not None:
-                        ep.close_log()
-                    elif not log_fh.closed:
-                        log_fh.close()
-                except Exception as close_error:
-                    logger.warning(
-                        "Could not close held evaluation log for %s: %s",
-                        idea_id, type(close_error).__name__)
+                if ep is not None:
+                    ep.close_log()
+                elif not log_fh.closed:
+                    log_fh.close()
                 raise
         if ep is not None:
             try:
@@ -457,7 +452,6 @@ def _write_eval_failure_marker(results_dir: Path, idea_id: str,
     Args:
         lake: IdeaLake instance for FSM transition recording (optional)
     """
-    require_no_unconfirmed_stop(results_dir / idea_id)
     report_path = evaluation_output_path(
         results_dir / idea_id, {"eval_output": eval_output})
     if (report_path is not None and
@@ -512,7 +506,6 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
         ep = active_evals[gpu]
         if getattr(ep, "_termination_unconfirmed", False):
             raise TerminationUnconfirmed("evaluation_termination_unconfirmed")
-        require_no_unconfirmed_stop(results_dir / ep.idea_id)
         try:
             ret = ep.process.poll()
         except OSError:

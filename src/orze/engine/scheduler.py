@@ -168,6 +168,14 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
     to 'queued' in the DB by a stale reconciliation).
     """
     idea_dir = results_dir / idea_id
+    from orze.engine.termination_hold import (
+        TerminationUnconfirmed, require_no_unconfirmed_stop,
+    )
+    try:
+        require_no_unconfirmed_stop(idea_dir)
+    except TerminationUnconfirmed:
+        logger.error("Refusing claim with unconfirmed stop: %s", idea_id)
+        return False
     try:
         idea_dir.mkdir(parents=True, exist_ok=False)
     except FileExistsError:
@@ -262,6 +270,14 @@ def cleanup_orphans(results_dir: Path, hours: float,
 
     for d in results_dir.iterdir():
         if not d.is_dir() or not d.name.startswith("idea-"):
+            continue
+        from orze.engine.termination_hold import (
+            TerminationUnconfirmed, require_no_unconfirmed_stop,
+        )
+        try:
+            require_no_unconfirmed_stop(d)
+        except TerminationUnconfirmed:
+            logger.error("Keeping execution with unconfirmed stop: %s", d.name)
             continue
         claim_path = d / "claim.json"
         metrics_path = d / "metrics.json"

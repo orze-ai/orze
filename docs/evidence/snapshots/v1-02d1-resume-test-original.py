@@ -252,7 +252,6 @@ def test_timeout_writes_non_resumable_receipt_when_policy_disabled(
 
     def terminate(proc, *args, **kwargs):
         proc.return_code = -15
-        return True
 
     monkeypatch.setattr("orze.engine.launcher._terminate_and_reap", terminate)
     monkeypatch.setattr(

@@ -212,6 +212,17 @@ def reconcile_stale_running(cfg: dict) -> None:
             return target or "FAILED"
 
         for idea_id in all_running:
+            from orze.engine.evaluation_retry import (
+                EvaluationRetryError, _require_closed_evaluations,
+            )
+            try:
+                # Includes durable stop requests from initialization failures
+                # and interrupted evaluators whose handle died with the daemon.
+                _require_closed_evaluations(results_dir / idea_id)
+            except EvaluationRetryError:
+                logger.error("Cannot recover %s: execution stop is unconfirmed", idea_id)
+                others.append(idea_id)
+                continue
             claim_path = results_dir / idea_id / "claim.json"
             if claim_path.exists():
                 try:
@@ -598,6 +609,14 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
             "WHERE status = 'running'").fetchall()
         for idea_id, em_raw in rows:
             idea_dir = results_dir / idea_id
+            from orze.engine.evaluation_retry import (
+                EvaluationRetryError, _require_closed_evaluations,
+            )
+            try:
+                _require_closed_evaluations(idea_dir)
+            except EvaluationRetryError:
+                logger.error("Cannot reconcile %s: execution stop is unconfirmed", idea_id)
+                continue
             claim_path = idea_dir / "claim.json"
 
             def completed_on_disk() -> bool:
@@ -859,6 +878,30 @@ def print_startup_summary(cfg: dict) -> None:
 # Shutdown
 # ---------------------------------------------------------------------------
 
+def _stop_for_shutdown(tracked, results_dir: Path | None, phase: str) -> bool:
+    from orze.engine.process import _terminate_and_reap
+    from orze.engine.termination_hold import (
+        TerminationUnconfirmed, terminate_execution,
+    )
+    try:
+        if results_dir is not None:
+            terminate_execution(
+                tracked, Path(results_dir) / tracked.idea_id, phase=phase,
+                reaper=_terminate_and_reap, timeout=10)
+        else:
+            # Legacy callers without a result directory cannot persist a stop
+            # request. They still must not confuse a leader exit with closure.
+            if (getattr(tracked, "_termination_unconfirmed", False) is True
+                    or _terminate_and_reap(tracked.process, tracked.idea_id) is not True
+                    or type(tracked.process.poll()) is not int):
+                tracked._termination_unconfirmed = True
+                return False
+        return True
+    except TerminationUnconfirmed:
+        logger.error("Shutdown HOLD: writers for %s are not proven stopped", tracked.idea_id)
+        return False
+
+
 def graceful_shutdown(results_dir: Path, cfg: dict,
                       active: dict, active_evals: dict, active_roles: dict,
                       iteration: int, state_dict: dict, lake,
@@ -884,6 +927,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     logger.info("Shutting down gracefully (kill_all=%s)...", kill_all)
     training_count = len(active)
     eval_count = len(active_evals)
+    held_training, held_evals = {}, {}
 
     def close_interrupted_evaluation(ep) -> None:
         """Close compute/stage evidence after a controlled evaluator stop."""
@@ -928,17 +972,29 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
 
     if kill_all:
         # Kill ALL child processes: training, eval, and roles
-        all_procs = []
         for gpu, tp in active.items():
             logger.info("Killing training %s on GPU %s (PID %d)",
                         tp.idea_id, gpu, tp.process.pid)
-            _kill_pg(tp.process, signal.SIGTERM)
-            all_procs.append(("training", tp))
+            phase = "posthoc" if getattr(tp, "is_posthoc", False) else "training"
+            if not _stop_for_shutdown(tp, results_dir, phase):
+                held_training[gpu] = tp
+                continue
+            tp.close_log()
+            try:
+                write_interruption_receipt(
+                    tp, results_dir, cfg, reason="orze_stop",
+                    terminating_signal="SIGTERM", return_code=tp.process.poll())
+            except Exception as exc:
+                logger.warning("Could not persist interruption receipt for %s: %s",
+                               tp.idea_id, type(exc).__name__)
         for gpu, ep in active_evals.items():
             logger.info("Killing eval %s on GPU %s (PID %d)",
                         ep.idea_id, gpu, ep.process.pid)
-            _kill_pg(ep.process, signal.SIGTERM)
-            all_procs.append(("eval", ep))
+            if not _stop_for_shutdown(ep, results_dir, "evaluation"):
+                held_evals[gpu] = ep
+                continue
+            ep.close_log()
+            close_interrupted_evaluation(ep)
         for role_name, rp in active_roles.items():
             logger.info("Killing role '%s' (PID %d)",
                         role_name, rp.process.pid)
@@ -947,43 +1003,15 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
             if reaped:
                 _fs_unlock(rp.lock_dir)
 
-        # Wait up to 10s then SIGKILL
-        deadline = time.time() + 10
-        for label, proc in all_procs:
-            remaining = max(1, deadline - time.time())
-            try:
-                proc.process.wait(timeout=remaining)
-            except subprocess.TimeoutExpired:
-                logger.warning("Force killing %s (PID %d)",
-                               label, proc.process.pid)
-                _kill_pg(proc.process, signal.SIGKILL)
-                try:
-                    proc.process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    pass
-            proc.close_log()
-            if label == "training":
-                try:
-                    write_interruption_receipt(
-                        proc, results_dir, cfg, reason="orze_stop",
-                        terminating_signal="SIGTERM",
-                        return_code=proc.process.poll(),
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "Could not persist interruption receipt for %s: %s",
-                        proc.idea_id, type(exc).__name__,
-                    )
-            else:
-                close_interrupted_evaluation(proc)
-            if hasattr(proc, 'lock_dir') and proc.lock_dir:
-                _fs_unlock(proc.lock_dir)
     else:
         # Training has a durable process/claim recovery path and may safely
         # detach. Evaluators do not: detaching left an unowned allocation that
         # could never write its terminal receipt. Interrupt evals cleanly and
         # return their stage to PENDING so the next controller can retry.
         for gpu, tp in active.items():
+            if getattr(tp, "_termination_unconfirmed", False) is True:
+                held_training[gpu] = tp
+                continue
             logger.info("Detaching training %s on GPU %s (PID %d) "
                         "-- will finish in background",
                         tp.idea_id, gpu, tp.process.pid)
@@ -992,15 +1020,9 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
             logger.info("Interrupting eval %s on GPU %s (PID %d) "
                         "-- next controller will retry",
                         ep.idea_id, gpu, ep.process.pid)
-            _kill_pg(ep.process, signal.SIGTERM)
-            try:
-                ep.process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                _kill_pg(ep.process, signal.SIGKILL)
-                try:
-                    ep.process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    pass
+            if not _stop_for_shutdown(ep, results_dir, "evaluation"):
+                held_evals[gpu] = ep
+                continue
             ep.close_log()
             close_interrupted_evaluation(ep)
         for role_name, rp in active_roles.items():
@@ -1066,7 +1088,9 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     # last-resort contract is to kill every process still tracked here.
     active_roles.clear()
     active.clear()
+    active.update(held_training)
     active_evals.clear()
+    active_evals.update(held_evals)
 
 
 def atexit_cleanup(active: dict, active_evals: dict,
@@ -1096,11 +1120,14 @@ def atexit_cleanup(active: dict, active_evals: dict,
             )
 
     for gpu, tp in list(active.items()):
-        _kill_pg(tp.process, signal.SIGKILL)
-        close_compute(tp, "training", "training_atexit_cleanup")
+        phase = "posthoc" if getattr(tp, "is_posthoc", False) else "training"
+        if not _stop_for_shutdown(tp, results_dir, phase):
+            continue
+        close_compute(tp, phase, "training_atexit_cleanup")
         tp.close_log()
     for gpu, ep in list(active_evals.items()):
-        _kill_pg(ep.process, signal.SIGKILL)
+        if not _stop_for_shutdown(ep, results_dir, "evaluation"):
+            continue
         close_compute(ep, "evaluation", "evaluation_atexit_cleanup")
         ep.close_log()
     for role_name, rp in list(active_roles.items()):

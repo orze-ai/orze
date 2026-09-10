@@ -64,6 +64,9 @@ from orze.reporting.state import (
     save_state, write_host_heartbeat, write_status_json,
 )
 from orze.engine.sealed import load_sealed_manifest, verify_sealed_files
+from orze.engine.termination_hold import (
+    TerminationUnconfirmed, require_no_unconfirmed_stop, terminate_execution,
+)
 
 
 # Canonical approach-family labels used when constructing IdeaProposals for the
@@ -752,11 +755,15 @@ class OrzePhaseMixin:
                     defer(idea_id, self.gpu_ids[0])
 
         def deliver(idea_id, gpu):
+            require_no_unconfirmed_stop(self.results_dir / idea_id)
             if idea_id not in delivered_ids:
                 eval_finished.append((idea_id, gpu))
                 delivered_ids.add(idea_id)
 
         def finish_without_process(idea_id, gpu):
+            # Neither missing eval configuration nor existing output can
+            # resolve a persisted, unconfirmed execution stop.
+            require_no_unconfirmed_stop(self.results_dir / idea_id)
             if not cfg.get("eval_script"):
                 if self.lake:
                     state = self.lake.get_fsm_state(idea_id)
@@ -829,6 +836,8 @@ class OrzePhaseMixin:
                                 idea_id, max_evals)
                     else:
                         deliver(idea_id, gpu)
+                except TerminationUnconfirmed:
+                    raise
                 except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                     if idea_id in attempted_ids:
                         # Dispatch/lifecycle I/O failures are not evidence that
@@ -1597,6 +1606,10 @@ class OrzePhaseMixin:
                                 ideas[idea_id]["title"][:50])
                     try:
                         tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)
+                    except TerminationUnconfirmed:
+                        # A child may exist even though launch never returned
+                        # a process object. Do not repair/reset/relaunch it.
+                        raise
                     except DuplicateLaunchError as e:
                         logger.info(
                             "[EXECUTION-DEDUP] %s rejected before GPU: %s",
@@ -1647,6 +1660,8 @@ class OrzePhaseMixin:
                             try:
                                 tp = launch(idea_id, gpu,
                                             self.results_dir, cfg, lake=self.lake)
+                            except TerminationUnconfirmed:
+                                raise
                             except Exception as e2:
                                 logger.error(
                                     "[FIX-RETRY] %s relaunch failed: %s",
@@ -1687,27 +1702,27 @@ class OrzePhaseMixin:
                     except RuntimeError as slot_err:
                         # Race: capacity check passed at target selection but
                         # failed at registration (system-load throttle kicked in
-                        # between launch() and assign()). Don't crash the
-                        # orchestrator — terminate the orphan subprocess and
-                        # retry the idea later.
+                        # between launch() and assign()). A confirmed stop can
+                        # requeue; unknown effects remain durably held even
+                        # though this process never entered the active map.
                         logger.warning(
                             "[SLOT-RACE] %s on GPU %s: %s — terminating orphan "
                             "and deferring idea", idea_id, gpu, slot_err)
-                        try:
-                            from orze.engine.process import _terminate_and_reap
-                            _terminate_and_reap(tp.process, f"orphan {idea_id}")
-                            tp.close_log()
-                        except Exception as cleanup_err:
-                            logger.warning("Cleanup after slot-race failed: %s",
-                                           cleanup_err)
+                        from orze.engine.process import _terminate_and_reap
+                        execution_phase = (
+                            "posthoc" if getattr(tp, "is_posthoc", False)
+                            else "training")
+                        return_code = terminate_execution(
+                            tp, self.results_dir / idea_id,
+                            phase=execution_phase, reaper=_terminate_and_reap)
+                        tp.close_log()
                         record_compute_terminal(
                             tp,
                             self.results_dir / idea_id,
                             "requeued",
                             "scheduler_slot_race",
-                            phase=("posthoc" if getattr(
-                                tp, "is_posthoc", False) else "training"),
-                            return_code=tp.process.poll(),
+                            phase=execution_phase,
+                            return_code=return_code,
                         )
                         _reset_idea_for_retry(
                             self.results_dir / idea_id,

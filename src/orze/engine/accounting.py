@@ -146,6 +146,8 @@ def record_compute_terminal(
     return_code: Optional[int] = None,
 ) -> dict:
     """Persist the first terminal allocation outcome for one attempt."""
+    from orze.engine.termination_hold import require_no_unconfirmed_stop
+    require_no_unconfirmed_stop(idea_dir)
     if outcome == "started":
         raise ComputeAccountingError("terminal_outcome_invalid")
     payload = _base(tp, phase, "terminal", outcome)
@@ -186,6 +188,8 @@ def record_zero_gpu_outcome(
     phase: str = "admission",
 ) -> dict:
     """Record a claimed attempt rejected/requeued before GPU allocation."""
+    from orze.engine.termination_hold import require_no_unconfirmed_stop
+    require_no_unconfirmed_stop(idea_dir)
     idea_id = _token(idea_id, "idea_id")
     idea_dir = Path(idea_dir)
     try:
@@ -241,6 +245,8 @@ def finalize_failed_launch_accounting(
     latter must already have a paired allocation receipt. Any half-written or
     contradictory state fails closed instead of being relabelled zero-GPU.
     """
+    from orze.engine.termination_hold import require_no_unconfirmed_stop
+    require_no_unconfirmed_stop(idea_dir)
     idea_id = _token(idea_id, "idea_id")
     idea_dir = Path(idea_dir)
     try:

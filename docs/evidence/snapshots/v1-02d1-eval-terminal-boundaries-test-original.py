@@ -83,7 +83,6 @@ def project(tmp_path, monkeypatch):
     def terminate(proc, *args, **kwargs):
         assert proc is p.process
         proc.returncode = -15
-        return True
 
     p.terminate = Mock(side_effect=terminate)
     monkeypatch.setattr(evaluator.subprocess, "Popen", p.popen)

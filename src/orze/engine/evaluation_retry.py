@@ -20,6 +20,13 @@ from orze.engine.evaluation_retry_files import (
 
 
 def _require_closed_evaluations(idea_dir: Path) -> None:
+    from orze.engine.termination_hold import (
+        TerminationUnconfirmed, require_no_unconfirmed_stop,
+    )
+    try:
+        require_no_unconfirmed_stop(idea_dir)
+    except TerminationUnconfirmed as exc:
+        raise EvaluationRetryError("evaluation_retry_termination_unconfirmed") from exc
     root = idea_dir / "_compute_receipts"
     if root.is_symlink():
         raise EvaluationRetryError("evaluation_retry_compute_evidence_redirected")

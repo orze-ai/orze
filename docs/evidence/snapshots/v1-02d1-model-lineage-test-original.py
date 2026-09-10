@@ -578,7 +578,6 @@ def test_launch_accounts_then_terminates_unattested_child(
     def fake_terminate(proc, *args, **kwargs):
         terminated.append(proc.pid)
         proc.returncode = -15
-        return True
 
     monkeypatch.setattr("orze.engine.launcher.subprocess.Popen", fake_popen)
     monkeypatch.setattr(

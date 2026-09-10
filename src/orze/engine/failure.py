@@ -54,6 +54,8 @@ def _reset_idea_for_retry(idea_dir: Path, release_claim: bool = False):
     repair/relaunch keeps the current claim; deferred retries must archive it
     so the scheduler can claim the preserved directory again.
     """
+    from orze.engine.termination_hold import require_no_unconfirmed_stop
+    require_no_unconfirmed_stop(idea_dir)
     metrics = idea_dir / "metrics.json"
     if metrics.exists():
         metrics.unlink(missing_ok=True)

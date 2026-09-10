@@ -25,12 +25,14 @@ CALLING SPEC:
         sig: signal number (default SIGTERM)
         side effects: sends signal to the entire process group; falls back to proc.send_signal
 
-    _terminate_and_reap(proc, label="", timeout=10) -> None
+    _terminate_and_reap(proc, label="", timeout=10) -> bool
         proc: subprocess.Popen
         label: str — for log messages
         timeout: float — seconds to wait after SIGTERM before SIGKILL
         side effects: SIGTERM -> wait -> SIGKILL surviving process-group
                       descendants; logs warnings on force kill
+        returns: True only if the group, tracked escaped descendants, and
+                 leader are stopped; callers must not ignore False
 
     _new_process_group() -> None
         preexec_fn for subprocess.Popen; calls os.setpgrp() to create a new process group
@@ -694,6 +696,7 @@ class TrainingProcess:
     config_path: Optional[str] = None
     attempt_id: Optional[str] = None
     execution_identity: Optional[str] = None
+    _termination_unconfirmed: bool = field(default=False, repr=False)
     _log_fh: Any = field(default=None, repr=False)
     _last_log_size: int = field(default=0, repr=False)
     _last_log_check: float = field(default=0.0, repr=False)
@@ -718,6 +721,7 @@ class EvalProcess:
     log_path: Path
     timeout: float
     attempt_id: Optional[str] = None
+    _termination_unconfirmed: bool = field(default=False, repr=False)
     _log_fh: Any = field(default=None, repr=False)
 
     def close_log(self):

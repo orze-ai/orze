@@ -32,7 +32,7 @@ _PROTECTED_NAMES = {
     "idea_config.yaml", "resolved_config.yaml",
 }
 _PROTECTED_TREES = {
-    "_compute_receipts", "_evaluation_bundle", "_evaluation_retries",
+    "_compute_receipts", "_evaluation_bundle", "_evaluation_retries", "_execution_stops",
     "checkpoints", "checkpoint", "models",
 }
 

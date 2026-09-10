@@ -1093,36 +1093,6 @@ def _resolve_idea_kind(idea_id: str, idea_cfg_path: Path,
     return None
 
 
-def _close_launch_log(log_fh) -> None:
-    """A secondary close failure cannot disguise an uncertain process stop."""
-    if log_fh is not None:
-        try:
-            log_fh.close()
-        except Exception as exc:
-            logger.warning("Launch log close failed: %s", type(exc).__name__)
-
-
-def _cleanup_failed_launch(tp, idea_dir: Path, phase: str, log_fh) -> None:
-    """Any known-created child needs stop authority, including lease exit."""
-    try:
-        return_code = terminate_execution(
-            tp, idea_dir, phase=phase, reaper=_terminate_and_reap, timeout=3,
-        )
-        try:
-            from orze.engine.accounting import record_compute_terminal
-            record_compute_terminal(
-                tp, idea_dir, "failed", f"{phase}_launch_initialization_failed",
-                phase=phase, return_code=return_code,
-            )
-        except TerminationUnconfirmed:
-            raise
-        except Exception as exc:
-            logger.warning("Launch terminal receipt failed for %s: %s",
-                           tp.idea_id, type(exc).__name__)
-    finally:
-        _close_launch_log(log_fh)
-
-
 def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
                     *, kind: str,
                     idea_cfg_path: Path,
@@ -1191,22 +1161,16 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
         raise LaunchIntegrityError(
             "artifact_preflight_receipt_missing_or_stale")
 
-    attempt_id = str(claim_data.get("attempt_id") or secrets.token_hex(16))
-    tp = SimpleNamespace(
-        idea_id=idea_id, gpu=gpu, process=None,
-        start_time=time.time(), attempt_id=attempt_id, is_posthoc=True,
-    )
-    proc = None
-    log_fh = None
-    from orze.engine.accounting import record_compute_start
-    try:
-        # A lease's __exit__ is still a post-Popen failure boundary.
-        _assert_controller_runtime_attested(cfg)
-        with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
-            _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
-            log_fh = open(log_path, "a")
-            log_fh.write(f"\n[posthoc_runner] kind={kind} gpu={gpu}\n")
-            log_fh.flush()
+    # Final sanity-check that the claimed GPU is still free at Popen
+    # time (c1136). Raises GpuUnavailableError if not.
+    _assert_controller_runtime_attested(cfg)
+    with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
+        _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
+
+        log_fh = open(log_path, "a")
+        log_fh.write(f"\n[posthoc_runner] kind={kind} gpu={gpu}\n")
+        log_fh.flush()
+        try:
             proc = subprocess.Popen(
                 cmd,
                 stdin=subprocess.PIPE,
@@ -1214,21 +1178,23 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
                 env=env, preexec_fn=_new_process_group,
                 pass_fds=lease_fds,
             )
-            tp.process = proc
-            tp.start_time = time.time()
-            record_compute_start(tp, idea_dir, phase="posthoc")
-    except Exception:
-        if proc is not None:
-            _cleanup_failed_launch(tp, idea_dir, "posthoc", log_fh)
-        else:
-            _close_launch_log(log_fh)
-        raise
+        except Exception:
+            log_fh.close()
+            raise
     try:
         proc.stdin.write(json.dumps(idea_cfg).encode())
         proc.stdin.close()
     except Exception:  # pragma: no cover
         pass
-    now = tp.start_time
+    attempt_id = secrets.token_hex(16)
+    if claim_data.get("attempt_id"):
+        attempt_id = str(claim_data["attempt_id"])
+    now = time.time()
+    tp = SimpleNamespace(
+        idea_id=idea_id, gpu=gpu, process=proc,
+        start_time=now, attempt_id=attempt_id, is_posthoc=True,
+    )
+    from orze.engine.accounting import record_compute_start
     try:
         tp = TrainingProcess(
             idea_id=idea_id, gpu=gpu, process=proc,
@@ -1237,8 +1203,20 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
             attempt_id=attempt_id, _log_fh=log_fh,
         )
         tp.is_posthoc = True
+        record_compute_start(tp, idea_dir, phase="posthoc")
     except Exception:
-        _cleanup_failed_launch(tp, idea_dir, "posthoc", log_fh)
+        return_code = terminate_execution(
+            tp, idea_dir, phase="posthoc", reaper=_terminate_and_reap,
+            timeout=3,
+        )
+        try:
+            from orze.engine.accounting import record_compute_terminal
+            record_compute_terminal(
+                tp, idea_dir, "failed", "posthoc_launch_initialization_failed",
+                phase="posthoc", return_code=return_code)
+        except Exception:
+            pass
+        log_fh.close()
         raise
     return tp
 
@@ -1734,16 +1712,6 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             results_dir, cfg, execution_identity, idea_id, attempt_id)
         raise LaunchIntegrityError(str(exc)) from exc
 
-    # Keep a fallback handle before entering the allocation boundary: both
-    # context-manager exit and TrainingProcess construction can fail after
-    # Popen succeeded. Neither failure can be treated as an unstarted child.
-    tp = SimpleNamespace(
-        idea_id=idea_id, gpu=gpu, process=None, start_time=time.time(),
-        attempt_id=attempt_id, execution_identity=execution_identity,
-    )
-    proc = None
-    log_fh = None
-    from orze.engine.accounting import record_compute_start
     # Final sanity-check that the claimed GPU is still free at Popen
     # time (c1136). Raises GpuUnavailableError if not — handled in
     # phases.py as a requeue, not a code-fix retry.
@@ -1763,20 +1731,22 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
                 preexec_fn=_new_process_group,
                 pass_fds=tuple(pass_fds),
             )
-            tp.process = proc
-            tp.start_time = time.time()
-            record_compute_start(tp, results_dir / idea_id, phase="training")
     except Exception:
         close_model_lineage_attestation(lineage_context)
-        if proc is not None:
-            _cleanup_failed_launch(tp, results_dir / idea_id, "training", log_fh)
-        else:
-            _close_launch_log(log_fh)
-            release_execution_identity(
-                results_dir, cfg, execution_identity, idea_id, attempt_id)
+        if "log_fh" in locals():
+            log_fh.close()
+        release_execution_identity(
+            results_dir, cfg, execution_identity, idea_id, attempt_id)
         raise
 
-    now = tp.start_time
+    now = time.time()
+    # Retain an actual process/attempt handle even if dataclass initialization
+    # fails. Cleanup uncertainty must not turn into a normal launch failure.
+    tp = SimpleNamespace(
+        idea_id=idea_id, gpu=gpu, process=proc,
+        start_time=now,
+        attempt_id=attempt_id, execution_identity=execution_identity,
+    )
 
     # Persist the actual trainer identity before advertising IN_PROGRESS.
     # The trainer deliberately owns a separate process group, so recording
@@ -1792,7 +1762,11 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             _log_fh=log_fh, _last_log_size=0,
             _last_log_check=now, _stall_since=0.0,
         )
-        # The allocation start is already durable before leaving the lease.
+        # Popen is the allocation boundary. Persist its start before lineage,
+        # claim, or FSM initialization so every process that briefly owns a
+        # GPU is paired with a terminal receipt on initialization failure.
+        from orze.engine.accounting import record_compute_start
+        record_compute_start(tp, results_dir / idea_id, phase="training")
         receive_model_lineage_attestation(
             lineage_context, process_pid=proc.pid)
         if claim_path.exists():
@@ -1825,7 +1799,19 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             mark_resume_launched(resume_context, claim_path)
     except Exception:
         close_model_lineage_attestation(lineage_context)
-        _cleanup_failed_launch(tp, results_dir / idea_id, "training", log_fh)
+        return_code = terminate_execution(
+            tp, results_dir / idea_id, phase="training",
+            reaper=_terminate_and_reap, timeout=3,
+        )
+        try:
+            from orze.engine.accounting import record_compute_terminal
+            record_compute_terminal(
+                tp, results_dir / idea_id, "failed",
+                "training_launch_initialization_failed",
+                phase="training", return_code=return_code)
+        except Exception:
+            pass
+        log_fh.close()
         raise
 
     return tp

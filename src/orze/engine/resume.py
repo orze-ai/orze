@@ -310,6 +310,8 @@ def write_interruption_receipt(tp, results_dir: Path, cfg: dict, reason: str,
     """Write a non-secret receipt; never infer resumability on errors."""
     results_dir = Path(results_dir)
     idea_dir = _idea_dir(tp.idea_id, results_dir)
+    from orze.engine.termination_hold import require_no_unconfirmed_stop
+    require_no_unconfirmed_stop(idea_dir)
     idea_dir.mkdir(parents=True, exist_ok=True)
     progress_name = str((cfg.get("resume") or {}).get(
         "progress_file", "progress.json"))

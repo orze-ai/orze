@@ -483,11 +483,6 @@ def test_controller_shutdown_closes_eval_compute_and_requeues_stage(
     signals = []
     monkeypatch.setattr(
         lifecycle, "_kill_pg", lambda proc, sig: signals.append(sig))
-    def confirmed_stop(proc, *args, **kwargs):
-        signals.append(15)
-        proc.wait(timeout=10)
-        return True
-    monkeypatch.setattr("orze.engine.process._terminate_and_reap", confirmed_stop)
     monkeypatch.setattr(lifecycle, "save_state", lambda *args: None)
     monkeypatch.setattr(lifecycle, "notify", lambda *args: None)
 
@@ -538,10 +533,6 @@ def test_atexit_closes_every_tracked_gpu_allocation(tmp_path, monkeypatch):
         process.return_code = -9
 
     monkeypatch.setattr(lifecycle, "_kill_pg", kill)
-    def confirmed_stop(proc, *args, **kwargs):
-        kill(proc, 9)
-        return True
-    monkeypatch.setattr("orze.engine.process._terminate_and_reap", confirmed_stop)
     lifecycle.atexit_cleanup(
         {4: training}, {5: evaluation}, {}, results,
     )
