@@ -248,6 +248,13 @@ def qualify_local_report_evidence(
     metrics, values, reason = load_local_report_evidence(idea_dir, report)
     if reason != "local_evidence_loaded":
         return metrics, values, None, reason
+    # This optional adapter declaration can veto ranking, never prove validity.
+    # Missing is supported; true still has to pass every other evidence check.
+    if "honest" in metrics:
+        if not isinstance(metrics["honest"], bool):
+            return metrics, values, None, "local_honesty_declaration_invalid"
+        if metrics["honest"] is False:
+            return metrics, values, None, "local_evidence_declared_non_honest"
     try:
         from orze.core.integrity import validate_metrics
         resolved_metrics = dict(metrics)

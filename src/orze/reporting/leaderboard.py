@@ -77,7 +77,7 @@ _CMP_OPS = {
 }
 
 _REPORT_UPDATED_TOKEN = "__ORZE_UPDATED_AT__"
-_RESULT_CACHE_SCHEMA_VERSION = 5
+_RESULT_CACHE_SCHEMA_VERSION = 6
 
 
 def _evidence_content_hash(paths) -> str:
@@ -1511,21 +1511,15 @@ class NotificationProcessor:
         if (self._best_idea_id is not None
                 and current_best != self._best_idea_id):
             best_val = completed_rows[0].get("primary_val")
-            # F14: champion-promotion guard — verify + z-score check before
-            # firing new_best. If blocked, we DO NOT update self._best_idea_id
-            # (caller keeps the prior best) and enqueue an audit idea.
+            # Qualification is mandatory; anomaly policy is explicit opt-in.
+            # A promotion observer does not implicitly enqueue audit work.
             if isinstance(best_val, (int, float)):
                 try:
-                    from orze.engine.champion_guard import (
-                        check_promotion, create_audit_idea,
-                    )
-                    def _make_audit(aid, sid, payload):
-                        if getattr(self, "_lake", None) is not None:
-                            create_audit_idea(self._lake, aid, sid, payload)
+                    from orze.engine.champion_guard import check_promotion
                     allow, info = check_promotion(
                         self.results_dir, current_best, float(best_val), cfg,
                         notify_fn=lambda k, p, c: notify(k, p, c),
-                        create_audit_idea_fn=_make_audit,
+                        lake=self.lake,
                     )
                     if not allow:
                         logger.warning(
@@ -1535,8 +1529,10 @@ class NotificationProcessor:
                             info.get("verified"), info.get("z"),
                         )
                         return False
-                except Exception as e:  # pragma: no cover - defensive
-                    logger.debug("champion_guard skipped: %s", e)
+                except Exception as e:
+                    logger.warning("Promotion check unavailable: %s",
+                                   type(e).__name__)
+                    return False
             fmt = (f"{best_val:.4f}"
                    if isinstance(best_val, (int, float)) else best_val)
             # Find previous best value for delta display

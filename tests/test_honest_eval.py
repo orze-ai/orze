@@ -177,27 +177,35 @@ def test_nexar_adapter_produces_honest_metrics(tmp_path):
     assert (idea_dir / "metrics.json").exists()
 
 
-def test_champion_guard_blocks_dishonest_metrics(tmp_path):
+def _check_declared_honesty(tmp_path, idea_id, metric, honest):
     from orze.engine.champion_guard import check_promotion
-    idea_id = "idea-x"
+    from orze.idea_lake import IdeaLake
     idir = tmp_path / idea_id
     idir.mkdir()
     (idir / "metrics.json").write_text(json.dumps(
-        {"pgmAP_ALL": 0.99, "honest": False}), encoding="utf-8")
-    # seed enough history so other paths are exercised cleanly
-    allowed, info = check_promotion(tmp_path, idea_id, 0.99, cfg={})
+        {"status": "COMPLETED", "pgmAP_ALL": metric, "honest": honest}),
+        encoding="utf-8")
+    lake = IdeaLake(str(tmp_path / "ideas.db"))
+    try:
+        lake.insert(idea_id, idea_id, "{}", "", status="completed")
+        cfg = {
+            "idea_lake_db": lake.db_path,
+            "report": {"primary_metric": "pgmAP_ALL", "sort": "descending",
+                       "columns": [{"key": "pgmAP_ALL"}]},
+        }
+        return check_promotion(tmp_path, idea_id, metric, cfg=cfg)
+    finally:
+        lake.close()
+
+
+def test_champion_guard_blocks_dishonest_metrics(tmp_path):
+    allowed, info = _check_declared_honesty(tmp_path, "idea-x", 0.99, False)
     assert allowed is False
     assert info["blocked"] is True
     assert info.get("honest") is False
 
 
 def test_champion_guard_allows_honest_metrics(tmp_path):
-    from orze.engine.champion_guard import check_promotion
-    idea_id = "idea-ok"
-    idir = tmp_path / idea_id
-    idir.mkdir()
-    (idir / "metrics.json").write_text(json.dumps(
-        {"pgmAP_ALL": 0.85, "honest": True}), encoding="utf-8")
-    allowed, info = check_promotion(tmp_path, idea_id, 0.85, cfg={})
+    allowed, info = _check_declared_honesty(tmp_path, "idea-ok", 0.85, True)
     assert allowed is True
     assert info.get("honest") is True

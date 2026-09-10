@@ -1,116 +1,90 @@
-"""Champion-promotion guard (F14).
+"""Mandatory promotion qualification and optional operational anomaly policy.
 
-Before promoting an idea to ``best_idea_id`` (and firing the ``new_best``
-notification), the guard:
+CALLING SPEC:
+    check_promotion(results_dir, idea_id, new_metric, cfg, *, idea_cfg=None,
+                    notify_fn=None, create_audit_idea_fn=None, lake=None)
+        Return (allowed, info). Qualification is always required, including when
+        champion_guard.enabled is false (the default). Explicit enabled=true
+        applies an absolute primary-metric z-score over currently qualified,
+        distinct prior ideas under the same objective/contract. action='hold'
+        preserves explicit opt-in blocking; action='warn' is advisory.
 
-1. Verifies the claimed metric. When the idea config carries a
-   ``reproducer`` command, the guard re-runs it in a fresh subprocess
-   and compares the reported metric to the original. If no reproducer
-   is given, it reads ``metrics.json`` in the idea's dir.
-
-2. Computes ``z = (new_metric - rolling_mean) / rolling_std`` over the
-   last N promotions. If ``z > z_threshold`` (default 4.0) and we have
-   at least ``min_history`` past promotions, the promotion is blocked
-   and an ``audit`` idea is enqueued instead. A notification is fired
-   to Telegram via ``notify('audit', …)``.
-
-The guard keeps a compact JSON history at
-``results/_champion_history.json`` so the distribution survives
-restarts.
+The legacy info['verified'] field means current qualified artifact value, not
+independent replication. This heuristic is not a significance test, scientific
+progress judgment, or guarantee of an atomic filesystem/database snapshot.
+Reproducer shell commands are unsupported here: schedule an explicit evaluation
+or replication task with its own execution and output contract.
 """
-
 from __future__ import annotations
 
-import datetime
+import hashlib
 import json
 import logging
 import math
-import subprocess
+import statistics
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
+
+from orze.engine.champion_history import (
+    objective_scope, read_history, record_history,
+)
+from orze.reporting.evidence import (
+    authoritative_completed_idea_ids,
+    qualify_authoritative_report_evidence_with_identity,
+    report_lifecycle_db_path,
+)
 
 logger = logging.getLogger("champion_guard")
 
 
+def _finite(value) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(float(value)))
+
+
 @dataclass
 class GuardConfig:
-    enabled: bool = True
+    enabled: bool = False
     z_threshold: float = 4.0
     min_history: int = 10
     history_size: int = 50
+    action: str = "hold"
 
     @classmethod
     def from_cfg(cls, cfg: Dict[str, Any]) -> "GuardConfig":
-        g = cfg.get("champion_guard") or {}
-        return cls(
-            enabled=bool(g.get("enabled", True)),
-            z_threshold=float(g.get("z_threshold", 4.0)),
-            min_history=int(g.get("min_history", 10)),
-            history_size=int(g.get("history_size", 50)),
-        )
+        raw = cfg.get("champion_guard") or {}
+        if not isinstance(raw, dict):
+            raise ValueError("guard_config_invalid")
+        guard = cls(**{key: raw[key] for key in (
+            "enabled", "z_threshold", "min_history", "history_size", "action",
+        ) if key in raw})
+        if (not isinstance(guard.enabled, bool)
+                or not _finite(guard.z_threshold) or guard.z_threshold <= 0
+                or isinstance(guard.min_history, bool)
+                or not isinstance(guard.min_history, int)
+                or isinstance(guard.history_size, bool)
+                or not isinstance(guard.history_size, int)
+                or not 2 <= guard.min_history <= guard.history_size <= 1000
+                or guard.action not in ("hold", "warn")):
+            raise ValueError("guard_config_invalid")
+        return guard
 
 
-def load_history(results_dir: Path) -> List[float]:
-    p = Path(results_dir) / "_champion_history.json"
-    if not p.exists():
-        return []
-    try:
-        return json.loads(p.read_text(encoding="utf-8")).get("metrics", [])
-    except (ValueError, OSError):
-        return []
-
-
-def save_history(results_dir: Path, metrics: List[float]) -> None:
-    p = Path(results_dir) / "_champion_history.json"
-    p.write_text(json.dumps({"metrics": metrics}, indent=2), encoding="utf-8")
-
-
-def _zscore(history: List[float], value: float) -> Optional[float]:
+def _zscore(history: list[float], value: float) -> Optional[float]:
     if len(history) < 2:
         return None
-    mean = sum(history) / len(history)
-    var = sum((x - mean) ** 2 for x in history) / len(history)
-    std = math.sqrt(var) if var > 0 else 0.0
-    if std < 1e-9:
-        return None  # distribution is degenerate; don't block
-    return (value - mean) / std
-
-
-def _reverify_metric(results_dir: Path, idea_id: str,
-                     claimed: float,
-                     idea_cfg: Optional[Dict[str, Any]] = None,
-                     timeout: int = 600) -> Optional[float]:
-    """Re-compute the metric. Return the verified value, or None on failure."""
-    idea_dir = Path(results_dir) / idea_id
-    reproducer = (idea_cfg or {}).get("reproducer")
-    if reproducer:
-        try:
-            r = subprocess.run(
-                reproducer, shell=True, capture_output=True, text=True,
-                timeout=timeout, cwd=str(idea_dir),
-            )
-            if r.returncode == 0:
-                # Look for a float in stdout (last matching number)
-                for line in reversed(r.stdout.splitlines()):
-                    for tok in line.split():
-                        try:
-                            return float(tok)
-                        except ValueError:
-                            continue
-        except Exception as e:  # pragma: no cover
-            logger.warning("reproducer for %s crashed: %s", idea_id, e)
-    # Fall back: read metrics.json
-    mj = idea_dir / "metrics.json"
-    if mj.exists():
-        try:
-            m = json.loads(mj.read_text(encoding="utf-8"))
-            for k in ("pgmAP_ALL", "map", "best_map", "score_mean", "score"):
-                if k in m and isinstance(m[k], (int, float)):
-                    return float(m[k])
-        except (ValueError, OSError):
-            pass
-    return None
+    scale = max(abs(item) for item in history)
+    if scale == 0:
+        return None
+    normalized = [item / scale for item in history]
+    std = statistics.pstdev(normalized)
+    if std == 0:
+        return None
+    z = (value / scale - statistics.fmean(normalized)) / std
+    # Finite inputs can still overflow a ratio. Keep the diagnostic JSON finite.
+    return z if math.isfinite(z) else math.copysign(sys.float_info.max, z)
 
 
 def check_promotion(
@@ -122,126 +96,117 @@ def check_promotion(
     idea_cfg: Optional[Dict[str, Any]] = None,
     notify_fn=None,
     create_audit_idea_fn=None,
+    lake=None,
 ) -> Tuple[bool, Dict[str, Any]]:
-    """Return (allow_promotion, info).
-
-    If allow_promotion is False the caller MUST NOT update best_idea_id.
-    ``info`` includes z-score, verified metric, and whether an audit idea
-    was enqueued so the orchestrator can record the decision.
-    """
-    gcfg = GuardConfig.from_cfg(cfg)
     info: Dict[str, Any] = {
-        "enabled": gcfg.enabled,
-        "z_threshold": gcfg.z_threshold,
-        "claimed": new_metric,
-        "verified": None,
-        "z": None,
-        "blocked": False,
-        "audit_idea_id": None,
+        "enabled": False, "claimed": new_metric, "verified": None,
+        "z": None, "blocked": False, "audit_idea_id": None,
+        "history_size": 0, "claim_scope": "operational_anomaly",
     }
 
-    if not gcfg.enabled:
-        _append_history(results_dir, new_metric, gcfg.history_size)
-        return True, info
+    def reject(reason):
+        info.update(blocked=True, reason=reason)
+        return False, info
 
-    # Honest-eval guard: refuse to promote metrics that were computed on
-    # the same split used for tuning (CV-OOF on test labels etc.). The
-    # adapter signals this by writing ``honest: true`` to metrics.json;
-    # explicit ``honest: false`` or missing-but-declared-leaky paths are
-    # rejected.
-    idea_dir = Path(results_dir) / idea_id
-    mj = idea_dir / "metrics.json"
-    honest_flag = None
     try:
-        if mj.exists():
-            mjd = json.loads(mj.read_text(encoding="utf-8"))
-            if "honest" in mjd:
-                honest_flag = bool(mjd["honest"])
-    except Exception:  # pragma: no cover
-        honest_flag = None
-    info["honest"] = honest_flag
-    if honest_flag is False:
-        info["blocked"] = True
-        info["reason"] = "metrics.json declares honest=false"
-        logger.warning(
-            "champion_guard: BLOCKED %s — metrics.json honest=false",
-            idea_id)
-        return False, info
+        guard = GuardConfig.from_cfg(cfg)
+        info.update(enabled=guard.enabled, z_threshold=guard.z_threshold,
+                    action=guard.action)
+        report = cfg.get("report") or {}
+        if (not isinstance(report, dict)
+                or not isinstance(report.get("primary_metric"), str)
+                or not report["primary_metric"].strip()
+                or report.get("sort", "descending") not in
+                ("ascending", "descending")):
+            return reject("objective_declaration_invalid")
+        if not _finite(new_metric):
+            return reject("claimed_metric_invalid")
+        if (idea_cfg or {}).get("reproducer"):
+            return reject("reproducer_requires_explicit_evaluation_task")
+        scoped_cfg = dict(cfg)
+        scoped_cfg["_env_ORZE_RESULTS_DIR"] = str(Path(results_dir).resolve())
+        db_path = report_lifecycle_db_path(
+            results_dir, cfg, getattr(lake, "db_path", None))
+        completed, reason = authoritative_completed_idea_ids(db_path)
+        if reason != "authoritative_lifecycle_loaded":
+            return reject(reason)
+        metrics, _, value, reason, identity = (
+            qualify_authoritative_report_evidence_with_identity(
+                idea_id, results_dir, scoped_cfg, completed))
+        info["honest"] = metrics.get("honest")
+        info["verified"] = value
+        info["evidence_identity"] = identity
+        if value is None or identity is None:
+            return reject(reason)
+        if value != new_metric:
+            return reject("claimed_metric_mismatch")
+        if not guard.enabled:
+            info["reason"] = "qualified_anomaly_policy_disabled"
+            return True, info
 
-    # 1) re-verify
-    verified = _reverify_metric(results_dir, idea_id, new_metric,
-                                idea_cfg=idea_cfg)
-    info["verified"] = verified
-    check_val = verified if verified is not None else new_metric
+        scope = objective_scope(scoped_cfg)
+        info["objective_scope"] = scope
+        history = []
+        for prior in read_history(db_path, scope, guard.history_size):
+            if prior["idea_id"] == idea_id:
+                continue
+            _, _, prior_value, _, _ = (
+                qualify_authoritative_report_evidence_with_identity(
+                    prior["idea_id"], results_dir, scoped_cfg, completed))
+            # A shared exposure ledger can change a full snapshot identity
+            # without producing another observation. Bind values and unique IDs;
+            # changed source values require a newly accepted revision.
+            if prior_value is not None and prior_value == prior["metric"]:
+                history.append(prior_value)
+        info["history_size"] = len(history)
+        z = (_zscore(history, value)
+             if len(history) >= guard.min_history else None)
+        info["z"] = z
+        anomalous = z is not None and abs(z) > guard.z_threshold
+        info["anomalous"] = anomalous
+        if anomalous:
+            info["reason"] = "operational_outlier"
+            payload = {
+                "idea_id": idea_id, "claimed": new_metric, "verified": value,
+                "z": z, "threshold": guard.z_threshold, "action": guard.action,
+                "claim_scope": "operational_anomaly",
+                "objective_scope": scope, "evidence_identity": identity,
+            }
+            if notify_fn is not None:
+                try:
+                    notify_fn("audit", payload, cfg)
+                except Exception:
+                    logger.warning("Operational anomaly notification unavailable")
+            if guard.action == "hold":
+                # An explicitly supplied callback retains its legacy API. The
+                # controller does not supply one or implicitly create tasks.
+                if create_audit_idea_fn is not None:
+                    audit_id = "audit-" + hashlib.sha256(
+                        f"{scope}:{idea_id}:{identity}".encode()).hexdigest()[:24]
+                    info["audit_idea_id"] = audit_id
+                    payload["audit_idea_id"] = audit_id
+                    create_audit_idea_fn(audit_id, idea_id, payload)
+                return reject("operational_outlier")
+        else:
+            info["reason"] = ("insufficient_history" if z is None
+                              else "operational_check_passed")
+        record_history(db_path, scope, idea_id, value, identity, guard.history_size)
+        return True, info
+    except Exception as exc:
+        logger.warning("Promotion check unavailable: %s", type(exc).__name__)
+        return reject("promotion_check_unavailable")
 
-    # 2) z-score against history
-    history = load_history(results_dir)
-    info["history_size"] = len(history)
-    z = _zscore(history, check_val) if len(history) >= gcfg.min_history else None
-    info["z"] = z
 
-    blocked = z is not None and z > gcfg.z_threshold
-    if blocked:
-        info["blocked"] = True
-        audit_id = f"audit-{idea_id}-{datetime.datetime.utcnow():%Y%m%dT%H%M%S}"
-        info["audit_idea_id"] = audit_id
-        payload = {
-            "idea_id": idea_id,
-            "claimed": new_metric,
-            "verified": verified,
-            "z": round(z, 2),
-            "threshold": gcfg.z_threshold,
-            "audit_idea_id": audit_id,
-        }
-        if notify_fn is not None:
-            try:
-                notify_fn("audit", payload, cfg)
-            except Exception:  # pragma: no cover
-                logger.exception("notify_fn failed")
-        if create_audit_idea_fn is not None:
-            try:
-                create_audit_idea_fn(audit_id, idea_id, payload)
-            except Exception:  # pragma: no cover
-                logger.exception("create_audit_idea_fn failed")
-        logger.warning(
-            "champion_guard: BLOCKED %s (claimed=%.4f verified=%s z=%.2f > %.2f)",
-            idea_id, new_metric, verified, z, gcfg.z_threshold,
-        )
-        return False, info
-
-    # 3) promote — record the value in history for future z-scoring
-    _append_history(results_dir, check_val, gcfg.history_size)
-    return True, info
-
-
-def _append_history(results_dir: Path, v: float, max_size: int) -> None:
-    hist = load_history(results_dir)
-    hist.append(float(v))
-    if len(hist) > max_size:
-        hist = hist[-max_size:]
-    save_history(results_dir, hist)
-
-
-def create_audit_idea(
-    lake,
-    audit_id: str,
-    suspect_idea_id: str,
-    payload: Dict[str, Any],
-) -> None:
-    """Insert an idea with kind='audit' to trigger a bug_fixer cycle."""
+def create_audit_idea(lake, audit_id: str, suspect_idea_id: str,
+                      payload: Dict[str, Any]) -> None:
+    """Explicit legacy audit action; never invoked implicitly by the controller."""
     cfg_yaml = json.dumps({
         "suspect_idea_id": suspect_idea_id,
-        "claimed": payload.get("claimed"),
-        "verified": payload.get("verified"),
-        "z": payload.get("z"),
-        "action": "audit",
+        "claimed": payload.get("claimed"), "verified": payload.get("verified"),
+        "z": payload.get("z"), "action": "audit",
     }, indent=2)
     lake.insert(
-        audit_id,
-        f"Audit suspicious promotion: {suspect_idea_id}",
-        cfg_yaml,
-        raw_markdown=cfg_yaml,
-        status="pending",
-        kind="audit",
+        audit_id, f"Audit suspicious promotion: {suspect_idea_id}",
+        cfg_yaml, raw_markdown=cfg_yaml, status="pending", kind="audit",
         parent=suspect_idea_id,
     )
