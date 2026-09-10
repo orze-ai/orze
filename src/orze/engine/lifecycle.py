@@ -157,6 +157,7 @@ def reconcile_stale_running(cfg: dict) -> None:
     since the other machine may still be training them.
     """
     import socket as _socket
+    from orze.engine.legacy_recovery import legacy_recovery_allowed, publish_legacy_recovery
     hostname = _socket.gethostname()
     results_dir = Path(cfg.get("results_dir", "orze_results"))
     lake_path = Path(cfg.get("idea_lake_db") or results_dir / "idea_lake.db")
@@ -212,6 +213,10 @@ def reconcile_stale_running(cfg: dict) -> None:
             return target or "FAILED"
 
         for idea_id in all_running:
+            if not legacy_recovery_allowed(lake, results_dir / idea_id):
+                logger.info("Native/held recovery requires explicit adoption: %s", idea_id)
+                others.append(idea_id)
+                continue
             from orze.engine.evaluation_retry import (
                 EvaluationRetryError, _require_closed_evaluations,
             )
@@ -288,11 +293,10 @@ def reconcile_stale_running(cfg: dict) -> None:
                         )
                         others.append(idea_id)
                         continue
-                    # New execution-identity admission retains ownership until
-                    # this immutable terminal receipt exists.  Only emit it
-                    # after the process group has been proven empty above.
-                    if claim.get("attempt_id"):
-                        try:
+                    def publish_recovery_files():
+                        # Process observation/stop above stays outside the
+                        # short guard. Recheck legacy eligibility at effects.
+                        if claim.get("attempt_id"):
                             from orze.engine.accounting import (
                                 record_recovered_compute_terminal,
                             )
@@ -302,39 +306,37 @@ def reconcile_stale_running(cfg: dict) -> None:
                                 outcome="interrupted",
                                 reason_code="startup_recovery",
                             )
-                        except Exception as exc:
-                            logger.error(
-                                "Cannot recover %s: compute ledger closure "
-                                "failed: %s", idea_id, type(exc).__name__)
-                            others.append(idea_id)
-                            continue
-                    metrics_status = {
-                        "COMPLETE": "COMPLETED",
-                        "EVALUATION_PENDING": "COMPLETED",
-                        "FAILED": "FAILED",
-                    }.get(target)
-                    atomic_write(
-                        results_dir / idea_id / "recovery.json",
-                        json.dumps({
-                            "idea_id": idea_id,
-                            "lifecycle_state": lifecycle_version[0],
-                            "lifecycle_transition_id": lifecycle_version[1],
-                            "owner_pid": claim_pid,
-                            "trainer_pid": trainer_pid,
-                            "trainer_pgid": trainer_pgid,
-                            "trainer_start_ticks": trainer_start,
-                            "termination_attempted": termination_attempted,
-                            "trainer_proven_stopped": terminated,
-                            "metrics_status_after_stop": metrics_status,
-                            "target_state": target,
-                            "recovered_at_epoch": time.time(),
-                            "recovered_at": datetime.datetime.now().isoformat(),
-                        }, indent=2),
-                    )
-                    recovered_claim = claim_path.with_name(
-                        f"claim.recovered.{int(time.time())}.json")
-                    os.replace(claim_path, recovered_claim)
-                    recoveries.append((idea_id, target))
+                        metrics_status = {
+                            "COMPLETE": "COMPLETED",
+                            "EVALUATION_PENDING": "COMPLETED",
+                            "FAILED": "FAILED",
+                        }.get(target)
+                        atomic_write(
+                            results_dir / idea_id / "recovery.json",
+                            json.dumps({
+                                "idea_id": idea_id,
+                                "lifecycle_state": lifecycle_version[0],
+                                "lifecycle_transition_id": lifecycle_version[1],
+                                "owner_pid": claim_pid,
+                                "trainer_pid": trainer_pid,
+                                "trainer_pgid": trainer_pgid,
+                                "trainer_start_ticks": trainer_start,
+                                "termination_attempted": termination_attempted,
+                                "trainer_proven_stopped": terminated,
+                                "metrics_status_after_stop": metrics_status,
+                                "target_state": target,
+                                "recovered_at_epoch": time.time(),
+                                "recovered_at": datetime.datetime.now().isoformat(),
+                            }, indent=2),
+                        )
+                        recovered_claim = claim_path.with_name(
+                            f"claim.recovered.{int(time.time())}.json")
+                        os.replace(claim_path, recovered_claim)
+                        return True
+                    if publish_legacy_recovery(lake, results_dir / idea_id, publish_recovery_files):
+                        recoveries.append((idea_id, target))
+                    else:
+                        others.append(idea_id)
                 except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
                     logger.error(
                         "Cannot safely recover claim for %s: %s", idea_id, exc)
@@ -399,86 +401,90 @@ def reconcile_stale_running(cfg: dict) -> None:
         if recoveries:
             reconciled = []
             for idea_id, target_state in recoveries:
-                current_state = lake.get_fsm_state(idea_id)
-                persisted = False
-                if target_state in ("COMPLETE", "FAILED"):
-                    reason = (
-                        "reconcile_startup_recover_completed_output"
-                        if target_state == "COMPLETE"
-                        else "reconcile_startup_recover_failed_output"
-                    )
-                    persisted = lake.reconcile_terminal_state(
-                        idea_id, target_state, reason)
-                elif target_state == "EVALUATION_PENDING":
-                    if current_state == "CLAIMED":
+                def publish_recovery_state():
+                    current_state = lake.get_fsm_state(idea_id)
+                    persisted = False
+                    if target_state in ("COMPLETE", "FAILED"):
+                        reason = (
+                            "reconcile_startup_recover_completed_output"
+                            if target_state == "COMPLETE"
+                            else "reconcile_startup_recover_failed_output"
+                        )
+                        persisted = lake.reconcile_terminal_state(
+                            idea_id, target_state, reason)
+                    elif target_state == "EVALUATION_PENDING":
+                        if current_state == "CLAIMED":
+                            persisted = lake.record_state_transition(
+                                idea_id,
+                                "CLAIMED",
+                                "IN_PROGRESS",
+                                reason="reconcile_training_process_started",
+                                host=hostname,
+                                pid=os.getpid(),
+                                sop_type="training",
+                            )
+                            current_state = lake.get_fsm_state(idea_id)
+                        else:
+                            persisted = current_state == "IN_PROGRESS"
+                        if persisted:
+                            training_stage = lake.get_stage_state(
+                                idea_id, "training")
+                            persisted = training_stage == "COMPLETE" or (
+                                training_stage in (
+                                    "NOT_STARTED", "PENDING", "IN_PROGRESS",
+                                ) and lake.record_stage_transition(
+                                    idea_id,
+                                    stage="training",
+                                    from_state=training_stage,
+                                    to_state="COMPLETE",
+                                    reason=(
+                                        "reconcile_training_completed_"
+                                        "evaluation_pending"
+                                    ),
+                                    host=hostname,
+                                    pid=os.getpid(),
+                                )
+                            )
+                        if persisted:
+                            evaluation_stage = lake.get_stage_state(
+                                idea_id, "evaluation")
+                            if evaluation_stage in ("NOT_STARTED", "IN_PROGRESS"):
+                                persisted = lake.record_stage_transition(
+                                    idea_id,
+                                    stage="evaluation",
+                                    from_state=evaluation_stage,
+                                    to_state="PENDING",
+                                    reason=(
+                                        "reconcile_evaluation_pending"
+                                        if evaluation_stage == "NOT_STARTED" else
+                                        "reconcile_interrupted_evaluation_pending"
+                                    ),
+                                    host=hostname,
+                                    pid=os.getpid(),
+                                )
+                            else:
+                                persisted = evaluation_stage == "PENDING"
+                    elif current_state in ("CLAIMED", "IN_PROGRESS"):
                         persisted = lake.record_state_transition(
                             idea_id,
-                            "CLAIMED",
-                            "IN_PROGRESS",
-                            reason="reconcile_training_process_started",
+                            current_state,
+                            "QUEUED",
+                            reason="startup_recover_orphan_terminated",
                             host=hostname,
                             pid=os.getpid(),
                             sop_type="training",
                         )
-                        current_state = lake.get_fsm_state(idea_id)
-                    else:
-                        persisted = current_state == "IN_PROGRESS"
-                    if persisted:
-                        training_stage = lake.get_stage_state(
-                            idea_id, "training")
-                        persisted = training_stage == "COMPLETE" or (
-                            training_stage in (
-                                "NOT_STARTED", "PENDING", "IN_PROGRESS",
-                            ) and lake.record_stage_transition(
-                                idea_id,
-                                stage="training",
-                                from_state=training_stage,
-                                to_state="COMPLETE",
-                                reason=(
-                                    "reconcile_training_completed_"
-                                    "evaluation_pending"
-                                ),
-                                host=hostname,
-                                pid=os.getpid(),
-                            )
-                        )
-                    if persisted:
-                        evaluation_stage = lake.get_stage_state(
-                            idea_id, "evaluation")
-                        if evaluation_stage in ("NOT_STARTED", "IN_PROGRESS"):
-                            persisted = lake.record_stage_transition(
-                                idea_id,
-                                stage="evaluation",
-                                from_state=evaluation_stage,
-                                to_state="PENDING",
-                                reason=(
-                                    "reconcile_evaluation_pending"
-                                    if evaluation_stage == "NOT_STARTED" else
-                                    "reconcile_interrupted_evaluation_pending"
-                                ),
-                                host=hostname,
-                                pid=os.getpid(),
-                            )
-                        else:
-                            persisted = evaluation_stage == "PENDING"
-                elif current_state in ("CLAIMED", "IN_PROGRESS"):
-                    persisted = lake.record_state_transition(
-                        idea_id,
-                        current_state,
-                        "QUEUED",
-                        reason="startup_recover_orphan_terminated",
-                        host=hostname,
-                        pid=os.getpid(),
-                        sop_type="training",
-                    )
-                elif current_state == "QUEUED":
-                    persisted = lake.set_status(idea_id, "queued")
+                    elif current_state == "QUEUED":
+                        persisted = lake.set_status(idea_id, "queued")
+                    return persisted
+                persisted = publish_legacy_recovery(
+                    lake, results_dir / idea_id, publish_recovery_state)
                 if persisted:
                     reconciled.append((idea_id, target_state))
                 else:
                     logger.error(
                         "Rejected startup lifecycle recovery for %s: %s -> %s",
-                        idea_id, current_state, target_state,
+                        idea_id, lake.get_fsm_state(idea_id), target_state,
                     )
             if reconciled:
                 logger.info(
@@ -578,6 +584,7 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
     Returns the number of rows reconciled.
     """
     import json as _json
+    from orze.engine.legacy_recovery import legacy_recovery_allowed, publish_legacy_recovery
     import socket as _socket
     hostname = _socket.gethostname()
     results_dir = Path(cfg.get("results_dir", "orze_results"))
@@ -609,6 +616,9 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
             "WHERE status = 'running'").fetchall()
         for idea_id, em_raw in rows:
             idea_dir = results_dir / idea_id
+            if not legacy_recovery_allowed(lake, idea_dir):
+                logger.info("Native/held recovery requires explicit adoption: %s", idea_id)
+                continue
             from orze.engine.evaluation_retry import (
                 EvaluationRetryError, _require_closed_evaluations,
             )
@@ -694,9 +704,9 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
                 # Completion may flush immediately before claim cleanup. It is
                 # the only terminal filesystem evidence accepted here.
                 if completed_on_disk():
-                    if reconcile_completed_training():
+                    if publish_legacy_recovery(lake, idea_dir, reconcile_completed_training):
                         n_completed += 1
-                elif lake.set_status(idea_id, "queued"):
+                elif publish_legacy_recovery(lake, idea_dir, lambda: lake.set_status(idea_id, "queued")):
                     n_requeued += 1
                 continue
 
@@ -724,7 +734,7 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
 
             # ---- Completed-on-disk check ----
             if completed_on_disk():
-                if reconcile_completed_training():
+                if publish_legacy_recovery(lake, idea_dir, reconcile_completed_training):
                     n_completed += 1
                 continue
 
@@ -742,15 +752,17 @@ def reconcile_running_dead_pids(cfg: dict) -> int:
             em["liveness_misses"] = miss_count
             if miss_count >= 2:
                 em["failure_reason"] = "orphaned_pid"
-            lake.conn.execute(
-                "UPDATE ideas SET eval_metrics = ? WHERE idea_id = ?",
-                (_json.dumps(em), idea_id))
-            lake.conn.commit()
-            if miss_count >= 2:
-                if lake.set_status(idea_id, "failed"):
+            def publish_liveness_miss():
+                lake.conn.execute(
+                    "UPDATE ideas SET eval_metrics = ? WHERE idea_id = ?",
+                    (_json.dumps(em), idea_id))
+                lake.conn.commit()
+                return lake.set_status(idea_id, "failed") if miss_count >= 2 else True
+            if publish_legacy_recovery(lake, idea_dir, publish_liveness_miss):
+                if miss_count >= 2:
                     n_orphaned += 1
-            else:
-                n_warned += 1
+                else:
+                    n_warned += 1
         if n_completed:
             target = (
                 "evaluation pending" if evaluation_required else "completed")
@@ -928,6 +940,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     training_count = len(active)
     eval_count = len(active_evals)
     held_training, held_evals = {}, {}
+    from orze.engine.shutdown_publication import handle_shutdown
 
     def close_interrupted_evaluation(ep) -> None:
         """Close compute/stage evidence after a controlled evaluator stop."""
@@ -976,6 +989,11 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
             logger.info("Killing training %s on GPU %s (PID %d)",
                         tp.idea_id, gpu, tp.process.pid)
             phase = "posthoc" if getattr(tp, "is_posthoc", False) else "training"
+            native = handle_shutdown(tp, results_dir, phase, _stop_for_shutdown, lake=lake, cfg=cfg)
+            if native is not None:
+                if not native:
+                    held_training[gpu] = tp
+                continue
             if not _stop_for_shutdown(tp, results_dir, phase):
                 held_training[gpu] = tp
                 continue
@@ -990,6 +1008,11 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
         for gpu, ep in active_evals.items():
             logger.info("Killing eval %s on GPU %s (PID %d)",
                         ep.idea_id, gpu, ep.process.pid)
+            native = handle_shutdown(ep, results_dir, "evaluation", _stop_for_shutdown, lake=lake, cfg=cfg)
+            if native is not None:
+                if not native:
+                    held_evals[gpu] = ep
+                continue
             if not _stop_for_shutdown(ep, results_dir, "evaluation"):
                 held_evals[gpu] = ep
                 continue
@@ -1020,6 +1043,11 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
             logger.info("Interrupting eval %s on GPU %s (PID %d) "
                         "-- next controller will retry",
                         ep.idea_id, gpu, ep.process.pid)
+            native = handle_shutdown(ep, results_dir, "evaluation", _stop_for_shutdown, lake=lake, cfg=cfg)
+            if native is not None:
+                if not native:
+                    held_evals[gpu] = ep
+                continue
             if not _stop_for_shutdown(ep, results_dir, "evaluation"):
                 held_evals[gpu] = ep
                 continue
@@ -1119,13 +1147,24 @@ def atexit_cleanup(active: dict, active_evals: dict,
                 phase, process.idea_id, type(exc).__name__,
             )
 
+    from orze.engine.shutdown_publication import handle_shutdown
     for gpu, tp in list(active.items()):
         phase = "posthoc" if getattr(tp, "is_posthoc", False) else "training"
+        native = handle_shutdown(tp, results_dir, phase, _stop_for_shutdown)
+        if native is not None:
+            if native and active.get(gpu) is tp:
+                del active[gpu]
+            continue
         if not _stop_for_shutdown(tp, results_dir, phase):
             continue
         close_compute(tp, phase, "training_atexit_cleanup")
         tp.close_log()
     for gpu, ep in list(active_evals.items()):
+        native = handle_shutdown(ep, results_dir, "evaluation", _stop_for_shutdown)
+        if native is not None:
+            if native and active_evals.get(gpu) is ep:
+                del active_evals[gpu]
+            continue
         if not _stop_for_shutdown(ep, results_dir, "evaluation"):
             continue
         close_compute(ep, "evaluation", "evaluation_atexit_cleanup")

@@ -158,8 +158,27 @@ def get_critical_force_pack_eligible(ideas: Dict[str, dict],
     return eligible
 
 
-def claim(idea_id: str, results_dir: Path, gpu: int,
-          lake=None) -> bool:
+def claim(idea_id: str, results_dir: Path, gpu: int, lake=None, *,
+          effect_lease=None) -> bool:
+    """Claim under the shared short guard; bind the supplied persistent DB."""
+    from orze.engine.claim_authority import claim_change_guard
+    from orze.engine.attempt_effect_lock import AttemptEffectInDoubt
+    from orze.engine.termination_hold import TerminationUnconfirmed
+    try:
+        with claim_change_guard(results_dir / idea_id, lake=lake,
+                                effect_lease=effect_lease) as (_, _, db_path):
+            return _claim_under_effect_lock(idea_id, results_dir, gpu, lake, db_path)
+    except AttemptEffectInDoubt:
+        # A nested lease is released by our caller. Do not turn uncertainty
+        # into False and let that caller commit or release the retained owner.
+        raise
+    except TerminationUnconfirmed as exc:
+        logger.warning("Claim ownership deferred for %s: %s", idea_id, exc)
+        return False
+
+
+def _claim_under_effect_lock(idea_id: str, results_dir: Path, gpu: int,
+                             lake=None, lifecycle_db=None) -> bool:
     """Atomically claim an idea via mkdir. Returns True if we got it.
     If lake is provided, also updates the DB status to 'running'.
 
@@ -206,6 +225,8 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
         "pid": os.getpid(),
         "gpu": gpu,
     }
+    if lifecycle_db is not None:
+        claim_info["lifecycle_db"] = lifecycle_db
     try:
         claim_info["owner_start_ticks"] = capture_process_identity(
             os.getpid())["start_ticks"]
@@ -220,6 +241,10 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
     claim_path = idea_dir / "claim.json"
     if not atomic_create(claim_path, json.dumps(claim_info, indent=2)):
         return False
+    from orze.engine.claim_authority import read_claim
+    from orze.engine.attempt_effect_lock import AttemptEffectInDoubt
+    if json.dumps(read_claim(claim_path), sort_keys=True) != json.dumps(claim_info, sort_keys=True):
+        raise AttemptEffectInDoubt("claim_publication_unconfirmed")
 
     if lake:
         try:
@@ -240,8 +265,8 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
             # makes a later scheduler believe another worker owns it.
             try:
                 claim_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+            except OSError as cleanup_error:
+                raise AttemptEffectInDoubt("claim_rollback_unconfirmed") from cleanup_error
             logger.warning("Claim rollback for %s: %s", idea_id, exc)
             return False
 
@@ -253,7 +278,7 @@ def claim(idea_id: str, results_dir: Path, gpu: int,
 # ---------------------------------------------------------------------------
 
 def cleanup_orphans(results_dir: Path, hours: float,
-                    lake=None) -> int:
+                    lake=None, *, effect_lease=None) -> int:
     """Archive stale local claims without deleting experiment evidence.
 
     Age alone never proves an orphan: another host may own a quiet job, or a
@@ -271,124 +296,150 @@ def cleanup_orphans(results_dir: Path, hours: float,
     for d in results_dir.iterdir():
         if not d.is_dir() or not d.name.startswith("idea-"):
             continue
-        from orze.engine.termination_hold import (
-            TerminationUnconfirmed, require_no_unconfirmed_stop,
-        )
+        from orze.engine.claim_authority import claim_change_guard
+        from orze.engine.termination_hold import TerminationUnconfirmed
         try:
-            require_no_unconfirmed_stop(d)
-        except TerminationUnconfirmed:
-            logger.error("Keeping execution with unconfirmed stop: %s", d.name)
-            continue
-        claim_path = d / "claim.json"
-        metrics_path = d / "metrics.json"
-
-        if not claim_path.exists():
-            continue
-
-        try:
-            last_activity = claim_path.stat().st_mtime
-            log_path = d / "train_output.log"
-            if log_path.exists():
-                last_activity = max(last_activity,
-                                    log_path.stat().st_mtime)
-            if last_activity >= cutoff:
-                continue
-
-            idea_id = d.name
-            age_hours = (time.time() - last_activity) / 3600
-            try:
-                claim_data = json.loads(
-                    claim_path.read_text(encoding="utf-8"))
-                if not isinstance(claim_data, dict):
-                    raise ValueError("claim must be a mapping")
-                if claim_data.get("claimed_by") != socket.gethostname():
-                    continue
-                owner_pid = int(claim_data["pid"])
-                owner_ticks = int(claim_data["owner_start_ticks"])
-            except (json.JSONDecodeError, OSError, UnicodeDecodeError,
-                    KeyError, TypeError, ValueError):
-                logger.warning(
-                    "Keeping stale claim for %s: ownership identity is "
-                    "incomplete or invalid", idea_id)
-                continue
-            if process_is_running(owner_pid, owner_ticks):
-                continue
-
-            trainer_pid = claim_data.get("trainer_pid")
-            trainer_ticks = claim_data.get("trainer_start_ticks")
-            if trainer_pid is not None or trainer_ticks is not None:
+            with claim_change_guard(d, lake=lake, effect_lease=effect_lease):
+                from orze.engine.termination_hold import (
+                    TerminationUnconfirmed, require_no_unconfirmed_stop,
+                )
                 try:
-                    if process_is_running(int(trainer_pid), int(trainer_ticks)):
+                    require_no_unconfirmed_stop(d)
+                except TerminationUnconfirmed:
+                    logger.error("Keeping execution with unconfirmed stop: %s", d.name)
+                    continue
+                claim_path = d / "claim.json"
+                metrics_path = d / "metrics.json"
+
+                if not claim_path.exists():
+                    continue
+
+                effects_started = False
+                try:
+                    last_activity = claim_path.stat().st_mtime
+                    log_path = d / "train_output.log"
+                    if log_path.exists():
+                        last_activity = max(last_activity,
+                                            log_path.stat().st_mtime)
+                    if last_activity >= cutoff:
                         continue
-                except (TypeError, ValueError):
-                    logger.warning(
-                        "Keeping stale claim for %s: trainer identity is "
-                        "incomplete or invalid", idea_id)
-                    continue
 
-            metrics_status = None
-            if metrics_path.exists():
-                try:
-                    metrics = json.loads(
-                        metrics_path.read_text(encoding="utf-8"))
-                    if isinstance(metrics, dict):
-                        metrics_status = metrics.get("status")
-                except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-                    pass
+                    idea_id = d.name
+                    age_hours = (time.time() - last_activity) / 3600
+                    try:
+                        claim_data = json.loads(
+                            claim_path.read_text(encoding="utf-8"))
+                        if not isinstance(claim_data, dict):
+                            raise ValueError("claim must be a mapping")
+                        if claim_data.get("claimed_by") != socket.gethostname():
+                            continue
+                        owner_pid = int(claim_data["pid"])
+                        owner_ticks = int(claim_data["owner_start_ticks"])
+                    except (json.JSONDecodeError, OSError, UnicodeDecodeError,
+                            KeyError, TypeError, ValueError):
+                        logger.warning(
+                            "Keeping stale claim for %s: ownership identity is "
+                            "incomplete or invalid", idea_id)
+                        continue
+                    if process_is_running(owner_pid, owner_ticks):
+                        continue
 
-            terminal_state = {
-                "COMPLETED": "COMPLETE",
-                "FAILED": "FAILED",
-            }.get(metrics_status)
-            if lake is not None:
-                try:
-                    if terminal_state is not None:
-                        persisted = lake.reconcile_terminal_state(
-                            idea_id,
-                            terminal_state,
-                            "reconcile_stale_claim_terminal_metrics",
-                        )
-                    else:
-                        persisted = lake.set_status(idea_id, "queued")
-                except Exception as exc:
-                    logger.warning(
-                        "Failed to persist orphan recovery for %s: %s",
-                        idea_id, exc)
-                    continue
-                if not persisted:
-                    logger.warning(
-                        "Keeping stale claim for %s: lifecycle recovery was "
-                        "rejected", idea_id)
-                    continue
+                    trainer_pid = claim_data.get("trainer_pid")
+                    trainer_ticks = claim_data.get("trainer_start_ticks")
+                    if trainer_pid is not None or trainer_ticks is not None:
+                        try:
+                            if process_is_running(int(trainer_pid), int(trainer_ticks)):
+                                continue
+                        except (TypeError, ValueError):
+                            logger.warning(
+                                "Keeping stale claim for %s: trainer identity is "
+                                "incomplete or invalid", idea_id)
+                            continue
 
-            suffix = time.time_ns()
-            logger.info(
-                "Archiving stale local claim: %s (last activity %.1fh ago)",
-                idea_id, age_hours)
-            archived_metrics = None
-            if metrics_path.exists() and terminal_state is None:
-                archived_metrics = d / f"metrics.orphan.{suffix}.json"
-                os.replace(metrics_path, archived_metrics)
-            archived_claim = d / f"claim.orphan.{suffix}.json"
-            os.replace(claim_path, archived_claim)
-            atomic_write(
-                d / f"recovery.orphan.{suffix}.json",
-                json.dumps({
-                    "schema_version": 1,
-                    "idea_id": idea_id,
-                    "outcome": ("terminal_preserved" if terminal_state
-                                else "requeued"),
-                    "terminal_state": terminal_state,
-                    "claim_archive": archived_claim.name,
-                    "metrics_archive": (
-                        archived_metrics.name if archived_metrics else None),
-                    "recovered_at": datetime.datetime.now(
-                        datetime.timezone.utc).isoformat(),
-                }, indent=2, sort_keys=True) + "\n",
-            )
-            cleaned += 1
-        except Exception as e:
-            logger.warning("Failed to clean orphan %s: %s", d.name, e)
+                    metrics_status = None
+                    if metrics_path.exists():
+                        try:
+                            metrics = json.loads(
+                                metrics_path.read_text(encoding="utf-8"))
+                            if isinstance(metrics, dict):
+                                metrics_status = metrics.get("status")
+                        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                            pass
+
+                    terminal_state = {
+                        "COMPLETED": "COMPLETE",
+                        "FAILED": "FAILED",
+                    }.get(metrics_status)
+                    if lake is not None:
+                        try:
+                            if terminal_state is not None:
+                                persisted = lake.reconcile_terminal_state(
+                                    idea_id,
+                                    terminal_state,
+                                    "reconcile_stale_claim_terminal_metrics",
+                                )
+                            else:
+                                persisted = lake.set_status(idea_id, "queued")
+                        except Exception as exc:
+                            logger.warning(
+                                "Failed to persist orphan recovery for %s: %s",
+                                idea_id, exc)
+                            continue
+                        if not persisted:
+                            logger.warning(
+                                "Keeping stale claim for %s: lifecycle recovery was "
+                                "rejected", idea_id)
+                            continue
+                        effects_started = True
+
+                    suffix = f"{time.time_ns()}.{secrets.token_hex(4)}"
+                    logger.info(
+                        "Archiving stale local claim: %s (last activity %.1fh ago)",
+                        idea_id, age_hours)
+                    archived_metrics = None
+                    from orze.engine.claim_authority import safe_file
+                    from orze.engine.attempt_effect_lock import AttemptEffectInDoubt
+                    archived_claim = d / f"claim.orphan.{suffix}.json"
+                    if safe_file(archived_claim) is not None:
+                        raise AttemptEffectInDoubt("orphan_claim_archive_exists")
+                    if metrics_path.exists() and terminal_state is None:
+                        archived_metrics = d / f"metrics.orphan.{suffix}.json"
+                        if safe_file(archived_metrics) is not None:
+                            raise AttemptEffectInDoubt("orphan_metrics_archive_exists")
+                        effects_started = True
+                        os.replace(metrics_path, archived_metrics)
+                    effects_started = True
+                    os.replace(claim_path, archived_claim)
+                    atomic_write(
+                        d / f"recovery.orphan.{suffix}.json",
+                        json.dumps({
+                            "schema_version": 1,
+                            "idea_id": idea_id,
+                            "outcome": ("terminal_preserved" if terminal_state
+                                        else "requeued"),
+                            "terminal_state": terminal_state,
+                            "claim_archive": archived_claim.name,
+                            "metrics_archive": (
+                                archived_metrics.name if archived_metrics else None),
+                            "recovered_at": datetime.datetime.now(
+                                datetime.timezone.utc).isoformat(),
+                        }, indent=2, sort_keys=True) + "\n",
+                    )
+                    cleaned += 1
+                except Exception as e:
+                    if effects_started:
+                        from orze.engine.attempt_effect_lock import AttemptEffectInDoubt
+                        raise AttemptEffectInDoubt("orphan_file_change_unconfirmed") from e
+                    logger.warning("Failed to clean orphan %s: %s", d.name, e)
+
+        except TerminationUnconfirmed as exc:
+            if effect_lease is not None:
+                from orze.engine.attempt_effect_lock import AttemptEffectInDoubt
+                if isinstance(exc, AttemptEffectInDoubt):
+                    # Our caller owns this lease: swallowing uncertainty here
+                    # would let it commit or release partially applied effects.
+                    raise
+            logger.warning("Keeping guarded/native execution %s: %s", d.name, exc)
 
     return cleaned
 

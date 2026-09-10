@@ -86,6 +86,7 @@ def test_post_popen_lease_failure_and_log_close_error_cannot_mask_termination_ho
     assert p.lake.get_fsm_state(p.idea_id) == "IN_PROGRESS"
     assert p.lake.get_stage_state(p.idea_id, "evaluation") == "IN_PROGRESS"
     assert not (p.folder / "assessment.json").exists()
-    assert not (p.folder / "_compute_receipts").exists()
+    assert len(list((p.folder / "_compute_receipts").glob("*/start.json"))) == 1
+    assert list((p.folder / "_compute_receipts").glob("*/terminal.json")) == []
     with pytest.raises(stop.TerminationUnconfirmed):
         stop.require_no_unconfirmed_stop(p.folder)

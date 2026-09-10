@@ -1321,6 +1321,8 @@ class NotificationProcessor:
         this boundary does not promise exactly-once observations or delivery.
         """
         try:
+            from orze.engine.completion_events import completion_is_current, filter_completions
+            finished = filter_completions(finished, self.lake, self.results_dir)
             cfg = self.cfg
             ncfg = cfg.get("notifications") or {}
             if finished:
@@ -1351,11 +1353,16 @@ class NotificationProcessor:
             view_lbs = self._build_view_leaderboards(cfg, completed_rows)
             row_lookup = {r["id"]: r for r in completed_rows}
 
-            for idea_id, gpu in finished:
+            for event in finished:
+                if not completion_is_current(event, self.lake, self.results_dir):
+                    continue
+                idea_id, gpu = event
                 try:
                     self._notify_finished(
                         idea_id, gpu, cfg, primary, row_lookup, rank_lookup,
-                        leaderboard, view_lbs, ideas, save_config_hash_fn)
+                        leaderboard, view_lbs, ideas, save_config_hash_fn,
+                        **({"source_event": event}
+                           if getattr(event, "attempt_ref", None) is not None else {}))
                 except Exception as exc:
                     logger.warning("Completion diagnostic skipped for %s: %s",
                                    idea_id, type(exc).__name__)
@@ -1363,8 +1370,9 @@ class NotificationProcessor:
             # New best detection + plateau tracking
             new_best = self._check_new_best(
                 completed_rows, primary, leaderboard, view_lbs, cfg)
-            n_completed = len({idea_id for idea_id, _ in finished
-                               if idea_id in row_lookup})
+            n_completed = len({event[0] for event in finished
+                               if event[0] in row_lookup and completion_is_current(
+                                   event, self.lake, self.results_dir)})
             if new_best:
                 self._completions_since_best = 0
                 self._plateau_notified = False
@@ -1447,9 +1455,11 @@ class NotificationProcessor:
 
     def _notify_finished(self, idea_id, gpu, cfg, primary, row_lookup,
                          rank_lookup, leaderboard, view_lbs, ideas,
-                         save_config_hash_fn):
+                         save_config_hash_fn, *, source_event=None):
         if (not isinstance(idea_id, str) or idea_id in ("", ".", "..")
                 or Path(idea_id).parts != (idea_id,)):
+            return
+        if source_event is not None and source_event[0] != idea_id:
             return
         row = row_lookup.get(idea_id, {})
         m = row.get("metrics")
@@ -1498,8 +1508,9 @@ class NotificationProcessor:
                                   "view_leaderboards": view_lbs}, cfg)
 
         if status == "COMPLETED":
+            from contextlib import nullcontext
+            from orze.engine.completion_events import completion_cache_guard
             from orze.reporting.notification_evidence import refresh_metric_snapshot
-            refresh_metric_snapshot(self.lake, row)
             try:
                 # Config dedup hash MUST be over the same canonical key-set
                 # that ingest checks (engine/phases.py: _config_override_hash
@@ -1520,10 +1531,18 @@ class NotificationProcessor:
                         "Config dedup hash NOT stored for %s: could not "
                         "resolve config overrides (no in-memory config and "
                         "no resolved_config.yaml).", idea_id)
-                else:
-                    save_config_hash_fn(idea_id, overrides)
+                # External notification and potentially slow config recovery
+                # stay outside this short guard. Native writes retain exact
+                # source ownership, but mirror/dedup remain best-effort caches,
+                # not observations or durable delivery acknowledgements.
+                guard = (completion_cache_guard(source_event, self.lake, self.results_dir)
+                         if source_event is not None else nullcontext())
+                with guard:
+                    refresh_metric_snapshot(self.lake, row)
+                    if overrides is not None:
+                        save_config_hash_fn(idea_id, overrides)
             except Exception as exc:
-                logger.debug("Config hash save failed for %s: %s",
+                logger.debug("Completion cache update unavailable for %s: %s",
                              idea_id, exc)
 
     def _notify_completed(self, idea_id, title, m, cfg, primary,

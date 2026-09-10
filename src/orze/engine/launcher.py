@@ -1102,12 +1102,16 @@ def _close_launch_log(log_fh) -> None:
             logger.warning("Launch log close failed: %s", type(exc).__name__)
 
 
-def _cleanup_failed_launch(tp, idea_dir: Path, phase: str, log_fh) -> None:
+def _cleanup_failed_launch(tp, idea_dir: Path, phase: str, log_fh, *, lake=None) -> None:
     """Any known-created child needs stop authority, including lease exit."""
     try:
         return_code = terminate_execution(
             tp, idea_dir, phase=phase, reaper=_terminate_and_reap, timeout=3,
         )
+        if getattr(tp, "attempt_ref", None) is not None:
+            from orze.engine.training_attempts import failed_launch
+            failed_launch(lake, tp, idea_dir, return_code)
+            return
         try:
             from orze.engine.accounting import record_compute_terminal
             record_compute_terminal(
@@ -1121,6 +1125,29 @@ def _cleanup_failed_launch(tp, idea_dir: Path, phase: str, log_fh) -> None:
                            tp.idea_id, type(exc).__name__)
     finally:
         _close_launch_log(log_fh)
+
+
+def _cleanup_rejected_training_intent(tp, idea_dir, cfg, lake, lineage_context, error):
+    """Close local pre-Popen resources, never resolve an uncertain intent."""
+    from orze.core.model_lineage import close_model_lineage_attestation
+    from orze.core.execution_attempts import current_attempt
+    from orze.engine.attempt_effect_lock import AttemptEffectInDoubt
+    from orze.engine.execution_authority import execution_transaction
+
+    close_model_lineage_attestation(lineage_context)
+    if isinstance(error, AttemptEffectInDoubt):
+        return
+    # A clean rejection does not authorize deleting a prior/current launch's
+    # reservation. Reacquire the task fence: a competing begin/reset must not
+    # fit between checking for native intent and releasing this exact record.
+    with execution_transaction(lake, idea_dir):
+        if current_attempt(lake.conn, tp.idea_id, "training") is not None:
+            return
+        try:
+            release_execution_identity(idea_dir.parent, cfg, tp.execution_identity,
+                                       tp.idea_id, tp.attempt_id)
+        except BaseException as exc:
+            raise AttemptEffectInDoubt("training_reservation_cleanup_unconfirmed") from exc
 
 
 def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
@@ -1516,6 +1543,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     """
     results_dir = Path(results_dir)
     _assert_launch_authorized(idea_id, results_dir, cfg)
+    from orze.engine.training_attempts import require_catalog
+    require_catalog(lake, results_dir / idea_id, cfg)
     require_no_unconfirmed_stop(results_dir / idea_id)
     _assert_campaign_evidence_authorized(cfg, lake)
     from orze.core.decision_batches import validate_idea_decision_admission
@@ -1741,6 +1770,14 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         idea_id=idea_id, gpu=gpu, process=None, start_time=time.time(),
         attempt_id=attempt_id, execution_identity=execution_identity,
     )
+    if lake is not None:
+        from orze.engine.training_attempts import begin
+        try:
+            tp.attempt_ref = begin(lake, tp, results_dir / idea_id)
+        except BaseException as intent_error:
+            _cleanup_rejected_training_intent(
+                tp, results_dir / idea_id, cfg, lake, lineage_context, intent_error)
+            raise
     proc = None
     log_fh = None
     from orze.engine.accounting import record_compute_start
@@ -1766,14 +1803,19 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             tp.process = proc
             tp.start_time = time.time()
             record_compute_start(tp, results_dir / idea_id, phase="training")
-    except Exception:
+    except Exception as launch_error:
         close_model_lineage_attestation(lineage_context)
         if proc is not None:
-            _cleanup_failed_launch(tp, results_dir / idea_id, "training", log_fh)
+            _cleanup_failed_launch(tp, results_dir / idea_id, "training", log_fh, lake=lake)
         else:
             _close_launch_log(log_fh)
             release_execution_identity(
                 results_dir, cfg, execution_identity, idea_id, attempt_id)
+            if getattr(tp, "attempt_ref", None) is not None:
+                from orze.engine.training_attempts import failed_launch
+                failed_launch(lake, tp, results_dir / idea_id, None, not_started=True)
+        from orze.engine.launch_failure_report import bind_launch_error
+        bind_launch_error(launch_error, getattr(tp, "attempt_ref", None))
         raise
 
     now = tp.start_time
@@ -1789,12 +1831,19 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             timeout=cfg.get("timeout", 3600),
             train_script=str(train_script), config_path=str(config_path),
             attempt_id=attempt_id, execution_identity=execution_identity,
+            attempt_ref=getattr(tp, "attempt_ref", None),
             _log_fh=log_fh, _last_log_size=0,
             _last_log_check=now, _stall_since=0.0,
         )
         # The allocation start is already durable before leaving the lease.
         receive_model_lineage_attestation(
             lineage_context, process_pid=proc.pid)
+        if getattr(tp, "attempt_ref", None) is not None:
+            from orze.engine.training_attempts import started
+            identity = capture_process_identity(proc.pid)
+            started(lake, tp, results_dir / idea_id, identity,
+                    resume_context=resume_context)
+            return tp
         if claim_path.exists():
             identity = capture_process_identity(proc.pid)
             claim_data = json.loads(claim_path.read_text(encoding="utf-8"))
@@ -1823,17 +1872,38 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             )
         if resume_context:
             mark_resume_launched(resume_context, claim_path)
-    except Exception:
+    except Exception as launch_error:
         close_model_lineage_attestation(lineage_context)
-        _cleanup_failed_launch(tp, results_dir / idea_id, "training", log_fh)
+        _cleanup_failed_launch(tp, results_dir / idea_id, "training", log_fh, lake=lake)
+        from orze.engine.launch_failure_report import bind_launch_error
+        bind_launch_error(launch_error, getattr(tp, "attempt_ref", None))
         raise
 
     return tp
 
 
-def _write_failure(idea_dir: Path, reason: str, lake=None, idea_id=None, cfg=None):
-    """Write a failure metrics.json atomically and record FSM transition."""
+def _write_failure(idea_dir: Path, reason: str, lake=None, idea_id=None, cfg=None,
+                   *, effect_lease=None):
+    """Write owned diagnostics; the native caller owns lifecycle acceptance."""
     require_no_unconfirmed_stop(idea_dir)
+    from orze.engine.attempt_effect_lock import AttemptEffectBusy, require_effect_lease
+    if effect_lease is not None:
+        require_effect_lease(effect_lease, idea_dir)
+        if lake is not None:
+            raise AttemptEffectBusy("training_owned_writer_cannot_commit_lifecycle")
+    else:
+        from orze.engine.attempt_effect_receipts import require_closed_effects
+        from orze.engine.execution_catalog import declared_catalog
+        require_closed_effects(idea_dir)
+        owner = idea_dir / "_attempt_effect.lock"
+        if owner.exists() or owner.is_symlink():
+            raise AttemptEffectBusy("training_owned_publication_required")
+        if declared_catalog(idea_dir) is not None:
+            raise AttemptEffectBusy("training_owned_publication_required")
+        if lake is not None:
+            from orze.core.execution_attempts import current_attempt
+            if current_attempt(lake.conn, idea_id or idea_dir.name, "training") is not None:
+                raise AttemptEffectBusy("training_owned_publication_required")
     metrics = {
         "status": "FAILED",
         "error": reason,
@@ -1869,6 +1939,8 @@ def _write_failure(idea_dir: Path, reason: str, lake=None, idea_id=None, cfg=Non
                 )
         except Exception as e:
             logger.warning("FSM transition failed (non-blocking): %s", e)
+
+    return metrics
 
 
 def _terminate_training(tp: TrainingProcess, results_dir: Path, cfg: dict,
@@ -1947,6 +2019,14 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
 
     for gpu in list(active.keys()):
         tp = active[gpu]
+        from orze.engine.training_attempts import require_catalog
+        require_catalog(lake, results_dir / tp.idea_id, cfg, handle=tp)
+        if lake is not None and not getattr(tp, "is_posthoc", False):
+            from orze.engine.training_attempts import current
+            if not current(lake, tp, results_dir / tp.idea_id):
+                if active.get(gpu) is tp:
+                    del active[gpu]
+                continue
         # A later leader exit cannot prove that the unresolved writers from a
         # failed tree stop vanished. Keep the active slot and durable evidence.
         try:
@@ -1964,6 +2044,15 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
 
         # --- Still running ---
         if ret is None:
+            if lake is not None and not getattr(tp, "is_posthoc", False):
+                from orze.engine.training_monitor import poll
+                event = poll(lake, tp, gpu, results_dir / tp.idea_id, cfg, ret,
+                             elapsed, failure_counts, stall_minutes)
+                if event is not None:
+                    if active.get(gpu) is tp:
+                        del active[gpu]
+                    finished.append(event)
+                continue
             if elapsed > tp.timeout:
                 logger.warning("[TIMEOUT] %s after %.0fm — killing",
                                tp.idea_id, elapsed / 60)
@@ -2125,6 +2214,15 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
         except Exception:
             pass
         tp.close_log()
+        if lake is not None and not getattr(tp, "is_posthoc", False):
+            from orze.engine.training_completion import finish
+            event = finish(lake, tp, gpu, results_dir / tp.idea_id,
+                           cfg, ret, failure_counts)
+            if active.get(gpu) is tp:
+                del active[gpu]
+            if event is not None:
+                finished.append(event)
+            continue
         metrics_path = results_dir / tp.idea_id / "metrics.json"
 
         if ret == 0 and metrics_path.exists():

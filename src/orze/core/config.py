@@ -470,7 +470,10 @@ def load_project_config(path: Optional[str] = None) -> dict:
         cfg["ideas_file"] = str(orze_dir / "ideas.md")
     
     # Resolve idea_lake_db default → .orze/idea_lake.db (NOT results_dir)
-    if not cfg.get("idea_lake_db"):
+    # Recompute provenance after merging user configuration. This is legacy
+    # compatibility metadata, not authority; never trust an input copy of it.
+    cfg["_idea_lake_db_defaulted"] = not bool(cfg.get("idea_lake_db"))
+    if cfg["_idea_lake_db_defaulted"]:
         cfg["idea_lake_db"] = str(orze_dir / "idea_lake.db")
     
     # Environment variable exposures for subprocess injection

@@ -49,6 +49,7 @@ class TestFSME2E(unittest.TestCase):
         """Test the generic QUEUED → CLAIMED → IN_PROGRESS → COMPLETE lifecycle."""
         idea_id = "idea-e2e-001"
         lake = IdeaLake(self.db_path)
+        lake.insert(idea_id, "FSM fixture", "{}", "", status="queued")
 
         # ========== STEP 1: CLAIM (QUEUED → CLAIMED) ==========
         print(f"\n[CLAIM] {idea_id}")
@@ -110,6 +111,7 @@ class TestFSME2E(unittest.TestCase):
         """Test IN_PROGRESS → FAILED path."""
         idea_id = "idea-e2e-fail-001"
         lake = IdeaLake(self.db_path)
+        lake.insert(idea_id, "FSM fixture", "{}", "", status="queued")
 
         # Claim
         claim(idea_id, self.results_dir, gpu=0, lake=lake)
@@ -141,6 +143,7 @@ class TestFSME2E(unittest.TestCase):
         """Verify every transition is logged with full context."""
         idea_id = "idea-e2e-audit-001"
         lake = IdeaLake(self.db_path)
+        lake.insert(idea_id, "FSM fixture", "{}", "", status="queued")
 
         # Make transitions with full context
         transitions = [
@@ -176,6 +179,7 @@ class TestFSME2E(unittest.TestCase):
         """Verify FSM state stays consistent across multiple operations."""
         idea_id = "idea-e2e-consistent-001"
         lake = IdeaLake(self.db_path)
+        lake.insert(idea_id, "FSM fixture", "{}", "", status="queued")
 
         # Make many transitions
         states = ["QUEUED", "CLAIMED", "IN_PROGRESS", "COMPLETE"]

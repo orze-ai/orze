@@ -794,7 +794,7 @@ class IdeaLake:
         *,
         known_queued_at: bool = False,
         record_lifecycle: bool = True,
-    ) -> None:
+    ) -> bool:
         """Insert a newly observed state with only timestamps actually known."""
         queued_at = (
             at if record_lifecycle and (known_queued_at or state == "QUEUED")
@@ -807,7 +807,7 @@ class IdeaLake:
             else None
         )
         completed_at = at if record_lifecycle and state == "COMPLETE" else None
-        conn.execute(
+        cursor = conn.execute(
             "INSERT INTO idea_state "
             "(idea_id, current_state, updated_by_host, updated_by_pid, sop_type, "
             "updated_at, first_queued_at, queued_at, claimed_at, started_at, "
@@ -817,6 +817,7 @@ class IdeaLake:
                 claimed_at, started_at, terminal_at, completed_at,
             ),
         )
+        return cursor.rowcount == 1
 
     def _reconcile_lifecycle_columns(self) -> None:
         """Idempotently repair legacy/FSM lifecycle divergence.
@@ -2104,12 +2105,32 @@ class IdeaLake:
         logger.info("Successfully updated %d config summaries.", count)
 
     def _stage_state_in_tx(self, idea_id: str, stage: str) -> str:
-        row = self.conn.execute(
-            "SELECT current_state FROM idea_stage_state "
+        rows = self.conn.execute(
+            "SELECT idea_id, stage, current_state FROM idea_stage_state "
             "WHERE idea_id = ? AND stage = ?",
             (idea_id, stage),
-        ).fetchone()
-        return row[0] if row else "NOT_STARTED"
+        ).fetchmany(2)
+        if not rows:
+            return "NOT_STARTED"
+        if len(rows) != 1 or tuple(rows[0][:2]) != (idea_id, stage):
+            return "INVALID"
+        return rows[0][2]
+
+    def _lifecycle_identity_exists_in_tx(self, idea_id: str) -> bool:
+        # Native attempt authority is main-schema scoped. These legacy SQL
+        # helpers use unqualified lifecycle names; reject TEMP tables/views
+        # that could make an acknowledged edge refer to a different catalog.
+        if self.conn.execute(
+            "SELECT 1 FROM temp.sqlite_master WHERE type IN ('table','view') "
+            "AND name COLLATE NOCASE IN "
+            "('ideas','idea_state','idea_transitions',"
+            "'idea_stage_state','idea_stage_transitions') LIMIT 1",
+        ).fetchone() is not None:
+            return False
+        rows = self.conn.execute(
+            "SELECT idea_id FROM ideas WHERE idea_id = ?", (idea_id,),
+        ).fetchmany(2)
+        return len(rows) == 1 and rows[0][0] == idea_id
 
     def _record_stage_transition_in_tx(
         self,
@@ -2123,7 +2144,8 @@ class IdeaLake:
         at: str,
     ) -> bool:
         """Compare-and-swap one pipeline stage inside the caller's transaction."""
-        if stage not in PIPELINE_STAGES:
+        if (not self.conn.in_transaction or stage not in PIPELINE_STAGES
+                or not self._lifecycle_identity_exists_in_tx(idea_id)):
             return False
         actual = self._stage_state_in_tx(idea_id, stage)
         if actual != from_state:
@@ -2140,23 +2162,31 @@ class IdeaLake:
             )
             return False
 
-        started_at = at if to_state == "IN_PROGRESS" else None
+        previous = self.conn.execute(
+            "SELECT started_at FROM idea_stage_state "
+            "WHERE idea_id COLLATE BINARY = ? AND stage COLLATE BINARY = ?",
+            (idea_id, stage),
+        ).fetchone()
+        started_at = (at if to_state == "IN_PROGRESS" else
+                      None if to_state == "PENDING" or previous is None else previous[0])
         terminal_at = at if to_state in STAGE_TERMINALS else None
-        if actual == "NOT_STARTED":
-            self.conn.execute(
+        if previous is None:
+            cursor = self.conn.execute(
                 "INSERT INTO idea_stage_state "
                 "(idea_id, stage, current_state, updated_at, started_at, "
                 "terminal_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (idea_id, stage, to_state, at, started_at, terminal_at),
             )
+            if cursor.rowcount != 1:
+                return False
         else:
             cursor = self.conn.execute(
                 "UPDATE idea_stage_state SET current_state = ?, "
                 "updated_at = ?, started_at = CASE "
                 "WHEN ? = 'PENDING' THEN NULL "
                 "WHEN ? = 'IN_PROGRESS' THEN ? ELSE started_at END, "
-                "terminal_at = ? WHERE idea_id = ? AND stage = ? "
-                "AND current_state = ?",
+                "terminal_at = ? WHERE idea_id COLLATE BINARY = ? "
+                "AND stage COLLATE BINARY = ? AND current_state COLLATE BINARY = ?",
                 (
                     to_state, at, to_state, to_state, at, terminal_at,
                     idea_id, stage, from_state,
@@ -2164,13 +2194,39 @@ class IdeaLake:
             )
             if cursor.rowcount != 1:
                 return False
-        self.conn.execute(
+        cursor = self.conn.execute(
             "INSERT INTO idea_stage_transitions "
             "(idea_id, stage, from_state, to_state, reason, host, pid, ts) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (idea_id, stage, from_state, to_state, reason, host, pid, at),
         )
-        return True
+        if cursor.rowcount != 1:
+            return False
+        audit = self.conn.execute(
+            "SELECT idea_id, stage, from_state, to_state, reason, host, pid, ts "
+            "FROM idea_stage_transitions WHERE id = ?", (cursor.lastrowid,),
+        ).fetchmany(2)
+        state = self.conn.execute(
+            "SELECT idea_id, stage, current_state, updated_at, started_at, terminal_at "
+            "FROM idea_stage_state WHERE idea_id = ? AND stage = ?",
+            (idea_id, stage),
+        ).fetchmany(2)
+        return (len(audit) == 1 and tuple(audit[0]) ==
+                (idea_id, stage, from_state, to_state, reason, host, pid, at)
+                and len(state) == 1 and tuple(state[0]) ==
+                (idea_id, stage, to_state, at, started_at, terminal_at))
+
+    def _stage_receipt_in_tx(self, idea_id: str, stage: str):
+        """Bounded stage/current-audit receipt, for final same-transaction checks."""
+        state = self.conn.execute(
+            "SELECT * FROM idea_stage_state WHERE idea_id COLLATE BINARY = ? "
+            "AND stage COLLATE BINARY = ?", (idea_id, stage),
+        ).fetchmany(2)
+        audit = self.conn.execute(
+            "SELECT * FROM idea_stage_transitions WHERE idea_id COLLATE BINARY = ? "
+            "AND stage COLLATE BINARY = ? ORDER BY id DESC LIMIT 1", (idea_id, stage),
+        ).fetchall()
+        return tuple(tuple(row) for row in state), tuple(tuple(row) for row in audit)
 
     def _sync_pipeline_for_global_transition(
         self,
@@ -2182,6 +2238,8 @@ class IdeaLake:
         pid: int,
         sop_type: str,
         at: str,
+        *,
+        receipts: Optional[dict] = None,
     ) -> bool:
         """Keep stage truth atomic with lifecycle launch/terminal/retry edges."""
         if sop_type != "training":
@@ -2189,10 +2247,14 @@ class IdeaLake:
 
         def move(stage: str, target: str, stage_reason: str) -> bool:
             current = self._stage_state_in_tx(idea_id, stage)
-            if current == target:
-                return True
-            return self._record_stage_transition_in_tx(
-                idea_id, stage, current, target, stage_reason, host, pid, at)
+            if current != target and not self._record_stage_transition_in_tx(
+                    idea_id, stage, current, target, stage_reason, host, pid, at):
+                return False
+            if receipts is not None:
+                # Capture immediately: a later stage's trigger may corrupt a
+                # previously accepted stage before the whole sync returns.
+                receipts[stage] = self._stage_receipt_in_tx(idea_id, stage)
+            return True
 
         if from_state == "CLAIMED" and to_state == "IN_PROGRESS":
             return (
@@ -2295,6 +2357,120 @@ class IdeaLake:
         ).fetchall())
         return [dict(row) for row in rows]
 
+    def _record_state_transition_in_tx(
+        self, idea_id: str, from_state: str, to_state: str,
+        reason: Optional[str] = None, host: Optional[str] = None,
+        pid: Optional[int] = None, sop_type: Optional[str] = None,
+        at: Optional[str] = None,
+    ) -> bool:
+        """Write one exact lifecycle edge in a transaction owned by the caller.
+
+        Never begins, commits or rolls back. False may follow tentative SQL
+        writes: the owning caller MUST roll back its transaction on rejection.
+        Database exceptions likewise belong to the caller's rollback boundary.
+        """
+        if not self.conn.in_transaction:
+            return False
+        if to_state not in VALID_STATE_TRANSITIONS.get(from_state, set()):
+            logger.warning("Invalid FSM transition: %s %s → %s", idea_id, from_state, to_state)
+            return False
+        if not self._lifecycle_identity_exists_in_tx(idea_id):
+            return False
+        rows = self.conn.execute(
+            "SELECT * FROM idea_state WHERE idea_id = ?", (idea_id,),
+        ).fetchmany(2)
+        if len(rows) > 1 or (rows and rows[0]["idea_id"] != idea_id):
+            return False
+        before = dict(rows[0]) if rows else {}
+        actual_state = before.get("current_state", "QUEUED")
+        if actual_state != from_state:
+            logger.warning(
+                "Stale FSM transition rejected: %s expected=%s actual=%s to=%s",
+                idea_id, from_state, actual_state, to_state)
+            return False
+        import socket as _socket
+        host = host or _socket.gethostname()
+        pid = pid or os.getpid()
+        sop_type = sop_type or "training"
+        reason = reason or ""
+        at = self._transition_time(self.conn) if at is None else at
+
+        # Derive exact postconditions from the existing current-attempt clock
+        # policy, including fields that this edge must leave unchanged.
+        clocks = ("first_queued_at", "queued_at", "claimed_at", "started_at",
+                  "terminal_at", "completed_at")
+        expected = {name: before.get(name) for name in clocks}
+        expected.update(idea_id=idea_id, current_state=to_state,
+                        updated_by_host=host, updated_by_pid=pid,
+                        sop_type=sop_type, updated_at=at)
+        if to_state == "QUEUED":
+            expected.update(first_queued_at=(before.get("first_queued_at")
+                                            if before.get("first_queued_at") is not None else at),
+                            queued_at=at, claimed_at=None, started_at=None,
+                            terminal_at=None, completed_at=None)
+        elif to_state == "CLAIMED":
+            expected.update(claimed_at=at, started_at=None, terminal_at=None, completed_at=None)
+        elif to_state == "IN_PROGRESS":
+            expected.update(started_at=at, terminal_at=None, completed_at=None)
+        elif to_state == "COMPLETE":
+            expected.update(terminal_at=at, completed_at=at)
+        elif to_state in ("FAILED", "SKIPPED"):
+            expected.update(terminal_at=at, completed_at=None)
+
+        if rows:
+            accepted = self._write_state_row(
+                self.conn, idea_id, to_state, host, pid, sop_type, at,
+                expected_state=from_state)
+        else:
+            accepted = self._insert_state_row(
+                self.conn, idea_id, to_state, host, pid, sop_type, at)
+        pipeline = {}
+        if not accepted or not self._sync_pipeline_for_global_transition(
+                idea_id, from_state, to_state, reason, host, pid, sop_type, at,
+                receipts=pipeline):
+            return False
+        # Keep already captured per-write receipts, and also ensure subsequent
+        # global/legacy writes cannot change an untouched stage.
+        for stage in PIPELINE_STAGES:
+            if stage not in pipeline:
+                pipeline[stage] = self._stage_receipt_in_tx(idea_id, stage)
+        cursor = self.conn.execute(
+            "INSERT INTO idea_transitions "
+            "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (idea_id, from_state, to_state, reason, host, pid, sop_type, at),
+        )
+        if cursor.rowcount != 1:
+            return False
+        audit_id = cursor.lastrowid
+        legacy_status = STATE_TO_STATUS.get(to_state)
+        if legacy_status:
+            cursor = self.conn.execute(
+                "UPDATE ideas SET status = ? WHERE idea_id COLLATE BINARY = ?",
+                (legacy_status, idea_id),
+            )
+            if cursor.rowcount != 1:
+                return False
+
+        # Read back after ALL writes: an AFTER trigger on the compatibility
+        # update must not invalidate a state/stage already checked earlier.
+        state = self.conn.execute(
+            "SELECT * FROM idea_state WHERE idea_id = ?", (idea_id,),
+        ).fetchmany(2)
+        audit = self.conn.execute(
+            "SELECT idea_id, from_state, to_state, reason, host, pid, sop_type, ts "
+            "FROM idea_transitions WHERE id = ?", (audit_id,),
+        ).fetchmany(2)
+        legacy = self.conn.execute(
+            "SELECT idea_id, status FROM ideas WHERE idea_id = ?", (idea_id,),
+        ).fetchmany(2)
+        return (len(state) == 1 and all(state[0][key] == value for key, value in expected.items())
+                and len(audit) == 1 and tuple(audit[0]) ==
+                (idea_id, from_state, to_state, reason, host, pid, sop_type, at)
+                and len(legacy) == 1 and tuple(legacy[0]) == (idea_id, legacy_status)
+                and all(self._stage_receipt_in_tx(idea_id, stage) == receipt
+                        for stage, receipt in pipeline.items()))
+
     def record_state_transition(self, idea_id: str, from_state: str, to_state: str,
                                 reason: Optional[str] = None,
                                 host: Optional[str] = None,
@@ -2324,81 +2500,10 @@ class IdeaLake:
         def _do_transition():
             self.conn.execute("BEGIN IMMEDIATE")
             try:
-                # Generic FSM validation (SOP-orthogonal)
-                if to_state not in VALID_STATE_TRANSITIONS.get(from_state, set()):
-                    logger.warning(
-                        "Invalid FSM transition: %s %s → %s",
-                        idea_id, from_state, to_state)
+                if not self._record_state_transition_in_tx(
+                        idea_id, from_state, to_state, reason, host, pid, sop_type):
                     self.conn.rollback()
                     return False
-
-                row = self.conn.execute(
-                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
-                    (idea_id,),
-                ).fetchone()
-                actual_state = row[0] if row else "QUEUED"
-                if actual_state != from_state:
-                    logger.warning(
-                        "Stale FSM transition rejected: %s expected=%s actual=%s to=%s",
-                        idea_id, from_state, actual_state, to_state,
-                    )
-                    self.conn.rollback()
-                    return False
-
-                transition_at = self._transition_time(self.conn)
-                if row:
-                    if not self._write_state_row(
-                        self.conn,
-                        idea_id,
-                        to_state,
-                        host,
-                        pid,
-                        sop_type,
-                        transition_at,
-                        expected_state=from_state,
-                    ):
-                        self.conn.rollback()
-                        return False
-                else:
-                    self._insert_state_row(
-                        self.conn,
-                        idea_id,
-                        to_state,
-                        host,
-                        pid,
-                        sop_type,
-                        transition_at,
-                    )
-
-                if not self._sync_pipeline_for_global_transition(
-                    idea_id, from_state, to_state, reason or "", host, pid,
-                    sop_type, transition_at,
-                ):
-                    self.conn.rollback()
-                    return False
-
-                # Record transition
-                self.conn.execute(
-                    "INSERT INTO idea_transitions "
-                    "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        idea_id, from_state, to_state, reason or "", host, pid,
-                        sop_type, transition_at,
-                    )
-                )
-
-                # Keep the compatibility status and the audited FSM in the
-                # same transaction for every lifecycle state, not only the
-                # terminals. Dispatch can therefore never see a claimed run
-                # as queued after this commit.
-                legacy_status = STATE_TO_STATUS.get(to_state)
-                if legacy_status:
-                    self.conn.execute(
-                        "UPDATE ideas SET status = ? WHERE idea_id = ?",
-                        (legacy_status, idea_id),
-                    )
-
                 self.conn.commit()
                 logger.info(
                     "[LIFECYCLE_TRANSITION] idea=%s %s → %s reason=\"%s\"",

@@ -730,7 +730,13 @@ class OrzePhaseMixin:
         real evaluation/global terminal states agree. Other outcomes remain
         pending for a later tick. Only training-only projects may skip eval.
         """
+        from orze.core.execution_attempts import current_attempt
+        from orze.engine.completion_events import (
+            completion_is_current, filter_completions, training_source,
+        )
         cfg = self.cfg
+        finished = filter_completions(finished, self.lake, self.results_dir)
+        eval_finished = filter_completions(eval_finished, self.lake, self.results_dir)
         managed_idea = cfg.get("_managed_idea_id")
         if managed_idea:
             finished = [item for item in finished if item[0] == managed_idea]
@@ -742,9 +748,9 @@ class OrzePhaseMixin:
         attempted_ids = set(delivered_ids)
         attempted_ids.update(ep.idea_id for ep in self.active_evals.values())
 
-        def defer(idea_id, gpu):
+        def defer(idea_id, gpu, source_event=None):
             if idea_id not in {iid for iid, _ in self.pending_evals}:
-                self.pending_evals.append((idea_id, gpu))
+                self.pending_evals.append(source_event or (idea_id, gpu))
 
         # Explicit retry admissions are durable evaluation work, not QUEUED
         # training ideas. Recover them even with an empty inbox after restart.
@@ -754,16 +760,29 @@ class OrzePhaseMixin:
                 if not managed_idea or idea_id == managed_idea:
                     defer(idea_id, self.gpu_ids[0])
 
-        def deliver(idea_id, gpu):
+        def deliver(idea_id, gpu, source_event=None):
             require_no_unconfirmed_stop(self.results_dir / idea_id)
-            if idea_id not in delivered_ids:
-                eval_finished.append((idea_id, gpu))
+            event = source_event or (idea_id, gpu)
+            if idea_id not in delivered_ids and completion_is_current(event, self.lake, self.results_dir):
+                eval_finished.append(event)
                 delivered_ids.add(idea_id)
 
-        def finish_without_process(idea_id, gpu):
+        def finish_without_process(idea_id, gpu, source_event=None):
             # Neither missing eval configuration nor existing output can
             # resolve a persisted, unconfirmed execution stop.
             require_no_unconfirmed_stop(self.results_dir / idea_id)
+            if self.lake is not None:
+                native_eval = current_attempt(self.lake.conn, idea_id, "evaluation")
+                if native_eval is not None:
+                    # Closed native execution was already accepted elsewhere.
+                    # None can retire this scheduling item, never mint delivery.
+                    return (native_eval["state"] in ("TERMINAL", "NOT_STARTED")
+                            and self.lake.get_stage_state(idea_id, "evaluation") != "PENDING")
+                if getattr(source_event, "attempt_ref", None) is not None and not cfg.get("eval_script"):
+                    if completion_is_current(source_event, self.lake, self.results_dir):
+                        deliver(idea_id, gpu, source_event)
+                        return True
+                    return False
             if not cfg.get("eval_script"):
                 if self.lake:
                     state = self.lake.get_fsm_state(idea_id)
@@ -787,10 +806,20 @@ class OrzePhaseMixin:
                 # A None return cannot establish an evaluated lifecycle when
                 # no authoritative state is available to this controller.
                 return False
-            deliver(idea_id, gpu)
+            deliver(idea_id, gpu, source_event)
             return True
 
-        for idea_id, gpu in finished:
+        def dispatch(idea_id, gpu, source_event=None):
+            source = source_event or training_source(idea_id, gpu, self.lake, self.results_dir)
+            kwargs = {"lake": self.lake}
+            if getattr(source, "attempt_ref", None) is not None:
+                kwargs["source_event"] = source
+            return launch_eval(idea_id, gpu, self.results_dir, cfg, **kwargs)
+
+        for event in finished:
+            idea_id, gpu = event
+            if not completion_is_current(event, self.lake, self.results_dir):
+                continue
             if idea_id in attempted_ids:
                 continue
             metrics_path = self.results_dir / idea_id / "metrics.json"
@@ -802,8 +831,8 @@ class OrzePhaseMixin:
                             and metrics.get("status") == "COMPLETED"):
                         if not cfg.get("eval_script"):
                             attempted_ids.add(idea_id)
-                            if not finish_without_process(idea_id, gpu):
-                                defer(idea_id, gpu)
+                            if not finish_without_process(idea_id, gpu, event):
+                                defer(idea_id, gpu, event)
                             continue
                         if len(self.active_evals) < max_evals:
                             if hasattr(self, 'slot_mgr'):
@@ -817,58 +846,64 @@ class OrzePhaseMixin:
                             if free_for_eval:
                                 use_gpu = free_for_eval[0]
                                 attempted_ids.add(idea_id)
-                                ep = launch_eval(
-                                    idea_id, use_gpu,
-                                    self.results_dir, cfg, lake=self.lake)
+                                ep = dispatch(idea_id, use_gpu, event)
                                 if ep is not None:
                                     self.active_evals[use_gpu] = ep
-                                elif not finish_without_process(idea_id, use_gpu):
-                                    defer(idea_id, use_gpu)
+                                elif not finish_without_process(idea_id, use_gpu, event):
+                                    defer(idea_id, use_gpu, event)
                             else:
-                                defer(idea_id, gpu)
+                                defer(idea_id, gpu, event)
                                 logger.info(
                                     "Eval deferred for %s (no free GPU)",
                                     idea_id)
                         else:
-                            defer(idea_id, gpu)
+                            defer(idea_id, gpu, event)
                             logger.info(
                                 "Eval deferred for %s (limit %d)",
                                 idea_id, max_evals)
                     else:
-                        deliver(idea_id, gpu)
+                        deliver(idea_id, gpu, event)
                 except TerminationUnconfirmed:
                     raise
                 except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                     if idea_id in attempted_ids:
                         # Dispatch/lifecycle I/O failures are not evidence that
                         # evaluation completed. Keep the attempted work.
-                        defer(idea_id, gpu)
+                        defer(idea_id, gpu, event)
                     else:
-                        deliver(idea_id, gpu)
+                        deliver(idea_id, gpu, event)
             else:
-                deliver(idea_id, gpu)
+                deliver(idea_id, gpu, event)
 
         # 6a. Launch pending evals from previous iterations
         still_pending = []
         active_eval_ids = {ep.idea_id for ep in self.active_evals.values()}
-        for p_idea, p_gpu in dict(self.pending_evals).items():
+        seen_pending = set()
+        for pending in self.pending_evals:
+            p_idea, p_gpu = pending
+            if p_idea in seen_pending:
+                continue
+            seen_pending.add(p_idea)
+            source_event = pending if getattr(pending, "attempt_ref", None) is not None else None
+            if source_event is not None and not completion_is_current(source_event, self.lake, self.results_dir):
+                continue
             if p_idea in delivered_ids or p_idea in active_eval_ids:
                 continue
             if managed_idea and p_idea != managed_idea:
-                still_pending.append((p_idea, p_gpu))
+                still_pending.append(pending)
                 continue
             if p_idea in attempted_ids:
-                still_pending.append((p_idea, p_gpu))
+                still_pending.append(pending)
                 continue
             if not cfg.get("eval_script"):
                 attempted_ids.add(p_idea)
                 eligible, _ = is_training_complete_for_downstream(
                     self.results_dir / p_idea, cfg)
-                if not eligible or not finish_without_process(p_idea, p_gpu):
-                    still_pending.append((p_idea, p_gpu))
+                if not eligible or not finish_without_process(p_idea, p_gpu, source_event):
+                    still_pending.append(pending)
                 continue
             if len(self.active_evals) >= max_evals:
-                still_pending.append((p_idea, p_gpu))
+                still_pending.append(pending)
                 continue
             if hasattr(self, 'slot_mgr'):
                 eval_busy = (self.slot_mgr.gpu_ids_in_use()
@@ -881,14 +916,13 @@ class OrzePhaseMixin:
             if free_for_eval:
                 use_gpu = free_for_eval[0]
                 attempted_ids.add(p_idea)
-                ep = launch_eval(
-                    p_idea, use_gpu, self.results_dir, cfg, lake=self.lake)
+                ep = dispatch(p_idea, use_gpu, source_event)
                 if ep is not None:
                     self.active_evals[use_gpu] = ep
-                elif not finish_without_process(p_idea, use_gpu):
-                    still_pending.append((p_idea, use_gpu))
+                elif not finish_without_process(p_idea, use_gpu, source_event):
+                    still_pending.append(pending)
             else:
-                still_pending.append((p_idea, p_gpu))
+                still_pending.append(pending)
         self.pending_evals = still_pending
 
         # 6b. Backlog scan: fill remaining eval slots with
@@ -962,8 +996,7 @@ class OrzePhaseMixin:
                         continue
                     use_gpu = free_for_eval.pop(0)
                     attempted_ids.add(iid)
-                    ep = launch_eval(
-                        iid, use_gpu, self.results_dir, cfg, lake=self.lake)
+                    ep = dispatch(iid, use_gpu)
                     if ep is not None:
                         self.active_evals[use_gpu] = ep
                         launched_backlog += 1
@@ -1652,6 +1685,11 @@ class OrzePhaseMixin:
                         logger.error("Failed to launch %s on GPU %s: %s",
                                      idea_id, gpu, e)
                         error_msg = f"Launch error: {e}"
+                        from orze.engine.launch_failure_report import report_launch_failure
+                        if report_launch_failure(
+                                self.lake, self.results_dir / idea_id, e,
+                                self.failure_counts, cfg) is not None:
+                            continue
                         if _try_executor_fix(idea_id, error_msg,
                                              self.results_dir, cfg,
                                              self.fix_counts):
@@ -1666,6 +1704,10 @@ class OrzePhaseMixin:
                                 logger.error(
                                     "[FIX-RETRY] %s relaunch failed: %s",
                                     idea_id, e2)
+                                if report_launch_failure(
+                                        self.lake, self.results_dir / idea_id, e2,
+                                        self.failure_counts, cfg) is not None:
+                                    continue
                                 finalize_failed_launch_accounting(
                                     idea_id,
                                     self.results_dir / idea_id,
@@ -1716,6 +1758,11 @@ class OrzePhaseMixin:
                             tp, self.results_dir / idea_id,
                             phase=execution_phase, reaper=_terminate_and_reap)
                         tp.close_log()
+                        if getattr(tp, "attempt_ref", None) is not None:
+                            from orze.engine.training_completion import requeue
+                            requeue(self.lake, tp, gpu, self.results_dir / idea_id,
+                                    cfg, return_code, "scheduler_slot_race")
+                            continue
                         record_compute_terminal(
                             tp,
                             self.results_dir / idea_id,

@@ -127,7 +127,8 @@ def _invoke(p, mode, monkeypatch, active):
     assert ep is not None
     active[0] = ep
     if mode == "async_timeout":
-        ep.start_time -= 120
+        now = ep.start_time + 120
+        monkeypatch.setattr(evaluator.time, "time", lambda: now)
     elif mode == "async_poll_error":
         ep.process.poll_error = True
     else:

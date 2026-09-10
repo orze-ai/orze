@@ -133,7 +133,12 @@ def test_phase_never_releases_unknown_started_execution(
         if boundary == "initialization":
             assert terminal["outcome"] == "failed"
             assert runner.lake.get_fsm_state("idea-handoff") == "FAILED"
-            assert fixer.call_count == 1
+            # Native repair is now a separate explicit action; this is the
+            # documented D2 fixture migration, not another historical red.
+            fixer.assert_not_called()
+            from orze.core.execution_attempts import current_attempt
+            report = current_attempt(runner.lake.conn, "idea-handoff", "launch_failure_report")
+            assert report["terminal"]["repair_status"] == "pending_explicit_action"
         else:
             assert terminal["outcome"] == "requeued"
             assert runner.lake.get_fsm_state("idea-handoff") == "QUEUED"

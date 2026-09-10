@@ -133,7 +133,7 @@ def _record_eval_audit(idea_dir: Path, action: str, reason: str,
 
 
 def launch_eval(idea_id: str, gpu: int, results_dir: Path,
-                cfg: dict, lake=None) -> Optional[EvalProcess]:
+                cfg: dict, lake=None, *, source_event=None) -> Optional[EvalProcess]:
     """Launch a non-blocking eval subprocess. Returns EvalProcess or None.
 
     Args:
@@ -145,6 +145,16 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
 
     eval_output = cfg.get("eval_output") or "eval_report.json"
     idea_dir = results_dir / idea_id
+    from orze.engine.native_evaluation import require_catalog
+    require_catalog(lake, idea_id, results_dir, cfg)
+    from orze.engine.completion_events import require_completion, training_source
+    from orze.core.execution_attempts import StaleAttempt
+    try:
+        source_event = source_event or training_source(idea_id, gpu, lake, results_dir)
+        if source_event is not None:
+            require_completion(source_event, lake, results_dir, phase="training")
+    except StaleAttempt:
+        return None
 
     def reject_ineligible() -> bool:
         eligible, eligibility_reason = is_training_complete_for_downstream(
@@ -156,9 +166,6 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         _record_eval_audit(idea_dir, "skip", eligibility_reason)
         return True
 
-    if reject_ineligible():
-        return None
-
     from orze.engine.evaluation_retry import (
         EvaluationRetryError, _require_closed_evaluations, validate_pending_retry,
     )
@@ -167,12 +174,24 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     # evaluator still owns writers and has only a start receipt. Its late
     # output cannot establish closure or authorize another evaluation.
     require_no_unconfirmed_stop(idea_dir)
+    from orze.engine.attempt_effect_receipts import require_closed_effects
+    require_closed_effects(idea_dir)
     try:
         _require_closed_evaluations(idea_dir)
     except EvaluationRetryError as exc:
-        _record_eval_audit(
-            idea_dir, "hold", "evaluation_termination_unconfirmed")
         raise TerminationUnconfirmed("evaluation_termination_unconfirmed") from exc
+    if lake is not None:
+        from orze.core.execution_attempts import current_attempt
+        current = current_attempt(lake.conn, idea_id, "evaluation")
+        if current is not None:
+            if current["state"] not in ("TERMINAL", "NOT_STARTED"):
+                raise TerminationUnconfirmed("evaluation_termination_unconfirmed")
+            if lake.get_stage_state(idea_id, "evaluation") != "PENDING":
+                # Previously accepted native output is not a new completion,
+                # and presence cannot reconcile a launched-but-unclosed row.
+                return None
+    if reject_ineligible():
+        return None
     try:
         validate_pending_retry(idea_id, results_dir, cfg, lake)
     except EvaluationRetryError as exc:
@@ -274,7 +293,13 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     proc = None
     ep = None
     stage_started = False
+    attempt_id = secrets.token_hex(16)
+    attempt_ref = None
     try:
+        if lake is not None:
+            from orze.engine.native_evaluation import begin
+            attempt_ref = begin(lake, idea_dir, attempt_id, gpu, source_event=source_event)
+            stage_started = True
         bundle = None
         entrypoint = eval_script
         if get_evaluation_bundle_config(cfg) is not None:
@@ -288,37 +313,6 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         _assert_controller_runtime_attested(cfg)
         with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
             _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
-            if lake is not None:
-                training_stage = lake.get_stage_state(idea_id, "training")
-                if training_stage != "COMPLETE":
-                    if training_stage not in (
-                            "NOT_STARTED", "PENDING", "IN_PROGRESS") or not (
-                            lake.record_stage_transition(
-                                idea_id,
-                                stage="training",
-                                from_state=training_stage,
-                                to_state="COMPLETE",
-                                reason="reconcile_validated_training_output",
-                                host=socket.gethostname(),
-                                pid=os.getpid(),
-                            )):
-                        raise RuntimeError(
-                            "training_stage_not_ready_for_evaluation")
-                evaluation_stage = lake.get_stage_state(
-                    idea_id, "evaluation")
-                if evaluation_stage not in ("NOT_STARTED", "PENDING") or not (
-                        lake.record_stage_transition(
-                            idea_id,
-                            stage="evaluation",
-                            from_state=evaluation_stage,
-                            to_state="IN_PROGRESS",
-                            reason=f"evaluation_launched on gpu {gpu}",
-                            host=socket.gethostname(),
-                            pid=os.getpid(),
-                        )):
-                    raise RuntimeError(
-                        "evaluation_stage_transition_rejected")
-                stage_started = True
             env = os.environ.copy()
             for k, v in (cfg.get("train_extra_env") or {}).items():
                 env[k] = str(v)
@@ -341,14 +335,26 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
                 log_fh.close()
                 raise
 
+            # Bind the pre-Popen intent before leaving the GPU lease or
+            # advertising a process to the scheduler. A constructor failure
+            # still leaves a holder with the exact durable attempt identity.
+            ep = SimpleNamespace(
+                idea_id=idea_id, gpu=gpu, process=proc, start_time=time.time(),
+                attempt_id=attempt_id, attempt_ref=attempt_ref,
+                close_log=log_fh.close)
+            if lake is not None:
+                from orze.engine.native_evaluation import started
+                started(lake, ep, idea_dir, record_compute_start)
+
         ep = EvalProcess(
             idea_id=idea_id, gpu=gpu, process=proc,
-            start_time=time.time(), log_path=log_path,
-            timeout=eval_timeout, attempt_id=secrets.token_hex(16),
+            start_time=ep.start_time, log_path=log_path,
+            timeout=eval_timeout, attempt_id=attempt_id,
+            attempt_ref=attempt_ref,
             _log_fh=log_fh,
         )
-        from orze.engine.accounting import record_compute_start
-        record_compute_start(ep, idea_dir, phase="evaluation")
+        if lake is None:
+            record_compute_start(ep, idea_dir, phase="evaluation")
         return ep
     except LaunchIntegrityError:
         # A controller-identity failure is an authorization rejection, not a
@@ -360,7 +366,8 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
             try:
                 holder = ep if ep is not None else SimpleNamespace(
                     idea_id=idea_id, process=proc, gpu=gpu,
-                    start_time=time.time(), attempt_id=None)
+                    start_time=time.time(), attempt_id=attempt_id,
+                    attempt_ref=attempt_ref)
                 terminate_execution(
                     holder, idea_dir, phase="evaluation",
                     reaper=_terminate_and_reap, timeout=3)
@@ -378,6 +385,28 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
                         "Could not close held evaluation log for %s: %s",
                         idea_id, type(close_error).__name__)
                 raise
+        if attempt_ref is not None:
+            from orze.engine.native_evaluation import finish, not_started
+            holder = ep if ep is not None else SimpleNamespace(
+                idea_id=idea_id, process=proc, gpu=gpu,
+                start_time=time.time(), attempt_id=attempt_id,
+                attempt_ref=attempt_ref)
+            if proc is None:
+                not_started(lake, holder, idea_dir,
+                            "evaluation_launch_preflight_rejected")
+                logger.warning("Evaluation not started for %s: %s", idea_id, e)
+                return None
+            finish(lake, holder, idea_dir, cfg,
+                   proc.poll() if proc is not None else None,
+                   forced=("failed", "evaluation_launch_initialization_failed",
+                           f"Evaluation launch failed: {type(e).__name__}"),
+                   not_started=proc is None)
+            if ep is not None:
+                ep.close_log()
+            logger.warning("Failed to launch eval for %s: %s", idea_id, e)
+            return None
+        if isinstance(e, TerminationUnconfirmed):
+            raise
         if ep is not None:
             try:
                 from orze.engine.accounting import record_compute_terminal
@@ -407,13 +436,16 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         return None
 
 
-def run_eval(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None):
+def run_eval(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None, *, source_event=None):
     """Run post-training evaluation (blocking). Used in --once mode.
 
     Args:
         lake: IdeaLake instance for FSM transition recording (optional)
     """
-    ep = launch_eval(idea_id, gpu, results_dir, cfg, lake=lake)
+    kwargs = {"lake": lake}
+    if source_event is not None:
+        kwargs["source_event"] = source_event
+    ep = launch_eval(idea_id, gpu, results_dir, cfg, **kwargs)
     if ep is None:
         return
     eval_output = cfg.get("eval_output") or "eval_report.json"
@@ -432,13 +464,17 @@ def run_eval(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None):
         # sealed/source validation, one receipt, and the pipeline transition.
         # Do not catch closure/storage errors and reinterpret them as a second
         # process failure or write a contradictory terminal receipt.
-        check_active_evals({gpu: ep}, results_dir, cfg, lake=lake)
-        return
+        events = check_active_evals({gpu: ep}, results_dir, cfg, lake=lake)
+        return events[0] if events else None
     logger.warning("Eval error for %s: %s", idea_id, reason)
     terminate_execution(
         ep, results_dir / idea_id, phase="evaluation",
         reaper=_terminate_and_reap)
     ep.close_log()
+    if getattr(ep, "attempt_ref", None) is not None:
+        from orze.engine.native_evaluation import finish
+        return finish(lake, ep, results_dir / idea_id, cfg, ep.process.poll(),
+                      forced=(outcome, reason_code, reason))
     _write_eval_failure_marker(
         results_dir, idea_id, eval_output, reason, lake=lake)
     record_compute_terminal(
@@ -447,7 +483,8 @@ def run_eval(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None):
 
 
 def _write_eval_failure_marker(results_dir: Path, idea_id: str,
-                               eval_output: str, reason: str, lake=None) -> None:
+                               eval_output: str, reason: str, lake=None,
+                               *, effect_lease=None) -> None:
     """Safety net: write failure marker if eval process died without one.
 
     The fallback never overwrites existing output, training metrics, or an
@@ -458,6 +495,22 @@ def _write_eval_failure_marker(results_dir: Path, idea_id: str,
         lake: IdeaLake instance for FSM transition recording (optional)
     """
     require_no_unconfirmed_stop(results_dir / idea_id)
+    from orze.engine.attempt_effect_lock import AttemptEffectBusy, require_effect_lease
+    if effect_lease is not None:
+        require_effect_lease(effect_lease, results_dir / idea_id)
+    else:
+        from orze.engine.attempt_effect_receipts import require_closed_effects
+        from orze.engine.execution_catalog import declared_catalog
+        require_closed_effects(results_dir / idea_id)
+        owner = results_dir / idea_id / "_attempt_effect.lock"
+        if owner.exists() or owner.is_symlink():
+            raise AttemptEffectBusy("evaluation_owned_publication_required")
+        if declared_catalog(results_dir / idea_id) is not None:
+            raise AttemptEffectBusy("evaluation_owned_publication_required")
+        if lake is not None:
+            from orze.core.execution_attempts import current_attempt
+            if current_attempt(lake.conn, idea_id, "evaluation") is not None:
+                raise AttemptEffectBusy("evaluation_owned_publication_required")
     report_path = evaluation_output_path(
         results_dir / idea_id, {"eval_output": eval_output})
     if (report_path is not None and
@@ -510,6 +563,14 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
     finished = []
     for gpu in list(active_evals.keys()):
         ep = active_evals[gpu]
+        from orze.engine.native_evaluation import require_catalog
+        require_catalog(lake, ep.idea_id, results_dir, cfg, handle=ep)
+        if lake is not None:
+            from orze.engine.native_evaluation import is_current
+            if not is_current(lake, ep):
+                if active_evals.get(gpu) is ep:
+                    del active_evals[gpu]
+                continue
         if getattr(ep, "_termination_unconfirmed", False):
             raise TerminationUnconfirmed("evaluation_termination_unconfirmed")
         require_no_unconfirmed_stop(results_dir / ep.idea_id)
@@ -522,6 +583,17 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                 ep, results_dir / ep.idea_id, phase="evaluation",
                 reaper=_terminate_and_reap)
             ep.close_log()
+            if getattr(ep, "attempt_ref", None) is not None:
+                from orze.engine.native_evaluation import finish
+                event = finish(lake, ep, results_dir / ep.idea_id, cfg,
+                               ep.process.returncode,
+                               forced=("failed", "evaluation_process_observation_failed",
+                                       "Evaluation process observation failed"))
+                if active_evals.get(gpu) is ep:
+                    del active_evals[gpu]
+                if event is not None:
+                    finished.append(event)
+                continue
             _write_eval_failure_marker(
                 results_dir, ep.idea_id, eval_output,
                 "Evaluation process observation failed", lake=lake)
@@ -543,6 +615,17 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
                     ep, results_dir / ep.idea_id, phase="evaluation",
                     reaper=_terminate_and_reap)
                 ep.close_log()
+                if getattr(ep, "attempt_ref", None) is not None:
+                    from orze.engine.native_evaluation import finish
+                    event = finish(lake, ep, results_dir / ep.idea_id, cfg,
+                                   ep.process.poll(),
+                                   forced=("interrupted", "evaluation_timeout",
+                                           f"Timed out after {elapsed/60:.0f}m"))
+                    if active_evals.get(gpu) is ep:
+                        del active_evals[gpu]
+                    if event is not None:
+                        finished.append(event)
+                    continue
                 _write_eval_failure_marker(
                     results_dir, ep.idea_id, eval_output,
                     f"Timed out after {elapsed/60:.0f}m", lake=lake)
@@ -556,6 +639,14 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
 
         # Process exited
         ep.close_log()
+        if getattr(ep, "attempt_ref", None) is not None:
+            from orze.engine.native_evaluation import finish
+            event = finish(lake, ep, results_dir / ep.idea_id, cfg, ret)
+            if active_evals.get(gpu) is ep:
+                del active_evals[gpu]
+            if event is not None:
+                finished.append(event)
+            continue
         eval_success = False
         if ret == 0:
             logger.info("[EVAL OK] %s on GPU %s in %.1fm",
@@ -620,7 +711,7 @@ def check_active_evals(active_evals: Dict[int, EvalProcess],
 
 
 def run_post_scripts(
-        idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None):
+        idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None, *, source_event=None):
     """Run additional post-training scripts (beyond eval_script).
     Each entry in post_scripts is a dict with: script, args, timeout, output."""
     post_scripts = (cfg.get("post_scripts") or [])
@@ -628,13 +719,17 @@ def run_post_scripts(
         return
 
     idea_dir = results_dir / idea_id
+    from orze.engine.completion_events import completion_is_current
+    if not completion_is_current(source_event or (idea_id, gpu), lake, results_dir):
+        return
     eligible, eligibility_reason = is_training_complete_for_downstream(
         idea_dir, cfg)
     if not eligible:
         logger.warning(
             "[POST_SCRIPT_SKIP] idea=%s reason=%s",
             idea_id, eligibility_reason)
-        _record_eval_audit(idea_dir, "skip", eligibility_reason)
+        if getattr(source_event, "attempt_ref", None) is None:
+            _record_eval_audit(idea_dir, "skip", eligibility_reason)
         return
 
     _assert_campaign_evidence_authorized(cfg, lake)
@@ -661,10 +756,11 @@ def run_post_scripts(
                     "path=%s",
                     idea_id, name, output_path,
                 )
-                _record_eval_audit(
-                    results_dir / idea_id, "skip", "output_exists",
-                    script=name, output_path=str(output_path),
-                )
+                if getattr(source_event, "attempt_ref", None) is None:
+                    _record_eval_audit(
+                        results_dir / idea_id, "skip", "output_exists",
+                        script=name, output_path=str(output_path),
+                    )
                 continue
 
         _assert_launch_authorized(idea_id, results_dir, cfg)
@@ -680,6 +776,13 @@ def run_post_scripts(
         }))
 
         log_path = results_dir / idea_id / f"{name}.log"
+        if not completion_is_current(source_event or (idea_id, gpu), lake, results_dir):
+            return
+        if getattr(source_event, "attempt_ref", None) is not None:
+            from orze.engine.native_post_script import run_native_post_script
+            run_native_post_script(source_event, idea_id, gpu, results_dir, cfg, lake,
+                                   cmd, timeout, log_path, env)
+            continue
         logger.info("Running %s for %s", name, idea_id)
 
         proc = None

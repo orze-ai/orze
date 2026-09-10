@@ -33,6 +33,8 @@ _PROTECTED_NAMES = {
 }
 _PROTECTED_TREES = {
     "_compute_receipts", "_evaluation_bundle", "_evaluation_retries", "_execution_stops",
+    "_execution_effects", "_attempt_effect.lock", "_attempt_effect.lock.source-lock",
+    "_execution_catalog.json",
     "checkpoints", "checkpoint", "models",
 }
 

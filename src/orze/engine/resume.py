@@ -304,19 +304,9 @@ def _receipt_contract(idea_id: str, results_dir: Path, cfg: dict,
     }
 
 
-def write_interruption_receipt(tp, results_dir: Path, cfg: dict, reason: str,
-                               terminating_signal: str,
-                               return_code: Optional[int] = None) -> dict:
-    """Write a non-secret receipt; never infer resumability on errors."""
-    results_dir = Path(results_dir)
-    idea_dir = _idea_dir(tp.idea_id, results_dir)
-    from orze.engine.termination_hold import require_no_unconfirmed_stop
-    require_no_unconfirmed_stop(idea_dir)
-    idea_dir.mkdir(parents=True, exist_ok=True)
-    progress_name = str((cfg.get("resume") or {}).get(
-        "progress_file", "progress.json"))
-    unresolved_progress = idea_dir / progress_name
-    receipt = {
+def _interruption_payload(tp, reason, terminating_signal, return_code) -> dict:
+    """Build allocation facts without touching the filesystem."""
+    return {
         "schema_version": 1,
         "idea_id": tp.idea_id,
         "interrupted_at": datetime.datetime.now(
@@ -330,6 +320,36 @@ def write_interruption_receipt(tp, results_dir: Path, cfg: dict, reason: str,
         "trainer_pid": getattr(tp.process, "pid", None),
         "resume_eligible": False,
     }
+
+
+def _interruption_reason_code(reason) -> str:
+    return {
+        "timeout": "interruption_timeout", "stall": "interruption_stall",
+        "zombie": "interruption_zombie", "watchdog": "interruption_watchdog",
+        "fatal_log": "interruption_fatal_log", "admin_kill": "interruption_admin_kill",
+        "orze_stop": "interruption_orze_stop",
+    }.get(str(reason), "interruption_other")
+
+
+def write_interruption_receipt(tp, results_dir: Path, cfg: dict, reason: str,
+                               terminating_signal: str,
+                               return_code: Optional[int] = None) -> dict:
+    """Legacy full-hash wrapper, including directory checkpoint support.
+
+    Native attempt callers use interruption_publication's separate read-only
+    prepare and short publisher, not this compatibility wrapper under a lock.
+    """
+    results_dir = Path(results_dir)
+    idea_dir = _idea_dir(tp.idea_id, results_dir)
+    from orze.engine.termination_hold import require_no_unconfirmed_stop
+    require_no_unconfirmed_stop(idea_dir)
+    from orze.engine.resume_publication import require_legacy_interruption, publish_legacy_interruption
+    require_legacy_interruption(tp, idea_dir, cfg)
+    idea_dir.mkdir(parents=True, exist_ok=True)
+    progress_name = str((cfg.get("resume") or {}).get(
+        "progress_file", "progress.json"))
+    unresolved_progress = idea_dir / progress_name
+    receipt = _interruption_payload(tp, reason, terminating_signal, return_code)
     try:
         if not (cfg.get("resume") or {}).get("enabled", False):
             raise ResumeValidationError("resume_policy_disabled")
@@ -350,31 +370,7 @@ def write_interruption_receipt(tp, results_dir: Path, cfg: dict, reason: str,
         receipt["resume_reason"] = str(exc)
     except (KeyError, OSError, TypeError, ValueError) as exc:
         receipt["resume_reason"] = f"validation_error:{type(exc).__name__}"
-    atomic_write(
-        idea_dir / "interruption.json",
-        json.dumps(receipt, indent=2, sort_keys=True) + "\n",
-    )
-    # The resumability document and compute ledger serve different purposes:
-    # this call records only allocation facts and a stable reason code.
-    from orze.engine.accounting import record_compute_terminal
-    phase = "posthoc" if getattr(tp, "is_posthoc", False) else "training"
-    compute_reason = {
-        "timeout": "interruption_timeout",
-        "stall": "interruption_stall",
-        "zombie": "interruption_zombie",
-        "watchdog": "interruption_watchdog",
-        "fatal_log": "interruption_fatal_log",
-        "admin_kill": "interruption_admin_kill",
-        "orze_stop": "interruption_orze_stop",
-    }.get(str(reason), "interruption_other")
-    record_compute_terminal(
-        tp,
-        idea_dir,
-        "interrupted",
-        compute_reason,
-        phase=phase,
-        return_code=return_code,
-    )
+    publish_legacy_interruption(tp, idea_dir, cfg, receipt, reason, return_code)
     return receipt
 
 
@@ -466,9 +462,11 @@ def admit_resume(idea_id: str, results_dir: Path, cfg: dict,
     receipt, checkpoint, receipt_sha = validate_resume_evidence(
         idea_id, results_dir, cfg, checkpoint_override)
     claim_path = idea_dir / "claim.json"
+    claim_sha = None
     if claim_path.exists():
         try:
-            claim, _ = _read_json(claim_path)
+            from orze.engine.resume_publication import read_small
+            claim, claim_sha = read_small(claim_path)
             pid = int(claim.get("trainer_pid") or 0)
             if pid <= 0:
                 raise ResumeValidationError("claim_identity_missing")
@@ -490,37 +488,8 @@ def admit_resume(idea_id: str, results_dir: Path, cfg: dict,
         "checkpoint_sha256": receipt["checkpoint"]["sha256"],
         "interruption_receipt_sha256": receipt_sha,
     }
-    # Requeue in the audited DB before releasing filesystem admission. A crash
-    # before the request is written remains fail-closed because claim/metrics
-    # still block the scheduler.
-    lake = None
-    try:
-        from orze.idea_lake import IdeaLake
-        db_path = cfg.get("idea_lake_db")
-        if db_path and Path(db_path).exists():
-            lake = IdeaLake(str(db_path))
-            if not lake.set_status(idea_id, "queued"):
-                raise ResumeValidationError("idea_lake_requeue_failed")
-    finally:
-        if lake is not None:
-            lake.close()
-
-    atomic_write(
-        idea_dir / "resume_request.json",
-        json.dumps(request, indent=2, sort_keys=True) + "\n",
-    )
-
-    stamp = int(time.time())
-    for source, label in ((idea_dir / "metrics.json", "metrics"),
-                          (claim_path, "claim")):
-        if source.exists():
-            target = idea_dir / f"{label}.interrupted.{stamp}.json"
-            suffix = 1
-            while target.exists():
-                target = idea_dir / f"{label}.interrupted.{stamp}.{suffix}.json"
-                suffix += 1
-            os.replace(source, target)
-    return request
+    from orze.engine.resume_publication import publish_admission
+    return publish_admission(idea_dir, cfg, request, claim_sha, receipt_sha)
 
 
 def prepare_resume_launch(idea_id: str, results_dir: Path, cfg: dict
@@ -529,7 +498,8 @@ def prepare_resume_launch(idea_id: str, results_dir: Path, cfg: dict
     request_path = _idea_dir(idea_id, Path(results_dir)) / "resume_request.json"
     if not request_path.exists():
         return None
-    request, _ = _read_json(request_path)
+    from orze.engine.resume_publication import read_small
+    request, request_sha = read_small(request_path)
     receipt, checkpoint, receipt_sha = validate_resume_evidence(
         idea_id, results_dir, cfg, str(_stored_path(
             request.get("checkpoint"), _project_root(cfg, Path(results_dir)))))
@@ -543,27 +513,23 @@ def prepare_resume_launch(idea_id: str, results_dir: Path, cfg: dict
         str(arg).replace("{checkpoint}", str(checkpoint))
         for arg in _resume_args(cfg)
     ]
+    claim, _ = read_small(request_path.parent / "claim.json", missing=True)
+    from orze.reporting.evidence import report_lifecycle_db_path
+    catalog = report_lifecycle_db_path(Path(results_dir), cfg)
     return {
         "args": args,
         "checkpoint": str(checkpoint),
         "receipt_sha256": receipt_sha,
         "request_path": request_path,
+        "request_sha256": request_sha,
+        "idea_id": idea_id,
+        "claim_attempt_id": (claim or {}).get("attempt_id"),
+        "project_root": str(_project_root(cfg, Path(results_dir))),
+        "catalog_path": str(catalog.absolute()) if catalog.exists() or catalog.is_symlink() else None,
     }
 
 
-def mark_resume_launched(context: dict, claim_path: Path) -> None:
+def mark_resume_launched(context: dict, claim_path: Path, *, effect_lease=None) -> None:
     """Consume a request only after trainer identity is durably recorded."""
-    request_path = Path(context["request_path"])
-    consumed = request_path.with_name("resume_request.consumed.json")
-    if consumed.exists():
-        consumed = request_path.with_name(
-            f"resume_request.consumed.{int(time.time())}.json")
-    if not claim_path.exists():
-        raise ResumeValidationError("resume_launch_claim_missing")
-    claim, _ = _read_json(claim_path)
-    claim.update({
-        "resume_checkpoint": context["checkpoint"],
-        "resume_receipt_sha256": context["receipt_sha256"],
-    })
-    atomic_write(claim_path, json.dumps(claim, indent=2) + "\n")
-    os.replace(request_path, consumed)
+    from orze.engine.resume_publication import consume_request
+    consume_request(context, claim_path, effect_lease=effect_lease)

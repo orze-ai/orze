@@ -9,11 +9,13 @@ import pytest
 
 import orze
 from orze.engine.orchestrator import Orze
+from orze.engine.accounting import record_compute_start
 from orze.engine.launcher import _write_failure, check_active, launch
 from orze.engine.process import TrainingProcess
 from orze.engine.scheduler import claim, get_unclaimed
 from orze.engine.upgrade import UpgradeManager
 from orze.core.config import _validate_config
+from orze.core.execution_attempts import current_attempt
 from orze.idea_lake import IdeaLake
 from orze.reporting.state import load_state
 
@@ -162,6 +164,8 @@ def test_config_check_reports_boolean_notifications(tmp_path, monkeypatch):
 
 def test_malformed_metrics_cannot_complete_the_lifecycle(tmp_path):
     class FinishedProcess:
+        pid = 881201
+
         def poll(self):
             return 0
 
@@ -171,16 +175,18 @@ def test_malformed_metrics_cannot_complete_the_lifecycle(tmp_path):
     results = tmp_path / "results"
     idea_dir = results / "idea-0001"
     idea_dir.mkdir(parents=True)
-    (idea_dir / "metrics.json").write_text("{broken", encoding="utf-8")
     lake = IdeaLake(str(tmp_path / "ideas.db"))
     lake.insert("idea-0001", "test", "{}", "", status="queued")
-    assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
+    assert claim("idea-0001", results, gpu=0, lake=lake)
     assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
+    attempt_id = json.loads((idea_dir / "claim.json").read_text())["attempt_id"]
     tp = TrainingProcess(
         idea_id="idea-0001", gpu=0, process=FinishedProcess(),
         start_time=time.time(), log_path=idea_dir / "train_output.log",
-        timeout=60,
+        timeout=60, attempt_id=attempt_id,
     )
+    record_compute_start(tp, idea_dir)
+    (idea_dir / "metrics.json").write_text("{broken", encoding="utf-8")
 
     assert check_active(
         {0: tp}, results, {"sops": {"failure_feedback": False}}, {}, lake=lake,
@@ -195,6 +201,8 @@ def test_malformed_metrics_cannot_complete_the_lifecycle(tmp_path):
 
 def test_vram_contention_releases_claim_and_audits_requeue(tmp_path):
     class FinishedProcess:
+        pid = 881202
+
         def poll(self):
             return 0
 
@@ -204,23 +212,22 @@ def test_vram_contention_releases_claim_and_audits_requeue(tmp_path):
     results = tmp_path / "results"
     idea_dir = results / "idea-vram"
     idea_dir.mkdir(parents=True)
+    lake = IdeaLake(str(tmp_path / "ideas.db"))
+    lake.insert("idea-vram", "vram", "{}", "", status="queued")
+    assert claim("idea-vram", results, gpu=4, lake=lake)
+    assert lake.record_state_transition(
+        "idea-vram", "CLAIMED", "IN_PROGRESS")
+    attempt_id = json.loads((idea_dir / "claim.json").read_text())["attempt_id"]
+    tp = TrainingProcess(
+        idea_id="idea-vram", gpu=4, process=FinishedProcess(),
+        start_time=time.time(), log_path=idea_dir / "train_output.log",
+        timeout=60, attempt_id=attempt_id,
+    )
+    record_compute_start(tp, idea_dir)
     (idea_dir / "metrics.json").write_text(json.dumps({
         "status": "FAILED",
         "error": "insufficient_vram: available=100 required=1000",
     }), encoding="utf-8")
-    (idea_dir / "claim.json").write_text(json.dumps({
-        "claimed_by": socket.gethostname(), "pid": 999999999, "gpu": 4,
-    }), encoding="utf-8")
-    lake = IdeaLake(str(tmp_path / "ideas.db"))
-    lake.insert("idea-vram", "vram", "{}", "", status="queued")
-    assert lake.record_state_transition("idea-vram", "QUEUED", "CLAIMED")
-    assert lake.record_state_transition(
-        "idea-vram", "CLAIMED", "IN_PROGRESS")
-    tp = TrainingProcess(
-        idea_id="idea-vram", gpu=4, process=FinishedProcess(),
-        start_time=time.time(), log_path=idea_dir / "train_output.log",
-        timeout=60,
-    )
 
     assert check_active(
         {4: tp}, results, {"sops": {"failure_feedback": False}}, {}, lake=lake,
@@ -237,8 +244,11 @@ def test_vram_contention_releases_claim_and_audits_requeue(tmp_path):
     lake.close()
 
 
-def test_training_completion_accepts_catch_up_winning_the_transition(tmp_path):
+def test_training_completion_cannot_redeliver_from_catch_up_state_alone(tmp_path):
+    """D2: a state label without an accepted attempt terminal is not delivery."""
     class FinishedProcess:
+        pid = 881203
+
         def poll(self):
             return 0
 
@@ -248,28 +258,40 @@ def test_training_completion_accepts_catch_up_winning_the_transition(tmp_path):
     results = tmp_path / "results"
     idea_dir = results / "idea-0001"
     idea_dir.mkdir(parents=True)
+    lake = IdeaLake(str(tmp_path / "ideas.db"))
+    lake.insert("idea-0001", "test", "{}", "", status="queued")
+    assert claim("idea-0001", results, gpu=0, lake=lake)
+    assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
+    attempt_id = json.loads((idea_dir / "claim.json").read_text())["attempt_id"]
+    tp = TrainingProcess(
+        idea_id="idea-0001", gpu=0, process=FinishedProcess(),
+        start_time=time.time(), log_path=idea_dir / "train_output.log",
+        timeout=60, attempt_id=attempt_id,
+    )
+    record_compute_start(tp, idea_dir)
     (idea_dir / "metrics.json").write_text(
         json.dumps({"status": "COMPLETED", "training_loss": 1.0}),
         encoding="utf-8",
     )
-    lake = IdeaLake(str(tmp_path / "ideas.db"))
-    lake.insert("idea-0001", "test", "{}", "", status="queued")
-    assert lake.record_state_transition("idea-0001", "QUEUED", "CLAIMED")
-    assert lake.record_state_transition("idea-0001", "CLAIMED", "IN_PROGRESS")
     assert lake.record_state_transition(
         "idea-0001", "IN_PROGRESS", "COMPLETE", "catch_up_training_completed"
     )
-    tp = TrainingProcess(
-        idea_id="idea-0001", gpu=0, process=FinishedProcess(),
-        start_time=time.time(), log_path=idea_dir / "train_output.log",
-        timeout=60,
-    )
+    history_before = lake.get_fsm_history("idea-0001")
+    stages_before = lake.get_stage_history("idea-0001")
+    metrics_before = (idea_dir / "metrics.json").read_bytes()
+    claim_before = (idea_dir / "claim.json").read_bytes()
+    assert current_attempt(lake.conn, "idea-0001", "training") is None
 
     assert check_active(
         {0: tp}, results, {"sops": {"failure_feedback": False}}, {}, lake=lake,
-    ) == [("idea-0001", 0)]
+    ) == []
     assert lake.get_fsm_state("idea-0001") == "COMPLETE"
-    assert len(lake.get_fsm_history("idea-0001")) == 3
+    assert lake.get_fsm_history("idea-0001") == history_before
+    assert lake.get_stage_history("idea-0001") == stages_before
+    assert (idea_dir / "metrics.json").read_bytes() == metrics_before
+    assert (idea_dir / "claim.json").read_bytes() == claim_before
+    assert not (idea_dir / "_compute_receipts" / attempt_id / "terminal.json").exists()
+    assert current_attempt(lake.conn, "idea-0001", "training") is None
     lake.close()
 
 

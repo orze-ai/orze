@@ -168,6 +168,10 @@ def test_legacy_and_imported_rows_are_not_given_fabricated_history(tmp_path):
 def test_original_transition_column_names_are_losslessly_normalized(tmp_path):
     db_path = tmp_path / "lake.db"
     lake = IdeaLake(db_path)
+    lake.insert("idea-legacy-edge", "Legacy fixture", "{}", "", status="queued")
+    # Retain the original legacy state/history fixture below, after admission.
+    lake.conn.execute("DELETE FROM idea_state WHERE idea_id='idea-legacy-edge'")
+    lake.conn.commit()
     lake.close()
 
     conn = sqlite3.connect(db_path)

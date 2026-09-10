@@ -15,6 +15,8 @@ from unittest.mock import Mock
 import pytest
 
 from orze.engine import accounting, evaluator
+from orze.engine.attempt_effect_lock import AttemptEffectInDoubt
+from orze.engine.evaluation_retry import request_evaluation_retry
 from orze.engine.sealed import write_sealed_manifest
 from orze.idea_lake import IdeaLake
 
@@ -245,31 +247,44 @@ def test_symlink_to_training_output_is_rejected_before_launch_without_changing_t
     assert any(row["reason"] == "evaluation_output_path_invalid" for row in audits)
 
 
-def test_terminal_receipt_io_failure_cannot_publish_complete_and_same_attempt_can_retry(project):
+def test_terminal_receipt_io_failure_holds_until_explicit_resolution(project):
     p = project
     ep = _launch(p)
     active = {0: ep}
     terminal_path = p.folder / "_compute_receipts" / ep.attempt_id / "terminal.json"
     # Real filesystem failure, not a mocked accounting/qualification result.
     terminal_path.mkdir()
-    try:
+    with pytest.raises(AttemptEffectInDoubt):
         evaluator.check_active_evals(active, p.results, p.cfg, lake=p.lake)
-    except accounting.ComputeAccountingError:
-        pass
     assert p.lake.get_fsm_state(p.idea_id) == "IN_PROGRESS"
     assert p.lake.get_stage_state(p.idea_id, "evaluation") == "IN_PROGRESS"
     assert active == {0: ep}
+    prepared = p.folder / "_execution_effects" / ep.attempt_id / "prepared.json"
+    committed = prepared.with_name("committed.json")
+    before = prepared.read_bytes()
+    assert not committed.exists()
     terminal_path.rmdir()
 
-    assert evaluator.check_active_evals(
-        active, p.results, p.cfg, lake=p.lake) == [(p.idea_id, 0)]
+    # D2 contract migration: removing the incidental I/O obstacle does not
+    # resolve a publication whose prepared intent may already have effects.
+    with pytest.raises(AttemptEffectInDoubt):
+        evaluator.check_active_evals(active, p.results, p.cfg, lake=p.lake)
+    with pytest.raises(AttemptEffectInDoubt):
+        request_evaluation_retry(p.idea_id, p.results, p.cfg, p.lake)
+    with pytest.raises(AttemptEffectInDoubt):
+        evaluator.launch_eval(p.idea_id, 0, p.results, p.cfg, lake=p.lake)
 
-    assert active == {}
-    path = _assert_terminal(p, "completed")
-    before = path.read_bytes()
-    assert evaluator.check_active_evals(active, p.results, p.cfg, lake=p.lake) == []
-    assert path.read_bytes() == before
-    assert p.terminal_writer.call_count == 2  # one rejected write, one persisted
+    assert active == {0: ep}
+    assert p.lake.get_fsm_state(p.idea_id) == "IN_PROGRESS"
+    assert p.lake.get_stage_state(p.idea_id, "evaluation") == "IN_PROGRESS"
+    assert p.lake.get_stage_state(p.idea_id, "training") == "COMPLETE"
+    assert (p.folder / "metrics.json").read_bytes() == p.training_bytes
+    assert (p.folder / "checkpoint.pt").read_bytes() == p.checkpoint_bytes
+    assert prepared.read_bytes() == before
+    assert not committed.exists()
+    assert not terminal_path.exists()
+    p.terminal_writer.assert_called_once()
+    p.popen.assert_called_once()
 
 
 def test_async_poll_error_reaps_and_records_failure_instead_of_abandoning_attempt(project):

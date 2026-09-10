@@ -47,61 +47,70 @@ def get_skipped_ideas(failure_counts: dict, max_failures: int) -> set:
             if count >= max_failures}
 
 
-def _reset_idea_for_retry(idea_dir: Path, release_claim: bool = False):
-    """Clean up an idea's result dir so it can be re-launched.
+def _reset_idea_for_retry(idea_dir: Path, release_claim: bool = False, *,
+                          lake=None, effect_lease=None):
+    """Validate ownership and closed attempts before any retry file mutation.
 
-    Removes metrics.json and renames the old log for reference. Immediate
-    repair/relaunch keeps the current claim; deferred retries must archive it
-    so the scheduler can claim the preserved directory again.
+    The explicit effect lease permits a legitimate caller-owned short guard;
+    it never supplies an implicit current-attempt or database authority.
     """
-    from orze.engine.termination_hold import require_no_unconfirmed_stop
-    require_no_unconfirmed_stop(idea_dir)
-    metrics = idea_dir / "metrics.json"
-    if metrics.exists():
-        metrics.unlink(missing_ok=True)
-
-    log = idea_dir / "train_output.log"
-    if log.exists():
-        attempt = 1
-        while (idea_dir / f"train_output.attempt{attempt}.log").exists():
-            attempt += 1
-        log.rename(idea_dir / f"train_output.attempt{attempt}.log")
-
-    claim = idea_dir / "claim.json"
-    if not claim.exists():
-        return
-
-    archive = idea_dir / f"claim.retry.{time.time_ns()}.json"
-    if release_claim:
-        claim.replace(archive)
-        return
-
-    # An immediate repair/relaunch remains owned by the same scheduler, but it
-    # is a distinct allocation attempt. Preserve the old claim as evidence and
-    # issue a fresh attempt ID before the next Popen.
-    try:
-        claim_data = json.loads(claim.read_text(encoding="utf-8"))
-        if not isinstance(claim_data, dict):
-            raise ValueError("claim must be a mapping")
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
-        # An invalid claim must not be silently replaced: recovery needs the
-        # original bytes to diagnose ownership safely.
-        raise RuntimeError("cannot renew invalid retry claim")
-    claim.replace(archive)
-    for key in (
-        "trainer_pid", "trainer_pgid", "trainer_start_ticks",
-        "trainer_started_at", "resume",
-    ):
-        claim_data.pop(key, None)
-    claim_data["attempt_id"] = secrets.token_hex(16)
-    claim_data["claimed_at"] = datetime.datetime.now().isoformat()
-    try:
-        atomic_write(claim, json.dumps(claim_data, indent=2))
-    except Exception:
-        # Preserve ownership if renewing the live claim fails after archival.
-        if not claim.exists() and archive.exists():
-            archive.replace(claim)
-        raise
+    from orze.core.fs import atomic_create
+    from orze.engine.attempt_effect_lock import AttemptEffectInDoubt
+    from orze.engine.claim_authority import claim_change_guard, read_claim, safe_file
+    idea_dir = Path(idea_dir).absolute()
+    with claim_change_guard(idea_dir, lake=lake, effect_lease=effect_lease) as (_, data, _):
+        metrics = idea_dir / "metrics.json"
+        log = idea_dir / "train_output.log"
+        claim = idea_dir / "claim.json"
+        archive = None
+        rotated_log = None
+        if safe_file(log) is not None:
+            for number in range(1, 1025):
+                candidate = idea_dir / f"train_output.attempt{number}.log"
+                if safe_file(candidate) is None:
+                    rotated_log = candidate
+                    break
+            if rotated_log is None:
+                raise AttemptEffectInDoubt("retry_log_archive_limit")
+        if data is not None:
+            archive = idea_dir / f"claim.retry.{time.time_ns()}.{secrets.token_hex(4)}.json"
+            if safe_file(archive) is not None:
+                raise AttemptEffectInDoubt("retry_claim_archive_exists")
+            renewed = dict(data)
+            for key in ("trainer_pid", "trainer_pgid", "trainer_start_ticks",
+                        "trainer_started_at", "resume"):
+                renewed.pop(key, None)
+            renewed["attempt_id"] = secrets.token_hex(16)
+            renewed["claimed_at"] = datetime.datetime.now().isoformat()
+            encoded = json.dumps(renewed, indent=2)
+        # All path, claim and committed native-attempt checks precede deletion.
+        try:
+            if safe_file(metrics) is not None:
+                metrics.unlink()
+            if rotated_log is not None:
+                log.rename(rotated_log)
+            if archive is not None:
+                claim.replace(archive)
+                if not release_claim:
+                    if not atomic_create(claim, encoded) or read_claim(claim) != renewed:
+                        raise OSError("retry_claim_publication_unconfirmed")
+            # Explicit nested callers can commit SQL before releasing their
+            # outer effect lease. Confirm every unlink/rename here, including
+            # release-only and no-claim resets, before granting that return.
+            directory = os.open(idea_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        except Exception as exc:
+            # Do not overwrite a new/replaced owner while restoring the prior
+            # name. Retain the effect guard whenever the outcome is uncertain.
+            if archive is not None and not claim.exists() and archive.exists():
+                try:
+                    archive.replace(claim)
+                except OSError:
+                    pass
+            raise AttemptEffectInDoubt("retry_file_change_unconfirmed") from exc
 
 
 _ARGPARSE_UNRECOGNIZED_RE = __import__("re").compile(

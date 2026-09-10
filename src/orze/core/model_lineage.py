@@ -30,6 +30,10 @@ class ModelLineageError(RuntimeError):
     """A stable, content-free managed-lineage rejection."""
 
 
+class ModelLineagePublicationUnsupported(ModelLineageError):
+    """Short publication cannot safely support this artifact; not model failure."""
+
+
 def _positive_int(value) -> bool:
     return not isinstance(value, bool) and isinstance(value, int) and value > 0
 
@@ -475,7 +479,9 @@ _LINEAGE_KEYS = {
 }
 
 
-def finalize_model_lineage(tp, idea_dir: Path, cfg: Mapping) -> dict:
+def _model_lineage_finalization_payload(
+    tp, idea_dir: Path, cfg: Mapping, *, readonly: bool = False,
+) -> dict:
     spec = cfg.get("model_lineage", {})
     if not isinstance(spec, Mapping) or not spec.get("enabled", False):
         return {"status": "disabled"}
@@ -486,10 +492,11 @@ def finalize_model_lineage(tp, idea_dir: Path, cfg: Mapping) -> dict:
     if (not isinstance(execution_identity, str)
             or _HEX64.fullmatch(execution_identity) is None):
         raise ModelLineageError("model_lineage_execution_identity_missing")
-    receipt_dir = _receipt_dir(idea_dir, attempt_id)
+    receipt_dir = _receipt_dir(idea_dir, attempt_id, create=not readonly)
     boundary, boundary_sha256 = _read_envelope(
         receipt_dir / "boundary.json", _BOUNDARY_KEYS)
-    separation = ensure_data_separation(cfg)
+    separation = (read_data_separation_receipt(cfg) if readonly
+                  else ensure_data_separation(cfg))
     separation_sha256 = data_separation_receipt_sha256(separation)
     expected_boundary = {
         "schema_version": 1,
@@ -533,8 +540,30 @@ def finalize_model_lineage(tp, idea_dir: Path, cfg: Mapping) -> dict:
         "finalized_at": datetime.datetime.now(
             datetime.timezone.utc).isoformat(),
     }
-    return _write_envelope_once(
-        _idea_path(idea_dir, LINEAGE_FILE), payload)["payload"]
+    return payload
+
+
+_MAX_PUBLICATION_BINDINGS = 64
+_MAX_FINALIZATION_PAYLOAD_BYTES = 16 * 1024
+
+
+from orze.core.model_lineage_finalization import (  # compatibility exports
+    PreparedModelLineageFinalization, prepare_model_lineage_finalization,
+    publish_model_lineage_finalization, _finalization_policy,
+    _finalization_subject, _finalization_paths, _publication_bindings, _prepared_payload,
+)
+
+
+def finalize_model_lineage(tp, idea_dir: Path, cfg: Mapping) -> dict:
+    """Legacy all-in-one finalizer, including directory hashing and audit repair.
+
+    Not suitable inside a short effect lock. Native callers should use the
+    explicitly read-only prepare and bounded publish functions above instead.
+    """
+    payload = _model_lineage_finalization_payload(tp, idea_dir, cfg)
+    if payload == {"status": "disabled"}:
+        return payload
+    return _write_envelope_once(_idea_path(idea_dir, LINEAGE_FILE), payload)["payload"]
 
 
 def validate_model_lineage_for_evaluation(

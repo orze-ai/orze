@@ -107,13 +107,14 @@ def test_existing_valid_output_cannot_reconcile_across_a_changed_sealed_file(pro
 
 @pytest.mark.parametrize("mode", ["async", "sync"])
 def test_timeout_without_confirmed_exit_keeps_attempt_in_progress_without_terminal_receipt(
-        project, mode):
+        project, mode, monkeypatch):
     p = project
     active = None
     if mode == "async":
         ep = evaluator.launch_eval(p.idea_id, 0, p.results, p.cfg, lake=p.lake)
         assert ep is not None
-        ep.start_time -= 120  # Deterministic timeout; never wait or use a GPU.
+        now = ep.start_time + 120  # Advance observation time, not persisted launch identity.
+        monkeypatch.setattr(evaluator.time, "time", lambda: now)
         active = {0: ep}
         with pytest.raises(RuntimeError, match="^evaluation_termination_unconfirmed$"):
             evaluator.check_active_evals(active, p.results, p.cfg, lake=p.lake)

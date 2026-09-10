@@ -55,6 +55,7 @@ class TestFSMSchema(unittest.TestCase):
     def test_record_state_transition(self):
         """Verify transitions are atomically recorded with audit trail."""
         lake = IdeaLake(self.db_path)
+        lake.insert("idea-test-001", "FSM fixture", "{}", "", status="queued")
 
         # Record a transition
         lake.record_state_transition(
@@ -83,6 +84,7 @@ class TestFSMSchema(unittest.TestCase):
         """Verify full lifecycle transitions are tracked."""
         lake = IdeaLake(self.db_path)
         idea_id = "idea-lifecycle-test"
+        lake.insert(idea_id, "FSM fixture", "{}", "", status="queued")
 
         # Simulate full lifecycle
         transitions = [
@@ -120,6 +122,7 @@ class TestFSMSchema(unittest.TestCase):
     def test_stale_from_state_is_rejected_without_audit_entry(self):
         lake = IdeaLake(self.db_path)
         idea_id = "idea-stale-writer"
+        lake.insert(idea_id, "FSM fixture", "{}", "", status="queued")
 
         self.assertTrue(lake.record_state_transition(idea_id, "QUEUED", "CLAIMED"))
         self.assertFalse(
@@ -230,6 +233,7 @@ class TestSchedulerClaim(unittest.TestCase):
         """Verify claim() records QUEUED→CLAIMED in FSM."""
         lake = IdeaLake(self.db_path)
         idea_id = "idea-claim-test"
+        lake.insert(idea_id, "FSM fixture", "{}", "", status="queued")
 
         # Claim the idea
         success = claim(idea_id, self.results_dir, gpu=0, lake=lake)
@@ -250,6 +254,7 @@ class TestSchedulerClaim(unittest.TestCase):
         """Verify second claim on same idea fails."""
         lake = IdeaLake(self.db_path)
         idea_id = "idea-double-claim-test"
+        lake.insert(idea_id, "FSM fixture", "{}", "", status="queued")
 
         # First claim succeeds
         success1 = claim(idea_id, self.results_dir, gpu=0, lake=lake)

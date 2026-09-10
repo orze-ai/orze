@@ -977,8 +977,17 @@ class Orze(OrzePhaseMixin):
                 self._remove_pid_file()
 
     def _run_leased(self):
+        from orze.engine.completion_events import completion_is_current, filter_completions
         cfg = self.cfg
         managed_idea = cfg.get("_managed_idea_id")
+
+        def post_for_event(event):
+            if not completion_is_current(event, self.lake, self.results_dir):
+                return
+            kwargs = {"lake": self.lake}
+            if getattr(event, "attempt_ref", None) is not None:
+                kwargs["source_event"] = event
+            run_post_scripts(event[0], event[1], self.results_dir, cfg, **kwargs)
 
         # Log pro status
         from orze.extensions import has_pro, pro_version
@@ -1315,6 +1324,7 @@ class Orze(OrzePhaseMixin):
                 finished = check_active(self.active, self.results_dir,
                                         cfg, self.failure_counts,
                                         self.fix_counts, lake=self.lake)
+            finished = filter_completions(finished, self.lake, self.results_dir)
 
             # 3-auto. After a SUCCESSFUL job finishes, check if GPU mode
             # should upgrade from exclusive to VRAM packing.
@@ -1325,19 +1335,23 @@ class Orze(OrzePhaseMixin):
                 from orze.engine.gpu_slots import _query_all_gpu_usage
                 # Find the first successful completion (has metrics.json
                 # with status=COMPLETED and ran for >30 seconds)
-                success_gpu = None
-                for idea_id, gpu_key in finished:
+                success_gpu, success_event = None, None
+                for event in finished:
+                    if not completion_is_current(event, self.lake, self.results_dir):
+                        continue
+                    idea_id, gpu_key = event
                     metrics_path = self.results_dir / idea_id / "metrics.json"
                     if metrics_path.exists():
                         try:
                             m = json.loads(metrics_path.read_text(encoding="utf-8"))
                             if m.get("status") == "COMPLETED" and m.get("training_time", 0) > 30:
                                 success_gpu = gpu_key
+                                success_event = event
                                 break
                         except (json.JSONDecodeError, OSError):
                             pass
 
-                if success_gpu is not None:
+                if success_gpu is not None and completion_is_current(success_event, self.lake, self.results_dir):
                     try:
                         usage = _query_all_gpu_usage(self.gpu_ids)
                         if usage:
@@ -1387,9 +1401,9 @@ class Orze(OrzePhaseMixin):
                 )
 
             # 3b. Run post-scripts for evals that just completed
-            for idea_id, gpu in eval_finished:
-                run_post_scripts(
-                    idea_id, gpu, self.results_dir, cfg, lake=self.lake)
+            eval_finished = filter_completions(eval_finished, self.lake, self.results_dir)
+            for event in eval_finished:
+                post_for_event(event)
 
             if not self.running:
                 break
@@ -1479,7 +1493,9 @@ class Orze(OrzePhaseMixin):
                             self.active, self.results_dir,
                             cfg, self.failure_counts,
                             self.fix_counts, lake=self.lake)
-                        for idea_id, gpu in once_finished:
+                        for event in filter_completions(once_finished, self.lake, self.results_dir):
+                            idea_id, gpu = event
+                            delivery = event
                             m_path = self.results_dir / idea_id / "metrics.json"
                             if m_path.exists():
                                 try:
@@ -1487,25 +1503,23 @@ class Orze(OrzePhaseMixin):
                                     if m.get("status") == "COMPLETED":
                                         if managed_idea:
                                             immediate, _ = self._launch_evals(
-                                                [(idea_id, gpu)], [],
+                                                [event], [],
                                                 {idea_id: {}})
-                                            if immediate:
-                                                run_post_scripts(
-                                                    idea_id, gpu,
-                                                    self.results_dir, cfg,
-                                                    lake=self.lake)
+                                            delivery = immediate[0] if immediate else None
+                                            for accepted in immediate:
+                                                post_for_event(accepted)
                                         else:
-                                            run_eval(
-                                                idea_id, gpu,
-                                                self.results_dir, cfg,
-                                                lake=self.lake)
-                                            run_post_scripts(
-                                                idea_id, gpu,
-                                                self.results_dir, cfg,
-                                                lake=self.lake)
+                                            if cfg.get("eval_script"):
+                                                kwargs = {"lake": self.lake}
+                                                if getattr(event, "attempt_ref", None) is not None:
+                                                    kwargs["source_event"] = event
+                                                delivery = run_eval(idea_id, gpu, self.results_dir, cfg, **kwargs)
+                                            if delivery is not None:
+                                                post_for_event(delivery)
                                 except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                                     pass
-                            all_once_finished.append((idea_id, gpu))
+                            if delivery is not None and completion_is_current(delivery, self.lake, self.results_dir):
+                                all_once_finished.append(delivery)
                         if managed_idea and not (
                                 self._capture_managed_wait_campaign_evidence(
                                     disk_ok
@@ -1523,11 +1537,10 @@ class Orze(OrzePhaseMixin):
                             break
                         ef = check_active_evals(
                             self.active_evals, self.results_dir, cfg, lake=self.lake)
-                        for idea_id, gpu in ef:
-                            run_post_scripts(
-                                idea_id, gpu, self.results_dir, cfg,
-                                lake=self.lake)
-                            all_once_finished.append((idea_id, gpu))
+                        for event in filter_completions(ef, self.lake, self.results_dir):
+                            post_for_event(event)
+                            if completion_is_current(event, self.lake, self.results_dir):
+                                all_once_finished.append(event)
                         if managed_idea and not (
                                 self._capture_managed_wait_campaign_evidence(
                                     disk_ok
