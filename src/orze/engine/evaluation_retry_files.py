@@ -35,6 +35,7 @@ _PROTECTED_TREES = {
     "_compute_receipts", "_evaluation_bundle", "_evaluation_retries", "_execution_stops",
     "_execution_effects", "_attempt_effect.lock", "_attempt_effect.lock.source-lock",
     "_execution_catalog.json",
+    "_evaluation_attempts", "artifacts", "research_artifacts",
     "checkpoints", "checkpoint", "models",
 }
 
@@ -119,6 +120,9 @@ def _protected(path: Path, idea_dir: Path, cfg: dict) -> bool:
 def retry_file_policy(idea_dir: Path, cfg: dict) -> dict[str, str]:
     """Only these named outputs may move; domain metric sources are not owned."""
     from orze.core.benchmark_contract import get_benchmark_contract
+    from orze.core.observation_contract import get_observation_contract
+    if get_observation_contract(cfg) is not None:
+        return {}  # Each evaluation owns a separate immutable history directory.
 
     output = str(cfg.get("eval_output") or "eval_report.json")
     candidates = {output: "move", "eval_output.log": "move"}

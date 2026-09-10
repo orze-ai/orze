@@ -124,6 +124,13 @@ def _request_evaluation_retry(idea_id: str, results_dir: Path,
     result = {"status": "evaluation_retry_pending", "idea_id": idea_id,
               "retry_id": str(prior) if prior is not None else None}
     fresh = False
+    from orze.core.execution_attempts import current_attempt
+    from orze.core.observation_contract import get_observation_contract
+    observation = get_observation_contract(cfg)
+    evaluation = current_attempt(lake.conn, idea_id, "evaluation")
+    bound_observation = bool(evaluation and evaluation["binding"].get("observation_publication"))
+    if (observation is not None) != bound_observation:
+        raise EvaluationRetryError("evaluation_retry_observation_contract_changed")
 
     def prepare(failure_id):
         nonlocal fresh
@@ -137,7 +144,11 @@ def _request_evaluation_retry(idea_id: str, results_dir: Path,
                 raise EvaluationRetryError("evaluation_retry_benchmark_history_invalid")
             if exposure.get("remaining", 0) <= 0:
                 raise EvaluationRetryError("evaluation_retry_benchmark_budget_exhausted")
-        result["retry_id"] = prepare_retry_files(idea_dir, cfg, failure_id)
+        if bound_observation:
+            from orze.engine.observation_publication import prepare_retry
+            result["retry_id"] = prepare_retry(idea_dir, cfg, failure_id, evaluation)
+        else:
+            result["retry_id"] = prepare_retry_files(idea_dir, cfg, failure_id)
         fresh = True
 
     try:
@@ -149,7 +160,11 @@ def _request_evaluation_retry(idea_id: str, results_dir: Path,
     if not admitted or result["retry_id"] is None:
         raise EvaluationRetryError("evaluation_retry_lifecycle_rejected")
     if not fresh:
-        verify_retry_prepared(idea_dir, cfg, int(result["retry_id"]))
+        if bound_observation:
+            from orze.engine.observation_publication import verify_retry
+            verify_retry(idea_dir, cfg, int(result["retry_id"]), evaluation)
+        else:
+            verify_retry_prepared(idea_dir, cfg, int(result["retry_id"]))
     return result
 
 
@@ -171,7 +186,17 @@ def validate_pending_retry(idea_id: str, results_dir: Path, cfg: dict, lake) -> 
     ).fetchone()[0]
     if failure_id is None:
         raise EvaluationRetryError("evaluation_retry_failure_identity_invalid")
-    verify_retry_prepared(Path(results_dir) / idea_id, cfg, int(failure_id))
+    from orze.core.execution_attempts import current_attempt
+    from orze.core.observation_contract import get_observation_contract
+    evaluation = current_attempt(lake.conn, idea_id, "evaluation")
+    bound = bool(evaluation and evaluation["binding"].get("observation_publication"))
+    if (get_observation_contract(cfg) is not None) != bound:
+        raise EvaluationRetryError("evaluation_retry_observation_contract_changed")
+    if bound:
+        from orze.engine.observation_publication import verify_retry
+        verify_retry(Path(results_dir) / idea_id, cfg, int(failure_id), evaluation)
+    else:
+        verify_retry_prepared(Path(results_dir) / idea_id, cfg, int(failure_id))
 
 
 def pending_evaluation_retries(lake, limit: int = 128) -> list[str]:

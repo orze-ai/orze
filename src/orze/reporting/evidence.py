@@ -239,6 +239,41 @@ def load_local_report_evidence(
     return metrics, values, "local_evidence_loaded"
 
 
+def _observation_adapter_reason(idea_dir: Path, cfg: Mapping) -> str | None:
+    """Legacy files cannot override a current native observation protocol.
+
+    Routing metadata is not qualification authority. Once a native catalog is
+    declared, failure to inspect it cannot downgrade the task to offline files.
+    This read grants no lifecycle/science claim and performs no schema writes.
+    """
+    if cfg.get("observation_contract") is not None:
+        return "observation_adapter_required"
+    connection = None
+    reason = None
+    try:
+        from orze.engine.execution_catalog import declared_catalog
+        database = declared_catalog(idea_dir)
+        if database is None:
+            return None
+        connection, _ = _open_authoritative_lifecycle(Path(database))
+        if connection is None:
+            return "observation_adapter_source_unverifiable"
+        connection.execute("BEGIN")
+        from orze.core.execution_attempts import current_attempt
+        row = current_attempt(connection, Path(idea_dir).name, "evaluation")
+        if row is not None and "observation_publication" in row["binding"]:
+            reason = "observation_adapter_required"
+    except Exception:
+        reason = "observation_adapter_source_unverifiable"
+    finally:
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                reason = "observation_adapter_source_unverifiable"
+    return reason
+
+
 def qualify_local_report_evidence(
     idea_dir: Path,
     cfg: Mapping,
@@ -251,6 +286,11 @@ def qualify_local_report_evidence(
     stable token suitable for aggregate reporting; validation messages and
     artifact contents never cross this boundary.
     """
+    adapter_reason = _observation_adapter_reason(idea_dir, cfg)
+    if adapter_reason is not None:
+        # This legacy adapter cannot turn task-level files into immutable
+        # observations, even when the task's operational stage is COMPLETE.
+        return {}, {}, None, adapter_reason
     report = cfg.get("report") or {}
     metrics, values, reason = load_local_report_evidence(idea_dir, report)
     if reason != "local_evidence_loaded":

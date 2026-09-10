@@ -1,17 +1,19 @@
 """Prepare declared, independent artifact inodes outside the terminal writer.
 
 CALLING SPEC:
-    prepare_artifacts(ref, idea_dir, binding) -> PreparedArtifacts
+    prepare_artifacts(ref, idea_dir, binding, *, source_dir=None) -> PreparedArtifacts
         Copies and hashes bounded declared regular files with no SQLite/effect
         lock held. New occurrence directories are create-only. Failed staging
         can remain, but is not an accepted artifact without a committed row.
-    verify_prepared_artifacts(prepared, ref, idea_dir, binding) -> tuple[dict, ...]
+    verify_prepared_artifacts(..., *, source_dir=None) -> tuple[dict, ...]
         Cheap identity checks only, for the current-attempt terminal writer.
         The caller registers these records in the same SQL transaction as the
         terminal. This module does not grant attempt or scientific authority.
 
 Snapshots use new inodes, never links/renames of worker files. Read-only mode
 is a cooperative-writer boundary, not a sandbox against a hostile same UID.
+Default source_dir preserves the training contract. Explicit evaluation input
+is restricted to idea_dir/_evaluation_attempts/<attempt_id>/work.
 """
 from __future__ import annotations
 
@@ -89,14 +91,29 @@ def _verify_identities(identities):
             raise AttemptEffectBusy("artifact_file_changed")
 
 
-def _binding(binding, ref, idea_dir):
+def _binding(binding, ref, idea_dir, source_dir=None):
     from orze.core.artifact_contract import validate_artifact_publication_binding
     normalized = validate_artifact_publication_binding(binding)
     folder = Path(idea_dir).absolute()
-    if (not isinstance(ref, AttemptRef) or ref.phase != "training"
+    if (not isinstance(ref, AttemptRef)
             or ref.task_id != folder.name or normalized["scope"] != str(folder.parent)):
         raise AttemptEffectBusy("artifact_producer_scope_invalid")
-    return normalized, folder
+    source = folder
+    if source_dir is None:
+        if ref.phase != "training":
+            raise AttemptEffectBusy("artifact_source_directory_required")
+    else:
+        source = Path(source_dir).absolute()
+        if (ref.phase != "evaluation" or source !=
+                folder / "_evaluation_attempts" / ref.attempt_id / "work"):
+            raise AttemptEffectBusy("artifact_source_directory_invalid")
+    return normalized, folder, source
+
+
+def artifact_occurrence_id(ref, logical_name, scope):
+    """Occurrence identity, deliberately independent of content bytes."""
+    return hashlib.sha256(_canonical({"producer": asdict(ref),
+        "logical_name": logical_name, "scope": scope}).encode("utf-8")).hexdigest()
 
 
 def _snapshot_hash(destination, maximum):
@@ -140,6 +157,7 @@ class PreparedArtifacts:
     records_json: str
     records_sha256: str
     identities: tuple
+    source_dir: str | None = None
 
 
 def _copy_one(source, destination, maximum):
@@ -208,10 +226,10 @@ def _copy_one(source, destination, maximum):
             raise failure
 
 
-def prepare_artifacts(ref, idea_dir, binding):
+def prepare_artifacts(ref, idea_dir, binding, *, source_dir=None):
     """Perform the expensive, unaccepted staging phase outside all writers."""
     try:
-        normalized, folder = _binding(binding, ref, idea_dir)
+        normalized, folder, source = _binding(binding, ref, idea_dir, source_dir)
         root = Path(normalized["root"])
         records, identities = [], []
         outputs = normalized["contract"]["outputs"]
@@ -219,10 +237,7 @@ def prepare_artifacts(ref, idea_dir, binding):
         root_fd = _open_directory(root, create=True) if outputs else None
         try:
             for logical_name, output in sorted(outputs.items()):
-                artifact_id = hashlib.sha256(_canonical({
-                    "producer": asdict(ref), "logical_name": logical_name,
-                    "scope": normalized["scope"],
-                }).encode("utf-8")).hexdigest()
+                artifact_id = artifact_occurrence_id(ref, logical_name, normalized["scope"])
                 # One occurrence gets one create-only staging directory. An
                 # unaccepted partial copy blocks retries instead of creating
                 # another potentially large orphan on every monitor tick.
@@ -233,7 +248,7 @@ def prepare_artifacts(ref, idea_dir, binding):
                 os.fsync(root_fd)
                 destination = root / artifact_id / "content"
                 digest, size, captured = _copy_one(
-                    folder / output["path"], destination, output["max_bytes"])
+                    source / output["path"], destination, output["max_bytes"])
                 identities.extend(captured)
                 records.append({
                     "schema": 1, "artifact_id": artifact_id, "producer": asdict(ref),
@@ -249,20 +264,22 @@ def prepare_artifacts(ref, idea_dir, binding):
         result = PreparedArtifacts(_canonical(asdict(ref)), str(folder),
                                    _canonical(normalized), encoded_records,
                                    hashlib.sha256(encoded_records.encode("utf-8")).hexdigest(),
-                                   tuple(identities))
-        verify_prepared_artifacts(result, ref, folder, normalized)
+                                   tuple(identities),
+                                   str(source) if source_dir is not None else None)
+        verify_prepared_artifacts(result, ref, folder, normalized, source_dir=source_dir)
         return result
     except (OSError, ValueError, TypeError) as exc:
         raise AttemptEffectBusy("artifact_snapshot_unavailable") from exc
 
 
-def verify_prepared_artifacts(prepared, ref, idea_dir, binding):
+def verify_prepared_artifacts(prepared, ref, idea_dir, binding, *, source_dir=None):
     """Verify bounded metadata, never reread/hash large files in the SQL lock."""
     try:
-        normalized, folder = _binding(binding, ref, idea_dir)
+        normalized, folder, source = _binding(binding, ref, idea_dir, source_dir)
         if (not isinstance(prepared, PreparedArtifacts)
                 or prepared.producer_json != _canonical(asdict(ref))
                 or prepared.idea_dir != str(folder)
+                or prepared.source_dir != (str(source) if source_dir is not None else None)
                 or prepared.binding_json != _canonical(normalized)
                 or hashlib.sha256(prepared.records_json.encode("utf-8")).hexdigest()
                    != prepared.records_sha256):

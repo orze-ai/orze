@@ -100,7 +100,8 @@ def is_current(lake, ep) -> bool:
     return True
 
 
-def begin(lake, idea_dir: Path, attempt_id: str, gpu, *, source_event=None) -> AttemptRef:
+def begin(lake, idea_dir: Path, attempt_id: str, gpu, *, source_event=None,
+          prepared=None, cfg=None) -> AttemptRef:
     """Commit launch intent and stage revision before any Popen."""
     with execution_transaction(lake, idea_dir) as tx:
         from orze.engine.completion_events import require_completion, training_source
@@ -130,6 +131,9 @@ def begin(lake, idea_dir: Path, attempt_id: str, gpu, *, source_event=None) -> A
         fence = lifecycle_fence(lake, idea_id, "evaluation")
         binding = {"origin": "native_evaluation", "lifecycle": fence,
                    "physical_gpu": gpu}
+        if prepared is not None:
+            from orze.engine.observation_publication import verify_evaluation
+            binding.update(verify_evaluation(prepared, idea_dir, cfg, lake, source))
         if source is not None and getattr(source, "attempt_ref", None) is not None:
             from dataclasses import asdict
             binding["source_ref"] = asdict(source.attempt_ref)
@@ -254,6 +258,14 @@ def finish(lake, ep, idea_dir, cfg, ret, *, forced=None, not_started=False):
         return None
     if not not_started and type(ret) is not int:
         raise AttemptEffectBusy("evaluation_exit_unconfirmed")
+    row = _owned(lake, ep, states=("LAUNCHING", "RUNNING"))
+    from orze.core.observation_contract import get_observation_contract
+    if row["binding"].get("observation_publication") is not None:
+        from orze.engine.observation_publication import finish_evaluation
+        return finish_evaluation(lake, ep, idea_dir, cfg, ret, forced=forced,
+                                 not_started=not_started)
+    if get_observation_contract(cfg) is not None:
+        raise AttemptEffectBusy("evaluation_observation_contract_unbound")
     paths = _inputs(idea_dir, cfg)
     identities = _identities(paths)
     success = False

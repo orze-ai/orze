@@ -142,6 +142,10 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     eval_script = cfg.get("eval_script")
     if not eval_script:
         return None
+    from orze.core.observation_contract import get_observation_contract
+    observation_contract = get_observation_contract(cfg)
+    if observation_contract is not None and lake is None:
+        raise LaunchIntegrityError("observation_native_catalog_required")
 
     eval_output = cfg.get("eval_output") or "eval_report.json"
     idea_dir = results_dir / idea_id
@@ -200,7 +204,7 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         return None
 
     output_path = evaluation_output_path(idea_dir, cfg)
-    if output_path is None:
+    if output_path is None and observation_contract is None:
         _record_eval_audit(idea_dir, "reject", "evaluation_output_path_invalid")
         return None
     # With legacy in-place evaluators, the training artifact already exists.
@@ -209,7 +213,8 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     aliases_training = output_path == idea_dir / "metrics.json"
     evaluated_alias = (lake is not None and
                        lake.get_stage_state(idea_id, "evaluation") == "COMPLETE")
-    if output_path.exists() and (not aliases_training or evaluated_alias):
+    if (observation_contract is None and output_path.exists()
+            and (not aliases_training or evaluated_alias)):
         contract_ok, contract_reason = validate_evaluation_result(idea_dir, cfg)
         if lake is not None and lake.get_fsm_state(idea_id) == "IN_PROGRESS":
             training_stage = lake.get_stage_state(idea_id, "training")
@@ -295,16 +300,29 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     stage_started = False
     attempt_id = secrets.token_hex(16)
     attempt_ref = None
+    prepared = None
     try:
+        if observation_contract is not None:
+            from orze.engine.observation_publication import prepare_evaluation
+            prepared = prepare_evaluation(idea_dir, cfg, lake, attempt_id, source_event)
+            prepared_payload = json.loads(prepared.payload_json)
+            io = prepared_payload["evaluation_io"]
+            log_path = Path(io["attempt_dir"]) / "eval_output.log"
         if lake is not None:
             from orze.engine.native_evaluation import begin
-            attempt_ref = begin(lake, idea_dir, attempt_id, gpu, source_event=source_event)
+            kwargs = {"source_event": source_event}
+            if prepared is not None:
+                kwargs.update(prepared=prepared, cfg=cfg)
+            attempt_ref = begin(lake, idea_dir, attempt_id, gpu, **kwargs)
             stage_started = True
         bundle = None
         entrypoint = eval_script
         if get_evaluation_bundle_config(cfg) is not None:
             bundle = stage_evaluation_bundle(idea_dir, cfg)
             entrypoint = str(bundle.entrypoint)
+        if prepared is not None:
+            python, entrypoint = io["declaration"]["python"], io["entrypoint"]
+            eval_args = io["declaration"]["arguments"]
         cmd = [python, entrypoint]
         cmd.extend(_format_args(eval_args, {
             "idea_id": idea_id, "gpu": 0, "physical_gpu": gpu,
@@ -314,7 +332,9 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
         with gpu_execution_lease(gpu, require_idle=True) as lease_fds:
             _verify_gpu_free(gpu, _launch_min_free_vram(cfg))
             env = os.environ.copy()
-            for k, v in (cfg.get("train_extra_env") or {}).items():
+            launch_environment = (io["declaration"]["environment"] if prepared is not None
+                                  else cfg.get("train_extra_env") or {})
+            for k, v in launch_environment.items():
                 env[k] = str(v)
             # Expose only the authorized physical device. Within the child it
             # is local CUDA device 0; {physical_gpu} remains available for
@@ -324,12 +344,21 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
             if bundle is not None:
                 env.update(bundle.environment(Path(
                     cfg.get("_project_root") or ".")))
+            popen_extra = {}
+            if prepared is not None:
+                from orze.engine.observation_publication import verify_evaluation
+                verify_evaluation(prepared, idea_dir, cfg, lake, source_event)
+                # Explicit adapter-owned paths win over inherited/user env.
+                env.update({"ORZE_EVALUATION_INPUT_MANIFEST": io["manifest"],
+                            "ORZE_EVALUATION_OUTPUT_DIR": io["work"],
+                            "ORZE_EVALUATION_OUTPUT_PATH": io["output"]})
+                popen_extra["cwd"] = io["work"]
             log_fh = open(log_path, "w", encoding="utf-8")
             try:
                 proc = subprocess.Popen(
                     cmd, env=env, stdout=log_fh,
                     stderr=subprocess.STDOUT,
-                    preexec_fn=_new_process_group, pass_fds=lease_fds,
+                    preexec_fn=_new_process_group, pass_fds=lease_fds, **popen_extra,
                 )
             except Exception:
                 log_fh.close()
