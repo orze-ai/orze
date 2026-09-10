@@ -47,6 +47,7 @@ from orze.engine.process import (
 )
 from orze.core.fs import _fs_unlock
 from orze.core.ideas import count_idea_headings
+from orze.engine.role_delivery import settle_role_delivery
 
 logger = logging.getLogger("orze")
 
@@ -223,7 +224,7 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                 rp, f"unattested role {role_name}",
                 reaper=_terminate_and_reap)
             rp.close_log()
-            if reaped:
+            if settle_role_delivery(rp, "error", None, reaped):
                 _fs_unlock(rp.lock_dir)
             del active_roles[role_name]
             finished.append((role_name, OUTCOME_ERROR))
@@ -240,7 +241,7 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                 reaped = terminate_role_process(
                     rp, f"role {role_name}", reaper=_terminate_and_reap)
                 rp.close_log()
-                if reaped:
+                if settle_role_delivery(rp, "timeout", None, reaped):
                     _fs_unlock(rp.lock_dir)
                 del active_roles[role_name]
                 finished.append((role_name, OUTCOME_TIMEOUT))
@@ -255,7 +256,7 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                 reaped = terminate_role_process(
                     rp, f"role {role_name}", reaper=_terminate_and_reap)
                 rp.close_log()
-                if reaped:
+                if settle_role_delivery(rp, "timeout", None, reaped):
                     _fs_unlock(rp.lock_dir)
                 del active_roles[role_name]
                 finished.append((role_name, OUTCOME_TIMEOUT))
@@ -267,8 +268,6 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
         reaped = terminate_role_process(
             rp, f"completed role {role_name}", reaper=_terminate_and_reap)
         rp.close_log()
-        if reaped:
-            _fs_unlock(rp.lock_dir)
         outcome: Outcome
         if not reaped:
             logger.error(
@@ -321,6 +320,10 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
         # CORRUPTION GUARD: check if ideas.md was truncated by the role
         _check_ideas_integrity(ideas_file, rp)
 
+        if settle_role_delivery(rp, outcome.name.lower(), ret, reaped):
+            _fs_unlock(rp.lock_dir)
+        elif getattr(rp, "trigger_launch", None) is not None:
+            outcome = OUTCOME_ERROR
         del active_roles[role_name]
         finished.append((role_name, outcome))
 

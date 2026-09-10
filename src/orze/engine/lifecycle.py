@@ -106,9 +106,10 @@ def startup_checks(results_dir: Path, cfg: dict,
 
     # 3. Scrub stale state files if orze (or orze-pro) was upgraded since
     # the last boot. Must run before the FSM / roles start so they don't
-    # observe pre-upgrade one-shot triggers or a pause sentinel that the
-    # old binary wrote. Silent no-op on first boot.
-    upgrade_check_and_clean(results_dir)
+    # observe stale derived state. Trigger files are outstanding messages,
+    # not proven stale by a package version change; preserve them for intake.
+    # Silent no-op on first boot.
+    upgrade_check_and_clean(results_dir, preserve_triggers=True)
 
     # 4. Initialize per-iteration health monitor
     health_monitor = HealthMonitor(results_dir)

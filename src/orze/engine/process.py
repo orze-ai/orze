@@ -810,8 +810,15 @@ class RoleProcess:
     # crash-recovery signal is authorized.
     process_nonce: Optional[str] = field(default=None, repr=False)
     _receipt_error: bool = field(default=False, repr=False)
+    # Captured delivery identity, independent of mutable role_state. These
+    # fields confer no process-signalling authority; nonce identities still do.
+    trigger_delivery_db: Optional[str] = field(default=None, repr=False)
+    trigger_launch: Optional[dict] = field(default=None, repr=False)
 
     def __post_init__(self):
+        if self.trigger_launch is not None:
+            from copy import deepcopy
+            self.trigger_launch = deepcopy(self.trigger_launch)
         if self._last_progress_at <= 0:
             self._last_progress_at = float(self.start_time)
         if self._last_observed_at <= 0:
@@ -1021,9 +1028,12 @@ def persist_role_process_receipt(rp: RoleProcess) -> bool:
             "descendants": descendants,
             "updated_ns": time.time_ns(),
         }
+        if rp.trigger_launch is not None:
+            from orze.engine.role_delivery import delivery_reference
+            payload["trigger_delivery"] = delivery_reference(rp)
         _atomic_private_json(rp.lock_dir / _ROLE_PROCESS_RECEIPT, payload)
         return True
-    except (OSError, TypeError, ValueError):
+    except (OSError, TypeError, ValueError, KeyError):
         return False
 
 
@@ -1175,7 +1185,7 @@ def terminate_role_process(
         discover_pgid=root_live,
     )
     clean = result is not False and nonce_scan_ok
-    if clean:
+    if clean and getattr(rp, "trigger_launch", None) is None:
         try:
             (rp.lock_dir / _ROLE_PROCESS_RECEIPT).unlink(missing_ok=True)
         except OSError:

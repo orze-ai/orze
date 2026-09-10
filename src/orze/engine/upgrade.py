@@ -362,7 +362,7 @@ def _same_versions(a: Optional[dict], b: dict) -> bool:
             and a.get("orze_pro") == b.get("orze_pro"))
 
 
-def _delete_garbage(results_dir: Path) -> list:
+def _delete_garbage(results_dir: Path, *, preserve_triggers: bool = False) -> list:
     """Delete every listed garbage file/glob. Returns the names deleted.
 
     Each unlink is wrapped individually — a single unlinkable file
@@ -379,7 +379,7 @@ def _delete_garbage(results_dir: Path) -> list:
         except OSError as e:
             logger.warning("upgrade_cleanup: could not remove %s: %s",
                            path, e)
-    for pattern in _GARBAGE_GLOBS:
+    for pattern in (() if preserve_triggers else _GARBAGE_GLOBS):
         for path in sorted(results_dir.glob(pattern)):
             if not _is_live_trigger(path):
                 continue
@@ -392,8 +392,13 @@ def _delete_garbage(results_dir: Path) -> list:
     return cleaned
 
 
-def check_and_clean(results_dir: Path) -> dict:
-    """See module docstring."""
+def check_and_clean(results_dir: Path, *, preserve_triggers: bool = False) -> dict:
+    """Scrub legacy state; native startup preserves unreceived task messages.
+
+    The default retains the explicit legacy cleanup API. Native lifecycle
+    passes preserve_triggers=True because a version change cannot prove that
+    an outstanding trigger was delivered or is safe to discard.
+    """
     current = _current_versions()
     result = {
         "upgraded": False,
@@ -424,7 +429,7 @@ def check_and_clean(results_dir: Path) -> dict:
 
     # Version change detected (upgrade, downgrade, or orze-pro
     # install/removal). Scrub, then stamp.
-    cleaned = _delete_garbage(results_dir)
+    cleaned = _delete_garbage(results_dir, preserve_triggers=preserve_triggers)
     _write_stamp(stamp_path, current)
     result["upgraded"] = True
     result["cleaned"] = cleaned
