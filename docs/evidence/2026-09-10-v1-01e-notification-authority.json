@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "item": "V1-01E",
+  "status": "mechanism_verified",
+  "claim": "Finished-batch bookkeeping uses current qualified evidence independently of notification enablement; observer-side metric mirrors cannot create or change lifecycle, and malformed diagnostics cannot drop unrelated completions",
+  "baseline": {
+    "core": "6e04a6752d9d706698ca88221e882c1e261c610b",
+    "pro": "d0d27f103efbda043de6607224d33e3323c17ba4"
+  },
+  "fix": {"core": "f871eafd8024ce76effb2e5bd7eb4dcd4dfabcf7"},
+  "remote_verification": "Successful push followed by git ls-remote origin refs/heads/feat/autoresearch-v1 matching the full core fix SHA",
+  "frozen_tests": [
+    {
+      "file": "tests/test_notification_authority_contract.py",
+      "sha256": "c9d8d220ae71242d8faed1acdadd14cf4b2245951c4ce4b062ac1b93dd57a700",
+      "baseline_failed": 11, "baseline_passed": 2,
+      "scope": "Real report, Lake, notification filtering, transport-only substitute, state save/load and database reopen; disabled bookkeeping, exact source zero, missing/rejected sources, unknown/nonterminal lifecycle, stale rows/current configuration/taint"
+    },
+    {
+      "file": "tests/test_notification_snapshot_boundary.py",
+      "sha256": "2e7345b55f482cf24c8fbe422380ae0f59d8170d4370a734011dd5c02b2d4019",
+      "baseline_failed": 8, "baseline_passed": 0,
+      "scope": "Public process preserves every nonmetric database field and transition; exact primary/secondary source values; qualification-to-update requeue; unknown/ineligible observations and poisoned view cache"
+    },
+    {
+      "file": "tests/test_notification_processing_boundaries.py",
+      "sha256": "e43ca38b11789618194da461861d8507b385b0e4557909664bde490f3ebf171a",
+      "baseline_failed": 10, "baseline_passed": 0,
+      "scope": "Malformed failure fields/list metrics with notifications on/off, disabled plateau flag and missing authority fail-closed/no creation"
+    }
+  ],
+  "initial_red": {
+    "command": "python3 -m pytest -q tests/test_notification_authority_contract.py --tb=short",
+    "exit_code": 1, "failed": 11, "passed": 2, "elapsed_seconds": 2.77
+  },
+  "independent_follow_on_red": {
+    "scope": "Boundary tests on the initial E implementation exposed six malformed-diagnostic failures while four controls already passed",
+    "exit_code": 1, "failed": 6, "passed": 4, "elapsed_seconds": 2.07,
+    "leaderboard_source_sha256": "98cd2b15b67682bae0a4aa554cf23a1f3a92f55fb678ee7bedfee679ebbf0af6",
+    "notification_evidence_source_sha256": "44282513af74246af5c5e494bd6f06b731891088460415a94f51872aefb3bb53"
+  },
+  "reproducible_frozen_baseline_recheck": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'import subprocess; import pytest; import orze.reporting.leaderboard as leaderboard; source = subprocess.run([\"git\", \"show\", \"6e04a6752d9d706698ca88221e882c1e261c610b:src/orze/reporting/leaderboard.py\"], check=True, capture_output=True, text=True).stdout; exec(compile(source, leaderboard.__file__, \"exec\"), leaderboard.__dict__); raise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_notification_authority_contract.py\", \"tests/test_notification_snapshot_boundary.py\", \"tests/test_notification_processing_boundaries.py\", \"--tb=short\"]))'",
+    "exit_code": 1, "failed": 29, "passed": 2, "elapsed_seconds": 6.83,
+    "scope": "Process-local substitution of the complete frozen baseline leaderboard module with unchanged final tests; no working-tree rollback. Other imported dependencies are the paired feature checkout, and the new helper is not called by the old module. All failures are behavioral assertions"
+  },
+  "targeted_green": {
+    "command": "python3 -m pytest -q tests/test_notification_authority_contract.py tests/test_notification_snapshot_boundary.py tests/test_notification_processing_boundaries.py tests/test_reporter_objective_notifications.py tests/test_config_dedup_keyset.py tests/test_config_dedup_rebuild_and_recover.py --tb=short",
+    "exit_code": 0, "passed": 41, "skipped": 0, "elapsed_seconds": 6.26
+  },
+  "final_core_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0, "passed": 1399, "skipped": 6, "elapsed_seconds": 97.86,
+    "skip_scope": "Optional Pro tests in the core-only source environment"
+  },
+  "final_pro_regression": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+    "exit_code": 0, "passed": 394, "skipped": 0, "elapsed_seconds": 31.90
+  },
+  "final_cross_repository_regression": {
+    "command": "Both src paths and the same explicit test-only license patch; pytest -q tests/test_evolution.py tests/test_sweeper.py tests/test_skill_registry.py --tb=short -rs from core",
+    "exit_code": 0, "passed": 30, "skipped": 0, "elapsed_seconds": 0.59
+  },
+  "independent_review": "Separate core, Pro and runtime reviewers approved the scoped final behavior; independent tests reproduced metadata replacement, a requeue interleaving, stale filtered views and malformed diagnostics",
+  "compatibility": [
+    "The mutable eval_metrics mirror is retained for legacy archive/UI consumers through guarded UPDATE only; all lifecycle, task kind, configuration, title and time fields remain untouched",
+    "Existing override-hash tests retain their original assertions and now supply an admitted row to the private post-qualification helper",
+    "Qualified zero/negative and explicit secondary are preserved; failed artifacts remain labeled unverified diagnostics rather than qualified outcomes",
+    "No-finished ticks remain no-ops, so expensive evidence requalification is event-driven rather than an unconditional full-artifact scan per poll"
+  ],
+  "limits": [
+    "No claim of cross-batch/restart observation deduplication, exactly-once notification delivery, atomic filesystem/SQLite snapshots or old-attempt fencing",
+    "Champion ID changes are not yet separated from objective improvement; guard policy/history and no-finished revocation remain open",
+    "Core report/admin qualification and Pro legacy idea_verifier cached accuracy are not all migrated by this consumer-boundary fix",
+    "No scientific-progress, statistical-equivalence or research-efficiency gain demonstrated",
+    "No production license activation, paid provider, real GPU, package publication, deployment or live campaign mutation; original workspace still has its prior 281 dirty entries"
+  ]
+}
