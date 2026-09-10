@@ -29,7 +29,9 @@
 | V1-02D1：执行停止确认 | 已修复、机制已验证 | Core `7c33787` / Pro 契约 `72158a5`；25 旧行为 red、15 旧兼容控制、4 草稿 red 与 33 新机制验收，共 77 passed；最终 Core 2108 passed / 7 optional Pro skips、Pro 723 passed、真实跨仓 60 passed。四份旧 fixture 完整快照保留，只迁移明确停止成功的测试替身，不修改业务断言 |
 | V1-02D2：原生 attempt 与发布边界 | 已实现、机制已验证 | Core `caecc61` / Pro 契约 `3e8f724` 已推送并读回精确远端 ref；冻结源码最终 Core 2524 passed / 7 optional Pro skips、Pro 723 passed、真实配对 60 passed；474/160 个源码、测试及构建声明文件前后 SHA 完全相同。[合同](../execution-attempt-authority.md)及[机器证据](../evidence/2026-09-10-v1-02d2-attempt-authority.json)区分旧开发提交/草稿红测、新机制及显式 fixture 迁移，不累加重叠 target。原生 adoption、repair worker、原生 resume admission、独立 observation 和产物隔离仍未完成 |
 | V1-02 整体 | 进行中 | A 关闭触发交付与保守启动恢复，B 关闭共享已记录阶段的完成资格，C 关闭原生提案源的并发交接/不可覆盖 admission，D1 关闭已接线的强制停止确认与持久停止 HOLD；D2 关闭已接线当前 attempt 的实际发布与消费边界。原生重启 adoption、未知结果裁定、完整跨崩溃交接和科学任务独立 observation 仍待收口 |
-| V1-03 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
+| V1-03A1：共享配额与完成记账 | 已修复、机制已验证 | Pro `6d22d7e` / Core 契约 `dcba7b5` 已推送并核实；21 个新目标测试为 11 旧行为 red、4 旧控制、6 新机制。最终 Pro 744 passed、真实配对 60 passed；Core 474 文件与 D2 完全一致，明确复用 D2 的 2524 passed / 7 optional Pro skips，而非声称新跑。[证据](../evidence/2026-09-10-v1-03a1-shared-quota.json)与[契约](../shared-quota-completion.md)保留旧混合状态一次迁移及同主机范围 |
+| V1-03 整体 | 进行中 | A1 关闭同控制器共享配额被完成记账清除/延长；持久需求计数、预算预约故障/并发上限、结果分类及可选角色组仍待收口。按主机保存不等于跨主机共享配额或逐结果同步持久化 |
+| V1-04 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
 
 [V1-02D1 机器可读证据](../evidence/2026-09-10-v1-02d1-termination-authority.json)与[执行停止契约](../execution-termination-authority.md)在两仓各保留一份。固定旧代码重放证明主进程退出被误当作停止确认、失败初始化/槽位注册释放权限，以及补评接受残留写入者产物的路径；修复要求持久请求、停止器严格 True 和整数退出码，再发布绑定请求哈希的确认。未确认停止跨对象丢失和已接线恢复入口保持 HOLD，不自动重试。四个草稿边界红测及四份兼容 fixture 原始快照均可重放。首次 start/stop 均未落盘时的崩溃/存储故障、普通自然退出的完整后代证明、stale-attempt CAS 和产物代际隔离仍未完成；仍不代表整个 V1 已完成。
 

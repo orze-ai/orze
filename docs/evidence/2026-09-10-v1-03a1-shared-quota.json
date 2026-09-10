@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "milestone": "V1-03A1",
+  "status": "implemented_and_mechanically_verified_not_v1_complete",
+  "implementation_commits": {
+    "pro": "6d22d7e54050004aa456f023e5b7c2ee23eaf1b3",
+    "core_contract": "dcba7b5024a6d9e566001600b8244a1226a8b126"
+  },
+  "canonical_evidence": {
+    "repository": "https://github.com/orze-ai/orze-pro",
+    "branch": "feat/autoresearch-v1",
+    "path": "docs/evidence/2026-09-10-v1-03a1-shared-quota.json",
+    "sha256": "e3b02beae3749caa8b95377050dfbe712f373768849db851b5fe68ff165efbca"
+  },
+  "canonical_inventory": {
+    "repository": "https://github.com/orze-ai/orze-pro",
+    "path": "docs/evidence/2026-09-10-v1-03a1-source-inventory.json",
+    "sha256": "a251e20d05ea911233192ee3d714112697914f9a4d343d7db7cb548e65a1db8d"
+  },
+  "classification_summary": {
+    "old_behavior_red": 11,
+    "old_controls": 4,
+    "new_mechanisms": 6,
+    "distinct_new_target_tests": 21,
+    "overlapping_targeted_suites_not_summed": true
+  },
+  "final_verification": {
+    "python": "3.10.12",
+    "pytest": "9.1.1",
+    "pro": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "cwd": "orze-pro",
+      "passed": 744,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 60.84,
+      "exit_code": 0,
+      "terminal_output": "..... [ 96%]\n........................                                                 [100%]\n744 passed in 60.84s (0:01:00)\n"
+    },
+    "paired": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "cwd": "orze",
+      "passed": 60,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 0.79,
+      "exit_code": 0,
+      "output": "............................................................             [100%]\n60 passed in 0.79s\n"
+    },
+    "core_full_reused_not_rerun": {
+      "evidence_commit": "b687f603cd1e8da8b59c7418456c2fdfb055da64",
+      "path": "docs/evidence/2026-09-10-v1-02d2-attempt-authority.json",
+      "passed": 2524,
+      "skipped": 7,
+      "seconds": 309.13,
+      "reason": "All 474 Core source/test/pyproject file hashes remain exactly identical to the D2 frozen source before and after this Pro-only source change. Real Pro integration re-run separately."
+    },
+    "inventory": {
+      "path": "docs/evidence/2026-09-10-v1-03a1-source-inventory.json",
+      "pro_files": 165,
+      "core_files": 474,
+      "exact_before_after_match": true
+    },
+    "license_boundary": "Actual paired source, test-only require_license patch; not a licensing/service/provider or GPU verification.",
+    "diff_check_exit_code": 0
+  },
+  "remote_ref_verification": {
+    "stage": "code_and_contract_pushed_before_evidence_only_commit",
+    "branch": "feat/autoresearch-v1",
+    "core": {
+      "chunk_id": "9dfe70",
+      "wall_time_seconds": 0.079664223,
+      "exit_code": 0,
+      "original_token_count": 33,
+      "output": "dcba7b5024a6d9e566001600b8244a1226a8b126\trefs/heads/feat/autoresearch-v1\n5ca2680dbd0139e63cd35a4f83da438b5b47ab99\trefs/heads/main\n"
+    },
+    "pro": {
+      "chunk_id": "fd8244",
+      "wall_time_seconds": 0.374230548,
+      "exit_code": 0,
+      "original_token_count": 33,
+      "output": "6d22d7e54050004aa456f023e5b7c2ee23eaf1b3\trefs/heads/feat/autoresearch-v1\n57feb6e0af19dcf62a80b1e447f0771936d39afe\trefs/heads/main\n"
+    },
+    "main_unchanged": true
+  },
+  "limits": [
+    "No full failure_retry_at redesign; ordinary relative failure cooldown/cadence and existing GOAL bypass remain.",
+    "Shared scope is explicit currently configured same-controller group membership. Dynamic regrouping/new-role inheritance is not guaranteed by this slice.",
+    "Existing per-host .orze_state_<hostname>.json persistence is used; no cross-host quota service, synchronous crash-proof write before every launch, or credential inference.",
+    "Malformed historical quota timestamps become a single bounded hold, not infinity or immediate bypass. Migration does not prove why an old mixed scalar existed.",
+    "No scientific convergence/research improvement claims and no provider/GPU/live campaign execution.",
+    "Test-only license gate and external process/telemetry boundaries are patched; production license checks are unchanged.",
+    "Core production/tests are unchanged by this subtask. D2 Core full-suite evidence may be explicitly reused only after root inventory verification; this file does not claim a new Core full-suite run.",
+    "The initial estimate of 84 final targeted tests was a counting mistake; actual final pytest result is 80 and is authoritative."
+  ],
+  "next_required_work": "Persistent research demand (V1-03B), reservation fault/ownership boundaries, explicit outcomes and optional role groups; whole V1 remains incomplete."
+}
