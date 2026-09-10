@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "item": "V1-01C",
+  "status": "mechanism_verified",
+  "claim": "Report, sweep winners/details, recovered champion and Pro research/evolution ranking share explicit primary/secondary ordering; qualified zero is preserved in completion notifications",
+  "baseline": {
+    "core": "5f2e51495a699aced1724be06419b1dc41c774e6",
+    "pro": "7ee406a0800f53e8040a3af31541812e16c9f3b5"
+  },
+  "fix": {
+    "core": "14065b5024fa28c23d79c8945fcfd62475eb77d2",
+    "pro": "139d4049ea213f83d2d5ee3a13d934f1b0d4f144"
+  },
+  "red": [
+    {
+      "repo": "core", "test_file": "tests/test_objective_ordering_contract.py",
+      "sha256": "1d09729753f2d9d71e1989f8f695162846780ff6cc354783801d8d37afc583fb",
+      "failed": 11, "passed": 2, "exit_code": 1,
+      "cause": "Real report/recovery/panel/sweep disagree due to implicit medal priority, source zero fallback, missing/invalid secondary and inconsistent ties"
+    },
+    {
+      "repo": "core", "test_file": "tests/test_secondary_metric_loading.py",
+      "sha256": "1ea4bb6d7170a86c5edb6cde00bf679f1d7f3d35a788ad9ecd0db6d4316b4559",
+      "failed": 4, "passed": 0, "exit_code": 1,
+      "cause": "Explicit non-display secondary absent from qualified values/cache, including dotted keys"
+    },
+    {
+      "repo": "core", "test_file": "tests/test_reporter_objective_notifications.py",
+      "sha256": "77f80d6cc93ab5300658668d47c376e8a0af5bee442d4469f2287da85df42788",
+      "failed": 2, "passed": 0, "exit_code": 1,
+      "cause": "Actual finished-notification reader replaces source-backed zero with raw 999"
+    },
+    {
+      "repo": "core", "test_file": "tests/test_objective_config_contract.py",
+      "sha256": "16efa945b0484fd4d7fbba9189d8a093cb503f10e592e058e78e5e87bb1ceeeb",
+      "failed": 16, "passed": 7, "exit_code": 1,
+      "cause": "Configuration check accepts malformed objective declarations that fail only after execution"
+    },
+    {
+      "repo": "pro", "test_file": "tests/test_research_secondary_ordering.py",
+      "sha256": "3ff3a34d06a8450d9e8085af8ec0497ce50ef38258179d9f8c9d9ed0a7e1981e",
+      "failed": 4, "passed": 2, "exit_code": 1,
+      "cause": "Real loader/evolution ignore explicit secondary and choose the missing value by lexical ID"
+    },
+    {
+      "repo": "pro", "test_file": "tests/test_compatibility_contract.py",
+      "failed": 1, "passed": 1, "exit_code": 1,
+      "cause": "Package still advertises support for core 4.6.1, which has no shared objective API"
+    }
+  ],
+  "red_command": "Run each named test file with python3 -m pytest -q TEST_FILE --tb=short from its checkout; Pro uses both src paths and an explicit test-only license gate patch",
+  "final_core_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0, "passed": 1344, "skipped": 6, "elapsed_seconds": 86.25,
+    "skip_scope": "Optional Pro tests in the core-only source environment"
+  },
+  "final_pro_regression": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+    "exit_code": 0, "passed": 377, "skipped": 0, "elapsed_seconds": 28.45
+  },
+  "final_cross_repository_regression": {
+    "command": "Both src paths and the same test-only license patch; pytest -q tests/test_evolution.py tests/test_sweeper.py tests/test_skill_registry.py --tb=short -rs from core",
+    "exit_code": 0, "passed": 30, "skipped": 0, "elapsed_seconds": 0.77
+  },
+  "independent_review": "Independent test authors, 57-test related review run, and final code/configuration/dependency diff review; no remaining blocker within this subitem",
+  "compatibility": [
+    "Source versions are core 4.6.2 and Pro 0.13.1; Pro requires orze>=4.6.2,<4.7. Use paired feature checkouts; no package was published or deployed",
+    "Secondary follows primary direction as before; null/empty secondary means absent; exact ties use ascending stable ID in either direction",
+    "Displaying medals no longer silently changes the objective. Domain ranking must be declared as a numeric objective",
+    "Invalid/missing secondary is not zero. Default nonfinite validation remains unchanged; nonfinite diagnostic sorting tests explicitly opt out of that validation",
+    "Result cache schema 5 and the secondary declaration hash prevent stale extracted values"
+  ],
+  "limits": [
+    "This is deterministic local ordering, not statistical equivalence or a research-quality improvement claim",
+    "Champion guard policy/history, raw unqualified notification fallback, notification-disabled state updates, plateau progress semantics, digest wiring/qualification and evaluation admission remain open subitems",
+    "No production license activation, paid provider, real GPU, package publication, deployment or migration exercised"
+  ]
+}
