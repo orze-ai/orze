@@ -1,0 +1,215 @@
+{
+  "schema": 1,
+  "slice": "V1-03E",
+  "date": "2026-09-10",
+  "status": "implemented, frozen full-suite and independent verification; not whole V1 completion",
+  "base": {
+    "core": "4920926d56695b112b882b4c81b8026957e12ab6",
+    "pro": "18b0265c7e3c1c3375d11c0d9a6535d7d951c4e2"
+  },
+  "implementation_commits": {
+    "core": "7741e2375926ef12db94dd44a7419f2ba66734a6",
+    "pro": "64684d8fd516d280c60afc5ede5a110324acbbf0"
+  },
+  "branch": "feat/autoresearch-v1",
+  "implementation_push_and_exact_remote_ref_verified": true,
+  "untouched_main": {
+    "core": "5ca2680dbd0139e63cd35a4f83da438b5b47ab99",
+    "pro": "57feb6e0af19dcf62a80b1e447f0771936d39afe"
+  },
+  "scope": [
+    "Default role_presets is empty. Credentials and GOAL do not activate work or unnamed role groups. Strict explicit environment_research and strategy_team presets preserve whole user declarations.",
+    "Environment preset uses the same three existing backend/model defaults, adds only missing names after legacy migration; Core does not implement Pro teams.",
+    "Team expansion is project-local and idempotent, retains GOAL/enabled-professor anchors and single-model restrictions. No global one-shot flags influence it.",
+    "Stall fallback requires exact true, positive non-bool threshold and known integer count. Actual manual requests, quota, failure backoff and budgets keep their normal paths."
+  ],
+  "contract": {
+    "path": "docs/optional-role-presets.md",
+    "sha256": "8333a38239b7e3a55cc6c4dc1ccd0c07f5a88b087d1036c3dc8f38ea78f968cb"
+  },
+  "distinct_new_tests": {
+    "total": 46,
+    "old_public_behavior_red": 15,
+    "old_controls": 10,
+    "new_mechanism_initial_green": 21,
+    "counting": "Core old5=3 red+2 controls; Pro old20=12 red+8 controls. Core strict-schema18 and independent loaded-dispatch3 are initially green mechanisms. Overlapping target runs are not added."
+  },
+  "frozen_tests": {
+    "core": [
+      {
+        "sha256": "d1fa494d7c838884fa987bdde86b4db524335055ea977ccbca79f71a3512d08f",
+        "path": "tests/test_optional_role_config.py"
+      },
+      {
+        "sha256": "982a196a5c7d1b2fc925dacc21936fcaee24cf476145b8441da0f23fca258a35",
+        "path": "tests/test_role_presets.py"
+      }
+    ],
+    "pro": [
+      {
+        "sha256": "f3617c28c09c43c2e50e641839ebaacaeb5f46c822f0476f8e5413960e57f1ba",
+        "path": "tests/test_optional_role_presets.py"
+      },
+      {
+        "sha256": "52840c05a11d7a7f676b75aa59ad36a686922f01b80bbbbd6663092341bca40c",
+        "path": "tests/test_role_presets_loaded_dispatch.py"
+      },
+      {
+        "sha256": "0459a2b8648ff44e42e9b42e8ccb64cc7788c97333772f01655879f4c975eebd",
+        "path": "tests/test_stall_activation_policy.py"
+      },
+      {
+        "sha256": "1a545228289390f06f777d7e90fae4d2661194ae5f8a0a8eedc97e589c2abe80",
+        "path": "tests/test_strategy_team_presets.py"
+      }
+    ]
+  },
+  "root_fixed_old_replays": [
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib, subprocess\nimport pytest\nimport orze.core.config as module\nrevision = \"4920926d56695b112b882b4c81b8026957e12ab6\"\npath = \"src/orze/core/config.py\"\nraw = subprocess.check_output([\"git\", \"show\", revision + \":\" + path])\nprint(\"FIXED_SOURCE\", revision, path, hashlib.sha256(raw).hexdigest(), flush=True)\nexec(compile(raw, revision + \":\" + path, \"exec\"), module.__dict__)\nraise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_optional_role_config.py\", \"--tb=line\"]))\nPY",
+      "failed": 3,
+      "passed": 2,
+      "seconds": 0.14,
+      "exit_code": 1,
+      "source_sha256": "add4c016ba5daf5e9c9edf4e3f82e856cc1b32dee4c16032399c051fcf07c9e0"
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib, subprocess\nfrom unittest.mock import patch\nimport pytest\nwith patch(\"orze_pro._gate.require_license\"):\n    import orze_pro.engine.role_runner as module\n    revision = \"18b0265c7e3c1c3375d11c0d9a6535d7d951c4e2\"\n    path = \"src/orze_pro/engine/role_runner.py\"\n    raw = subprocess.check_output([\"git\", \"show\", revision + \":\" + path])\n    print(\"FIXED_SOURCE\", revision, path, hashlib.sha256(raw).hexdigest(), flush=True)\n    exec(compile(raw, revision + \":\" + path, \"exec\"), module.__dict__)\n    raise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_optional_role_presets.py\", \"tests/test_strategy_team_presets.py\", \"tests/test_stall_activation_policy.py\", \"--tb=line\"]))\nPY",
+      "failed": 12,
+      "passed": 8,
+      "seconds": 3.03,
+      "exit_code": 1,
+      "source_sha256": "5122e97fde4c96af6e851704b75a513e070d342bb9fd49bef68b15ab8e141696"
+    }
+  ],
+  "replay_scope": "Full fixed config/runner module respectively loaded in fresh process memory; other dependencies current. No disk restoration or whole historical two-repo install claimed. The Pro output was truncated by tool; footer/exit are actual, not a complete transcript.",
+  "core_author_verification": [
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_optional_role_config.py --tb=short",
+      "failed": 3,
+      "passed": 2,
+      "seconds": 0.19,
+      "exit_code": 1,
+      "when": "before source change, byte-exact promotion of frozen external five"
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_optional_role_config.py tests/test_role_presets.py --tb=short",
+      "passed": 23,
+      "seconds": 0.27,
+      "exit_code": 0,
+      "when": "initial new-mechanism acceptance plus original five green"
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_optional_role_config.py tests/test_role_presets.py tests/test_orze_dir_layout.py tests/test_sealed_hashes.py tests/test_round2_f1_evolution_deprecation.py tests/test_round3_validator_allowlist.py tests/test_objective_config_contract.py tests/test_resume_default_catalog_compatibility.py tests/test_fsm_runner_config_contract.py tests/test_cli_check.py --tb=short",
+      "passed": 89,
+      "seconds": 1.11,
+      "exit_code": 0,
+      "when": "final frozen Core target"
+    }
+  ],
+  "final_full_runs": [
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "exit_code": 0,
+      "passed": 2588,
+      "skipped": 7,
+      "seconds": 336.58
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "exit_code": 0,
+      "passed": 830,
+      "skipped": 0,
+      "seconds": 143.08
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "exit_code": 0,
+      "passed": 60,
+      "skipped": 0,
+      "seconds": 0.73
+    }
+  ],
+  "final_source_inventory": {
+    "path": "docs/evidence/2026-09-10-v1-03e-source-inventory.json",
+    "sha256": "2bd1a294152b125baf986a9471f06e3b761bc2be9eb1d991b32136749fddf4e1",
+    "core_files": 484,
+    "pro_files": 188,
+    "before_after_identical": true,
+    "note": "All src/tests/pyproject.toml; includes intentional explicit-fixture migration, unlike a claim that no old tests changed."
+  },
+  "reviews": [
+    {
+      "repo": "pro",
+      "path": "docs/evidence/2026-09-10-v1-03e-role-presets-review.json",
+      "sha256": "0cf1528f3d53b20e4959917baa02df2bc6d6482798db0462bccd6c7876cbe80b",
+      "roles": "Pro implementation author verification, Core non-author review",
+      "final_target_passed": [
+        160,
+        23
+      ],
+      "seconds": [
+        39.8,
+        0.29
+      ]
+    },
+    {
+      "repo": "pro",
+      "path": "docs/evidence/2026-09-10-v1-03e-loaded-dispatch-review.json",
+      "sha256": "7b8a20997cea68e86471b3e37240676d74c14fa3c420d93f7b4766efe8386747",
+      "roles": "Independent runtime/consumer review of both production changes",
+      "final_passed": 46,
+      "seconds": 4.5,
+      "first_own_passed": 3,
+      "first_seconds": 0.78,
+      "no_blocker": true
+    }
+  ],
+  "legacy_fixture_migrations": [
+    {
+      "repo": "pro",
+      "path": "tests/test_autoinject_timeouts.py",
+      "snapshot": "docs/evidence/snapshots/v1-03e-autoinject-timeouts-original.py",
+      "old_sha256": "03e5e746db7fad7da8ec77aff5d59a4bc8052268a6657fe203fbe4d5601af324",
+      "new_sha256": "5b64f715b2bf62636ae6a6d64121aee7ca940da303093e9156a84258be455344",
+      "change": "Four explicit strategy preset prerequisites; all nineteen assert ASTs identical."
+    },
+    {
+      "repo": "pro",
+      "path": "tests/test_role_runner_deadlock_breaker.py",
+      "snapshot": "docs/evidence/snapshots/v1-03e-deadlock-breaker-original.py",
+      "old_sha256": "6c3aa06d321fd4bacd0a571c87d51b3c952188be07f6c5d9eef542259068cfe7",
+      "new_sha256": "314362b28a2e62917c26a671e2a075f3235a779719de1812e60af7897b23e887",
+      "change": "Five explicit stall prerequisites and two test names/docs; all twenty-three assert ASTs identical."
+    }
+  ],
+  "root_checks": {
+    "reviewed_full_production_diff_and_new_tests": true,
+    "independent_assert_ast_equivalence": 42,
+    "subevidence_command_python_syntax_checked": true,
+    "original_workspace_dirty_entries": 281,
+    "original_workspace_modified_by_this_slice": false
+  },
+  "environment": {
+    "python": "3.10.12",
+    "pytest": "9.1.1",
+    "cuda_visible_devices": "",
+    "pro_license": "Test-process require_license patch only; no production licensing changes or license validation claim",
+    "core_skips": "Seven optional Pro-stub skips; paired actual local-source 60 pass."
+  },
+  "limitations": [
+    "Default changes require users relying on implicit roles to explicitly choose a preset or configure roles. No user YAML is rewritten to add spending permission.",
+    "Preset materialization is not runtime revocation; removing only the preset does not remove existing roles or stop children. Existing professor-success fan-out and requested initial audit stay compatible.",
+    "Named team SOPs remain existing optional domain-oriented defaults, not a generic research policy implementation. No real provider, OS child, GPU, holdout or research gains demonstrated.",
+    "New malformed preset validation does not validate every unrelated role/config field. Existing trigger publication protocol is not strengthened to exactly-once by this slice.",
+    "Whole V1, bounded research context, generic CPU execution and heterogeneous holdout remain unfinished. Provider structured refusal/truncation integration remains separately unverified."
+  ]
+}
