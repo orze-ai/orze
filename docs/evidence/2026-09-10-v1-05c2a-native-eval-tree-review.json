@@ -1,0 +1,288 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2a",
+  "reviewer": "runtime_evidence",
+  "status": "fixture_v2_audited_old_replay_reproduced_source_matched_final_bounded_eight_green",
+  "scope": "Actual CPU native evaluation leader/descendant closure before legacy-native or B2 publication. Training fixture uses fake process/GPU boundaries; evaluation Popen, fork, setsid, execve, sockets, pidfds, output writes, publication functions and SQLite are real.",
+  "baseline": {
+    "core_commit": "fd24ea2586db4b36b42ace55f20708923169886d",
+    "pro_commit": "3466510c5417065bc17550a3f9462ad4bdf542b5",
+    "snapshot_provenance": "Four complete modules copied using apply_patch from git show of the preceding committed implementation-branch source, then independently SHA256-compared with unchanged on-disk source before author implementation.",
+    "sources": [
+      {
+        "path": "src/orze/engine/evaluator.py",
+        "sha256": "bc3f7bc6085986265fc1b32542624a9de621803ca48141fc61b5b77fff6394e6",
+        "snapshot": "docs/evidence/snapshots/v1-05c2a-before-native-eval-tree-evaluator.py",
+        "snapshot_sha256": "bc3f7bc6085986265fc1b32542624a9de621803ca48141fc61b5b77fff6394e6"
+      },
+      {
+        "path": "src/orze/engine/native_evaluation.py",
+        "sha256": "2910b240677dcdf776b0f44c61e0fd8a62ba68be4c98feb7d41f8aa5f9651f79",
+        "snapshot": "docs/evidence/snapshots/v1-05c2a-before-native-eval-tree-native-evaluation.py",
+        "snapshot_sha256": "2910b240677dcdf776b0f44c61e0fd8a62ba68be4c98feb7d41f8aa5f9651f79"
+      },
+      {
+        "path": "src/orze/engine/observation_publication.py",
+        "sha256": "f6cd2e67b39d202f86c81dc1cbe331db3c4e5ce9100ab007bb763c524b0cc66e",
+        "snapshot": "docs/evidence/snapshots/v1-05c2a-before-native-eval-tree-observation-publication.py",
+        "snapshot_sha256": "f6cd2e67b39d202f86c81dc1cbe331db3c4e5ce9100ab007bb763c524b0cc66e"
+      },
+      {
+        "path": "src/orze/engine/process.py",
+        "sha256": "2365ba40dc50aa390799fee7ccfa5db91e9b0bf78dfeb07354bc3a5576331f91",
+        "snapshot": "docs/evidence/snapshots/v1-05c2a-before-native-eval-tree-process.py",
+        "snapshot_sha256": "2365ba40dc50aa390799fee7ccfa5db91e9b0bf78dfeb07354bc3a5576331f91"
+      }
+    ],
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_eval_tree_completion.py --tb=short",
+    "exit_code": 1,
+    "footer": "3 failed, 2 passed in 3.37s",
+    "behavior_reds": 3,
+    "positive_controls": 2,
+    "missing_api_failures": 0,
+    "setup_or_cleanup_errors": 0,
+    "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'import importlib; from pathlib import Path; import pytest; modules=[(\"orze.engine.process\",\"process\"),(\"orze.engine.native_evaluation\",\"native-evaluation\"),(\"orze.engine.observation_publication\",\"observation-publication\"),(\"orze.engine.evaluator\",\"evaluator\")]; [(lambda module,path: exec(compile(path.read_text(),str(path),\"exec\"),module.__dict__))(importlib.import_module(name),Path(\"docs/evidence/snapshots/v1-05c2a-before-native-eval-tree-\"+label+\".py\")) for name,label in modules]; raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_native_eval_tree_completion.py\",\"--tb=short\"]))'",
+    "replay_exit_code": 1,
+    "replay_footer": "3 failed, 2 passed in 3.24s",
+    "replay_scope": "All four complete fixed modules loaded in memory before pytest collection. No source files modified during replay. The same three live-daemon publication assertions fail; two ordinary exit controls pass.",
+    "prefreeze_draft_note": "An initial not-yet-frozen test draft ran 3 failed, 2 passed in 3.98s. Before freezing, handshake reply was ordered before leader release to avoid future supervisor quick-stop races, and root's forced-cleanup operational-failure contract was asserted. Only the final d447 test and its 3.37s run/replay are the frozen five; preliminary failures are not added.",
+    "test_sha256": "d447461d5693e5d49b46b35a72942ceb76641cbbb4aecaaa487eb7d040fbde17",
+    "fixture_version": 1
+  },
+  "test": {
+    "path": "tests/test_native_eval_tree_completion.py",
+    "sha256": "a4eb67edd8da6f821bd74690acc03117cdf4a9d4b92c2336e560184d712ae03e",
+    "fixture_version": 2,
+    "cases": 5,
+    "fixture_migrations": [
+      {
+        "version": 2,
+        "authorized_by": "root; explicit bounded fixture migration after shared B2 fixtures adopted tests/supervision_fixture.py",
+        "original_snapshot": "docs/evidence/snapshots/v1-05c2a-native-eval-tree-fixture-v1.py",
+        "original_snapshot_sha256": "d447461d5693e5d49b46b35a72942ceb76641cbbb4aecaaa487eb7d040fbde17",
+        "current_sha256": "a4eb67edd8da6f821bd74690acc03117cdf4a9d4b92c2336e560184d712ae03e",
+        "changes": [
+          "cpu_project explicitly restores evaluator.prepare_supervised to the real function imported from engine.supervised_process, overriding only the shared fixture's explicit simulation stub.",
+          "_launch captures ep.process.pid using pidfd_open and registers it for exact cleanup immediately after ep is returned, before waiting on the daemon socket; identical later detached-only registration is removed."
+        ],
+        "ordered_assert_ast_count": 34,
+        "ordered_assert_ast_identical": true,
+        "assert_ast_command": "python3 -c 'import ast; from pathlib import Path; a=Path(\"docs/evidence/snapshots/v1-05c2a-native-eval-tree-fixture-v1.py\"); b=Path(\"tests/test_native_eval_tree_completion.py\"); collect=lambda p:[ast.dump(node,include_attributes=False) for node in ast.walk(ast.parse(p.read_text())) if isinstance(node,ast.Assert)]; old,new=collect(a),collect(b); assert old==new; print(\"identical ordered Assert AST:\",len(old))'",
+        "diff_review": "Full diff has exactly the two authorized fixture changes and deletion of the displaced comment. No original assertion changed, no production edit, and no edits to other fixtures.",
+        "classification": "Fixture protocol migration, not product failure or a new behavior-red count. The existing five still execute real CPU workers and the same original safety/outcome assertions.",
+        "old_module_replay": {
+          "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+          "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'import importlib; from pathlib import Path; import pytest; modules=[(\"orze.engine.process\",\"process\"),(\"orze.engine.native_evaluation\",\"native-evaluation\"),(\"orze.engine.observation_publication\",\"observation-publication\"),(\"orze.engine.evaluator\",\"evaluator\")]; [(lambda module,path: exec(compile(path.read_text(),str(path),\"exec\"),module.__dict__))(importlib.import_module(name),Path(\"docs/evidence/snapshots/v1-05c2a-before-native-eval-tree-\"+label+\".py\")) for name,label in modules]; raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_native_eval_tree_completion.py\",\"--tb=short\"]))'",
+          "exit_code": 1,
+          "footer": "3 failed, 2 passed in 3.23s",
+          "session_id": 77259,
+          "session_state": "completed",
+          "fixed_modules": "The same four complete pre-C2a modules listed in baseline.sources were loaded in memory. New supervised_process remains importable for fixture restoration but old evaluator never calls it.",
+          "same_three_behavior_reds": true,
+          "additional_reds": 0,
+          "setup_or_cleanup_errors": 0
+        }
+      }
+    ],
+    "cases_detail": [
+      {
+        "id": "legacy-native-poll",
+        "classification": "old_public_behavior_red",
+        "observed": "Actual check_active_evals calls real record_compute_terminal while the escaped output writer's exact pidfd is live."
+      },
+      {
+        "id": "b2-native-poll",
+        "classification": "old_public_behavior_red",
+        "observed": "Actual check_active_evals calls real register_artifacts, register_observations and record_compute_terminal while the output writer's exact pidfd is live."
+      },
+      {
+        "id": "b2-direct-callback",
+        "classification": "old_public_behavior_red",
+        "observed": "Direct native_evaluation.finish bypasses monitor opportunity and performs all three real publications while the exact output writer is live."
+      },
+      {
+        "id": "exit-zero",
+        "classification": "old_positive_control",
+        "observed": "Actual CPU worker with no descendants exits 0, native terminal completes with one immutable result artifact and one observation; start/terminal use actual worker PID."
+      },
+      {
+        "id": "exit-nonzero",
+        "classification": "old_positive_control",
+        "observed": "Actual CPU worker with no descendants exits 7 despite valid output, native terminal is failed, artifact/observation lists empty and PID/return code unchanged."
+      }
+    ],
+    "safety": [
+      "Daemon connects over a private Unix socket after setsid/double-fork/execve with an empty environment. SO_PEERCRED authenticates its PID before pidfd_open; the daemon waits for a test message before permitting leader exit.",
+      "Initial output is actually written and fsynced by the daemon. In each old red it also rewrites that same open output inode after the unsafe callback, establishing a concrete surviving writer.",
+      "Transparent publication spies inspect pidfd readiness and delegate to the real writer without replacing qualification, transaction, files or returned values; this catches publish-then-stop as well as no-stop.",
+      "Fixture process temporarily becomes a subreaper solely to reap its orphaned daemon, then restores the previous setting. Only actual Popen roots and authenticated socket peers with captured pidfds are signalled, followed by bounded waits and exact waitpid. No host process search, username matching or killpg.",
+      "Root's cross-message cleanup observation is recorded: future wrapped-worker fixture migration should register the blocked worker's pidfd immediately at prepare, not only after daemon handshake. All five current old-source invocations completed and cleaned up without errors; this is not an additional product red."
+    ],
+    "assertion_contract": "No publication while a known owned daemon is live. If a new implementation requires forced stop, any accepted terminal must be operational failed with actual worker return code 0 and no observations. This added forced-stop contract is not counted as a separate old behavior red. A verified deferred/HOLD path may preserve RUNNING instead.",
+    "future_fixture_note": "The planned root-approved v2 migration is now complete and separately recorded. V1 d447 and its original 3.37s baseline/3.24s replay remain historical evidence; the current a4eb v2 replay is 3.23s. These are the same three behavioral reds, not added independent failures."
+  },
+  "candidate_green": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_eval_tree_completion.py --tb=short",
+    "exit_code": 0,
+    "footer": "5 passed in 3.68s",
+    "session_id": 16059,
+    "session_state": "completed",
+    "fixture_version": 2,
+    "test_sha256": "a4eb67edd8da6f821bd74690acc03117cdf4a9d4b92c2336e560184d712ae03e",
+    "pre_run_source_hashes": {
+      "src/orze/engine/supervised_process.py": "6c9532709481c0bdd44b5b9e58c32f24875b7fb1668715f2bdb60ed1feffdb42",
+      "src/orze/engine/supervisor_worker.py": "5afd66706db4f6d524b693161774d81eced2f96dc97175c995fad2d8f9cf05cc",
+      "src/orze/engine/evaluator.py": "24e639709f7465aae1d4348b8c5be7bf184c30dfe0cec22e0f32e96722cc1940",
+      "src/orze/engine/native_evaluation.py": "251d8df2dbdfff45927012acd1cc3daf6ff8dbff27c8c4a192a66952f1675b08",
+      "src/orze/engine/observation_publication.py": "d97d8fd2c6ffb57e3cd5dbd5d6a5db4e268b5fb0314c91d1ef12bb8ea97d1f1e"
+    },
+    "post_run_source_hashes": {
+      "src/orze/engine/supervised_process.py": "6c9532709481c0bdd44b5b9e58c32f24875b7fb1668715f2bdb60ed1feffdb42",
+      "src/orze/engine/supervisor_worker.py": "5afd66706db4f6d524b693161774d81eced2f96dc97175c995fad2d8f9cf05cc",
+      "src/orze/engine/evaluator.py": "24e639709f7465aae1d4348b8c5be7bf184c30dfe0cec22e0f32e96722cc1940",
+      "src/orze/engine/native_evaluation.py": "251d8df2dbdfff45927012acd1cc3daf6ff8dbff27c8c4a192a66952f1675b08",
+      "src/orze/engine/observation_publication.py": "d97d8fd2c6ffb57e3cd5dbd5d6a5db4e268b5fb0314c91d1ef12bb8ea97d1f1e"
+    },
+    "matched_source_count": 5,
+    "additional_post_run_hashes": {
+      "src/orze/engine/evaluation_supervision.py": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485",
+      "src/orze/engine/process.py": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+      "tests/supervision_fixture.py": "9b01b078f181cc1325905ca1d1e9d1f18f5a3527c5b1bb03a2d340ec0350dba7",
+      "tests/test_observation_snapshot_contract.py": "a434a4f67d9e8af4fccdd5a4c1cff12e6ceebc63e28e2a9315e589f63bc8a51a"
+    },
+    "classification": "Candidate source only, not final freeze/full-suite evidence. The migrated fixture restores the real supervisor; these five use real worker/daemon processes, not simulated closure.",
+    "running_test_sessions_at_report_update": []
+  },
+  "final_green": null,
+  "limits": [
+    "Three entrypoints establish one natural-exit ownership gap; they are not three independent root-cause claims.",
+    "Only native evaluation launch/publication is in C2a scope. Training natural completion, posthoc, pre/post scripts, roles/director and restart recovery remain separate.",
+    "No new supervision API is referenced to create a historical failure. Supervisor protocol faults are later new-mechanism tests.",
+    "No paid provider, GPU execution, holdout access, network workload, real research campaign or scientific-efficiency claim.",
+    "Root owns complete-source inventory, full suites and remote verification. This report records baseline behavior, versioned fixture evidence and source-matched bounded CPU runs, not a whole-repository final acceptance."
+  ],
+  "shutdown_mechanisms": {
+    "classification": "Three new C2a protocol/caller mechanisms, not historical old-API behavior reds.",
+    "test_path": "tests/test_evaluation_supervision_shutdown.py",
+    "test_sha256": "4ae1848681e3c31d18e17addc0c3e76721afc40e7c1370a6171c4788b7c38e0b",
+    "shared_cpu_fixture_sha256": "a4eb67edd8da6f821bd74690acc03117cdf4a9d4b92c2336e560184d712ae03e",
+    "cases": 3,
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_evaluation_supervision_shutdown.py --tb=short",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "initial_draft": {
+      "test_sha256": "e5638c03c687c99bf5e90c5d46b265b01b4677230dc3b8ad7fcaea5356ca3450",
+      "complete_snapshot": "docs/evidence/snapshots/v1-05c2a-shutdown-test-initial.py",
+      "snapshot_sha256": "e5638c03c687c99bf5e90c5d46b265b01b4677230dc3b8ad7fcaea5356ca3450",
+      "exit_code": 1,
+      "footer": "1 failed, 2 passed in 2.36s",
+      "session_id": 39456,
+      "session_state": "completed",
+      "classification": "Incorrect assertion in an unfrozen new test, not a product failure. Shutdown had returned True and the daemon was already stopped; the test wrongly required forced_cleanup=True. supervisor_worker sets that field only when SIGKILL escalation actually signals a child, whereas this ordinary fixture exits on SIGTERM. stop_requested=True is the relevant shutdown fact.",
+      "correction": "Require stop_requested=True and an exact boolean forced_cleanup field, while retaining all shutdown/interrupted/worker0/zero-observation assertions. Only the new owned test changed; production and earlier frozen tests did not.",
+      "product_red_count": 0
+    },
+    "green": {
+      "exit_code": 0,
+      "footer": "3 passed in 2.34s",
+      "session_id": 92420,
+      "session_state": "completed",
+      "epoch_pre_source_hashes": {
+        "src/orze/engine/shutdown_publication.py": "9e17e66e4480cb14edda2dde6c0b36712831d72aaf95fd302fbc58e131f71026",
+        "src/orze/engine/lifecycle.py": "4ea8b94e16928403f4bf8298f3319e68717af22b932516dcdbc110c2a12a50eb",
+        "src/orze/engine/termination_hold.py": "55a04a8ab701613236c260f6d014bc4e2222c1c7cee7015664ea921e8bdba82f",
+        "src/orze/engine/process.py": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+        "src/orze/engine/supervised_process.py": "6c9532709481c0bdd44b5b9e58c32f24875b7fb1668715f2bdb60ed1feffdb42",
+        "src/orze/engine/supervisor_worker.py": "5afd66706db4f6d524b693161774d81eced2f96dc97175c995fad2d8f9cf05cc",
+        "src/orze/engine/evaluator.py": "33e50632a1a1e48325572f92d4bee6b71d3b120b686077d8978f0d7a6307891c",
+        "src/orze/engine/native_evaluation.py": "251d8df2dbdfff45927012acd1cc3daf6ff8dbff27c8c4a192a66952f1675b08",
+        "src/orze/engine/evaluation_supervision.py": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485",
+        "src/orze/engine/observation_publication.py": "d97d8fd2c6ffb57e3cd5dbd5d6a5db4e268b5fb0314c91d1ef12bb8ea97d1f1e"
+      },
+      "epoch_post_source_hashes": {
+        "src/orze/engine/shutdown_publication.py": "9e17e66e4480cb14edda2dde6c0b36712831d72aaf95fd302fbc58e131f71026",
+        "src/orze/engine/lifecycle.py": "4ea8b94e16928403f4bf8298f3319e68717af22b932516dcdbc110c2a12a50eb",
+        "src/orze/engine/termination_hold.py": "55a04a8ab701613236c260f6d014bc4e2222c1c7cee7015664ea921e8bdba82f",
+        "src/orze/engine/process.py": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+        "src/orze/engine/supervised_process.py": "6c9532709481c0bdd44b5b9e58c32f24875b7fb1668715f2bdb60ed1feffdb42",
+        "src/orze/engine/supervisor_worker.py": "5afd66706db4f6d524b693161774d81eced2f96dc97175c995fad2d8f9cf05cc",
+        "src/orze/engine/evaluator.py": "33e50632a1a1e48325572f92d4bee6b71d3b120b686077d8978f0d7a6307891c",
+        "src/orze/engine/native_evaluation.py": "251d8df2dbdfff45927012acd1cc3daf6ff8dbff27c8c4a192a66952f1675b08",
+        "src/orze/engine/evaluation_supervision.py": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485",
+        "src/orze/engine/observation_publication.py": "d97d8fd2c6ffb57e3cd5dbd5d6a5db4e268b5fb0314c91d1ef12bb8ea97d1f1e"
+      },
+      "hash_window": "Ten source hashes captured before the initial trial and rechecked after both trials; all exact. This candidate epoch includes evaluator33e50632 after READY/GO validation changes, distinct from the earlier CPU5 candidate24e63970.",
+      "source_hashes_equal": true,
+      "production_fixes_required": false,
+      "classification": "First complete passing run of the corrected, frozen new mechanisms. Not final full-suite acceptance."
+    },
+    "cases_detail": [
+      {
+        "name": "test_actual_shutdown_callback_closes_detached_writer_before_interrupted_terminal",
+        "evidence": "Actual handle_shutdown calls Mock(wraps=lifecycle._stop_for_shutdown), which runs the real terminate_execution and supervised reaper adapter. Exact daemon pidfd closes before compute publication; process_tree equals the validated TREE_CLOSED receipt, D1 request/confirmation hash agrees, effect receipt is closed, SQL terminal is interrupted with original worker0, global/eval stage failed, training stage complete and no artifact/observation is registered."
+      },
+      {
+        "name": "test_shutdown_rejects_changed_persistent_nonce_before_any_stop_call",
+        "evidence": "Actual SQLite binding nonce is changed; handle_shutdown returns False before the wrapped real stop callback is called. Exact daemon remains alive, native row/stage/files remain byte/value equal and there are no publications. No host process is touched by the rejected call."
+      },
+      {
+        "name": "test_killed_own_supervisor_keeps_live_writer_and_active_native_attempt_in_hold",
+        "evidence": "Only a dup of this handle's captured supervisor_pidfd is signalled with SIGKILL. Actual check_active_evals raises TerminationUnconfirmed, latches the handle and retains active/current RUNNING state with unchanged files and no terminal/artifact/observation. Fixture finally cleans only its already captured own process pidfds and exact adopted daemon PID."
+      }
+    ],
+    "scope_limits": [
+      "Uses actual handle_shutdown and its actual lifecycle stop callback, not the whole graceful_shutdown outer controller loop.",
+      "Training setup remains the established B1/B2 OS/GPU-double fixture; evaluation supervisor and descendants are real CPU processes.",
+      "No host process scan or numeric group signalling. No holdout/GPU/provider execution.",
+      "Does not claim supervisor-loss automatic recovery, successful scientific evaluation after forced stop, or completed C2 coverage for training/posthoc/scripts."
+    ]
+  },
+  "final_bounded": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_eval_tree_completion.py tests/test_evaluation_supervision_shutdown.py --tb=short",
+    "exit_code": 0,
+    "footer": "8 passed in 11.42s",
+    "session_id": 13116,
+    "session_state": "completed",
+    "classification": "Source-specific bounded final CPU evaluation/shutdown verification, not whole-suite final acceptance. Root subsequently reopened a test-fixture-only epoch; these unchanged production and real-CPU test hashes remain the exact scope of this result.",
+    "pre_run_source_hashes": {
+      "src/orze/engine/shutdown_publication.py": "9e17e66e4480cb14edda2dde6c0b36712831d72aaf95fd302fbc58e131f71026",
+      "src/orze/engine/lifecycle.py": "4ea8b94e16928403f4bf8298f3319e68717af22b932516dcdbc110c2a12a50eb",
+      "src/orze/engine/termination_hold.py": "55a04a8ab701613236c260f6d014bc4e2222c1c7cee7015664ea921e8bdba82f",
+      "src/orze/engine/process.py": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+      "src/orze/engine/supervised_process.py": "6c9532709481c0bdd44b5b9e58c32f24875b7fb1668715f2bdb60ed1feffdb42",
+      "src/orze/engine/supervisor_worker.py": "5afd66706db4f6d524b693161774d81eced2f96dc97175c995fad2d8f9cf05cc",
+      "src/orze/engine/evaluator.py": "33e50632a1a1e48325572f92d4bee6b71d3b120b686077d8978f0d7a6307891c",
+      "src/orze/engine/native_evaluation.py": "251d8df2dbdfff45927012acd1cc3daf6ff8dbff27c8c4a192a66952f1675b08",
+      "src/orze/engine/evaluation_supervision.py": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485",
+      "src/orze/engine/observation_publication.py": "d97d8fd2c6ffb57e3cd5dbd5d6a5db4e268b5fb0314c91d1ef12bb8ea97d1f1e"
+    },
+    "post_run_source_hashes": {
+      "src/orze/engine/shutdown_publication.py": "9e17e66e4480cb14edda2dde6c0b36712831d72aaf95fd302fbc58e131f71026",
+      "src/orze/engine/lifecycle.py": "4ea8b94e16928403f4bf8298f3319e68717af22b932516dcdbc110c2a12a50eb",
+      "src/orze/engine/termination_hold.py": "55a04a8ab701613236c260f6d014bc4e2222c1c7cee7015664ea921e8bdba82f",
+      "src/orze/engine/process.py": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+      "src/orze/engine/supervised_process.py": "6c9532709481c0bdd44b5b9e58c32f24875b7fb1668715f2bdb60ed1feffdb42",
+      "src/orze/engine/supervisor_worker.py": "5afd66706db4f6d524b693161774d81eced2f96dc97175c995fad2d8f9cf05cc",
+      "src/orze/engine/evaluator.py": "33e50632a1a1e48325572f92d4bee6b71d3b120b686077d8978f0d7a6307891c",
+      "src/orze/engine/native_evaluation.py": "251d8df2dbdfff45927012acd1cc3daf6ff8dbff27c8c4a192a66952f1675b08",
+      "src/orze/engine/evaluation_supervision.py": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485",
+      "src/orze/engine/observation_publication.py": "d97d8fd2c6ffb57e3cd5dbd5d6a5db4e268b5fb0314c91d1ef12bb8ea97d1f1e"
+    },
+    "matched_source_count": 10,
+    "test_hashes": {
+      "tests/test_native_eval_tree_completion.py": "a4eb67edd8da6f821bd74690acc03117cdf4a9d4b92c2336e560184d712ae03e",
+      "tests/test_evaluation_supervision_shutdown.py": "4ae1848681e3c31d18e17addc0c3e76721afc40e7c1370a6171c4788b7c38e0b"
+    },
+    "test_hashes_equal_pre_post": true,
+    "historical_runs_preserved": "Candidate CPU5 at evaluator24e63970 and shutdown3 initial/corrected runs remain above; this rerun adds no new historical behavior-red count.",
+    "documentation_review": {
+      "path": "docs/native-evaluation-supervision.md",
+      "sha256": "07187f76d91a4e0d5554613f59d9d49411d8f48868db1be37c49359d8b039675",
+      "full_text_read": true,
+      "conclusion": "Launch step3 is explicitly limited to prepared launch inputs and controller integrity. It does not claim complete legacy script/content pinning. Native-only, Linux ownership, real worker PID, HOLD on uncertain closure and unfinished training/script/restart scope are explicit."
+    },
+    "running_test_sessions_at_update": []
+  }
+}

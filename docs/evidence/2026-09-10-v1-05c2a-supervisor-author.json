@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2a",
+  "owner": "core_review",
+  "status": "author_candidate_frozen_pending_integrated_review",
+  "base_core_head": "fd24ea2586db4b36b42ace55f20708923169886d",
+  "scope": "New Linux subreaper primitives only. Parent owns native evaluation integration. No training/lineage migration, recovery adoption, real GPU/provider, or holdout access.",
+  "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "candidate_sources": {
+    "src/orze/engine/supervised_process.py": "6c9532709481c0bdd44b5b9e58c32f24875b7fb1668715f2bdb60ed1feffdb42",
+    "src/orze/engine/supervisor_worker.py": "5afd66706db4f6d524b693161774d81eced2f96dc97175c995fad2d8f9cf05cc"
+  },
+  "tests": {
+    "tests/test_supervised_process.py": {
+      "sha256": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+      "cases": 10,
+      "classification": "New API mechanisms; no release behavior/API-absence red claim",
+      "first_run": "10 passed in 1.17s, exit 0",
+      "coverage": [
+        "READY blocks actual worker before exec; actual worker PID and detached identity",
+        "actual worker exit 0 / 7 / -SIGTERM without transport-code substitution",
+        "real quick double fork and setsid: adopted helper finishes naturally before ECHILD_WALL",
+        "STOP after leader zero preserves zero and separately records forced cleanup",
+        "private socket does not survive worker exec; supplied lease fd does",
+        "supervisor SIGKILL yields uncertainty, never failed integer",
+        "unsupported platform rejected before subprocess",
+        "post-spawn setup send failure carries provisional handle"
+      ]
+    },
+    "tests/test_supervisor_preparation_handoff.py": {
+      "sha256": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+      "cases": 3,
+      "classification": "New-draft exception-routing defects; not released bugs",
+      "classification_detail": "First two actually Popen a tiny CPU supervisor before injected close/constructor failure. Third stubs fork and verifies owned drain routing, not a real OS tree-closure proof.",
+      "first_run": "3 failed in 0.35s; shell also ran sha256sum so overall shell exit was 0. Independent pytest-only rerun: 3 failed in 0.34s, exit 1.",
+      "snapshots": {
+        "docs/evidence/snapshots/v1-05c2a-before-supervised-preparation-handoff.py": "3b00513a78977d28a9d1ee5fb9fbb23178ac23cd3182d779f118e45f9efa879e",
+        "docs/evidence/snapshots/v1-05c2a-before-supervisor-fork-handoff.py": "571507f54b06c07a1e015537a8ad87541e66c2efb07a3ce7d377734554a0f88e"
+      },
+      "snapshot_provenance": "Both complete files captured directly before handoff repair via apply_patch; SHA equals observed first candidate source. Not reconstructed after repair.",
+      "fixed_snapshot_replay": "3 failed in 0.23s, exit 1",
+      "repair": "Prepare fallback handle before Popen. All post-Popen close/construction/READY exceptions carry the actual owner as SupervisionUncertain. Cleanup exceptions do not mask it; stable error suppresses original exception chaining. Post-fork read-gate close is in owned emergency-drain scope."
+    }
+  },
+  "commands": {
+    "first_mechanisms": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_supervised_process.py --tb=short",
+    "handoff_red": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_supervisor_preparation_handoff.py --tb=short",
+    "handoff_replay": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.engine import supervisor_worker, supervised_process\nfor module, name in ((supervisor_worker, 'v1-05c2a-before-supervisor-fork-handoff.py'), (supervised_process, 'v1-05c2a-before-supervised-preparation-handoff.py')):\n    snapshot = Path('docs/evidence/snapshots') / name\n    exec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_supervisor_preparation_handoff.py', '--tb=short']))\nPY",
+    "candidate_target": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py --tb=short"
+  },
+  "candidate_target_result": {
+    "passed": 13,
+    "failed": 0,
+    "seconds": 1.32,
+    "exit_code": 0,
+    "test_hashes_unchanged": true
+  },
+  "recording_notes": [
+    "An initial source insertion joined the PROTOCOL and WALL declarations and py_compile caught SyntaxError. Corrected before the first test run; mechanical editing error, not a product red.",
+    "Original 10 and subsequent handoff 3 have not been edited after their recorded freeze.",
+    "Integrated evaluator old-red tests and parent adapter tests are separate evidence, not added to these counts.",
+    "No whole-suite or final source epoch claim in this candidate report."
+  ],
+  "protocol": {
+    "prepare": "Linux support probe before Popen; supervisor sets subreaper and forks blocked worker before READY. Caller durably binds identity then explicitly starts.",
+    "pid": "Public pid is real worker PID, separate supervisor identity and retained supervisor pidfd.",
+    "closure": "Integer status requires matching TREE_CLOSED plus supervisor exit 0. WNOHANG=0 is pending, not ECHILD. Sole supervisor waitpid owner uses __WALL.",
+    "stopping": "Only private STOP or channel loss triggers cleanup; pidfd signals target verified direct/adopted children. No PGID/raw PID fallback. Natural useful descendants are not automatically killed.",
+    "lease": "Supplied lease fds survive worker exec and are retained by supervisor until tree closure; IPC/gate fds are not exec-inherited.",
+    "outcome": "Worker returncode remains actual status; stop_requested/forced_cleanup are separate facts. Native adapter must not promote stopped leader-0 to success.",
+    "uncertainty": "Post-Popen setup errors and supervisor/channel loss are not NOT_STARTED or ordinary failed exit. No crash adoption or automatic restart authority."
+  },
+  "linux_evidence": {
+    "local_python": "3.10.12",
+    "platform": "linux",
+    "python_has_pidfd_open": true,
+    "python_has_pidfd_send_signal": true,
+    "local_header": "/usr/include/linux/wait.h:13 #define __WALL 0x40000000",
+    "primary_sources": [
+      {
+        "url": "https://man7.org/linux/man-pages/man2/PR_SET_CHILD_SUBREAPER.2const.html",
+        "checked": "Nearest living subreaper adopts orphan descendants and can wait for them; flag not inherited by fork/clone, preserved across exec."
+      },
+      {
+        "url": "https://man7.org/linux/man-pages/man2/pidfd_open.2.html",
+        "checked": "Stable child reference relies on no explicit SIGCHLD ignore / NOCLDWAIT and no separate reaper; supervisor single thread sets SIGCHLD default."
+      },
+      {
+        "url": "https://man7.org/linux/man-pages/man2/pidfd_send_signal.2.html",
+        "checked": "Signals use stable pidfds instead of PID reuse-prone numbers."
+      }
+    ],
+    "waitpid_fetch_note": "This turn's waitpid.2 and wait.2 web opens timed out. __WALL was checked in the local Linux UAPI header, and actual Linux process tests exercise waitpid(-1,WNOHANG|__WALL)."
+  },
+  "limits": [
+    "Linux only; no unsafe non-Linux/pidfd fallback",
+    "Private setup frame <= 1 MiB; identity <= 16 KiB; no cmd/env/raw nonce in persistent binding or process argv",
+    "Not hostile same-UID or namespace sandbox; no host process-table kill scan",
+    "Unkillable/unconfirmed owned descendants retain supervisor/lease and caller HOLD",
+    "No recovery adoption or durable supervisor-side receipt store; parent must persist accepted closure with terminal effect",
+    "No guarantees for legacy unsupervised evaluation or training/lineage in this slice"
+  ]
+}

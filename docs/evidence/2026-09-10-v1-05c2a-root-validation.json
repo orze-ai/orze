@@ -1,0 +1,278 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2a",
+  "reviewer": "root",
+  "status": "final_source_mechanisms_verified",
+  "core_code_commit": "937c3b352948f0fb683b89dd0cd84ea84d089636",
+  "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "freeze_utc": "2026-09-10 20:14:52 UTC",
+  "post_check_utc": "2026-09-10 20:22:08 UTC",
+  "new_tests": {
+    "total": 40,
+    "old_public_behavior_reds": 3,
+    "old_positive_controls": 2,
+    "new_mechanisms": 29,
+    "new_draft_defects": 6,
+    "note": "The three old failures are three entrypoints into one natural-exit ownership gap, not three independent root causes. New API/mechanism tests and test-fixture errors are not historical product bugs.",
+    "files": [
+      {
+        "path": "tests/test_evaluation_ready_go_attestation.py",
+        "sha256": "c1a769a70b4429c5d1b6735fb6684b757be8dfd12254dc4be6c5297e525d161c"
+      },
+      {
+        "path": "tests/test_evaluation_ready_go_boundary.py",
+        "sha256": "30a57eb26b5afe44b593aa66171debedaa9dc099d36ed6cf50e2c9448740f7ac"
+      },
+      {
+        "path": "tests/test_evaluation_supervision_binding.py",
+        "sha256": "e695ef536a80065d8ce22bf46c232ac50bbb930939606e5c1a25de29be2a305a"
+      },
+      {
+        "path": "tests/test_evaluation_supervision_protocol.py",
+        "sha256": "8b5f4b67d5dd1ff504814485efd5a088b616591a2a3384377b7549afa3251731"
+      },
+      {
+        "path": "tests/test_evaluation_supervision_shutdown.py",
+        "sha256": "4ae1848681e3c31d18e17addc0c3e76721afc40e7c1370a6171c4788b7c38e0b"
+      },
+      {
+        "path": "tests/test_native_eval_tree_completion.py",
+        "sha256": "a4eb67edd8da6f821bd74690acc03117cdf4a9d4b92c2336e560184d712ae03e"
+      },
+      {
+        "path": "tests/test_supervised_process.py",
+        "sha256": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0"
+      },
+      {
+        "path": "tests/test_supervisor_preparation_handoff.py",
+        "sha256": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77"
+      }
+    ],
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_evaluation_supervision_binding.py tests/test_native_eval_tree_completion.py tests/test_evaluation_supervision_protocol.py tests/test_evaluation_ready_go_boundary.py tests/test_evaluation_ready_go_attestation.py tests/test_evaluation_supervision_shutdown.py --tb=short",
+    "exit_code": 0,
+    "summary": "40 passed in 19.53s",
+    "root_unit_scope": "13 binding/proof cases use an explicit protocol-double subclass, not OS/SQLite/publication proof. Actual CPU and native publication evidence is separately identified in the independent reports."
+  },
+  "fixture_migration": {
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,subprocess\nfrom pathlib import Path\npaths=[\"tests/test_completion_event_authority.py\",\"tests/test_eval_completion_source_contract.py\",\"tests/test_eval_existing_output_contract.py\",\"tests/test_eval_failure_marker_io.py\",\"tests/test_eval_reconciliation_safety.py\",\"tests/test_eval_retry_artifacts.py\",\"tests/test_eval_retry_benchmark.py\",\"tests/test_eval_retry_execution.py\",\"tests/test_eval_terminal_boundaries.py\",\"tests/test_evaluation_termination_authority.py\",\"tests/test_execution_native_watch.py\",\"tests/test_observation_snapshot_contract.py\",\"tests/test_stale_evaluation_completion.py\"]\nassert len(paths)==13\nfiles=[]; assertions=mock_calls=0\nfor path in paths:\n old=subprocess.check_output(['git','show','fd24ea2586db4b36b42ace55f20708923169886d:'+path]); new=Path(path).read_bytes(); snapshot=Path('docs/evidence/snapshots/v1-05c2a-before-fixture-'+Path(path).name).read_bytes()\n assert old==snapshot,path\n ot,nt=old.decode(),new.decode(); oa,na=ast.parse(ot),ast.parse(nt)\n aa=lambda tree:[ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Assert)]\n mm=lambda tree,source:[ast.get_source_segment(source,n) for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr.startswith('assert')]\n assert aa(oa)==aa(na),path\n assert mm(oa,ot)==mm(na,nt),path\n assertions+=len(aa(oa)); mock_calls+=len(mm(oa,ot))\n files.append({'path':path,'baseline_sha256':hashlib.sha256(old).hexdigest(),'current_sha256':hashlib.sha256(new).hexdigest()})\nassert assertions==437 and mock_calls==72\nprint(json.dumps({'files':files,'complete_snapshots_exact':13,'assert_ast_unchanged':assertions,'mock_assert_calls_source_unchanged':mock_calls},indent=2))\nPY",
+    "exit_code": 0,
+    "result": {
+      "files": [
+        {
+          "path": "tests/test_completion_event_authority.py",
+          "baseline_sha256": "33c3376043c9353d00a1c1752aa3dd535e3ebf7ce6e17a15db458bc754e4d4fc",
+          "current_sha256": "9de206b5b0b3caf7b3b3a61ff2f763b37984798009a01241a879d0751bbd6bbc"
+        },
+        {
+          "path": "tests/test_eval_completion_source_contract.py",
+          "baseline_sha256": "4bf14707da22f43238fbce0553111dceb5da7959d80935fca1f0f4f7079a80d3",
+          "current_sha256": "b1f31449c6fc2e647dbb62306be01002340c0b5f5d9043b9fe6dae4125c27f96"
+        },
+        {
+          "path": "tests/test_eval_existing_output_contract.py",
+          "baseline_sha256": "64906220aaef06a887962f50a99247f3399530cab2e31ded235ffaae23488aab",
+          "current_sha256": "c64e60daa0888936c4b4da8854f241eb3102dbcfe4ba5445a7451a2b0fb3f062"
+        },
+        {
+          "path": "tests/test_eval_failure_marker_io.py",
+          "baseline_sha256": "ee33ebefee795177bef2bb87372122d87d1aae6a0f3979c95191bce35f3310d7",
+          "current_sha256": "bd29383449218b116f324213b730a037c04df5d423e221979f791176b7a152ef"
+        },
+        {
+          "path": "tests/test_eval_reconciliation_safety.py",
+          "baseline_sha256": "2be2a84769dc244e7b23adc841cd370850ab1352fdfda88706e8ae700fb86bb4",
+          "current_sha256": "87b883e865525e07a023b0f7f1b1dd6a3af80bb1faa240112083876209e4bd23"
+        },
+        {
+          "path": "tests/test_eval_retry_artifacts.py",
+          "baseline_sha256": "f12ae66bdc1b741db67c76b862c6684d58d91772af5a7fc8c6e37187a71a3765",
+          "current_sha256": "f9fa4403a5061370bb0983a2d37c7399231cba47d992ffaf4e11a2dee88a02dc"
+        },
+        {
+          "path": "tests/test_eval_retry_benchmark.py",
+          "baseline_sha256": "c4b4155f3140ac009546f3473feb88f71d6c912c8fadf58c988a7e9efbdf42ba",
+          "current_sha256": "1a52e97f5e2491d26b1e867cbdd98d70d08752d674ce469c61ac0e763e0cefb8"
+        },
+        {
+          "path": "tests/test_eval_retry_execution.py",
+          "baseline_sha256": "1b99178b9d6371ff879b622e69f0eaf8ba45f3025b26664affc601e093668df3",
+          "current_sha256": "bd198294888d0cc9cb132ec17d362ccbdfb92e92fbc5f90fcaea2cf708b0f2b1"
+        },
+        {
+          "path": "tests/test_eval_terminal_boundaries.py",
+          "baseline_sha256": "f264f754d6561199ea6716598d16e1aa1abb708c3869f593ceea2956c47e5d87",
+          "current_sha256": "eaa911525414bc859a8854dfb3c6c18741f58cc0837d2c7e7a2a9240e6796858"
+        },
+        {
+          "path": "tests/test_evaluation_termination_authority.py",
+          "baseline_sha256": "3f0bb33e28e1167e2cce044771ad4e3bf0787018a7e6a89208c52dc53bd6ef65",
+          "current_sha256": "4d2bfef6c4d236c85dbdc61ed7d4f95af1f269872213da449968c7af5781806a"
+        },
+        {
+          "path": "tests/test_execution_native_watch.py",
+          "baseline_sha256": "b1488877332b4424d430d3962f85c2e2c540e3c0ed383fcd56fb5ab184450498",
+          "current_sha256": "37ad5d44078022040cf802d7ee40fb2a90f5edcd20919cd4f02b04cf5eeb44fb"
+        },
+        {
+          "path": "tests/test_observation_snapshot_contract.py",
+          "baseline_sha256": "835c42fddbf39fc5714d177c4f8acbfa540af74666900a331fa878d48add552c",
+          "current_sha256": "a434a4f67d9e8af4fccdd5a4c1cff12e6ceebc63e28e2a9315e589f63bc8a51a"
+        },
+        {
+          "path": "tests/test_stale_evaluation_completion.py",
+          "baseline_sha256": "3e0435c9a434c5356ab23f52c4b42d7c16f98eca98579cb011389340f105dbbe",
+          "current_sha256": "3cf5112075ea7c184c624ed5c52c88a280c836d5ed6dd9d37667ce558ce9fa34"
+        }
+      ],
+      "complete_snapshots_exact": 13,
+      "assert_ast_unchanged": 437,
+      "mock_assert_calls_source_unchanged": 72
+    },
+    "direct_thirteenth_command_executed_from_independent_json": true,
+    "direct_thirteenth_exit_code": 0,
+    "semantics": "12 explicit import/install pairs around old fake-Popen fixtures; 1 explicit direct protocol-double wrap around an old started API test. Original SQL trigger and start.json assertion preserved. No autouse/production fallback. Real CPU fixture explicitly restores production prepare and Popen.",
+    "reproducibility": "This root audit uses an explicit 13-file list and remains runnable after commit. Earlier independent git-diff discovery commands record their actual historical dirty-worktree epochs, not a clean-tree replay interface.",
+    "excluded_fixture_failures": [
+      "Initial four-file migration scan: 29 failed, 33 passed in 10.05s; then 62 passed in 12.48s.",
+      "Sixteen-file migration scan: 35 failed, 212 passed, 1 skipped in 32.18s; then 247 passed, 1 skipped in 33.13s.",
+      "Missing local install and simulated-handle copy recursion: 3 failed, 8 passed in 9.29s; corrected target 50 passed in 19.25s; independent 16 passed in 7.65s.",
+      "Direct started fake handle: 1 failed, 1 passed in 1.02s; corrected target 19 passed in 3.60s; independent 7 passed in 4.80s."
+    ],
+    "unchanged_real_cpu_asserts": 34,
+    "original_real_cpu_fixture_sha256": "d447461d5693e5d49b46b35a72942ceb76641cbbb4aecaaa487eb7d040fbde17"
+  },
+  "report_validation": {
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,re,shlex\nfrom pathlib import Path\npaths=[\"docs/evidence/2026-09-10-v1-05c2a-fixture-migration-review.json\",\"docs/evidence/2026-09-10-v1-05c2a-native-eval-tree-review.json\",\"docs/evidence/2026-09-10-v1-05c2a-ready-go-review.json\",\"docs/evidence/2026-09-10-v1-05c2a-supervision-protocol-review.json\",\"docs/evidence/2026-09-10-v1-05c2a-supervisor-author.json\"]\nresults=[]; unique={}\nfor name in paths:\n path=Path(name); data=json.loads(path.read_bytes()); commands=[]; snapshots={}\n def walk(value):\n  if isinstance(value,dict):\n   for key,item in value.items():\n    if key.startswith('docs/evidence/snapshots/') and isinstance(item,str) and re.fullmatch('[0-9a-f]{64}',item): snapshots[key]=item\n    if isinstance(item,str) and item.startswith('docs/evidence/snapshots/'):\n     digest=value.get(key+'_sha256')\n     if key=='path': digest=value.get('sha256')\n     if key=='complete_snapshot': digest=value.get('snapshot_sha256')\n     if key=='before_snapshot': digest=value.get('before_sha256')\n     if digest is not None: snapshots[item]=digest\n    walk(item)\n  elif isinstance(value,list):\n   for item in value: walk(item)\n  elif isinstance(value,str) and (value.startswith('PYTHONDONTWRITEBYTECODE=') or value.startswith('python3 -c ')): commands.append(value)\n walk(data)\n for cmd in commands:\n  parts=shlex.split(cmd)\n  if '<<' in cmd: ast.parse(cmd.split('\\n',1)[1].rsplit('\\nPY',1)[0])\n  elif '-c' in parts: ast.parse(parts[parts.index('-c')+1])\n for name,digest in snapshots.items():\n  raw=Path(name).read_bytes(); actual=hashlib.sha256(raw).hexdigest()\n  assert actual==digest,(name,actual,digest)\n  ast.parse(raw); unique[name]=digest\n results.append({'path':str(path),'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'commands_parsed':len(commands),'snapshot_links_hash_matched':len(snapshots)})\nactual={str(p) for p in Path('docs/evidence/snapshots').glob('v1-05c2a-*.py')}\nassert actual==set(unique),(actual-set(unique),set(unique)-actual)\nassert len(unique)==24\nprint(json.dumps({'reports':results,'unique_snapshots_hash_matched':len(unique),'snapshot_scope':'23 complete files and 1 complete started function, not 24 complete modules','snapshots':unique},indent=2))\nPY",
+    "exit_code": 0,
+    "reports": [
+      {
+        "path": "docs/evidence/2026-09-10-v1-05c2a-fixture-migration-review.json",
+        "sha256": "e0cff8d193c98f42f00968fef0dafdb02902ef767e39378033ca3d607d4d5570",
+        "commands_parsed": 5,
+        "snapshot_links_hash_matched": 15
+      },
+      {
+        "path": "docs/evidence/2026-09-10-v1-05c2a-native-eval-tree-review.json",
+        "sha256": "620eae91f2ffd8b878379485497eedab381897951997e866483153b8b3f5e0c5",
+        "commands_parsed": 7,
+        "snapshot_links_hash_matched": 6
+      },
+      {
+        "path": "docs/evidence/2026-09-10-v1-05c2a-ready-go-review.json",
+        "sha256": "5ac5cbac796af7026800e41d00c03ff0dc7ae7a33998e65d27fd6db6474e364d",
+        "commands_parsed": 4,
+        "snapshot_links_hash_matched": 1
+      },
+      {
+        "path": "docs/evidence/2026-09-10-v1-05c2a-supervision-protocol-review.json",
+        "sha256": "de7856af22535ffeb20af7926d27837ae21001b2fe6d7420d00d41e9f9a3042d",
+        "commands_parsed": 4,
+        "snapshot_links_hash_matched": 1
+      },
+      {
+        "path": "docs/evidence/2026-09-10-v1-05c2a-supervisor-author.json",
+        "sha256": "7e54c28375715361de7f91cb436ed65530e0943acf4f2e228e203dca513bc682",
+        "commands_parsed": 4,
+        "snapshot_links_hash_matched": 2
+      }
+    ],
+    "unique_snapshots_hash_matched": 24,
+    "snapshot_scope": "23 complete files and 1 complete started function, not 24 complete modules",
+    "snapshots": {
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_eval_completion_source_contract.py": "4bf14707da22f43238fbce0553111dceb5da7959d80935fca1f0f4f7079a80d3",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_eval_existing_output_contract.py": "64906220aaef06a887962f50a99247f3399530cab2e31ded235ffaae23488aab",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_eval_failure_marker_io.py": "ee33ebefee795177bef2bb87372122d87d1aae6a0f3979c95191bce35f3310d7",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_eval_reconciliation_safety.py": "2be2a84769dc244e7b23adc841cd370850ab1352fdfda88706e8ae700fb86bb4",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_eval_retry_artifacts.py": "f12ae66bdc1b741db67c76b862c6684d58d91772af5a7fc8c6e37187a71a3765",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_eval_retry_benchmark.py": "c4b4155f3140ac009546f3473feb88f71d6c912c8fadf58c988a7e9efbdf42ba",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_eval_retry_execution.py": "1b99178b9d6371ff879b622e69f0eaf8ba45f3025b26664affc601e093668df3",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_eval_terminal_boundaries.py": "f264f754d6561199ea6716598d16e1aa1abb708c3869f593ceea2956c47e5d87",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_evaluation_termination_authority.py": "3f0bb33e28e1167e2cce044771ad4e3bf0787018a7e6a89208c52dc53bd6ef65",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_observation_snapshot_contract.py": "835c42fddbf39fc5714d177c4f8acbfa540af74666900a331fa878d48add552c",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_stale_evaluation_completion.py": "3e0435c9a434c5356ab23f52c4b42d7c16f98eca98579cb011389340f105dbbe",
+      "docs/evidence/snapshots/v1-05c2a-native-eval-tree-fixture-v1.py": "d447461d5693e5d49b46b35a72942ceb76641cbbb4aecaaa487eb7d040fbde17",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_completion_event_authority.py": "33c3376043c9353d00a1c1752aa3dd535e3ebf7ce6e17a15db458bc754e4d4fc",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-copy-supervision_fixture.py": "9b01b078f181cc1325905ca1d1e9d1f18f5a3527c5b1bb03a2d340ec0350dba7",
+      "docs/evidence/snapshots/v1-05c2a-before-fixture-test_execution_native_watch.py": "b1488877332b4424d430d3962f85c2e2c540e3c0ed383fcd56fb5ab184450498",
+      "docs/evidence/snapshots/v1-05c2a-before-native-eval-tree-evaluator.py": "bc3f7bc6085986265fc1b32542624a9de621803ca48141fc61b5b77fff6394e6",
+      "docs/evidence/snapshots/v1-05c2a-before-native-eval-tree-native-evaluation.py": "2910b240677dcdf776b0f44c61e0fd8a62ba68be4c98feb7d41f8aa5f9651f79",
+      "docs/evidence/snapshots/v1-05c2a-before-native-eval-tree-observation-publication.py": "f6cd2e67b39d202f86c81dc1cbe331db3c4e5ce9100ab007bb763c524b0cc66e",
+      "docs/evidence/snapshots/v1-05c2a-before-native-eval-tree-process.py": "2365ba40dc50aa390799fee7ccfa5db91e9b0bf78dfeb07354bc3a5576331f91",
+      "docs/evidence/snapshots/v1-05c2a-shutdown-test-initial.py": "e5638c03c687c99bf5e90c5d46b265b01b4677230dc3b8ad7fcaea5356ca3450",
+      "docs/evidence/snapshots/v1-05c2a-before-evaluation-ready-go.py": "24e639709f7465aae1d4348b8c5be7bf184c30dfe0cec22e0f32e96722cc1940",
+      "docs/evidence/snapshots/v1-05c2a-before-started-protocol.py": "aa72cd45456fc0d133389511b1cc0993dfb7ed2888088752d992fec6123a98ea",
+      "docs/evidence/snapshots/v1-05c2a-before-supervised-preparation-handoff.py": "3b00513a78977d28a9d1ee5fb9fbb23178ac23cd3182d779f118e45f9efa879e",
+      "docs/evidence/snapshots/v1-05c2a-before-supervisor-fork-handoff.py": "571507f54b06c07a1e015537a8ad87541e66c2efb07a3ce7d377734554a0f88e"
+    },
+    "all_selected_reports_read_completely": true,
+    "note": "23 complete-file snapshots and one complete started function. The latter is a narrow draft replay, not a full old module. Parsing a command is distinguished from executing its recorded test replay."
+  },
+  "source_import": {
+    "python": "3.10.12",
+    "pytest": "9.1.1",
+    "core_probe_command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest,sys\nclass SourceProbe:\n def pytest_sessionstart(self, session):\n  import orze\n  from orze.engine import evaluator\n  expected=Path('src/orze/engine/evaluator.py').resolve()\n  assert Path(evaluator.__file__).resolve()==expected\n  print('verified pytest source:',orze.__file__,evaluator.__file__)\nprint('python:',sys.version.split()[0],'pytest:',pytest.__version__)\nraise SystemExit(pytest.main(['-q','--collect-only','tests/test_evaluation_supervision_binding.py'],plugins=[SourceProbe()]))\nPY",
+    "core_probe_exit_code": 0,
+    "core_pytest_module": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/engine/evaluator.py",
+    "pro_module": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro/src/orze_pro/__init__.py",
+    "note": "Core pytest uses pyproject.toml pythonpath=['src']; a collection-only hook verified its real import before collection. Plain python without pytest/PYTHONPATH resolves an unrelated installed package, so standalone red replays explicitly use PYTHONPATH=src. The 13 collected probe cases are not an extra test run. Pro and paired runs explicitly put both local source trees on PYTHONPATH."
+  },
+  "superseded_epochs": [
+    {
+      "freeze_utc": "2026-09-10 20:00:45 UTC",
+      "core": {
+        "exit_code": 1,
+        "status": "interrupted via owned tool session Ctrl-C around 33%, no full count",
+        "note": "Pytest tmp_path stash KeyError occurred during interrupt teardown, not as a product regression."
+      },
+      "pro": {
+        "exit_code": 0,
+        "summary": "944 passed in 164.11s (0:02:44)"
+      },
+      "paired": {
+        "exit_code": 0,
+        "summary": "60 passed in 0.81s"
+      },
+      "excluded_from_final": true,
+      "reason": "Additional explicit OS-double fixture migration and test helper copy/PID substitution compatibility; no production source changes. Core stopped via owned tool session Ctrl-C, not full result; pytest tmp_path teardown KeyError occurred during interruption."
+    },
+    {
+      "freeze_utc": "2026-09-10 20:06:47 UTC",
+      "core": {
+        "exit_code": 1,
+        "summary": "1 failed, 2961 passed, 7 skipped in 405.29s (0:06:45)"
+      },
+      "pro": {
+        "exit_code": 0,
+        "summary": "944 passed in 158.16s (0:02:38)"
+      },
+      "paired": {
+        "exit_code": 0,
+        "summary": "60 passed in 0.77s"
+      },
+      "core_source_tests_pre_post_equal": true,
+      "excluded_from_final": true,
+      "reason": "One unchanged direct-started test still used a raw fake process, so READY validation rejected before the intended real SQL trigger/receipt rollback test. Full failed run retained; explicit protocol-double fixture migration follows with original assertions unchanged."
+    }
+  ],
+  "diff_checks": {
+    "source_tests_contract_exit_code": 0,
+    "all_staged_exit_code": 2,
+    "only_preserved_snapshot_warning": "docs/evidence/snapshots/v1-05c2a-before-started-protocol.py:17: new blank line at EOF.",
+    "note": "Exact pre-fix snapshot retained; no current source/test/contract whitespace error. Not fixed by altering frozen replay evidence."
+  },
+  "protection": {
+    "checked_utc": "2026-09-10 20:19:28 UTC",
+    "original_worktree": "/hot-data/fsx/workspace/erik/auto-research-1.7b",
+    "original_status_lines": 281,
+    "original_worktree_touched": false,
+    "holdout_contents_read": false,
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245"
+  },
+  "limits": [
+    "Native evaluation only, not native training/posthoc/scripts/director/recovery adoption or a generic CPU autoresearch loop.",
+    "Only bounded temporary CPU subprocesses/SQLite/filesystem and explicit GPU/training/license test boundaries; no real GPU training, paid provider, deployment, main merge or scientific-efficiency claim.",
+    "Confirmed local descendant closure is not a same-UID adversarial sandbox, scientific validation or an atomic filesystem snapshot.",
+    "Uncertain supervisor/transport or rejected runtime/input authority holds the durable intent; no automatic rerun/refund/adoption. Verifiable crash recovery is still required by whole V1.",
+    "Source inventories and actual completion summaries retained; complete progress stdout is not claimed archived. Overlapping runs are not summed."
+  ]
+}

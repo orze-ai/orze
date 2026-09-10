@@ -1,0 +1,158 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2a",
+  "status": "implemented_mechanisms_verified",
+  "whole_v1_complete": false,
+  "scope": "Prelaunch-owned process-tree closure for new native evaluations, including native legacy-report and JSON-observation adapters. Not a domain-specific research optimization.",
+  "baseline": {
+    "core": "fd24ea2586db4b36b42ace55f20708923169886d",
+    "pro": "3466510c5417065bc17550a3f9462ad4bdf542b5"
+  },
+  "code_commits": {
+    "orze": "937c3b352948f0fb683b89dd0cd84ea84d089636"
+  },
+  "pro_source_reference": "3466510c5417065bc17550a3f9462ad4bdf542b5",
+  "pro_code_changed": false,
+  "code_remote": {
+    "branch": "feat/autoresearch-v1",
+    "observed_sha": "937c3b352948f0fb683b89dd0cd84ea84d089636",
+    "verified_utc": "2026-09-10 20:22:56 UTC",
+    "main_sha": "5ca2680dbd0139e63cd35a4f83da438b5b47ab99",
+    "main_changed": false
+  },
+  "contract": {
+    "path": "docs/native-evaluation-supervision.md",
+    "sha256": "07187f76d91a4e0d5554613f59d9d49411d8f48868db1be37c49359d8b039675"
+  },
+  "root_validation": {
+    "path": "docs/evidence/2026-09-10-v1-05c2a-root-validation.json",
+    "sha256": "ae9001c17b259ce6d01fdb13d8c0b2eceaab67e198943e74978d3d76928a99de"
+  },
+  "independent_reports": [
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2a-fixture-migration-review.json",
+      "sha256": "e0cff8d193c98f42f00968fef0dafdb02902ef767e39378033ca3d607d4d5570",
+      "commands_parsed": 5,
+      "snapshot_links_hash_matched": 15
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2a-native-eval-tree-review.json",
+      "sha256": "620eae91f2ffd8b878379485497eedab381897951997e866483153b8b3f5e0c5",
+      "commands_parsed": 7,
+      "snapshot_links_hash_matched": 6
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2a-ready-go-review.json",
+      "sha256": "5ac5cbac796af7026800e41d00c03ff0dc7ae7a33998e65d27fd6db6474e364d",
+      "commands_parsed": 4,
+      "snapshot_links_hash_matched": 1
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2a-supervision-protocol-review.json",
+      "sha256": "de7856af22535ffeb20af7926d27837ae21001b2fe6d7420d00d41e9f9a3042d",
+      "commands_parsed": 4,
+      "snapshot_links_hash_matched": 1
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2a-supervisor-author.json",
+      "sha256": "7e54c28375715361de7f91cb436ed65530e0943acf4f2e228e203dca513bc682",
+      "commands_parsed": 4,
+      "snapshot_links_hash_matched": 2
+    }
+  ],
+  "new_test_classification": {
+    "total": 40,
+    "preceding_committed_branch_behavior_failures": 3,
+    "old_positive_controls": 2,
+    "new_mechanisms": 29,
+    "draft_defects": 6,
+    "note": "Three public paths prove one natural-exit ownership gap. The baseline is the preceding implementation commit, not an assertion about a released product. Missing APIs, setup/fixture failures and repeated runs are not counted as historical bugs.",
+    "mechanisms": "10 supervisor API cases + 13 binding validation cases + 3 initially passing native adapter cases + 3 real shutdown/HOLD cases.",
+    "drafts": "3 post-spawn/fork handoff faults + 1 missing-protocol started admission + 2 READY-to-GO revalidation faults."
+  },
+  "implemented": [
+    "Commit protocol-tagged LAUNCHING intent before supervisor creation; READY carries actual worker PID/start ticks, separate supervisor identity, full AttemptRef/scope and digests.",
+    "Durably bind native RUNNING/compute start before GO; recheck controller runtime and prepared B2 inputs before allowing execution. Known blocked initialization failures are stopped; uncertain handoffs HOLD.",
+    "Dedicated Linux subreaper owns orphan descendants including detached double-fork workers. Natural leader exit alone does not publish and does not kill useful descendants.",
+    "Integer completion requires matching TREE_CLOSED, actual worker status, ECHILD with __WALL, and normal supervisor exit. STOP targets only direct/adopted owned children through pidfds; no native-evaluation PGID discovery fallback.",
+    "Both direct native publishers and shutdown verify full stored binding/closure before effects and again in the short transaction. Persist full closure in terminal/effect plan; stopped worker zero cannot produce successful evaluation observations.",
+    "Historical native rows without protocol cannot be enrolled from bare PID. Genuine no-catalog legacy Popen remains unsupervised; supported Linux is now required for new native evaluation."
+  ],
+  "behavior_evidence": {
+    "baseline": "3 failed, 2 passed in 3.37s; frozen v1 full-four-module replay 3 failed, 2 passed in 3.24s.",
+    "fixture_migrated_replay": "Same old four modules with v2 real-CPU fixture: 3 failed, 2 passed in 3.23s; all 34 original Assert AST unchanged.",
+    "runtime": "Actual CPU double-fork/setsid/empty-env output writer, authenticated peer pidfd, real filesystem/SQLite and transparent publication spies. Real shutdown callback closes writer before interrupted publication; killing only the fixture-owned supervisor holds the active attempt.",
+    "independent_final_bounded": "Runtime 8 passed / 11.42s, Pro reviewer 33 passed / 11.08s, independent GO review 2 + author-owned primitive rechecks 13 = 15 passed / 2.81s. These overlap final full/new-target runs and are not added."
+  },
+  "fixture_migration": {
+    "files": 13,
+    "install_pairs": 12,
+    "direct_protocol_wraps": 1,
+    "complete_original_files_exact": 13,
+    "original_assert_ast_unchanged": 437,
+    "original_mock_assert_call_source_unchanged": 72,
+    "real_cpu_fixture_assert_ast_unchanged": 34,
+    "explicit_only": true,
+    "autouse_or_production_fallback": false,
+    "note": "Simulated READY/closure are stated test assumptions, not actual process proof. Helper copy/PID behavior and a missing local installation were corrected with original tests preserved. Direct started SQL-trigger fixture still requires the compute start file before rollback."
+  },
+  "final_validation": {
+    "epoch": 3,
+    "freeze_utc": "2026-09-10 20:14:52 UTC",
+    "post_check_utc": "2026-09-10 20:22:08 UTC",
+    "fresh_runs": true,
+    "core": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "exit_code": 0,
+      "summary": "2962 passed, 7 skipped in 406.70s (0:06:46)",
+      "skips": "Seven optional Pro/stub cases, covered with real local Pro imports by the separate 60-case paired run."
+    },
+    "pro": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "exit_code": 0,
+      "summary": "944 passed in 163.26s (0:02:43)"
+    },
+    "paired": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "exit_code": 0,
+      "summary": "60 passed in 0.86s"
+    },
+    "new_target": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_evaluation_supervision_binding.py tests/test_native_eval_tree_completion.py tests/test_evaluation_supervision_protocol.py tests/test_evaluation_ready_go_boundary.py tests/test_evaluation_ready_go_attestation.py tests/test_evaluation_supervision_shutdown.py --tb=short",
+      "exit_code": 0,
+      "summary": "40 passed in 19.53s"
+    },
+    "source_inventory": {
+      "path": "docs/evidence/2026-09-10-v1-05c2a-source-inventory.json",
+      "sha256": "3a87d5b535e3d3344a960a51e65db756b6caffe1c14acd76b78592de34d682de",
+      "core_files": 552,
+      "pro_files": 214,
+      "pre_post_sha256_equal": true
+    },
+    "environment": {
+      "python": "3.10.12",
+      "pytest": "9.1.1",
+      "core_source": "pytest pythonpath=['src'], independently verified in collection-only hook",
+      "pro_source": "Explicit PYTHONPATH=src:../orze/src; local imports verified",
+      "gpu": "CUDA_VISIBLE_DEVICES empty; no GPU workloads; explicitly isolated lease/telemetry fixtures",
+      "pro_license": "Test-only require_license patch; production gate unchanged"
+    }
+  },
+  "superseded_epochs": "Two earlier epochs are excluded: one interrupted Core run (Pro had completed) after a missing install and simulated-copy failure; then complete Core 1 failed/2961 passed/7 skipped due to the direct-started fixture. Only epoch 3 is final; all production sources were unchanged by those fixture-only followups.",
+  "snapshot_note": "24 hashed snapshots: 23 complete files and one complete started function; exact trailing blank line in that narrow draft snapshot is intentionally preserved. Current source/tests/contract diff-check is clean.",
+  "protection": {
+    "checked_utc": "2026-09-10 20:19:28 UTC",
+    "original_worktree": "/hot-data/fsx/workspace/erik/auto-research-1.7b",
+    "original_status_lines": 281,
+    "original_worktree_touched": false,
+    "holdout_contents_read": false,
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245"
+  },
+  "limits": [
+    "Native evaluation only, not native training/posthoc/scripts/director/recovery adoption or a generic CPU autoresearch loop.",
+    "Only bounded temporary CPU subprocesses/SQLite/filesystem and explicit GPU/training/license test boundaries; no real GPU training, paid provider, deployment, main merge or scientific-efficiency claim.",
+    "Confirmed local descendant closure is not a same-UID adversarial sandbox, scientific validation or an atomic filesystem snapshot.",
+    "Uncertain supervisor/transport or rejected runtime/input authority holds the durable intent; no automatic rerun/refund/adoption. Verifiable crash recovery is still required by whole V1.",
+    "Source inventories and actual completion summaries retained; complete progress stdout is not claimed archived. Overlapping runs are not summed."
+  ]
+}

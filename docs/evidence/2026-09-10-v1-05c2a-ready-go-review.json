@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2a",
+  "reviewer": "core_review",
+  "review_kind": "Independent review of root-owned native evaluation integration; author's own primitive tests are identified separately",
+  "status": "reviewed_candidate_no_remaining_scope_blocker",
+  "whole_suite_claim": false,
+  "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "reviewed_sources": {
+    "src/orze/engine/evaluator.py": "33e50632a1a1e48325572f92d4bee6b71d3b120b686077d8978f0d7a6307891c",
+    "src/orze/engine/native_evaluation.py": "251d8df2dbdfff45927012acd1cc3daf6ff8dbff27c8c4a192a66952f1675b08",
+    "src/orze/engine/observation_publication.py": "d97d8fd2c6ffb57e3cd5dbd5d6a5db4e268b5fb0314c91d1ef12bb8ea97d1f1e",
+    "src/orze/engine/evaluation_supervision.py": "efbe87da1a00258bc6e3cf1078da2fb87ea19642b9c7f872fac8a6f5d672e485",
+    "src/orze/engine/process.py": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+    "src/orze/engine/shutdown_publication.py": "9e17e66e4480cb14edda2dde6c0b36712831d72aaf95fd302fbc58e131f71026"
+  },
+  "unchanged_author_primitives": {
+    "src/orze/engine/supervised_process.py": "6c9532709481c0bdd44b5b9e58c32f24875b7fb1668715f2bdb60ed1feffdb42",
+    "src/orze/engine/supervisor_worker.py": "5afd66706db4f6d524b693161774d81eced2f96dc97175c995fad2d8f9cf05cc"
+  },
+  "findings": [
+    {
+      "classification": "confirmed new-draft regression, not release behavior",
+      "test": "tests/test_evaluation_ready_go_boundary.py",
+      "sha256": "30a57eb26b5afe44b593aa66171debedaa9dc099d36ed6cf50e2c9448740f7ac",
+      "cause": "Final verify_evaluation was before prepare_supervised. After actual READY a same-directory atomic replacement of the pinned copied entrypoint was executed by GO. Terminal validation would be too late to prevent unauthorized code effects.",
+      "red": "1 failed in 0.97s, exit 1; actual real-CPU marker assertion failed.",
+      "fixture_correction": "Initial unfrozen version tried writing the read-only copied file in place and failed its READY seam with PermissionError (1 failed in 0.96s). This is not a product red. Replaced with writable sibling then atomic replace before freezing; no frozen business assertion was weakened.",
+      "fix": "Root added actual prepared-evaluation revalidation immediately before GO. On refusal the known blocked worker is stopped; bound-input drift can still prevent terminal publication and preserves unresolved authority."
+    },
+    {
+      "classification": "confirmed new-draft regression, not release behavior",
+      "test": "tests/test_evaluation_ready_go_attestation.py",
+      "sha256": "c1a769a70b4429c5d1b6735fb6684b757be8dfd12254dc4be6c5297e525d161c",
+      "cause": "Only pre-READY controller attestation ran. An explicit attestation boundary configured to reject after READY was never invoked before GO.",
+      "red": "Combined frozen two tests: 2 failed in 1.68s, exit 1; second observes call history [False] and absent LaunchIntegrityError.",
+      "proof_limit": "Supervisor and evaluator are real CPU processes. Runtime attestation is the controlled fault boundary; no actual installed package/runtime tampering is claimed.",
+      "fix": "Root re-attests before GO, confirms STOP for the blocked worker and closes its log before preserving LaunchIntegrityError. Runtime rejection does not authorize publishing results or automatically retrying the held native intent."
+    }
+  ],
+  "old_candidate_snapshot": {
+    "path": "docs/evidence/snapshots/v1-05c2a-before-evaluation-ready-go.py",
+    "sha256": "24e639709f7465aae1d4348b8c5be7bf184c30dfe0cec22e0f32e96722cc1940",
+    "provenance": "Complete current evaluator.py directly captured before either fix via apply_patch; its SHA equals the observed current source. No reconstruction. The original first test stayed byte-identical when the second independent test file was added."
+  },
+  "commands": {
+    "first_red": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_evaluation_ready_go_boundary.py --tb=short",
+    "both_red": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_evaluation_ready_go_boundary.py tests/test_evaluation_ready_go_attestation.py --tb=short",
+    "snapshot_replay": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.engine import evaluator\nsnapshot = Path('docs/evidence/snapshots/v1-05c2a-before-evaluation-ready-go.py')\nexec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), evaluator.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_evaluation_ready_go_boundary.py', 'tests/test_evaluation_ready_go_attestation.py', '--tb=short']))\nPY",
+    "current": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_evaluation_ready_go_boundary.py tests/test_evaluation_ready_go_attestation.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py --tb=short"
+  },
+  "results": {
+    "snapshot_replay": {
+      "failed": 2,
+      "seconds": 1.5,
+      "exit_code": 1
+    },
+    "current": {
+      "passed": 15,
+      "seconds": 2.81,
+      "exit_code": 0,
+      "composition": "2 independent GO regressions + 13 author-owned primitive rechecks, not 15 independent tests",
+      "sources_and_tests_pre_post_unchanged": true
+    }
+  },
+  "integration_review": [
+    "started checks the declared protocol and exact READY binding before compute-start and mark_running; old unbound native rows cannot be enrolled by callback.",
+    "Both native finish adapters require real handle closure before result reading and repeat exact closure in the publication transaction. Stored worker return code is not rewritten to fake success.",
+    "STOP/forced cleanup changes operational outcome, not worker returncode; no successful observations are inferred from stopped leader zero.",
+    "process._terminate_and_reap dispatches supervised handles before any legacy descendant discovery/PGID signalling; no failure falls back to raw process-group termination.",
+    "Native shutdown checks current binding before STOP and exact closure before and inside terminal publication.",
+    "READY-to-GO is now revalidated. This is not an atomic hostile-filesystem snapshot guarantee; the contract explicitly does not claim such a sandbox."
+  ],
+  "fixture_review": {
+    "path": "tests/supervision_fixture.py",
+    "sha256": "9b01b078f181cc1325905ca1d1e9d1f18f5a3527c5b1bb03a2d340ec0350dba7",
+    "autouse": false,
+    "production_fallback": false,
+    "inspected_explicit_install_files": [
+      "tests/test_stale_evaluation_completion.py",
+      "tests/test_observation_snapshot_contract.py",
+      "tests/test_eval_terminal_boundaries.py",
+      "tests/test_eval_reconciliation_safety.py",
+      "tests/test_evaluation_termination_authority.py",
+      "tests/test_eval_existing_output_contract.py",
+      "tests/test_eval_retry_execution.py",
+      "tests/test_eval_completion_source_contract.py",
+      "tests/test_eval_retry_artifacts.py",
+      "tests/test_eval_retry_benchmark.py",
+      "tests/test_eval_failure_marker_io.py"
+    ],
+    "conclusion": "Every inspected installation is adjacent to an existing explicit fake Popen/Mock. The retry-artifacts installation is local to its single launch test. cpu_project explicitly restores real prepare_supervised and REAL_POPEN. Its inherited reaper wrapper leaves real handles wrapped by the real Core STOP dispatch, not a simulated closure. Existing false-reaper fixtures preserve their false outcome.",
+    "limitation": "This review checks explicit fixture placement and current implementation, not a new independent assertion-AST migration audit. Root owns original-file migration evidence. Simulated closure is never real process-tree evidence."
+  },
+  "documentation": {
+    "path": "docs/native-evaluation-supervision.md",
+    "read_sha256": "e04665bc549a9a5337589f706a501e0c5643c88f331d8058af2da44df980a356",
+    "read_sha256_status": "Historical review candidate before wording clarification",
+    "final_read_sha256": "288a31f3bfc196b662200e5a459eb51ac31f0ed26cce4a8d658c8207b06a74b2",
+    "final_full_read": true,
+    "full_read": true,
+    "scope_and_hold_accurate": true,
+    "small_wording_reported": "Root clarified 'No process wait' to 'No blocking process wait'. Final full document reread confirms this is accurate; no additional wording issue found."
+  },
+  "boundaries": [
+    "No production or existing fixture/test edits by this reviewer",
+    "No paid provider, GPU launch, holdout, or broad safety matrix",
+    "Parent source inventory/full-suite evidence is separate and not claimed here"
+  ]
+}
