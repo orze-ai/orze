@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "item": "V1-01G2 / V1-05A",
+  "status": "mechanism_verified",
+  "claim": "Explicit evaluation-only retries preserve generation artifacts, admit only agreed failed evaluations, recover partial file preparation, survive controller restart and consume a fresh bounded benchmark look only when evaluation preparation is attempted.",
+  "sequence_note": "This adjacent dependency closure follows G1 before the remaining V1-01 consumers. It closes only explicit eval-only retry, not the whole V1-05 generation/replicate/cleanup phase or V1-02 attempt fencing.",
+  "baseline": {
+    "core": "12132af68fe7675f1617098de08779c359f60ee6",
+    "pro": "d0d27f103efbda043de6607224d33e3323c17ba4"
+  },
+  "fix": {
+    "core": "1f375c4b714abe5c5462320f0b5734abf534feb3"
+  },
+  "remote_verification": "Push succeeded; git ls-remote origin refs/heads/feat/autoresearch-v1 returned exactly 1f375c4b714abe5c5462320f0b5734abf534feb3.",
+  "frozen_tests": [
+    {
+      "file": "tests/test_eval_retry_lifecycle.py",
+      "sha256": "49ea039bcac5ce8c559def2d1bbf92aa801965eb3f419d1027bb92f3eb0b3118"
+    },
+    {
+      "file": "tests/test_eval_retry_existing_db.py",
+      "sha256": "355b165ef66c3cbc13a8b74f15a41d4df78a271083d65032baa39d6ff9188a82"
+    },
+    {
+      "file": "tests/test_eval_retry_cli.py",
+      "sha256": "e806e1d68353bb14747368dd528967433d3b135b2f98decd602cd6c15dfd38cd"
+    },
+    {
+      "file": "tests/test_eval_retry_artifacts.py",
+      "sha256": "f12ae66bdc1b741db67c76b862c6684d58d91772af5a7fc8c6e37187a71a3765"
+    },
+    {
+      "file": "tests/test_eval_retry_execution.py",
+      "sha256": "1b99178b9d6371ff879b622e69f0eaf8ba45f3025b26664affc601e093668df3"
+    },
+    {
+      "file": "tests/test_eval_retry_benchmark.py",
+      "sha256": "c4b4155f3140ac009546f3473feb88f71d6c912c8fadf58c988a7e9efbdf42ba"
+    },
+    {
+      "file": "tests/test_eval_retry_cli_integration.py",
+      "sha256": "ba3e1340d0bbb7cb228e5365fc3fd0aca98183a69fcfbe9028bb96a662b8ff09"
+    },
+    {
+      "file": "tests/test_eval_retry_policy_boundaries.py",
+      "sha256": "9ce25eb25badb341de5acc4b0f479cffae8ae53394e2d914524de64340bc8479"
+    }
+  ],
+  "test_classification": {
+    "new_feature_cases": 73,
+    "missing_capability_checks": "Initial lifecycle tests had 19 missing-method failures plus one legacy-reset control pass; opener had 9 missing-module failures; CLI had 9 missing-command failures; artifact suite could not collect without the new module. These are API absence checks, not old behavioral red tests.",
+    "first_green_only": "Execution (2), benchmark (7), and actual CLI integration (3) first ran against the implementation. They are acceptance tests, not claimed old red-to-green regressions.",
+    "behavioral_red_replays": "Five policy/input safety assertions fail against the preserved pre-review G2 draft; one control passes. One silent provenance-publication assertion fails when only the previous committed prepare_benchmark_evaluation function is restored."
+  },
+  "policy_boundary_replay": {
+    "snapshot": "docs/evidence/snapshots/v1-01g2-before-policy-pins.py",
+    "sha256": "c868ce6c247ec9a618469bc0f81621d6209408ab79cd0986abcad22d327f3f27",
+    "scope": "Exact uncommitted G2 draft, not released baseline code; substitute in an isolated Python process and reload its consumer bindings. Final tests unchanged.",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib\nfrom pathlib import Path\nimport pytest\nimport orze.engine.evaluation_retry_files as retry_files\nsnapshot = Path('docs/evidence/snapshots/v1-01g2-before-policy-pins.py')\nexec(compile(snapshot.read_text(), str(snapshot), 'exec'), retry_files.__dict__)\nimport orze.engine.evaluation_retry as retry_service\nimportlib.reload(retry_service)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_eval_retry_policy_boundaries.py', '--tb=short']))\nPY",
+    "exit_code": 1,
+    "failed": 5,
+    "passed": 1,
+    "elapsed_seconds": 1.19
+  },
+  "provenance_publication_replay": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'import ast, subprocess, pytest; from orze.core import benchmark_contract as benchmark; from orze.engine import evaluator; source = subprocess.check_output([\"git\", \"show\", \"12132af68fe7675f1617098de08779c359f60ee6:src/orze/core/benchmark_contract.py\"], text=True); function = next(node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == \"prepare_benchmark_evaluation\"); exec(compile(ast.Module(body=[function], type_ignores=[]), \"benchmark_contract.py@12132af\", \"exec\"), benchmark.__dict__); evaluator.prepare_benchmark_evaluation = benchmark.prepare_benchmark_evaluation; raise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_eval_retry_benchmark.py\", \"-k\", \"silent_provenance_publication_failure\", \"--tb=short\"]))'",
+    "exit_code": 1,
+    "failed": 1,
+    "deselected": 6,
+    "elapsed_seconds": 0.31,
+    "scope": "Only the prior committed prepare_benchmark_evaluation AST is restored in memory; all other code remains the paired feature checkout. Failure is an unwanted fake process launch after a no-op provenance publication."
+  },
+  "targeted_green": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_eval_retry_lifecycle.py tests/test_eval_retry_existing_db.py tests/test_eval_retry_cli.py tests/test_eval_retry_artifacts.py tests/test_eval_retry_execution.py tests/test_eval_retry_benchmark.py tests/test_eval_retry_cli_integration.py tests/test_eval_retry_policy_boundaries.py tests/test_eval_existing_output_contract.py tests/test_eval_completion_source_contract.py tests/test_eval_dispatch_outcomes.py tests/test_failed_evaluation_source.py tests/test_eval_output_policy_boundaries.py tests/test_eval_dispatch_tick_contract.py tests/test_eval_terminal_boundaries.py tests/test_eval_dispatch_boundary_types.py tests/test_eval_reconciliation_safety.py tests/test_eval_policy_history_scope.py tests/test_eval_failure_marker_io.py --tb=short",
+    "exit_code": 0,
+    "passed": 160,
+    "skipped": 0,
+    "elapsed_seconds": 28.6,
+    "scope": "73 G2 cases plus all 87 frozen G1 cases."
+  },
+  "final_core_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0,
+    "passed": 1620,
+    "skipped": 6,
+    "elapsed_seconds": 137.46,
+    "skip_scope": "Existing optional Pro tests in the core-only source environment."
+  },
+  "final_pro_regression": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+    "exit_code": 0,
+    "passed": 394,
+    "skipped": 0,
+    "elapsed_seconds": 33.57
+  },
+  "final_cross_repository_regression": {
+    "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"--tb=short\",\"-rs\"]))'",
+    "exit_code": 0,
+    "passed": 30,
+    "skipped": 0,
+    "elapsed_seconds": 0.39
+  },
+  "independent_review": [
+    {
+      "scope": "Policy/input boundaries plus lifecycle and existing-database admission",
+      "passed": 35,
+      "elapsed_seconds": 7.97
+    },
+    {
+      "scope": "Artifact recovery, restart execution and benchmark receipt/limit boundaries",
+      "passed": 26,
+      "elapsed_seconds": 5.32
+    },
+    {
+      "scope": "Real CLI/config/SQLite integration and CLI routing; no mocking of admission service",
+      "passed": 12,
+      "elapsed_seconds": 0.9
+    }
+  ],
+  "verified_boundaries": [
+    "Only global FAILED / training COMPLETE / evaluation FAILED with matching legacy status and history can open a retry. Ordinary FAILED-to-QUEUED training reset remains unchanged.",
+    "Duplicate pending requests do not write state/history, archive again, launch work or spend benchmark looks. They must still match the policy and training/checkpoint evidence pinned by the original request.",
+    "Filesystem preparation is an allowlisted, recoverable manifest under _evaluation_retries/<failed transition ID>; old outputs and receipts remain recoverable, and generation metrics, training configuration, lineage and checkpoint files are never moved.",
+    "Partial rename, copy or SQL failure can be re-admitted through the same manifest; conflicting source/destination bytes fail closed without overwrite.",
+    "Existing-database CLI open does not create a missing database or bootstrap/migrate an incompatible one. Retry subcommand runs before provider/license/GPU setup.",
+    "After clearing in-memory pending and reopening the database, the actual scheduler dispatches evaluation only, with a new attempt receipt; fake process and GPU boundaries are explicit.",
+    "Old benchmark provenance remains pinned at the original path and is copied into the archive. New preparation consumes the next bounded look and requires a new nonce; missing ledger, stale receipt, exhausted budget or silent provenance publication cannot launch evaluation."
+  ],
+  "compatibility": [
+    "See docs/evaluation-retry.md. G1 and all earlier tests remain unchanged.",
+    "A metrics.json in-place evaluator alias is not archived. This preserves legacy invocation without claiming immutable generation storage."
+  ],
+  "limits": [
+    "No actual GPU, evaluator subprocess, paid LLM/provider, production license activation, deployment, package publication or live campaign mutation. Temporary files and SQLite are real; external execution is doubled.",
+    "This is recoverable file preparation plus a transactional lifecycle change, not one atomic filesystem/SQLite transaction or distributed exactly-once delivery.",
+    "No stale-attempt ABA fence or universal process liveness authority. Known unclosed local evaluation receipts block admission; legacy failures without start receipts rely on the agreed lifecycle.",
+    "Pending retry scan is bounded to 128 entries. Fairness/pagination/backpressure under persistently blocked entries remain V1-03 work.",
+    "Admission spends no benchmark look, but existing evaluation preparation precedes the GPU lease/process launch. A later preflight/lease/publication failure can consume a reserved look, and some preflight failures remain pending. No reservation-ordering or automatic backoff fix is claimed.",
+    "Explicit policy, environment, interpreter and selected generation/checkpoint inputs are pinned; ambient dependencies or unsealed evaluator source bytes are not a complete immutable execution environment. Hashing large checkpoints can hold the admission database write lock.",
+    "Manifest copies of provenance are historical; current provenance may legitimately advance after reservation. No scientific independence or research-efficiency gain follows from test counts.",
+    "V1-01 remaining consumers and progress semantics, V1-02 recovery/fencing, and the full V1-03 through V1-07 phases remain unaccepted."
+  ]
+}
