@@ -49,7 +49,7 @@ from orze.core.benchmark_contract import (
     validate_benchmark_receipt,
 )
 from orze.reporting.state import _read_all_heartbeats
-from orze.reporting.objective import objective_sort_key
+from orze.reporting.objective import objective_improves, objective_sort_key
 
 
 def notify(event, data, cfg):
@@ -1257,17 +1257,17 @@ class NotificationProcessor:
                 save_config_hash_fn, build_machine_status_fn):
         """Consume a finished batch independently of delivery settings.
 
-        Repeated batches and progress semantics retain their legacy behavior;
+        Reconcile current evidence even without a finished batch. Selection
+        changes alone are not objective improvements. Repeated batches and
+        result revisions still require a separate observation identity model;
         this boundary does not promise exactly-once observations or delivery.
         """
         try:
             cfg = self.cfg
             ncfg = cfg.get("notifications") or {}
-            if not finished:
-                return
-
-            logger.info("Processing completion evidence for %d finished items",
-                        len(finished))
+            if finished:
+                logger.info("Processing completion evidence for %d finished items",
+                            len(finished))
             from orze.reporting.notification_evidence import (
                 qualified_notification_rows,
             )
@@ -1313,7 +1313,7 @@ class NotificationProcessor:
             else:
                 self._completions_since_best += n_completed
 
-            if ncfg.get("enabled", False):
+            if finished and ncfg.get("enabled", False):
                 self._check_plateau(completed_rows, cfg)
                 self._periodic_report(ncfg, cfg, primary, counts, active_count,
                                       leaderboard, view_lbs, build_machine_status_fn)
@@ -1510,9 +1510,17 @@ class NotificationProcessor:
             self._plateau_notified = False
             return False
         current_best = completed_rows[0]["id"]
+        previous = next((row for row in completed_rows
+                         if row["id"] == self._best_idea_id), None)
         fired = False
-        if (self._best_idea_id is not None
-                and current_best != self._best_idea_id):
+        # Stable ID breaks display ties but is not measured improvement. An
+        # absent/revoked previous result is not a comparison baseline either.
+        if (previous is not None and current_best != self._best_idea_id
+                and objective_improves(
+                    completed_rows[0].get("primary_val"),
+                    completed_rows[0].get("values", {}),
+                    previous.get("primary_val"), previous.get("values", {}),
+                    cfg.get("report") or {})):
             best_val = completed_rows[0].get("primary_val")
             # Qualification is mandatory; anomaly policy is explicit opt-in.
             # A promotion observer does not implicitly enqueue audit work.
@@ -1538,12 +1546,7 @@ class NotificationProcessor:
                     return False
             fmt = (f"{best_val:.4f}"
                    if isinstance(best_val, (int, float)) else best_val)
-            # Find previous best value for delta display
-            prev_val = None
-            for r in completed_rows[1:]:
-                if r["id"] == self._best_idea_id:
-                    prev_val = r.get("primary_val")
-                    break
+            prev_val = previous.get("primary_val")
             prev_fmt = (f"{prev_val:.4f}"
                         if isinstance(prev_val, (int, float)) else prev_val)
             notify("new_best", {
