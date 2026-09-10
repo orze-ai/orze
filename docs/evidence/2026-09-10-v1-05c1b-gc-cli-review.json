@@ -1,0 +1,142 @@
+{
+  "schema": 1,
+  "slice": "V1-05C1b",
+  "reviewer": "root",
+  "scope": "GC CLI configuration provenance, strict preconsumer rejection and actual legacy CLI-to-GC operation.",
+  "tests": {
+    "tests/test_gc_cli_scope.py": {
+      "sha256": "b864c93c5435b479b10571a99a077cfca71fabfb62b381565a7a02f9ebca6543",
+      "cases": 7,
+      "old_behavior_failures": 6,
+      "old_controls": 1,
+      "evidence_level": "Actual main/parser/configuration; destructive consumer replaced by a call spy."
+    },
+    "tests/test_gc_cli_boundary_mechanisms.py": {
+      "sha256": "e4da4a9560ad22f431c64f580e5e953a8abd807ee9c2aa70e3bc29d6bc860dba",
+      "cases": 4,
+      "new_mechanisms": 3,
+      "draft_regressions": 1,
+      "evidence_level": "Three parser/consumer-boundary tests; one real python -m CLI subprocess rejecting invalid input before GC."
+    },
+    "tests/test_gc_cli_legacy_authority.py": {
+      "sha256": "8883777998f96fca7e565c120e34bc39117c5a85bad0112cd5ab61119aa29bc9",
+      "cases": 2,
+      "draft_regressions": 1,
+      "draft_controls": 1,
+      "evidence_level": "Actual main to actual run_gc, real temporary-file checkpoint deletion for legitimate legacy configuration; explicitly missing authority preserved without DB creation."
+    }
+  },
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-05c1b-before-gc.py",
+      "sha256": "ed81df07edfc30ea81d6ae9192d31da238f6799ee5365bd65bf02bb1c8ca5f05",
+      "provenance": "Complete old GC module at af9d6d19ea9d9e65f3a2da9820b57808f7e7d653, captured before production changes by GC author."
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c1b-before-cli-threshold-rejection.py",
+      "sha256": "6c578076686b2b7affee6eb3602273a0ae7f18de9aea20dbd04263090ebeb301",
+      "provenance": "Complete current main() obtained with inspect.getsource and saved with apply_patch after observed OverflowError, before its fix. Not an old released-product bug."
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c1b-before-cli-legacy-route.py",
+      "sha256": "d3ffba2fd088cc32d409bd7393dff5582b3886e2ec22cc71e1cd0610ccde055a",
+      "provenance": "Complete current main() captured after the genuine legacy-path failure, before correcting default versus explicit DB selection."
+    }
+  ],
+  "initial_observations": [
+    {
+      "kind": "old_behavior",
+      "result": {
+        "chunk_id": "d96319",
+        "wall_time_seconds": 0.915279585,
+        "exit_code": 1,
+        "original_token_count": 1019,
+        "output": "FFFFFF.                                                                  [100%]\n=================================== FAILURES ===================================\n______________ test_config_paths_are_anchored_to_selected_project ______________\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_gc_cli_scope.py:43: in test_config_paths_are_anchored_to_selected_project\n    assert call[\"results_dir\"] == project / \"outputs\"\nE   AssertionError: assert PosixPath('outputs') == (PosixPath('/tmp/pytest-of-erik/pytest-4277/test_config_paths_are_anchored0/project') / 'outputs')\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n_______ test_missing_selected_config_never_invokes_destructive_consumer ________\ntests/test_gc_cli_scope.py:57: in test_missing_selected_config_never_invokes_destructive_consumer\n    with pytest.raises(SystemExit) as error:\nE   Failed: DID NOT RAISE SystemExit\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n_ test_bad_selected_config_never_falls_back_to_destructive_defaults[[unclosed] _\ntests/test_gc_cli_scope.py:73: in test_bad_selected_config_never_falls_back_to_destructive_defaults\n    with pytest.raises(SystemExit) as error:\nE   Failed: DID NOT RAISE SystemExit\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n------------------------------ Captured log call -------------------------------\nWARNING  orze.gc:orze_gc.py:486 Could not load /tmp/pytest-of-erik/pytest-4277/test_bad_selected_config_never0/orze.yaml: while parsing a flow sequence\n  in \"<unicode string>\", line 1, column 1:\n    [unclosed\n    ^\nexpected ',' or ']', but got '<stream end>'\n  in \"<unicode string>\", line 1, column 10:\n    [unclosed\n             ^\n__ test_bad_selected_config_never_falls_back_to_destructive_defaults[false\\n] __\ntests/test_gc_cli_scope.py:73: in test_bad_selected_config_never_falls_back_to_destructive_defaults\n    with pytest.raises(SystemExit) as error:\nE   Failed: DID NOT RAISE SystemExit\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n___ test_bad_selected_config_never_falls_back_to_destructive_defaults[[]\\n] ____\ntests/test_gc_cli_scope.py:73: in test_bad_selected_config_never_falls_back_to_destructive_defaults\n    with pytest.raises(SystemExit) as error:\nE   Failed: DID NOT RAISE SystemExit\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n________ test_explicit_zero_overrides_are_not_replaced_by_config_values ________\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_gc_cli_scope.py:94: in test_explicit_zero_overrides_are_not_replaced_by_config_values\n    assert {key: observed[0][key] for key in (\"keep_top\", \"keep_recent\", \"min_free_gb\")} == {\nE   AssertionError: assert {'keep_top': ..._free_gb': 10} == {'keep_top': ...n_free_gb': 0}\nE     \nE     Differing items:\nE     {'min_free_gb': 10} != {'min_free_gb': 0}\nE     {'keep_top': 50} != {'keep_top': 0}\nE     {'keep_recent': 20} != {'keep_recent': 0}\nE     Use -v to get more diff\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n=========================== short test summary info ============================\nFAILED tests/test_gc_cli_scope.py::test_config_paths_are_anchored_to_selected_project\nFAILED tests/test_gc_cli_scope.py::test_missing_selected_config_never_invokes_destructive_consumer\nFAILED tests/test_gc_cli_scope.py::test_bad_selected_config_never_falls_back_to_destructive_defaults[[unclosed]\nFAILED tests/test_gc_cli_scope.py::test_bad_selected_config_never_falls_back_to_destructive_defaults[false\\n]\nFAILED tests/test_gc_cli_scope.py::test_bad_selected_config_never_falls_back_to_destructive_defaults[[]\\n]\nFAILED tests/test_gc_cli_scope.py::test_explicit_zero_overrides_are_not_replaced_by_config_values\n6 failed, 1 passed in 0.77s\n"
+      },
+      "footer": "6 failed, 1 passed in 0.77s"
+    },
+    {
+      "kind": "draft_threshold_rejection",
+      "result": {
+        "chunk_id": "7c32b6",
+        "wall_time_seconds": 0.440097691,
+        "exit_code": 1,
+        "original_token_count": 185,
+        "output": "F...                                                                     [100%]\n=================================== FAILURES ===================================\n_____ test_unrepresentable_disk_threshold_is_a_clean_preconsumer_rejection _____\ntests/test_gc_cli_boundary_mechanisms.py:26: in test_unrepresentable_disk_threshold_is_a_clean_preconsumer_rejection\n    orze_gc.main()\nsrc/orze/agents/orze_gc.py:368: in main\n    or not math.isfinite(min_free_gb)):\nE   OverflowError: int too large to convert to float\n=========================== short test summary info ============================\nFAILED tests/test_gc_cli_boundary_mechanisms.py::test_unrepresentable_disk_threshold_is_a_clean_preconsumer_rejection\n1 failed, 3 passed in 0.30s\n"
+      },
+      "footer": "1 failed, 3 passed in 0.30s"
+    },
+    {
+      "kind": "draft_legacy_provenance",
+      "result": {
+        "chunk_id": "fd3bee",
+        "wall_time_seconds": 0.407480327,
+        "exit_code": 1,
+        "original_token_count": 213,
+        "output": "F.                                                                       [100%]\n=================================== FAILURES ===================================\n_ test_cli_distinguishes_absent_default_from_explicit_missing_authority[False] _\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_gc_cli_legacy_authority.py:39: in test_cli_distinguishes_absent_default_from_explicit_missing_authority\n    assert result == 0, \"an absent unconfigured default is not a failed explicit route\"\nE   AssertionError: an absent unconfigured default is not a failed explicit route\nE   assert 2 == 0\n=========================== short test summary info ============================\nFAILED tests/test_gc_cli_legacy_authority.py::test_cli_distinguishes_absent_default_from_explicit_missing_authority[False]\n1 failed, 1 passed in 0.27s\n"
+      },
+      "footer": "1 failed, 1 passed in 0.27s"
+    }
+  ],
+  "replays": [
+    {
+      "kind": "whole_old_module",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'from pathlib import Path; import pytest; import orze.agents.orze_gc as module; path=Path(\"docs/evidence/snapshots/v1-05c1b-before-gc.py\"); exec(compile(path.read_text(), str(path), \"exec\"), module.__dict__); raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_gc_cli_scope.py\",\"--tb=short\"]))'",
+      "result": {
+        "chunk_id": "b0e1d5",
+        "wall_time_seconds": 0.407578288,
+        "exit_code": 1,
+        "original_token_count": 1129,
+        "output": "FFFFFF.                                                                  [100%]\n=================================== FAILURES ===================================\n______________ test_config_paths_are_anchored_to_selected_project ______________\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_gc_cli_scope.py:43: in test_config_paths_are_anchored_to_selected_project\n    assert call[\"results_dir\"] == project / \"outputs\"\nE   AssertionError: assert PosixPath('outputs') == (PosixPath('/tmp/pytest-of-erik/pytest-4306/test_config_paths_are_anchored0/project') / 'outputs')\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n_______ test_missing_selected_config_never_invokes_destructive_consumer ________\ntests/test_gc_cli_scope.py:57: in test_missing_selected_config_never_invokes_destructive_consumer\n    with pytest.raises(SystemExit) as error:\nE   Failed: DID NOT RAISE SystemExit\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n_ test_bad_selected_config_never_falls_back_to_destructive_defaults[[unclosed] _\ntests/test_gc_cli_scope.py:73: in test_bad_selected_config_never_falls_back_to_destructive_defaults\n    with pytest.raises(SystemExit) as error:\nE   Failed: DID NOT RAISE SystemExit\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n----------------------------- Captured stderr call -----------------------------\n2026-09-10 18:41:56,584 - orze.gc - WARNING - Could not load /tmp/pytest-of-erik/pytest-4306/test_bad_selected_config_never0/orze.yaml: while parsing a flow sequence\n  in \"<unicode string>\", line 1, column 1:\n    [unclosed\n    ^\nexpected ',' or ']', but got '<stream end>'\n  in \"<unicode string>\", line 1, column 10:\n    [unclosed\n             ^\n------------------------------ Captured log call -------------------------------\nWARNING  orze.gc:v1-05c1b-before-gc.py:486 Could not load /tmp/pytest-of-erik/pytest-4306/test_bad_selected_config_never0/orze.yaml: while parsing a flow sequence\n  in \"<unicode string>\", line 1, column 1:\n    [unclosed\n    ^\nexpected ',' or ']', but got '<stream end>'\n  in \"<unicode string>\", line 1, column 10:\n    [unclosed\n             ^\n__ test_bad_selected_config_never_falls_back_to_destructive_defaults[false\\n] __\ntests/test_gc_cli_scope.py:73: in test_bad_selected_config_never_falls_back_to_destructive_defaults\n    with pytest.raises(SystemExit) as error:\nE   Failed: DID NOT RAISE SystemExit\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n___ test_bad_selected_config_never_falls_back_to_destructive_defaults[[]\\n] ____\ntests/test_gc_cli_scope.py:73: in test_bad_selected_config_never_falls_back_to_destructive_defaults\n    with pytest.raises(SystemExit) as error:\nE   Failed: DID NOT RAISE SystemExit\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n________ test_explicit_zero_overrides_are_not_replaced_by_config_values ________\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_gc_cli_scope.py:94: in test_explicit_zero_overrides_are_not_replaced_by_config_values\n    assert {key: observed[0][key] for key in (\"keep_top\", \"keep_recent\", \"min_free_gb\")} == {\nE   AssertionError: assert {'keep_top': ..._free_gb': 10} == {'keep_top': ...n_free_gb': 0}\nE     \nE     Differing items:\nE     {'keep_recent': 20} != {'keep_recent': 0}\nE     {'min_free_gb': 10} != {'min_free_gb': 0}\nE     {'keep_top': 50} != {'keep_top': 0}\nE     Use -v to get more diff\n----------------------------- Captured stdout call -----------------------------\n{\n  \"test_consumer\": true\n}\n=========================== short test summary info ============================\nFAILED tests/test_gc_cli_scope.py::test_config_paths_are_anchored_to_selected_project\nFAILED tests/test_gc_cli_scope.py::test_missing_selected_config_never_invokes_destructive_consumer\nFAILED tests/test_gc_cli_scope.py::test_bad_selected_config_never_falls_back_to_destructive_defaults[[unclosed]\nFAILED tests/test_gc_cli_scope.py::test_bad_selected_config_never_falls_back_to_destructive_defaults[false\\n]\nFAILED tests/test_gc_cli_scope.py::test_bad_selected_config_never_falls_back_to_destructive_defaults[[]\\n]\nFAILED tests/test_gc_cli_scope.py::test_explicit_zero_overrides_are_not_replaced_by_config_values\n6 failed, 1 passed in 0.25s\n"
+      }
+    },
+    {
+      "kind": "complete_draft_threshold_main",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'from pathlib import Path; import pytest; import orze.agents.orze_gc as module; path=Path(\"docs/evidence/snapshots/v1-05c1b-before-cli-threshold-rejection.py\"); exec(compile(path.read_text(), str(path), \"exec\"), module.__dict__); raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_gc_cli_boundary_mechanisms.py\",\"-k\",\"unrepresentable\",\"--tb=short\"]))'",
+      "result": {
+        "chunk_id": "e7ffdb",
+        "wall_time_seconds": 0.345918535,
+        "exit_code": 1,
+        "original_token_count": 196,
+        "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_____ test_unrepresentable_disk_threshold_is_a_clean_preconsumer_rejection _____\ntests/test_gc_cli_boundary_mechanisms.py:26: in test_unrepresentable_disk_threshold_is_a_clean_preconsumer_rejection\n    orze_gc.main()\ndocs/evidence/snapshots/v1-05c1b-before-cli-threshold-rejection.py:93: in main\n    or not math.isfinite(min_free_gb)):\nE   OverflowError: int too large to convert to float\n=========================== short test summary info ============================\nFAILED tests/test_gc_cli_boundary_mechanisms.py::test_unrepresentable_disk_threshold_is_a_clean_preconsumer_rejection\n1 failed, 3 deselected in 0.19s\n"
+      }
+    },
+    {
+      "kind": "complete_draft_legacy_main",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'from pathlib import Path; import pytest; import orze.agents.orze_gc as module; path=Path(\"docs/evidence/snapshots/v1-05c1b-before-cli-legacy-route.py\"); exec(compile(path.read_text(), str(path), \"exec\"), module.__dict__); raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_gc_cli_legacy_authority.py\",\"--tb=short\"]))'",
+      "result": {
+        "chunk_id": "557378",
+        "wall_time_seconds": 0.403537461,
+        "exit_code": 1,
+        "original_token_count": 533,
+        "output": "F.                                                                       [100%]\n=================================== FAILURES ===================================\n_ test_cli_distinguishes_absent_default_from_explicit_missing_authority[False] _\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_gc_cli_legacy_authority.py:39: in test_cli_distinguishes_absent_default_from_explicit_missing_authority\n    assert result == 0, \"an absent unconfigured default is not a failed explicit route\"\nE   AssertionError: an absent unconfigured default is not a failed explicit route\nE   assert 2 == 0\n----------------------------- Captured stderr call -----------------------------\n2026-09-10 18:40:30,564 - orze.gc - INFO - ==================================================\n2026-09-10 18:40:30,564 - orze.gc - INFO - GARBAGE COLLECTION\n2026-09-10 18:40:30,564 - orze.gc - INFO - ==================================================\n2026-09-10 18:40:30,564 - orze.gc - INFO - Top performers: 0 ideas\n2026-09-10 18:40:30,564 - orze.gc - INFO - + Recent completions: 0 ideas\n2026-09-10 18:40:30,564 - orze.gc - INFO - Total protected: 0 ideas\n2026-09-10 18:40:30,588 - orze.gc - INFO - Checkpoints: deleted=0, kept=0, errors=1\n2026-09-10 18:40:30,588 - orze.gc - INFO - Disk free: 634.1GB\n------------------------------ Captured log call -------------------------------\nINFO     orze.gc:orze_gc.py:191 ==================================================\nINFO     orze.gc:orze_gc.py:192 GARBAGE COLLECTION\nINFO     orze.gc:orze_gc.py:193 ==================================================\nINFO     orze.gc:orze_gc.py:210 Top performers: 0 ideas\nINFO     orze.gc:orze_gc.py:214 + Recent completions: 0 ideas\nINFO     orze.gc:orze_gc.py:229 Total protected: 0 ideas\nINFO     orze.gc:orze_gc.py:238 Checkpoints: deleted=0, kept=0, errors=1\nINFO     orze.gc:orze_gc.py:263 Disk free: 634.1GB\n=========================== short test summary info ============================\nFAILED tests/test_gc_cli_legacy_authority.py::test_cli_distinguishes_absent_default_from_explicit_missing_authority[False]\n1 failed, 1 passed in 0.24s\n"
+      }
+    }
+  ],
+  "final_target": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_gc_cli_scope.py tests/test_gc_cli_boundary_mechanisms.py tests/test_gc_cli_legacy_authority.py --tb=short",
+    "result": {
+      "chunk_id": "d6e1e8",
+      "wall_time_seconds": 0.76094954,
+      "exit_code": 0,
+      "original_token_count": 25,
+      "output": ".............                                                            [100%]\n13 passed in 0.62s\n"
+    },
+    "source_test_pre": "e722779df2dd3099ef7837b5266a74aaab3945eedb26b05395f59228a0e42c12  src/orze/agents/orze_gc.py\nb864c93c5435b479b10571a99a077cfca71fabfb62b381565a7a02f9ebca6543  tests/test_gc_cli_scope.py\ne4da4a9560ad22f431c64f580e5e953a8abd807ee9c2aa70e3bc29d6bc860dba  tests/test_gc_cli_boundary_mechanisms.py\n8883777998f96fca7e565c120e34bc39117c5a85bad0112cd5ab61119aa29bc9  tests/test_gc_cli_legacy_authority.py\n",
+    "source_test_post": "e722779df2dd3099ef7837b5266a74aaab3945eedb26b05395f59228a0e42c12  src/orze/agents/orze_gc.py\nb864c93c5435b479b10571a99a077cfca71fabfb62b381565a7a02f9ebca6543  tests/test_gc_cli_scope.py\ne4da4a9560ad22f431c64f580e5e953a8abd807ee9c2aa70e3bc29d6bc860dba  tests/test_gc_cli_boundary_mechanisms.py\n8883777998f96fca7e565c120e34bc39117c5a85bad0112cd5ab61119aa29bc9  tests/test_gc_cli_legacy_authority.py\n",
+    "identical": true
+  },
+  "boundaries": [
+    "All test assertions and inputs frozen before their associated fixes. No old existing test was weakened or changed.",
+    "Configuration-derived paths use selected config directory; explicit CLI path overrides use invocation cwd. Invalid/missing/oversized config does not fall back to destructive defaults.",
+    "Explicit numeric zero is honored. Nonfinite or unrepresentably large thresholds produce parser exit 2, not OverflowError.",
+    "DB selection uses key/argument provenance. Missing unconfigured default remains absent; explicit missing DB remains authority and refuses. Existing or dangling default symlink is not silently dropped.",
+    "Two default-versus-explicit tests execute actual GC against temporary storage; spy-only tests are not represented as destructive end-to-end proof.",
+    "The real CLI subprocess is a configuration-rejection check, not the unfinished generic CPU research loop.",
+    "Full-suite inventory and commit/remote readback are recorded by the canonical parent evidence separately."
+  ]
+}

@@ -1,0 +1,180 @@
+{
+  "schema": 1,
+  "slice": "V1-05C1b",
+  "scope": "Independent GC: explicit project/native authority, no-follow quarantine reclamation, no-overwrite archive and actual CLI/periodic/emergency consumers.",
+  "baseline_commits": {
+    "orze": "af9d6d19ea9d9e65f3a2da9820b57808f7e7d653",
+    "orze_pro": "dfb8b7bc4cf9f73d8a8b77c15c0defdd5d53d233"
+  },
+  "code_commits": {
+    "orze": "d72c42997030706d0eddcfc75627bf568100f07d",
+    "orze_pro": "dfb8b7bc4cf9f73d8a8b77c15c0defdd5d53d233"
+  },
+  "case_accounting": {
+    "distinct_new_cases": 42,
+    "core_new_cases": 42,
+    "pro_new_cases": 0,
+    "old_public_behavior_failures": 19,
+    "old_controls": 5,
+    "new_mechanisms": 14,
+    "new_draft_control": 1,
+    "new_draft_regressions": 3,
+    "groups": [
+      [
+        "tests/test_gc_direct_containment.py",
+        6
+      ],
+      [
+        "tests/test_gc_path_authority.py",
+        6
+      ],
+      [
+        "tests/test_gc_native_authority.py",
+        6
+      ],
+      [
+        "tests/test_gc_cli_scope.py",
+        7
+      ],
+      [
+        "tests/test_gc_cli_boundary_mechanisms.py",
+        4
+      ],
+      [
+        "tests/test_gc_cli_legacy_authority.py",
+        2
+      ],
+      [
+        "tests/test_gc_scope_mechanisms.py",
+        8
+      ],
+      [
+        "tests/test_gc_pending_quarantine.py",
+        1
+      ],
+      [
+        "tests/test_gc_controller_handoff.py",
+        2
+      ]
+    ],
+    "note": "19 old failing scenarios share unsafe authority/containment/configuration causes; not 19 distinct root causes. New lower-level scope refusal is an intentional API safety contract. Actual cfg/scoped operation tests are needed in addition to no-scope rejection. Author43 includes the unchanged old ranking control. Root13, author43, native83+2, path35+2 and full-suite runs overlap and must not be added.",
+    "draft_failures": [
+      "CLI unrepresentable integer threshold raised OverflowError instead of clean rejection.",
+      "CLI injected absent default database and blocked legitimate explicitly configured legacy GC.",
+      "After reclaim failure detached source disappeared, next GC silently hid pending quarantine."
+    ],
+    "fixture_note": "The new controller handoff test initially compared Path with an equal path string. Corrected before freeze, without production changes; its 2 initial failures are not product reds. No existing test or frozen assertion was changed."
+  },
+  "supporting_evidence": [
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c1b-gc-author.json",
+      "sha256": "238a9ca4528fa1faba88de491bd35d2cc25d0edc509dfac055ad9b7493253f0e",
+      "role": "production author",
+      "summary": "Final 43 passed in 6.08s; complete old GC replay 5 failed/1 passed; eight scope mechanisms, one pending-quarantine draft regression, two real controller-to-spy handoffs."
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c1b-native-gc-review.json",
+      "sha256": "33366cc3dd15838acc4db11d6d70b8822e587f14799f66291d75f2fb84a996f2",
+      "role": "independent native reviewer",
+      "summary": "Final 83 passed in 23.25s plus handoff2 in 0.84s; old GC replay 4 failed/1 passed/1 new-contract case excluded; real SQLite/B1/HOLD and actual configured GC."
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c1b-gc-paths-review.json",
+      "sha256": "c66929b5f88b3fbd2623eae8b37810da73ffc808442c6298e73fc6ac47e30b4c",
+      "role": "independent path/consumer reviewer",
+      "summary": "Final 35 passed in 1.75s plus handoff2 in 0.78s; old full GC replay 4 failed/2 passed; real replacement/root overlap preservation and scoped positive."
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c1b-gc-cli-review.json",
+      "sha256": "bc62a78c6da892d039dc4a642102a7b4150ca6d0b6c668f758faff7fbbd4b29c",
+      "role": "main CLI author/reviewer",
+      "summary": "Final13 passed in 0.62s with exact pre/post source/test hashes. Old full GC replay6 failed/1 passed; two complete draft main functions reproduce their specific failures."
+    }
+  ],
+  "contract": {
+    "path": "docs/gc-scope.md",
+    "sha256": "7edbea6e98386410456afc7ab3d62e81c91e9669eebf5e5f2facf97b4e028428"
+  },
+  "report_audit": {
+    "read_completely": true,
+    "decoded_commands_syntax_checked": {
+      "author": 7,
+      "root": 4,
+      "path": 5,
+      "native": 5
+    },
+    "final_source_and_test_hash_mappings_checked": {
+      "author": 15,
+      "path": 13,
+      "native": 9,
+      "root": 3
+    },
+    "snapshot_baseline_git_show_sha256": "ed81df07edfc30ea81d6ae9192d31da238f6799ee5365bd65bf02bb1c8ca5f05",
+    "diff_check": "Production/tests/contract staged diff check passed. Two complete old module snapshots preserve the same original whitespace-only line 88 byte-exactly; staged all-files diff check reports those two historical trailing-whitespace lines, not production defects."
+  },
+  "remote_code_readback": {
+    "branch": "feat/autoresearch-v1",
+    "orze": "d72c42997030706d0eddcfc75627bf568100f07d",
+    "orze_pro": "dfb8b7bc4cf9f73d8a8b77c15c0defdd5d53d233",
+    "orze_pro_note": "Unchanged Pro production/tests; freshly tested against changed Core.",
+    "main_unchanged": {
+      "orze": "5ca2680dbd0139e63cd35a4f83da438b5b47ab99",
+      "orze_pro": "57feb6e0af19dcf62a80b1e447f0771936d39afe"
+    }
+  },
+  "final_validation": {
+    "freeze_utc": "2026-09-10 18:43:04 UTC",
+    "post_check_utc": "2026-09-10 18:50:44 UTC",
+    "fresh_runs": true,
+    "core": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "exit_code": 0,
+      "summary": "2922 passed, 7 skipped in 396.02s (0:06:36)",
+      "skips": "Seven optional Pro/stub cases; real Pro consumers are covered by the separate 60-case paired run."
+    },
+    "pro": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "exit_code": 0,
+      "summary": "944 passed in 162.75s (0:02:42)"
+    },
+    "paired": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "exit_code": 0,
+      "summary": "60 passed in 0.93s"
+    },
+    "environment": {
+      "python": "3.10.12",
+      "pytest": "9.1.1",
+      "gpu": "CUDA_VISIBLE_DEVICES empty; no GPU workloads",
+      "pro_license": "Test-only unittest.mock.patch(require_license), production gate unchanged"
+    },
+    "source_inventory": {
+      "path": "docs/evidence/2026-09-10-v1-05c1b-source-inventory.json",
+      "sha256": "f903697a1dcddc9952ba09a46c84d0d79aa019fecd15aa61500774d94cd889a3",
+      "core_files": 540,
+      "pro_files": 214,
+      "pre_post_sha256_equal": true
+    }
+  },
+  "protected_original_workspace": {
+    "path": "/hot-data/fsx/workspace/erik/auto-research-1.7b",
+    "status_entries": 281,
+    "last_read_only_check_utc": "2026-09-10 18:47:32 UTC",
+    "note": "Untouched; destructive tests only target their own synthetic temporary data."
+  },
+  "holdout": {
+    "read": false,
+    "sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245"
+  },
+  "limits": [
+    "This closes scoped independent GC only, not the whole V1-05 or V1 plan. Custom scripts and natural-exit/process ownership remain open.",
+    "cfg=None/scope=None now refuse; external destructive callers must pass their actual complete project configuration/scope. Genuine explicit legacy storage remains supported.",
+    "Bounded no-follow metadata, fresh read-only closed authority and shared task guards coordinate framework writers; not an adversarial same-UID sandbox or discovery of undeclared dependencies.",
+    "Quarantine can preserve an uncertain detach/reclaim and diagnose it on later runs; no automatic retry/recovery worker, cross-device copy/delete, rollback or power-loss proof.",
+    "Dry-run count keys are previews. Logical deleted bytes are not physical blocks; same-filesystem archive moved_bytes does not release that filesystem's space and freed_bytes is zero.",
+    "Keep/ranking/GC receipts do not establish scientific validity or observation-backed selection. Old malformed-JSON/ascending ranking control remains unchanged.",
+    "No live training, paid provider, GPU, production licensing change, holdout read, release/deployment/main merge, generic CPU autoresearch loop or research efficiency gain.",
+    "Exact inventories and actual pytest completion summaries are preserved; no claim that complete progress stdout was archived."
+  ],
+  "recorded_utc": "2026-09-10 18:52:48 UTC"
+}

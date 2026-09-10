@@ -1,0 +1,222 @@
+{
+  "schema": 1,
+  "slice": "V1-05C1b",
+  "author": "core_review",
+  "role": "GC helper and non-CLI consumer author; own public/mechanism tests. Root owns main() CLI and its independent tests. This is not an independent review or final full-suite record.",
+  "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "baseline": {
+    "core": "af9d6d19ea9d9e65f3a2da9820b57808f7e7d653",
+    "pro": "dfb8b7bc4cf9f73d8a8b77c15c0defdd5d53d233",
+    "snapshot": "docs/evidence/snapshots/v1-05c1b-before-gc.py",
+    "sha256": "ed81df07edfc30ea81d6ae9192d31da238f6799ee5365bd65bf02bb1c8ca5f05",
+    "provenance": "Complete original orze_gc.py captured before any GC/CLI production change with apply_patch; original and snapshot SHA matched. Not reconstructed after the repair."
+  },
+  "final_sources": {
+    "src/orze/agents/orze_gc.py": "e722779df2dd3099ef7837b5266a74aaab3945eedb26b05395f59228a0e42c12",
+    "src/orze/engine/gc_safety.py": "0051dc160606df3d3950dfd98273dedc169573a1f5b248f75bd6dcc191d995e6",
+    "src/orze/engine/gc_tree.py": "9fca08593291f3878b979e8fc6045db9b22c2dcdb52e5dfa5081b40aeff4779e",
+    "src/orze/engine/scheduler.py": "c3762251514cf45becb00d101632423af2b9afcad8259a2217b0994de626474c",
+    "src/orze/engine/phases.py": "d6b926457bd6468ab53bd67790832168fc498c49afa3ca5780ecf8768281041f"
+  },
+  "owned_frozen_tests": {
+    "tests/test_gc_direct_containment.py": {
+      "sha256": "7c21e3a82c9f6358c5c750f9d3e38a45f11d2cfe085f1d57476f9c95767fa7b0",
+      "cases": 6,
+      "classification": "Five real old low-level destructive behaviors plus one old dry-run control; not missing-new-API failures.",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_gc_direct_containment.py --tb=short",
+      "initial": {
+        "failed": 5,
+        "passed": 1,
+        "seconds": 0.44,
+        "exit": 1
+      },
+      "observed": [
+        "Checkpoint directory API removed temporary project source.",
+        "Redirected checkpoint root deleted a different temporary project artifact.",
+        "Results API deleted an arbitrary unscoped input file.",
+        "Archive overwrote an existing destination.",
+        "Archive moved a redirected overlays link."
+      ],
+      "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport orze.agents.orze_gc as gc\nimport pytest\nsnapshot = Path('docs/evidence/snapshots/v1-05c1b-before-gc.py')\nexec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), gc.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_gc_direct_containment.py', '--tb=short']))\nPY",
+      "replay": {
+        "failed": 5,
+        "passed": 1,
+        "seconds": 0.23,
+        "exit": 1
+      },
+      "caveat": "The repaired low-level APIs intentionally refuse missing scope. Their green result alone is not evidence that explicit native/scoped cleanup is correct; separate real-scoped positive and negative tests are required and included."
+    },
+    "tests/test_gc_scope_mechanisms.py": {
+      "sha256": "1b5faec8107a04e8453315498fb471ffb38370b108130e58989cc945e99aa008",
+      "cases": 8,
+      "classification": "New explicit-scope/physical-filesystem mechanisms, not old API-absence red.",
+      "initial": {
+        "passed": 8,
+        "seconds": 0.72,
+        "exit": 0
+      },
+      "coverage": [
+        "Real explicit-scope checkpoint directory deletion.",
+        "Real explicit-scope result leaf deletion.",
+        "Real same-filesystem archive with preserved bytes and no space-saving claim.",
+        "Nested redirect refused before detach.",
+        "Scope cannot authorize a different root.",
+        "Existing archive destination/source both preserved.",
+        "Actual rename followed by lost acknowledgement retains effect owner and quarantined payload, zero successes.",
+        "Reclamation unlink failure preserves quarantine, without automatic retry."
+      ],
+      "development_note": "After initial mechanism green and before freezing, root requested moved_bytes accounting; added the same-filesystem archive assertion moved_bytes equals source size and freed_bytes equals zero. No frozen assertion was weakened."
+    },
+    "tests/test_gc_pending_quarantine.py": {
+      "sha256": "eaea84f90e4a22512b36c0e86e434c03cc91bb58f2eec1d86c90d2a3188048d1",
+      "cases": 1,
+      "classification": "Actual draft regression: next tick hid an unresolved quarantine because the source had already been detached.",
+      "initial": {
+        "failed": 1,
+        "seconds": 0.27,
+        "exit": 1
+      },
+      "snapshot": "docs/evidence/snapshots/v1-05c1b-before-pending-quarantine.py",
+      "snapshot_sha256": "5cf888b64bdb7f533169c59f9d136f19aa53d89cda9d36bc78a1933dbe3dc0df",
+      "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport orze.engine.gc_safety as gc\nimport pytest\nsnapshot = Path('docs/evidence/snapshots/v1-05c1b-before-pending-quarantine.py')\nexec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), gc.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_gc_pending_quarantine.py', '--tb=short']))\nPY",
+      "replay": {
+        "failed": 1,
+        "seconds": 0.12,
+        "exit": 1
+      },
+      "repaired_with_original_mechanisms": {
+        "passed": 9,
+        "seconds": 0.62,
+        "exit": 0
+      }
+    },
+    "tests/test_gc_controller_handoff.py": {
+      "sha256": "4e6b7b70d94cd76d8a04cbec2bb82e1f7dac2bf0a875145242a1f6a564f634cf",
+      "cases": 2,
+      "classification": "New actual-consumer wiring mechanisms, not old destructive bug reds.",
+      "coverage": [
+        "Real _run_leased periodic branch -> real run_cleanup -> run_gc consumer spy: same complete cfg, same real IdeaLake, exact roots; outer cleanup lock finally released.",
+        "Real low-disk _launch_training branch -> run_gc spy: same cfg/Lake/roots, active training plus evaluation keep IDs, forced zero threshold."
+      ],
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_gc_controller_handoff.py --tb=short",
+      "first_fixture_result": {
+        "failed": 2,
+        "seconds": 0.48,
+        "reason": "New test compared Path object with IdeaLake.db_path string despite equal path text. Not a production defect or old red."
+      },
+      "fixture_correction": "Before freeze only, convert the expected existing Lake.db_path string to Path for the path-equality assertion. No production change. GC handoff fields had already been observed.",
+      "final": {
+        "passed": 2,
+        "seconds": 0.46,
+        "exit": 0
+      },
+      "limitation": "The consumer is a spy: proves actual call-chain scope handoff, not destructive end-to-end GC. Actual GC filesystem/SQLite behavior is separately covered."
+    }
+  },
+  "shared_frozen_tests": {
+    "tests/test_gc_path_authority.py": "268934385b776e6b3f23354a63d6786fda8d873b89cf497932aa70a02b612500",
+    "tests/test_gc_native_authority.py": "b7c0401b776749879504c38da802497c8311c504e7717c63671247026343376a",
+    "tests/test_gc_cli_scope.py": "b864c93c5435b479b10571a99a077cfca71fabfb62b381565a7a02f9ebca6543",
+    "tests/test_gc_cli_boundary_mechanisms.py": "e4da4a9560ad22f431c64f580e5e953a8abd807ee9c2aa70e3bc29d6bc860dba",
+    "tests/test_gc_cli_legacy_authority.py": "8883777998f96fca7e565c120e34bc39117c5a85bad0112cd5ab61119aa29bc9",
+    "tests/test_gc_lake_query.py": "30333cab35a3184dc8162402a1997d740e06ed8fd17387106a4eb973471a195a"
+  },
+  "final_validation": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_gc_direct_containment.py tests/test_gc_scope_mechanisms.py tests/test_gc_pending_quarantine.py tests/test_gc_controller_handoff.py tests/test_gc_path_authority.py tests/test_gc_native_authority.py tests/test_gc_lake_query.py tests/test_gc_cli_scope.py tests/test_gc_cli_boundary_mechanisms.py tests/test_gc_cli_legacy_authority.py --tb=short",
+    "result": {
+      "passed": 43,
+      "seconds": 6.08,
+      "exit": 0
+    },
+    "counting": "Ten unique files. 42 C1b cases plus the unchanged old malformed-JSON/ascending metric-ranking control. Do not add overlapping candidate runs or other reviewers' runs as distinct tests.",
+    "production_sha_verified_before_and_after": true
+  },
+  "candidate_history": [
+    {
+      "label": "Initial scope/quarantine implementation; not final source.",
+      "result": {
+        "passed": 19,
+        "seconds": 2.09
+      },
+      "files": "direct6 + path6 + native6 + old ranking1"
+    },
+    {
+      "label": "After archive logical-byte accounting, before pending-root diagnostic repair.",
+      "result": {
+        "passed": 27,
+        "seconds": 2.46
+      },
+      "files": "previous19 + mechanism8"
+    },
+    {
+      "label": "Earlier CLI epoch, excludes later default-DB legacy route and two actual handoff tests.",
+      "result": {
+        "passed": 39,
+        "seconds": 2.82
+      }
+    },
+    {
+      "label": "Final production, before adding new handoff tests.",
+      "result": {
+        "passed": 41,
+        "seconds": 4.79
+      }
+    },
+    {
+      "label": "C1/claim/lock/D1 compatibility neighborhood on frozen non-CLI production. Later main()-only CLI change did not alter these modules.",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_pattern_containment.py tests/test_cleanup_pattern_configuration.py tests/test_cleanup_framework_authority.py tests/test_cleanup_controller_handoff.py tests/test_cleanup_pattern_mechanisms.py tests/test_cleanup_bound_catalog.py tests/test_cleanup_bound_artifact_root.py tests/test_cleanup_glob_compatibility.py tests/test_cleanup_declared_legacy_inputs.py tests/test_orphan_cleanup_evidence.py tests/test_claim_catalog_routing.py tests/test_orphan_borrowed_lease.py tests/test_claim_effect_durability.py tests/test_training_claim_native_authority.py tests/test_training_claim_effect_boundaries.py tests/test_idea_source_lock.py tests/test_fs_lock.py tests/test_training_termination_authority.py --tb=short",
+      "result": {
+        "passed": 102,
+        "seconds": 15.08,
+        "exit": 0
+      },
+      "not_a_final_cli_validation": true
+    }
+  ],
+  "linux_primitive": {
+    "primary_reference": "https://man7.org/linux/man-pages/man2/rename.2.html",
+    "checked_facts": "renameat2 RENAME_NOREPLACE refuses an existing destination; filesystem flag support is required. EXDEV refuses movement across mount points. EINVAL can indicate unsupported flags. Ordinary rename can replace a destination and is not a safe fallback.",
+    "implementation": "ctypes libc renameat2 with directory FDs and flag 1; explicit ENOSYS/EINVAL/EOPNOTSUPP refusal; no fallback to overwrite or shutil.move.",
+    "local_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 - <<'PY'\nimport ctypes, platform\nprint({'system': platform.system(), 'kernel': platform.release(), 'libc': platform.libc_ver(), 'renameat2': hasattr(ctypes.CDLL(None), 'renameat2')})\nPY",
+    "local_result": {
+      "system": "Linux",
+      "kernel": "5.15.0-163-generic",
+      "libc": [
+        "glibc",
+        "2.35"
+      ],
+      "renameat2": true
+    },
+    "evidence_level": "Actual temporary-file explicit-scope deletion/archive positives exercised the syscall, not a mocked successful rename. No claim that every filesystem or machine supports it."
+  },
+  "contract": {
+    "public": "run_gc(..., *, cfg=None, lake=None). Explicit cfg mapping required; cfg=None returns blocked. Product CLI and periodic/emergency callers pass actual cfg; controller callers also pass their Lake.",
+    "lower": "gc_checkpoints/gc_results/archive_to_cold_storage(..., *, scope=None). Missing or mismatched GCScope raises GCRefused before writes. The scope factory is gc_scope(results_dir, cfg, *, lake=None, lake_db_path=None, checkpoints_dir=None, archive_dir=None).",
+    "authority": "Roots, declared sources, control and actual catalog protected. Matching existing result task directory required. Keep hints cannot authorize deletion. Fresh closed authority and captured identity checked under existing task effect guard; no DB bootstrap or lifecycle mutation.",
+    "io": "Metadata-only bounded no-follow snapshots precede the guard. Same-root quarantine intent, no-replace detach and parent fsync occur under the guard. No large tree walk/hash/delete or archive movement is held inside it. Captured quarantined identities govern reclamation.",
+    "limits": {
+      "scan_entries": 16384,
+      "tree_entries": 16384,
+      "tree_depth": 64,
+      "pending_tasks": 1024,
+      "pending_actions_per_task": 1024
+    },
+    "uncertainty": "Possibly completed detach retains effect owner. Reclamation failure retains quarantine and reports errors; subsequent GC detects pending quarantine even without a source candidate. No automatic replay/recovery.",
+    "accounting": "Actual success counted only after completed quarantine receipt. Dry-run count keys are previews and create no markers/guards. Delete freed_bytes remains logical file size, not physical blocks. Same-filesystem archive uses moved_bytes and freed_bytes=0. Measured free_gb is an un-attributed disk snapshot."
+  },
+  "documentation_review": {
+    "path": "docs/gc-scope.md",
+    "sha256": "7edbea6e98386410456afc7ab3d62e81c91e9669eebf5e5f2facf97b4e028428",
+    "read_completely": true,
+    "result": "Accurate for this slice; no change requested."
+  },
+  "limitations": [
+    "No natural descendant closure/C2, supervisor implementation, director process ownership, or generic CPU research controller changes.",
+    "No discovery of undeclared dependencies or adversarial same-UID filesystem sandbox guarantee.",
+    "No cross-filesystem archive copy/delete support, atomic multi-file rollback, power-loss proof, or automatic quarantine repair.",
+    "GC intents are cleanup diagnostics, not execution attempts or scientific observations.",
+    "No provider, real GPU, holdout, live research campaign, or performance/space-saving claim.",
+    "Final Core/Pro/paired whole-suite results, independent reviews and canonical closure belong to root's evidence, not this author's bounded test results.",
+    "No source or frozen tests changed after final epoch. No commits or pushes by this subagent."
+  ]
+}

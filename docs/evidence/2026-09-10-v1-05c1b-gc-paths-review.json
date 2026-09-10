@@ -1,0 +1,196 @@
+{
+  "schema": 1,
+  "slice": "V1-05C1b",
+  "reviewer": "pro_review",
+  "status": "final_scoped_review_passed",
+  "scope": "Independent public GC path/identity regressions and read-only review. This reviewer changed no production source or existing tests.",
+  "baseline": {
+    "core_commit": "af9d6d19ea9d9e65f3a2da9820b57808f7e7d653",
+    "source": "src/orze/agents/orze_gc.py",
+    "source_sha256": "ed81df07edfc30ea81d6ae9192d31da238f6799ee5365bd65bf02bb1c8ca5f05",
+    "snapshot": "docs/evidence/snapshots/v1-05c1b-before-gc-scope-safety.py",
+    "snapshot_sha256": "ed81df07edfc30ea81d6ae9192d31da238f6799ee5365bd65bf02bb1c8ca5f05",
+    "snapshot_provenance": "Complete original module copied byte-exact using apply_patch before production changes, including all destructive functions, run_gc and main.",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_gc_path_authority.py --tb=short",
+    "exit_code": 1,
+    "footer": "4 failed, 2 passed in 0.23s",
+    "behavior_reds": 4,
+    "controls": 2,
+    "fixture_errors": 0,
+    "missing_api_failures": 0,
+    "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nmodule = importlib.import_module('orze.agents.orze_gc')\nfilename = 'docs/evidence/snapshots/v1-05c1b-before-gc-scope-safety.py'\nexec(compile(Path(filename).read_bytes(), filename, 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_gc_path_authority.py','--tb=short']))\nPY",
+    "replay_exit_code": 1,
+    "replay_footer": "4 failed, 2 passed in 0.21s",
+    "replay_method": "Compile the full frozen module into the imported module namespace in a separate pytest process; no source files are replaced on disk."
+  },
+  "tests": {
+    "path": "tests/test_gc_path_authority.py",
+    "sha256": "268934385b776e6b3f23354a63d6786fda8d873b89cf497932aa70a02b612500",
+    "cases": 6,
+    "fixture_migrations": 0,
+    "invocation_contract": "Preservation assertions run immediately after the old public call. When the new cfg parameter exists, they run again against the same physical case with explicit project configuration. The old source fails before reaching any new parameter. The replacement case additionally asserts the actual configured scan performed the swap; the legacy positive must truly delete. Thus cfg=None refusal alone is not counted as the fix.",
+    "fixture_scope": "Actual temporary source/results/checkpoint files with explicit project configuration and no database declaration. This fixture is not load_project_config or a native attempt fixture; separate native and CLI suites cover those consumers.",
+    "case_detail": [
+      [
+        "test_gc_checkpoint_root_cannot_erase_results_or_project_inputs[results]",
+        "old_behavior_red",
+        "Checkpoint root equal to results erases the real task metrics/config tree in the old implementation."
+      ],
+      [
+        "test_gc_checkpoint_root_cannot_erase_results_or_project_inputs[project-ancestor]",
+        "old_behavior_red",
+        "Checkpoint root is the project ancestor of results/source; old one-level scan reaches and deletes the real task tree."
+      ],
+      [
+        "test_gc_archive_cannot_publish_into_declared_source_directory",
+        "old_behavior_red",
+        "Old archive publishes result artifacts into a directory containing the actual declared train script; this is not an arbitrary project-subdirectory prohibition."
+      ],
+      [
+        "test_gc_does_not_delete_same_name_directory_replaced_after_scan",
+        "old_behavior_red",
+        "Actual scandir/DirEntry metadata is observed before a real directory rename/replacement. Old deletion removes the replacement; final implementation must compare the captured original identity."
+      ],
+      [
+        "test_gc_does_not_follow_checkpoint_directory_symlink",
+        "old_control",
+        "The no-follow symlink preservation control retains an external directory and its bytes."
+      ],
+      [
+        "test_scoped_gc_keeps_selected_and_removes_only_independent_legacy_checkpoint",
+        "old_control",
+        "A genuine independent disposable checkpoint is removed while explicit keep IDs and real result/source files remain."
+      ]
+    ]
+  },
+  "candidate_green": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_gc_path_authority.py tests/test_gc_cli_scope.py tests/test_gc_direct_containment.py tests/test_gc_lake_query.py --tb=short",
+    "exit_code": 0,
+    "footer": "20 passed in 0.46s",
+    "source_and_test_pre": "70cd0a582047eb78b40a0bbe11084ef14ea0d704c96fa6bbffcaddd1781a4d6d  src/orze/agents/orze_gc.py\n240021e7c2a394abc13b1724d974379ce430777b6b306417be44fb483fad969e  src/orze/engine/gc_safety.py\n0623955f4a3fb1812bf263d91e3c007d562a460e758ab3ca9aac9426b1ed26cd  src/orze/engine/gc_tree.py\nc3762251514cf45becb00d101632423af2b9afcad8259a2217b0994de626474c  src/orze/engine/scheduler.py\nd6b926457bd6468ab53bd67790832168fc498c49afa3ca5780ecf8768281041f  src/orze/engine/phases.py\n268934385b776e6b3f23354a63d6786fda8d873b89cf497932aa70a02b612500  tests/test_gc_path_authority.py\n",
+    "source_and_test_post": "70cd0a582047eb78b40a0bbe11084ef14ea0d704c96fa6bbffcaddd1781a4d6d  src/orze/agents/orze_gc.py\n240021e7c2a394abc13b1724d974379ce430777b6b306417be44fb483fad969e  src/orze/engine/gc_safety.py\n0623955f4a3fb1812bf263d91e3c007d562a460e758ab3ca9aac9426b1ed26cd  src/orze/engine/gc_tree.py\nc3762251514cf45becb00d101632423af2b9afcad8259a2217b0994de626474c  src/orze/engine/scheduler.py\nd6b926457bd6468ab53bd67790832168fc498c49afa3ca5780ecf8768281041f  src/orze/engine/phases.py\n268934385b776e6b3f23354a63d6786fda8d873b89cf497932aa70a02b612500  tests/test_gc_path_authority.py\n",
+    "classification": "Earlier candidate only: final CLI legacy-route and quarantine changes were not yet frozen. These overlapping targets must not be added to final results as distinct tests."
+  },
+  "final_green": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_gc_path_authority.py tests/test_gc_cli_scope.py tests/test_gc_direct_containment.py tests/test_gc_lake_query.py tests/test_gc_cli_boundary_mechanisms.py tests/test_gc_cli_legacy_authority.py tests/test_gc_scope_mechanisms.py tests/test_gc_pending_quarantine.py --tb=short",
+    "exit_code": 0,
+    "footer": "35 passed in 1.75s",
+    "source_and_test_pre": {
+      "src/orze/agents/orze_gc.py": "e722779df2dd3099ef7837b5266a74aaab3945eedb26b05395f59228a0e42c12",
+      "src/orze/engine/gc_safety.py": "0051dc160606df3d3950dfd98273dedc169573a1f5b248f75bd6dcc191d995e6",
+      "src/orze/engine/gc_tree.py": "9fca08593291f3878b979e8fc6045db9b22c2dcdb52e5dfa5081b40aeff4779e",
+      "src/orze/engine/scheduler.py": "c3762251514cf45becb00d101632423af2b9afcad8259a2217b0994de626474c",
+      "src/orze/engine/phases.py": "d6b926457bd6468ab53bd67790832168fc498c49afa3ca5780ecf8768281041f",
+      "tests/test_gc_path_authority.py": "268934385b776e6b3f23354a63d6786fda8d873b89cf497932aa70a02b612500",
+      "tests/test_gc_cli_scope.py": "b864c93c5435b479b10571a99a077cfca71fabfb62b381565a7a02f9ebca6543",
+      "tests/test_gc_direct_containment.py": "7c21e3a82c9f6358c5c750f9d3e38a45f11d2cfe085f1d57476f9c95767fa7b0",
+      "tests/test_gc_lake_query.py": "30333cab35a3184dc8162402a1997d740e06ed8fd17387106a4eb973471a195a",
+      "tests/test_gc_cli_boundary_mechanisms.py": "e4da4a9560ad22f431c64f580e5e953a8abd807ee9c2aa70e3bc29d6bc860dba",
+      "tests/test_gc_cli_legacy_authority.py": "8883777998f96fca7e565c120e34bc39117c5a85bad0112cd5ab61119aa29bc9",
+      "tests/test_gc_scope_mechanisms.py": "1b5faec8107a04e8453315498fb471ffb38370b108130e58989cc945e99aa008",
+      "tests/test_gc_pending_quarantine.py": "eaea84f90e4a22512b36c0e86e434c03cc91bb58f2eec1d86c90d2a3188048d1"
+    },
+    "source_and_test_post": {
+      "src/orze/agents/orze_gc.py": "e722779df2dd3099ef7837b5266a74aaab3945eedb26b05395f59228a0e42c12",
+      "src/orze/engine/gc_safety.py": "0051dc160606df3d3950dfd98273dedc169573a1f5b248f75bd6dcc191d995e6",
+      "src/orze/engine/gc_tree.py": "9fca08593291f3878b979e8fc6045db9b22c2dcdb52e5dfa5081b40aeff4779e",
+      "src/orze/engine/scheduler.py": "c3762251514cf45becb00d101632423af2b9afcad8259a2217b0994de626474c",
+      "src/orze/engine/phases.py": "d6b926457bd6468ab53bd67790832168fc498c49afa3ca5780ecf8768281041f",
+      "tests/test_gc_path_authority.py": "268934385b776e6b3f23354a63d6786fda8d873b89cf497932aa70a02b612500",
+      "tests/test_gc_cli_scope.py": "b864c93c5435b479b10571a99a077cfca71fabfb62b381565a7a02f9ebca6543",
+      "tests/test_gc_direct_containment.py": "7c21e3a82c9f6358c5c750f9d3e38a45f11d2cfe085f1d57476f9c95767fa7b0",
+      "tests/test_gc_lake_query.py": "30333cab35a3184dc8162402a1997d740e06ed8fd17387106a4eb973471a195a",
+      "tests/test_gc_cli_boundary_mechanisms.py": "e4da4a9560ad22f431c64f580e5e953a8abd807ee9c2aa70e3bc29d6bc860dba",
+      "tests/test_gc_cli_legacy_authority.py": "8883777998f96fca7e565c120e34bc39117c5a85bad0112cd5ab61119aa29bc9",
+      "tests/test_gc_scope_mechanisms.py": "1b5faec8107a04e8453315498fb471ffb38370b108130e58989cc945e99aa008",
+      "tests/test_gc_pending_quarantine.py": "eaea84f90e4a22512b36c0e86e434c03cc91bb58f2eec1d86c90d2a3188048d1"
+    },
+    "all_pre_post_identical": true,
+    "target_composition": "Original 20-case candidate selection plus CLI boundary4, CLI legacy2, explicit-scope mechanisms8 and pending-quarantine1. These are overlapping target runs, not additional distinct new tests.",
+    "classification": "Final frozen source; no source or frozen test modified by this reviewer."
+  },
+  "review": {
+    "conclusion": "No remaining blocker found within the agreed C1b public path/configuration/identity scope.",
+    "independence": "This agent authored only its six independent tests, preserved the complete old GC snapshot and wrote this report. GC/CLI/helper/scheduler/phases implementation was authored by other agents.",
+    "checked": [
+      {
+        "source": "src/orze/agents/orze_gc.py",
+        "finding": "The standalone CLI validates bounded selected configuration before the consumer, anchors configured paths to config directory and explicit argv paths to invocation directory, preserves explicit numeric zero, and maps blocked outcomes to exit 2. Explicit DB key/argument remains authority even if missing; an undeclared absent default is not injected, while an existing/default symlink is handed to fail-closed authority checks."
+      },
+      {
+        "source": "src/orze/engine/gc_safety.py",
+        "finding": "Explicit configuration/scope is required. Checkpoint/archive roots cannot equal or contain project root, overlap results or declared inputs/control roots. Actual entry metadata is captured during enumeration; replacement is rejected before detach. The same task effect guard/native authority path protects live or unresolved attempts; no results task directory is manufactured."
+      },
+      {
+        "source": "src/orze/engine/gc_tree.py",
+        "finding": "No-follow metadata checks reject redirects and unsupported tree entries; no-replace same-filesystem rename detaches to quarantine. Reclaim runs outside the short task guard, verifies captured identities, and reports success only after completion receipt publication. Unknown detach holds the effect owner; failed reclamation is preserved and later GC reports pending quarantine even when the source path is gone. Cross-device archive refuses rather than copy/delete."
+      },
+      {
+        "source": "src/orze/engine/scheduler.py",
+        "finding": "Periodic GC now passes the existing cfg and Lake into run_gc; this is a narrow two-argument authority handoff, not a rewritten ranking policy."
+      },
+      {
+        "source": "src/orze/engine/phases.py",
+        "finding": "Emergency GC also passes cfg and Lake while preserving the existing externally known active-task retention set."
+      }
+    ],
+    "additional_issues_handled_by_other_authors": [
+      "Unrepresentable numeric disk threshold was reported as preconsumer input-contract rejection, not an old destructive behavior failure; parent owns its mechanism evidence.",
+      "CLI default-missing database initially blocked legitimate legacy cleanup. Parent independently froze the real CLI positive/explicit-missing pair and fixed provenance locally; this report reruns it but does not claim authorship of those tests.",
+      "Source-less pending quarantine handling and its draft baseline belong to the GC author, not the four old path behavior failures."
+    ],
+    "not_claimed": [
+      "No automatic recovery or deletion retry for unresolved quarantine.",
+      "No arbitrary malicious same-UID filesystem writer protection or global filesystem transaction.",
+      "No current scientific qualification inferred from keep lists, raw metrics, GC receipts or removal byte counts.",
+      "No verification that every external extension/direct caller has migrated to the new explicit scope requirement."
+    ]
+  },
+  "appended_controller_handoff_review": {
+    "test": "tests/test_gc_controller_handoff.py",
+    "test_sha256": "4e6b7b70d94cd76d8a04cbec2bb82e1f7dac2bf0a875145242a1f6a564f634cf",
+    "classification": "Two new consumer-handoff mechanisms, not old-source behavioral reds and not destructive end-to-end tests.",
+    "review": "Both use a real temporary IdeaLake and actual controller entry points. The periodic case enters _run_leased and cleanup, verifies the full cfg object, the exact Lake/results/checkpoints/catalog handoff and cleanup-lock release. The disk-pressure case enters _launch_training and verifies the same handoff plus both training/evaluation active IDs and min_free_gb=0. A GCReached BaseException stops at the run_gc spy, avoiding ordinary swallowed Exception false greens. Startup/OS/services and the actual GC consumer are replaced deliberately, so this proves call-chain argument delivery rather than filesystem reclamation.",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_gc_controller_handoff.py --tb=short",
+    "exit_code": 0,
+    "footer": "2 passed in 0.78s",
+    "pre_sha256": {
+      "src/orze/agents/orze_gc.py": "e722779df2dd3099ef7837b5266a74aaab3945eedb26b05395f59228a0e42c12",
+      "src/orze/engine/gc_safety.py": "0051dc160606df3d3950dfd98273dedc169573a1f5b248f75bd6dcc191d995e6",
+      "src/orze/engine/gc_tree.py": "9fca08593291f3878b979e8fc6045db9b22c2dcdb52e5dfa5081b40aeff4779e",
+      "src/orze/engine/scheduler.py": "c3762251514cf45becb00d101632423af2b9afcad8259a2217b0994de626474c",
+      "src/orze/engine/phases.py": "d6b926457bd6468ab53bd67790832168fc498c49afa3ca5780ecf8768281041f",
+      "tests/test_gc_controller_handoff.py": "4e6b7b70d94cd76d8a04cbec2bb82e1f7dac2bf0a875145242a1f6a564f634cf",
+      "docs/gc-scope.md": "7edbea6e98386410456afc7ab3d62e81c91e9669eebf5e5f2facf97b4e028428"
+    },
+    "post_sha256": {
+      "src/orze/agents/orze_gc.py": "e722779df2dd3099ef7837b5266a74aaab3945eedb26b05395f59228a0e42c12",
+      "src/orze/engine/gc_safety.py": "0051dc160606df3d3950dfd98273dedc169573a1f5b248f75bd6dcc191d995e6",
+      "src/orze/engine/gc_tree.py": "9fca08593291f3878b979e8fc6045db9b22c2dcdb52e5dfa5081b40aeff4779e",
+      "src/orze/engine/scheduler.py": "c3762251514cf45becb00d101632423af2b9afcad8259a2217b0994de626474c",
+      "src/orze/engine/phases.py": "d6b926457bd6468ab53bd67790832168fc498c49afa3ca5780ecf8768281041f",
+      "tests/test_gc_controller_handoff.py": "4e6b7b70d94cd76d8a04cbec2bb82e1f7dac2bf0a875145242a1f6a564f634cf",
+      "docs/gc-scope.md": "7edbea6e98386410456afc7ab3d62e81c91e9669eebf5e5f2facf97b4e028428"
+    },
+    "all_pre_post_identical": true,
+    "prior_35_preserved": true
+  },
+  "doc_review_final": {
+    "path": "docs/gc-scope.md",
+    "sha256": "7edbea6e98386410456afc7ab3d62e81c91e9669eebf5e5f2facf97b4e028428",
+    "matched": true,
+    "scope": "Read completely after the 35-case run and together with the two added controller tests. The document distinguishes intentional no-scope API refusal, explicit legacy/no-default-catalog compatibility, native authority, no-follow identity checks, cooperative quarantine/HOLD, no cross-device fallback, logical bytes versus physical space, and spy wiring versus real temporary-file tests. It does not claim automatic recovery, adversarial same-UID safety, natural-descendant closure or finished V1."
+  },
+  "limits": [
+    "Only actual files created under pytest temporary directories were deleted/moved; no live user data, worker, GPU, holdout or paid provider was used.",
+    "New cfg=None/scope=None refusal is an explicit safety-contract change, not legacy no-configuration destructive API compatibility.",
+    "Keep-set/ranking data only retain candidates; it is not mutation authority. No ranking/scientific evidence semantics were rewritten here.",
+    "No arbitrary same-UID malicious filesystem writer guarantee, remote recovery or automatic quarantine replay is claimed.",
+    "No director restart/kill, natural-exit descendants, cross-device copy-and-delete, artifact-retention policy or research-efficiency conclusion is in this slice.",
+    "Full Core/Pro suites, remote commit/push and aggregated distinct counts belong to the parent evidence, not this bounded independent report."
+  ]
+}
