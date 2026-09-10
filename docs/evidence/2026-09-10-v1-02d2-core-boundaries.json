@@ -1,0 +1,395 @@
+{
+  "schema_version": 1,
+  "status": "draft_subagent_evidence_not_final_release_validation",
+  "date": "2026-09-10",
+  "author": "core_review",
+  "last_targeted_validation": {
+    "result": "92 passed in 8.11s",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_execution_attempts.py tests/test_execution_authority.py tests/test_execution_watch_contract.py tests/test_execution_native_watch.py tests/test_execution_dependency_watch.py tests/test_execution_lifecycle_reference.py tests/test_claim_effect_durability.py tests/test_reset_durability_modes.py tests/test_interruption_receipt_identity.py tests/test_training_completion_catalog_scope.py --tb=short",
+    "scope": "Supplemental targeted run only; not the final whole-source Core/Pro/paired validation."
+  },
+  "repository": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "base_head": "250ad8a627806ae540fe0dcac3db41eb8bd5cb7b",
+  "scope": "Supplemental core D2 boundary evidence. Root owns final integrated suites, release classification, fixture migrations outside this record, and commit/push.",
+  "caveats": [
+    "The workspace contains concurrent uncommitted implementation. Results below were run at their respective recorded draft stages; current_source_sha256 is a capture, not a claim that every historical result used that final source.",
+    "Missing new APIs are mechanism absence, never historical behavior reds. Published-D1 behavior, uncommitted-draft behavior, mechanism acceptance, and fixture migration are labeled separately.",
+    "No real training, GPU allocation, provider, deployment, or private holdout was used. Model-lineage inputs in tests are synthetic tiny manifests.",
+    "Native restart adoption, automatic repair workers, global cross-restart count reconstruction, and isolated worker artifacts are not implemented by these helpers."
+  ],
+  "groups": [
+    {
+      "id": "D2-training-public-initial",
+      "classification": "published_D1_behavior_regression",
+      "tests": [
+        "tests/test_stale_training_completion.py",
+        "tests/test_training_completion_write_race.py"
+      ],
+      "results": {
+        "baseline": "2 failed / 4 controls; then 6 failed / 2 controls",
+        "current_reported": "14 passed in 7.03s"
+      },
+      "baseline_source": "250ad8a627806ae540fe0dcac3db41eb8bd5cb7b",
+      "note": "Initial 6+8 public tests were frozen before production. Root subsequently versioned the FSM write seam from public transition to caller-owned in_tx and preserved the original fixture; that migration/evidence is owned by root, not silently merged here.",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_stale_training_completion.py tests/test_training_completion_write_race.py --tb=short"
+    },
+    {
+      "id": "generic-attempt-store",
+      "classification": "new_API_acceptance_plus_4_draft_behavior_regressions",
+      "tests": [
+        "tests/test_execution_attempts.py"
+      ],
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-attempt-json-exactness.py"
+      ],
+      "results": {
+        "initial_new_mechanisms": 43,
+        "draft_red": 4,
+        "draft_controls": 43,
+        "current": "47 passed"
+      },
+      "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys\nfrom pathlib import Path\nimport pytest\nfor name, filename in [[\"orze.core.execution_attempts\",\"docs/evidence/snapshots/v1-02d2-before-attempt-json-exactness.py\"]]:\n    module = importlib.import_module(name)\n    source = Path(filename)\n    exec(compile(source.read_text(), str(source), 'exec'), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_execution_attempts.py\",\"--tb=short\"]))\nPY",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_execution_attempts.py --tb=short",
+      "notes": [
+        "All storage writes use a caller-owned SQLite transaction; no BEGIN/COMMIT/ROLLBACK is performed by the generic store.",
+        "The four draft regressions concern canonical JSON identity exactness, including bool/int and integer/float coercion. They are not missing-old-API reds."
+      ]
+    },
+    {
+      "id": "execution-coordinator",
+      "classification": "uncommitted_draft_behavior_regression_and_new_mechanism_controls",
+      "tests": [
+        "tests/test_execution_authority.py"
+      ],
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-execution-authority.py"
+      ],
+      "results": {
+        "draft_red": 11,
+        "draft_controls": 7,
+        "current": "18 passed"
+      },
+      "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys\nfrom pathlib import Path\nimport pytest\nfor name, filename in [[\"orze.engine.execution_authority\",\"docs/evidence/snapshots/v1-02d2-before-execution-authority.py\"]]:\n    module = importlib.import_module(name)\n    source = Path(filename)\n    exec(compile(source.read_text(), str(source), 'exec'), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_execution_authority.py\",\"--tb=short\"]))\nPY",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_execution_authority.py --tb=short",
+      "fixture_notes": [
+        "Before freeze, _assert_hold was corrected to accept both Busy and InDoubt sibling exceptions; three initial fixture mismatches were excluded.",
+        "A Python 3.10 Exception.add_note implementation mistake was fixed; it is not additional regression evidence."
+      ]
+    },
+    {
+      "id": "native-intent-started-watch",
+      "classification": "2_uncommitted_business_draft_regressions",
+      "tests": [
+        "tests/test_execution_native_watch.py"
+      ],
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-attempt-watch-authority.py",
+        "docs/evidence/snapshots/v1-02d2-before-attempt-watch-evaluation.py"
+      ],
+      "results": {
+        "draft_red": 2,
+        "draft_duration_seconds": 0.89
+      },
+      "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys\nfrom pathlib import Path\nimport pytest\nfor name, filename in [[\"orze.engine.execution_authority\",\"docs/evidence/snapshots/v1-02d2-before-attempt-watch-authority.py\"],[\"orze.engine.native_evaluation\",\"docs/evidence/snapshots/v1-02d2-before-attempt-watch-evaluation.py\"]]:\n    module = importlib.import_module(name)\n    source = Path(filename)\n    exec(compile(source.read_text(), str(source), 'exec'), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_execution_native_watch.py\",\"--tb=short\"]))\nPY",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_execution_native_watch.py --tb=short"
+    },
+    {
+      "id": "watch-and-cross-phase-reference-contracts",
+      "classification": "new_API_mechanism_acceptance_only",
+      "tests": [
+        "tests/test_execution_watch_contract.py",
+        "tests/test_execution_dependency_watch.py",
+        "tests/test_execution_lifecycle_reference.py"
+      ],
+      "mechanisms": {
+        "watch_and_strict_identity": 5,
+        "closed_dependency": 3,
+        "explicit_lifecycle_phase": 5
+      },
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_execution_watch_contract.py tests/test_execution_dependency_watch.py tests/test_execution_lifecycle_reference.py --tb=short",
+      "notes": [
+        "watch_attempt validates current explicit lifecycle bindings.",
+        "watch_dependency requires a current closed exact row without requiring its historical lifecycle to remain current.",
+        "lifecycle_phase explicitly references training from a controller action; no controller training stage is invented.",
+        "Generic CPU/GPU/process/metric semantics are not embedded in the store."
+      ]
+    },
+    {
+      "id": "legacy-import-catalog-scope",
+      "classification": "uncommitted_business_draft_regression",
+      "tests": [
+        "tests/test_training_completion_catalog_scope.py"
+      ],
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-training-scope-training_attempts.py",
+        "docs/evidence/snapshots/v1-02d2-before-training-scope-training_completion.py"
+      ],
+      "results": {
+        "draft_red": 1,
+        "draft_controls": 1,
+        "draft_duration_seconds": 0.87
+      },
+      "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys\nfrom pathlib import Path\nimport pytest\nfor name, filename in [[\"orze.engine.training_attempts\",\"docs/evidence/snapshots/v1-02d2-before-training-scope-training_attempts.py\"],[\"orze.engine.training_completion\",\"docs/evidence/snapshots/v1-02d2-before-training-scope-training_completion.py\"]]:\n    module = importlib.import_module(name)\n    source = Path(filename)\n    exec(compile(source.read_text(), str(source), 'exec'), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_training_completion_catalog_scope.py\",\"--tb=short\"]))\nPY",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_training_completion_catalog_scope.py --tb=short"
+    },
+    {
+      "id": "native-training-caller",
+      "classification": "uncommitted_business_draft_regressions_and_controls",
+      "tests": [
+        "tests/test_native_training_caller_boundaries.py"
+      ],
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-native-training-process.py",
+        "docs/evidence/snapshots/v1-02d2-before-native-training-attempts.py",
+        "docs/evidence/snapshots/v1-02d2-before-native-training-launcher.py"
+      ],
+      "results": {
+        "draft_red": 2,
+        "draft_controls": 4,
+        "draft_duration_seconds": 3.41,
+        "current_neighborhood": "21 passed in 6.59s"
+      },
+      "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys\nfrom pathlib import Path\nimport pytest\nfor name, filename in [[\"orze.engine.process\",\"docs/evidence/snapshots/v1-02d2-before-native-training-process.py\"],[\"orze.engine.training_attempts\",\"docs/evidence/snapshots/v1-02d2-before-native-training-attempts.py\"],[\"orze.engine.launcher\",\"docs/evidence/snapshots/v1-02d2-before-native-training-launcher.py\"]]:\n    module = importlib.import_module(name)\n    source = Path(filename)\n    exec(compile(source.read_text(), str(source), 'exec'), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_native_training_caller_boundaries.py\",\"--tb=short\"]))\nPY",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_training_caller_boundaries.py tests/test_training_termination_authority.py tests/test_training_lease_exit_authority.py --tb=short"
+    },
+    {
+      "id": "claim-reset-durability",
+      "classification": "uncommitted_business_draft_regressions",
+      "tests": [
+        "tests/test_claim_effect_durability.py",
+        "tests/test_reset_durability_modes.py"
+      ],
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-claim-durability-authority.py",
+        "docs/evidence/snapshots/v1-02d2-before-claim-durability-failure.py",
+        "docs/evidence/snapshots/v1-02d2-before-claim-durability-scheduler.py"
+      ],
+      "results": {
+        "draft_red": 7,
+        "draft_controls": 2,
+        "draft_duration_seconds": 1.01,
+        "current_neighborhood": "44 passed in 8.85s",
+        "independent_review": "runtime_evidence: 61 passed in 5.94s, additional orphan/scheduler 9 passed in 1.32s"
+      },
+      "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys\nfrom pathlib import Path\nimport pytest\nfor name, filename in [[\"orze.engine.claim_authority\",\"docs/evidence/snapshots/v1-02d2-before-claim-durability-authority.py\"],[\"orze.engine.failure\",\"docs/evidence/snapshots/v1-02d2-before-claim-durability-failure.py\"],[\"orze.engine.scheduler\",\"docs/evidence/snapshots/v1-02d2-before-claim-durability-scheduler.py\"]]:\n    module = importlib.import_module(name)\n    source = Path(filename)\n    exec(compile(source.read_text(), str(source), 'exec'), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_claim_effect_durability.py\",\"tests/test_reset_durability_modes.py\",\"--tb=short\"]))\nPY",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_claim_effect_durability.py tests/test_reset_durability_modes.py --tb=short",
+      "notes": [
+        "Reset now fsyncs the parent after all release/renew/no-claim namespace changes.",
+        "Nested claim must propagate InDoubt instead of returning False and releasing the outer owner's uncertain effects."
+      ]
+    },
+    {
+      "id": "interruption-receipt-identity",
+      "classification": "independent_uncommitted_draft_regression",
+      "tests": [
+        "tests/test_interruption_receipt_identity.py"
+      ],
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-interruption-receipt-identity.py"
+      ],
+      "results": {
+        "draft_red": 1,
+        "draft_duration_seconds": 0.24
+      },
+      "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys\nfrom pathlib import Path\nimport pytest\nfor name, filename in [[\"orze.engine.interruption_publication\",\"docs/evidence/snapshots/v1-02d2-before-interruption-receipt-identity.py\"]]:\n    module = importlib.import_module(name)\n    source = Path(filename)\n    exec(compile(source.read_text(), str(source), 'exec'), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_interruption_receipt_identity.py\",\"--tb=short\"]))\nPY",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_interruption_receipt_identity.py --tb=short",
+      "note": "Test and snapshot authored by core_review; production fix owned by runtime_evidence. Existing return_code false must not equal expected integer 0."
+    },
+    {
+      "id": "launch-failure-report",
+      "classification": "2_uncommitted_business_draft_regressions_plus_new_mechanisms",
+      "tests": [
+        "tests/test_launch_failure_report.py",
+        "tests/test_launch_failure_report_contract.py"
+      ],
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-launch-failure-report-launcher.py",
+        "docs/evidence/snapshots/v1-02d2-before-launch-failure-report-phases.py",
+        "docs/evidence/snapshots/v1-02d2-before-launch-failure-report-handoff-test.py"
+      ],
+      "results": {
+        "initial_draft_red": 2,
+        "initial_duration_seconds": 1.08,
+        "fixed_snapshot_replay": "2 failed, 4 original-D1 controls passed in 2.31s",
+        "new_report_mechanisms": 6,
+        "combined_new_contracts": "16 passed in 4.88s",
+        "related_suite": "66 passed in 16.33s"
+      },
+      "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys\nfrom pathlib import Path\nimport pytest\nfor name, filename in [[\"orze.engine.launcher\",\"docs/evidence/snapshots/v1-02d2-before-launch-failure-report-launcher.py\"],[\"orze.engine.phases\",\"docs/evidence/snapshots/v1-02d2-before-launch-failure-report-phases.py\"]]:\n    module = importlib.import_module(name)\n    source = Path(filename)\n    exec(compile(source.read_text(), str(source), 'exec'), module.__dict__)\nsys.path.insert(0, str(Path('tests').absolute()))\nfixture = importlib.import_module('test_training_launch_termination_handoff')\nsource = Path('docs/evidence/snapshots/v1-02d2-before-launch-failure-report-handoff-test.py')\nexec(compile(source.read_text(), str(source), 'exec'), fixture.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_training_launch_termination_handoff.py\",\"tests/test_launch_failure_report.py\",\"--tb=short\"]))\nPY",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_training_launch_termination_handoff.py tests/test_training_termination_authority.py tests/test_training_lease_exit_authority.py tests/test_native_training_caller_boundaries.py tests/test_execution_authority.py tests/test_execution_watch_contract.py tests/test_execution_native_watch.py tests/test_launch_failure_report.py tests/test_launch_failure_report_contract.py tests/test_execution_dependency_watch.py tests/test_execution_lifecycle_reference.py --tb=short",
+      "fixture_migration": {
+        "path": "tests/test_training_launch_termination_handoff.py",
+        "original_sha256": "cb32dd38d6fdf5cb56afa6a322dfb61cfe0831e86424731c9fb95b5754eda0d3",
+        "updated_sha256": "b1d916e76aae4f2f806b7c253a0c5b04fa1e9c9fce8fa88fb230a83c3570f331",
+        "change": "Only confirmed native initialization's inline fixer count 1 became no-provider plus pending_explicit_action receipt assertion. Slot/unknown-stop assertions unchanged. Explicit contract migration, not an old behavior red."
+      },
+      "excluded_execution": "An initial direct pytest run on the snapshot test path lacked tests/conftest GPU fixture scope and failed with __enter__; all four are excluded. Correct replay imports original test code into its normal module/path.",
+      "notes": [
+        "Launcher attaches only its captured ref after failed_launch closed successfully.",
+        "A late A exception after a real B reset/claim/begin is handled stale without file/FSM/count/provider effects.",
+        "Duplicate reports pin both source and controller-action rows and project the durable count without adding another.",
+        "repair_status=pending_explicit_action is not an implemented repair worker or scientific observation."
+      ]
+    },
+    {
+      "id": "prelaunch-intent-cleanup",
+      "classification": "4_uncommitted_business_draft_regressions",
+      "tests": [
+        "tests/test_training_intent_cleanup.py"
+      ],
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-training-intent-cleanup-launcher.py"
+      ],
+      "results": {
+        "initial_draft_red": 4,
+        "initial_duration_seconds": 1.24,
+        "fixed_snapshot_replay": "4 failed in 1.13s",
+        "related_green": "22 passed in 7.44s"
+      },
+      "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys\nfrom pathlib import Path\nimport pytest\nfor name, filename in [[\"orze.engine.launcher\",\"docs/evidence/snapshots/v1-02d2-before-training-intent-cleanup-launcher.py\"]]:\n    module = importlib.import_module(name)\n    source = Path(filename)\n    exec(compile(source.read_text(), str(source), 'exec'), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_training_intent_cleanup.py\",\"--tb=short\"]))\nPY",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_training_intent_cleanup.py tests/test_native_training_caller_boundaries.py tests/test_launch_failure_report.py tests/test_launch_failure_report_contract.py tests/test_training_launch_termination_handoff.py --tb=short",
+      "notes": [
+        "Real lineage os.pipe and real begin/SQLite fault boundaries; no actual Popen.",
+        "Known clean rejection may release exact reservation only after reacquiring the task guard and proving no native training row exists.",
+        "Commit-unknown or existing LAUNCHING retains reservation/intent/HOLD; only this caller's local pipe is closed.",
+        "Snapshot trailing blank line was corrected before freeze; final snapshot matches captured launcher bytes exactly."
+      ]
+    },
+    {
+      "id": "legacy-recovery-native-boundary",
+      "classification": "uncommitted_business_draft_regressions",
+      "tests": [
+        "tests/test_native_startup_recovery.py",
+        "tests/test_startup_native_admission_race.py"
+      ],
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-native-startup-recovery.py"
+      ],
+      "results": {
+        "static_native_draft_red": 4,
+        "static_duration_seconds": 1.47,
+        "legacy_to_native_race_draft_red": 2,
+        "race_duration_seconds": 0.73,
+        "related_green": "39 passed in 11.65s"
+      },
+      "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys\nfrom pathlib import Path\nimport pytest\nfor name, filename in [[\"orze.engine.lifecycle\",\"docs/evidence/snapshots/v1-02d2-before-native-startup-recovery.py\"]]:\n    module = importlib.import_module(name)\n    source = Path(filename)\n    exec(compile(source.read_text(), str(source), 'exec'), module.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_native_startup_recovery.py\",\"tests/test_startup_native_admission_race.py\",\"--tb=short\"]))\nPY",
+      "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_startup_recovery.py tests/test_startup_native_admission_race.py tests/test_startup_recovery.py tests/test_dead_pid_reconcile.py tests/test_execution_stop_recovery_boundaries.py --tb=short",
+      "fixture_note": "Before final race-test freeze, B was strengthened from LAUNCHING to real begun/started RUNNING; original dead-PID case was a valid FSM-refusal control, not counted as a red. Final B uses real claim/begin/start receipts and only a synthetic process identity.",
+      "notes": [
+        "Early checks exclude every native catalog/history and uncertain owner.",
+        "Each actual bounded recovery file/compute/FSM/metadata callback reacquires the native admission guard and rechecks eligibility.",
+        "Process observation/termination remains outside the short publication guard.",
+        "Legacy recovery never adopts native execution, even when complete metrics or a dead PID exist. Native restart adoption remains explicitly OPEN."
+      ]
+    }
+  ],
+  "resume_boundary_validation": {
+    "classification": "uncommitted_business_draft_regressions_and_new_mechanism_acceptance",
+    "scope": "Legacy publication refuses native catalog/history under the short effect guard. Native started consumes only the prepared request under its existing attempt transaction. Native resume adoption remains OPEN.",
+    "tests": [
+      "tests/test_resume_native_admission_guard.py",
+      "tests/test_resume_launch_consumption.py",
+      "tests/test_native_interruption_wrapper.py",
+      "tests/test_resume_catalog_effect_boundaries.py",
+      "tests/test_resume_publication_contract.py"
+    ],
+    "results": {
+      "parent_admission_draft_red": "3 failed in 0.96s",
+      "marker_initial_draft_red": "3 failed in 0.53s",
+      "marker_and_legacy_writer_fixed_snapshot_replay": "5 failed in 1.14s",
+      "scope_and_close_fixed_snapshot_replay": "2 failed in 0.70s",
+      "new_publication_mechanisms": 5,
+      "targeted_green_with_17_legacy_controls": "32 passed in 4.45s",
+      "final_resume_targeted_with_real_CLI": "34 passed in 4.75s"
+    },
+    "marker_and_writer_replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nsnapshot = Path('docs/evidence/snapshots/v1-02d2-before-resume-launch-consumption.py')\nmodule = importlib.import_module('orze.engine.resume')\nexec(compile(snapshot.read_text(), str(snapshot), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_resume_launch_consumption.py', 'tests/test_native_interruption_wrapper.py', '--tb=short']))\nPY",
+    "scope_and_close_replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nsnapshot = Path('docs/evidence/snapshots/v1-02d2-before-resume-catalog-close.py')\nmodule = importlib.import_module('orze.engine.resume_publication')\nexec(compile(snapshot.read_text(), str(snapshot), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_resume_catalog_effect_boundaries.py', '--tb=short']))\nPY",
+    "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_resume_publication_contract.py tests/test_resume_launch_consumption.py tests/test_resume_native_admission_guard.py tests/test_native_interruption_wrapper.py tests/test_resume_catalog_effect_boundaries.py tests/test_resume.py --tb=short",
+    "fixture_note": "Before publication-mechanism freeze, the parent-fsync fault predicate was restricted to the post-consumption boundary. Its first run faulted lock acquisition instead (1 failed / 27 passed); that fixture mismatch is excluded from behavior-red evidence.",
+    "notes": [
+      "Checkpoint validation and process liveness probes remain outside the publication guard.",
+      "Owned database handles close before the effect guard releases; close failure preserves HOLD and the primary failure cause.",
+      "Catalog declaration, prepared context and claim lifecycle routes must agree before native request consumption.",
+      "Legacy interruption full-checkpoint hashing remains compatible, but its actual receipt/accounting publication rechecks that no native authority was admitted during hashing.",
+      "The 32-case run preceded the independently reviewed real-loader default-DB compatibility correction; its evidence is recorded separately."
+    ]
+  },
+  "resume_default_catalog_compatibility": {
+    "classification": "uncommitted_compatibility_draft_regression_and_control",
+    "test_owner": "pro_review",
+    "test": "tests/test_resume_default_catalog_compatibility.py",
+    "initial_result": "1 failed / 1 passed in 0.34s",
+    "fixed_snapshot_replay": "1 failed / 1 passed in 0.25s",
+    "final_targeted_result": "34 passed in 4.75s",
+    "baseline_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nfor name, filename in [('orze.core.config', 'docs/evidence/snapshots/v1-02d2-before-resume-default-config.py'), ('orze.engine.resume_publication', 'docs/evidence/snapshots/v1-02d2-before-resume-default-publication.py')]:\n    module = importlib.import_module(name)\n    snapshot = Path(filename)\n    exec(compile(snapshot.read_text(), str(snapshot), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_resume_default_catalog_compatibility.py', '--tb=short']))\nPY",
+    "green_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_resume_default_catalog_compatibility.py tests/test_resume_publication_contract.py tests/test_resume_launch_consumption.py tests/test_resume_native_admission_guard.py tests/test_native_interruption_wrapper.py tests/test_resume_catalog_effect_boundaries.py tests/test_resume.py --tb=short",
+    "notes": [
+      "The test uses real CLI main, load_project_config and admit_resume, not hand-constructed configuration.",
+      "The loader recomputes _idea_lake_db_defaulted after user configuration is merged, ignoring user-provided copies of that internal value.",
+      "Only a still-missing loader-injected default with no native declaration or claim binding retains legacy no-database compatibility. An explicitly configured missing path fails even when it equals the default path.",
+      "This provenance is compatibility metadata, not a database authorization capability or automatic native restart admission."
+    ]
+  },
+  "file_sha256": {
+    "tests/test_resume_default_catalog_compatibility.py": "1db1640fc58fe0b0ac1ae802eef5bb271ac12b26d975ad1c713a727791c0c7d2",
+    "docs/evidence/snapshots/v1-02d2-before-resume-default-config.py": "853a2afad1f1c7c7eb7da21fc76463180d4dfb41a696006c7ff81f975f354eb8",
+    "docs/evidence/snapshots/v1-02d2-before-resume-default-publication.py": "d96cb9632ef01198bc90046d3530df4a8dbea71896cce897ab1d335fc90fb614",
+    "src/orze/core/config.py": "add4c016ba5daf5e9c9edf4e3f82e856cc1b32dee4c16032399c051fcf07c9e0",
+    "tests/test_resume_native_admission_guard.py": "d983fdefff1feb163e45baaabffeb02b069d915edebd6626018076a8d718366c",
+    "tests/test_resume_launch_consumption.py": "221912aadb8a8f8d1031c205382a8230f85fb208e2b5b055b6043f56e45f409c",
+    "tests/test_native_interruption_wrapper.py": "cf231c0d265778ed6fcb49c1a1d15f1ad944657c2e3656786884f2292123820a",
+    "tests/test_resume_catalog_effect_boundaries.py": "2a81f4f78ef5b912d039bbf0f40d6fd8a13fe6227a674ccbdc1bbc7432359b8b",
+    "tests/test_resume_publication_contract.py": "4af439019f9967f6e221d239b7c54e0e698213c36672c340bb2871aea6b40ec3",
+    "docs/evidence/snapshots/v1-02d2-before-resume-native-admission.py": "3b248d969ba1e2b925608a0f0fd68d07ccdc391494d688e0a80263c2225b1d1e",
+    "docs/evidence/snapshots/v1-02d2-before-resume-launch-consumption.py": "675d308c18a5d7e5958b1d4cf99aaa4120c059eb4f2a6902f45563d8fb869203",
+    "docs/evidence/snapshots/v1-02d2-before-resume-catalog-close.py": "79ae5d4cf628e4c81da5ee9ac224b3770a528b0bb36fb66d7258f4c3b426c225",
+    "src/orze/engine/resume.py": "74991e3fce1705d41e41566a7f2581ee86d27b4afe88c06c357ada7673168946",
+    "src/orze/engine/resume_publication.py": "49b74b8830bbb966f2f36f72aa6ac063937af813f464d22eeb7a19cb5f1bf1ba",
+    "tests/test_stale_training_completion.py": "5a345f063b12d18d09fae15b0eb8575ccca2c807bb16b5019b850a251f0c2e87",
+    "tests/test_training_completion_write_race.py": "ac89924cdb2dc89f3ce86e9758b459678b0cda07dc8f24c8d0335ea0c1d98149",
+    "tests/test_execution_attempts.py": "1b3a1867d3c184771c0a08d4da03298229d771c7d5748bdc32325c07f9114565",
+    "docs/evidence/snapshots/v1-02d2-before-attempt-json-exactness.py": "b89f85fece1f8b751afcdbb9aee49639ac0327d61b12619a61314af3c6362347",
+    "tests/test_execution_authority.py": "1cae610b1f1b8cb2b59cc28e0d343827854df425024db024147d15cf4b67d783",
+    "docs/evidence/snapshots/v1-02d2-before-execution-authority.py": "e358dc90e3bff42db301620ff8c96d4b4e45ade0f832e7ee79f4e09ce4440ba2",
+    "tests/test_execution_native_watch.py": "b1488877332b4424d430d3962f85c2e2c540e3c0ed383fcd56fb5ab184450498",
+    "docs/evidence/snapshots/v1-02d2-before-attempt-watch-authority.py": "e831fefb86494488b1c1cc2eea636f2be9435a596d16510724d283b2a4728fb4",
+    "docs/evidence/snapshots/v1-02d2-before-attempt-watch-evaluation.py": "501cf2e80f9e38b990c419e454c02202ca616befc6378798068040ec2defc622",
+    "tests/test_execution_watch_contract.py": "28ca25fccaafdc43a3a52305523cbb2aaf07b5179a46ea7ddc5994491ca9d98a",
+    "tests/test_execution_dependency_watch.py": "aee361895164effb6f113653331a2d1f090a4d8c87fba2201ef862d9f96a84f1",
+    "tests/test_execution_lifecycle_reference.py": "77d6c65b12ef282b899cfbf134a09576659702f33a47a1bbbff8cf84e5eb1629",
+    "tests/test_training_completion_catalog_scope.py": "38c7b30f9537a6afa490a35a5772e2c2250bd99cffb890d0a0cb2028c5f0867a",
+    "docs/evidence/snapshots/v1-02d2-before-training-scope-training_attempts.py": "b725466a89ccd68c38dc3d12936d8dbec70a23ba5dbe73e920282b7129cb0bcb",
+    "docs/evidence/snapshots/v1-02d2-before-training-scope-training_completion.py": "7de6fcfa3d64aa283ac4337353319647dc357029e96a24ee924d15967d51b524",
+    "tests/test_native_training_caller_boundaries.py": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+    "docs/evidence/snapshots/v1-02d2-before-native-training-process.py": "6dd9750b4ca5adfc4ba2e53ffdb5c1c4c60f18a57076eff077fcbb467b451733",
+    "docs/evidence/snapshots/v1-02d2-before-native-training-attempts.py": "73e68f9b4f9e7b6c829a849800c0d88ece2c39121b94257d27dfa4ea0a46d7af",
+    "docs/evidence/snapshots/v1-02d2-before-native-training-launcher.py": "107caf75112289fa41c36d29af85271afe8980fd545a31a315e9b203dcf37b1d",
+    "tests/test_claim_effect_durability.py": "10eec71c7ecd571a51e90bc2e83f2179fef0d9e42e5c88671a9491c6a5f44ef8",
+    "tests/test_reset_durability_modes.py": "f7e1b07558e38793b715a8016cab1b013e58a1864e9e1b06954f0715773f15ae",
+    "docs/evidence/snapshots/v1-02d2-before-claim-durability-authority.py": "e27648d20ab7fe090be9dbd1bddd8ad0675afdce22261ee4f235b363be78c5af",
+    "docs/evidence/snapshots/v1-02d2-before-claim-durability-failure.py": "fc6e7ab8b13e4de04d0c3a37bd8dc628a2e84df5f882f2ec89d3bfb4b19d4cee",
+    "docs/evidence/snapshots/v1-02d2-before-claim-durability-scheduler.py": "5476a85e212a87d92c23e297f8a6fb2c14ec54172458d8dc65a04a3ad186b3c7",
+    "tests/test_interruption_receipt_identity.py": "35e94a4d05c986029ca10687801bcfdddd1d7bcb84861d4bf4c81e7a0ca1e1ee",
+    "docs/evidence/snapshots/v1-02d2-before-interruption-receipt-identity.py": "6390b72053ae48705be0f42b85594882c39a48a0d896902b5e0f0c43681a8503",
+    "tests/test_launch_failure_report.py": "a34b4ac4c5b27dfc28470ba87ef16f6b73c2b2ae050450cf8b286c641f995199",
+    "tests/test_launch_failure_report_contract.py": "c25bef0fa232f1ad2f99075fa1d53c420573d68d838a898c754404f3fd21e6ae",
+    "docs/evidence/snapshots/v1-02d2-before-launch-failure-report-launcher.py": "829362f10024ab1bbf62dc63c216480954a591408958d50210f3eb19bce77c2f",
+    "docs/evidence/snapshots/v1-02d2-before-launch-failure-report-phases.py": "524c0427a65da555856336e52d5f62d13ee946ee6df05dbb2ecba3fc61b208dc",
+    "docs/evidence/snapshots/v1-02d2-before-launch-failure-report-handoff-test.py": "cb32dd38d6fdf5cb56afa6a322dfb61cfe0831e86424731c9fb95b5754eda0d3",
+    "tests/test_training_intent_cleanup.py": "3f3963a89837bb0477f51b4a432645820b92a8039de26bb48fad71cfd3c996ef",
+    "docs/evidence/snapshots/v1-02d2-before-training-intent-cleanup-launcher.py": "84b30ece24a5d78f4d88ef8fbc6bc9896efe5d476ba2ea8676055bb8cf57496a",
+    "tests/test_native_startup_recovery.py": "67236edcc5f599d7a84d079fe3c56b53086833aeb039d6d525531f726ab93019",
+    "tests/test_startup_native_admission_race.py": "af472ec7456d2db96163ad3cae459e487c2596b655db867b79492695a10ee008",
+    "docs/evidence/snapshots/v1-02d2-before-native-startup-recovery.py": "318be9203dee4ee3658a446d4e10a1eb4658dfb8a1564954821deaf1d7c81e17",
+    "tests/test_training_launch_termination_handoff.py": "b1d916e76aae4f2f806b7c253a0c5b04fa1e9c9fce8fa88fb230a83c3570f331",
+    "src/orze/core/execution_attempts.py": "22f35720dd68398dddf4b439fa6a085e4805303080c7152c67f04548055751b4",
+    "src/orze/engine/execution_authority.py": "20f5dc0bc802db87d868d0662209c6a6e414ae2fa3e6c882feb2d9e3e1864ad8",
+    "src/orze/engine/launch_failure_report.py": "c35998c0389d949b55b52ce78f7b6b33bcf0cf7250c6623583bca310d255fda9",
+    "src/orze/engine/legacy_recovery.py": "13180afed5c2c864d7c287f4e40881f703b93a8ae29c5c5b56c17e7159dd5bad",
+    "src/orze/engine/launcher.py": "edb49d267abe631cd8402b8dbef8136d3e99909c654cc5ffae3361f0608046fe",
+    "src/orze/engine/phases.py": "eb61b6dc3613e4f38d91135ebb9285058d47cc2f82aaa4918ec8a4a7cbff186c",
+    "src/orze/engine/lifecycle.py": "4ea8b94e16928403f4bf8298f3319e68717af22b932516dcdbc110c2a12a50eb",
+    "src/orze/engine/failure.py": "3c569bf1f498c36c0eaf640a86ab5ec4276ddd7347a257ba2b9404748d698154",
+    "src/orze/engine/scheduler.py": "b65511c4a83bc7b3bb57002f7861c11cabf94317ebca7016c3d592dc6adc602c"
+  }
+}

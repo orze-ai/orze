@@ -1,0 +1,503 @@
+{
+  "schema_version": 1,
+  "status": "implemented_and_mechanically_verified_not_v1_complete",
+  "date": "2026-09-10",
+  "scope": "V1-02D2: generic attempt identity and connected controller publication boundaries; not the complete V1 or complete recovery protocol.",
+  "repositories": {
+    "core": {
+      "base": "250ad8a627806ae540fe0dcac3db41eb8bd5cb7b",
+      "implementation_commit": "caecc617cd4260d2472c8a7f2508dba925ec06a1"
+    },
+    "pro": {
+      "base": "07e58caf9c4b6f99423d17d0bc767857a481787d",
+      "implementation_commit": "3e8f724ff2e0b717bb1ac44457407f7903df7ad8"
+    },
+    "branch": "feat/autoresearch-v1"
+  },
+  "authority": "Core alone owns execution_attempts and lifecycle publication; Pro consumes the paired Core interfaces.",
+  "contract": "docs/execution-attempt-authority.md",
+  "proof_policy": {
+    "published_release_behavior_reds": "Historical label: fixed, previously pushed D1 development-branch source, not a packaged release. No package release was performed.",
+    "working_draft_behavior_reds": "Defects frozen in the uncommitted implementation; never counted as old-release bugs.",
+    "new_mechanisms": "New API/schema/capability acceptance, with absence/type/setup failures excluded from behavior-red claims.",
+    "fixture_migrations": "Original complete files preserved; changed contract or actual seam stated explicitly; not counted as product bugs.",
+    "aggregation": "Targeted suites overlap. Do not sum their totals or treat a draft-source targeted run as final integrated verification."
+  },
+  "supplemental_evidence": [
+    "docs/evidence/2026-09-10-v1-02d2-core-boundaries.json",
+    "docs/evidence/2026-09-10-v1-02d2-runtime-boundaries.json",
+    "docs/evidence/2026-09-10-v1-02d2-completion-events.json",
+    "docs/evidence/2026-09-10-v1-02d2-publication-foundations.json"
+  ],
+  "root_frozen_groups": [
+    {
+      "id": "training-private-failure",
+      "tests": [
+        "tests/test_training_private_failure_authority.py"
+      ],
+      "draft_red": 2,
+      "controls": 0,
+      "seconds": 0.78,
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-training-private-failure.py"
+      ],
+      "test_sha": "0b6be64284343c75c9b631b9ac58325a802dcde5402cc8342aca86611d2b57d8"
+    },
+    {
+      "id": "evaluation-process-binding",
+      "tests": [
+        "tests/test_evaluation_process_binding.py"
+      ],
+      "draft_red": 2,
+      "controls": 0,
+      "seconds": 1.36,
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-evaluation-process-owned.py",
+        "docs/evidence/snapshots/v1-02d2-before-evaluation-process-started.py"
+      ],
+      "test_sha": "ca0bc3861a0961ed62f91fdf92be4d173a5a62d12b3881c4541613f2508d4752"
+    },
+    {
+      "id": "evaluation-retry-all-phases",
+      "tests": [
+        "tests/test_evaluation_retry_all_phase_authority.py"
+      ],
+      "draft_red": 3,
+      "controls": 0,
+      "seconds": 1.29,
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-evaluation-retry-all-phases.py"
+      ],
+      "test_sha": "f04d566243d1b4738b435b4c4891fee1b7045d56d23dfb4ce4d3cfcb8737cb30"
+    },
+    {
+      "id": "native-shutdown",
+      "tests": [
+        "tests/test_native_shutdown_publication.py"
+      ],
+      "draft_red": 4,
+      "controls": 0,
+      "seconds": 1.68,
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-native-shutdown-graceful.py",
+        "docs/evidence/snapshots/v1-02d2-before-native-shutdown-atexit.py"
+      ],
+      "test_sha": "0cb9070ad879e481ab8d74f71b3bf2dca1ef5de184d52d34162252693521422c"
+    },
+    {
+      "id": "resume-native-admission",
+      "tests": [
+        "tests/test_resume_native_admission_guard.py"
+      ],
+      "draft_red": 3,
+      "controls": 0,
+      "seconds": 0.96,
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-resume-native-admission.py"
+      ],
+      "test_sha": "d983fdefff1feb163e45baaabffeb02b069d915edebd6626018076a8d718366c"
+    }
+  ],
+  "additional_root_groups": [
+    {
+      "id": "native-evaluation-public-old-release",
+      "tests": [
+        "tests/test_stale_evaluation_completion.py"
+      ],
+      "published_base": "250ad8a627806ae540fe0dcac3db41eb8bd5cb7b",
+      "red": 5,
+      "controls": 1,
+      "baseline_seconds": 1.32,
+      "recorded_green": {
+        "passed": 6,
+        "seconds": 2.12
+      },
+      "test_sha256": "3e0435c9a434c5356ab23f52c4b42d7c16f98eca98579cb011389340f105dbbe"
+    },
+    {
+      "id": "native-evaluation-caller-boundaries",
+      "tests": [
+        "tests/test_native_evaluation_caller_boundaries.py",
+        "tests/test_native_evaluation_missing_catalog.py"
+      ],
+      "classification": "working_draft_behavior_and_new_controls",
+      "draft_red": 3,
+      "new_controls": 5,
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-native-caller-boundaries-evaluator.py",
+        "docs/evidence/snapshots/v1-02d2-before-native-caller-boundaries.py"
+      ]
+    },
+    {
+      "id": "evaluation-early-writes",
+      "tests": [
+        "tests/test_evaluation_early_write_boundaries.py"
+      ],
+      "draft_red": 4,
+      "baseline_seconds": 1.06,
+      "recorded_green_neighborhood": {
+        "passed": 33,
+        "seconds": 9
+      },
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-eval-early-writes.py",
+        "docs/evidence/snapshots/v1-02d2-before-eval-early-writes-native.py"
+      ],
+      "test_sha256": "7109a69c38c63bc65c92540f83bed487f2d522d9a49aa84d9ddc4c8fd10ac055"
+    },
+    {
+      "id": "effect-lock-ownership",
+      "tests": [
+        "tests/test_attempt_effect_lock.py",
+        "tests/test_attempt_effect_release_boundaries.py"
+      ],
+      "new_mechanisms": 6,
+      "draft_red": 3,
+      "baseline_seconds": 0.38,
+      "recorded_green": {
+        "passed": 9,
+        "seconds": 0.35
+      },
+      "snapshot": "docs/evidence/snapshots/v1-02d2-before-effect-release-classification.py",
+      "note": "idea_source_lock was not changed. The archived source-lock-before-strict-release file records an abandoned design, not a implemented strict_release API."
+    },
+    {
+      "id": "effect-receipt-coherence",
+      "tests": [
+        "tests/test_attempt_effect_receipts.py",
+        "tests/test_attempt_effect_snapshot_coherence.py"
+      ],
+      "new_mechanisms": 39,
+      "draft_red": 2,
+      "baseline_seconds": 0.31,
+      "recorded_green_with_lock": {
+        "passed": 50,
+        "seconds": 2.14
+      },
+      "snapshot": "docs/evidence/snapshots/v1-02d2-before-effect-snapshot-coherence.py",
+      "note": "The initial fixture corrupted files before acquisition and correctly met the existing HOLD gate; it was corrected before freeze and excluded from behavior-red counts."
+    },
+    {
+      "id": "catalog-routing-contract",
+      "tests": [
+        "tests/test_execution_catalog.py"
+      ],
+      "draft_red": 6,
+      "controls": 15,
+      "baseline_seconds": 7.04,
+      "replay_seconds": 5.14,
+      "recorded_green_neighborhood": {
+        "passed": 33,
+        "seconds": 8.26
+      },
+      "snapshot": "docs/evidence/snapshots/v1-02d2-before-catalog-boundaries.py"
+    },
+    {
+      "id": "caller-owned-lifecycle",
+      "tests": [
+        "tests/test_lifecycle_owned_transaction.py",
+        "tests/test_lifecycle_cross_stage_receipts.py"
+      ],
+      "published_base": "250ad8a627806ae540fe0dcac3db41eb8bd5cb7b",
+      "published_first_group": {
+        "failed": 13,
+        "passed": 3,
+        "new_api_skipped": 6,
+        "seconds": 6.67
+      },
+      "cross_stage": {
+        "failed": 2,
+        "seconds": 0.41,
+        "classification": "same two cases also reproduced on a working draft; not double-counted"
+      },
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-cross-stage-core.py",
+        "docs/evidence/snapshots/v1-02d2-before-cross-stage-sync.py"
+      ]
+    },
+    {
+      "id": "lifecycle-namespace-and-terminal-fence",
+      "tests": [
+        "tests/test_execution_lifecycle_namespace.py",
+        "tests/test_execution_cross_table_receipts.py"
+      ],
+      "draft_red": 2,
+      "note": "Real TEMP shadow schema and a real AFTER-attempt-terminal trigger changing the bound lifecycle; not mocked acceptance.",
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-lifecycle-namespace-guard.py"
+      ]
+    },
+    {
+      "id": "lineage-preparation",
+      "tests": [
+        "tests/test_model_lineage_prepared_finalization.py",
+        "tests/test_model_lineage_preparation_boundaries.py",
+        "tests/test_model_lineage_publication_durability.py"
+      ],
+      "new_preparation": {
+        "passed_control_on_release": 1,
+        "missing_new_api_skips": 16
+      },
+      "draft_boundary": {
+        "failed": 2,
+        "controls": 2
+      },
+      "draft_durability": {
+        "failed": 1
+      },
+      "recorded_green_neighborhood": {
+        "passed": 87,
+        "seconds": 4.63
+      },
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-lineage-path-validation.py",
+        "docs/evidence/snapshots/v1-02d2-before-lineage-parent-fsync.py"
+      ],
+      "note": "Mechanically split helper code into model_lineage_finalization.py; tests preserved. A missing stat import during extraction was an implementation error, not a behavior-red proof."
+    },
+    {
+      "id": "claim-reset-publication",
+      "tests": [
+        "tests/test_training_claim_effect_boundaries.py",
+        "tests/test_training_claim_native_authority.py"
+      ],
+      "draft_red": 4,
+      "new_mechanisms": 17,
+      "baseline_seconds": 0.3,
+      "replay_seconds": 0.23,
+      "recorded_green_neighborhood": {
+        "passed": 61,
+        "seconds": 6.7
+      },
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-training-claim-effects.py",
+        "docs/evidence/snapshots/v1-02d2-before-training-reset-effects.py"
+      ],
+      "note": "First three interactions are new draft-boundary defects; the invalid-claim metrics deletion case also exposes preexisting behavior. Do not label all four as published-D1 reds."
+    },
+    {
+      "id": "native-training-repair-marker",
+      "tests": [
+        "tests/test_native_training_repair_status.py"
+      ],
+      "classification": "two new mechanism tests; no historical behavior red claimed",
+      "new_mechanisms": 2,
+      "note": "pending_explicit_action is a diagnostic requirement only, not a delivered repair work item or authorized inline provider."
+    },
+    {
+      "id": "bare-failure-writer-legacy-hold",
+      "tests": [
+        "tests/test_failure_writer_legacy_hold.py"
+      ],
+      "classification": "working_draft_behavior",
+      "draft_red": 2,
+      "baseline_seconds": 0.27,
+      "independent_snapshot_replay": {
+        "failed": 2,
+        "seconds": 0.17
+      },
+      "current": {
+        "passed": 2,
+        "seconds": 0.24
+      },
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-before-legacy-held-failure-training.py",
+        "docs/evidence/snapshots/v1-02d2-before-legacy-held-failure-evaluation.py"
+      ],
+      "note": "Only the already-retained owner admission check is added; explicit owned-lease branch unchanged. Not a claim of all legacy writer TOCTOU guarantees."
+    }
+  ],
+  "fixture_migrations": [
+    {
+      "files": [
+        "tests/test_fsm_integration.py",
+        "tests/test_fsm_e2e.py",
+        "tests/test_lifecycle_timestamps.py"
+      ],
+      "change": "Ten orphan lifecycle fixtures now perform real idea admission. Original assertion ASTs (46/24/63 nodes) preserved.",
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-test_fsm_integration-original.py",
+        "docs/evidence/snapshots/v1-02d2-test_fsm_e2e-original.py",
+        "docs/evidence/snapshots/v1-02d2-test_lifecycle_timestamps-original.py"
+      ],
+      "targeted": {
+        "passed": 78,
+        "seconds": 12.53
+      }
+    },
+    {
+      "files": [
+        "tests/test_eval_terminal_boundaries.py"
+      ],
+      "change": "A partially published native effect stays HOLD after removing a filesystem obstacle; the old same-callback automatic replay expectation is intentionally replaced.",
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-test_eval_terminal_boundaries-original.py"
+      ]
+    },
+    {
+      "files": [
+        "tests/test_evaluation_stop_bypass_boundaries.py"
+      ],
+      "change": "A post-Popen lease-exit failure can have a durable start but no terminal; all stop/handle assertions retained.",
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-test_evaluation_stop_bypass_boundaries-original.py"
+      ]
+    },
+    {
+      "files": [
+        "tests/test_training_completion_write_race.py"
+      ],
+      "change": "Only two FSM write seams migrated from public record_state_transition to the actual caller-owned in_tx method; race and business assertions retained, all seams must execute.",
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-test_training_completion_write_race-original.py"
+      ],
+      "original_sha256": "30e6e8419509acbc4194a63cc46f8c457713f9063a0bbaeaee64906ec254f3e0"
+    },
+    {
+      "files": [
+        "tests/test_live_run_regressions.py"
+      ],
+      "change": "Malformed/VRAM completion fixtures now include real claim/start/PID/attempt identity; already COMPLETE catch-up no longer mints a native finished event. Fifteen untouched functions are AST-identical.",
+      "snapshots": [
+        "docs/evidence/snapshots/v1-02d2-test_live_run_regressions-original.py"
+      ],
+      "targeted": {
+        "passed": 50,
+        "seconds": 5.51
+      }
+    },
+    {
+      "files": [
+        "tests/test_training_launch_termination_handoff.py"
+      ],
+      "change": "Confirmed native initialization failure no longer runs an inline provider; verifies source-bound report with pending_explicit_action. Four original D1 controls replayed on the old function snapshot.",
+      "details": "docs/evidence/2026-09-10-v1-02d2-core-boundaries.json"
+    },
+    {
+      "files": [
+        "tests/test_evaluation_termination_authority.py",
+        "tests/test_eval_reconciliation_safety.py"
+      ],
+      "change": "Timeout now changes the observed time via a fake clock rather than mutating a persisted start clock; all original assertions retained by AST comparison.",
+      "details": "docs/evidence/2026-09-10-v1-02d2-runtime-boundaries.json"
+    }
+  ],
+  "diagnostics_excluded_from_final_proof": [
+    {
+      "passed": 2324,
+      "failed": 15,
+      "skipped": 7,
+      "seconds": 238.16,
+      "note": "Changing-source diagnostic. Failures were preflight misclassification, diagnostic-path handling, retry static rejection order, three legacy fixture contracts, native caller bindings and native slot requeue; subsequent targeted fixes are recorded separately."
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short --maxfail=20",
+      "exit_code": 1,
+      "passed": 2495,
+      "skipped": 7,
+      "failed": 6,
+      "duration_seconds": 267.22,
+      "note": "Non-final diagnostic against changing in-memory modules/source. Six newly frozen resume cases loaded pre-fix functions; core reviewer subsequently fixed with targeted23 green. Must rerun frozen final source."
+    }
+  ],
+  "final_source_verification": {
+    "python": "3.10.12",
+    "pytest": "9.1.1",
+    "core": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "cwd": "orze",
+      "passed": 2524,
+      "skipped": 7,
+      "failed": 0,
+      "seconds": 309.13,
+      "exit_code": 0,
+      "output": "........................................................................ [  2%]\n........................................................................ [  5%]\n........................................................................ [  8%]\n........................................................................ [ 11%]\n........................................................................ [ 14%]\n........................................................................ [ 17%]\n........................................................................ [ 19%]\n........................................................................ [ 22%]\n........................................................................ [ 25%]\n........................................................................ [ 28%]\n........................................................................ [ 31%]\n................................................................sss..... [ 34%]\n........................................................................ [ 36%]\n........................................................................ [ 39%]\n........................................................................ [ 42%]\n........s............................................................... [ 45%]\n........................................................................ [ 48%]\n........................................................................ [ 51%]\n........................................................................ [ 54%]\n........................................................................ [ 56%]\n........................................................................ [ 59%]\n........................................................................ [ 62%]\n........................................................................ [ 65%]\n........................................................................ [ 68%]\n........................................................................ [ 71%]\n........................................................................ [ 73%]\n........................................................................ [ 76%]\n........................................................................ [ 79%]\n........................................................................ [ 82%]\n........................................................................ [ 85%]\n........................................................................ [ 88%]\n.............................ss......................................... [ 91%]\n........................................................................ [ 93%]\n........................................................................ [ 96%]\n........................................................................ [ 99%]\n..........                                                               [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n2524 passed, 7 skipped in 309.13s (0:05:09)\n"
+    },
+    "pro": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "cwd": "orze-pro",
+      "passed": 723,
+      "skipped": 0,
+      "failed": 0,
+      "seconds": 106.88,
+      "exit_code": 0,
+      "output": "........................................................................ [  9%]\n........................................................................ [ 19%]\n........................................................................ [ 29%]\n........................................................................ [ 39%]\n........................................................................ [ 49%]\n........................................................................ [ 59%]\n........................................................................ [ 69%]\n........................................................................ [ 79%]\n........................................................................ [ 89%]\n........................................................................ [ 99%]\n...                                                                      [100%]\n723 passed in 106.88s (0:01:46)\n"
+    },
+    "paired": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "cwd": "orze",
+      "passed": 60,
+      "skipped": 0,
+      "failed": 0,
+      "seconds": 0.83,
+      "exit_code": 0,
+      "output": "............................................................             [100%]\n60 passed in 0.83s\n"
+    },
+    "inventory": "docs/evidence/2026-09-10-v1-02d2-source-inventory.json",
+    "source_test_pyproject_files": {
+      "core": 474,
+      "pro": 160
+    },
+    "before_after_sha256_exact": true,
+    "optional_pro_note": "Core-only environment has stub orze_pro; all 7 optional skips are covered by named paired suite with actual Pro source and a test-only require_license patch. Real licensing is not verified.",
+    "independent_review": "Supplemental records contain frozen baseline/draft replays and independent targeted reviews; these earlier changing-draft checks are not relabeled as this final source full run.",
+    "formatting_check": {
+      "production_and_contract_exit_code": 0,
+      "frozen_source_and_tests": {
+        "chunk_id": "9e6d50",
+        "wall_time_seconds": 0.000003449,
+        "exit_code": 2,
+        "original_token_count": 134,
+        "output": "docs/evidence/snapshots/v1-02d2-before-resume-default-config.py:91: trailing whitespace.\n+    \ndocs/evidence/snapshots/v1-02d2-before-resume-default-config.py:94: trailing whitespace.\n+    \ndocs/evidence/snapshots/v1-02d2-before-resume-default-config.py:98: trailing whitespace.\n+    \ndocs/evidence/snapshots/v1-02d2-before-resume-default-config.py:102: trailing whitespace.\n+    \ntests/test_launch_failure_report_contract.py:83: trailing whitespace.\n+            \"UPDATE execution_attempts SET terminal_json=json_set(terminal_json,\" \n"
+      },
+      "exception_reason": "Four original snapshot whitespace lines and one frozen test whitespace line preserved byte-for-byte. No behavior, expected result or assertion changed to silence formatting."
+    }
+  },
+  "implementation_commits": {
+    "core": "caecc617cd4260d2472c8a7f2508dba925ec06a1",
+    "pro_contract": "3e8f724ff2e0b717bb1ac44457407f7903df7ad8"
+  },
+  "remote_ref_verification": {
+    "stage": "Implementation commits pushed and exact named refs read back before evidence-only commit.",
+    "core": {
+      "chunk_id": "9afc69",
+      "wall_time_seconds": 0.082464003,
+      "exit_code": 0,
+      "original_token_count": 33,
+      "output": "caecc617cd4260d2472c8a7f2508dba925ec06a1\trefs/heads/feat/autoresearch-v1\n5ca2680dbd0139e63cd35a4f83da438b5b47ab99\trefs/heads/main\n"
+    },
+    "pro": {
+      "chunk_id": "302690",
+      "wall_time_seconds": 0.384718196,
+      "exit_code": 0,
+      "original_token_count": 33,
+      "output": "3e8f724ff2e0b717bb1ac44457407f7903df7ad8\trefs/heads/feat/autoresearch-v1\n57feb6e0af19dcf62a80b1e447f0771936d39afe\trefs/heads/main\n"
+    },
+    "no_force_push": true,
+    "no_main_merge": true,
+    "no_release": true
+  },
+  "limitations": [
+    "No native restart adoption or operator IN_DOUBT resolution tool yet.",
+    "No isolated repair worker or end-to-end repair delivery; native resume admission remains an explicit unsupported operation pending a source-bound recovery action.",
+    "No immutable observation/artifact graph, replicate acceptance, all-consumer durable ACK, or cross-restart count reconstruction.",
+    "Canonical external-worker output writes and natural-exit descendants are not physically isolated by controller transactions.",
+    "No final CPU autoresearch loop, heterogeneous or holdout acceptance, real GPU/provider/service integration, production license or deployment verification.",
+    "No research-efficiency or GPU-hour savings inferred from tests."
+  ],
+  "next_required_work": "Continue V1-03 shared quota and persistent demand; then V1-04 through V1-07 plus explicitly open V1-01/02/05 acceptance. No final V1, CPU loop, production or research-gain completion claim.",
+  "milestone": "V1-02D2",
+  "supplemental_evidence_sha256": {
+    "docs/evidence/2026-09-10-v1-02d2-core-boundaries.json": "f998e60aa6a2b80c0bcff3dbee9f4d140f0e8b5b1991b044263eb3d4e852c35d",
+    "docs/evidence/2026-09-10-v1-02d2-runtime-boundaries.json": "9b7cb71ce3f3984bfde3f3e61ec257be7c036ae6894dfc34a0a0a2935a767171",
+    "docs/evidence/2026-09-10-v1-02d2-completion-events.json": "71616f19f767d76d21abd62e16d584a68d6a8c0324ec43b8b2fdcf26f249f321",
+    "docs/evidence/2026-09-10-v1-02d2-publication-foundations.json": "020449d715b3ff2be889ac0b9fec142e814dda6c6a122df2178b09c5204de7ea"
+  },
+  "resume_final_boundary": {
+    "independent_targeted_passed": 34,
+    "independent_seconds": 4.71,
+    "loader_default_cli_draft_red": 1,
+    "loader_default_cli_control": 1,
+    "note": "Actual CLI default injection compatibility is preserved only without claim/native route binding; explicit missing DB remains rejected. Native admission and reconstruction remain unsupported, not solved by this compatibility branch."
+  }
+}
