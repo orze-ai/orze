@@ -13,8 +13,10 @@ from pathlib import Path
 from typing import Mapping
 
 from orze.core.data_separation import (
+    DataSeparationError,
     data_separation_receipt_sha256,
     ensure_data_separation,
+    read_data_separation_receipt,
 )
 from orze.core.fs import atomic_write
 
@@ -178,12 +180,13 @@ def _read_compute_receipt(path: Path, reason: str) -> dict:
     return payload
 
 
-def _receipt_dir(idea_dir: Path, attempt_id: str) -> Path:
+def _receipt_dir(idea_dir: Path, attempt_id: str, *, create: bool = True) -> Path:
     if not isinstance(attempt_id, str) or _TOKEN.fullmatch(attempt_id) is None:
         raise ModelLineageError("model_lineage_attempt_id_invalid")
     path = _idea_path(
         idea_dir, str(Path("_compute_receipts") / attempt_id))
-    path.mkdir(parents=True, exist_ok=True)
+    if create:
+        path.mkdir(parents=True, exist_ok=True)
     if path.is_symlink():
         raise ModelLineageError("model_lineage_path_redirected")
     return path
@@ -537,7 +540,10 @@ def finalize_model_lineage(tp, idea_dir: Path, cfg: Mapping) -> dict:
 def validate_model_lineage_for_evaluation(
     idea_dir: Path, cfg: Mapping, *, include_artifact_manifest: bool = False,
 ) -> tuple[dict, str] | tuple[dict, str, dict]:
-    """Validate current managed artifact and terminal attempt evidence."""
+    """Read-validate current managed artifact and terminal attempt evidence.
+
+    Validation never repairs missing receipts or starts a data-separation audit.
+    """
     spec = cfg.get("model_lineage", {})
     if not isinstance(spec, Mapping) or not spec.get("enabled", False):
         raise ModelLineageError("model_lineage_disabled")
@@ -561,7 +567,7 @@ def validate_model_lineage_for_evaluation(
             or not isinstance(lineage.get("execution_identity_sha256"), str)
             or _HEX64.fullmatch(lineage["execution_identity_sha256"]) is None):
         raise ModelLineageError("model_lineage_receipt_invalid")
-    receipt_dir = _receipt_dir(idea_dir, lineage["attempt_id"])
+    receipt_dir = _receipt_dir(idea_dir, lineage["attempt_id"], create=False)
     boundary, boundary_sha256 = _read_envelope(
         receipt_dir / "boundary.json", _BOUNDARY_KEYS)
     if (boundary_sha256 != lineage.get("boundary_receipt_sha256")
@@ -572,8 +578,11 @@ def validate_model_lineage_for_evaluation(
             or boundary.get("kernel_path_isolation") is not True
             or boundary.get("training_network_denied") is not True):
         raise ModelLineageError("model_lineage_boundary_receipt_mismatch")
-    separation = ensure_data_separation(cfg)
-    separation_sha256 = data_separation_receipt_sha256(separation)
+    try:
+        separation = read_data_separation_receipt(cfg)
+        separation_sha256 = data_separation_receipt_sha256(separation)
+    except DataSeparationError as exc:
+        raise ModelLineageError(str(exc)) from exc
     if (lineage.get("data_separation_receipt_sha256") != separation_sha256
             or boundary.get("data_separation_receipt_sha256")
             != separation_sha256

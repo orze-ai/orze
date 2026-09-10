@@ -29,4 +29,5 @@
 - 本项不是全数据库/文件原子快照，不解决 observation 去重、历史修订、过期 attempt 或执行租约。
 - 全目录快照仍是 O(任务数)，admin 配置预算是逐项预算，不是全目录总内存上限。API 仍读取派生缓存，保留既有 TTL，不保证实时状态。
 - 本项只关闭 report-only 和队列路径，不代表所有 admin 端点、verifier、director、convergence 已迁移。
+- I2 原验收未覆盖 opt-in lineage 的间接审计写入；I3 单独修复该共享资格路径，见 [lineage 观察边界](lineage-observer-boundary.md)。这不把 I2 当时的测试扩张为所有证据路径的只读证明。
 - 真实临时 SQLite、报告文件和进程内 HTTP API 验证不等于生产部署、GPU 训练、付费 provider 或科研效率收益验证。

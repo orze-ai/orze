@@ -159,7 +159,7 @@ def _policy_hash(policy: Mapping) -> str:
     ).encode("utf-8")).hexdigest()
 
 
-def _state_path(cfg: Mapping) -> Path:
+def _state_path(cfg: Mapping, *, create: bool = True) -> Path:
     root = Path(cfg.get("_orze_dir") or (
         Path(cfg.get("_project_root", ".")) / ".orze"))
     current = root
@@ -168,7 +168,8 @@ def _state_path(cfg: Mapping) -> Path:
             raise DataSeparationError("data_separation_state_redirected")
         current = current.parent
     state = root / "state"
-    state.mkdir(parents=True, exist_ok=True)
+    if create:
+        state.mkdir(parents=True, exist_ok=True)
     if state.is_symlink():
         raise DataSeparationError("data_separation_state_redirected")
     return state / "data_separation.json"
@@ -331,6 +332,37 @@ def _read_manifest(handle, *, role: str, policy: Mapping, connection,
     if count == 0:
         raise DataSeparationError("data_separation_manifest_empty")
     return count, digest.hexdigest()
+
+
+def read_data_separation_receipt(cfg: Mapping) -> dict:
+    """Validate an existing receipt without repairing or re-auditing evidence.
+
+    Observers inspect manifest metadata, never manifest contents. A missing or
+    stale receipt is unavailable evidence, not permission to run an audit.
+    Model artifact verification is a separate, still-required lineage check.
+    """
+    spec = cfg.get("data_separation", {})
+    if not isinstance(spec, Mapping):
+        raise DataSeparationError("data_separation_policy_not_mapping")
+    if validate_data_separation_config(cfg):
+        raise DataSeparationError("data_separation_policy_invalid")
+    if spec.get("enabled", False) is False:
+        return {"status": "disabled"}
+    policy = _policy(spec)
+    train = _safe_manifest(spec["train_manifest"], policy["max_bytes"])
+    evaluation = _safe_manifest(spec["evaluation_manifest"], policy["max_bytes"])
+    if train[0] == evaluation[0]:
+        raise DataSeparationError("data_separation_manifests_not_distinct")
+    metadata = _metadata_signature([train, evaluation])
+    cached = _cached_receipt(
+        _state_path(cfg, create=False), policy, _policy_hash(policy), metadata)
+    if cached is None:
+        raise DataSeparationError("data_separation_receipt_unavailable")
+    current = [_safe_manifest(str(item[0]), policy["max_bytes"])
+               for item in (train, evaluation)]
+    if _metadata_signature(current) != metadata:
+        raise DataSeparationError("data_separation_manifest_changed_during_read")
+    return cached
 
 
 def ensure_data_separation(cfg: Mapping, *, _lock_held: bool = False) -> dict:

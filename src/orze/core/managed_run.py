@@ -243,10 +243,10 @@ def verify_managed_idea_outcome(cfg: Mapping, idea_id: str) -> dict:
     if policy.get("require_data_separation") is True:
         from orze.core.data_separation import (
             DataSeparationError,
-            ensure_data_separation,
+            read_data_separation_receipt,
         )
         try:
-            ensure_data_separation(cfg)
+            read_data_separation_receipt(cfg)
         except DataSeparationError as exc:
             raise ManagedRunError(str(exc)) from exc
 

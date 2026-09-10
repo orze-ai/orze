@@ -734,7 +734,7 @@ def test_managed_outcome_revalidates_required_data_separation(
     )
     calls = []
     monkeypatch.setattr(
-        "orze.core.data_separation.ensure_data_separation",
+        "orze.core.data_separation.read_data_separation_receipt",
         lambda cfg: calls.append(cfg) or {"schema_version": 1},
     )
     cfg = {
