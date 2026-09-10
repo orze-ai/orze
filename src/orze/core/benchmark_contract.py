@@ -776,6 +776,15 @@ def prepare_benchmark_evaluation(idea_dir: Path, cfg: Mapping) -> dict[str, str]
         provenance_path,
         json.dumps(provenance, sort_keys=True, indent=2) + "\n",
     )
+    # atomic_write has a legacy ENOSPC no-op path. Do not hand a fresh nonce
+    # to a child unless its exact provenance was actually published. The
+    # reserved exposure is intentionally retained even when publication fails.
+    try:
+        published = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BenchmarkContractError("benchmark_provenance_not_published") from exc
+    if published != provenance:
+        raise BenchmarkContractError("benchmark_provenance_not_published")
     child_env = {
         "ORZE_BENCHMARK_EVALUATION_NONCE": nonce,
         "ORZE_BENCHMARK_RECEIPT": str(receipt_path.resolve()),

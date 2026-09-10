@@ -866,6 +866,14 @@ class OrzePhaseMixin:
             if idea_id not in {iid for iid, _ in self.pending_evals}:
                 self.pending_evals.append((idea_id, gpu))
 
+        # Explicit retry admissions are durable evaluation work, not QUEUED
+        # training ideas. Recover them even with an empty inbox after restart.
+        if self.lake is not None and cfg.get("eval_script") and self.gpu_ids:
+            from orze.engine.evaluation_retry import pending_evaluation_retries
+            for idea_id in pending_evaluation_retries(self.lake):
+                if not managed_idea or idea_id == managed_idea:
+                    defer(idea_id, self.gpu_ids[0])
+
         def deliver(idea_id, gpu):
             if idea_id not in delivered_ids:
                 eval_finished.append((idea_id, gpu))

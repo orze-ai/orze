@@ -6,6 +6,7 @@ Calling spec:
     orze -c orze.yaml --gpus 0,1                # with project config
     orze init [path]                            # initialize new project
     orze start / stop / restart                 # daemon management
+    orze retry-eval IDEA_ID -c orze.yaml         # admit evaluation-only retry
     orze --check                                # validate config
     orze --launch-status                        # fast stop/pause policy JSON
     orze --admin                                # launch admin panel
@@ -77,6 +78,49 @@ def _run_sop_subcommand(args) -> int:
               "status commands.")
         return 2
     return run_sop_subcommand(args)
+
+
+def _run_retry_eval_subcommand(args) -> int:
+    """Admit evaluation-only work without GPU discovery or paid extensions."""
+    import json
+    import sqlite3
+
+    from orze.core.evaluation_retry_state import open_existing_lake
+    from orze.engine.evaluation_retry import request_evaluation_retry
+    from orze.reporting.evidence import report_lifecycle_db_path
+
+    lake = None
+    try:
+        config_path = Path(args.config_file or "orze.yaml").absolute()
+        if not config_path.is_file():
+            raise ValueError("evaluation_retry_config_missing")
+        # The shared loader interprets relative paths from cwd. This early,
+        # single-threaded CLI branch scopes that interpretation to the selected
+        # project, then restores the caller's cwd before invoking the service.
+        caller_cwd = Path.cwd()
+        try:
+            os.chdir(config_path.parent)
+            cfg = load_project_config(str(config_path))
+            cfg["_config_path"] = str(config_path)
+            results_dir = Path(cfg["results_dir"]).absolute()
+            cfg["results_dir"] = str(results_dir)
+            cfg["_env_ORZE_RESULTS_DIR"] = str(results_dir)
+            db_path = report_lifecycle_db_path(results_dir, cfg).absolute()
+            cfg["idea_lake_db"] = str(db_path)
+        finally:
+            os.chdir(caller_cwd)
+        # The existing-only opener rejects missing/invalid project authority
+        # without SQLite's normal create/bootstrap behavior.
+        lake = open_existing_lake(db_path)
+        result = request_evaluation_retry(args.idea_id, results_dir, cfg, lake)
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return 0
+    except (ValueError, OSError, sqlite3.Error) as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False))
+        return 2
+    finally:
+        if lake is not None:
+            lake.close()
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +231,15 @@ Examples:
     )
     resume_parser.add_argument("-c", "--config-file", type=str, default=None,
                                help="Path to orze.yaml")
+
+    # Evaluation retry is explicit admission, never training reset/resume.
+    retry_eval_parser = subparsers.add_parser(
+        "retry-eval", help="Admit one failed evaluation for retry without retraining")
+    retry_eval_parser.add_argument("idea_id", help="Exact evaluation-failed idea ID")
+    retry_eval_parser.add_argument(
+        "-c", "--config-file", type=str, default=argparse.SUPPRESS,
+        help="Path to orze.yaml (also accepts the global -c option)",
+    )
 
     # run-idea — one exact queued idea through the ordinary hardened pipeline
     run_idea_parser = subparsers.add_parser(
@@ -497,6 +550,9 @@ Examples:
         cfg = load_project_config(args.config_file)
         cfg["_config_path"] = args.config_file or "orze.yaml"
         return do_launch_status(cfg)
+
+    if args.command == "retry-eval":
+        return _run_retry_eval_subcommand(args)
 
     if not _find_pro_key():
         maybe_star()

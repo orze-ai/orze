@@ -1439,6 +1439,21 @@ class IdeaLake:
 
         return bool(_retry_on_busy(_do))
 
+    def retry_evaluation(
+        self, idea_id: str, reason: str = "evaluation_retry_requested", *,
+        prepare_artifacts=None,
+    ) -> bool:
+        """Atomically retry failed evaluation without resetting completed training.
+
+        The optional internal coordinator callback runs under the DB write lock
+        before state changes. It receives the failed global transition ID and
+        must prepare artifacts recoverably/idempotently without changing the DB.
+        """
+        from orze.core.evaluation_retry_state import retry_evaluation
+        return retry_evaluation(
+            self, idea_id, reason, prepare_artifacts=prepare_artifacts,
+        )
+
     def has(self, idea_id: str) -> bool:
         # SQLITE_BUSY exposure: same as get(). Wrap the read so a transient
         # lock contention is retried instead of raised into the orchestrator.

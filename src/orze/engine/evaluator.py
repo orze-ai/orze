@@ -151,6 +151,14 @@ def launch_eval(idea_id: str, gpu: int, results_dir: Path,
     if reject_ineligible():
         return None
 
+    from orze.engine.evaluation_retry import EvaluationRetryError, validate_pending_retry
+    try:
+        validate_pending_retry(idea_id, results_dir, cfg, lake)
+    except EvaluationRetryError as exc:
+        _record_eval_audit(idea_dir, "reject", "evaluation_retry_validation_failed",
+                           detail=str(exc))
+        return None
+
     output_path = evaluation_output_path(idea_dir, cfg)
     if output_path is None:
         _record_eval_audit(idea_dir, "reject", "evaluation_output_path_invalid")
