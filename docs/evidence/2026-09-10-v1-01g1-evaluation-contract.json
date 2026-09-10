@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "item": "V1-01G1",
+  "status": "mechanism_verified",
+  "claim": "Evaluation admission and completion use declared artifact sources across existing-output, blocking and asynchronous entry points; configured no-process results are never inferred to be successful evaluations",
+  "baseline": {
+    "core": "28650a176ab47ee4dc538d1eabd850ca0bd36fd4",
+    "pro": "d0d27f103efbda043de6607224d33e3323c17ba4"
+  },
+  "frozen_tests": [
+    {
+      "file": "tests/test_eval_existing_output_contract.py",
+      "sha256": "64906220aaef06a887962f50a99247f3399530cab2e31ded235ffaae23488aab"
+    },
+    {
+      "file": "tests/test_eval_completion_source_contract.py",
+      "sha256": "4bf14707da22f43238fbce0553111dceb5da7959d80935fca1f0f4f7079a80d3"
+    },
+    {
+      "file": "tests/test_eval_dispatch_outcomes.py",
+      "sha256": "033b624dec3a254455dade3fca65d57e34a72aaa5dbf0cc44d32f7972152cc63"
+    },
+    {
+      "file": "tests/test_failed_evaluation_source.py",
+      "sha256": "ccf6ad63075a4e2bc4cbf18b643cfaabb76b5a20cd3474b52800758c48edb72c"
+    },
+    {
+      "file": "tests/test_eval_output_policy_boundaries.py",
+      "sha256": "37f50cde560e4453f7457d510edff906f9bfb88511ff54cbaa406ac4abb3a146"
+    },
+    {
+      "file": "tests/test_eval_dispatch_tick_contract.py",
+      "sha256": "04908b48267ff81a4a301aa740bf8d4991bd9ea9671559b08b8555a6eed5a5e0"
+    },
+    {
+      "file": "tests/test_eval_terminal_boundaries.py",
+      "sha256": "fbcf8d0ac986d3359c8992028878753fb571b9a47fa24d38a84905d99ed7997f"
+    },
+    {
+      "file": "tests/test_eval_dispatch_boundary_types.py",
+      "sha256": "82ad59584a0da82046a49abb69e927bde2f5564e1ed0ac6bb925d975e820ef29"
+    },
+    {
+      "file": "tests/test_eval_reconciliation_safety.py",
+      "sha256": "ed9b8a7de8ed978f38ce865c737a491397f144326bf592fbffda7ee172a832d2"
+    },
+    {
+      "file": "tests/test_eval_policy_history_scope.py",
+      "sha256": "8b98079315844b6799ab175e063742ecb79b5289588f5182ce1d6bf3642ee5c4"
+    },
+    {
+      "file": "tests/test_eval_failure_marker_io.py",
+      "sha256": "ee33ebefee795177bef2bb87372122d87d1aae6a0f3979c95191bce35f3310d7"
+    }
+  ],
+  "reproducible_frozen_baseline_recheck": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport subprocess\nimport pytest\nimport orze.engine.evaluator as evaluator\nimport orze.engine.phases as phases\nimport orze.reporting.evidence as evidence\nimport orze.reporting.leaderboard as leaderboard\nimport orze.engine.champion_history as history\nbaseline = '28650a176ab47ee4dc538d1eabd850ca0bd36fd4'\nfor module, path in ((evaluator, 'src/orze/engine/evaluator.py'), (phases, 'src/orze/engine/phases.py'), (evidence, 'src/orze/reporting/evidence.py'), (leaderboard, 'src/orze/reporting/leaderboard.py'), (history, 'src/orze/engine/champion_history.py')):\n    source = subprocess.run(['git', 'show', baseline + ':' + path], check=True, capture_output=True, text=True).stdout\n    exec(compile(source, module.__file__ + '@' + baseline, 'exec'), module.__dict__)\nfiles = [\"tests/test_eval_existing_output_contract.py\",\"tests/test_eval_completion_source_contract.py\",\"tests/test_eval_dispatch_outcomes.py\",\"tests/test_failed_evaluation_source.py\",\"tests/test_eval_output_policy_boundaries.py\",\"tests/test_eval_dispatch_tick_contract.py\",\"tests/test_eval_terminal_boundaries.py\",\"tests/test_eval_dispatch_boundary_types.py\",\"tests/test_eval_reconciliation_safety.py\",\"tests/test_eval_policy_history_scope.py\",\"tests/test_eval_failure_marker_io.py\"]\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', '--tb=no'] + files))\nPY",
+    "exit_code": 1,
+    "failed": 69,
+    "passed": 18,
+    "elapsed_seconds": 31.15,
+    "scope": "Five changed baseline modules are substituted in an isolated Python process. Final frozen tests and all other dependencies remain the paired feature checkout; no filesystem rollback, import or setup failures are counted."
+  },
+  "targeted_green": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_eval_existing_output_contract.py tests/test_eval_completion_source_contract.py tests/test_eval_dispatch_outcomes.py tests/test_failed_evaluation_source.py tests/test_eval_output_policy_boundaries.py tests/test_eval_dispatch_tick_contract.py tests/test_eval_terminal_boundaries.py tests/test_eval_dispatch_boundary_types.py tests/test_eval_reconciliation_safety.py tests/test_eval_policy_history_scope.py tests/test_eval_failure_marker_io.py --tb=short",
+    "exit_code": 0,
+    "passed": 87,
+    "skipped": 0,
+    "elapsed_seconds": 30.77
+  },
+  "final_pro_regression": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+    "exit_code": 0,
+    "passed": 394,
+    "skipped": 0,
+    "elapsed_seconds": 34.14
+  },
+  "independent_review": [
+    {
+      "scope": "Phases dispatch changes, new 9 scheduler cases and related admission/managed/campaign tests",
+      "passed": 175,
+      "elapsed_seconds": 39.15
+    },
+    {
+      "scope": "Output policy/cache/identity/history scope, sealed reconciliation and timeout boundaries",
+      "passed": 25,
+      "elapsed_seconds": 9.76
+    },
+    {
+      "scope": "Sync/async source validation, receipts, sealed/metrics deletion, wait/poll faults and confirmed-termination boundary",
+      "passed": 35,
+      "elapsed_seconds": 12.91
+    },
+    {
+      "scope": "Final marker IO conflict with real filesystem and unchanged frozen test",
+      "passed": 2,
+      "elapsed_seconds": 0.79
+    }
+  ],
+  "compatibility": [
+    "See docs/evaluation-contract.md. Missing optional evaluation output is compatible when neither declared source requirements nor benchmark policy require its contents; no-primary tasks can complete with zero observations.",
+    "Only the framework-designated output receives completion-status semantics, when an evaluator is configured or it is explicitly a metric source; unrelated domain JSON status fields remain domain data.",
+    "The result cache schema is 7; configured output content, path and evaluator activation affect cache/evidence identity, and activation/path isolate champion-guard history.",
+    "metrics.json and ./metrics.json aliases still reach evaluation when pending; symlink/hard-link/escaping output paths are rejected. The framework never overwrites existing output or training metrics with its fallback.",
+    "Original test_determinism_hardening_4.py skip-audit test retains every assertion; its fixture now includes completed training so it exercises instrumentation rather than a training admission bypass.",
+    "Before freezing the new terminal-boundary file, its proposed symlink-launch expectation was corrected to the existing safe-path rejection contract; that discarded expectation is not a red-to-green claim.",
+    "Blocking normal exits delegate to the asynchronous validator/receipt/lifecycle path. A failed best-effort diagnostic marker write cannot suppress failure closure; uncertain termination never fabricates a terminal receipt.",
+    "Benchmark failure audit reason compatibility is retained. Sealed validation now also protects existing-output reconciliation."
+  ],
+  "limits": [
+    "No actual GPU, evaluator subprocess, paid provider, production license activation, package publication, deployment or live campaign mutation exercised. Tests use real temporary artifact/SQLite/compute receipt paths and double only external execution/hardware boundaries.",
+    "Stage, filesystem, observation and compute receipt transitions are not one atomic transaction; attempt fencing, crash recovery, stale-child completion and distributed exactly-once dispatch remain subsequent work.",
+    "Evaluation-only retry and immutable generation snapshots are not implemented by this item. A legacy in-place evaluator can itself mutate metrics.json; framework fallback preservation is not an immutability claim about that external script.",
+    "Deduplication is per scheduler tick, not across controllers or restarts; legacy no-lake dispatch cannot establish completion from None. Backlog retains known-config and configured checkpoint gates.",
+    "Champion progress versus ranking/ties, repeated completion accounting, no-finished revocation, and remaining report/admin/legacy verifier consumers remain open. G1 does not complete V1-01 or V1 as a whole.",
+    "Evidence identities protect the read interval, not a globally atomic filesystem/lifecycle decision. Research efficiency or scientific validity gains are not inferred from these tests."
+  ],
+  "fix": {
+    "core": "637ef59ea7ebc5015b40c81cb11bf2669bddd089"
+  },
+  "remote_verification": "Push succeeded and git ls-remote origin refs/heads/feat/autoresearch-v1 matched the full fix SHA.",
+  "final_core_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0,
+    "passed": 1547,
+    "skipped": 6,
+    "elapsed_seconds": 137.44,
+    "skip_scope": "Existing optional Pro tests in the core-only source environment"
+  },
+  "final_cross_repository_regression": {
+    "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"--tb=short\",\"-rs\"]))'",
+    "exit_code": 0,
+    "passed": 30,
+    "skipped": 0,
+    "elapsed_seconds": 0.48
+  }
+}
