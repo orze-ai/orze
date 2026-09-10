@@ -26,8 +26,11 @@
 | V1-02A：持久触发交付 | 已实现、机制已验证 | Core `105c58e` / Pro `99f3489`；3 旧公共行为 red、2 草稿绑定 red 与 80 新机制，共 85 passed；最终 Core 1932 passed / 7 optional Pro skips、Pro 710 passed、真实跨仓 60 passed；旧 workflow fixture 显式版本化保留原快照，最终 v3 旧源码仍重现 2 red |
 | V1-02B：共享完成阶段一致性 | 已修复、机制已验证 | Core `3c92571` / Pro 验收 `4672fbb`；33 旧行为 red、1 新 helper 草稿 red、1 新并发事务机制与 18 兼容控制，共 53 passed；最终 Core 1975 passed / 7 optional Pro skips、Pro 720 passed、真实跨仓 60 passed |
 | V1-02C：提案交接与不可覆盖入队 | 已修复、机制已验证 | Core `d869acf` / Pro 验收 `598905e`；22 旧行为 red、3 草稿 red、31 新机制与 3 兼容控制，共 59 passed；最终 Core 2031 passed / 7 optional Pro skips、Pro 723 passed、真实跨仓 60 passed。两套 source 测试夹具显式版本化，保留原快照 |
-| V1-02 整体 | 进行中 | A 关闭触发交付与保守启动恢复，B 关闭共享已记录阶段的完成资格，C 关闭原生提案源的并发交接/不可覆盖 admission；研究任务 stale-attempt 边界及科学任务独立 attempt/observation 仍待收口 |
+| V1-02D1：执行停止确认 | 已修复、机制已验证 | Core `7c33787` / Pro 契约 `72158a5`；25 旧行为 red、15 旧兼容控制、4 草稿 red 与 33 新机制验收，共 77 passed；最终 Core 2108 passed / 7 optional Pro skips、Pro 723 passed、真实跨仓 60 passed。四份旧 fixture 完整快照保留，只迁移明确停止成功的测试替身，不修改业务断言 |
+| V1-02 整体 | 进行中 | A 关闭触发交付与保守启动恢复，B 关闭共享已记录阶段的完成资格，C 关闭原生提案源的并发交接/不可覆盖 admission，D1 关闭已接线的强制停止确认与持久停止 HOLD；研究任务 stale-attempt 边界、完整启动意图及科学任务独立 attempt/observation 仍待收口 |
 | V1-03 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
+
+[V1-02D1 机器可读证据](../evidence/2026-09-10-v1-02d1-termination-authority.json)与[执行停止契约](../execution-termination-authority.md)在两仓各保留一份。固定旧代码重放证明主进程退出被误当作停止确认、失败初始化/槽位注册释放权限，以及补评接受残留写入者产物的路径；修复要求持久请求、停止器严格 True 和整数退出码，再发布绑定请求哈希的确认。未确认停止跨对象丢失和已接线恢复入口保持 HOLD，不自动重试。四个草稿边界红测及四份兼容 fixture 原始快照均可重放。首次 start/stop 均未落盘时的崩溃/存储故障、普通自然退出的完整后代证明、stale-attempt CAS 和产物代际隔离仍未完成；仍不代表整个 V1 已完成。
 
 [V1-02C 机器可读证据](../evidence/2026-09-10-v1-02c-proposal-handoff.json)与[提案源契约](../proposal-source-handoff.md)在两仓各保留一份。固定旧 fs/parser/IdeaLake/phase 重放与实际 Pro producer→Core consumer 重放证明追加丢失、同 ID 覆写、失败后不能 ACK、未完成 finalizer 被提前入库等缺陷。新入口只创建或精确重放，不把 config duplicate/解析失败当成删除源的权限；主文件原字节与未处理区块保留，已提交但删源失败可恢复。源 owner 不再按 60 秒年龄被抢占；磁盘错误恢复失败和二次 close 错误保留不确定 owner。marker/未知 owner 不提供自动恢复工具，其他 legacy/portfolio 写入口及科学复验语义没有被宣称已统一；仍不代表 V1 完成。
 

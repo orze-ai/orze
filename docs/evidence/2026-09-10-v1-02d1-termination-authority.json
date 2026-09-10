@@ -1,0 +1,262 @@
+{
+  "schema_version": 1,
+  "milestone": "V1-02D1",
+  "date": "2026-09-10",
+  "status": "implemented_and_mechanically_verified_not_v1_complete",
+  "scope": "通用训练/posthoc/评估的强制停止确认、停止不确定性持久保留与原生恢复入口，不是 ASR 优化",
+  "baseline": {
+    "core": "4218e15bbd67c7b2558a70d62701b41400a0f96a",
+    "pro": "28d9f81aaa01f92d97932285e5ac02dbd6856152",
+    "branch": "feat/autoresearch-v1"
+  },
+  "old_behavior": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, subprocess, pytest\nref='4218e15bbd67c7b2558a70d62701b41400a0f96a'\nfor name in ['core.fs','engine.process','engine.accounting','engine.evaluation_retry_files','engine.evaluation_retry','engine.failure','engine.resume','engine.scheduler','engine.launcher','engine.evaluator','engine.phases','engine.lifecycle']:\n    mod=importlib.import_module('orze.'+name)\n    path='src/orze/'+name.replace('.','/')+'.py'\n    source=subprocess.check_output(['git','show',ref+':'+path],text=True)\n    exec(compile(source,ref+':'+path,'exec'),mod.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_evaluation_termination_authority.py','tests/test_training_termination_authority.py','tests/test_training_launch_termination_handoff.py','tests/test_shutdown_termination_authority.py','tests/test_training_lease_exit_authority.py','--tb=short']))\nPY",
+    "failed": 25,
+    "passed": 15,
+    "seconds": 7.36,
+    "exit_code": 1,
+    "note": "固定基线的12个完整 Core 模块在独立测试进程中载入；同一40项测试，不覆盖工作树，无 missing-API/setup errors。",
+    "observed_failure": "Integer leader exits wrongly authorized terminal/failure/retry; true retry admitted late old output as COMPLETE; post-Popen lease exit failure skipped cleanup entirely."
+  },
+  "draft_replays": [
+    {
+      "name": "receipt",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport importlib, pytest\nmodule=importlib.import_module('orze.engine.termination_hold')\npath=Path('docs/evidence/snapshots/v1-02d1-before-stop-receipt-recursion-guard.py')\nexec(compile(path.read_text(),str(path),'exec'),module.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_execution_stop_receipts.py','--tb=short']))\nPY",
+      "failed": 1,
+      "passed": 23,
+      "seconds": 1.34,
+      "exit_code": 1,
+      "classification": "draft_only_not_old_behavior",
+      "observed_failure": "RecursionError escaped the specialized HOLD error for deeply nested bounded JSON."
+    },
+    {
+      "name": "recovery",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport importlib, pytest\nmodule=importlib.import_module('orze.engine.lifecycle')\npath=Path('docs/evidence/snapshots/v1-02d1-before-dead-pid-stop-guard.py')\nexec(compile(path.read_text(),str(path),'exec'),module.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_execution_stop_recovery_boundaries.py','--tb=short']))\nPY",
+      "failed": 1,
+      "passed": 9,
+      "seconds": 4.56,
+      "exit_code": 1,
+      "classification": "draft_only_not_old_behavior",
+      "observed_failure": "F7 reset an evaluation stage to PENDING despite a durable unconfirmed stop."
+    },
+    {
+      "name": "eval",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport importlib, pytest\nmodule=importlib.import_module('orze.engine.evaluator')\npath=Path('docs/evidence/snapshots/v1-02d1-before-eval-stop-bypass-guards.py')\nexec(compile(path.read_text(),str(path),'exec'),module.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_evaluation_stop_bypass_boundaries.py','--tb=short']))\nPY",
+      "failed": 2,
+      "passed": 1,
+      "seconds": 1.36,
+      "exit_code": 1,
+      "classification": "draft_only_not_old_behavior",
+      "observed_failure": "A missing local latch allowed failure FSM publication; secondary log-close error masked TerminationUnconfirmed."
+    }
+  ],
+  "acceptance": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_evaluation_termination_authority.py tests/test_training_termination_authority.py tests/test_training_launch_termination_handoff.py tests/test_shutdown_termination_authority.py tests/test_training_lease_exit_authority.py tests/test_execution_stop_receipts.py tests/test_execution_stop_recovery_boundaries.py tests/test_evaluation_stop_bypass_boundaries.py --tb=short",
+    "passed": 77,
+    "seconds": 12.41,
+    "exit_code": 0,
+    "classification": {
+      "old_behavior_red": 25,
+      "old_compatibility_controls": 15,
+      "draft_behavior_red": 4,
+      "new_mechanism_acceptance": 33
+    }
+  },
+  "boundaries": [
+    "只覆盖已接线的训练/posthoc/评估强制停止与shutdown/retry/recovery，角色沿用已有协议，pre/post scripts 和普通自然退出的完整后代证明不属于本项。",
+    "严格 True 与整数退出码来自受控进程组及已跟踪后代的停止器，不宣称发现所有逃逸写入者或远程执行者。",
+    "停止请求在信号前持久化；未确认、部分或非法记录只可 HOLD，无自动重试/年龄抢占/手工删除即安全的恢复接口。",
+    "若 Popen 已返回但首次 start/stop 记录均未持久化且存储不可用，只能内存 HOLD；本项不证明该窗口跨重启安全。",
+    "未完成 D2 stale-attempt CAS、canonical artifact 代际归属/隔离、独立 observation/replicate、真实CPU autoresearch闭环或 V1整体。",
+    "没有真实GPU训练、付费provider、真实科研收益或已发布版本声明。配对Pro回归仅在测试进程patch授权边界。",
+    "完整测试回归包含现有本地dummy subprocess；新D1契约测试仅mock OS/provider/GPU边界、使用真实临时SQLite/文件/compute receipts。",
+    "原始用户工作区保持281条status项未改；holdout挑战只核对SHA256未读。"
+  ],
+  "source_sha256": {
+    "src/orze/engine/accounting.py": "0282077bd368f14fc4af08e38fc47be66a593ed1c1fb8c5c782b30ebfabad043",
+    "src/orze/engine/evaluation_retry.py": "540d7f9c9ebd20a9b02d9e0531448e28c9001ad8bee571cb8c91bf97b95aa16c",
+    "src/orze/engine/evaluation_retry_files.py": "cae54bd4aab392caaad870e6c87cd71fcff11e74e35f023460e876f95c263390",
+    "src/orze/engine/evaluator.py": "2032ed979f48492472f74ba8ee7b4bf9c65c0775ba6a252544d4a82085b995e2",
+    "src/orze/engine/failure.py": "16fbff5b76d43c4455ce4e88d5c8168c0df57614819a36f0f57db854eb3bffa4",
+    "src/orze/engine/launcher.py": "80be2e070b69ecd5b01135e2499fa48c8a84b1b859f707c11440b4ea4d0b5868",
+    "src/orze/engine/lifecycle.py": "318be9203dee4ee3658a446d4e10a1eb4658dfb8a1564954821deaf1d7c81e17",
+    "src/orze/engine/phases.py": "32486dd4f4b4342b8951a3f97c3103b3f5198635a25a86ec25ddaa8585663e4a",
+    "src/orze/engine/process.py": "07c21ac945c6bfeb0e0fc7afdb05f09aa0b44a455e32a04e033951f25186088c",
+    "src/orze/engine/resume.py": "69f4df0b2f6d0b614992f3fe591f75e717c93fe6584766ce4757a60842eb763c",
+    "src/orze/engine/scheduler.py": "f4f62f763fcdbd2ae79ccd136c507c5c35c56a0e8c85128a2dbc5b55dd34456e",
+    "src/orze/engine/termination_hold.py": "55a04a8ab701613236c260f6d014bc4e2222c1c7cee7015664ea921e8bdba82f"
+  },
+  "artifact_sha256": {
+    "tests/test_evaluation_termination_authority.py": "eb4328f215d761743e645b589b1d9f0523ca7c9802cf75b5aa692f6421856ec9",
+    "tests/test_training_termination_authority.py": "69306fd640246c9a5c5aaccef672c1a3c820b32676e60c59a94c6c361e5c0376",
+    "tests/test_training_launch_termination_handoff.py": "cb32dd38d6fdf5cb56afa6a322dfb61cfe0831e86424731c9fb95b5754eda0d3",
+    "tests/test_shutdown_termination_authority.py": "17bc5750f8ac8c9df2cc6bb35202d3e38c30ee1e799476fa3c6e003c06fff4b8",
+    "tests/test_training_lease_exit_authority.py": "0de8645e7cb92e0493bb1b65f29c9b859a16c4ef5ef415aca00eabe8746dddc5",
+    "tests/test_execution_stop_receipts.py": "0f948666bd3649544126dae4fda733fb007c362ada7878aecc3a05c2b05ea32b",
+    "tests/test_execution_stop_recovery_boundaries.py": "6266823f8f3fc7138f11b1149f92da92a44993752233d8f92c1c071d670b3491",
+    "tests/test_evaluation_stop_bypass_boundaries.py": "35ea132e88effbc27f44c7e0b55bd651f434e67483b409ff273168ec9a90afae",
+    "tests/test_eval_terminal_boundaries.py": "63efd9885953f4b2dc7bd6ce836429bbd25f7d9e61d012f93d1a0f5d66bc5e21",
+    "tests/test_resume.py": "da7787dc678fb765c846660a0f3496f0245320a55844f34d30ebb443a98fe7b8",
+    "tests/test_model_lineage.py": "14f1923c328098459986171b20418217431ea8a3af1b7e6acea961e9c928526e",
+    "tests/test_compute_accounting.py": "bfe1821988477c5a17c17455774acf62208df01f288782795d74036d2a79a8c4",
+    "docs/evidence/snapshots/v1-02d1-before-dead-pid-stop-guard.py": "571ccfdd26c601b308e86686d9c427f6627a6120a0a1b2105f9c2c76829d812b",
+    "docs/evidence/snapshots/v1-02d1-before-eval-stop-bypass-guards.py": "a927abde4982b20fa7d27e899fecf9b469b23ec5d730d271a286f7d2dc30f440",
+    "docs/evidence/snapshots/v1-02d1-before-launch-lease-exit.py": "ca49dd2ccddc00b711179fdf0af35c13c8eb7a8373148b15b5698afcf976f859",
+    "docs/evidence/snapshots/v1-02d1-before-stop-receipt-recursion-guard.py": "409063703b555cd95e5e8ce9dfda4c79df058d031f039ad423edf9373d4002d3",
+    "docs/evidence/snapshots/v1-02d1-compute-accounting-test-original.py": "5e6258f8e049babb2745fb3e3bc2d936a62f6cd509d5a413c7f517a0d32e6487",
+    "docs/evidence/snapshots/v1-02d1-eval-terminal-boundaries-test-original.py": "fbcf8d0ac986d3359c8992028878753fb571b9a47fa24d38a84905d99ed7997f",
+    "docs/evidence/snapshots/v1-02d1-model-lineage-test-original.py": "b9a82812a87a8c700955ebadf4424c3de3512900901802945ad6c129da088dd7",
+    "docs/evidence/snapshots/v1-02d1-resume-test-original.py": "f3a6e9f87afe4a4fbfb9a3952378aa350de8ae25cdb22bed0ad5a031a43ddc48",
+    "docs/execution-termination-authority.md": "00e13ac7b77e4df0adf5cc8271cfd854459dfe3ed9a0568b404d8b26fbbcc2bb"
+  },
+  "target_files": [
+    {
+      "file": "tests/test_evaluation_termination_authority.py",
+      "old_red": 7,
+      "old_controls": 4
+    },
+    {
+      "file": "tests/test_training_termination_authority.py",
+      "old_red": 7,
+      "old_controls": 4
+    },
+    {
+      "file": "tests/test_training_launch_termination_handoff.py",
+      "old_red": 2,
+      "old_controls": 2
+    },
+    {
+      "file": "tests/test_shutdown_termination_authority.py",
+      "old_red": 5,
+      "old_controls": 5
+    },
+    {
+      "file": "tests/test_training_lease_exit_authority.py",
+      "old_red": 4,
+      "old_controls": 0
+    },
+    {
+      "file": "tests/test_execution_stop_receipts.py",
+      "draft_red": 1,
+      "new_acceptance": 23
+    },
+    {
+      "file": "tests/test_execution_stop_recovery_boundaries.py",
+      "draft_red": 1,
+      "new_acceptance": 9
+    },
+    {
+      "file": "tests/test_evaluation_stop_bypass_boundaries.py",
+      "draft_red": 2,
+      "new_acceptance": 1
+    }
+  ],
+  "fixture_migrations": [
+    {
+      "file": "tests/test_eval_terminal_boundaries.py",
+      "snapshot": "docs/evidence/snapshots/v1-02d1-eval-terminal-boundaries-test-original.py",
+      "change": "仅reaper fixture加return True，不改断言；原fixture旧evaluator 14 passed/2.25s。"
+    },
+    {
+      "file": "tests/test_resume.py",
+      "snapshot": "docs/evidence/snapshots/v1-02d1-resume-test-original.py",
+      "change": "仅terminate fixture加return True，不改断言。"
+    },
+    {
+      "file": "tests/test_model_lineage.py",
+      "snapshot": "docs/evidence/snapshots/v1-02d1-model-lineage-test-original.py",
+      "change": "仅fake_terminate fixture加return True，不改断言；原resume+model_lineage两node固定旧launcher 2 passed/0.11s。"
+    },
+    {
+      "file": "tests/test_compute_accounting.py",
+      "snapshot": "docs/evidence/snapshots/v1-02d1-compute-accounting-test-original.py",
+      "change": "shutdown/atexit替身从仅发送信号的seam迁移到明确停止确认seam，保留原信号、终态、active/FSM断言。",
+      "old_replay": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport subprocess, pytest\nfrom orze.engine import lifecycle\nref='4218e15bbd67c7b2558a70d62701b41400a0f96a'\nsource=subprocess.check_output(['git','show',ref+':src/orze/engine/lifecycle.py'],text=True)\nexec(compile(source,ref+':src/orze/engine/lifecycle.py','exec'),lifecycle.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','docs/evidence/snapshots/v1-02d1-compute-accounting-test-original.py::test_controller_shutdown_closes_eval_compute_and_requeues_stage','docs/evidence/snapshots/v1-02d1-compute-accounting-test-original.py::test_atexit_closes_every_tracked_gpu_allocation','--tb=short']))\nPY",
+        "passed": 2,
+        "seconds": 0.49,
+        "exit_code": 0
+      }
+    }
+  ],
+  "fixture_original_replay_instructions": "原fixture完整快照可直接作为pytest文件路径，不覆盖工作树。按对应旧模块重放，使用原test node ID；原文件/迁移后文件哈希均在artifact_sha256中。",
+  "prefreeze_setup_corrections": [
+    "shutdown测试初稿误用IdeaLake context manager，5个正控先遇AttributeError；冻结前改为真实close/open，随后旧代码5 red/5 pass，初稿错误不作产品证据。",
+    "phase测试初稿未模拟fake child /proc identity，导致slot case先落初始化异常；冻结前补真实OS seam，最终基线2 red/2 pass。",
+    "评估草稿编辑期间一处exc变量误删导致NameError，已在最终冻结和回归前修复，不计缺陷收益。"
+  ],
+  "intermediate_regression": {
+    "status": "diagnostic_not_final_source",
+    "core": {
+      "failed": 2,
+      "passed": 2065,
+      "skipped": 7,
+      "seconds": 191.4
+    },
+    "reason": "首次全量在追加边界测试/接线仍进行时运行，仅两处旧compute-accounting信号seam fixture失败；之后保存原快照、固定旧源码重放并迁移。不能当最终源验收。"
+  },
+  "regressions": {
+    "commands": {
+      "core": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "pro": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "paired": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'"
+    },
+    "pro": {
+      "passed": 723,
+      "seconds": 111.12,
+      "exit_code": 0
+    },
+    "paired": {
+      "passed": 60,
+      "seconds": 0.74,
+      "exit_code": 0
+    },
+    "core": {
+      "passed": 2108,
+      "skipped": 7,
+      "seconds": 233.15,
+      "exit_code": 0,
+      "skip_reason": "optional installed Pro stub; real paired source coverage separately 60 passed"
+    }
+  },
+  "preservation": {
+    "original_workspace_status_entries": 281,
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+    "holdout_contents_read": false
+  },
+  "environment": {
+    "python": "3.10.12",
+    "pytest": "9.1.1"
+  },
+  "implementation_commits": {
+    "core": "7c337873b3ddad05d4bdba7f553561576253d82e",
+    "pro": "72158a58815bb39c35468ff465a6b2622fc5485f"
+  },
+  "review": {
+    "independent_agents": [
+      "core_review",
+      "pro_review",
+      "runtime_evidence"
+    ],
+    "main_replayed_old_and_drafts": true,
+    "final_source_hashes_rechecked_after_suites": true,
+    "diff_check": "passed"
+  },
+  "command_workdirs": {
+    "old_and_draft_replays": "orze checkout",
+    "acceptance": "orze checkout",
+    "core": "orze checkout",
+    "pro": "orze-pro checkout; sibling directory named orze",
+    "paired": "orze checkout; sibling directory named orze-pro"
+  },
+  "artifact_repository": "orze (including original fixture snapshots); Pro holds a matching contract and evidence copy",
+  "combined_original_fixture_replay": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, subprocess, pytest\nref='4218e15bbd67c7b2558a70d62701b41400a0f96a'\nfor name in ['core.fs','engine.process','engine.accounting','engine.evaluation_retry_files','engine.evaluation_retry','engine.failure','engine.resume','engine.scheduler','engine.launcher','engine.evaluator','engine.phases','engine.lifecycle']:\n    mod=importlib.import_module('orze.'+name)\n    path='src/orze/'+name.replace('.','/')+'.py'\n    source=subprocess.check_output(['git','show',ref+':'+path],text=True)\n    exec(compile(source,ref+':'+path,'exec'),mod.__dict__)\nfrom pathlib import Path\nfrom types import ModuleType\nfixtures=ModuleType('d1_original_test_fixtures')\nfixture_path=Path('tests/conftest.py')\nexec(compile(fixture_path.read_text(),str(fixture_path),'exec'),fixtures.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"docs/evidence/snapshots/v1-02d1-eval-terminal-boundaries-test-original.py\",\"docs/evidence/snapshots/v1-02d1-resume-test-original.py::test_timeout_writes_non_resumable_receipt_when_policy_disabled\",\"docs/evidence/snapshots/v1-02d1-model-lineage-test-original.py::test_launch_accounts_then_terminates_unattested_child\",\"docs/evidence/snapshots/v1-02d1-compute-accounting-test-original.py::test_controller_shutdown_closes_eval_compute_and_requeues_stage\",\"docs/evidence/snapshots/v1-02d1-compute-accounting-test-original.py::test_atexit_closes_every_tracked_gpu_allocation\",\"--tb=short\"], plugins=[fixtures]))\nPY",
+    "passed": 18,
+    "seconds": 2.63,
+    "exit_code": 0,
+    "fixture_plugin_sha256": "22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641",
+    "note": "Snapshot files outside tests/ explicitly load the unchanged tests/conftest.py as a pytest plugin to preserve isolated GPU-lease fixtures."
+  },
+  "snapshot_replay_setup_correction": "An initial combined snapshot replay omitted tests/conftest.py (snapshots live outside tests/), producing one fixture KeyError/17 pass; fake Popen blocked the misplaced OS query. This is not a product red. The explicit original fixture plugin yields 18 pass."
+}
