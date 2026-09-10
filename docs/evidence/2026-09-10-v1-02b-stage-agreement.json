@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "item": "V1-02B",
+  "status": "mechanism_verified",
+  "claim": "Recorded training/evaluation stages constrain completed evidence across Core and Pro. Historical absence remains compatible, but present NULL/nonterminal values do not. Structural ambiguity fails closed; notification metric refresh owns its transaction and rechecks stages at the conditional write.",
+  "baseline": {
+    "core": "2e39efb8e84d1df6e938fcbb854281a3b806b03c",
+    "pro": "fcb003fe2e534aa6554b64a59293a92a79c99e88"
+  },
+  "fix_commits": {
+    "core": "3c9257180651ebb8991bd19571332e2475acda07",
+    "pro": "4672fbba7d782293284c4f13fc8a9821f1c2f5d3"
+  },
+  "frozen_tests": [
+    {
+      "repository": "orze",
+      "file": "tests/test_authoritative_stage_contract.py",
+      "sha256": "8cfc4769a1ca192e9c9fc4eb602255573afd1da582f1a105cb95498cdcd0699f",
+      "cases": 23,
+      "old_behavior_failed": 15,
+      "old_controls_passed": 8,
+      "old_elapsed_seconds": 3.59
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_stage_observer_write_boundary.py",
+      "sha256": "70d9170b0304b70733e08dd9175e8aac951e34681923cbb6d9af7e7384eb2ed0",
+      "cases": 12,
+      "old_behavior_failed": 8,
+      "old_controls_passed": 4,
+      "old_elapsed_seconds": 2.26
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_stage_qualification_consumers.py",
+      "sha256": "ac8e9f8ea3634fe44338456b56267398ee6e4965b832b7f973fdc8645ffb8d60",
+      "cases": 10,
+      "old_behavior_failed": 7,
+      "old_controls_passed": 3,
+      "old_elapsed_seconds": 1.71
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_stage_transaction_boundaries.py",
+      "sha256": "51ae6b3051202923bcd825697dc30eebbe51ce4818f2ee6393fa9f282dd8dc07",
+      "cases": 8,
+      "classification": "3 old behavior reds, 1 new-helper draft red, 1 new concurrent-transaction mechanism, 3 compatibility controls; old global NOCASE defect also remains in draft replay and is counted once."
+    }
+  ],
+  "classification_totals": {
+    "target_cases": 53,
+    "old_behavior_reds": 33,
+    "draft_behavior_reds": 1,
+    "new_mechanism_acceptance": 1,
+    "compatibility_controls": 18
+  },
+  "old_rechecks": [
+    {
+      "repository": "orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_authoritative_stage_contract.py tests/test_stage_observer_write_boundary.py --tb=short",
+      "failed": 23,
+      "passed": 12,
+      "seconds": 5.77,
+      "baseline": "2e39efb8e84d1df6e938fcbb854281a3b806b03c",
+      "production_diff_empty_after_run": true,
+      "exit_code": 1,
+      "notes": "Main reran both frozen files before production edits; git status confirmed production diff empty immediately after completion."
+    },
+    {
+      "repository": "orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom unittest.mock import patch\nimport pytest\nwith patch('orze_pro._gate.require_license'):\n    raise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_stage_qualification_consumers.py','--tb=short']))\nPY",
+      "failed": 7,
+      "passed": 3,
+      "elapsed_seconds": 1.71,
+      "exit_code": 1,
+      "notes": "Direct fixed-old paired source; actual run_role_step, real SQLite/source qualification, process tripwire. No missing API/fixture failures."
+    },
+    {
+      "repository": "orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport subprocess\nimport pytest\nfrom orze.reporting import evidence, catalog, notification_evidence\nbaseline = '2e39efb8e84d1df6e938fcbb854281a3b806b03c'\nfor module, relative in (\n    (evidence, 'src/orze/reporting/evidence.py'),\n    (catalog, 'src/orze/reporting/catalog.py'),\n    (notification_evidence, 'src/orze/reporting/notification_evidence.py'),\n):\n    source = subprocess.check_output(['git', 'show', baseline + ':' + relative], text=True)\n    exec(compile(source, '<baseline-2e39efb8-' + relative + '>', 'exec'), module.__dict__)\nraise SystemExit(pytest.main([\n    '-q', '-p', 'no:cacheprovider', '--tb=short',\n    'tests/test_stage_transaction_boundaries.py::test_metric_refresh_preserves_callers_uncommitted_transaction',\n    'tests/test_stage_transaction_boundaries.py::test_failed_metric_update_rolls_back_only_its_owned_transaction',\n    'tests/test_stage_transaction_boundaries.py::test_sql_and_python_agree_on_exact_completion_tokens_even_with_nocase_storage[idea_state-complete-False]',\n]))\nPY",
+      "failed": 3,
+      "passed": 0,
+      "seconds": 1.16,
+      "exit_code": 1,
+      "notes": "Fixed complete old modules loaded in memory. Three actual public behavior failures, not API absence."
+    }
+  ],
+  "draft_recheck": {
+    "repository": "orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.reporting import evidence, catalog, notification_evidence, lifecycle_stages\nsnapshots = Path('docs/evidence/snapshots')\nsource = (snapshots / 'v1-02b-before-binary-stage-comparison.py').read_text()\nexec(compile(source, '<draft-before-binary-stage-comparison>', 'exec'), lifecycle_stages.__dict__)\nfor module in (evidence, catalog, notification_evidence):\n    for name in ('validate_lifecycle_schema', 'completed_stage_sql', 'completed_stages_agree', 'stage_projection'):\n        if name in module.__dict__:\n            module.__dict__[name] = getattr(lifecycle_stages, name)\nfor module, name in (\n    (evidence, 'v1-02b-before-binary-completed-rows.py'),\n    (notification_evidence, 'v1-02b-before-binary-metric-refresh.py'),\n):\n    source = (snapshots / name).read_text()\n    exec(compile(source, '<draft-' + name + '>', 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_stage_transaction_boundaries.py', '--tb=short']))\nPY",
+    "failed": 2,
+    "passed": 6,
+    "seconds": 3.62,
+    "exit_code": 1,
+    "snapshots": {
+      "docs/evidence/snapshots/v1-02b-before-binary-stage-comparison.py": "0b88e384f2c3cb3f8af354c680c3724b5d79e16f07461f904f16e4986643025e",
+      "docs/evidence/snapshots/v1-02b-before-binary-completed-rows.py": "bfc60cea78a967c4ba774350e76d5b70b9eafad8bad77a81b379442cad08b94b",
+      "docs/evidence/snapshots/v1-02b-before-binary-metric-refresh.py": "57b1252fcfcc3483e5b64d479188b1c85bfc8fb179af4331e10828ef96e60f83"
+    },
+    "notes": "Full helper plus two exact function snapshots and direct-import bindings restored. Two reds include one new-helper stage comparison gap and one already-counted old global comparison defect. Initial draft run 2 failed/6 passed in 1.55s; snapshots preserve exact pre-fix source."
+  },
+  "verification": {
+    "target": {
+      "cwd": "orze-pro",
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_stage_qualification_consumers.py\",\"../orze/tests/test_authoritative_stage_contract.py\",\"../orze/tests/test_stage_observer_write_boundary.py\",\"../orze/tests/test_stage_transaction_boundaries.py\",\"--tb=short\"]))'",
+      "passed": 53,
+      "seconds": 9.25,
+      "exit_code": 0
+    },
+    "core_full": {
+      "cwd": "orze",
+      "command": "python3 -m pytest -q tests --tb=short -rs",
+      "passed": 1975,
+      "skipped": 7,
+      "seconds": 214.77,
+      "exit_code": 0
+    },
+    "pro_full": {
+      "cwd": "orze-pro",
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "passed": 720,
+      "seconds": 108.16,
+      "exit_code": 0
+    },
+    "paired": {
+      "cwd": "orze",
+      "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "passed": 60,
+      "seconds": 0.89,
+      "exit_code": 0,
+      "notes": "All 60 relevant paired-source cases pass; standalone optional installed-Pro stubs explain the seven Core skips."
+    },
+    "independent": [
+      "Observer/stage/config/admin/report neighborhood: 52 passed in 12.27s.",
+      "Separate Pro frozen 10: 10 passed in 3.77s; Core transaction 8: 8 passed in 3.65s. Review confirmed final source hashes and frozen test/snapshot hashes.",
+      "Main existing evidence/catalog/notification/ranking neighborhood: 95 passed in 9.50s. First command referenced a nonexistent test filename and collected zero tests; corrected before run, not a product red."
+    ]
+  },
+  "final_source_sha256": {
+    "orze/src/orze/reporting/lifecycle_stages.py": "4390dfd49e836693eb669f063e021261541cf6f975122224c7409c764e69f048",
+    "orze/src/orze/reporting/evidence.py": "9013faa993651d37236c40fb0a4ec31cc30c7b0795e71669b9cb71c1a6721903",
+    "orze/src/orze/reporting/catalog.py": "b9a6a3f1e7f85e8bef45cbcc6caef95d479a67e69b191e83d8b9790bf213d321",
+    "orze/src/orze/reporting/notification_evidence.py": "6c215bc4b8247de2fcbadda93df57b02a28a95f89a1f7806edafdaa8f41de36d"
+  },
+  "boundaries": [
+    "Read-only observers never create, migrate or repair lifecycle databases. True absent historical stage rows remain unrecorded, not proof of past execution.",
+    "Present training must exactly COMPLETE; evaluation COMPLETE/SKIPPED. SQL BINARY comparison matches Python exact state strings even with historical NOCASE/RTRIM state-column collation. Other custom stage names gain no invented completion meaning.",
+    "Schema/duplicate identity checks and rows share one transaction; current exact PK avoids duplicate scans. Unique historical no-PK tables remain supported. This is not a general identity-collation or hostile DB security redesign.",
+    "Known per-task stage conflicts exclude only that completed candidate, while an exact bounded lifecycle request rejects the entire requested set on any requested conflict. Structural/duplicate identity errors reject the whole authority read.",
+    "Pipeline counts preserve audited global FSM semantics. Artifact/cache presence cannot override withdrawn completion qualification.",
+    "Notification is still a mutable metric mirror, not an immutable observation. It skips caller-owned transactions, rolls back only owned work on error, and does not promise atomicity with result files.",
+    "No paid provider, GPU/training, production license, deployment or live-campaign writes. Full regression retains existing local subprocess fixtures; new tests use real temporary SQLite and in-process public consumers with OS/provider tripwires.",
+    "Original dirty workspace still has 281 status entries. Frozen holdout SHA256 remains fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245; main has not read it.",
+    "V1-02 proposal admission and scientific task/attempt/observation identity, V1-03 through V1-07 remain open. No general research-efficiency gain or full V1 completion claim."
+  ]
+}

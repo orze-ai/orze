@@ -22,10 +22,13 @@
 | V1-01K1：显式、版本绑定的队列审核 | 已修复、机制已验证 | Core `5fe292b` / Pro `9e7df19`；13 旧行为 red、2 旧控制、8 草稿行为 red 与 89 新机制验收，共 112 项；最终 core 1847 passed / 7 optional Pro skips、Pro 550 passed、真实跨仓 31 passed；registry optional-dependency 测试声明修订保留原快照并重放，非产品红测 |
 | V1-01L1：thinker 观察与启动确认 | 已修复、机制已验证 | Pro `4ed67d1`；21 冻结公共行为旧源码重放 16 red / 5 pass，38 新机制及 1 草稿状态边界 red，共 60 passed；最终 Pro 610 passed，core 1847 passed / 7 optional Pro skips，真实跨仓 31 passed |
 | V1-01L2：逐技能激活与实际提示词交付 | 已修复、机制已验证 | Core `8da25dc` / Pro `b7cd5be`；22 冻结公共行为旧源码 16 red / 6 pass，另 2 草稿 I/O 边界 red 与 76 新机制，共 100 项；最终 Core 1876 passed / 7 optional Pro skips、Pro 681 passed，真实跨仓 60 passed；全部 60 项 L1 冻结回归也通过 |
-| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、其他消费者的阶段一致性仍待收口；J1/L1/L2 仅关闭相应角色/技能的显式证据节奏，J2 不代表通用依赖和全部 director 资源安全已完成，K1 不代表统一审核预算或科学判断已完成 |
+| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数仍待收口；共享完成阶段一致性由 V1-02B 补齐。J1/L1/L2 仅关闭相应角色/技能的显式证据节奏，J2 不代表通用依赖和全部 director 资源安全已完成，K1 不代表统一审核预算或科学判断已完成 |
 | V1-02A：持久触发交付 | 已实现、机制已验证 | Core `105c58e` / Pro `99f3489`；3 旧公共行为 red、2 草稿绑定 red 与 80 新机制，共 85 passed；最终 Core 1932 passed / 7 optional Pro skips、Pro 710 passed、真实跨仓 60 passed；旧 workflow fixture 显式版本化保留原快照，最终 v3 旧源码仍重现 2 red |
-| V1-02 整体 | 进行中 | A 关闭触发请求的接收、精确 payload、lease/attempt 与保守启动恢复；共享合法阶段终态、并发提案追加/消费及科学任务独立 attempt/observation 仍待收口 |
+| V1-02B：共享完成阶段一致性 | 已修复、机制已验证 | Core `3c92571` / Pro 验收 `4672fbb`；33 旧行为 red、1 新 helper 草稿 red、1 新并发事务机制与 18 兼容控制，共 53 passed；最终 Core 1975 passed / 7 optional Pro skips、Pro 720 passed、真实跨仓 60 passed |
+| V1-02 整体 | 进行中 | A 关闭触发请求的接收、精确 payload、lease/attempt 与保守启动恢复，B 关闭共享已记录阶段的完成资格；并发提案追加/消费及科学任务独立 attempt/observation 仍待收口 |
 | V1-03 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
+
+[V1-02B 机器可读证据](../evidence/2026-09-10-v1-02b-stage-agreement.json)与[阶段资格契约](../completed-stage-agreement.md)在两仓各保留一份。真实缺失阶段历史保持兼容，已存在的 NULL/未知/非终态不能再混入已完成结果；SQL 与 Python 使用精确状态值，结构/身份歧义不被 set/dict 去重掩盖。通知缓存只在自有写事务内重新检查并更新，不提交调用者尚未提交的工作。冻结测试覆盖真实 report 热缓存撤销、Pro 排名/调度、两个 SQLite 连接及故障触发器。Pipeline 计数、其他扩展阶段和非 COMPLETE 生命周期语义未扩大；本项不是科学任务身份、不可变 observation 或科研收益验收。
 
 [V1-01A 机器可读证据](../evidence/2026-09-10-v1-01a-champion-recovery.json)包含基线、修复提交、红测内容哈希、命令、退出码、通过/跳过数量和适用边界。方案定稿、代码推送、机制验证、真实研究收益是四种不同状态。
 
