@@ -1,0 +1,114 @@
+{
+  "schema": 1,
+  "slice": "V1-05B1",
+  "author": "runtime_evidence",
+  "classification": "New opt-in mechanism acceptance, not historical missing-API behavior regressions",
+  "head_observed_after_targeted_run": "23912021747b49a54870beed979ff351ed8ccac4",
+  "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "owned_production": [
+    "src/orze/engine/artifact_publication.py",
+    "src/orze/engine/training_attempts.py",
+    "src/orze/engine/training_completion.py",
+    "src/orze/engine/launcher.py"
+  ],
+  "owned_tests": {
+    "path": "tests/test_native_artifact_publication.py",
+    "case_count": 16,
+    "sha256": "911a949f083c43a94cc45bb9e781f377289e53b2269a1ee1d58de8cdba892643",
+    "historical_behavior_red_count": 0
+  },
+  "acceptance": [
+    "Actual native launcher pins publication contract before Popen and preserves the binding when RUNNING is published.",
+    "Actual check_active -> training_completion registers declared records and artifact_ids with the terminal transaction.",
+    "Independent inode and readback SHA remain stable after a worker writes through its old source descriptor.",
+    "Missing, oversized, redirected, or changing sources cannot create accepted records or a successful terminal.",
+    "Changed, disabled, newly enabled, or legacy-import-unbound contracts cannot redirect or manufacture producer provenance.",
+    "Partial writes leave unaccepted staging and preserve source; a second poll does not repeat large copy IO.",
+    "A rejected terminal UPDATE rolls back registered artifact rows and retains the existing effect HOLD.",
+    "Default-off, explicitly zero-artifact success, and failed opt-in attempts remain distinct."
+  ],
+  "runs": [
+    {
+      "stage": "initial_owned_mechanism_plus_neighbor_candidate",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_artifact_publication.py tests/test_native_training_caller_boundaries.py tests/test_training_completion_write_race.py tests/test_training_completion_catalog_scope.py --tb=short",
+      "footer": "31 passed in 9.66s",
+      "note": "At this stage the owned file had 15 cases. Source was still being refined; this is not final-source validation."
+    },
+    {
+      "stage": "expanded_candidate",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_artifact_publication.py tests/test_native_training_caller_boundaries.py tests/test_training_completion_write_race.py tests/test_training_completion_catalog_scope.py tests/test_research_artifact_store.py tests/test_artifact_contract_config.py --tb=short",
+      "footer": "87 passed in 10.58s",
+      "note": "Owned file had its frozen 16 cases."
+    },
+    {
+      "stage": "source_frozen_training_neighborhood",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_artifact_publication.py tests/test_native_training_caller_boundaries.py tests/test_training_completion_write_race.py tests/test_training_completion_catalog_scope.py tests/test_research_artifact_store.py tests/test_artifact_contract_config.py tests/test_native_training_repair_status.py tests/test_training_intent_cleanup.py tests/test_stale_training_completion.py tests/test_native_training_shutdown_boundaries.py tests/test_training_launch_termination_handoff.py tests/test_execution_identity.py tests/test_model_lineage_prepared_finalization.py tests/test_model_lineage.py --tb=short",
+      "footer": "173 passed in 20.52s",
+      "owned_source_pre_post_hashes_equal": true,
+      "test_file_count": 14,
+      "note": "Owned production sources and owned 16-test file were not edited during this run. Shared-source hashes were captured after the run; this is a targeted suite, not root's final full-suite verification."
+    }
+  ],
+  "sha256_after_targeted_run": {
+    "src/orze/engine/artifact_publication.py": "e36b5221a0cd1a634da1bbf043f1e1802b56ddade4b2df59d78cc77f9951139f",
+    "src/orze/engine/training_attempts.py": "12ca922ecc25ee2bb0178d2d288981745a8fd344e4305f2e24c7be5b96fca73b",
+    "src/orze/engine/training_completion.py": "1aeb2728c388c42cdbe2c8cf3efa5451d654782469c4597741d54f0d164a1dd9",
+    "src/orze/engine/launcher.py": "82987da4eb0f984e9b5476b0a49560b560a75fce7e4fc76fad7832c320a78c01",
+    "src/orze/core/artifact_contract.py": "e5d746af0f48deb4a845e140853cf93415dc9bf62eee35da3e527a22a1c56c13",
+    "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+    "src/orze/core/config.py": "2ac30d480ee5805f1f7618c2de6c2bb8982c2c89addef2c7cc255c21bba3a776",
+    "tests/test_native_artifact_publication.py": "911a949f083c43a94cc45bb9e781f377289e53b2269a1ee1d58de8cdba892643",
+    "tests/test_native_training_caller_boundaries.py": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+    "tests/test_training_completion_write_race.py": "ac89924cdb2dc89f3ce86e9758b459678b0cda07dc8f24c8d0335ea0c1d98149",
+    "tests/test_training_completion_catalog_scope.py": "38c7b30f9537a6afa490a35a5772e2c2250bd99cffb890d0a0cb2028c5f0867a",
+    "tests/test_research_artifact_store.py": "bbb967bb85641d9c6908c4f6fa8cb06f0ebeae466c8461558d4553fee0407e3a",
+    "tests/test_artifact_contract_config.py": "6b38871b62fd0f6b42959a73b3e50ea353477faf37dec76577d09567e3b1ec8c",
+    "tests/test_native_training_repair_status.py": "7b8392e7efe383d6caec63dd8fa08c7f2d70338fcd3ff1e38fd972e00012fc9d",
+    "tests/test_training_intent_cleanup.py": "3f3963a89837bb0477f51b4a432645820b92a8039de26bb48fad71cfd3c996ef",
+    "tests/test_stale_training_completion.py": "5a345f063b12d18d09fae15b0eb8575ccca2c807bb16b5019b850a251f0c2e87",
+    "tests/test_native_training_shutdown_boundaries.py": "26b2453c10d1eddd02868ff544a776bb000136a68cff1c87fc9e55d215eb5c5b",
+    "tests/test_training_launch_termination_handoff.py": "b1d916e76aae4f2f806b7c253a0c5b04fa1e9c9fce8fa88fb230a83c3570f331",
+    "tests/test_execution_identity.py": "64effe15b1d6da41069b1a72452973f986435bf5387a1c29eb3e54b5c5f26bee",
+    "tests/test_model_lineage_prepared_finalization.py": "be0d705bf440109f1dd13d86f983be2a234c68232ba3a3b7f5e7687015269a85",
+    "tests/test_model_lineage.py": "14f1923c328098459986171b20418217431ea8a3af1b7e6acea961e9c928526e",
+    "docs/artifact-records.md": "42e26efd6a5a65ee64804a3c0f5b82a6b5a0a015ef22a308e253068bd16aa95e"
+  },
+  "implementation_choices": {
+    "occurrence_id": "SHA256 of canonical complete producer AttemptRef, logical_name and results scope; neither content hash nor specification hash",
+    "storage": "<binding.root>/<artifact_id>/content",
+    "partial_staging": "Create-only deterministic occurrence directories; existing staging refuses blind reuse and requires explicit resolution. No automatic GC or crash recovery is implemented.",
+    "io_boundary": "Copy, content hash, fsync and readback hash occur before effect lease / BEGIN IMMEDIATE; terminal writer uses cheap captured identity and metadata checks.",
+    "transaction_boundary": "Effect plan then full declared batch registration then lifecycle/compute and native terminal in one SQLite transaction, with final artifact row readback; filesystem and SQLite are not atomic."
+  },
+  "test_boundaries": {
+    "real": [
+      "IdeaLake and generic execution_attempts",
+      "Native launch/begin/started/check_active/completion",
+      "Snapshot file IO and actual old worker file descriptor",
+      "SQLite terminal rejection trigger",
+      "Shared artifact store and contract validators"
+    ],
+    "mocked": [
+      "Popen child/process identity and stop boundaries from test_native_training_caller_boundaries",
+      "GPU fleet ownership query and test-scoped lease boundary from conftest",
+      "Specific file IO fault seams"
+    ],
+    "not_claimed": [
+      "Paid provider calls or GPU training",
+      "Real CPU executor integration",
+      "Scientific observations or qualified research improvement",
+      "Evaluation worker output isolation",
+      "Explicit same-seed replication admission",
+      "Automatic staging recovery or garbage collection",
+      "Protection against hostile same-UID filesystem or direct SQL mutation",
+      "Final full-suite, source inventory, commit or remote push verification"
+    ]
+  },
+  "limitations": [
+    "Default legacy outputs and existing evaluation paths are unchanged.",
+    "Historical artifact lookup is metadata only; it does not grant current attempt ownership or prove confirmed completion.",
+    "Read-only snapshot mode is cooperative, not a security sandbox.",
+    "Prepared files can remain without accepted records after failure; later ticks refuse that occurrence instead of multiplying large orphan copies."
+  ],
+  "root_followup": "Independent review, final frozen-source full regression, evidence aggregation and commit/push remain owned by root."
+}

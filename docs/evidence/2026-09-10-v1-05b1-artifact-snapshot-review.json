@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "milestone": "V1-05B1",
+  "role": "independent reviewer and artifact snapshot acceptance-test author",
+  "date": "2026-09-10",
+  "repository": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "review_base_head": "23912021747b49a54870beed979ff351ed8ccac4",
+  "classification": "New opt-in mechanisms; no missing-API failure is counted as a historical behavior regression.",
+  "scope": "Declared native training artifact snapshots and immutable registry records bound to the current attempt terminal transaction only.",
+  "review_conclusion": "No blocker found in this bounded B1 scope on the exact final source below.",
+  "production_edits_by_reviewer": [],
+  "owned_test": {
+    "path": "tests/test_artifact_snapshot_contract.py",
+    "sha256": "00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359",
+    "cases": 8,
+    "coverage": [
+      "Actual native launch and completion: an old worker FD can modify its original output but cannot modify the accepted independent inode.",
+      "Two genuinely different seed tasks producing identical bytes receive distinct artifact occurrence IDs and retain historical records; no same-config admission bypass.",
+      "After staging, a same-process peer using the already captured immutable preparation commits first; the original callback emits no second completion and creates no duplicate records.",
+      "All declared source reads and full snapshot readback/hash happen with no effect lock or SQLite writer transaction.",
+      "Changed prepared metadata digest and replaced snapshot inode are rejected before artifact registration/terminal acceptance.",
+      "Rejected terminal SQL rolls back all artifact rows and retains the unresolved effect HOLD.",
+      "Legacy-disabled native completion does not infer outputs, create registry/root, or add terminal artifact IDs."
+    ]
+  },
+  "candidate_history": [
+    {
+      "label": "Initial mechanism acceptance, superseded candidate; not final source proof",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_artifact_snapshot_contract.py --tb=short",
+      "exit_code": 0,
+      "passed": 8,
+      "duration_seconds": 3.61,
+      "test_sha256": "ddb7662a18e56b02a5699c528dede00eee20351d5533cf6dc6aae4af9a2052b7",
+      "observed_source_sha256": {
+        "src/orze/engine/artifact_publication.py": "2b249f090fa23a120e8a4a62cfba61c1dd85eef737e9b7d1efb20f895306a217",
+        "src/orze/engine/training_completion.py": "927b04617fd87fb1e5162869d9e0076b15acfe5ba067c109155bd8e8253ed745",
+        "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33"
+      },
+      "note": "No initial API-absence or fixture execution errors were counted. Later deterministic occurrence staging intentionally changed the reentrant preparation fixture contract."
+    }
+  ],
+  "fixture_migration": {
+    "authorized_by": "root, before editing",
+    "classification": "Versioned fixture migration for a new mechanism contract; not an old-release regression or a claimed production red.",
+    "reason": "A deterministic per-attempt/logical-output occurrence directory now blocks automatic recopy of unresolved staging, preventing repeated monitor ticks from allocating new large orphan snapshots.",
+    "original_snapshot": "docs/evidence/snapshots/v1-05b1-artifact-snapshot-tests-original.py",
+    "original_sha256": "ddb7662a18e56b02a5699c528dede00eee20351d5533cf6dc6aae4af9a2052b7",
+    "updated_sha256": "00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359",
+    "changed_test": "test_peer_terminal_during_unlocked_copy_prevents_second_artifact_acceptance",
+    "change": "The reentrant same-process peer receives the captured PreparedArtifacts value, preserving the post-prepare/pre-commit race and all original assertions. It does not recover disk staging, grant an independent peer a hidden token, or perform a second copy.",
+    "other_seven_cases_unchanged": true,
+    "assertions": {
+      "command": "python3 -c 'import ast, pathlib; a=pathlib.Path(\"docs/evidence/snapshots/v1-05b1-artifact-snapshot-tests-original.py\"); b=pathlib.Path(\"tests/test_artifact_snapshot_contract.py\"); shape=lambda p:[ast.dump(n,include_attributes=False) for n in ast.walk(ast.parse(p.read_text())) if isinstance(n,ast.Assert)]; aa,bb=shape(a),shape(b); assert aa==bb; print({\"assert_ast_equal\":True,\"assert_count\":len(aa)})'",
+      "exit_code": 0,
+      "assert_ast_equal": true,
+      "assert_count": 57
+    },
+    "first_updated_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_artifact_snapshot_contract.py --tb=short",
+      "exit_code": 0,
+      "passed": 8,
+      "duration_seconds": 3.77
+    }
+  },
+  "final_validation": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_artifact_snapshot_contract.py tests/test_artifact_contract_config.py tests/test_artifact_contract_binding.py tests/test_artifact_preflight.py tests/test_research_artifact_store.py tests/test_native_artifact_publication.py tests/test_stale_training_completion.py tests/test_training_completion_write_race.py --tb=short",
+    "exit_code": 0,
+    "passed": 107,
+    "failed": 0,
+    "duration_seconds": 20.71,
+    "note": "Eight files, including the owned eight cases and existing stale-training/write-race controls. Counts overlap earlier targeted runs and must not be summed as distinct tests. This is not a full repository suite.",
+    "production_hashes_before_after_equal": true,
+    "source_sha256": {
+      "src/orze/core/artifact_contract.py": "e5d746af0f48deb4a845e140853cf93415dc9bf62eee35da3e527a22a1c56c13",
+      "src/orze/core/config.py": "2ac30d480ee5805f1f7618c2de6c2bb8982c2c89addef2c7cc255c21bba3a776",
+      "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "src/orze/engine/artifact_publication.py": "e36b5221a0cd1a634da1bbf043f1e1802b56ddade4b2df59d78cc77f9951139f",
+      "src/orze/engine/training_attempts.py": "12ca922ecc25ee2bb0178d2d288981745a8fd344e4305f2e24c7be5b96fca73b",
+      "src/orze/engine/training_completion.py": "1aeb2728c388c42cdbe2c8cf3efa5451d654782469c4597741d54f0d164a1dd9",
+      "src/orze/engine/launcher.py": "82987da4eb0f984e9b5476b0a49560b560a75fce7e4fc76fad7832c320a78c01"
+    },
+    "test_sha256": {
+      "tests/test_artifact_snapshot_contract.py": "00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359",
+      "tests/test_artifact_contract_config.py": "6b38871b62fd0f6b42959a73b3e50ea353477faf37dec76577d09567e3b1ec8c",
+      "tests/test_artifact_contract_binding.py": "387ff26257a378bd74e6a98a5646010b6daee4be4b65dbbdbd78fb5c5ffa2766",
+      "tests/test_artifact_preflight.py": "3365acfd6a9f4bfc70332ac2f32c061213101285d02ff128b51935947744c435",
+      "tests/test_research_artifact_store.py": "bbb967bb85641d9c6908c4f6fa8cb06f0ebeae466c8461558d4553fee0407e3a",
+      "tests/test_native_artifact_publication.py": "911a949f083c43a94cc45bb9e781f377289e53b2269a1ee1d58de8cdba892643",
+      "tests/test_stale_training_completion.py": "5a345f063b12d18d09fae15b0eb8575ccca2c807bb16b5019b850a251f0c2e87",
+      "tests/test_training_completion_write_race.py": "ac89924cdb2dc89f3ce86e9758b459678b0cda07dc8f24c8d0335ea0c1d98149"
+    }
+  },
+  "read_only_review": [
+    "Strict opt-in declaration is validated during config loading and direct launch. The binding is pinned before Popen and carried through RUNNING; completion rechecks it without allowing legacy import to acquire artifact provenance.",
+    "Copying and full hash readback use independent inodes outside the effect/SQLite lock. The locked verifier checks bounded metadata and identity only.",
+    "Deterministic occurrence identity is separate from content SHA and does not authorize replay. Existing staging is a conservative resolution-required hold, not automatic recovery.",
+    "register_artifacts requires caller-owned current RUNNING authority, complete output names, exact BINARY identities, rowcount and canonical readback. It does not own the transaction. Historical APIs perform no DDL or filesystem IO and do not grant current permissions.",
+    "Actual native terminal publishing registers artifacts with lifecycle/terminal in one transaction and rereads the complete expected artifact set after finish_attempt, before coordinator commit.",
+    "The publication contract and docs correctly distinguish cooperative immutability, unaccepted staging, confirmed completion events and historical metadata."
+  ],
+  "documentation": {
+    "path": "docs/artifact-records.md",
+    "sha256": "42e26efd6a5a65ee64804a3c0f5b82a6b5a0a015ef22a308e253068bd16aa95e"
+  },
+  "limits": [
+    "Read-only file mode is not a hostile same-UID sandbox; arbitrary SQL/filesystem tampering is outside this insert-only API guarantee.",
+    "Filesystem effects and SQL commit are not atomic; uncertain/failed staging and effect receipts may need explicit resolution. No garbage collection or native restart adoption is added.",
+    "Existing adapter execution_identity plus artifact contract is a legacy training specification fingerprint, not complete immutable scientific protocol/data identity.",
+    "Evaluation paths remain mutable/shared until B2. No immutable observation is created here. Explicit replication admission remains B3.",
+    "No real CPU/GPU execution, paid provider, throughput improvement, holdout inspection, deployment or full V1-05 completion is claimed."
+  ]
+}

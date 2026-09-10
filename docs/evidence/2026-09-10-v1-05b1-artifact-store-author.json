@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "milestone": "V1-05B1",
+  "component": "declared artifact SQLite occurrence store",
+  "author": "/root/pro_review",
+  "date_utc": "2026-09-10",
+  "repository_head_at_target_run": "23912021747b49a54870beed979ff351ed8ccac4",
+  "classification": "New mechanism acceptance; no old API-absence red claimed.",
+  "owned_files": {
+    "src/orze/core/research_artifacts.py": {
+      "sha256": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "lines": 293
+    },
+    "tests/test_research_artifact_store.py": {
+      "sha256": "bbb967bb85641d9c6908c4f6fa8cb06f0ebeae466c8461558d4553fee0407e3a",
+      "cases": 37
+    }
+  },
+  "shared_dependency_at_target_completion": {
+    "src/orze/core/artifact_contract.py": "e5d746af0f48deb4a845e140853cf93415dc9bf62eee35da3e527a22a1c56c13"
+  },
+  "runs": [
+    {
+      "kind": "first complete new-mechanism run",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_research_artifact_store.py --tb=short",
+      "result": {
+        "passed": 37,
+        "failed": 0,
+        "duration_seconds": 0.96,
+        "exit_code": 0
+      },
+      "baseline_note": "No preimplementation import-absence run or behavior-red claim. No fixture correction was needed for this initial 37."
+    },
+    {
+      "kind": "author bounded regression target, not a repository-wide final suite",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_research_artifact_store.py tests/test_execution_attempts.py tests/test_lifecycle_owned_transaction.py tests/test_artifact_contract_config.py tests/test_artifact_contract_binding.py --tb=short",
+      "result": {
+        "passed": 130,
+        "failed": 0,
+        "duration_seconds": 5.04,
+        "exit_code": 0
+      },
+      "hash_note": "Owned source and test remained unchanged from their initial run hashes. Shared dependency hash was captured after this target; this entry does not claim a full-worktree pre/post inventory."
+    }
+  ],
+  "covered": [
+    "Caller-owned transaction required; no BEGIN, COMMIT, ROLLBACK or SAVEPOINT by the store. Caller data, table creation and inserted records can roll back together.",
+    "Exact current RUNNING AttemptRef and bound output contract required for publication; stale, launching and terminal references rejected.",
+    "Whole declared output set, strict field types, scope, specification, physical root/id/content path and declared byte limits checked before insert.",
+    "Same-byte different-attempt records retain distinct occurrence IDs, with equal content hashes and specification fingerprints.",
+    "Historical reads remain read-only and detached after newer attempt generations. Missing table remains missing.",
+    "API exact replay adds no writes; content/name/occurrence identity conflicts cannot replace prior records.",
+    "Exact main schema and BINARY identity indexes; TEMP shadow tables do not redirect writes.",
+    "IGNORE, changed row identity and altered attempt binding are rejected; SQLite errors require caller-wide rollback, including partially inserted batches.",
+    "Bounded canonical stored JSON is checked without repair; zero-byte artifact and zero-output enabled contract controls."
+  ],
+  "limits": [
+    "Store validates metadata only and performs no filesystem IO. Independent-copy creation, file integrity and physical ownership belong to the publisher/native adapter and have separate tests.",
+    "API is insert-only, not tamper-proof against arbitrary direct SQL or filesystem modification.",
+    "Any write error requires the caller to roll back its entire transaction. The store deliberately does not roll back or commit caller work.",
+    "SQLite Python exposes in_transaction, not the existing transaction locking mode. Caller must acquire its effect lease and BEGIN IMMEDIATE.",
+    "Adapter must verify artifact records again after subsequent terminal/lifecycle writes if those writes can trigger changes; registration cannot pre-verify later caller operations.",
+    "Historical metadata lookup is not lifecycle, metric, benchmark, or scientific qualification.",
+    "No evaluation physical isolation, observation ledger, explicit replicate authorization, real GPU/provider experiment, release readiness, or repository-wide final-suite result is claimed."
+  ],
+  "independent_review": "Requested from /root/core_review; this author record does not substitute for the separate independent review.",
+  "commits": "No commit or push performed by this author."
+}
