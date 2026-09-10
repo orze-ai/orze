@@ -1,0 +1,188 @@
+{
+  "schema": 1,
+  "slice": "V1-03D",
+  "date": "2026-09-10",
+  "status": "implemented, frozen full-suite and independent mechanism verification; not whole V1 completion",
+  "base": {
+    "core": "c49ab08ca37ccb2dadaf0ab12a8985c396dd4936",
+    "pro": "273bfa8ade0b8eacbdbd583f0de99ce7324592ea"
+  },
+  "implementation_commits": {
+    "core": "85598d4b94d95cc4f40066128d031fd17f060fc2",
+    "pro": "59bc0e8f24b03695fd5f8397c91e7ad5bb36ced8"
+  },
+  "branch": "feat/autoresearch-v1",
+  "implementation_push_and_exact_remote_ref_verified": true,
+  "untouched_main": {
+    "core": "5ca2680dbd0139e63cd35a4f83da438b5b47ab99",
+    "pro": "57feb6e0af19dcf62a80b1e447f0771936d39afe"
+  },
+  "contract": "docs/native-research-results.md",
+  "contract_sha256": "06d288ba6845d0417405d075688dd011fae37f3d26f4521eecd151a295e00a5d",
+  "scope": [
+    "Actual native CLI/cycle/parser/filter/source append -> bound result -> Core completion before SQLite trigger settlement -> Pro captured process usage and role-state details.",
+    "No shared inbox size/mtime/count can establish this invocation's output. accepted/partial only means filtered proposals successfully source-appended.",
+    "Nonzero, quota, timeout, unconfirmed cleanup and terminal-write uncertainty take precedence over a valid productive result. Bare CLI known write failures return nonzero; legacy integer function API remains."
+  ],
+  "distinct_new_tests": {
+    "total": 31,
+    "old_behavior_red": 5,
+    "old_controls": 4,
+    "new_mechanism_initial_green": 22,
+    "note": "Overlapping target/full runs are not added to distinct counts; no API-absence, fixture errors or working-draft route error counted as historical red."
+  },
+  "frozen_tests": {
+    "core": [
+      {
+        "sha256": "d6e25034aeb3e873c495b8676b07ceb418da90945f231d58f698dc69628afcb0",
+        "path": "tests/test_native_result_process_precedence.py"
+      },
+      {
+        "sha256": "5a62628828e015b6273c86138e28f96603de0b985095d756b045e8bf5448dd71",
+        "path": "tests/test_native_role_result_boundaries.py"
+      }
+    ],
+    "pro": [
+      {
+        "sha256": "588b5fc32ee37483afb1d39f81ea32ffc486dbad6bba2ac09a98580552dafd53",
+        "path": "tests/test_native_result_delivery.py"
+      },
+      {
+        "sha256": "46c8d55cccbb9b47e2d42524600ce7e595be42ee07183fb465082c8037b3aa1d",
+        "path": "tests/test_native_result_source_blocked.py"
+      },
+      {
+        "sha256": "c391983a8baa487801be1471cf4964ff200d21836af85cca0d74ea8a71562f8d",
+        "path": "tests/test_research_cli_failure_classification.py"
+      },
+      {
+        "sha256": "0f5b58b72f7dac1915af1125955473aa2c441ade13db37ffec4b3065e79c52f9",
+        "path": "tests/test_research_result_classification.py"
+      },
+      {
+        "sha256": "2b54dde2fd1878d5e1beacd1830df38ca9c5886adcad3bbad0e1301cf83d8b19",
+        "path": "tests/test_research_result_compatibility.py"
+      }
+    ]
+  },
+  "old_behavior_replay": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib, importlib, subprocess\nfrom pathlib import Path\nfrom unittest.mock import patch\nimport pytest\nbase=Path('/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC')\nsources=[\n('orze','c49ab08ca37ccb2dadaf0ab12a8985c396dd4936','orze.engine.process','src/orze/engine/process.py'),\n('orze','c49ab08ca37ccb2dadaf0ab12a8985c396dd4936','orze.engine.roles','src/orze/engine/roles.py'),\n('orze-pro','273bfa8ade0b8eacbdbd583f0de99ce7324592ea','orze_pro.agents.research_llm','src/orze_pro/agents/research_llm.py'),\n('orze-pro','273bfa8ade0b8eacbdbd583f0de99ce7324592ea','orze_pro.agents.research','src/orze_pro/agents/research.py'),\n('orze-pro','273bfa8ade0b8eacbdbd583f0de99ce7324592ea','orze_pro.engine.role_runner','src/orze_pro/engine/role_runner.py')]\nwith patch('orze_pro._gate.require_license'):\n    for repo,revision,name,path in sources:\n        module=importlib.import_module(name)\n        raw=subprocess.check_output(['git','show',revision+':'+path],cwd=base/repo)\n        print('FIXED_SOURCE',name,revision,hashlib.sha256(raw).hexdigest(),flush=True)\n        exec(compile(raw,revision+':'+path,'exec'),module.__dict__)\n    raise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_research_result_classification.py','tests/test_research_cli_failure_classification.py','--tb=short']))\nPY",
+    "exit_code": 1,
+    "failed": 5,
+    "passed": 4,
+    "seconds": 3.44,
+    "source_kind": "Five full fixed modules loaded in memory in a fresh process; other dependencies are current. Not a historical full installation. No disk source restoration.",
+    "source_sha256": {
+      "core/src/orze/engine/process.py": "6dd9750b4ca5adfc4ba2e53ffdb5c1c4c60f18a57076eff077fcbb467b451733",
+      "core/src/orze/engine/roles.py": "2a912b5395b2fff2fa3765ce54b50da0104589de6c8c9e20e9563d9a12512416",
+      "pro/src/orze_pro/agents/research_llm.py": "9f5aa4b51c9686e8e252d8bb3d911ad831ba25859292714c12c4d5186d9ab35b",
+      "pro/src/orze_pro/agents/research.py": "d9da9e54c646f005775721e0b10fd9551207e02a9935921f3201b1ea6cd36d13",
+      "pro/src/orze_pro/engine/role_runner.py": "6a333c96c746f3013bed10b71296a90be3314e1762513f69a846dba3d9f80d51"
+    },
+    "failures": [
+      "empty inbox plus empty batch wrongly OK",
+      "rejected batch borrows peer append",
+      "known native append IO failure reports process success",
+      "partial batch counts peer proposal",
+      "standalone CLI known append IO failure exits zero"
+    ],
+    "output_note": "Actual footer and exit captured; tool output was truncated, so this is not a full stdout transcript."
+  },
+  "root_green_runs": [
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_research_result_classification.py\",\"tests/test_research_cli_failure_classification.py\",\"tests/test_native_result_delivery.py\",\"--tb=short\"]))'",
+      "exit_code": 0,
+      "passed": 13,
+      "seconds": 2.81
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_result_process_precedence.py --tb=short",
+      "exit_code": 0,
+      "passed": 5,
+      "seconds": 1.15
+    }
+  ],
+  "final_full_runs": [
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "exit_code": 0,
+      "passed": 2565,
+      "skipped": 7,
+      "seconds": 332.41
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "exit_code": 0,
+      "passed": 807,
+      "skipped": 0,
+      "seconds": 137.88
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "exit_code": 0,
+      "passed": 60,
+      "skipped": 0,
+      "seconds": 0.92
+    }
+  ],
+  "final_source_inventory": {
+    "path": "docs/evidence/2026-09-10-v1-03d-source-inventory.json",
+    "sha256": "ed98cdf51f1afadc64444882f4a65d3584a0810dd2847d27832b6e90c9c2dd1c",
+    "before_after_identical": true,
+    "core_files": 481,
+    "pro_files": 184,
+    "note": "All src, tests, pyproject.toml including untracked new files. No old test edits. Contract-only boundary note was added after full tests; no source/test edits."
+  },
+  "independent_reviews": [
+    {
+      "repo": "core",
+      "path": "docs/evidence/2026-09-10-v1-03d-native-result-boundaries.json",
+      "sha256": "09d28e9b5c12528ee96045bdc2b30e1105f08cfb1c3e1ffb15ffa27e847f007b",
+      "final_passed": 91,
+      "seconds": 6.72,
+      "no_blocker": true
+    },
+    {
+      "repo": "pro",
+      "path": "docs/evidence/2026-09-10-v1-03d-result-consumers.json",
+      "sha256": "b1fb5938fbc42fec96e174722ae82031ef4e67b9edb438b256f149fe8493a782",
+      "runs_passed": [
+        171,
+        23,
+        17
+      ],
+      "seconds": [
+        21.78,
+        8.2,
+        15.37
+      ],
+      "no_blocker": true
+    }
+  ],
+  "draft_notes": [
+    "First new-route integration stopped before Popen in ten cases because orze_path was called with four arguments; fixed before final freeze, not historical red. Full pre-fix module was not preserved.",
+    "Core precedence file first had five fixture errors from missing trigger_project import; corrected only dependency import before freeze. Not a product failure.",
+    "Compatibility test initially supplied str where its fixture expected Path; corrected before freeze. blocked+rejection schema was corrected before the blocked test's first complete green run. No false red-to-green claim."
+  ],
+  "test_environment": {
+    "python": "3.10.12",
+    "pytest": "9.1.1",
+    "cuda_visible_devices": "",
+    "pro_license": "require_license patched only inside test process; production authorization unchanged",
+    "core_skips": "Seven optional Pro-stub skips; paired command uses actual local Pro source and passes 60 relevant cases."
+  },
+  "limits": [
+    "No actual child/provider/GPU execution or research benefit established. Provider strings and OS launch/identity/reaper/notification boundaries are test seams; actual source append, result publication and SQLite settlement are exercised.",
+    "String provider API still cannot separate every swallowed transport error/refusal/truncation; empty unknown response is not guessed to be official refusal.",
+    "No automatic restart reconstruction of lost native RoleProcess references; no automatic replay, refund, arbitrary hostile-writer signature, global result garbage collection, or exactly-once external effects.",
+    "Trigger row operational outcome is durable independently of full result details. Usage remains best-effort, not cross-file/SQLite atomic telemetry.",
+    "Existing integer run_research_cycle callers retain compatibility; result_out and CLI exit convey detailed errors. accepted is not Lake admission, execution, a valid observation or scientific success.",
+    "V1-03E optional role presets and V1-04 through V1-07 remain unfinished; overall V1 and CPU loop are not claimed complete."
+  ]
+}
