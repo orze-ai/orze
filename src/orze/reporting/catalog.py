@@ -26,6 +26,9 @@ import yaml
 from orze.reporting.evidence import (
     _LIFECYCLE_STATUS_STATES, _open_authoritative_lifecycle,
 )
+from orze.reporting.lifecycle_stages import (
+    completed_stages_agree, stage_projection, validate_lifecycle_schema,
+)
 
 
 @dataclass(frozen=True)
@@ -51,20 +54,7 @@ class CatalogSnapshot:
                    for row in self.records.values())
 
 
-def _table_columns(connection, name: str, *, required=True):
-    row = connection.execute(
-        "SELECT type FROM sqlite_master WHERE name=?", (name,),
-    ).fetchone()
-    if row is None and not required:
-        return None
-    if row is None or row[0] != "table":
-        raise ValueError("catalog_schema_invalid")
-    # Names originate exclusively from fixed literals below.
-    return {column[1] for column in connection.execute(
-        f"PRAGMA table_info({name})").fetchall()}
-
-
-def _agreed_state(status, state, training, evaluation):
+def _agreed_state(status, state, training_id, training, evaluation_id, evaluation):
     normalized_status = str(status or "").strip().lower()
     if state is None:
         return "UNKNOWN", "lifecycle_state_missing"
@@ -72,10 +62,9 @@ def _agreed_state(status, state, training, evaluation):
         return "UNKNOWN", "lifecycle_state_conflict"
     # Missing historical stage rows remain unrecorded, not manufactured as
     # success. Training-only tasks can legitimately skip evaluation.
-    if state == "COMPLETE":
-        if (training is not None and training != "COMPLETE"
-                or evaluation is not None and evaluation not in ("COMPLETE", "SKIPPED")):
-            return "UNKNOWN", "lifecycle_stage_conflict"
+    if state == "COMPLETE" and not completed_stages_agree(
+            training_id, training, evaluation_id, evaluation):
+        return "UNKNOWN", "lifecycle_stage_conflict"
     return state, "lifecycle_agreed"
 
 
@@ -145,15 +134,8 @@ def load_catalog_snapshot(db_path: Path | str, *, include_configs=False) -> Cata
         return CatalogSnapshot(path, reason)
     try:
         connection.execute("BEGIN")
-        ideas_columns = _table_columns(connection, "ideas")
-        state_columns = _table_columns(connection, "idea_state")
-        if (not {"idea_id", "status"}.issubset(ideas_columns)
-                or not {"idea_id", "current_state"}.issubset(state_columns)):
-            raise ValueError("catalog_schema_invalid")
-        stage_columns = _table_columns(connection, "idea_stage_state", required=False)
-        if (stage_columns is not None and not
-                {"idea_id", "stage", "current_state"}.issubset(stage_columns)):
-            raise ValueError("catalog_schema_invalid")
+        schema = validate_lifecycle_schema(connection)
+        ideas_columns = schema["ideas"]
 
         metadata = ", ".join(
             f"i.{name}" if name in ideas_columns else f"NULL AS {name}"
@@ -167,14 +149,7 @@ def load_catalog_snapshot(db_path: Path | str, *, include_configs=False) -> Cata
                 "CASE WHEN length(CAST(i.config AS BLOB)) <= "
                 f"{_MAX_CONFIG_BYTES} THEN i.config ELSE NULL END"
             )
-        stages = "NULL, NULL"
-        stage_join = ""
-        if stage_columns is not None:
-            stages = "t.current_state, e.current_state"
-            stage_join = (
-                " LEFT JOIN idea_stage_state t ON t.idea_id=i.idea_id AND t.stage='training'"
-                " LEFT JOIN idea_stage_state e ON e.idea_id=i.idea_id AND e.stage='evaluation'"
-            )
+        stages, stage_join = stage_projection(schema)
         rows = connection.execute(
             f"SELECT i.idea_id, i.status, s.current_state, {metadata}, {stages}, {config_column} "
             "FROM ideas i LEFT JOIN idea_state s ON s.idea_id=i.idea_id"
@@ -189,11 +164,12 @@ def load_catalog_snapshot(db_path: Path | str, *, include_configs=False) -> Cata
         }
         for row in rows:
             (idea_id, status, state, title, priority, category, parent,
-             hypothesis, training, evaluation, raw_config) = row
+             hypothesis, training_id, training, evaluation_id, evaluation, raw_config) = row
             if (not isinstance(idea_id, str) or idea_id in ("", ".", "..")
                     or Path(idea_id).parts != (idea_id,) or idea_id in records):
                 raise ValueError("catalog_identity_invalid")
-            agreed, row_reason = _agreed_state(status, state, training, evaluation)
+            agreed, row_reason = _agreed_state(
+                status, state, training_id, training, evaluation_id, evaluation)
             records[idea_id] = {
                 "idea_id": idea_id, "title": str(title or idea_id),
                 "status": status, "fsm_state": state,

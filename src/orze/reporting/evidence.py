@@ -11,6 +11,11 @@ import stat
 from pathlib import Path
 from typing import Mapping
 
+from orze.reporting.lifecycle_stages import (
+    completed_stage_sql, completed_stages_agree, stage_projection,
+    validate_lifecycle_schema,
+)
+
 
 def report_lifecycle_db_path(results_dir: Path, cfg: Mapping,
                               override: Path | str | None = None) -> Path:
@@ -376,6 +381,8 @@ def _authoritative_completed_rows(
         return [], reason
     try:
         try:
+            connection.execute("BEGIN")
+            schema = validate_lifecycle_schema(connection)
             select = (
                 "i.idea_id, i.approach_family"
                 if include_family else "i.idea_id"
@@ -384,9 +391,10 @@ def _authoritative_completed_rows(
                 f"SELECT {select} FROM ideas AS i "
                 "JOIN idea_state AS s ON s.idea_id = i.idea_id "
                 "WHERE lower(i.status) = 'completed' "
-                "AND s.current_state = 'COMPLETE'"
+                "AND s.current_state COLLATE BINARY = 'COMPLETE' AND "
+                + completed_stage_sql(schema, idea_alias="i")
             ).fetchall()
-        except sqlite3.Error:
+        except (sqlite3.Error, ValueError, TypeError):
             return [], "authoritative_lifecycle_database_invalid"
     finally:
         connection.close()
@@ -424,15 +432,18 @@ def authoritative_idea_lifecycle(
         return {}, reason
     try:
         try:
+            connection.execute("BEGIN")
+            schema = validate_lifecycle_schema(connection)
+            stages, stage_join = stage_projection(schema)
             marks = ",".join("?" for _ in normalized)
             rows = connection.execute(
                 "SELECT i.idea_id, i.status, i.approach_family, "
-                "s.current_state FROM ideas AS i "
+                f"s.current_state, {stages} FROM ideas AS i "
                 "JOIN idea_state AS s ON s.idea_id = i.idea_id "
-                f"WHERE i.idea_id IN ({marks})",
+                + stage_join + f" WHERE i.idea_id IN ({marks})",
                 normalized,
             ).fetchall()
-        except sqlite3.Error:
+        except (sqlite3.Error, ValueError, TypeError):
             return {}, "authoritative_lifecycle_database_invalid"
     finally:
         connection.close()
@@ -440,12 +451,16 @@ def authoritative_idea_lifecycle(
     if len(rows) != len(normalized):
         return {}, "authoritative_lifecycle_rows_missing"
     lifecycle = {}
-    for idea_id, raw_status, raw_family, state in rows:
+    for (idea_id, raw_status, raw_family, state, training_id, training,
+         evaluation_id, evaluation) in rows:
         status = str(raw_status or "").strip().lower()
         if (not isinstance(state, str)
                 or state not in _LIFECYCLE_STATUS_STATES.get(
                     status, frozenset())):
             return {}, "authoritative_lifecycle_state_conflict"
+        if state == "COMPLETE" and not completed_stages_agree(
+                training_id, training, evaluation_id, evaluation):
+            return {}, "authoritative_lifecycle_stage_conflict"
         family = str(raw_family or "other").strip().lower()
         if _SAFE_FAMILY_RE.fullmatch(family) is None:
             family = "other"
