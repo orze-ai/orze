@@ -14,7 +14,8 @@
 | V1-01G1：评估资格与真实完成 | 已修复、机制已验证 | Core `637ef59`；87 冻结测试旧模块 69 red / 18 pass，当前全绿；既有输出/同步/异步共用契约，None 不再被猜作成功；最终 core 1547 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
 | V1-01G2 / V1-05A：显式补评 | 已实现、机制已验证 | Core `1f375c4`；73 新机制验收与 G1 的 87 测试合计 160 passed；另有 5 个草稿边界红测及 1 个旧发布函数行为红测可重放；最终 core 1620 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
 | V1-01H1：选择不等于局部改善 | 已修复、机制已验证 | Core `858dc31`；31 冻结测试旧模块 24 red / 7 pass，当前全绿；idle tick 重验/撤销，stable ID、缺测及失格替换不冒充改善；最终 core 1651 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
-| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、native report/admin 与旧 verifier、显式 convergence/director 消费者仍待收口 |
+| V1-01I1：native report 统一资格 | 已修复、机制已验证 | Core `7b76484`；35 冻结测试旧模块 26 行为 red + 4 新字段验收失败 / 5 pass，当前全绿；完整 cfg、逐行 identity、缓存不授予资格，旧 offline API 明确未验证；最终 core 1686 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
+| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、CLI report-only 非迁移读取/完整 catalog、admin queue 与旧 verifier、显式 convergence/director 消费者仍待收口 |
 | V1-02 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
 
 [V1-01A 机器可读证据](../evidence/2026-09-10-v1-01a-champion-recovery.json)包含基线、修复提交、红测内容哈希、命令、退出码、通过/跳过数量和适用边界。方案定稿、代码推送、机制验证、真实研究收益是四种不同状态。
@@ -34,3 +35,5 @@ V1-01B 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01b-researc
 [V1-01G2 机器可读证据](../evidence/2026-09-10-v1-01g2-evaluation-retry.json)记录显式补评的状态事务、文件恢复、重启调度、真实 CLI 和 benchmark look/nonce 验收；[使用与边界](../evaluation-retry.md)说明归档位置和拒绝条件。此项是紧接 G1 提前收口的 V1-05A 依赖切片，不代表跳过 V1-02 至 V1-04，也不代表整个 V1-05 完成。新增 API 的缺失检查与真正行为红测分开记录；独立 generation、复验、过期 attempt fencing、预约后未启动的预算处理和调度公平性仍未验收。
 
 [V1-01H1 机器可读证据](../evidence/2026-09-10-v1-01h1-objective-progress.json)提供公共通知路径的冻结红绿重放、真实 guard history 边界与最终全量结果；[语义与限制](../objective-progress.md)区分当前局部比较、历史修订与科学判决。空闲 tick 重验增加读 I/O，不声称效率净收益；旧 mtime 恢复和逐 host 状态尚未改为唯一 observation 计数。
+
+[V1-01I1 机器可读证据](../evidence/2026-09-10-v1-01i1-native-report.json)记录 native authority、cache/identity 与旧离线兼容的冻结红绿测试和测试前提更正；[范围说明](../report-authority.md)区分原生排名、未验证离线展示及 Pipeline 覆盖。配置 DB 的直接 report 入口不会自动迁移，但旧 CLI 构造器仍待修复；不能把 API 验收当作 CLI 非迁移读或 admin 队列状态已完成。

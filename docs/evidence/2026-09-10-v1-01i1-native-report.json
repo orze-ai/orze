@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "item": "V1-01I1",
+  "status": "mechanism_verified",
+  "claim": "Native update_report ranking now uses agreed lifecycle completion and the shared current full-policy evidence/identity qualifier. Derived caches and display-column fallbacks cannot supply native scores or qualification; the old database-free offline API remains explicitly unverified.",
+  "baseline": {
+    "core": "a2a6ad4ec3317a287a5797a93b009e3bcf435c8c",
+    "pro": "d0d27f103efbda043de6607224d33e3323c17ba4"
+  },
+  "frozen_tests": [
+    {
+      "file": "tests/test_report_native_authority.py",
+      "sha256": "403ac529ba675023852993d0c4028dc07956a5b307a0080010e9b45376e275de"
+    },
+    {
+      "file": "tests/test_report_native_cache_identity.py",
+      "sha256": "cb378f810a34511646d77639af8af9fb813be38708005284628e542641cd09df"
+    },
+    {
+      "file": "tests/test_report_authority_compatibility.py",
+      "sha256": "ed6dccad500bbe0cab5c4d4edbab5b21d43c09ca4a90f526cefaa8eb0b365726"
+    }
+  ],
+  "reproducible_frozen_baseline_recheck": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport subprocess\nimport pytest\nimport orze.reporting.leaderboard as leaderboard\nbaseline = 'a2a6ad4ec3317a287a5797a93b009e3bcf435c8c'\nsource = subprocess.check_output(['git', 'show', baseline + ':src/orze/reporting/leaderboard.py'], text=True)\nexec(compile(source, leaderboard.__file__ + '@' + baseline, 'exec'), leaderboard.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_report_native_authority.py', 'tests/test_report_native_cache_identity.py', 'tests/test_report_authority_compatibility.py', '--tb=short']))\nPY",
+    "exit_code": 1,
+    "failed": 30,
+    "behavior_failed": 26,
+    "new_field_failed": 4,
+    "passed": 5,
+    "elapsed_seconds": 11.96,
+    "scope": "Only the previous committed leaderboard module is substituted in an isolated Python process. Final tests and other code remain the paired feature checkout; no filesystem rollback or missing dependency counts.",
+    "classification": "26 behavioral assertion failures; four separate new-field acceptance failures (two evidence_identity and two lifecycle_authority labels). Five pre-existing positive cases pass. Do not describe all 30 as old behavioral regressions."
+  },
+  "targeted_green": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_report_native_authority.py tests/test_report_native_cache_identity.py tests/test_report_authority_compatibility.py --tb=short",
+    "exit_code": 0,
+    "passed": 35,
+    "elapsed_seconds": 13.05
+  },
+  "related_regression": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_report_native_authority.py tests/test_report_native_cache_identity.py tests/test_leaderboard_evidence.py tests/test_report_lake_status.py tests/test_declared_honesty_qualification.py --tb=short",
+    "exit_code": 0,
+    "passed": 73,
+    "elapsed_seconds": 18.6
+  },
+  "final_pro_regression": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+    "exit_code": 0,
+    "passed": 394,
+    "elapsed_seconds": 36.43,
+    "skipped": 0
+  },
+  "final_cross_repository_regression": {
+    "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"--tb=short\",\"-rs\"]))'",
+    "exit_code": 0,
+    "passed": 30,
+    "elapsed_seconds": 0.56,
+    "skipped": 0
+  },
+  "independent_review": [
+    {
+      "scope": "Native authority public API, final UNKNOWN postcondition correction, read-only diff review",
+      "passed": 14,
+      "elapsed_seconds": 2.67
+    },
+    {
+      "scope": "Warm-cache policy/log drift, rehashed forged scores, source mutation, shared per-row identity and final documentation review",
+      "passed": 11,
+      "elapsed_seconds": 2.66
+    },
+    {
+      "scope": "Native full-policy/source/coverage and database-only history discovery; legacy order/cache/labels and pipeline count separation",
+      "passed": 10,
+      "elapsed_seconds": 2.5
+    }
+  ],
+  "test_corrections": [
+    "The first draft of test_report_native_authority.py incorrectly expected get_fsm_state(missing_id) to return None after the ranking assertion; the unchanged API returns 'UNKNOWN'. Corrected it and added before/after SQL assertions that no idea_state row exists. The final hash and full old-module replay above use this corrected file; initial draft hash 14f57f67946f6efaba41efcf34ff075809ff660d1bbf45a306a3a2a83996d64a is not the final frozen test.",
+    "Existing test_declared_honesty_qualification.py pre_honesty_policy fixture now forwards **kwargs, including the existing require_primary option used by the shared caller. Every eligibility, cache, preservation and rejection assertion is unchanged."
+  ],
+  "verified_boundaries": [
+    "Native taint, non-clean training access and FSM/legacy status conflicts cannot enter ranking, including warm-cache paths.",
+    "Unknown IDs cannot authorize themselves from completed files. Configured missing/incompatible/empty-declaration DB paths never fall back to offline artifact authority or create/migrate the database through update_report.",
+    "Changing clean-access policy or WATCH/FORBIDDEN/malformed access evidence invalidates qualification; backdated source changes are requalified.",
+    "Recomputing an unkeyed cache row checksum cannot invent scores or revive rejected evidence. Native cache schema 8 stores only a derived presentation snapshot.",
+    "Source mutation during the actual read rejects the unstable row while preserving the stable row. Successful native rows expose the same evidence_identity as the shared qualifier.",
+    "Native source/coverage follows full cfg.report, not metric_harvest/default display-column inference. Configured DB with no Lake object and empty inbox still supplies completed candidate IDs.",
+    "Legacy offline sort, zero/negative values, metadata fast path and unchanged-output mtimes are preserved; main/view JSON and Markdown mark lifecycle as unverified_local_artifact.",
+    "Native Lake pipeline FSM counts are intentionally distinct from evidence-qualified ranking counts. No-Lake pipeline coverage is explicitly labeled partial."
+  ],
+  "limits": [
+    "See docs/report-authority.md. This item covers update_report and the orchestrator's ranking call, not all consumers or V1-01 as a whole.",
+    "CLI --report-only still opens an existing DB through the normal IdeaLake constructor, whose bootstrap/migration side effects remain open for the next reader slice. Direct update_report non-creation tests do not prove that CLI behavior.",
+    "With configured DB but no open Lake object, only supplied ideas and lifecycle-completed candidates contribute to the current pipeline view, not the complete catalog; pipeline_scope explicitly records that coverage.",
+    "Per-row stable contents are not a globally atomic filesystem/lifecycle snapshot or an immutable observation ledger. Duplicate delivery, historical result revisions and stale attempts remain subsequent work.",
+    "Native rows are requalified and content-hashed every report tick. This adds IO; no net research-efficiency benefit or GPU-hour saving is inferred.",
+    "Database-free offline cache compatibility is explicitly unverified. Old verifier/director and explicit convergence consumers must still be closed separately; adding labels does not fix them.",
+    "Admin queue, configured-DB read-only opening/catalog coverage, durable handoff/backpressure, stateful knowledge, independent attempts, CPU closure and holdout acceptance remain open.",
+    "No actual GPU, evaluator subprocess, paid provider, production license activation, package publication, deployment or live project mutation. Tests exercise real temporary SQLite/files/reports and explicit fault boundaries."
+  ],
+  "fix": {
+    "core": "7b76484401d35cd66b6960cc17f8ed44952a74f0"
+  },
+  "remote_verification": "Push succeeded; git ls-remote origin refs/heads/feat/autoresearch-v1 matched exactly 7b76484401d35cd66b6960cc17f8ed44952a74f0.",
+  "final_core_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0,
+    "passed": 1686,
+    "skipped": 6,
+    "elapsed_seconds": 148.72,
+    "skip_scope": "Existing optional Pro tests in the core-only source environment."
+  }
+}
