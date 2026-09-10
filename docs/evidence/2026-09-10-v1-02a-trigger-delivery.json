@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "item": "V1-02A",
+  "status": "mechanism_verified",
+  "claim": "Native trigger requests use an immutable persistent inbox payload, exact delivery leases and attempt-bound launch/process receipts. Known no-exec failures remain retryable; ambiguous starts and stale owners never authorize automatic replay. Native upgrade preserves unreceived requests.",
+  "baseline": {
+    "core": "c1c5d7b864a95b763c814050521a285081db1d63",
+    "pro": "54dc6f25ff4b93df96fb6ada37fb3c4cf1747a7f"
+  },
+  "fix_commits": {
+    "core": "105c58e20ff82fdd4f7e3ed52db8014605b38b5f",
+    "pro": "99f3489da3b10184851317a9329e238f173d6bfe"
+  },
+  "frozen_tests": [
+    {
+      "repository": "orze",
+      "file": "tests/test_trigger_delivery.py",
+      "cases": 42,
+      "sha256": "401e6311fba39aff7a422a4da1e7e1648369883125b04ce661c96d860c1a1710",
+      "classification": "new mechanism"
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_trigger_role_completion.py",
+      "cases": 10,
+      "sha256": "95ea1250d53623f8591b89df99b603370292112c1e63dc28bbdf4a0125bcc625",
+      "classification": "new actual-completion mechanism"
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_trigger_upgrade_preservation.py",
+      "cases": 2,
+      "sha256": "d215accbbd7afb3e425c17c0577683c108779460a714fd22331a7e4222581c9c",
+      "classification": "one old native-startup behavior red, one new preserve option acceptance"
+    },
+    {
+      "repository": "orze",
+      "file": "tests/test_trigger_binding_boundaries.py",
+      "cases": 2,
+      "sha256": "69a114b7310fd6b9bf8dc5f00dc453d26d56fc6692396e05c4da1b569d91e49e",
+      "classification": "two uncommitted completion-binding draft reds"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_trigger_workflow_delivery.py",
+      "cases": 2,
+      "sha256": "83a67f71db74c4788f581ed06d3ade86cb0e68fc0a6bbaefcd361862a08e3733",
+      "classification": "two old workflow behavior reds; explicitly versioned fixture v3"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_trigger_delivery_caller.py",
+      "cases": 8,
+      "sha256": "505812a9858939471e63f125947a1461e5ee927d27d4b7f2ceea4ede6390f98e",
+      "classification": "new actual caller/SQLite faults"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_role_delivery_scope.py",
+      "cases": 7,
+      "sha256": "400271d230199eef8cd764a11ad1ae519061cd5222d2c33bd7421696ef29df0f",
+      "classification": "new scope mechanism"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_trigger_payload_consumer.py",
+      "cases": 12,
+      "sha256": "d6ae0347878a76a1c7563166e95108c4dd4fbaa6cf56eadf8e14a246844ccf9b",
+      "classification": "new actual research CLI dry-run prompt and multi-mode payload contract"
+    }
+  ],
+  "classification_totals": {
+    "target_cases": 85,
+    "old_behavior_reds": 3,
+    "draft_behavior_reds": 2,
+    "new_mechanism_acceptance": 80
+  },
+  "old_rechecks": [
+    {
+      "repository": "orze-pro",
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport subprocess\nfrom unittest.mock import patch\nimport pytest\nwith patch(\"orze_pro._gate.require_license\"):\n    from orze_pro.engine import role_runner\n    source = subprocess.check_output([\"git\", \"show\", \"54dc6f25ff4b93df96fb6ada37fb3c4cf1747a7f:src/orze_pro/engine/role_runner.py\"], text=True)\n    exec(compile(source, \"frozen:54dc6f2:src/orze_pro/engine/role_runner.py\", \"exec\"), role_runner.__dict__)\n    raise SystemExit(pytest.main([\"-q\", \"tests/test_trigger_workflow_delivery.py\", \"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "failed": 2,
+      "passed": 0,
+      "elapsed_seconds": 0.63,
+      "notes": "Fixed original Pro runner from git, current Core legacy claim implementation unchanged. Final v3 fixture invokes actual Core RoleProcess/check_active_roles, with simulated OS boundaries and unique attempt reservations. Independent original v1 2 red in .37s; v2 and v3 fixed-old replay each 2 red in .32s. Tests assert delivered requests, not an absent new API or forced deletion contract."
+    },
+    {
+      "repository": "orze",
+      "command": "PYTHONPATH=src python3 - <<'PY'\nimport subprocess\nimport pytest\nfrom orze.engine import lifecycle\nsource = subprocess.check_output([\"git\", \"show\", \"c1c5d7b864a95b763c814050521a285081db1d63:src/orze/engine/lifecycle.py\"], text=True)\nexec(compile(source, \"frozen:c1c5d7b:src/orze/engine/lifecycle.py\", \"exec\"), lifecycle.__dict__)\nraise SystemExit(pytest.main([\"-q\", \"tests/test_trigger_upgrade_preservation.py::test_native_startup_preserves_not_yet_received_trigger_across_upgrade\", \"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "failed": 1,
+      "passed": 0,
+      "elapsed_seconds": 0.06,
+      "notes": "Fixed native startup function calls existing cleanup default; unreceived trigger is actually deleted. New optional preserve=True API test is excluded from old-red count. Initial replay missing PYTHONPATH imported installed stale Core and errored before collection; corrected command shown, not counted as product red."
+    }
+  ],
+  "draft_recheck": {
+    "repository": "orze",
+    "snapshot": "docs/evidence/snapshots/v1-02a-before-binding-validation.py",
+    "sha256": "02f112fe40786b2b1e635aa5bde31449a0173b731f7d631c07f57fc6d66c9a78",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport sys\nimport types\nfrom pathlib import Path\nimport pytest\nimport orze.engine\nimport orze.engine.roles as roles\nsnapshot = Path(\"docs/evidence/snapshots/v1-02a-before-binding-validation.py\")\nmodule = types.ModuleType(\"orze.engine.role_delivery\")\nmodule.__file__ = str(snapshot.resolve())\nexec(compile(snapshot.read_text(encoding=\"utf-8\"), module.__file__, \"exec\"), module.__dict__)\nsys.modules[module.__name__] = module\norze.engine.role_delivery = module\nroles.settle_role_delivery = module.settle_role_delivery\nraise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_trigger_binding_boundaries.py\", \"--tb=short\"]))\nPY",
+    "exit_code": 1,
+    "failed": 2,
+    "passed": 0,
+    "elapsed_seconds": 0.69,
+    "notes": "Full helper snapshot and roles.settle_role_delivery direct import binding replaced. A first reviewer replay replaced only sys.modules and incorrectly exercised new helper; discarded. Correct replay demonstrates nonce/role mismatch terminalizing STARTED before validation. Final green uses identical frozen assertions."
+  },
+  "fixture_versions": {
+    "workflow": [
+      {
+        "version": 1,
+        "snapshot": "docs/evidence/snapshots/v1-02a-trigger-workflow-test-original.py",
+        "sha256": "4e0419e5ac27463a4fcc5cea98e1bc7bec58aa451fd804b3a2237a3260a7b555",
+        "reason": "Original fake completion only popped active_roles; cannot be used to bypass durable STARTED hold."
+      },
+      {
+        "version": 2,
+        "snapshot": "docs/evidence/snapshots/v1-02a-trigger-workflow-test-v2.py",
+        "sha256": "81fdae306f94b4e225502376af341febbb01f8244eaa444e477a7572fb89a299",
+        "reason": "Replaced fake completion with actual Core lifecycle; fixed reserved attempt string still unlike real unique reservations."
+      },
+      {
+        "version": 3,
+        "file": "tests/test_trigger_workflow_delivery.py",
+        "sha256": "83a67f71db74c4788f581ed06d3ade86cb0e68fc0a6bbaefcd361862a08e3733",
+        "reason": "Unique mocked reservations plus actual completion. Both original delivery assertions unchanged; old runner still fails both."
+      }
+    ],
+    "existing_trigger_condition": {
+      "cases": 6,
+      "original_snapshot": "docs/evidence/snapshots/v1-02a-trigger-condition-test-original.py",
+      "original_sha256": "3b24e7a558f221950b6131bd3b90fb2d2376637747a588f804055a99f5b0a336",
+      "current_sha256": "fca3ba65682c083240620fad0624833cf90030ca77347798cbcb1bd90d50d43d",
+      "notes": "Test dependency boundary migrated from obsolete claim_trigger to real native lease_trigger; successful native file is now retained by contract, not unlinked. Fault/lock/backoff/activation assertions preserved. Initial six related failures included real missing-DB-parent admission gap; production fixed that first. Only two obsolete claim/mock assertions remained, then fixture migrated. These six existing cases are not added to target/new-red count."
+    },
+    "pre_freeze_diagnostics": [
+      "Eight completion setup errors exposed the still-incomplete begin_launch return lacking immutable nonce/argv hashes. API return/matching fixed before test freeze; no reproducible old/draft-red claim for these in-progress integration errors.",
+      "Three payload-consumer setup errors assumed scheduled roles create delivery tables; fixture corrected to allow no table/no rows. Not product reds."
+    ]
+  },
+  "verification": {
+    "target": {
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests/test_trigger_workflow_delivery.py\", \"tests/test_trigger_delivery_caller.py\", \"tests/test_trigger_payload_consumer.py\", \"tests/test_role_delivery_scope.py\", \"../orze/tests/test_trigger_delivery.py\", \"../orze/tests/test_trigger_role_completion.py\", \"../orze/tests/test_trigger_upgrade_preservation.py\", \"../orze/tests/test_trigger_binding_boundaries.py\", \"--tb=short\"]))'",
+      "cwd": "orze-pro",
+      "exit_code": 0,
+      "passed": 85,
+      "skipped": 0,
+      "elapsed_seconds": 13.77
+    },
+    "core_full": {
+      "command": "python3 -m pytest -q tests --tb=short -rs",
+      "cwd": "orze",
+      "exit_code": 0,
+      "passed": 1932,
+      "skipped": 7,
+      "elapsed_seconds": 179.35
+    },
+    "pro_full": {
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "cwd": "orze-pro",
+      "exit_code": 0,
+      "passed": 710,
+      "skipped": 0,
+      "elapsed_seconds": 64.55
+    },
+    "paired": {
+      "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "cwd": "orze",
+      "exit_code": 0,
+      "passed": 60,
+      "skipped": 0,
+      "elapsed_seconds": 0.82,
+      "notes": "31 existing cross-repository cases plus 29 L2 manifest cases; reruns standalone optional Pro paths using actual paired source."
+    },
+    "independent": [
+      "Core 42 new + 9 legacy ledger cases passed; actual two connection CAS, schema/DML faults, legacy tombstones, no-file restart, attempt/hash fencing.",
+      "Independent Core completion/upgrade/binding review 65 passed in 7.94s including 9 existing ledger cases; found and froze 2 binding reds.",
+      "Independent Pro scope/L1/L2 regression 120 passed; migrated trigger/backoff/workflow/caller 29 passed.",
+      "Independent actual payload consumer 12 + caller8 + workflow2 =22 passed in 6.87s; actual research CLI main --dry-run, context, rules integrity and build_prompt, not a mocked prompt."
+    ]
+  },
+  "final_source_sha256": {
+    "orze/src/orze/engine/role_delivery.py": "72e1b55ef032c1500c82bdb86c1cff35d7bb74f008385a91fb051cff657e4d4d",
+    "orze/src/orze/engine/process.py": "51e9199e04b9c4098ae9ab5d5dbbe4f93f573209221aa10d2fc621c7a34db7e5",
+    "orze/src/orze/engine/roles.py": "2a912b5395b2fff2fa3765ce54b50da0104589de6c8c9e20e9563d9a12512416",
+    "orze/src/orze/engine/upgrade.py": "370bb4c1ce6830fcbdc90a9c6f9a2abc7ff9337ebf4400e31bdb3d2ba3e74f8c",
+    "orze/src/orze/engine/lifecycle.py": "665a0a771408356167366758e378786aab903a9c17212c274910216700e592aa",
+    "orze/src/orze/engine/trigger_delivery.py": "a0a54db8120a86be90ae6b238e62a6781ca28100497ad9058d84dccc9c73fdaa",
+    "orze/src/orze/engine/trigger_delivery_storage.py": "730fa20e1de37b87ac99b420ff4e7cd315184101edcbcf68437cd4193de0a690",
+    "orze/src/orze/engine/trigger_ingress.py": "5a9697328fef44e25bb2c7f2d9c2779af8227ce23b0f05824fe79c1964105afc",
+    "orze-pro/src/orze_pro/engine/role_runner.py": "84435282e623af7f77c1ba3257cd244e56f31de34f7c601e4a9bc51e6da14247",
+    "orze-pro/src/orze_pro/engine/role_delivery.py": "466fb7787883afe33c97ec2889aa1113c51f2328f5f1e4c8d889591983b24cda"
+  },
+  "boundaries": [
+    "New contract tests use temporary files/real SQLite and actual Core completion or in-process research CLI dry-run. OS/provider boundaries are substituted. Full regression retains existing local process fixtures; no GPU/training/paid model or live campaign use.",
+    "Native ingress never unlinks live file; already received version does not fire again. Single-slot file producer can still overwrite requests before intake; concurrent proposal append/consumption is a separate remaining item.",
+    "LAUNCHING/STARTED/IN_DOUBT never expire into runnable work; clearing active_roles or reaping process is not no-side-effect proof. No automatic/manual uncertainty-resolution API in this slice.",
+    "TERMINAL is an operational process result, not task-goal success or scientific evidence. Only captured role/nonce/attempt can settle; argv hash is not complete execution-protocol fingerprint.",
+    "Only externally triggered native roles use this inbox. Scheduled roles, scientific task/generation/artifact/observation identity, shared lifecycle-stage agreement and the full V1-02 remain open.",
+    "Legacy consume API and explicit legacy cleanup defaults remain; native startup alone opts into preserving triggers. Mixed old binaries retain old unlink hazards, not a supported exactly-once claim.",
+    "No budget refund claim for reserved-but-unstarted work; shared quota/budget scopes, cleanup/retention, whole prompt/input budgets and declared-output versus actual-skill receipts remain later work.",
+    "Script receives raw request via configured arguments/environment; arbitrary script adoption is not inferred. Research dry-run verifies actual final prompt, not a real LLM decision or research benefit.",
+    "Original dirty workspace and holdout remain outside implementation clones; no deployment/package publication. Entire V1 remains in progress."
+  ]
+}

@@ -23,7 +23,9 @@
 | V1-01L1：thinker 观察与启动确认 | 已修复、机制已验证 | Pro `4ed67d1`；21 冻结公共行为旧源码重放 16 red / 5 pass，38 新机制及 1 草稿状态边界 red，共 60 passed；最终 Pro 610 passed，core 1847 passed / 7 optional Pro skips，真实跨仓 31 passed |
 | V1-01L2：逐技能激活与实际提示词交付 | 已修复、机制已验证 | Core `8da25dc` / Pro `b7cd5be`；22 冻结公共行为旧源码 16 red / 6 pass，另 2 草稿 I/O 边界 red 与 76 新机制，共 100 项；最终 Core 1876 passed / 7 optional Pro skips、Pro 681 passed，真实跨仓 60 passed；全部 60 项 L1 冻结回归也通过 |
 | V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、其他消费者的阶段一致性仍待收口；J1/L1/L2 仅关闭相应角色/技能的显式证据节奏，J2 不代表通用依赖和全部 director 资源安全已完成，K1 不代表统一审核预算或科学判断已完成 |
-| V1-02 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
+| V1-02A：持久触发交付 | 已实现、机制已验证 | Core `105c58e` / Pro `99f3489`；3 旧公共行为 red、2 草稿绑定 red 与 80 新机制，共 85 passed；最终 Core 1932 passed / 7 optional Pro skips、Pro 710 passed、真实跨仓 60 passed；旧 workflow fixture 显式版本化保留原快照，最终 v3 旧源码仍重现 2 red |
+| V1-02 整体 | 进行中 | A 关闭触发请求的接收、精确 payload、lease/attempt 与保守启动恢复；共享合法阶段终态、并发提案追加/消费及科学任务独立 attempt/observation 仍待收口 |
+| V1-03 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
 
 [V1-01A 机器可读证据](../evidence/2026-09-10-v1-01a-champion-recovery.json)包含基线、修复提交、红测内容哈希、命令、退出码、通过/跳过数量和适用边界。方案定稿、代码推送、机制验证、真实研究收益是四种不同状态。
 
@@ -58,3 +60,5 @@ V1-01J2 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01j2-direc
 V1-01L1 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01l1-thinker-evidence.json`，语义与限制见该仓 `docs/thinker-evidence.md`。thinker 不再数 Markdown 行或读写旧 best 字段；当前合格可比较 ID 的观察基线与启动确认分离，只有进程创建及登记成功才消费启动前 receipt。手动/周期/失败级联保留独立语义，失格或未知不冒充 plateau；陈旧 scope/reference/generation、预算/构建/登记失败不会覆盖或确认本次机会。同主机的有界状态并非共享 observation/attempt 账本，手动 trigger 的 claim-before-Popen 窗口及 L2 skill 门控仍待修复。
 
 [V1-01L2 机器可读证据](../evidence/2026-09-10-v1-01l2-skill-activation.json)在两仓各保留一份；[技能契约](../skill-activation.md)区分 legacy string API、strict native composition、逐 source 周期/合格证据基线，以及原生 research 内容寻址文件/子进程校验。只有实际进入提示词的技能在 Popen 与 RoleProcess 登记成功后确认；全部未激活不会预留预算或启动。目录故障的两份草稿函数快照、原封不动的行为测试、最终代码哈希与全量命令可重放。输出/watchdog 回执仍按声明技能推导，内容寻址文件清理与整体输入预算未关闭；没有把启动确认冒充持久 exactly-once 交付。下一项继续 V1-02 的 payload/lease/进程不确定性，而非宣称 V1 已完成。
+
+[V1-02A 机器可读证据](../evidence/2026-09-10-v1-02a-trigger-delivery.json)与[交付契约](../trigger-delivery.md)在两仓各保留一份。原生四类入口共用持久 inbox，实际领取的不可变 payload 到达 Script env/args 与 Claude/research 最终提示词；文件保留不等于未消费、文件消失不等于完成。确定未 exec 可重试，LAUNCHING/STARTED/IN_DOUBT 不因过期或内存清空而重放；匹配角色/nonce/attempt 的实际完成先落库再清收据。固定旧代码重放证明 A→B 丢请求、明确未启动后丢请求与升级误删，独立草稿快照证明坏绑定抢先终态的缺陷。旧测试中的假完成/固定 attempt/claim-unlink 依赖显式版本化，不靠放宽安全合同换绿。未实现不确定任务的自动裁定、完整执行协议指纹或所有研究任务身份；没有科研收益或线上完成声明。
