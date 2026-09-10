@@ -1169,8 +1169,10 @@ python: {python_for_yaml}
 # eval_output: eval_report.json
 
 # --- RESEARCH AGENT (optional) ---
-# Auto-generates ideas. Requires API key in .env or environment.
-# Uncomment below only to customize settings:
+# Disabled unless roles or a preset are explicitly configured.
+# Credentials alone do not enable research. To discover the existing API-key
+# backends, opt in with: role_presets: [environment_research]
+# Or uncomment the explicit role below and supply its API key:
 #
 # roles:
 #   research:
@@ -1279,7 +1281,7 @@ noise: 0.1
 
     print()
     if _detected:
-        print(f"  API keys: \033[32m{', '.join(_detected)}\033[0m (auto-discovered)")
+        print(f"  API keys: \033[32m{', '.join(_detected)}\033[0m (detected; not role activation)")
     else:
         print(f"  API keys: \033[33mnone found\033[0m — add to {project_dir}/.env")
 
@@ -1430,7 +1432,7 @@ noise: 0.1
             print(f"  5. Run: \033[36morze start -c {cfg_path}\033[0m")
         else:
             print(f"  1. Edit \033[36m{project_dir}/train.py\033[0m with your training logic")
-            print(f"  2. Add API key to \033[36m{project_dir}/.env\033[0m (optional, for auto-research)")
+            print(f"  2. Configure a research role or role_presets: [environment_research], then add its API key to \033[36m{project_dir}/.env\033[0m (optional)")
             print(f"  3. Run: \033[36morze --check -c {cfg_path}\033[0m to validate")
             print(f"  4. Run: \033[36morze -c {cfg_path}\033[0m to start")
 
@@ -1677,7 +1679,7 @@ def do_check(cfg: dict):
                 print(f"    {ok} {rname}: {detail}")
         if research_names and not has_any_llm_key and pro_enabled:
             print(f"    {warn_mark} \033[33mAuto-research will not work: no ANTHROPIC_API_KEY or GEMINI_API_KEY found\033[0m")
-            print(f"      Add ANTHROPIC_API_KEY or GEMINI_API_KEY to .env to enable auto-research")
+            print(f"      Supply the configured research backend's API key in .env")
     else:
         if pro_enabled:
             print(f"    {no} No research agent configured — ideas will not be generated automatically")
@@ -1685,8 +1687,8 @@ def do_check(cfg: dict):
                 print(f"      hint: add an API key to .env (GEMINI_API_KEY or ANTHROPIC_API_KEY)")
                 print(f"            and configure a research role in orze.yaml")
             else:
-                print(f"      hint: auto-discovery found API key(s) but roles section in orze.yaml")
-                print(f"            may be overriding it. Remove 'roles: {{}}' or configure a research role")
+                print(f"      hint: detected API keys do not enable roles by themselves")
+                print(f"            configure a research role or role_presets: [environment_research]")
         else:
             print(f"    \033[2mAI-powered idea generation, auto-fix, and code evolution\033[0m")
             print(f"    \033[2mAvailable with orze-pro → orze.ai/pro\033[0m")

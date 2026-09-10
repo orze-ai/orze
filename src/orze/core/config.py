@@ -5,8 +5,9 @@ CALLING SPEC:
         Module-level dict with all default orze.yaml keys and their defaults.
 
     load_project_config(path: Optional[str] = None) -> dict
-        Load orze.yaml (or path), merge with DEFAULT_CONFIG, auto-discover
-        research backends from env vars, load .env. Returns full config dict.
+        Load orze.yaml (or path), merge with DEFAULT_CONFIG and load .env.
+        Environment-backed roles require the explicit environment_research
+        preset; credentials alone never enable roles. Returns full config dict.
 
     _validate_config(cfg: dict) -> tuple[list[str], list[str]]
         Validate a loaded config. Returns (errors, warnings) where errors
@@ -33,6 +34,7 @@ from pathlib import Path
 import yaml
 
 from orze.core.research_policy import validate_research_policy_config
+from orze.core.role_presets import configured_role_presets, apply_environment_research
 
 logger = logging.getLogger("orze")
 
@@ -301,6 +303,8 @@ DEFAULT_CONFIG = {
     "orphan_timeout_hours": 6,  # reclaim stale claims after 6 hours
     "plateau_threshold": 50,    # fire plateau notification after N completions w/o improvement
     "roles": {},
+    # Credentials and GOAL files are capabilities/inputs, not role activation.
+    "role_presets": [],
     # Optional autonomous-proposal contract. ``single_model_single_pass``
     # rejects composite work before it can enter the experiment queue.
     "research_policy": {
@@ -399,6 +403,9 @@ def load_project_config(path: Optional[str] = None) -> dict:
 
     # Expand ${VAR} references in config values using os.environ
     cfg = _expand_env_vars(cfg)
+    # Validate before any optional role expansion. Runtime consumers use the
+    # same strict declaration through role_preset_enabled().
+    configured_role_presets(cfg)
 
     # Loud-warn on unresolved ${VAR} placeholders. Calls relying on these
     # (notifications, webhooks) will silently fail at runtime — make the
@@ -485,34 +492,11 @@ def load_project_config(path: Optional[str] = None) -> dict:
     cfg["_env_ORZE_KNOWLEDGE_DIR"] = str(results_path / "knowledge")
     cfg["_env_ORZE_FEEDBACK_DIR"] = str(orze_dir / "feedback")
 
-    # Auto-discover research backends from environment API keys.
-    # Only activates if NO roles are explicitly configured at all.
-    # If the user defined any roles (even mode: script), respect that
-    # and don't inject auto-discovered backends alongside them.
-    roles = cfg.get("roles") or {}
-    if not roles:
-        _AUTO_BACKENDS = [
-            ("GEMINI_API_KEY", "gemini", "gemini-2.5-flash"),
-            ("OPENAI_API_KEY", "openai", "gpt-4o"),
-            ("ANTHROPIC_API_KEY", "anthropic", None),
-        ]
-        discovered = []
-        for env_var, backend, default_model in _AUTO_BACKENDS:
-            if os.environ.get(env_var):
-                role_name = f"research_{backend}"
-                role_cfg = {"mode": "research", "backend": backend}
-                if default_model:
-                    role_cfg["model"] = default_model
-                if "roles" not in cfg:
-                    cfg["roles"] = {}
-                cfg["roles"][role_name] = role_cfg
-                discovered.append(f"{backend} ({env_var})")
-        if discovered:
-            logger.info("Auto-discovered research backends: %s",
-                        ", ".join(discovered))
-        else:
-            logger.info("No API keys found in environment — research agent will not run. "
-                        "Add GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY to .env")
+    # Explicit presets supplement missing names only, after legacy role
+    # migration. Existing entries, including disabled roles, remain unchanged.
+    added_roles = apply_environment_research(cfg)
+    if added_roles:
+        logger.info("environment_research preset added roles: %s", ", ".join(added_roles))
 
     # Auto-seal eval scripts (data leakage guardrail). Any file in the project
     # root matching eval_*.py or eval_*.sh is added to sealed_files unless
@@ -558,6 +542,10 @@ def _validate_config(cfg: dict) -> tuple:
     """Validate orze config on startup. Returns (errors, warnings) tuple."""
     errors = []
     warnings = []
+    try:
+        configured_role_presets(cfg)
+    except ValueError as exc:
+        errors.append(str(exc))
 
     # --- Errors: things that will break ---
 
@@ -1102,8 +1090,9 @@ def _validate_config(cfg: dict) -> tuple:
 
     if not roles:
         warnings.append("No research agent configured — idea generation disabled. "
-                        "Add an API key to .env (GEMINI_API_KEY, OPENAI_API_KEY, or "
-                        "ANTHROPIC_API_KEY) for auto-discovery, or configure roles: in orze.yaml")
+                        "Configure roles: explicitly, or opt in with "
+                        "role_presets: [environment_research] and supply an API key. "
+                        "Credentials alone do not enable roles.")
 
     # Check for API keys if research roles exist
     has_research = roles and any(
