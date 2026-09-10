@@ -7,6 +7,7 @@ Calling spec:
     orze init [path]                            # initialize new project
     orze start / stop / restart                 # daemon management
     orze retry-eval IDEA_ID -c orze.yaml         # admit evaluation-only retry
+    orze replicate SOURCE --request-id KEY      # admit one explicit repeat task
     orze --check                                # validate config
     orze --launch-status                        # fast stop/pause policy JSON
     orze --admin                                # launch admin panel
@@ -237,6 +238,20 @@ Examples:
         "retry-eval", help="Admit one failed evaluation for retry without retraining")
     retry_eval_parser.add_argument("idea_id", help="Exact evaluation-failed idea ID")
     retry_eval_parser.add_argument(
+        "-c", "--config-file", type=str, default=argparse.SUPPRESS,
+        help="Path to orze.yaml (also accepts the global -c option)",
+    )
+
+    replicate_parser = subparsers.add_parser(
+        "replicate", help="Explicitly admit a same-configuration repeat task")
+    replicate_parser.add_argument("source_task_id", help="Confirmed native source task ID")
+    replicate_parser.add_argument(
+        "--request-id", required=True,
+        help="Stable idempotency key; reuse it after an uncertain response",
+    )
+    replicate_parser.add_argument(
+        "--reason", default="explicit_replication", help="Recorded control-plane rationale")
+    replicate_parser.add_argument(
         "-c", "--config-file", type=str, default=argparse.SUPPRESS,
         help="Path to orze.yaml (also accepts the global -c option)",
     )
@@ -553,6 +568,10 @@ Examples:
 
     if args.command == "retry-eval":
         return _run_retry_eval_subcommand(args)
+
+    if args.command == "replicate":
+        from orze.cli_replication import run_replication
+        return run_replication(args)
 
     # Report inspection must not probe credentials, install extensions, or
     # enter runtime setup. An explicit subcommand keeps its existing priority.

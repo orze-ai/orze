@@ -92,6 +92,9 @@ def require_catalog(lake, idea_dir, cfg, *, handle=None):
             existing = None
             try:
                 existing = open_existing_lake(path)
+                from orze.core.replication_requests import request_for_task
+                if request_for_task(existing.conn, Path(idea_dir).name) is not None:
+                    raise AttemptEffectBusy("training_replication_catalog_required")
                 if current_attempt(existing.conn, Path(idea_dir).name, "training") is not None:
                     raise AttemptEffectBusy("training_native_catalog_required")
             except AttemptEffectBusy:
@@ -218,15 +221,29 @@ def begin(lake, tp, idea_dir, cfg=None):
         bind_catalog(lake, idea_dir, tx.lease)
         _, claim_sha = _claim(tp, idea_dir, lake)
         launch_state = _launch_state(lake, tp.idea_id)
+        from orze.engine.replication import replication_authorization
+        replication = replication_authorization(
+            lake, tp.idea_id, idea_dir, cfg or {}, getattr(tp, "execution_identity", None),
+            claim_id=tp.attempt_id)
+        captured_replication = getattr(tp, "replication_authorization", None)
+        if ((replication is not None or captured_replication is not None)
+                and not canonical_identity_equal(replication, captured_replication)):
+            raise AttemptEffectBusy("training_replication_authorization_changed")
         binding = {
             "origin": "native_training", "claim_sha256": claim_sha,
             "launch_lifecycle": launch_state,
         }
         if artifact_binding is not None:
             binding["artifact_publication"] = artifact_binding
+        if replication is not None:
+            binding["replication"] = replication
         ref = create_attempt(tx.conn, tp.idea_id, "training", tp.attempt_id, binding)
         if not canonical_identity_equal(_launch_state(lake, tp.idea_id), launch_state):
             raise AttemptAuthorityError("training_launch_lifecycle_changed")
+        if replication is not None and not canonical_identity_equal(
+                replication_authorization(lake, tp.idea_id, idea_dir, cfg or {},
+                                          tp.execution_identity, claim_id=tp.attempt_id), replication):
+            raise AttemptEffectBusy("training_replication_authorization_changed")
         tx.watch_attempt(ref)
     return ref
 
@@ -271,6 +288,8 @@ def started(lake, tp, idea_dir, process_identity, *, resume_context=None):
             }
             if "artifact_publication" in row["binding"]:
                 binding["artifact_publication"] = row["binding"]["artifact_publication"]
+            if "replication" in row["binding"]:
+                binding["replication"] = row["binding"]["replication"]
             mark_running(tx.conn, tp.attempt_ref, binding=binding)
             if resume_context:
                 launcher.mark_resume_launched(resume_context, idea_dir / "claim.json", effect_lease=tx.lease)

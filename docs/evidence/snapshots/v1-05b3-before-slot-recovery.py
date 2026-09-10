@@ -246,7 +246,6 @@ class ReplicaReservation:
     """Captured occurrence slot; not authorization to create a process."""
     path: Path
     record_sha256: str
-    file_identity: tuple
     identity: str
     idea_id: str
     attempt_id: str
@@ -269,12 +268,6 @@ def _replica_read(path):
     if hashlib.sha256(_replica_bytes(value)).hexdigest() != digest:
         raise ValueError("replication_slot_noncanonical")
     return value, digest
-
-
-def _replica_identity(path):
-    value = path.lstat()
-    return (value.st_dev, value.st_ino, value.st_mode, value.st_nlink,
-            value.st_size, value.st_mtime_ns, value.st_ctime_ns)
 
 
 def _replica_sync(folder):
@@ -336,12 +329,10 @@ def _replace_replica(path, record, owned, *, replacing):
         if replacing:
             os.replace(temporary, path)
         _replica_sync(path.parent)
-        identity = _replica_identity(path)
         actual, digest = _replica_read(path)
-        if (actual != record or digest != hashlib.sha256(raw).hexdigest()
-                or _replica_identity(path) != identity or not owned()):
+        if actual != record or digest != hashlib.sha256(raw).hexdigest() or not owned():
             raise OSError("replication_slot_readback_failed")
-        return digest, identity
+        return digest
     except BaseException as exc:
         # Partial bytes/rename/fsync are never interpreted as a refundable
         # reservation. Leave both the selected record and gate for recovery.
@@ -361,7 +352,7 @@ def _require_closed_replica(lake, results_dir, owner, authorization):
     ref = AttemptRef(row["task_id"], row["phase"], row["attempt_id"], row["generation"])
     closed = require_completion(CompletionEvent(ref.task_id, 0, ref), lake, results_dir,
                                 phase="training")
-    if closed["terminal"].get("outcome") not in ("failed", "not_started", "requeued"):
+    if closed["terminal"].get("outcome") not in ("failed", "not_started"):
         raise AttemptEffectBusy("replication_slot_previous_attempt_not_retryable")
 
 
@@ -370,7 +361,7 @@ def reserve_replica_execution_identity(results_dir, cfg, identity, idea_id, atte
     """Reserve a DB-authorized occurrence without changing semantic identity.
 
     The flat default owner is never read, replaced or deleted. Existing
-    occurrence slots need a confirmed failed/not-started/requeued native attempt;
+    occurrence slots need a confirmed failed/not-started *native* attempt;
     missing intent, open work, completed work and uncertain storage all hold.
     """
     from orze.engine.replication import replication_authorization
@@ -403,8 +394,8 @@ def reserve_replica_execution_identity(results_dir, cfg, identity, idea_id, atte
         record = {"schema_version": 2, "execution_identity": identity,
                   "idea_id": idea_id, "attempt_id": attempt_id,
                   "request_id": request_id, "authorization_sha256": auth_sha}
-        digest, file_identity = _replace_replica(path, record, owned, replacing=old is not None)
-    return ReplicaReservation(path, digest, file_identity, identity, idea_id, attempt_id, request_id)
+        digest = _replace_replica(path, record, owned, replacing=old is not None)
+    return ReplicaReservation(path, digest, identity, idea_id, attempt_id, request_id)
 
 
 def release_replica_execution_identity(reservation):
@@ -415,13 +406,10 @@ def release_replica_execution_identity(reservation):
     path = reservation.path
     with _replica_gate(path) as owned:
         try:
-            if _replica_identity(path) != reservation.file_identity:
-                raise AttemptEffectBusy("replication_slot_capture_changed")
             value, digest = _replica_read(path)
             if (digest != reservation.record_sha256 or value.get("idea_id") != reservation.idea_id
                     or value.get("attempt_id") != reservation.attempt_id
-                    or value.get("request_id") != reservation.request_id
-                    or _replica_identity(path) != reservation.file_identity or not owned()):
+                    or value.get("request_id") != reservation.request_id or not owned()):
                 raise AttemptEffectBusy("replication_slot_capture_changed")
             path.unlink()
             _replica_sync(path.parent)

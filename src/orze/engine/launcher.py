@@ -66,6 +66,7 @@ from orze.engine.resume import (
 from orze.engine.execution_identity import (
     DuplicateExecutionError, compute_execution_identity,
     release_execution_identity, reserve_execution_identity,
+    release_replica_execution_identity, reserve_replica_execution_identity,
 )
 from orze.engine.termination_hold import (
     TerminationUnconfirmed, require_no_unconfirmed_stop, terminate_execution,
@@ -1144,10 +1145,19 @@ def _cleanup_rejected_training_intent(tp, idea_dir, cfg, lake, lineage_context, 
         if current_attempt(lake.conn, tp.idea_id, "training") is not None:
             return
         try:
-            release_execution_identity(idea_dir.parent, cfg, tp.execution_identity,
-                                       tp.idea_id, tp.attempt_id)
+            _release_training_reservation(tp, idea_dir.parent, cfg)
         except BaseException as exc:
             raise AttemptEffectInDoubt("training_reservation_cleanup_unconfirmed") from exc
+
+
+def _release_training_reservation(tp, results_dir, cfg):
+    """An explicit occurrence releases its captured slot, never mutable cfg."""
+    reservation = getattr(tp, "replica_reservation", None)
+    if reservation is not None:
+        release_replica_execution_identity(reservation)
+    else:
+        release_execution_identity(results_dir, cfg, tp.execution_identity,
+                                   tp.idea_id, tp.attempt_id)
 
 
 def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
@@ -1290,7 +1300,7 @@ class DuplicateLaunchError(LaunchIntegrityError):
 def find_forbidden_launch_override(value, path: str = "config",
                                    _seen: Optional[set] = None,
                                    _depth: int = 0) -> Optional[str]:
-    """Return the first nested ``force_launch`` path, if present.
+    """Return a nested reserved control-plane key, if present.
 
     The key is forbidden even when false: idea data must never carry a switch
     that changes which integrity validators the control plane executes.
@@ -1307,7 +1317,7 @@ def find_forbidden_launch_override(value, path: str = "config",
     if isinstance(value, dict):
         for key, child in value.items():
             child_path = f"{path}.{key}"
-            if str(key) == "force_launch":
+            if str(key) in {"force_launch", "replication_request_id", "replication_authorization"}:
                 return child_path
             found = find_forbidden_launch_override(
                 child, child_path, _seen, _depth + 1)
@@ -1729,8 +1739,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     if stored_attempt:
         attempt_id = str(stored_attempt)
 
-    try:
-        execution_identity = compute_execution_identity(
+    identity_inputs = dict(
             config_path=Path(config_path),
             base_config_path=Path(cfg["base_config"]),
             train_script=Path(train_script),
@@ -1740,10 +1749,29 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             data_boundaries=dict(db_cfg),
             data_separation=dict(cfg.get("data_separation") or {}),
         )
-        reserve_execution_identity(
-            results_dir, cfg, execution_identity, idea_id, attempt_id)
+    replication = None
+    replica_reservation = None
+    try:
+        execution_identity = compute_execution_identity(**identity_inputs)
+        if lake is not None:
+            from orze.engine.replication import replication_authorization
+            replication = replication_authorization(
+                lake, idea_id, results_dir / idea_id, cfg, execution_identity,
+                claim_id=attempt_id)
+        if replication is None:
+            reserve_execution_identity(
+                results_dir, cfg, execution_identity, idea_id, attempt_id)
+        else:
+            replica_reservation = reserve_replica_execution_identity(
+                results_dir, cfg, execution_identity, idea_id, attempt_id,
+                lake=lake, authorization=replication)
     except DuplicateExecutionError as exc:
         raise DuplicateLaunchError(str(exc)) from exc
+
+    # Only this captured slot can be released after a later cfg mutation.
+    reservation_owner = SimpleNamespace(
+        execution_identity=execution_identity, idea_id=idea_id, attempt_id=attempt_id,
+        replica_reservation=replica_reservation)
 
     from orze.core.model_lineage import (
         ModelLineageError, close_model_lineage_attestation,
@@ -1762,8 +1790,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         if lineage_context:
             env.update(lineage_context["env"])
     except ModelLineageError as exc:
-        release_execution_identity(
-            results_dir, cfg, execution_identity, idea_id, attempt_id)
+        _release_training_reservation(reservation_owner, results_dir, cfg)
         raise LaunchIntegrityError(str(exc)) from exc
 
     # Keep a fallback handle before entering the allocation boundary: both
@@ -1772,12 +1799,16 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     tp = SimpleNamespace(
         idea_id=idea_id, gpu=gpu, process=None, start_time=time.time(),
         attempt_id=attempt_id, execution_identity=execution_identity,
+        replication_authorization=replication, replica_reservation=replica_reservation,
     )
     if lake is not None:
         from orze.engine.training_attempts import begin
         try:
+            if replication is not None and compute_execution_identity(**identity_inputs) != execution_identity:
+                from orze.engine.attempt_effect_lock import AttemptEffectBusy
+                raise AttemptEffectBusy("replication_execution_inputs_changed")
             from orze.core.artifact_contract import get_artifact_contract
-            if get_artifact_contract(cfg) is None:
+            if get_artifact_contract(cfg) is None and replication is None:
                 tp.attempt_ref = begin(lake, tp, results_dir / idea_id)
             else:
                 tp.attempt_ref = begin(lake, tp, results_dir / idea_id, cfg=cfg)
@@ -1802,6 +1833,9 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             pass_fds = list(lease_fds)
             if lineage_context:
                 pass_fds.append(lineage_context["write_fd"])
+            if replication is not None and compute_execution_identity(**identity_inputs) != execution_identity:
+                from orze.engine.attempt_effect_lock import AttemptEffectBusy
+                raise AttemptEffectBusy("replication_execution_inputs_changed")
             proc = subprocess.Popen(
                 cmd, env=env, stdout=log_fh, stderr=subprocess.STDOUT,
                 preexec_fn=_new_process_group,
@@ -1816,11 +1850,13 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             _cleanup_failed_launch(tp, results_dir / idea_id, "training", log_fh, lake=lake)
         else:
             _close_launch_log(log_fh)
-            release_execution_identity(
-                results_dir, cfg, execution_identity, idea_id, attempt_id)
+            if replica_reservation is None:
+                _release_training_reservation(tp, results_dir, cfg)
             if getattr(tp, "attempt_ref", None) is not None:
                 from orze.engine.training_attempts import failed_launch
                 failed_launch(lake, tp, results_dir / idea_id, None, not_started=True)
+            if replica_reservation is not None:
+                _release_training_reservation(tp, results_dir, cfg)
         from orze.engine.launch_failure_report import bind_launch_error
         bind_launch_error(launch_error, getattr(tp, "attempt_ref", None))
         raise
@@ -1842,6 +1878,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             _log_fh=log_fh, _last_log_size=0,
             _last_log_check=now, _stall_since=0.0,
         )
+        tp.replica_reservation = replica_reservation
+        tp.replication_authorization = replication
         # The allocation start is already durable before leaving the lease.
         receive_model_lineage_attestation(
             lineage_context, process_pid=proc.pid)
