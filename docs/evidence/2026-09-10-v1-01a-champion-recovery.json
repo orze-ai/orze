@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "item": "V1-01A",
+  "claim": "CLI and controller startup recover champion state only from lifecycle-complete, policy-qualified artifact evidence",
+  "status": "mechanism_verified",
+  "baseline_commit": "1b3fc3e0365cf805017c8b3bcee32025af4beabe",
+  "fix_commit": "c9f01bfe04654022ef9cdb8ef96de1dd47d84dac",
+  "python": "3.10.12",
+  "pytest": "9.1.1",
+  "red": {
+    "test_file": "tests/test_rebuild_evidence_contract.py",
+    "test_file_sha256": "c1e8c9df3323bdc9d78275e804bd080a5b0db9fbd8167d33c1811c32d9b74374",
+    "command": "python3 -m pytest -q tests/test_rebuild_evidence_contract.py --tb=short",
+    "exit_code": 1,
+    "failed": 11,
+    "cause": "behavior assertions: wrong source ranking, rejected evidence resurrected, malformed result crash, inspection created missing database"
+  },
+  "independent_startup_review": {
+    "entrypoint": "orze.engine.orchestrator.Orze.__init__",
+    "test_file": "tests/test_rebuild_startup_contract.py",
+    "additional_red_before_notification_fix": {"failed": 4, "passed": 6},
+    "boundaries_replaced": ["config schema validator", "signal/atexit registration", "notifications"],
+    "boundaries_real": ["controller constructor", "SQLite lifecycle", "state loading", "artifact qualifier", "reporter state"],
+    "subprocess_calls": 0,
+    "gpu_allocations": 0
+  },
+  "final_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0,
+    "passed": 1302,
+    "skipped": 6,
+    "elapsed_seconds": 71.76,
+    "skip_scope": "optional Pro tests unavailable in core-only import environment"
+  },
+  "cross_repository_regression": {
+    "command": "With both checkout src directories on PYTHONPATH and a test-only patch of orze_pro._gate.require_license, run pytest -q tests/test_evolution.py tests/test_sweeper.py tests/test_skill_registry.py --tb=short -rs from core",
+    "exit_code": 0,
+    "passed": 30,
+    "skipped": 0,
+    "note": "Production license code was not modified; real activation was not tested"
+  },
+  "compatibility": [
+    "Legacy lake-only helper remains available for archive inspection, but production recovery never uses it to promote cached scores",
+    "Missing evidence now yields no champion and no plateau budget instead of restoring an unverified cached result",
+    "CLI retains its explicit overwrite behavior; normal controller startup requalifies and revokes stale state",
+    "Existing tests for recovery now provide completed artifacts instead of treating cached metrics alone as authoritative"
+  ],
+  "limits": [
+    "Not a complete V1 acceptance receipt",
+    "No real GPU, provider, production migration or deployment exercised",
+    "No claim of better research quality, statistical equivalence or GPU-hour savings",
+    "Plateau count retains the existing eligible-result mtime ordering; it is not a statistical stopping rule"
+  ]
+}
