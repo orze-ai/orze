@@ -80,10 +80,17 @@ def test_rebuild_none_when_empty(tmp_path):
 
 
 def test_rebuild_state_file_writes(tmp_path):
-    _ = _make_lake(tmp_path, [
+    lake = _make_lake(tmp_path, [
         {"id": "idea-001", "eval_metrics": {"test_accuracy": 0.81}},
         {"id": "idea-002", "eval_metrics": {"test_accuracy": 0.88}},
     ])
+    lake.close()
+    for idea_id, value in (("idea-001", 0.81), ("idea-002", 0.88)):
+        folder = tmp_path / idea_id
+        folder.mkdir()
+        (folder / "metrics.json").write_text(json.dumps({
+            "status": "COMPLETED", "test_accuracy": value,
+        }))
     cfg = {"results_dir": str(tmp_path),
            "report": {"primary_metric": "test_accuracy"},
            "idea_lake_db": str(tmp_path / "idea_lake.db")}
@@ -93,9 +100,15 @@ def test_rebuild_state_file_writes(tmp_path):
 
 
 def test_rebuild_state_file_idempotent_without_overwrite(tmp_path):
-    _ = _make_lake(tmp_path, [
+    lake = _make_lake(tmp_path, [
         {"id": "idea-001", "eval_metrics": {"test_accuracy": 0.9}},
     ])
+    lake.close()
+    folder = tmp_path / "idea-001"
+    folder.mkdir()
+    (folder / "metrics.json").write_text(json.dumps({
+        "status": "COMPLETED", "test_accuracy": 0.9,
+    }))
     cfg = {"results_dir": str(tmp_path),
            "report": {"primary_metric": "test_accuracy"},
            "idea_lake_db": str(tmp_path / "idea_lake.db")}
@@ -127,3 +140,29 @@ def test_rebuild_state_prefers_terminal_artifacts_over_stale_lake_units(tmp_path
     summary = rebuild_state_file(tmp_path, cfg, overwrite=True)
 
     assert summary["best_idea_id"] == "idea-best"
+
+
+@pytest.mark.parametrize("previous,expected", [("idea-stale", False), ("idea-best", True)])
+def test_all_host_rebuild_scopes_notification_to_champion(tmp_path, previous, expected):
+    lake = _make_lake(tmp_path, [
+        {"id": "idea-best", "eval_metrics": {"score": 0.5}},
+    ])
+    folder = tmp_path / "idea-best"
+    folder.mkdir()
+    (folder / "metrics.json").write_text(json.dumps({
+        "status": "COMPLETED", "score": 0.5,
+    }))
+    peer = tmp_path / ".orze_state_peer.json"
+    peer.write_text(json.dumps({
+        "best_idea_id": previous, "completions_since_best": 0,
+        "plateau_notified": True, "unrelated": "preserved",
+    }))
+    try:
+        rebuild_state_file(tmp_path, {"report": {"primary_metric": "score"}},
+                           lake=lake, overwrite=True, all_hosts=True)
+        updated = json.loads(peer.read_text())
+        assert updated["best_idea_id"] == "idea-best"
+        assert updated["plateau_notified"] is expected
+        assert updated["unrelated"] == "preserved"
+    finally:
+        lake.close()

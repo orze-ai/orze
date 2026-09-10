@@ -10,8 +10,10 @@ The plateau-breaking skill ``axiom_removal`` is gated on
 long run), the plateau counter never advances and the breaker never
 fires.
 
-This module rebuilds both fields from authoritative terminal result artifacts,
-falling back to ``idea_lake.db`` when artifacts are unavailable:
+Production recovery rebuilds both fields from lifecycle-complete, qualified
+result evidence. Cached lake metrics are never a fallback for rejected or
+missing artifacts. The legacy lake-only helper remains an archive query, not a
+source of steering authority:
 
     best_idea_id = best eligible completed idea under report.sort
     completions_since_best = count(completed ideas with archived_at >= best.archived_at) - 1
@@ -23,12 +25,12 @@ resolved the same way ``orze.reporting.leaderboard`` does. Callers:
 
 CALLING SPEC
 ------------
-    rebuild_best_from_lake(lake, primary_metric) -> (best_id, since_best)
-        Pure-function core: inspects the lake, returns the two fields.
-        ``best_id`` is None iff no completed idea has the metric.
+    rebuild_best_from_evidence(results_dir, cfg, lake=None) -> (best_id, since)
+        Read-only shared recovery path for CLI and orchestrator startup.
+        Uses the complete report, lifecycle, and benchmark qualification policy.
 
     rebuild_state_file(results_dir, cfg, overwrite=False) -> dict
-        Applies rebuild_best_from_lake to the host's state file on disk.
+        Applies rebuild_best_from_evidence to the host's state file on disk.
         Returns a summary dict.
 """
 from __future__ import annotations
@@ -194,6 +196,66 @@ def rebuild_best_from_results_dir(results_dir: Path | str,
     return best_id, newer_completed
 
 
+def rebuild_best_from_evidence(results_dir: Path, cfg: dict,
+                               lake=None) -> Tuple[Optional[str], int]:
+    """Rebuild steering state without weakening the current evidence policy.
+
+    Missing lifecycle authority or zero eligible observations yields no best
+    and zero plateau budget. Never create a database or promote cached metrics
+    in order to make recovery appear successful. Only qualified observations
+    count toward the existing completion/mtime-based plateau counter.
+    """
+    from orze.reporting.evidence import (
+        authoritative_completed_idea_ids,
+        qualify_authoritative_report_evidence_with_identity,
+    )
+
+    results_dir = Path(results_dir)
+    scoped_cfg = dict(cfg)
+    report = dict(cfg.get("report") or {})
+    report.setdefault("primary_metric", "test_accuracy")
+    scoped_cfg["report"] = report
+    scoped_cfg["_env_ORZE_RESULTS_DIR"] = str(results_dir.resolve())
+    db_path = (getattr(lake, "db_path", None) or cfg.get("idea_lake_db")
+               or results_dir / "idea_lake.db")
+    completed, reason = authoritative_completed_idea_ids(Path(db_path))
+    if reason != "authoritative_lifecycle_loaded":
+        logger.warning("Champion recovery unavailable: %s", reason)
+        return None, 0
+
+    candidates = []
+    for idea_id in sorted(completed):
+        _, _, value, _, _ = qualify_authoritative_report_evidence_with_identity(
+            idea_id, results_dir, scoped_cfg, completed)
+        if value is None:
+            continue
+        try:
+            mtime = (results_dir / idea_id / "metrics.json").stat().st_mtime
+        except OSError:
+            continue
+        candidates.append((idea_id, value, mtime))
+    if not candidates:
+        return None, 0
+    lower_is_better = str(report.get("sort", "descending")).lower().startswith("asc")
+    candidates.sort(key=lambda item: item[1], reverse=not lower_is_better)
+    best_id, _, best_mtime = candidates[0]
+    return best_id, sum(mtime > best_mtime for _, _, mtime in candidates)
+
+
+def restore_reporter_from_evidence(reporter, results_dir: Path, cfg: dict,
+                                   lake=None) -> None:
+    """Restore or revoke persisted champion state on controller startup."""
+    best_id, since = rebuild_best_from_evidence(results_dir, cfg, lake=lake)
+    previous = reporter._best_idea_id
+    if best_id != previous or since < reporter._completions_since_best:
+        reporter._plateau_notified = False
+    reporter._best_idea_id = best_id
+    reporter._completions_since_best = since
+    logger.info("Reconciled best_idea_id=%s (previous=%s) "
+                "completions_since_best=%d from qualified evidence",
+                best_id, previous, since)
+
+
 def rebuild_state_file(results_dir: Path, cfg: dict,
                        overwrite: bool = False,
                        lake=None,
@@ -207,38 +269,9 @@ def rebuild_state_file(results_dir: Path, cfg: dict,
     every ``.orze_state_<host>.json`` file in the results dir (multi-
     daemon shared FSx case).
     """
-    from orze.idea_lake import IdeaLake
-
     report_cfg = cfg.get("report", {})
     primary = report_cfg.get("primary_metric", "test_accuracy")
-    sort_order = report_cfg.get("sort", "descending")
-    min_datasets = int(report_cfg.get("min_datasets", 0) or 0)
-    dataset_keys = _report_dataset_keys(report_cfg)
-
-    # Prefer terminal artifacts. Historical lake rows can contain normalized
-    # fractions while metrics.json/report columns use percentages; ranking the
-    # mixed units can manufacture a false champion.
-    best_id, since = rebuild_best_from_results_dir(
-        results_dir, primary, sort_order, min_datasets, dataset_keys)
-
-    # Artifact scan had no eligible metric — use lake-only archives as a
-    # compatibility fallback.
-    if best_id is None:
-        own_lake = False
-        if lake is None:
-            db_path = (cfg.get("idea_lake_db")
-                       or str(Path(results_dir) / "idea_lake.db"))
-            lake = IdeaLake(db_path)
-            own_lake = True
-        try:
-            best_id, since = rebuild_best_from_lake(
-                lake, primary, sort_order, min_datasets, dataset_keys)
-        finally:
-            if own_lake:
-                try:
-                    lake.close()
-                except Exception:
-                    pass
+    best_id, since = rebuild_best_from_evidence(results_dir, cfg, lake=lake)
 
     state = load_state(Path(results_dir))
     existing_best = state.get("best_idea_id")
@@ -261,6 +294,8 @@ def rebuild_state_file(results_dir: Path, cfg: dict,
     if not will_write:
         return summary
 
+    if best_id != existing_best or since < existing_since:
+        state["plateau_notified"] = False
     state["best_idea_id"] = best_id
     state["completions_since_best"] = since
     save_state(Path(results_dir), state)
@@ -278,6 +313,9 @@ def rebuild_state_file(results_dir: Path, cfg: dict,
                 d = _json.loads(p.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
+            if (best_id != d.get("best_idea_id")
+                    or since < (d.get("completions_since_best") or 0)):
+                d["plateau_notified"] = False
             d["best_idea_id"] = best_id
             d["completions_since_best"] = since
             try:

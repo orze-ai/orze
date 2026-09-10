@@ -272,37 +272,18 @@ class Orze(OrzePhaseMixin):
         self._upgrade_mgr = UpgradeManager(self.results_dir, cfg)
         self._reporter = NotificationProcessor(self.results_dir, cfg, lake=self.lake)
         self._reporter.load_state(state)
-        # Reconcile champion state from the same sort and completeness contract
-        # as the report. Persisted state can become stale when report policy
-        # changes (for example, excluding partial-dataset metrics).
+        # Re-qualify persisted champion state under the full current evidence
+        # contract. Rejected/missing evidence cannot fall back to lake scores.
         try:
-            from orze.engine.rebuild_state import (
-                _report_dataset_keys, rebuild_best_from_lake,
-                rebuild_best_from_results_dir,
-            )
-            if self.lake is not None and not cfg.get("_managed_idea_id"):
-                report_cfg = cfg.get("report", {})
-                primary = report_cfg.get("primary_metric", "test_accuracy")
-                args = (
-                    primary,
-                    report_cfg.get("sort", "descending"),
-                    int(report_cfg.get("min_datasets", 0) or 0),
-                    _report_dataset_keys(report_cfg),
-                )
-                best_id, since = rebuild_best_from_results_dir(
-                    self.results_dir, *args)
-                if best_id is None:
-                    best_id, since = rebuild_best_from_lake(
-                        self.lake, *args)
-                if best_id is not None:
-                    previous = self._reporter._best_idea_id
-                    self._reporter._best_idea_id = best_id
-                    self._reporter._completions_since_best = since
-                    logger.info("Reconciled best_idea_id=%s (previous=%s) "
-                                "completions_since_best=%d from results/lake "
-                                "(metric=%s)", best_id, previous, since, primary)
+            from orze.engine.rebuild_state import restore_reporter_from_evidence
+            if not cfg.get("_managed_idea_id"):
+                restore_reporter_from_evidence(
+                    self._reporter, self.results_dir, cfg, lake=self.lake)
         except Exception as e:
-            logger.debug("rebuild_best_from_lake failed on startup: %s", e)
+            self._reporter._best_idea_id = None
+            self._reporter._completions_since_best = 0
+            self._reporter._plateau_notified = False
+            logger.debug("Qualified champion recovery failed on startup: %s", e)
 
         # Event used to interrupt poll sleep instantly on shutdown signal
         self._stop_event = threading.Event()
