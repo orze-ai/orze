@@ -63,12 +63,23 @@ def _fs_lock(lock_dir: Path, stale_seconds: float = 600) -> bool:
     Auto-breaks stale locks older than stale_seconds using atomic rename
     to avoid TOCTOU races between nodes.  On the local host, also breaks
     locks whose owning PID has died (regardless of age)."""
+    from orze.core.idea_source_lock import idea_source_lock_protected
+    if idea_source_lock_protected(lock_dir):
+        logger.debug("Refusing generic lock ownership in protected idea source namespace")
+        return False
     try:
         lock_dir.mkdir(parents=True, exist_ok=False)
+        if idea_source_lock_protected(lock_dir):
+            # A source declaration raced our first check. Leave this empty
+            # directory held rather than grant generic ownership or erase an
+            # uncertain namespace; recovery is explicit for source locks.
+            return False
         meta = {"host": socket.gethostname(), "pid": os.getpid(), "time": time.time()}
         (lock_dir / "lock.json").write_text(json.dumps(meta), encoding="utf-8")
         return True
     except FileExistsError:
+        if idea_source_lock_protected(lock_dir):
+            return False
         # A managed-role crash receipt is process authority, not a disposable
         # lock artifact. Only startup reconciliation on its owning host may
         # remove it after nonce-bound stable identities are proven stopped.
@@ -121,6 +132,8 @@ def _fs_lock(lock_dir: Path, stale_seconds: float = 600) -> bool:
 
             # Atomic takeover: rename the stale lock dir to a unique name.
             # Only one node can succeed at this rename — the loser gets OSError.
+            if idea_source_lock_protected(lock_dir):
+                return False
             stale_name = lock_dir.with_name(
                 f"{lock_dir.name}._stale_{uuid.uuid4().hex[:12]}"
             )
@@ -134,6 +147,8 @@ def _fs_lock(lock_dir: Path, stale_seconds: float = 600) -> bool:
                 pass
             try:
                 lock_dir.mkdir(parents=True, exist_ok=False)
+                if idea_source_lock_protected(lock_dir):
+                    return False
                 new_meta = {"host": socket.gethostname(), "pid": os.getpid(), "time": time.time()}
                 (lock_dir / "lock.json").write_text(json.dumps(new_meta), encoding="utf-8")
                 return True
@@ -245,7 +260,14 @@ def atomic_create(path: Path, content: str) -> bool:
 
 def locked_append(path: Path, content: str, lock_dir: Path,
                   stale_seconds: float = 60, after_append=None) -> bool:
-    """Append durable text and finalize it under one acquired lock."""
+    """Append/finalize with source ownership, never an age-expiring lease.
+
+    stale_seconds remains accepted for API compatibility but cannot authorize
+    takeover of a possibly active or incompletely finalized source owner.
+    """
+    from orze.core.idea_source_lock import (
+        SourceLockInDoubt, idea_source_lock, idea_source_lock_owned,
+    )
     path = Path(path)
     lock_dir = Path(lock_dir)
     for candidate in (path, lock_dir):
@@ -255,14 +277,14 @@ def locked_append(path: Path, content: str, lock_dir: Path,
             current = current / part
             if current.is_symlink():
                 return False
-    locked = _fs_lock(lock_dir, stale_seconds=stale_seconds)
-    if not locked:
-        return False
-    try:
+    with idea_source_lock(lock_dir) as lease:
+        if lease is None:
+            return False
         path.parent.mkdir(parents=True, exist_ok=True)
         flags = os.O_RDWR | os.O_CREAT | os.O_APPEND
         flags |= getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(str(path), flags, 0o644)
+        rollback_uncertain = False
         try:
             metadata = os.fstat(fd)
             if (not statlib.S_ISREG(metadata.st_mode)
@@ -270,32 +292,45 @@ def locked_append(path: Path, content: str, lock_dir: Path,
                 return False
             original_size = metadata.st_size
             encoded = content.encode("utf-8")
-            written = 0
-            while written < len(encoded):
-                count = os.write(fd, encoded[written:])
-                if count <= 0:
-                    raise OSError("locked_append_short_write")
-                written += count
-            os.fsync(fd)
-            if after_append is not None:
-                if not callable(after_append):
-                    raise TypeError("locked_append_finalizer_not_callable")
-                try:
+            if not idea_source_lock_owned(lease):
+                raise OSError("idea_source_lock_ownership_lost")
+            try:
+                written = 0
+                while written < len(encoded):
+                    count = os.write(fd, encoded[written:])
+                    if count <= 0:
+                        raise OSError("locked_append_short_write")
+                    written += count
+                os.fsync(fd)
+                if after_append is not None:
+                    if not callable(after_append):
+                        raise TypeError("locked_append_finalizer_not_callable")
                     after_append()
-                except BaseException:
+                if not idea_source_lock_owned(lease):
+                    raise OSError("idea_source_lock_ownership_lost")
+            except BaseException:
+                try:
                     os.ftruncate(fd, original_size)
                     os.fsync(fd)
-                    raise
+                except BaseException as rollback_error:
+                    rollback_uncertain = True
+                    # Do not expose uncertain partial bytes to another owner.
+                    # The source context retains this lease for recovery.
+                    raise SourceLockInDoubt("locked_append_rollback_unconfirmed") from rollback_error
+                raise
         finally:
-            os.close(fd)
+            try:
+                os.close(fd)
+            except BaseException as close_error:
+                if rollback_uncertain:
+                    raise SourceLockInDoubt("locked_append_rollback_unconfirmed") from close_error
+                raise
         dir_fd = os.open(str(path.parent), os.O_RDONLY)
         try:
             os.fsync(dir_fd)
         finally:
             os.close(dir_fd)
         return True
-    finally:
-        _fs_unlock(lock_dir)
 
 
 def tail_file(path: Path, n_bytes: int = 4096) -> str:

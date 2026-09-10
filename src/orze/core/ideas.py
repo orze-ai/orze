@@ -135,6 +135,20 @@ def parse_ideas(path: str) -> Dict[str, dict]:
                            len(_parse_ideas_cache["result"]))
             return _overlay_sidecar_ideas(path, _parse_ideas_cache["result"])
         return {}
+    ideas = parse_ideas_text(text)
+    _parse_ideas_cache["mtime"] = mtime
+    _parse_ideas_cache["path"] = path
+    _parse_ideas_cache["result"] = ideas
+    return _overlay_sidecar_ideas(path, ideas)
+
+
+def parse_ideas_text(text: str) -> Dict[str, dict]:
+    """Parse captured source text without file/cache/sidecar authority.
+
+    The legacy file API retains its cache and overlay behavior. Transactional
+    ingestion calls this with one captured block and handles duplicate source
+    identities itself, so a cache hit cannot authorize deleting fresh bytes.
+    """
     ideas = {}
     pattern = re.compile(rf"^## ({IDEA_ID_PATTERN}):\s*(.+?)$", re.MULTILINE)
     matches = list(pattern.finditer(text))
@@ -178,10 +192,7 @@ def parse_ideas(path: str) -> Dict[str, dict]:
             "config": config,
             "raw": raw.strip(),
         }
-    _parse_ideas_cache["mtime"] = mtime
-    _parse_ideas_cache["path"] = path
-    _parse_ideas_cache["result"] = ideas
-    return _overlay_sidecar_ideas(path, ideas)
+    return ideas
 
 
 def _find_sweep_keys(config: dict, prefix: str = "") -> Dict[str, list]:

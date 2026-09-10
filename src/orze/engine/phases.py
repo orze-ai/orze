@@ -541,152 +541,29 @@ class OrzePhaseMixin:
 
     def _sync_ideas(self, cfg):
         """Phase: sync ideas from ideas.md to lake, expand sweeps, build unclaimed queue."""
-        raw_ideas = parse_ideas(cfg["ideas_file"])
-        # Typed-schema validation (v2 ``proposal_version: 2`` ideas only).
-        # Backward compatible: legacy ``## idea-XXX:`` entries pass through
-        # untouched. v2 ideas with validation errors are flagged in logs so
-        # the professor / research role sees them, but not rejected — the
-        # legacy ingestion above is the source of truth.
-        try:
-            from orze_substrate.role_outputs import (
-                IdeaProposal, parse_ideas_md,
-            )
-            for item in parse_ideas_md(cfg["ideas_file"]):
-                if isinstance(item, IdeaProposal):
-                    errs = item.validate()
-                    if errs:
-                        logger.warning(
-                            "ideas.md v2 validation errors in %s: %s",
-                            item.idea_id, "; ".join(errs))
-        except Exception as e:  # pragma: no cover — never block ingest on validator bugs
-            logger.debug("v2 ideas validator skipped: %s", e)
         if self.lake:
-            # Sync new ideas to DB queue
-            db_ids = self.lake.get_all_ids()
-            ingested_ids = []
-            config_hashes = self._load_config_hashes()
-            # Completed-only caching leaves a race window in which several
-            # identical proposals can all be queued before the first one
-            # finishes.  Include every already-admitted non-failed row and
-            # update this map after each insert, so one sync batch cannot
-            # manufacture deterministic replicas under different IDs.
-            pending_hashes = {
-                idea_id: self._config_override_hash(idea.get("config", {}))
-                for idea_id, idea in raw_ideas.items()
-                if idea_id not in db_ids
-            }
-            try:
-                needed = {
-                    identity for identity in pending_hashes.values()
-                    if identity not in config_hashes
-                }
-                admitted_hashes = self.lake.find_admitted_config_hashes(needed)
-                for identity, admitted_id in admitted_hashes.items():
-                    config_hashes.setdefault(identity, admitted_id)
-            except Exception as exc:
-                # DB/config ambiguity must not erase the completed cache. The
-                # final launch identity boundary remains authoritative.
-                logger.warning(
-                    "Could not extend config dedup with admitted ideas: %s",
-                    type(exc).__name__)
-            for idea_id, idea in raw_ideas.items():
-                if idea_id not in db_ids:
-                    # Config dedup: skip if overrides match a completed idea
-                    override_hash = pending_hashes[idea_id]
-                    existing_id = config_hashes.get(override_hash)
-                    if existing_id:
-                        logger.info(
-                            "Skipping %s: config duplicate of %s",
-                            idea_id, existing_id)
-                        continue
-                    # Clamp priority: "critical" is reserved for
-                    # human/API-submitted ideas, not auto-ingested ones.
-                    # Exception: sidecar ideas (ideas.d/*.md) are controlled
-                    # by the professor SOP, not the research agent, so they
-                    # may legitimately declare critical priority.
-                    raw_pri = idea.get("priority", "medium")
-                    if raw_pri == "critical" and idea.get("_overlay_source") != "sidecar":
-                        raw_pri = "high"
-                    raw_text = idea.get("raw", "")
-                    def _raw_f(field):
-                        m = re.search(rf"\*\*{re.escape(field)}\*\*:\s*(.+)", raw_text)
-                        return m.group(1).strip() if m else None
-                    # Validation moved to launch time (catches ALL idea sources)
-                    idea_cfg = idea.get("config", {})
-                    self.lake.insert(
-                        idea_id, idea["title"], yaml.dump(idea_cfg),
-                        raw_text,
-                        status="queued",
-                        priority=raw_pri,
-                        category=_raw_f("Category"),
-                        parent=_raw_f("Parent"),
-                        hypothesis=_raw_f("Hypothesis"),
-                        approach_family=idea.get("approach_family", _raw_f("Approach Family") or "other"),
-                    )
-                    config_hashes[override_hash] = idea_id
-                    ingested_ids.append(idea_id)
-
+            from orze.engine.idea_ingress import ingest_ideas_source
+            raw_ideas, ingested_ids = ingest_ideas_source(self, cfg)
+            # Optional enrichment runs only for committed admissions, after
+            # the source lock is released. An ACK publication failure leaves
+            # source retryable; enrichment may append work for a later tick.
             if ingested_ids:
-                logger.info("Ingested %d new ideas from %s to SQLite queue",
-                            len(ingested_ids), cfg["ideas_file"])
-                # Co-Scientist-style Elo triage (Item 1, 2026-05-23 spec).
-                # Behind feature flag substrate.elo_ranking_enabled (default
-                # off). Best-effort: never blocks ingestion. See
-                # orze_substrate/elo_ranking.py for design notes.
+                substrate_cfg = cfg.get("substrate", {}) or {}
                 try:
-                    substrate_cfg = cfg.get("substrate", {}) or {}
                     if substrate_cfg.get("elo_ranking_enabled"):
                         _run_elo_tournament_for_ingested(
                             self.lake, ingested_ids, substrate_cfg)
-                except Exception as e:  # pragma: no cover — never block ingest
-                    logger.warning("Elo tournament round skipped: %s", e)
-                # Co-Scientist-style Reflection critic (Item 2, 2026-05-23 spec).
-                # Behind feature flag substrate.reflection_enabled (default
-                # off). Best-effort: never blocks ingestion. Writes
-                # results/_reflections/_reflection_<idea_id>.md for engineer
-                # / research / professor to consume next cycle.
+                except Exception as exc:
+                    logger.warning("Elo tournament round skipped: %s", exc)
                 try:
-                    substrate_cfg = cfg.get("substrate", {}) or {}
                     if substrate_cfg.get("reflection_enabled"):
                         _run_reflection_for_ingested(
-                            self.lake, ingested_ids, substrate_cfg,
-                            self.results_dir)
-                except Exception as e:  # pragma: no cover — never block ingest
-                    logger.warning("Reflection round skipped: %s", e)
-                # Consumption: wipe ideas.md after ingestion, keeping header.
-                # Use fs lock to prevent race with concurrent research agent appends.
-                ideas_lock = self.results_dir / ".ideas_md.lock"
-                if _fs_lock(ideas_lock, stale_seconds=60):
-                    try:
-                        text = Path(cfg["ideas_file"]).read_text(encoding="utf-8")
-                        header_match = re.split(r"^## idea-", text, flags=re.MULTILINE)[0]
-                        Path(cfg["ideas_file"]).write_text(header_match.strip() + "\n\n",
-                                                           encoding="utf-8")
-                        logger.info("Consumed %d ideas from %s (wiped file)",
-                                    len(ingested_ids), cfg["ideas_file"])
-                        # Record the legitimate wipe so the corruption
-                        # guard knows this shrink was designed, not rogue.
-                        from orze.engine.roles import mark_ingest
-                        mark_ingest(Path(cfg["ideas_file"]))
-                        # Update pre-snapshots on active roles so the corruption
-                        # guard doesn't false-positive on the legitimate wipe.
-                        # Also credit research-writer roles with the ingested
-                        # count so they don't trip the "ideas.md was not
-                        # modified" soft-failure check — they appended, we
-                        # just consumed it before they exited.
-                        new_size = Path(cfg["ideas_file"]).stat().st_size
-                        ingested_n = len(ingested_ids)
-                        for rp in self.active_roles.values():
-                            rp.ideas_pre_size = new_size
-                            rp.ideas_pre_count = 0
-                            if getattr(rp, "writes_ideas_file", True) and ingested_n:
-                                rp.ideas_consumed_during_run += ingested_n
-                    except Exception as e:
-                        logger.warning("Failed to consume ideas.md: %s", e)
-                    finally:
-                        _fs_unlock(ideas_lock)
-                else:
-                    logger.debug("Skipping ideas.md consumption (lock held)")
+                            self.lake, ingested_ids, substrate_cfg, self.results_dir)
+                except Exception as exc:
+                    logger.warning("Reflection round skipped: %s", exc)
+        else:
+            # Legacy no-lake mode does not acknowledge or mutate its source.
+            raw_ideas = parse_ideas(cfg["ideas_file"])
 
         # 5a-pre. Inline Tier 1 filter (orze-pro): skip garbage before it's claimed
         try:
