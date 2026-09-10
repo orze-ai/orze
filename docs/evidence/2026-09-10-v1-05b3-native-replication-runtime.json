@@ -1,0 +1,191 @@
+{
+  "schema": 1,
+  "date": "2026-09-10",
+  "milestone": "V1-05B3",
+  "repository": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "base_head": "475f12686606bc0bf49384e9bbf7ec7ffcad3db2",
+  "role": "Author of native replication occurrence-slot reservation and training launch integration; bounded author verification.",
+  "conclusion": "The scoped final implementation passed 13 author cases and a 112-case bounded neighborhood with the three owned production files unchanged. Full suites and remote verification are recorded by root separately.",
+  "owned_production_sha256": {
+    "src/orze/engine/execution_identity.py": "bbf8fd950dc178b650def2dce485ac4fe9d7f1cb5f93d44e79e9aae21a9b26ab",
+    "src/orze/engine/launcher.py": "ff1dd6442e6af2ba71f4ab3dbb4af4863b00cd52530d5893a6dd677fa845c5be",
+    "src/orze/engine/training_attempts.py": "62b0c0d1805c8cd21755ec6deb6a47073aa6b4f6f49646eb6f69a9ea4b5e5647"
+  },
+  "owned_production_pre_post_sha256_equal": true,
+  "shared_source_final_inventory": {
+    "src/orze/engine/replication.py": "2cf98322c13444318e8eba5a5b2021d977d9eb799b7750acb4966828f314c6f0",
+    "src/orze/core/replication_requests.py": "f2f0a1191023d562099ba8bd6917adc2bca84c0d4cc1f7b4f08f81b061c34fc9"
+  },
+  "shared_source_note": "These are final read-only inventory hashes, not a claim that this author implemented or independently froze the shared request store/service.",
+  "api_and_scope": [
+    "Default reserve_execution_identity(results_dir,cfg,identity,idea_id,attempt_id) and flat-owner behavior remain compatible. Descriptive replication_role/index metadata grants no exception.",
+    "An actual native launch reads replication_authorization from the trusted request-to-task mapping, current claim, confirmed source, unchanged configuration and specification. The occurrence reservation rechecks that authorization; native begin rechecks inside its owned transaction before and after creating the AttemptRef.",
+    "Native binding['replication'] survives started. The existing execution semantic SHA and B1 specification fingerprint remain unchanged; task/attempt/artifact occurrence IDs are independent.",
+    "Authorized slots are root/<identity>.replicas/<request_id>.json. They do not read, overwrite or delete the original flat owner.",
+    "The dedicated slot namespace uses the existing nonce-bound source-lock protocol with no age takeover. Canonical bounded slot metadata is written/fsynced/closed/read back; uncertain storage retains the owner/HOLD and does not authorize Popen.",
+    "Cleanup uses a captured absolute path, exact record digest and complete file stat identity. A later cfg root mutation cannot redirect cleanup; a same-content replacement inode cannot be deleted as the captured owner.",
+    "Existing slots can be replaced only for the same authorized task/request with a current confirmed native failed/not_started/requeued terminal and a new legitimate claim. Completed, open, unknown and interrupted attempts do not qualify.",
+    "No-Lake launch checks the existing database's request mapping read-only, including a newly created but not yet claimed replica. Removing the artifact contract cannot silently downgrade that task to legacy execution.",
+    "Only the precise recursive keys force_launch, replication_request_id and replication_authorization are reserved. There is no prefix-wide ban on ordinary domain configuration."
+  ],
+  "test_sha256": {
+    "tests/test_replication_execution_slots.py": "25e77ae9c153e1ff992d25dcf909f53c5aaf8aa0c2e5a807157c2582f3d6e155",
+    "tests/test_replication_slot_recovery_boundaries.py": "fe4f40d86bf48cfed9bf99236fce592da8d1d395a538e92435ac1b1685e0f6ae",
+    "tests/test_replication_requests.py": "1283bebf7385296fd9a969de11af1bc17614a729912bc6443cb368349e7c6198",
+    "tests/test_replication_native_dispatch.py": "c9ebb129db38c0fc4d7cb6b414df8e915f76fc59d6523f0632bff2b2dcd0820d",
+    "tests/test_execution_identity.py": "64effe15b1d6da41069b1a72452973f986435bf5387a1c29eb3e54b5c5f26bee",
+    "tests/test_native_training_caller_boundaries.py": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+    "tests/test_training_intent_cleanup.py": "3f3963a89837bb0477f51b4a432645820b92a8039de26bb48fad71cfd3c996ef",
+    "tests/test_native_artifact_publication.py": "911a949f083c43a94cc45bb9e781f377289e53b2269a1ee1d58de8cdba892643",
+    "tests/test_artifact_snapshot_contract.py": "00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359",
+    "tests/test_native_observation_publication.py": "3e5849b66429e588a2ef57dc4cf5bac2d23d29407b02b8ca2376a1a23b10bdbf",
+    "tests/test_observation_snapshot_contract.py": "835c42fddbf39fc5714d177c4f8acbfa540af74666900a331fa878d48add552c",
+    "tests/test_stale_training_completion.py": "5a345f063b12d18d09fae15b0eb8575ccca2c807bb16b5019b850a251f0c2e87"
+  },
+  "new_mechanism_acceptance": {
+    "file": "tests/test_replication_execution_slots.py",
+    "sha256": "25e77ae9c153e1ff992d25dcf909f53c5aaf8aa0c2e5a807157c2582f3d6e155",
+    "cases": 11,
+    "classification": "New B3 mechanisms, first executed after the real request API and actual launch integration existed. Missing APIs were not tested or classified as behavioral red.",
+    "first_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_replication_execution_slots.py --tb=short",
+      "exit_code": 0,
+      "passed": 11,
+      "duration_seconds": 6.65
+    },
+    "coverage": [
+      "Two actual explicit requests from one confirmed native B1 source preserve exact source config and seed, execution identity and specification while creating distinct slots/attempts/artifacts; same output bytes retain the same content SHA.",
+      "Unrequested model-authored replication labels still hit ordinary completed-execution dedup.",
+      "Script, configuration and claim scope drift prevent Popen and do not reserve a slot.",
+      "A real request deletion between occurrence reservation and native begin is rejected by the second authoritative check; no native attempt or Popen is accepted.",
+      "A partial positive write followed by EIO leaves exact partial slot bytes and retained ownership; a later attempt does not blindly replace it.",
+      "Known no-Popen cleanup targets the captured slot even when cfg._orze_dir changes and another location contains a foreign slot.",
+      "RUNNING cannot be replayed. A confirmed FAILED task may use its existing authorized request after an actual bounded reset/requeue and new claim.",
+      "An unclaimed replica with no execution history still requires its native Lake; the read-only no-Lake refusal does not change database bytes or create a catalog."
+    ],
+    "fixtures_unchanged_after_freeze": true
+  },
+  "confirmed_draft_regressions": [
+    {
+      "label": "One new-integration optional-authorization compatibility defect",
+      "case": "tests/test_native_training_caller_boundaries.py::test_real_launch_publishes_intent_to_peer_before_popen_and_binds_started",
+      "case_file_sha256": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+      "classification": "Draft-introduced compatibility bug, not a pre-B3 released bug and not twenty independent source-fixture defects.",
+      "description": "The shared comparator deliberately accepts dictionaries only. Calling it with two absent authorizations returned false and rejected an ordinary native launch.",
+      "snapshot": "docs/evidence/snapshots/v1-05b3-before-optional-authorization.py",
+      "snapshot_sha256": "696115f1b5eebf2926e3d2aec7dc8332d1b4776eceeb05635cbbe9bab587862e",
+      "snapshot_provenance": "Complete begin function reconstructed after the narrow repair from the earlier tool-observed complete function by restoring only the previous None-comparison branch. It is not a pre-repair capture of the entire source file.",
+      "fixed_function_replay": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'from pathlib import Path; import pytest; import orze.engine.training_attempts as module; p=Path(\"docs/evidence/snapshots/v1-05b3-before-optional-authorization.py\"); exec(compile(p.read_bytes(),str(p),\"exec\"),module.__dict__); raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_native_training_caller_boundaries.py::test_real_launch_publishes_intent_to_peer_before_popen_and_binds_started\",\"--tb=short\"]))'",
+        "exit_code": 1,
+        "failed": 1,
+        "passed": 0,
+        "duration_seconds": 0.57,
+        "footer": "1 failed in 0.57s"
+      },
+      "current_control": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_training_caller_boundaries.py::test_real_launch_publishes_intent_to_peer_before_popen_and_binds_started --tb=short",
+        "exit_code": 0,
+        "passed": 1,
+        "duration_seconds": 0.5,
+        "footer": "1 passed in 0.50s"
+      },
+      "repair": "Handle absent/absent authorization explicitly; keep the shared canonical comparator and every existing test assertion unchanged.",
+      "counting": "Earlier shared-author 20 setup failures and reviewer 2 source-setup failures were symptoms of this one defect, not additional B3 behavior failures."
+    },
+    {
+      "label": "Two occurrence-slot draft regressions",
+      "file": "tests/test_replication_slot_recovery_boundaries.py",
+      "sha256": "fe4f40d86bf48cfed9bf99236fce592da8d1d395a538e92435ac1b1685e0f6ae",
+      "cases": 2,
+      "classification": "Confirmed implementation-draft defects, not missing-API failures or old-release regressions.",
+      "snapshot": "docs/evidence/snapshots/v1-05b3-before-slot-recovery.py",
+      "snapshot_sha256": "a61516270649baa22a2751e6321011e21fe1a58739d8a94ffdfa6f6dfe9dc10b",
+      "snapshot_provenance": "Entire execution_identity.py captured byte-for-byte before both repairs; its source and snapshot hashes were checked equal.",
+      "first_red": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_replication_slot_recovery_boundaries.py --tb=short",
+        "exit_code": 1,
+        "failed": 2,
+        "passed": 0,
+        "duration_seconds": 1.88,
+        "footer": "2 failed in 1.88s"
+      },
+      "fixed_snapshot_replay": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'from pathlib import Path; import pytest; import orze.engine.execution_identity as module; import orze.engine.launcher as launcher; p=Path(\"docs/evidence/snapshots/v1-05b3-before-slot-recovery.py\"); exec(compile(p.read_bytes(),str(p),\"exec\"),module.__dict__); launcher.reserve_replica_execution_identity=module.reserve_replica_execution_identity; launcher.release_replica_execution_identity=module.release_replica_execution_identity; raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_replication_slot_recovery_boundaries.py\",\"--tb=short\"]))'",
+        "exit_code": 1,
+        "failed": 2,
+        "passed": 0,
+        "duration_seconds": 1.66,
+        "footer": "2 failed in 1.66s",
+        "scope": "The complete old module is executed in its imported namespace and launcher's two imported slot callables are rebound to those old exports. Other dependencies and frozen tests remain current; no disk production file is replaced."
+      },
+      "defects": [
+        {
+          "name": "confirmed operational requeue refused",
+          "mechanism": "Real check_active closed a VRAM-contention attempt with outcome requeued, rotated files/claim, and restored QUEUED. Its subsequent valid claim was incorrectly refused by the draft slot terminal allowlist.",
+          "repair": "Permit only confirmed native requeued in addition to failed/not_started; keep interrupted unsupported."
+        },
+        {
+          "name": "same-bytes inode replacement removed",
+          "mechanism": "During the actual GPU availability seam, another inode containing identical slot bytes replaced the captured file. Known no-Popen cleanup deleted it because the draft captured only the content digest.",
+          "repair": "Capture complete file stat identity during verified publication and compare it before/after read at cleanup, alongside exact digest and ownership."
+        }
+      ],
+      "frozen_tests_modified_during_fix": false
+    }
+  ],
+  "candidate_runs": [
+    {
+      "label": "Pre-repair author neighborhood, not the final source",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_replication_execution_slots.py tests/test_replication_requests.py tests/test_replication_native_dispatch.py tests/test_execution_identity.py tests/test_native_training_caller_boundaries.py tests/test_training_intent_cleanup.py tests/test_native_artifact_publication.py tests/test_artifact_snapshot_contract.py tests/test_native_observation_publication.py tests/test_observation_snapshot_contract.py tests/test_stale_training_completion.py --tb=short",
+      "exit_code": 0,
+      "passed": 110,
+      "duration_seconds": 42.74,
+      "identity_source_sha256": "a61516270649baa22a2751e6321011e21fe1a58739d8a94ffdfa6f6dfe9dc10b"
+    },
+    {
+      "label": "All 13 after behavioral repairs, before the docstring-only requeued wording correction",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_replication_execution_slots.py tests/test_replication_slot_recovery_boundaries.py --tb=short",
+      "exit_code": 0,
+      "passed": 13,
+      "duration_seconds": 8.26,
+      "exact_final_hash_claim": false
+    }
+  ],
+  "final_green": {
+    "author_cases": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_replication_execution_slots.py tests/test_replication_slot_recovery_boundaries.py --tb=short",
+      "exit_code": 0,
+      "passed": 13,
+      "failed": 0,
+      "duration_seconds": 8.23,
+      "footer": "13 passed in 8.23s"
+    },
+    "bounded_neighborhood": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_replication_execution_slots.py tests/test_replication_slot_recovery_boundaries.py tests/test_replication_requests.py tests/test_replication_native_dispatch.py tests/test_execution_identity.py tests/test_native_training_caller_boundaries.py tests/test_training_intent_cleanup.py tests/test_native_artifact_publication.py tests/test_artifact_snapshot_contract.py tests/test_native_observation_publication.py tests/test_observation_snapshot_contract.py tests/test_stale_training_completion.py --tb=short",
+      "files": 12,
+      "exit_code": 0,
+      "passed": 112,
+      "failed": 0,
+      "duration_seconds": 79.12,
+      "footer": "112 passed in 79.12s (0:01:19)"
+    },
+    "counting": "The focused 13 are included in 112; earlier 11/110/13 candidate runs overlap and are not added. This evidence tracks three unique B3 draft defects (one optional-authorization compatibility issue and two slot-recovery issues). Other authors' CLI/store/reserved-field requirements have separate evidence."
+  },
+  "final_read_only_review": {
+    "command": "git diff --check -- src/orze/engine/execution_identity.py src/orze/engine/launcher.py src/orze/engine/training_attempts.py",
+    "exit_code": 0,
+    "documentation": "docs/explicit-replication.md",
+    "documentation_sha256": "ef32e5576a2f6e0cff26f714c7d2a11822025dd69997a1a5a542f253702e417f",
+    "note": "Read the complete documentation and final owned diff. The approved boundaries match: exact request replay does not reset work; failed/not_started/requeued compatibility is retained; interrupted checkpoint resume for replica tasks remains explicit unsupported."
+  },
+  "limitations": [
+    "The request is a control-plane authorization for one fixed task, not a scientific conclusion, independent-measurement guarantee, or permission inferred from model prose.",
+    "B3 uses the existing native training process/GPU path. Tests substitute those boundaries and do not demonstrate a real CPU executor, GPU training or measured research benefit.",
+    "Filesystem slot writes and SQLite attempt commits are not atomic. An unbound/uncertain reservation can remain HOLD and may require explicit operator resolution; there is no age takeover or automatic recovery claim.",
+    "Slot files and request metadata are not security capabilities against arbitrary hostile same-user filesystem/SQL writes.",
+    "Explicit replica interrupted-checkpoint resume is not yet supported; unrelated legacy execution behavior is preserved.",
+    "Entrypoint/input drift checks do not freeze every import, interpreter package, inherited environment variable or external dataset.",
+    "No repeated-measurement aggregation, observation ranking, paid provider, holdout access, full repository suite, commit, push or remote verification is claimed in this author report."
+  ]
+}

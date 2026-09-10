@@ -1,0 +1,120 @@
+{
+  "schema": 1,
+  "date": "2026-09-10",
+  "milestone": "V1-05B3 explicit replication request and native authorization service",
+  "role": "core_review authored the two new request/service modules and four new test files; independent review is owned by pro_review",
+  "baseline_core": "475f12686606bc0bf49384e9bbf7ec7ffcad3db2",
+  "baseline_pro": "6c6070ea50eb79763f04aca86627e47f548b39b7",
+  "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "scope": [
+    "Immutable generic request table with bounded read-only historical lookup and caller-owned insert-only transactions.",
+    "First coordinator adapter accepts only current confirmed native B1 training terminals, matching bounded canonical source configuration, launch execution identity, artifact declaration and artifact metadata.",
+    "One explicit request ID maps atomically to one new queued task with unchanged configuration/seed and an audited UNKNOWN-to-QUEUED admission. No source-file append or new task directory is created by admission.",
+    "Launch authorization reads the durable mapping and rechecks source, scope, target configuration and current claim. It does not start/commit a transaction or hash large inputs.",
+    "Ordinary proposal admission and Pro proposal dedup remain unchanged. The existing private insertion primitive is reused only inside the explicit coordinator transaction; no public skip-dedup option was added."
+  ],
+  "source_sha256": {
+    "src/orze/core/replication_requests.py": "f2f0a1191023d562099ba8bd6917adc2bca84c0d4cc1f7b4f08f81b061c34fc9",
+    "src/orze/engine/replication.py": "2cf98322c13444318e8eba5a5b2021d977d9eb799b7750acb4966828f314c6f0"
+  },
+  "unchanged_reused_source": {
+    "path": "src/orze/core/proposal_admission.py",
+    "sha256": "4b68532044abbfa4c18b51e0f2d9ea991dedfaf9ceb8a6263ceb9a501c75fa1a",
+    "edited_by_this_agent": false
+  },
+  "test_sha256": {
+    "tests/test_replication_requests.py": "1283bebf7385296fd9a969de11af1bc17614a729912bc6443cb368349e7c6198",
+    "tests/test_replication_request_store.py": "2018db1fee100034a8d3844c8c43ffd0b6ab6e0dc5c1a382af9234d5cdc99eed",
+    "tests/test_replication_scope_binding.py": "ce9024b3142bce0b1fb62464ed804f4620cf529ce6390dc33e4d5803f4e2eead",
+    "tests/test_replication_optional_category.py": "a45f24bebcfca05a26b70b7a8de91f9da7d6f417e5af7f93b104133f4293eea9"
+  },
+  "new_mechanism_acceptance": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_replication_requests.py --tb=short",
+      "passed": 20,
+      "seconds": 8.86,
+      "classification": "New API mechanisms, not historical missing-API regressions. Frozen after the explicit pre-freeze concurrency fixture correction below.",
+      "coverage": "Exact raw config/seed, fresh queued task and no attempt/directory invention; same-request replay without resetting a claimed task; distinct requests without salt; two real connections; source config/file/script/scope drift; failed and legacy sources; caller transaction ownership; three real INSERT IGNORE failures with whole rollback; read-only missing table; actual claim-bound authorization; unchanged ordinary config dedup; unsafe request IDs."
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_replication_request_store.py --tb=short",
+      "passed": 6,
+      "seconds": 0.35,
+      "classification": "First-run green generic store mechanisms, not old behavior reds.",
+      "coverage": "Generic non-training source phase; detached historical reads after source generation changes; no read DDL; caller rollback including schema; no implicit write transaction; duplicate request does not rewrite; NOCASE schema rejection; ignored INSERT does not count as a receipt."
+    }
+  ],
+  "pre_freeze_fixture_correction": {
+    "original_full_test_snapshot": "docs/evidence/snapshots/v1-05b3-replication-request-test-original.py",
+    "original_sha256": "d2792d0a5a584393950415c738245a49361fd90136e465009b4e9916192ae278",
+    "snapshot_provenance": "Reconstructed after the pre-freeze fixture correction, not a direct pre-edit byte capture. The complete frozen test file was read and its only changed concurrency block was replaced with the exact initial block retained in the original apply_patch/tool transcript. No other test-file edits preceded reconstruction. The SHA above was computed from this reconstructed full file after saving it; it was not recorded before the correction. The AST comparison below compares that reconstructed original with the frozen file.",
+    "original_assert_count": 32,
+    "frozen_assert_count": 33,
+    "all_original_assert_asts_preserved": true,
+    "added_assert": "assert any(result is not None for result in results)",
+    "reason": "The existing source effect guard may immediately reject a simultaneous same-host acquisition as attempt_effect_lock_unavailable. The original unfrozen fixture incorrectly retried only errors containing the word busy. The frozen fixture allows that exact lock rejection, requires at least one actual winner, then retries the identical request key after both contenders return. Every original unique-task/request/count assertion is preserved; this does not grant lock takeover or generate a new request key.",
+    "candidate_runs": [
+      {"errors": 20, "seconds": 5.95, "classification": "All stopped during the real B1 source fixture because the concurrently authored native-begin draft compared None/None through a dict-only identity helper. Runtime fixed ordinary no-request compatibility; no request target assertion ran. Not old release evidence."},
+      {"failed": 1, "passed": 19, "seconds": 8.67, "classification": "Unfrozen fixture lock-error spelling/contract mistake, not a product regression."}
+    ]
+  },
+  "draft_regressions": [
+    {
+      "name": "Explicit null catalog declaration cannot silently authorize the supplied foreign Lake",
+      "test": "tests/test_replication_scope_binding.py",
+      "snapshot": "docs/evidence/snapshots/v1-05b3-before-replication-catalog-binding.py",
+      "snapshot_sha256": "7395858ca5fcc3a4fa4cfaec32b48325f04d81b728cee7b78b15c3e10bcf4e9d",
+      "snapshot_scope": "Complete draft engine/replication.py",
+      "original_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_replication_scope_binding.py --tb=short",
+      "original_result": {"failed": 1, "passed": 1, "seconds": 1.11},
+      "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -c 'from pathlib import Path; import pytest; import orze.engine.replication as module; snapshot=Path(\"docs/evidence/snapshots/v1-05b3-before-replication-catalog-binding.py\"); exec(compile(snapshot.read_bytes(), str(snapshot), \"exec\"), module.__dict__); raise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_replication_scope_binding.py\", \"--tb=short\"]))'",
+      "replay_result": {"failed": 1, "passed": 1, "seconds": 0.98},
+      "fix": "Use key presence and the shared report_lifecycle_db_path resolver; explicit null/empty retain the existing declared-default-path meaning. The empty-string case already rejected on the draft and is a control, not a second red.",
+      "classification": "One new implementation draft behavior regression, not an old B2 release bug."
+    },
+    {
+      "name": "Optional task category does not become a mandatory taxonomy",
+      "test": "tests/test_replication_optional_category.py",
+      "snapshot": "docs/evidence/snapshots/v1-05b3-before-optional-task-category.py",
+      "snapshot_sha256": "dd4f442db891761d0db180bcac0be94bd095e18d6b5e5e97c29c7525fd97bcf5",
+      "snapshot_scope": "Complete draft _task function",
+      "original_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_replication_optional_category.py --tb=short",
+      "original_result": {"failed": 1, "seconds": 1.07},
+      "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -c 'from pathlib import Path; import pytest; import orze.engine.replication as module; snapshot=Path(\"docs/evidence/snapshots/v1-05b3-before-optional-task-category.py\"); exec(compile(snapshot.read_bytes(), str(snapshot), \"exec\"), module.__dict__); raise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_replication_optional_category.py\", \"--tb=short\"]))'",
+      "replay_result": {"failed": 1, "seconds": 0.56},
+      "fix": "Accept and preserve category=None for a lawful confirmed source and new task. No broader metadata or scientific classification changes.",
+      "classification": "One new implementation draft compatibility regression, not an old B2 release bug."
+    }
+  ],
+  "intermediate_candidate": {
+    "engine_sha256": "9b46e85affe2500f6377d57a55c6e259571d60e1efb5ce771fa10aa3941e9ddd",
+    "passed": 28,
+    "seconds": 9.49,
+    "status": "Historical candidate after catalog fix, before nullable-category fix; not final source proof."
+  },
+  "final_author_validation": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_replication_requests.py tests/test_replication_request_store.py tests/test_replication_scope_binding.py tests/test_replication_optional_category.py --tb=short",
+      "passed": 29,
+      "seconds": 10.15,
+      "exit_code": 0
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_replication_requests.py tests/test_replication_request_store.py tests/test_replication_scope_binding.py tests/test_replication_optional_category.py tests/test_proposal_admission.py tests/test_idea_ingress_contract.py tests/test_artifact_snapshot_contract.py --tb=short",
+      "passed": 64,
+      "seconds": 26.31,
+      "exit_code": 0,
+      "own_source_pre_post_hashes_equal": true,
+      "counting": "29 distinct new request/store/boundary cases plus 20 unchanged ordinary admission, 7 unchanged public ingress and 8 unchanged B1 artifact snapshot cases. Earlier runs overlap and are not added."
+    }
+  ],
+  "limits": [
+    "Source configurations must fit bounded JSON-shaped YAML metadata; unavailable configuration is a refusal to authorize replication, not a scientific invalidity claim.",
+    "The request ID is not a capability. Internal launch consumers must use the durable mapping and current source/task/claim checks; a configuration field or historical request read is insufficient.",
+    "The control service does not start work. Native slot isolation and before-Popen/final attempt binding are authored and evidenced separately by runtime_evidence; CLI and Pro controls have separate owners.",
+    "The same fixed new task retains existing bounded retries after a confirmed failure/NOT_STARTED; successful or unresolved attempts are not new launch permission.",
+    "A same-config/seed execution is an explicit repetition, not statistical independence. Artifact occurrences, observations and later analysis retain their own identities and qualification rules.",
+    "No large artifact hashing occurs in request or launch authorization. Request-side train/base/config identity hashing is outside the short source effect guard and SQL writer; this is not a hostile same-UID filesystem sandbox.",
+    "No holdout data, paid provider, real GPU/CPU workload, measured throughput claim, deployment, commit or push was performed by this agent. Full repository verification and final release closure belong to root."
+  ]
+}
