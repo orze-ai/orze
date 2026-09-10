@@ -820,11 +820,26 @@ class RoleProcess:
     # fields confer no process-signalling authority; nonce identities still do.
     trigger_delivery_db: Optional[str] = field(default=None, repr=False)
     trigger_launch: Optional[dict] = field(default=None, repr=False)
+    # Native proposal-result identity is captured at dispatch, never recovered
+    # from mutable role_state or shared ideas.md after the child exits.
+    native_result_ref: Optional[dict] = field(default=None, repr=False)
+    native_result_details: Optional[dict] = field(default=None, repr=False)
 
     def __post_init__(self):
         if self.trigger_launch is not None:
             from copy import deepcopy
             self.trigger_launch = deepcopy(self.trigger_launch)
+        if self.native_result_ref is not None:
+            from orze.core.research_result import (
+                NativeResultError, validate_native_result_ref,
+            )
+            self.native_result_ref = validate_native_result_ref(
+                self.native_result_ref, process_nonce=self.process_nonce)
+            if (self.native_result_ref["role_name"] != self.role_name
+                    or (self.trigger_launch is not None
+                        and self.native_result_ref["attempt_id"]
+                        != self.trigger_launch.get("attempt_id"))):
+                raise NativeResultError("native_result_process_binding_invalid")
         if self._last_progress_at <= 0:
             self._last_progress_at = float(self.start_time)
         if self._last_observed_at <= 0:

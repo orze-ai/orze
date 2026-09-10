@@ -48,6 +48,7 @@ from orze.engine.process import (
 from orze.core.fs import _fs_unlock
 from orze.core.ideas import count_idea_headings
 from orze.engine.role_delivery import settle_role_delivery
+from orze.engine.role_result import native_role_outcome
 
 logger = logging.getLogger("orze")
 
@@ -224,6 +225,9 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                 rp, f"unattested role {role_name}",
                 reaper=_terminate_and_reap)
             rp.close_log()
+            if getattr(rp, "native_result_ref", None) is not None:
+                native_role_outcome(rp, None, cleanup_verified=reaped,
+                                    forced_reason="process_identity_unconfirmed")
             if settle_role_delivery(rp, "error", None, reaped):
                 _fs_unlock(rp.lock_dir)
             del active_roles[role_name]
@@ -241,6 +245,9 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                 reaped = terminate_role_process(
                     rp, f"role {role_name}", reaper=_terminate_and_reap)
                 rp.close_log()
+                if getattr(rp, "native_result_ref", None) is not None:
+                    native_role_outcome(rp, None, cleanup_verified=reaped,
+                                        forced_reason="process_timeout")
                 if settle_role_delivery(rp, "timeout", None, reaped):
                     _fs_unlock(rp.lock_dir)
                 del active_roles[role_name]
@@ -256,6 +263,9 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                 reaped = terminate_role_process(
                     rp, f"role {role_name}", reaper=_terminate_and_reap)
                 rp.close_log()
+                if getattr(rp, "native_result_ref", None) is not None:
+                    native_role_outcome(rp, None, cleanup_verified=reaped,
+                                        forced_reason="process_timeout")
                 if settle_role_delivery(rp, "timeout", None, reaped):
                     _fs_unlock(rp.lock_dir)
                 del active_roles[role_name]
@@ -269,7 +279,24 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
             rp, f"completed role {role_name}", reaper=_terminate_and_reap)
         rp.close_log()
         outcome: Outcome
-        if not reaped:
+        if getattr(rp, "native_result_ref", None) is not None:
+            bucket = native_role_outcome(
+                rp, ret, cleanup_verified=reaped,
+                rate_limited=(ret != 0 and (ret == 42 or _is_rate_limit_exit(rp.log_path))),
+            )
+            outcome = {
+                "ok": OUTCOME_OK, "error": OUTCOME_ERROR,
+                "soft_failure": OUTCOME_SOFT_FAILURE,
+                "rate_limited": OUTCOME_RATE_LIMITED,
+            }[bucket]
+            if outcome == OUTCOME_OK:
+                _consecutive_soft_failures.pop(role_name, None)
+            elif outcome == OUTCOME_SOFT_FAILURE:
+                _consecutive_soft_failures[role_name] = _consecutive_soft_failures.get(role_name, 0) + 1
+            logger.info("%s cycle %d native result: %s/%s (%s)",
+                        role_name, rp.cycle_num, rp.native_result_details["status"],
+                        rp.native_result_details["reason"], outcome.name)
+        elif not reaped:
             logger.error(
                 "%s exited %d but managed descendants could not be proven "
                 "stopped", role_name, ret)
@@ -324,6 +351,9 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
             _fs_unlock(rp.lock_dir)
         elif getattr(rp, "trigger_launch", None) is not None:
             outcome = OUTCOME_ERROR
+            if getattr(rp, "native_result_ref", None) is not None:
+                from orze.core.research_result import make_result
+                rp.native_result_details = make_result("error", "trigger_terminal_unconfirmed")
         del active_roles[role_name]
         finished.append((role_name, outcome))
 
