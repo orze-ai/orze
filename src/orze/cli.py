@@ -554,6 +554,12 @@ Examples:
     if args.command == "retry-eval":
         return _run_retry_eval_subcommand(args)
 
+    # Report inspection must not probe credentials, install extensions, or
+    # enter runtime setup. An explicit subcommand keeps its existing priority.
+    if args.report_only and args.command is None:
+        from orze.reporting.report_cli import run_report_only
+        return run_report_only(args)
+
     if not _find_pro_key():
         maybe_star()
 
@@ -1404,21 +1410,6 @@ Examples:
             print("Orze re-enabled.")
         else:
             print("Orze was not disabled.")
-        return
-
-    # --report-only
-    if args.report_only:
-        from orze.core.ideas import parse_ideas
-        from orze.reporting.leaderboard import update_report
-        ideas = parse_ideas(cfg["ideas_file"])
-        results_dir = Path(cfg["results_dir"])
-        lake = None
-        lake_path = Path(cfg["idea_lake_db"])
-        if lake_path.exists():
-            from orze.idea_lake import IdeaLake
-            lake = IdeaLake(str(lake_path))
-        update_report(results_dir, ideas, cfg, lake=lake)
-        print("Report updated.")
         return
 
     # --research-only is an alias for --role-only research

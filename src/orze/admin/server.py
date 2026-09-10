@@ -459,7 +459,8 @@ async def get_queue(
     all_statuses = queue_data.get("counts", {})
 
     priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    status_order = {"pending": 0, "running": 1, "completed": 2, "failed": 3, "error": 4}
+    status_order = {"pending": 0, "running": 1, "completed": 2, "failed": 3,
+                    "error": 4, "skipped": 5, "archived": 6, "unknown": 7}
 
     # Enrich with HF info and filter
     results = []
@@ -472,8 +473,11 @@ async def get_queue(
                     and s not in item.get("title", "").lower()):
                 continue
         # Add HF info on-demand (cheap lookup, no I/O)
-        item["huggingface"] = _get_hf_info(
-            item.get("config", {}).get("backbone", {}).get("name", ""))
+        item = dict(item)
+        config = item.get("config")
+        backbone = config.get("backbone") if isinstance(config, dict) else None
+        name = backbone.get("name") if isinstance(backbone, dict) else None
+        item["huggingface"] = _get_hf_info(name if isinstance(name, str) else "")
         results.append(item)
 
     results.sort(key=lambda r: (
@@ -495,6 +499,10 @@ async def get_queue(
         "per_page": per_page,
         "total_pages": total_pages,
         "counts": all_statuses,
+        "lifecycle_authority": queue_data.get(
+            "lifecycle_authority", "unverified_local_artifact"),
+        "lifecycle_authority_reason": queue_data.get(
+            "lifecycle_authority_reason", "legacy_admin_cache_unverified"),
     }
 
 

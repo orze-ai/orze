@@ -28,6 +28,9 @@ def report_authority(results_dir: Path, cfg: dict, lake=None):
     requested = override is not None or "idea_lake_db" in cfg
     if not requested:
         return False, set(), "unverified_local_artifact"
+    from orze.reporting.catalog import CatalogSnapshot
+    if isinstance(lake, CatalogSnapshot) and not lake.available:
+        return True, set(), lake.reason
     try:
         db_path = report_lifecycle_db_path(results_dir, cfg, override)
         completed, reason = authoritative_completed_idea_ids(db_path)

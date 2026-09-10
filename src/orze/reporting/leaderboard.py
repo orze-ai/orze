@@ -113,13 +113,20 @@ def _cache_row_hash(row) -> str:
 
 
 def _atomic_write_if_changed(path: Path, content: str) -> bool:
-    """Atomically write only when the bytes would change."""
+    """Publish changed bytes and verify them; a silent failed write is failure."""
+    expected = content.encode("utf-8")
     try:
-        if path.read_text(encoding="utf-8") == content:
+        if path.read_bytes() == expected:
             return False
-    except (OSError, UnicodeDecodeError):
+    except OSError:
         pass
     atomic_write(path, content)
+    try:
+        observed = path.read_bytes()
+    except OSError as exc:
+        raise OSError(f"Observer publication not confirmed: {path}") from exc
+    if observed != expected:
+        raise OSError(f"Observer publication content mismatch: {path}")
     return True
 
 
@@ -137,8 +144,8 @@ def _write_report_if_changed(path: Path, template: str, updated_at: str) -> bool
     )
     if normalized == template:
         return False
-    atomic_write(path, template.replace(_REPORT_UPDATED_TOKEN, updated_at, 1))
-    return True
+    return _atomic_write_if_changed(
+        path, template.replace(_REPORT_UPDATED_TOKEN, updated_at, 1))
 
 
 def _matches_view_filter(results_dir: Path, idea_id: str, view_filter: dict) -> bool:
@@ -340,6 +347,15 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     from orze.reporting.native_report import (
         native_report_evidence, report_authority,
     )
+    if lake is None and "idea_lake_db" in cfg:
+        from orze.reporting.catalog import load_catalog_snapshot
+        from orze.reporting.evidence import report_lifecycle_db_path
+        try:
+            lake = load_catalog_snapshot(report_lifecycle_db_path(results_dir, cfg))
+        except (OSError, TypeError, ValueError):
+            # report_authority retains the explicit request and fails closed.
+            # Invalid configuration must not select legacy artifact authority.
+            pass
     native_authority, authoritative_ids, authority_reason = report_authority(
         results_dir, cfg, lake)
     lifecycle_authority = (
@@ -405,7 +421,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             if aid not in all_ideas:
                 # Stub for report walker — title will be fetched from DB below
                 all_ideas[aid] = {"title": "...", "priority": "archived"}
-    else:
+    elif not native_authority:
         archived_index = results_dir / "_archived_index.json"
         if archived_index.exists():
             try:
@@ -694,7 +710,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
 
     pipeline_total = sum(counts.values())
     pipeline_scope = (
-        "lake_catalog" if lake else "provided_and_completed_candidates"
+        "unavailable_lake_catalog" if lake and getattr(lake, "available", True) is False
+        else "lake_catalog" if lake else "provided_and_completed_candidates"
         if native_authority else "provided_offline_candidates"
     )
 
@@ -1159,40 +1176,10 @@ def write_admin_cache(results_dir: Path, ideas: dict, cfg: dict):
         status = "online" if age <= 120 else ("degraded" if age <= 300 else "offline")
         heartbeats.append({**hb, "status": status, "heartbeat_age_sec": round(age, 1)})
 
-    # Queue
-    sweep_max = cfg.get("sweep", {}).get("max_combos", 20)
-    expanded = expand_sweeps(dict(ideas), max_combos=sweep_max)
-    all_statuses: dict = {}
-    queue_items = []
-    for idea_id, idea in expanded.items():
-        idea_dir = results_dir / idea_id
-        idea_status = "pending"
-        if idea_dir.exists():
-            mpath = idea_dir / "metrics.json"
-            if mpath.exists():
-                try:
-                    m = json.loads(mpath.read_text(encoding="utf-8"))
-                    idea_status = m.get("status", "COMPLETED").lower()
-                except (json.JSONDecodeError, OSError):
-                    idea_status = "running"
-            else:
-                idea_status = "running"
-        all_statuses[idea_status] = all_statuses.get(idea_status, 0) + 1
-        raw = idea.get("raw", "")
-        _cat_m = re.search(r"\*\*Category\*\*:\s*(.+)", raw)
-        _par_m = re.search(r"\*\*Parent\*\*:\s*(.+)", raw)
-        _hyp_m = re.search(r"\*\*Hypothesis\*\*:\s*(.+)", raw)
-        queue_items.append({
-            "idea_id": idea_id,
-            "title": idea.get("title", ""),
-            "priority": idea.get("priority", "medium"),
-            "status": idea_status,
-            "config": idea.get("config", {}),
-            "sweep_parent": idea.get("_sweep_parent"),
-            "category": _cat_m.group(1).strip() if _cat_m else "architecture",
-            "parent": _par_m.group(1).strip() if _par_m else "none",
-            "hypothesis": _hyp_m.group(1).strip() if _hyp_m else "",
-        })
+    # Queue: lifecycle is independent of successful training metrics. The
+    # catalog reader closes its read-only snapshot before publication.
+    from orze.reporting.admin_queue import build_admin_queue
+    queue = build_admin_queue(results_dir, ideas, cfg)
 
     # Alerts
     alerts = []
@@ -1213,9 +1200,9 @@ def write_admin_cache(results_dir: Path, ideas: dict, cfg: dict):
                     continue
                 try:
                     m = json.loads(mpath.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
+                except (json.JSONDecodeError, UnicodeDecodeError, OSError):
                     continue
-                if m.get("status") not in ("FAILED", "ERROR"):
+                if not isinstance(m, dict) or m.get("status") not in ("FAILED", "ERROR"):
                     continue
                 alerts.append({
                     "type": "failure", "idea_id": entry.name,
@@ -1243,13 +1230,12 @@ def write_admin_cache(results_dir: Path, ideas: dict, cfg: dict):
 
     cache = {
         "nodes": {"heartbeats": heartbeats, "local_gpus": []},
-        "queue": {"items": queue_items, "counts": all_statuses,
-                  "total_all": sum(all_statuses.values())},
+        "queue": queue,
         "alerts": {"alerts": alerts, "count": len(alerts)},
         "epoch": now,
     }
     admin_cache_path = orze_path(cfg, "state", "admin_cache.json")
-    atomic_write(admin_cache_path, json.dumps(cache, default=str))
+    _atomic_write_if_changed(admin_cache_path, json.dumps(cache, default=str))
 
 
 def format_report_text(data: dict) -> str:
