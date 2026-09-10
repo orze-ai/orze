@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "item": "V1-01L2",
+  "status": "mechanism_verified",
+  "claim": "Native skill composition supplies actual included source manifests; per-source periodic and qualified-evidence gates acknowledge only successful process registration. Explicit empty/all-gated research stops before budget and Popen; managed child rules are content-bound and verified before context or model access.",
+  "baseline": {
+    "core": "ac5500d9c1d75e936d96162e5897608164e30faf",
+    "pro": "fc3ecea00dfbc1416586c7a23a613bb1048580c0"
+  },
+  "fix_commits": {
+    "core": "8da25dc8d57fb88981654fae4a2c062bba85afa5",
+    "pro": "b7cd5bed5172c1c0c862cc4d0cc95ba4e5b3498d"
+  },
+  "frozen_tests": [
+    {
+      "repository": "orze",
+      "file": "tests/test_skill_composition_manifest.py",
+      "cases": 29,
+      "sha256": "e2ccea3519274d3a6b9f610dd08d7bded851fa0389f4af0f4b3cf9795e48dbcc",
+      "classification": "new mechanism"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_skill_activation_dispatch.py",
+      "cases": 9,
+      "sha256": "1af44145b1c63c9006eeb71e84cca37dbeb3a7c4c600667584f48176c169e5ce",
+      "classification": "6 old behavior reds, 3 old controls"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_skill_native_gating.py",
+      "cases": 13,
+      "sha256": "a0169746bd2467871d713be85658d26ec7619cc6d49b8568eba084b27fbaa4ce",
+      "classification": "10 old behavior reds, 3 old controls"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_skill_activation.py",
+      "cases": 20,
+      "sha256": "c24f4fac5e9507648d72b4cfe56e4ac5d7ac40f52189ba710e9d74589a26e8d3",
+      "classification": "new mechanism"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_skill_payload_builder.py",
+      "cases": 8,
+      "sha256": "4a08d61f1f452db7115513f6b97a418874631c056e5dbb0f494f7efe435e346f",
+      "classification": "new mechanism"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_research_required_rules.py",
+      "cases": 19,
+      "sha256": "9946159a578b97bfd46857dbc87272ef5253b20437519b88f46cf3e41befc8a3",
+      "classification": "new mechanism"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_skill_payload_dispatch_boundaries.py",
+      "cases": 1,
+      "sha256": "d22e88cff68d819e90814916d3f43806ea0b2cd03f0f42513c113bd8ce7e6c5a",
+      "classification": "uncommitted draft behavior red: payload directory ENOSPC"
+    },
+    {
+      "repository": "orze-pro",
+      "file": "tests/test_skill_payload_directory_collision.py",
+      "cases": 1,
+      "sha256": "4107a16492b354b26199608b8c8d5a6653cc08bae0acaa92ebe462d5272fe892",
+      "classification": "uncommitted draft behavior red: directory occupied by regular file"
+    }
+  ],
+  "classification_totals": {
+    "target_cases": 100,
+    "old_behavior_reds": 16,
+    "old_positive_controls": 6,
+    "draft_behavior_reds": 2,
+    "new_mechanism_acceptance": 76
+  },
+  "old_recheck": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, subprocess, sys, types\nfrom unittest.mock import patch\nimport pytest\ngate = patch(\"orze_pro._gate.require_license\")\ngate.start()\nfor name, repository, revision, path in (\n    (\"orze.skills.loader\", \"../orze\", \"ac5500d9c1d75e936d96162e5897608164e30faf\", \"src/orze/skills/loader.py\"),\n    (\"orze_pro.engine.role_runner\", \".\", \"fc3ecea00dfbc1416586c7a23a613bb1048580c0\", \"src/orze_pro/engine/role_runner.py\"),\n):\n    current = importlib.import_module(name)\n    source = subprocess.check_output([\"git\", \"-C\", repository, \"show\", revision + \":\" + path], text=True)\n    module = types.ModuleType(name)\n    module.__file__ = current.__file__\n    module.__package__ = current.__package__\n    sys.modules[name] = module\n    parent, leaf = name.rsplit(\".\", 1)\n    setattr(importlib.import_module(parent), leaf, module)\n    exec(compile(source, \"frozen:\" + revision + \":\" + path, \"exec\"), module.__dict__)\nraise SystemExit(pytest.main([\"-q\", \"tests/test_skill_activation_dispatch.py\", \"tests/test_skill_native_gating.py\", \"--tb=short\"]))\nPY",
+    "cwd": "orze-pro",
+    "exit_code": 1,
+    "failed": 16,
+    "passed": 6,
+    "elapsed_seconds": 3.11,
+    "independent_baseline_seconds": 3.32,
+    "notes": "Fixed original Core loader and Pro runner git blobs executed in memory, with existing APIs and real composition/IdeaLake/source files. Independent original-baseline run preceded production edits and reported same 16/6. Four failed-launch controls become old-red only at successful-launch repetition: old code already preserved failure opportunities; do not claim those initial failure paths were fixed. No missing API/import failures counted. Tool-rendered long red output was truncated; summary and replay command retained."
+  },
+  "draft_rechecks": [
+    {
+      "snapshot": "docs/evidence/snapshots/v1-01l2-before-payload-directory-error.py",
+      "sha256": "c72518569d51b79a5fce8952eaf24883e03e59befecc531465cd6fae9c8bdf05",
+      "scope": "Exact builder function, executed in current runner globals",
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nfrom unittest.mock import patch\nimport pytest\nwith patch(\"orze_pro._gate.require_license\"):\n    from orze_pro.engine import role_runner\n    path = Path(\"docs/evidence/snapshots/v1-01l2-before-payload-directory-error.py\")\n    exec(compile(path.read_text(), str(path), \"exec\"), role_runner.__dict__)\n    raise SystemExit(pytest.main([\"-q\", \"tests/test_skill_payload_dispatch_boundaries.py\", \"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "failed": 1,
+      "passed": 0,
+      "elapsed_seconds": 0.32
+    },
+    {
+      "snapshot": "docs/evidence/snapshots/v1-01l2-before-directory-collision.py",
+      "sha256": "7f867e782a85b1bf787e28b3b3979011c6c1f8656d5764439f52f615487c446b",
+      "scope": "Exact builder function, executed in current runner globals",
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nfrom unittest.mock import patch\nimport pytest\nwith patch(\"orze_pro._gate.require_license\"):\n    from orze_pro.engine import role_runner\n    path = Path(\"docs/evidence/snapshots/v1-01l2-before-directory-collision.py\")\n    exec(compile(path.read_text(), str(path), \"exec\"), role_runner.__dict__)\n    raise SystemExit(pytest.main([\"-q\", \"tests/test_skill_payload_directory_collision.py\", \"--tb=short\"]))\nPY",
+      "original_draft_exit_code": 1,
+      "original_draft_failed": 1,
+      "original_draft_seconds": 0.41,
+      "exit_code": 1,
+      "failed": 1,
+      "passed": 0,
+      "elapsed_seconds": 0.34
+    }
+  ],
+  "verification": {
+    "core_full": {
+      "command": "python3 -m pytest -q tests --tb=short -rs",
+      "cwd": "orze",
+      "exit_code": 0,
+      "passed": 1876,
+      "skipped": 7,
+      "elapsed_seconds": 162.69
+    },
+    "pro_full": {
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "cwd": "orze-pro",
+      "exit_code": 0,
+      "passed": 681,
+      "skipped": 0,
+      "elapsed_seconds": 67.42
+    },
+    "pro_target_and_l1_regression": {
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests/test_skill_activation_dispatch.py\", \"tests/test_skill_native_gating.py\", \"tests/test_skill_activation.py\", \"tests/test_skill_payload_builder.py\", \"tests/test_research_required_rules.py\", \"tests/test_skill_payload_dispatch_boundaries.py\", \"tests/test_skill_payload_directory_collision.py\", \"tests/test_thinker_qualified_trigger.py\", \"tests/test_thinker_evidence.py\", \"tests/test_thinker_evidence_state_boundaries.py\", \"tests/test_thinker_activation_boundaries.py\", \"--tb=short\"]))'",
+      "cwd": "orze-pro",
+      "exit_code": 0,
+      "passed": 131,
+      "elapsed_seconds": 28.24,
+      "notes": "71 L2 cases plus all 60 frozen L1 cases"
+    },
+    "paired_core": {
+      "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "cwd": "orze",
+      "exit_code": 0,
+      "passed": 60,
+      "skipped": 0,
+      "elapsed_seconds": 0.81,
+      "notes": "29 new composition cases plus 31 existing paired cases; reruns all 7 standalone optional-Pro paths"
+    },
+    "independent_reviews": [
+      "Core legacy wrapper byte-equivalence with fixed original loader for unknown gate, builtin metadata, empty separators and whole-string substitution.",
+      "Independent Core/Pro actual-manifest, successful registration ACK and child verify-before-context review; directory failure found as a separately frozen draft regression.",
+      "Pro helper 20 new mechanisms passed; 68 frozen L1/legacy controls passed after shared-view refactor."
+    ],
+    "earlier_nonfinal_full": {
+      "pro_passed": 680,
+      "elapsed_seconds": 73.85,
+      "source_role_runner_sha256": "1ee9057b9080007e34f87c0f529cb9af3e821d42b4eb1180ed69580b56c3d0ac",
+      "notes": "Before second directory-collision draft fix; NOT final-source proof. Final 681 suite rerun afterward."
+    },
+    "fixture_corrections": [
+      "Before freeze, builder test fixture omitted _env_ORZE_RESULTS_DIR: 4 KeyError failures corrected in fixture only, not product reds.",
+      "Before freeze, helper test treated IdeaLake.db_path string as Path; fixture corrected, not a product red.",
+      "Cross-repository identical test module names caused one collection collision; independent reviewer reran with --import-mode=importlib, not a product red.",
+      "Ordinary-source capacity behavior was tightened with an unfrozen draft test; counted only among new mechanisms, not an additional frozen old/draft red."
+    ]
+  },
+  "final_source_sha256": {
+    "orze/src/orze/skills/loader.py": "e572a540325eb438cfeb8b050079edd06315410ad5cf16f5bd5f8203b03e5afe",
+    "orze/src/orze/skills/composition.py": "7d1105cb40bc5a352fc63cfb808d0cee62bdc79420f134e3c8fa4be4545155d7",
+    "orze-pro/src/orze_pro/engine/role_runner.py": "17066c522667b24021e3e18dfa1b662441f1e1d104aabe4f7d0eb22ecdebfffd",
+    "orze-pro/src/orze_pro/engine/thinker_evidence.py": "18ae48700d66c29b8af6e7624bb7806536c5fb0979a3f6d2a85fb96f72e52336",
+    "orze-pro/src/orze_pro/engine/skill_activation.py": "9324337bacbe9c1d0ec36f6593c4689ce891735fbdc626fc33a94813b4c002ed",
+    "orze-pro/src/orze_pro/agents/research.py": "01205d5115c4dd47b212163777da1995e106430699a0bea3514c0d034d3ef6fd",
+    "orze-pro/src/orze_pro/agents/rules_integrity.py": "7d69d8d6bfb1d30269ad902252848da7028b439f3ebc8d683a3e5b14e85f1062"
+  },
+  "boundaries": [
+    "No GPU, training, paid provider, production license mutation, deployment or package publication. Test-only license patch is process scoped.",
+    "Legacy string composer and no-skills-key research retain compatibility. manual, plateau_or_new and both zero gates are explicitly legacy-always, not scientific/manual gate implementations.",
+    "State is per-host/source and bounded (128 sources; total 8192 retained/pending IDs; 4096 per plateau), not durable delivery/attempt/observation identity or statistical convergence. Source scanning can remain O(N).",
+    "Only observed valid trigger policy changes reset generation; unknown/unreadable intermediate versions retain prior consumption history. Content hashes alone do not reset clocks.",
+    "Popen created but registration/ACK uncertain remains V1-02. Child rules failure can happen after parent budget/start acknowledgment; no refund or exactly-once claim.",
+    "Output/watchdog receipts still derive all declared sources, not actual included manifest. Existing project-root resolution and on_file/registry override semantics unchanged.",
+    "Content-addressed payload retention/cleanup, whole prompt/knowledge/input IO budgets remain open. Hash is neither signature nor instruction authority.",
+    "No research-efficiency or scientific-improvement claim inferred from test counts. Entire V1 remains in progress."
+  ],
+  "workspace": {
+    "original_dirty_status_entries": 281,
+    "original_workspace_untouched_by_this_work": true,
+    "holdout_read_by_main": false,
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245"
+  }
+}
