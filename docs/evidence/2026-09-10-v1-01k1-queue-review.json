@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "item": "V1-01K1",
+  "status": "mechanism_verified",
+  "claim": "Explicit, scoped, version-bound optional queue review through the canonical runner; committed queue actions and receipts never overwrite experiment metrics. Configuration-only similarity no longer grants a deletion right.",
+  "baseline": {
+    "core": "2b12d63835c0191ea883aa4e12ee79d77ad28330",
+    "pro": "ff81d3278dbcab4f005610ac8de604df91da3538"
+  },
+  "frozen_tests": [
+    {
+      "repository": "core",
+      "file": "tests/test_queue_review.py",
+      "sha256": "308fffe4a27d2fd02bfa9601941e6a17bed2a458f996811cbd81fc8b389c373b",
+      "cases": 42,
+      "classification": "new mechanism acceptance"
+    },
+    {
+      "repository": "core",
+      "file": "tests/test_queue_review_storage_boundaries.py",
+      "sha256": "9b7bfd18a709ed352d651c72a437e9cad0fda35225b0bcb9241a8dc41c83c7c0",
+      "cases": 3,
+      "classification": "three uncommitted core draft behavior reds"
+    },
+    {
+      "repository": "core",
+      "file": "tests/test_fsm_runner_registry.py",
+      "sha256": "e5ad729160bba89340a4dade4fd3e627e3c44ce170f94de0c830f25356f94374",
+      "cases": 1,
+      "classification": "one old public runner behavior red; fixture v2 explicitly handles optional stub ImportError"
+    },
+    {
+      "repository": "core",
+      "file": "tests/test_fsm_runner_config_contract.py",
+      "sha256": "8fc7246bc351c30a0e6425cd7eb1bd92fa2ffe204ef17b1497f67fa664ebe95b",
+      "cases": 15,
+      "classification": "new configuration/selection mechanism acceptance"
+    },
+    {
+      "repository": "core",
+      "file": "tests/test_fsm_runner_objective_boundary.py",
+      "sha256": "e72139c65cab2947a39b1f253cfdd1093f29c8219a72139ed4f3daced1174b76",
+      "cases": 1,
+      "classification": "one uncommitted runner draft behavior red"
+    },
+    {
+      "repository": "pro",
+      "file": "tests/test_verifier_legacy_write_boundaries.py",
+      "sha256": "f3b73837179af69abe71720504579455d139b4cffde191faab42ecf4cf1da4fe",
+      "cases": 14,
+      "classification": "twelve old public behavior reds plus two existing positive controls"
+    },
+    {
+      "repository": "pro",
+      "file": "tests/test_verifier_review_contract.py",
+      "sha256": "f73e16c318ccac4a2af6e45594931739a4463ddeaa462770dcd1ffbfb2b93a3f",
+      "cases": 25,
+      "classification": "new mechanism acceptance"
+    },
+    {
+      "repository": "pro",
+      "file": "tests/test_verifier_provider_jsonl_boundaries.py",
+      "sha256": "8508778c03d7c229f3d6e68933c923565bfab347bc7fe1eeb6c255c198ca9c88",
+      "cases": 4,
+      "classification": "four uncommitted verifier draft behavior reds"
+    },
+    {
+      "repository": "pro",
+      "file": "tests/test_verifier_runner_closure.py",
+      "sha256": "bb3093e67192e65ba321ace44164a4099062ae1f01c41850ff7e0448bbe71c87",
+      "cases": 3,
+      "classification": "new actual runner-to-transaction mechanism acceptance"
+    },
+    {
+      "repository": "pro",
+      "file": "tests/test_fsm_config_handoff.py",
+      "sha256": "617864990a8c06ac9188e8cc204c16878d7a03f225e80cee0c9442fcb75be124",
+      "cases": 4,
+      "classification": "new actual role-to-script config delivery acceptance"
+    }
+  ],
+  "old_behavior_rechecks": [
+    {
+      "repository": "pro",
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'import importlib, subprocess; from unittest.mock import patch; import pytest\nwith patch(\"orze_pro._gate.require_license\"):\n    module = importlib.import_module(\"orze_pro.fsm.plugins.idea_verifier\")\n    source = subprocess.check_output([\"git\",\"show\",\"ff81d3278dbcab4f005610ac8de604df91da3538:src/orze_pro/fsm/plugins/idea_verifier.py\"], text=True)\n    exec(compile(source,\"old_idea_verifier.py\",\"exec\"), module.__dict__)\n    raise SystemExit(pytest.main([\"-q\", \"tests/test_verifier_legacy_write_boundaries.py\", \"--tb=short\", \"--show-capture=no\"]))'",
+      "failed": 12,
+      "passed": 2,
+      "elapsed_seconds": 2.64,
+      "exit_code": 1,
+      "scope": "Fixed old verifier module loaded in memory against current core; existing two-argument APIs and real legacy-path SQLite/artifacts. Failures assert actual mutations/vetoes, not missing APIs."
+    },
+    {
+      "repository": "core",
+      "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'import subprocess\nfrom unittest.mock import patch\nimport pytest\nfrom orze.fsm import runner\nimport orze_pro\nwith patch(\"orze_pro._gate.require_license\"):\n    source = subprocess.check_output([\"git\",\"show\",\"2b12d63835c0191ea883aa4e12ee79d77ad28330:src/orze/fsm/runner.py\"], text=True)\n    exec(compile(source,\"old_fsm_runner.py\",\"exec\"), runner.__dict__)\n    orze_pro.__file__ = \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/j2-old-source.8uIlB7/src/orze_pro/__init__.py\"\n    raise SystemExit(pytest.main([\"-q\",\"tests/test_fsm_runner_registry.py\",\"--tb=short\",\"--show-capture=no\"]))'",
+      "failed": 1,
+      "passed": 0,
+      "elapsed_seconds": 0.14,
+      "exit_code": 1,
+      "scope": "Fixed old runner loaded in memory. Retained detached Pro worktree 7ef7fbd provides actual old plugin and YAML files; both git blobs match ff81d327 baseline exactly (896a165c4541e77007cfa31eea8843c2d1bf2f1a and ff238be60d3ff7a2c48854f485dfe102e14a9c8b). Current engine API remains. Actual plugin/procedure/step raises missing canonical registry KeyError. Original frozen test replay 0.25s; optional-dependency fixture v2 replay 0.14s."
+    }
+  ],
+  "draft_rechecks": [
+    {
+      "repository": "core",
+      "snapshot": "docs/evidence/snapshots/v1-01k1-before-storage-postconditions.py",
+      "sha256": "4f0f561ddc78081dc239383ef316dccf063cd966d31049d4b3c10e032a67bd91",
+      "command": "PYTHONPATH=/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src:/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'import importlib\nfrom pathlib import Path\nfrom unittest.mock import patch\nimport pytest\nwith patch(\"orze_pro._gate.require_license\"):\n    module = importlib.import_module(\"orze.core.queue_review\")\n    source = Path(\"docs/evidence/snapshots/v1-01k1-before-storage-postconditions.py\")\n    exec(compile(source.read_text(), str(source), \"exec\"), module.__dict__)\n    raise SystemExit(pytest.main([\"-q\",\"tests/test_queue_review_storage_boundaries.py\",\"--tb=short\",\"--show-capture=no\"]))'",
+      "failed": 3,
+      "passed": 0,
+      "elapsed_seconds": 1.11,
+      "exit_code": 1,
+      "scope": "Uncommitted new transaction helper permits silently ignored priority, transition or review receipt writes; not old-release API absence."
+    },
+    {
+      "repository": "core",
+      "snapshot": "docs/evidence/snapshots/v1-01k1-before-objective-boundary.py",
+      "sha256": "8d88d6610ecb3ec67d1d29a279fa3a374a07499f9735b7aa229627765511b10c",
+      "command": "PYTHONPATH=/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src:/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'import importlib\nfrom pathlib import Path\nfrom unittest.mock import patch\nimport pytest\nwith patch(\"orze_pro._gate.require_license\"):\n    module = importlib.import_module(\"orze.fsm.runner\")\n    source = Path(\"docs/evidence/snapshots/v1-01k1-before-objective-boundary.py\")\n    exec(compile(source.read_text(), str(source), \"exec\"), module.__dict__)\n    raise SystemExit(pytest.main([\"-q\",\"tests/test_fsm_runner_objective_boundary.py\",\"--tb=short\",\"--show-capture=no\"]))'",
+      "failed": 1,
+      "passed": 0,
+      "elapsed_seconds": 0.09,
+      "exit_code": 1,
+      "scope": "Uncommitted new runner forwards runtime default test_accuracy despite no declared research objective."
+    },
+    {
+      "repository": "pro",
+      "snapshot": "docs/evidence/snapshots/v1-01k1-before-provider-jsonl.py",
+      "sha256": "4f37a4c75dda895e8a386391c952d27f554b7411c40aae81566cc444ef274efc",
+      "command": "PYTHONPATH=/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src:/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'import importlib\nfrom pathlib import Path\nfrom unittest.mock import patch\nimport pytest\nwith patch(\"orze_pro._gate.require_license\"):\n    module = importlib.import_module(\"orze_pro.fsm.plugins.idea_verifier\")\n    source = Path(\"docs/evidence/snapshots/v1-01k1-before-provider-jsonl.py\")\n    exec(compile(source.read_text(), str(source), \"exec\"), module.__dict__)\n    raise SystemExit(pytest.main([\"-q\",\"tests/test_verifier_provider_jsonl_boundaries.py\",\"--tb=short\",\"--show-capture=no\"]))'",
+      "failed": 4,
+      "passed": 0,
+      "elapsed_seconds": 1.16,
+      "exit_code": 1,
+      "scope": "Uncommitted verifier rejects single-record JSONL, drops Kimi endpoint and calls Gemini/Anthropic despite unsupported explicit endpoint."
+    }
+  ],
+  "test_fixture_correction": {
+    "original_file": "core/docs/evidence/snapshots/v1-01k1-registry-test-original.py",
+    "original_sha256": "697e08a8adc61ee2d0bc5c41bf9bebb5c6ac01f0ba96fcc1257b6810f039f8b0",
+    "change": "Only pytest.importorskip('orze_pro', exc_type=ImportError) added for intentional installed placeholder package. No behavior assertion removed or weakened. Paired-source test must still execute; v2 old runner reproduces the same real registry KeyError.",
+    "first_core_full": {
+      "failed": 1,
+      "passed": 1847,
+      "skipped": 6,
+      "elapsed_seconds": 185.26,
+      "classification": "Optional-dependency fixture failure, not product red or final green."
+    },
+    "other_notes": "The initial queue-helper fixture UPDATE lacked a commit and was corrected before freezing; not counted as a product red. Two patch/JavaScript orchestration failures applied no edits and are not test evidence."
+  },
+  "targeted_green": [
+    {
+      "repository": "core",
+      "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests/test_queue_review.py\", \"tests/test_queue_review_storage_boundaries.py\", \"tests/test_fsm_runner_registry.py\", \"tests/test_fsm_runner_config_contract.py\", \"tests/test_fsm_runner_objective_boundary.py\", \"--tb=short\"]))'",
+      "passed": 62,
+      "elapsed_seconds": 9.86,
+      "exit_code": 0,
+      "scope": "Paired sources, all real registry test assertions executed; final production code. Test fixture v2 also re-executed in final 31-case cross run."
+    },
+    {
+      "repository": "pro",
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests/test_verifier_provider_jsonl_boundaries.py\", \"tests/test_verifier_review_contract.py\", \"tests/test_verifier_legacy_write_boundaries.py\", \"tests/test_verifier_runner_closure.py\", \"tests/test_fsm_config_handoff.py\", \"--tb=short\"]))'",
+      "passed": 50,
+      "elapsed_seconds": 4.99,
+      "exit_code": 0,
+      "scope": "Five final test files, including runner-to-real-transaction closure. A subsequent spelling-only literal cleanup was independently rerun in 46 cases and included in the final Pro full suite."
+    }
+  ],
+  "independent_review": [
+    {
+      "agent": "core_review",
+      "passed": 62,
+      "scope": "55 related tests plus 7 existing FSM/trigger tests; real FSM fault/partial-decision diagnostics. Receipt committed before failed FSM.save can leave telemetry count behind, documented rather than claimed atomic."
+    },
+    {
+      "agent": "pro_review",
+      "passed": 46,
+      "elapsed_seconds": 6.8,
+      "scope": "14 legacy+25 mechanism+4 draft boundaries+3 actual runner closures; final source no remaining blockers in slice."
+    },
+    {
+      "agent": "runtime_evidence",
+      "passed": 45,
+      "elapsed_seconds": 6.38,
+      "scope": "42 original transaction mechanisms+3 independently frozen silent-write failures; final rowcount/readback checks before commit, no remaining blockers in limited slice."
+    }
+  ],
+  "limits": [
+    "No paid model calls, real provider requests, GPU training, deployments, package release, production license activation, or research-efficiency percentage measured.",
+    "Caller-owned batch is not a cryptographic capability. No independent batch/attempt/observation identities or safety against malicious database owners/arbitrary rewrites.",
+    "Recipe identity alone does not settle experimental identity or scientific value. APPROVE is not scientific validation.",
+    "Receipt version binds task revision, not automatic policy-version migration; changing review policy does not invalidate all existing receipts.",
+    "Database receipt is authoritative. FSM counter persistence is separate and can undercount after commit/save crash; no cross-file atomicity or exactly-once provider-call claim.",
+    "Review metadata and prompt/response are bounded, not total catalog/qualification I/O; discovery may scan beyond reviewed prefixes.",
+    "Generic resource quota, durable trigger/launch handoff, stale attempt fencing, other SOPs, CPU closure, heterogeneous examples and unopened holdout remain outstanding.",
+    "Only selected bundled automation is activated; explicit project procedure overrides remain the operator's policy. Old standalone fsm.engine custom imports need migration.",
+    "Original workspace remains untouched with 281 status entries; frozen holdout content not read, hash unchanged."
+  ],
+  "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+  "fix_commits": {
+    "core": "5fe292bd89ed0bf7828e9736344c1bd61423d35d",
+    "pro": "9e7df1993eba117132e3c4bb6363856a97e26e6c"
+  },
+  "regression": [
+    {
+      "repository": "core",
+      "command": "python3 -m pytest -q tests --tb=short -rs",
+      "passed": 1847,
+      "skipped": 7,
+      "elapsed_seconds": 154.47,
+      "exit_code": 0,
+      "scope": "Final standalone core test suite; installed optional Pro placeholder causes seven skips, all relevant paired cases exercised separately."
+    },
+    {
+      "repository": "pro",
+      "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "passed": 550,
+      "elapsed_seconds": 71.36,
+      "exit_code": 0,
+      "scope": "Final full Pro suite with paired core source and process-local license gate patch only."
+    },
+    {
+      "repository": "core_with_pro",
+      "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests/test_evolution.py\", \"tests/test_sweeper.py\", \"tests/test_skill_registry.py\", \"tests/test_fsm_runner_registry.py\", \"--tb=short\", \"-rs\"]))'",
+      "passed": 31,
+      "elapsed_seconds": 0.7,
+      "exit_code": 0,
+      "scope": "Actual paired sources, including final registry fixture v2. No registry skip."
+    }
+  ],
+  "execution_environment": {
+    "python": "3.10.12",
+    "pytest": "9.1.1",
+    "branch": "feat/autoresearch-v1",
+    "source_frozen_during_final_suites": true
+  }
+}
