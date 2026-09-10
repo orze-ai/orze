@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-10",
+  "author": "core_review",
+  "status": "component_evidence_not_final_full_release_validation",
+  "repository": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "base_head": "4aaf9311c6d5371dc1549dbe907ea18d13bb678a",
+  "scope": "V1-03B Core read-only persistent lifecycle demand. Root owns Pro consumer evidence, final integrated suites, release classification and commit/push.",
+  "implementation": {
+    "path": "src/orze/core/research_demand.py",
+    "lines": 175,
+    "api": "load_persistent_demand(db_path: str | Path) -> DemandSnapshot",
+    "contract": [
+      "Frozen snapshot and nested DemandCounts; available and complete are distinct.",
+      "When available, counts.queued remains a confirmed lower bound even if other tasks are unknown.",
+      "queue_count and waiting_count are None unless the snapshot is available and complete; unknown is never interpreted as known zero.",
+      "waiting_count is queued plus evaluation_pending. Claimed and executing tasks are not counted as waiting.",
+      "First evaluation and explicit evaluation retry share the recorded training COMPLETE / evaluation PENDING classification; no limited retry-candidate query is used.",
+      "Read-only existing-database opener, schema validation and one BEGIN read transaction; bounded 256-row buffers contain normalized state enums, not task configurations, titles or metric payloads.",
+      "Explicit BINARY global-state and stage comparisons; the stored mirror must be TEXT before lower() normalization.",
+      "Missing historical stage rows can preserve queued/completed compatibility. Recorded NULL, insufficient running-stage information, or terminal tasks with an IN_PROGRESS stage remain unknown.",
+      "No database creation, migration, reconciliation, admission, queue mutation, result-artifact read, provider call or GPU probe."
+    ]
+  },
+  "mechanism_acceptance": {
+    "classification": "new_API_mechanism_acceptance_only",
+    "test": "tests/test_persistent_research_demand.py",
+    "cases": 22,
+    "freeze": {
+      "result": "22 tests collected in 0.12s",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest --collect-only -q -p no:cacheprovider tests/test_persistent_research_demand.py"
+    },
+    "first_implemented_run": {
+      "result": "22 passed in 2.97s",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_persistent_research_demand.py --tb=short",
+      "source_sha256": "35c688dd1e6df87b7c5733eddb0e4dee04b026543d452bfb3660383cda431a2f"
+    },
+    "coverage": [
+      "Known empty catalog and deep snapshot immutability.",
+      "Real mode=ro/query_only read, one transaction, closed connection, unchanged bytes and no configuration/title/metric SELECT.",
+      "2507 queued tasks and 257 pending evaluations, exceeding existing dispatcher/retry query limits.",
+      "Actual first-evaluation and dedicated evaluation-retry lifecycle transitions.",
+      "Future evaluation PENDING during active training is not yet waiting evaluation work.",
+      "Known queue lower bound survives unrelated mirror/global conflicts; exact counts become unknown.",
+      "Present NULL stage values differ from genuinely missing historical rows/tables.",
+      "Missing, invalid, incompatible, symlinked and hardlinked databases are not created or repaired.",
+      "Duplicate identity/join rows, malformed schema and interrupted reads discard all partial results."
+    ],
+    "note": "The file was frozen before implementation and was only collected at that stage. Missing old API behavior was not run or counted as a historical regression. The original 22 tests were not edited after freeze."
+  },
+  "draft_boundary_regressions": {
+    "classification": "uncommitted_draft_behavior_regressions_not_published_old_API_failures",
+    "test": "tests/test_research_demand_state_boundaries.py",
+    "snapshot": "docs/evidence/snapshots/v1-03b-before-demand-state-types.py",
+    "snapshot_scope": "Complete original 171-line research_demand.py module, byte-identical SHA to the initially implemented draft.",
+    "cases": {
+      "terminal_with_recorded_active_stage": 3,
+      "blob_mirror_coerced_by_sqlite_lower": 2,
+      "real_normal_terminal_compatibility_control": 1
+    },
+    "initial_result": "5 failed, 1 passed in 1.23s",
+    "fixed_snapshot_replay": {
+      "result": "5 failed, 1 passed in 2.21s",
+      "exit_code": 1,
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nsnapshot = Path('docs/evidence/snapshots/v1-03b-before-demand-state-types.py')\nmodule = importlib.import_module('orze.core.research_demand')\nexec(compile(snapshot.read_text(), str(snapshot), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_research_demand_state_boundaries.py', '--tb=short']))\nPY"
+    },
+    "fixes": [
+      "Check typeof(i.status) before lower() can coerce a stored BLOB into an accepted text mirror.",
+      "Classify FAILED/SKIPPED/ARCHIVED with a recorded IN_PROGRESS stage as unknown; retain real inactive tasks including historical skipped PENDING stages."
+    ],
+    "fixture_migrations": [],
+    "note": "All six frozen assertions passed after the two narrow fixes. This did not redefine admission, scientific validity, arbitrary stage-name semantics, or the lifecycle writer."
+  },
+  "targeted_validation": {
+    "result": "70 passed in 11.77s",
+    "exit_code": 0,
+    "counts": {
+      "new_demand_cases": 28,
+      "existing_catalog_stage_and_retry_cases": 42
+    },
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_persistent_research_demand.py tests/test_research_demand_state_boundaries.py tests/test_catalog_snapshot.py tests/test_stage_observer_write_boundary.py tests/test_eval_retry_lifecycle.py --tb=short",
+    "source_sha256": "fb64a59102e07658b894a789e3b85f13e6e629511545dbb265f3c0972460c10e"
+  },
+  "independent_review": [
+    {
+      "reviewer": "pro_review",
+      "stage": "initial_22_case_draft",
+      "result": "22 passed in 2.95s",
+      "source_sha256": "35c688dd1e6df87b7c5733eddb0e4dee04b026543d452bfb3660383cda431a2f",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_persistent_research_demand.py --tb=short",
+      "note": "Initial review was limited to those mechanisms and does not claim to have covered the later type/terminal draft boundaries."
+    },
+    {
+      "reviewer": "pro_review",
+      "stage": "final_frozen_core_source",
+      "result": "28 passed in 4.08s",
+      "exit_code": 0,
+      "source_sha256": "fb64a59102e07658b894a789e3b85f13e6e629511545dbb265f3c0972460c10e",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_persistent_research_demand.py tests/test_research_demand_state_boundaries.py --tb=short",
+      "conclusion": "No V1-03B Core blocker identified after independent review of typed mirror and terminal-active-stage corrections; no source or frozen tests edited by the reviewer."
+    }
+  ],
+  "limitations": [
+    "This is a point-in-time recorded lifecycle backlog, not proof of ready work, current process ownership, scientific evidence, artifact validity or CPU/GPU capacity.",
+    "No claim of cross-host exactly-once dispatch, shared quota enforcement, attempt adoption or task generation admission is made.",
+    "The read snapshot is not atomic with result files; this module deliberately does not read those files.",
+    "Only the component/targeted suites above are recorded here. Final Core/Pro/paired full-suite results were not yet available for this document and are owned by root in the integrated evidence ledger."
+  ],
+  "file_sha256": {
+    "src/orze/core/research_demand.py": "fb64a59102e07658b894a789e3b85f13e6e629511545dbb265f3c0972460c10e",
+    "tests/test_persistent_research_demand.py": "0f68f7e6bb0871e00f253933d6e2e8782f45b4251a7bce2468f63055bf6a8324",
+    "tests/test_research_demand_state_boundaries.py": "3f08eb7a062bf3a4843385dbdf7f6a4e1edb1cf8a845fb4c3712cfa77ad3e8b7",
+    "docs/evidence/snapshots/v1-03b-before-demand-state-types.py": "35c688dd1e6df87b7c5733eddb0e4dee04b026543d452bfb3660383cda431a2f"
+  }
+}

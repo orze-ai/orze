@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "milestone": "V1-03B",
+  "date": "2026-09-10",
+  "status": "implemented_mechanically_verified_not_v1_complete",
+  "baseline": {
+    "core": "4aaf9311c6d5371dc1549dbe907ea18d13bb678a",
+    "pro": "5a1a93ae30f77cf49f602a69f6e3d5beb48db5a9",
+    "branch": "feat/autoresearch-v1"
+  },
+  "implementation_commits": {
+    "core": "3ea04e61e37c3b0a7b4db25dcf74d923d07c3cad",
+    "pro": "19f9bf54b0951bfe5d0eb35661e2d8de7b1ae680"
+  },
+  "scope": "Read-only accepted lifecycle backlog, known lower-bound cap and complete waiting cadence, actual summary/skill/research CLI prompt consumers. Not readiness, a concurrent capacity reservation or research gain.",
+  "contract": "docs/persistent-research-demand.md",
+  "classification": {
+    "old_public_behavior_red": 13,
+    "old_controls": 3,
+    "new_core_api_mechanisms": 22,
+    "working_draft_behavior_red": 7,
+    "working_draft_controls": 2,
+    "distinct_target_cases": 47,
+    "overlapping_target_runs_not_summed": true
+  },
+  "supplemental_evidence": [
+    {
+      "repository": "orze",
+      "path": "docs/evidence/2026-09-10-v1-03b-demand-core.json",
+      "sha256": "5091d84c52890a4c93e9b7bf374e0b4c9fe7895ded1addc0f645c847ed91147e"
+    },
+    {
+      "repository": "orze-pro",
+      "path": "docs/evidence/2026-09-10-v1-03b-consumers.json",
+      "sha256": "383525744d2f8500e2bdd081a5cabe5afd95f8cec227682c47e935d1a62ed523"
+    }
+  ],
+  "frozen_tests": {
+    "core": [
+      {
+        "sha256": "0f68f7e6bb0871e00f253933d6e2e8782f45b4251a7bce2468f63055bf6a8324",
+        "path": "tests/test_persistent_research_demand.py"
+      },
+      {
+        "sha256": "3f08eb7a062bf3a4843385dbdf7f6a4e1edb1cf8a845fb4c3712cfa77ad3e8b7",
+        "path": "tests/test_research_demand_state_boundaries.py"
+      }
+    ],
+    "pro": [
+      {
+        "sha256": "ae4ef21685959d1ed1e9fd31f2567dccc44b7aec32c9c1183da150b3f70c722f",
+        "path": "tests/test_native_producer_demand.py"
+      },
+      {
+        "sha256": "be1756b84e78735f94ceb773403c7b4116bd41c42f11e90ab465c8fa213fc8e0",
+        "path": "tests/test_persistent_demand_cap.py"
+      },
+      {
+        "sha256": "8b5983ed14085dc539e448f49ac29472508d99c12046dde494c1c637270a1df8",
+        "path": "tests/test_persistent_research_demand.py"
+      },
+      {
+        "sha256": "ad7ff6c968f47eb784af727aef7585fec8272e217bebae15633761d868314b45",
+        "path": "tests/test_research_demand_consumers.py"
+      },
+      {
+        "sha256": "8f62c16d7bdfafbd703057df2554cd8fa1cf084e23b4477b61106f97e1cff0d7",
+        "path": "tests/test_research_demand_prompt.py"
+      },
+      {
+        "sha256": "fe18627608b939bd13c215538da2ed37c7e516ed1283c3f99bafbed51e813511",
+        "path": "tests/test_research_demand_scope.py"
+      }
+    ]
+  },
+  "root_replays": {
+    "published_old_runner": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom unittest.mock import patch\nimport subprocess, pytest\nwith patch('orze_pro._gate.require_license'):\n    import orze_pro.engine.role_runner as runner\n    ref='5a1a93ae30f77cf49f602a69f6e3d5beb48db5a9'\n    path='src/orze_pro/engine/role_runner.py'\n    source=subprocess.check_output(['git','show',ref+':'+path],text=True)\n    exec(compile(source,ref+':'+path,'exec'),runner.__dict__)\n    raise SystemExit(pytest.main(['-q','-p','no:cacheprovider',\n        'tests/test_persistent_research_demand.py','tests/test_persistent_demand_cap.py',\n        'tests/test_native_producer_demand.py','tests/test_research_demand_consumers.py',\n        'tests/test_research_demand_prompt.py','--tb=short']))\nPY",
+      "exit_code": 1,
+      "failed": 13,
+      "passed": 3,
+      "seconds": 17.01,
+      "terminal_output": "13 failed, 3 passed in 17.01s",
+      "note": "Complete fixed prior Pro runner evaluated in a fresh test process; the current dependency worktree is retained. No missing API failures. Full terminal output was truncated by the tool, so this record stores the verified footer rather than claiming a full transcript."
+    },
+    "declared_scope_draft": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom unittest.mock import patch\nimport pytest\nwith patch('orze_pro._gate.require_license'):\n    raise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_research_demand_scope.py','--tb=short']))\nPY",
+      "snapshot": "orze-pro/docs/evidence/snapshots/v1-03b-before-declared-demand-scope.py",
+      "snapshot_sha256": "46a4bf887c0199ed7504fcd4000cc55de4378ce968331e8b818103a66fac0cb8",
+      "failed": 2,
+      "passed": 1,
+      "seconds": 0.61,
+      "classification": "working_draft_existing_helper_behavior_not_published_bug",
+      "green_passed": 3,
+      "green_seconds": 0.58
+    }
+  },
+  "root_targeted": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom unittest.mock import patch\nimport pytest\nwith patch('orze_pro._gate.require_license'):\n    raise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_persistent_research_demand.py','tests/test_persistent_demand_cap.py','tests/test_native_producer_demand.py','tests/test_research_demand_consumers.py','tests/test_research_demand_prompt.py','tests/test_research_demand_scope.py','--tb=short']))\nPY",
+    "passed": 19,
+    "exit_code": 0,
+    "seconds": 7.73
+  },
+  "independent_review": {
+    "actor": "pro_review",
+    "core_cases": 28,
+    "core_seconds": 4.08,
+    "pro_neighbor_cases": 179,
+    "pro_neighbor_seconds": 30.46,
+    "production_written_by_reviewer": false,
+    "no_scope_blocker": true
+  },
+  "fixture_policy": "No existing business test or assertion was edited. External six-case diagnostic copied byte-for-byte and re-frozen on the named predecessor. New API absence not counted as a behavior red. Two template defects first observed in a draft were separately replayed against the complete previous Pro runner.",
+  "final_verification": {
+    "python": "3.10.12",
+    "pytest": "9.1.1",
+    "core": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "cwd": "orze",
+      "passed": 2552,
+      "skipped": 7,
+      "seconds": 322.98,
+      "chunk_id": "4b332c",
+      "wall_time_seconds": 0.000002513,
+      "exit_code": 0,
+      "original_token_count": 347,
+      "output": ".................................................. [ 95%]\n........................................................................ [ 98%]\n......................................                                   [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n2552 passed, 7 skipped in 322.98s (0:05:22)\n"
+    },
+    "pro": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "cwd": "orze-pro",
+      "exit_code": 0,
+      "passed": 763,
+      "skipped": 0,
+      "seconds": 126.11,
+      "terminal_output": "763 passed in 126.11s (0:02:06)",
+      "observed_chunk_id": "21fff1"
+    },
+    "paired": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "cwd": "orze",
+      "passed": 60,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 0.79,
+      "exit_code": 0,
+      "output": "............................................................             [100%]\n60 passed in 0.79s\n"
+    },
+    "inventory": "docs/evidence/2026-09-10-v1-03b-source-inventory.json",
+    "files": {
+      "core": 477,
+      "pro": 172
+    },
+    "before_after_verified": true,
+    "license_boundary": "Real paired source with a test-only require_license patch. No production licensing, external services, provider or GPU run."
+  },
+  "remote_ref_verification": {
+    "branch": "feat/autoresearch-v1",
+    "core": {
+      "chunk_id": "f04233",
+      "wall_time_seconds": 0.000001804,
+      "exit_code": 0,
+      "original_token_count": 55,
+      "output": "To https://github.com/orze-ai/orze.git\n   4aaf931..3ea04e6  HEAD -> feat/autoresearch-v1\n3ea04e61e37c3b0a7b4db25dcf74d923d07c3cad\trefs/heads/feat/autoresearch-v1\n5ca2680dbd0139e63cd35a4f83da438b5b47ab99\trefs/heads/main\n"
+    },
+    "pro": {
+      "chunk_id": "b48889",
+      "wall_time_seconds": 0.000002044,
+      "exit_code": 0,
+      "original_token_count": 56,
+      "output": "To https://github.com/orze-ai/orze-pro.git\n   5a1a93a..19f9bf5  HEAD -> feat/autoresearch-v1\n19f9bf54b0951bfe5d0eb35661e2d8de7b1ae680\trefs/heads/feat/autoresearch-v1\n57feb6e0af19dcf62a80b1e447f0771936d39afe\trefs/heads/main\n"
+    },
+    "main_unchanged": true
+  },
+  "limitations": [
+    "Point-in-time accepted lifecycle backlog, not executable readiness, artifact validity or permission.",
+    "Unknown/missing demand permits established normal-due/manual compatibility but never empty-queue acceleration; it does not certify being below the queue cap.",
+    "Known queued cap is checked during dispatch policy, not an atomic shared capacity reservation. Unadmitted inbox candidates are not falsely counted as admitted work.",
+    "Reads use bounded memory, not constant time. Multiple roles still read their own snapshots; no cross-role cache coherence or CPU executor/capacity support added.",
+    "Existing completed template count and other old metadata views are not all unified by this queued-demand slice.",
+    "No real provider, GPU, research-efficiency improvement, whole V1 or release completion claim."
+  ],
+  "next_required_work": "Continue reservation ownership/fault boundaries, outcome classification and optional role groups; later V1-04 through V1-07 remain."
+}
