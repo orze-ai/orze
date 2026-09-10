@@ -1,0 +1,367 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2c posthoc completion consumers",
+  "reviewer": "core_review",
+  "role_separation": "Independent review of root's launcher/native posthoc/parent completion and consumer wiring. Root discovered the routing gates in this agent's posthoc_attempts; this agent reproduced and authored that narrow fix. During independent root-consumer review this agent identified the two missing-route early returns, then authored only root-authorized shutdown/report guards. Those remediations are explicitly author work; root and pro_review separately read the final guards.",
+  "classification": {
+    "new_mechanism_cases": 4,
+    "old_public_red_cases": 0,
+    "draft_red_cases": 4,
+    "note": "Tests were written before consumer-ready notice, then first executed with all new APIs and consumer wiring present. No missing import, unsupported keyword or setup failure is counted as a behavior red."
+  },
+  "test": {
+    "path": "tests/test_posthoc_completion_consumers.py",
+    "sha256": "28201b615f538c746294526bfb2101bbf57919b1f947dae52af47ce28e540cca",
+    "cases": [
+      "Actual CPU posthoc launch and parent check_active produce the exact accepted CompletionEvent; real _launch_evals delivers it without a second evaluator despite configured eval_script.",
+      "The same real completion delivered from pending_evals keeps its exact posthoc ref and does not launch an evaluator or mutate claim, metrics, FSM or terminal rows.",
+      "Actual detached CPU writer remains live after leader zero exit; handle_shutdown invokes real lifecycle._stop_for_shutdown, waits for ECHILD_WALL closure, and publishes posthoc interruption with actual zero worker code and training lifecycle FAILED. No public result or training resume receipt is invented.",
+      "Actual OrzePhaseMixin slot-refusal branch chooses posthoc requeue rather than training requeue. Launch/STOP/requeue are explicit doubles here; this is dispatch coverage, not native stop/requeue end-to-end proof."
+    ]
+  },
+  "first_run": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_completion_consumers.py --tb=short",
+    "passed": 4,
+    "failed": 0,
+    "seconds": 3.03,
+    "exit_code": 0,
+    "pre_post_files_equal": [
+      "src/orze/engine/phases.py",
+      "src/orze/engine/shutdown_publication.py",
+      "src/orze/engine/completion_events.py",
+      "src/orze/engine/posthoc_completion.py",
+      "tests/test_posthoc_completion_consumers.py"
+    ]
+  },
+  "bounded_verification": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_completion_consumers.py tests/test_completion_event_loop_branches.py tests/test_native_shutdown_publication.py tests/test_native_training_shutdown_boundaries.py tests/test_training_launch_termination_handoff.py --tb=short",
+    "passed": 24,
+    "failed": 0,
+    "seconds": 10.96,
+    "exit_code": 0,
+    "pre_post_source_and_test_hashes_equal": {
+      "src/orze/engine/launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+      "src/orze/engine/native_posthoc.py": "28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc",
+      "src/orze/engine/posthoc_worker.py": "794f3b6ce7ad6fa36294d48ed78ebd0e7929f1ea0b8d444fa39080685dee4803",
+      "src/orze/engine/posthoc_completion.py": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+      "src/orze/engine/phases.py": "5ef2bcb618ea78215c3489630d5bc1397fd1003cef3ba2c1bd6a53ba75b01197",
+      "src/orze/engine/shutdown_publication.py": "93fb23b175363ced6ab300c6bba33e9d200c60dd41052ff358e747abe603ee1a",
+      "src/orze/engine/completion_events.py": "88d591cc08f28354d16b0a91c77b27a02745319e768425ea9d1b5ad43b0cd5e8",
+      "tests/test_posthoc_completion_consumers.py": "28201b615f538c746294526bfb2101bbf57919b1f947dae52af47ce28e540cca",
+      "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f"
+    },
+    "qualification": "Bounded candidate-source verification, not a claim of final full-repository epoch acceptance. The four first-run cases overlap this target and are not added to its count."
+  },
+  "read_review": {
+    "files": [
+      "src/orze/engine/completion_events.py diff",
+      "src/orze/engine/phases.py completion/pending and slot-race diff",
+      "src/orze/engine/shutdown_publication.py full relevant branches and diff",
+      "src/orze/engine/launcher.py native dispatch/monitor/cleanup diff",
+      "src/orze/engine/native_posthoc.py full module",
+      "src/orze/engine/posthoc_worker.py full module",
+      "src/orze/engine/posthoc_completion.py full module",
+      "src/orze/engine/artifact_publication.py exact posthoc source-directory diff",
+      "src/orze/engine/launch_failure_report.py phase/source diff",
+      "src/orze/engine/process_supervision.py additive phase diff"
+    ],
+    "findings": [
+      "Completion validation retains exact current terminal and confirmed effect checks while adding posthoc and rejecting tokenless posthoc history.",
+      "New and pending typed posthoc events bypass the training_source/launch_eval route and preserve the original immutable completion reference.",
+      "Slot-race selects its adapter from persisted AttemptRef phase before the old mutable flag fallback; posthoc routing guard precedes STOP.",
+      "Shutdown has an explicit posthoc current/proof branch before and inside publication; compute uses posthoc while the terminal explicitly binds the existing training lifecycle stage.",
+      "Native worker passes no artifact catalog DB and writes candidates in the exact attempt work directory. Parent validates closure before candidate parsing/copying and rechecks current ownership/proof in publication.",
+      "Normal adapter dict returns retain zero values and are operational results, not B2 observations. STOP/forced cleanup cannot turn a leader zero into successful publication.",
+      "Initial four-case consumer review found no blocker in its tested paths. This was not complete routing coverage: root subsequently identified the two concrete gate gaps recorded below, and the original candidate is superseded."
+    ]
+  },
+  "routing_draft_addendum": {
+    "discovery": "Root independently identified terminal/tokenless and active/foreign-phase fallback gaps in this agent's posthoc_attempts.require_catalog; root explicitly authorized two new actual CPU regressions and a narrow local fix.",
+    "test": "tests/test_posthoc_phase_routing.py",
+    "test_sha256": "d2a99b2a748d885b1d031abcce01fcd7227c383876fdeec0bb620f7bc228a83c",
+    "new_draft_regressions": 2,
+    "first_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_phase_routing.py --tb=short",
+      "failed": 2,
+      "passed": 0,
+      "seconds": 1.94,
+      "exit_code": 1,
+      "actual_failures": [
+        "A genuinely completed native posthoc handle with its ref removed re-entered the actual legacy terminal writer ('completed', 'trainer_completed', phase='posthoc'). The test observes the real writer invocation, not a claimed second successful commit.",
+        "An active native posthoc handle with a foreign evaluation ref and is_posthoc=True reached the real legacy timeout STOP; its authenticated live child pidfd became exited."
+      ]
+    },
+    "complete_snapshots": {
+      "provenance": "Existing complete byte-captured candidate snapshots created by runtime_evidence before its publication group. This agent verified both snapshots exactly matched current production hashes before the first two routing regressions; they were not reconstructed after the fix.",
+      "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-posthoc-attempts.py": "14e40df3557399b271a01dcbb55ce54dd7aba5a5b12ce33345b5a901cfa54882",
+      "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a"
+    },
+    "fixed_snapshot_replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\n\nfor name, file in (\n    ('orze.engine.posthoc_attempts', 'v1-05c2c-before-native-posthoc-publication-posthoc-attempts.py'),\n    ('orze.engine.launcher', 'v1-05c2c-before-native-posthoc-publication-launcher.py'),\n):\n    module = importlib.import_module(name)\n    snapshot = Path('docs/evidence/snapshots') / file\n    exec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider',\n    'tests/test_posthoc_phase_routing.py', '--tb=short']))\nPY",
+      "failed": 2,
+      "passed": 0,
+      "seconds": 1.79,
+      "exit_code": 1,
+      "note": "Both complete candidate modules replayed in memory with other current dependencies. Both failures remained at the same real writer/STOP assertions; not a released whole-repository replay or API/setup error."
+    },
+    "fix": {
+      "path": "src/orze/engine/posthoc_attempts.py",
+      "sha256": "7b5e70ac38d26b383205c475b89b7ffd84b581bf0968a210ce3fb6704e21bab3",
+      "scope": "Only require_catalog: reject tokenless handles for any posthoc history, and require an active posthoc handle's AttemptRef type/phase/task/handle attempt identity before legacy routing.",
+      "compatibility": "No-handle fresh launches remain allowed; closed posthoc history does not reject a correctly referenced later training/evaluation action. A correctly shaped stale posthoc generation is left to current() returning False; the route guard does not turn it into current write permission. Original own25, consumer4, runtime4/publication5 and the new two assertions were not edited."
+    },
+    "verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_phase_routing.py tests/test_posthoc_supervision_binding.py tests/test_posthoc_completion_consumers.py tests/test_native_posthoc_tree_completion.py tests/test_native_posthoc_publication.py --tb=short",
+      "passed": 40,
+      "failed": 0,
+      "seconds": 17.9,
+      "exit_code": 0,
+      "pre_post_hashes_equal": true,
+      "source_hashes": {
+        "src/orze/engine/posthoc_attempts.py": "7b5e70ac38d26b383205c475b89b7ffd84b581bf0968a210ce3fb6704e21bab3",
+        "src/orze/engine/posthoc_supervision.py": "7b6676f4b274d053633fd74dbfc33f10f1f3b8250d9a4d7718bd8eddef552cdd",
+        "src/orze/engine/launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+        "src/orze/engine/native_posthoc.py": "28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc",
+        "src/orze/engine/posthoc_completion.py": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+        "src/orze/engine/phases.py": "5ef2bcb618ea78215c3489630d5bc1397fd1003cef3ba2c1bd6a53ba75b01197",
+        "src/orze/engine/shutdown_publication.py": "93fb23b175363ced6ab300c6bba33e9d200c60dd41052ff358e747abe603ee1a",
+        "src/orze/engine/completion_events.py": "88d591cc08f28354d16b0a91c77b27a02745319e768425ea9d1b5ad43b0cd5e8"
+      },
+      "test_hashes": {
+        "tests/test_posthoc_phase_routing.py": "d2a99b2a748d885b1d031abcce01fcd7227c383876fdeec0bb620f7bc228a83c",
+        "tests/test_posthoc_supervision_binding.py": "1e8c79d53b41a815e4583209304a1df401020cdb9593fa709441a5cfa7bf1400",
+        "tests/test_posthoc_completion_consumers.py": "28201b615f538c746294526bfb2101bbf57919b1f947dae52af47ce28e540cca",
+        "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f",
+        "tests/test_native_posthoc_publication.py": "c07a9e2c363ebcbe4c322d430a40a9c6f8b64642a394e9e003766cd388de7417"
+      },
+      "preceding_subset": "The same fixed source first passed the 35-case subset without publication5 in 13.02s. This overlaps the 40-case run and is not added to counts.",
+      "epoch_limit": "Root's other candidate-source work was ongoing; this is exact bounded gate verification, not a full-source freeze or whole-Core/Pro claim."
+    }
+  },
+  "limits": [
+    "The initial independent consumer tests changed no production. Root subsequently authorized this agent's own posthoc_attempts route fix and the two root-consumer shutdown/report guards; all author interventions and independent discovery/review attribution are separated above. No existing assertions or fixtures were changed by these fixes.",
+    "Actual CPU cases use temporary synthetic outputs, accelerator stubs and authenticated fixture-owned pidfds; no real model inference, training, provider, GPU or holdout is involved.",
+    "Slot-race is explicitly a dispatch mechanism; it does not independently prove whole native requeue transaction correctness.",
+    "No assertion of arbitrary adapter sandboxing, automatic crash adoption, scientific observation validity, or exactly-once downstream delivery ACKs.",
+    "Root's full inventories, full-suite runs and final source epoch must be recorded separately."
+  ],
+  "missing_route_draft_addendum": {
+    "discovery": "core_review's independent read of root consumer integration found shutdown's lake=None/route=None early return and report's training-only catalog probe. Root authorized two actual CPU regressions before two narrow source changes; these are current C2c draft bugs, not released legacy bugs.",
+    "test": "tests/test_posthoc_missing_route_consumers.py",
+    "test_sha256": "693b8289260ec739466c58e8a912fe300b315216ba44bdb5623c9d9147eabbf6",
+    "draft_red_cases": 2,
+    "first_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_missing_route_consumers.py --tb=short",
+      "failed": 2,
+      "passed": 0,
+      "seconds": 1.85,
+      "actual_assertions": [
+        "Actual handle_shutdown returned None instead of False after removing declaration/claim route and in-memory ref; real cfg still identified a catalog with RUNNING posthoc. The authenticated descendant remained live. This tests the fallback contract, not a subsequently executed legacy STOP.",
+        "Actual report_launch_failure returned legacy None instead of raising AttemptEffectBusy after the corresponding losses and a genuinely failed native posthoc terminal. This does not claim a second write or new failure counter occurred."
+      ],
+      "shell_note": "The first shell cell appended sha256sum after pytest, so its final shell exit was 0 despite the explicit pytest 2-failed footer. The separate exact snapshot replay below captured process exit 1."
+    },
+    "complete_snapshots": {
+      "provenance": "Both complete current modules were copied with apply_patch from fully read source before the new test ran and before remediation. sha256sum confirmed source/snapshot byte equality; not reconstructed post-fix.",
+      "sha256": {
+        "docs/evidence/snapshots/v1-05c2c-before-posthoc-missing-route-shutdown.py": "93fb23b175363ced6ab300c6bba33e9d200c60dd41052ff358e747abe603ee1a",
+        "docs/evidence/snapshots/v1-05c2c-before-posthoc-missing-route-launch-report.py": "34264f11a232dd8bb008c81559bdb948501e22624b282cb31a5d381051f5d84f"
+      }
+    },
+    "fixed_snapshot_replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nfor name, file in (\n    ('orze.engine.shutdown_publication', 'v1-05c2c-before-posthoc-missing-route-shutdown.py'),\n    ('orze.engine.launch_failure_report', 'v1-05c2c-before-posthoc-missing-route-launch-report.py'),\n):\n    module = importlib.import_module(name)\n    snapshot = Path('docs/evidence/snapshots') / file\n    exec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_posthoc_missing_route_consumers.py', '--tb=short']))\nPY",
+      "failed": 2,
+      "passed": 0,
+      "seconds": 2.8,
+      "exit_code": 1,
+      "note": "Both full draft modules replayed in memory with other current dependencies. Failures stayed on None fallback and DID NOT RAISE; no fixture/API errors. This is not a whole released-repository replay."
+    },
+    "fix": {
+      "author": "core_review under root's explicit two-file authorization",
+      "changes": [
+        "shutdown_publication: only in lake=None AND route=None branch, call posthoc require_catalog before legacy None. Normal declared-catalog reopening is unchanged; uncertainty returns False and preserves the handle.",
+        "launch_failure_report: import require_catalog from posthoc_attempts instead of training_attempts, retaining the composite training structural checks and adding the existing-only posthoc-history probe."
+      ],
+      "source_sha256": {
+        "src/orze/engine/shutdown_publication.py": "13111d9ca88e56fea82dec95fb9a8f2c5c4a4e5f6e8976fb689cbcebaff07014",
+        "src/orze/engine/launch_failure_report.py": "6b0a5ad87aa4d80c564bbf04020578a3369eb36a366174029f29c7dc9b3a7ebf"
+      },
+      "assertions_unchanged": true
+    },
+    "first_green": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_missing_route_consumers.py --tb=short",
+      "passed": 2,
+      "failed": 0,
+      "seconds": 1.84,
+      "exit_code": 0
+    },
+    "independent_guard_review": {
+      "reviewers": [
+        "root",
+        "pro_review"
+      ],
+      "pro_review_note": "Complete read of the final two guards and new tests, with source/test pre-post hashes unchanged. No tests executed by pro_review in this particular review; no edits. It confirmed declared-route reopening and genuinely legacy compatibility were retained."
+    }
+  },
+  "final_bounded_verification": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_missing_route_consumers.py tests/test_posthoc_completion_consumers.py tests/test_posthoc_phase_routing.py tests/test_posthoc_ready_go_boundary.py tests/test_posthoc_configuration_descriptor.py tests/test_launch_failure_report.py tests/test_launch_failure_report_contract.py tests/test_training_launch_failure_supervision.py tests/test_native_shutdown_publication.py tests/test_native_training_shutdown_boundaries.py tests/test_shutdown_termination_authority.py tests/test_evaluation_supervision_shutdown.py --tb=short",
+    "passed": 51,
+    "failed": 0,
+    "seconds": 45.14,
+    "exit_code": 0,
+    "pre_post_hashes_equal": true,
+    "pre_post_sha256": {
+      "src/orze/engine/artifact_publication.py": "de752ad18c47e7c38b6ace3f5ee05bbdf15bb940c26e33ffd56568d983bf9ab6",
+      "src/orze/engine/completion_events.py": "88d591cc08f28354d16b0a91c77b27a02745319e768425ea9d1b5ad43b0cd5e8",
+      "src/orze/engine/launch_failure_report.py": "6b0a5ad87aa4d80c564bbf04020578a3369eb36a366174029f29c7dc9b3a7ebf",
+      "src/orze/engine/launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+      "src/orze/engine/phases.py": "5ef2bcb618ea78215c3489630d5bc1397fd1003cef3ba2c1bd6a53ba75b01197",
+      "src/orze/engine/process_supervision.py": "cf670c844f80d2be5de99f7d2a6f305ebd9d35bf7227cc8217867e31b168ed1e",
+      "src/orze/engine/shutdown_publication.py": "13111d9ca88e56fea82dec95fb9a8f2c5c4a4e5f6e8976fb689cbcebaff07014",
+      "src/orze/engine/native_posthoc.py": "6ca2630164e5955bae7fb5b3da8814fd1b220518d64a916be10b454b550031a7",
+      "src/orze/engine/posthoc_attempts.py": "7b5e70ac38d26b383205c475b89b7ffd84b581bf0968a210ce3fb6704e21bab3",
+      "src/orze/engine/posthoc_completion.py": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+      "src/orze/engine/posthoc_supervision.py": "7b6676f4b274d053633fd74dbfc33f10f1f3b8250d9a4d7718bd8eddef552cdd",
+      "src/orze/engine/posthoc_worker.py": "794f3b6ce7ad6fa36294d48ed78ebd0e7929f1ea0b8d444fa39080685dee4803",
+      "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+      "tests/test_posthoc_missing_route_consumers.py": "693b8289260ec739466c58e8a912fe300b315216ba44bdb5623c9d9147eabbf6",
+      "tests/test_posthoc_completion_consumers.py": "28201b615f538c746294526bfb2101bbf57919b1f947dae52af47ce28e540cca",
+      "tests/test_posthoc_phase_routing.py": "d2a99b2a748d885b1d031abcce01fcd7227c383876fdeec0bb620f7bc228a83c",
+      "tests/test_posthoc_ready_go_boundary.py": "24dc86ac3863566e203c7833f2ca91ed42b931fd1b68b27bfd146c7ff53434f9",
+      "tests/test_posthoc_configuration_descriptor.py": "d1bcce2af0edc5137e5279ac842f04649f0d682d5ddd284ede06c6ca06fffdd8",
+      "tests/test_launch_failure_report.py": "80cad6d5bb810a480a31d389a5e4ead896ef0be76a2f227a572c14a724853f23",
+      "tests/test_launch_failure_report_contract.py": "c25bef0fa232f1ad2f99075fa1d53c420573d68d838a898c754404f3fd21e6ae",
+      "tests/test_training_launch_failure_supervision.py": "9a6b95886eaded2065dbc40a5a310a2429ad8730b164a637a8ade14caa9e9422",
+      "tests/test_native_shutdown_publication.py": "0cb9070ad879e481ab8d74f71b3bf2dca1ef5de184d52d34162252693521422c",
+      "tests/test_native_training_shutdown_boundaries.py": "97f38baf61934028324b77109105edd74386d2c54b66d90de312b2f3c48cef7d",
+      "tests/test_shutdown_termination_authority.py": "17bc5750f8ac8c9df2cc6bb35202d3e38c30ee1e799476fa3c6e003c06fff4b8",
+      "tests/test_evaluation_supervision_shutdown.py": "4ae1848681e3c31d18e17addc0c3e76721afc40e7c1370a6171c4788b7c38e0b"
+    },
+    "qualification": "Final frozen-source bounded verification, not the whole-Core/Pro run. Includes new2, consumer4, routing2, independent READY/GO5 and descriptor2 plus existing shutdown/report neighborhoods. Earlier 2/4/24/40 runs overlap and are not cumulatively added.",
+    "source_test_edits_during_run": false,
+    "git_diff_check_exit_code": 0,
+    "epoch_note": "Historical epoch1 bounded 51-pass run, preserved exactly. Root later found two omitted fake-Popen fixture migrations in the full epoch1 suite. Production remained byte-identical; the new fixture migration and epoch2 bounded run are recorded separately below."
+  },
+  "final_read_review": {
+    "conclusion": "No remaining blocker identified within C2c's bounded native posthoc launch, owned closure, parent publication and actual completion/report/shutdown routes after the recorded remediations.",
+    "scope": "Read all current new worker/launch/parent completion/sealed-payload modules, own adapters (author review only), and the complete seven existing-source diffs. Re-read final native_posthoc 6ca263 and contract after timeout/B3/descriptor changes; the 13 source SHA values are recorded in final_bounded_verification.",
+    "specific_conclusions": [
+      "Current native posthoc persists its own ref before create-only work and worker allocation; READY compute is phase-qualified and precedes lease exit, RUNNING and fresh controls precede GO. Possible-fork uncertainty cannot become NOT_STARTED; integrity rejection confirms STOP without granting publication.",
+      "Sealed payload and descriptor identity checks bind the actual file read. Worker closes its inherited payload before explicit adapter import; startup hooks are explicitly not sandboxed. No arbitrary config path content hashing or post-GO writer isolation is claimed.",
+      "Parent requires exact current closure before reading/copying candidates and again under terminal publication, preserving actual worker exit 0 while STOP produces interruption/failure. Whole declared B1 batch is re-read; there is no B2 observation invention.",
+      "Fresh and pending posthoc events do not become implicit training sources or trigger extra evaluation. Slot-race is ref-qualified; launch report preserves exact closed source and started-lifecycle priority. Missing-route consumers now reject native fallback without changing legitimate catalog reopening.",
+      "Timeout is finite positive and pinned; invalid/changed limits and unsupported durable B3 requests cannot authorize GO. Controller downtime is not an enforced wall-clock deadline."
+    ],
+    "contract": {
+      "path": "docs/native-posthoc-supervision.md",
+      "sha256": "dc4a7fd791b09132daa397520f4a4ff78ec8c0d109e5f7e152c4270ae3bbbab5",
+      "review": "Read complete final text; limits accurately distinguish operational metrics from science, descriptor injection from reproduced pathname ABA, and adapter startup/code from a sandbox. No misleading claim found in this scope."
+    }
+  },
+  "fixture_epoch2_addendum": {
+    "authorization": "Root reported its full epoch1 2 failed/3090 passed/7 skipped in 457.95s and explicitly authorized this agent to migrate only the old lease-exit fixture. This is a fixture-contract migration, not two additional production bug reds. Root's full-run record is externally reported here, not this agent's full-suite execution.",
+    "file": "tests/test_training_lease_exit_authority.py",
+    "original_sha256": "640aeb2a4bfbae6170da2009da5bddd057148af2feb6218173e08348c1fbd3ab",
+    "final_sha256": "5a0e09708d0438e407bfdc6bc000ef53de84a41aca0ecf604d635ae91c216e24",
+    "snapshot": {
+      "path": "docs/evidence/snapshots/v1-05c2c-before-posthoc-lease-fixture-migration.py",
+      "sha256": "640aeb2a4bfbae6170da2009da5bddd057148af2feb6218173e08348c1fbd3ab",
+      "provenance": "Complete direct byte capture before this migration. git show 285ad7a:tests/test_training_lease_exit_authority.py, current old file and snapshot SHA all matched; not reconstructed."
+    },
+    "independent_old_fixture_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_training_lease_exit_authority.py --tb=short",
+      "failed": 2,
+      "passed": 2,
+      "seconds": 1.96,
+      "exit_code": 1,
+      "failures": "Both posthoc parameters had stops=[] rather than [True]; training controls passed."
+    },
+    "diagnostic_snapshot_replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport sys\nimport pytest\nsys.path.insert(0, str(Path('tests').absolute()))\nimport test_training_lease_exit_authority as module\nsnapshot = Path('docs/evidence/snapshots/v1-05c2c-before-posthoc-lease-fixture-migration.py')\nexec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), module.__dict__)\nclass Diagnostic:\n    def pytest_exception_interact(self, node, call, report):\n        for entry in call.excinfo.traceback:\n            values = entry.frame.f_locals\n            if 'phase' in values and 'error' in values and 'stops' in values:\n                exc = values['error'].value\n                chain = []\n                while exc is not None:\n                    chain.append((type(exc).__name__, str(exc)))\n                    exc = exc.__cause__\n                print('LEASE_FIXTURE_DIAGNOSTIC', values['phase'], values['confirmed'], 'stops=', values['stops'], 'exceptions=', chain)\nraise SystemExit(pytest.main(['-q', '-s', '-p', 'no:cacheprovider', 'tests/test_training_lease_exit_authority.py', '--tb=short'], plugins=[Diagnostic()]))\nPY",
+      "failed": 2,
+      "passed": 2,
+      "seconds": 1.24,
+      "exit_code": 1,
+      "observed_exception_chain": [
+        [
+          "TerminationUnconfirmed",
+          "posthoc_supervision_unconfirmed"
+        ],
+        [
+          "SupervisionUncertain",
+          "supervisor_prepare_uncertain"
+        ]
+      ],
+      "note": "Both confirmed values had this chain, before the intended lease-exit fault. The plugin only reads pytest failure-frame locals; it changes no production, fixtures, mock behavior or fault outcome. This overlaps the same four tests, not additional cases."
+    },
+    "cause_and_change": "The old posthoc branch passed a raw fake Child into the real prepare_supervised protocol, so safe READY preparation failed before reaching the post-yield lease OSError. Remove only the phase=='training' conditional around the existing identity stub and install_training(monkeypatch). The shared helper's historical name does not select attempt phase: it deep-copies the caller's actual posthoc identity. No training ref is borrowed and no real OS closure is claimed by this old fake-Popen fixture.",
+    "preservation": {
+      "command": "python3 - <<'PY'\nimport ast\nfrom pathlib import Path\nold = ast.parse(Path('docs/evidence/snapshots/v1-05c2c-before-posthoc-lease-fixture-migration.py').read_text())\nnew = ast.parse(Path('tests/test_training_lease_exit_authority.py').read_text())\ndef extract(tree, predicate):\n    return [ast.dump(n, include_attributes=False) for n in sorted(ast.walk(tree), key=lambda n: (getattr(n, 'lineno', 0), getattr(n, 'col_offset', 0))) if predicate(n)]\ndef call_name(n):\n    return ast.unparse(n.func) if isinstance(n, ast.Call) else ''\nchecks = {\n 'assertions': lambda n: isinstance(n, ast.Assert),\n 'pytest_raises': lambda n: call_name(n) == 'pytest.raises',\n 'mock_calls': lambda n: call_name(n) == 'monkeypatch.setattr',\n}\nfor name, predicate in checks.items():\n    before, after = extract(old, predicate), extract(new, predicate)\n    assert before == after, name\n    print(name, len(before), 'AST identical')\nPY",
+      "assert_nodes": 16,
+      "pytest_raises_calls": 1,
+      "monkeypatch_setattr_calls": 5,
+      "source_order_ast_all_identical": true,
+      "exit_code": 0,
+      "production_changes": false,
+      "shared_fixture_changes": false,
+      "shared_fixture_sha256": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f",
+      "new_82_tests_changed": false
+    },
+    "target": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_training_lease_exit_authority.py tests/test_posthoc_ready_go_boundary.py --tb=short",
+      "passed": 9,
+      "failed": 0,
+      "seconds": 4.13,
+      "exit_code": 0,
+      "scope": "Four original lease-exit assertions plus five existing actual-CPU READY/GO boundary tests."
+    },
+    "independent_review": {
+      "agent": "pro_review",
+      "type": "Read-only, not a separate test run",
+      "finding": "Original snapshot equals git285ad7 byte-for-byte; only the training-only conditional was removed. Independently confirmed 16 Assert/1 raises/5 monkeypatch source-order AST equality and unchanged shared fixture. Actual posthoc ref remains in the simulated binding; no migration blocker."
+    }
+  },
+  "epoch2_bounded_verification": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_native_posthoc_tree_completion.py tests/test_posthoc_supervision_binding.py tests/test_sealed_payload.py tests/test_posthoc_ready_go_boundary.py tests/test_native_posthoc_publication.py tests/test_posthoc_completion_consumers.py tests/test_posthoc_phase_routing.py tests/test_posthoc_launch_input_boundaries.py tests/test_posthoc_budget_pinning.py tests/test_posthoc_replication_authority.py tests/test_posthoc_configuration_descriptor.py tests/test_posthoc_missing_route_consumers.py --tb=short",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "passed": 82,
+    "failed": 0,
+    "seconds": 49.96,
+    "exit_code": 0,
+    "pre_post_hashes_equal": true,
+    "sha256": {
+      "src/orze/engine/artifact_publication.py": "de752ad18c47e7c38b6ace3f5ee05bbdf15bb940c26e33ffd56568d983bf9ab6",
+      "src/orze/engine/completion_events.py": "88d591cc08f28354d16b0a91c77b27a02745319e768425ea9d1b5ad43b0cd5e8",
+      "src/orze/engine/launch_failure_report.py": "6b0a5ad87aa4d80c564bbf04020578a3369eb36a366174029f29c7dc9b3a7ebf",
+      "src/orze/engine/launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+      "src/orze/engine/phases.py": "5ef2bcb618ea78215c3489630d5bc1397fd1003cef3ba2c1bd6a53ba75b01197",
+      "src/orze/engine/process_supervision.py": "cf670c844f80d2be5de99f7d2a6f305ebd9d35bf7227cc8217867e31b168ed1e",
+      "src/orze/engine/shutdown_publication.py": "13111d9ca88e56fea82dec95fb9a8f2c5c4a4e5f6e8976fb689cbcebaff07014",
+      "src/orze/engine/native_posthoc.py": "6ca2630164e5955bae7fb5b3da8814fd1b220518d64a916be10b454b550031a7",
+      "src/orze/engine/posthoc_attempts.py": "7b5e70ac38d26b383205c475b89b7ffd84b581bf0968a210ce3fb6704e21bab3",
+      "src/orze/engine/posthoc_completion.py": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+      "src/orze/engine/posthoc_supervision.py": "7b6676f4b274d053633fd74dbfc33f10f1f3b8250d9a4d7718bd8eddef552cdd",
+      "src/orze/engine/posthoc_worker.py": "794f3b6ce7ad6fa36294d48ed78ebd0e7929f1ea0b8d444fa39080685dee4803",
+      "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+      "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f",
+      "tests/test_posthoc_supervision_binding.py": "1e8c79d53b41a815e4583209304a1df401020cdb9593fa709441a5cfa7bf1400",
+      "tests/test_sealed_payload.py": "f2a1baaad054f92fc88354bc9a0aa501bcd44e1a9a0697b7c881aa13d696025d",
+      "tests/test_posthoc_ready_go_boundary.py": "24dc86ac3863566e203c7833f2ca91ed42b931fd1b68b27bfd146c7ff53434f9",
+      "tests/test_native_posthoc_publication.py": "c07a9e2c363ebcbe4c322d430a40a9c6f8b64642a394e9e003766cd388de7417",
+      "tests/test_posthoc_completion_consumers.py": "28201b615f538c746294526bfb2101bbf57919b1f947dae52af47ce28e540cca",
+      "tests/test_posthoc_phase_routing.py": "d2a99b2a748d885b1d031abcce01fcd7227c383876fdeec0bb620f7bc228a83c",
+      "tests/test_posthoc_launch_input_boundaries.py": "249b44d91df19ddc672565225696d5bf15c25b275c3289b6bfada4ed6129a903",
+      "tests/test_posthoc_budget_pinning.py": "8c879e33f494cdf1da076a77dace0923e128c4646a32d6a62048c928feb2bc5d",
+      "tests/test_posthoc_replication_authority.py": "c66758eade03bdb1e882f586561c3e00fcf5abd98398513a94eb83822ef91b89",
+      "tests/test_posthoc_configuration_descriptor.py": "d1bcce2af0edc5137e5279ac842f04649f0d682d5ddd284ede06c6ca06fffdd8",
+      "tests/test_posthoc_missing_route_consumers.py": "693b8289260ec739466c58e8a912fe300b315216ba44bdb5623c9d9147eabbf6",
+      "tests/test_training_lease_exit_authority.py": "5a0e09708d0438e407bfdc6bc000ef53de84a41aca0ecf604d635ae91c216e24",
+      "tests/supervision_fixture.py": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f"
+    },
+    "production_equal_to_prior_51": true,
+    "scope": "All 12 frozen C2c test files, unchanged. The migrated four-case legacy file was separately tested in the nine-case target and its final hash monitored here. Existing source remains identical; no whole-Core/Pro acceptance is claimed by these bounded runs, and overlapping 9/51/82 cases are not added.",
+    "conclusion": "No additional production blocker identified; the epoch1 full-suite failures above were omitted explicit OS-double migration. Root owns epoch2 full-suite/inventory acceptance."
+  }
+}

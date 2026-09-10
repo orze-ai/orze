@@ -1,0 +1,421 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2c",
+  "reviewer": "runtime_evidence",
+  "status": "thirteen_independent_candidate_green_baseline_and_replica_route_red_history_preserved",
+  "scope": "Existing public launcher.launch to _launch_posthoc/run_posthoc and actual check_active, with a synthetic CPU adapter and a detached live output writer. No model inference, GPU/provider, holdout, host scan or production edits.",
+  "baseline": {
+    "core_commit": "285ad7acd0eeb2ddfc38d289f473c35f3b561e0d",
+    "pro_commit": "abda68efbc7410151848c47e6962d54d390a9bb8",
+    "snapshot_provenance": "Five complete modules saved via apply_patch from git show of the preceding committed implementation-branch source, before production authors changed them. Each snapshot compared byte-for-byte with the commit and unchanged on-disk source; exact including EOF. All five source hashes were still equal after the first baseline run.",
+    "sources": [
+      {
+        "path": "src/orze/engine/launcher.py",
+        "sha256": "5562e31474b10483531fa8b2f1a9828c7647a8eacebd1df204f74c3c02901265",
+        "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-tree-launcher.py",
+        "snapshot_sha256": "5562e31474b10483531fa8b2f1a9828c7647a8eacebd1df204f74c3c02901265"
+      },
+      {
+        "path": "src/orze/engine/posthoc_runner.py",
+        "sha256": "5b271e6e1716fd0a2bab0811d521fe38b01b67b5df991b9b198ef49d5ec512c1",
+        "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-tree-posthoc-runner.py",
+        "snapshot_sha256": "5b271e6e1716fd0a2bab0811d521fe38b01b67b5df991b9b198ef49d5ec512c1"
+      },
+      {
+        "path": "src/orze/engine/process.py",
+        "sha256": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+        "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-tree-process.py",
+        "snapshot_sha256": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d"
+      },
+      {
+        "path": "src/orze/engine/accounting.py",
+        "sha256": "0282077bd368f14fc4af08e38fc47be66a593ed1c1fb8c5c782b30ebfabad043",
+        "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-tree-accounting.py",
+        "snapshot_sha256": "0282077bd368f14fc4af08e38fc47be66a593ed1c1fb8c5c782b30ebfabad043"
+      },
+      {
+        "path": "src/orze/engine/training_completion.py",
+        "sha256": "6546f9773f6b890d3200786d0596cd2662f402ac5c425c68e6f5d1b45f63a31c",
+        "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-tree-training-completion.py",
+        "snapshot_sha256": "6546f9773f6b890d3200786d0596cd2662f402ac5c425c68e6f5d1b45f63a31c"
+      }
+    ],
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_posthoc_tree_completion.py --tb=short",
+    "exit_code": 1,
+    "footer": "2 failed, 2 passed in 2.39s",
+    "session_id": 42189,
+    "session_state": "completed",
+    "behavior_reds": 2,
+    "controls": 2,
+    "setup_or_cleanup_errors": 0,
+    "missing_api_failures": 0,
+    "replay": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= ORZE_TEST_POSTHOC_RUNNER_SNAPSHOT=/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/snapshots/v1-05c2c-before-native-posthoc-tree-posthoc-runner.py python3 -c 'import importlib; from pathlib import Path; import pytest; modules=[(\"orze.engine.process\",\"process\"),(\"orze.engine.accounting\",\"accounting\"),(\"orze.engine.posthoc_runner\",\"posthoc-runner\"),(\"orze.engine.training_completion\",\"training-completion\"),(\"orze.engine.launcher\",\"launcher\")]; [(lambda module,path: exec(compile(path.read_text(),str(path),\"exec\"),module.__dict__))(importlib.import_module(name),Path(\"docs/evidence/snapshots/v1-05c2c-before-native-posthoc-tree-\"+label+\".py\")) for name,label in modules]; raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_native_posthoc_tree_completion.py\",\"--tb=short\"]))'",
+      "exit_code": 1,
+      "footer": "2 failed, 2 passed in 2.84s",
+      "session_id": 89433,
+      "session_state": "completed",
+      "fixed_modules": "Five complete parent modules loaded in memory before collection, ordered process/accounting/posthoc_runner/training_completion/launcher. The explicitly set ORZE_TEST_POSTHOC_RUNNER_SNAPSHOT makes the child sitecustomize execute the complete old runner too, before registering the real test adapter. No production file replacement.",
+      "scope_limit": "Fixed modules plus explicit old child runner, not a full historical repository checkout. Both actual old behavior assertions reproduce with both standalone controls; replay is not two additional defects.",
+      "additional_red_count": 0
+    },
+    "observations": [
+      {
+        "case": "worker-public-metrics",
+        "classification": "old_public_behavior_red",
+        "evidence": "The actual adapter returns COMPLETED/score0 while an authenticated setsid/doublefork/empty-env descendant retains the original output FD. Real run_posthoc, not adapter/test code, writes canonical metrics.json before closure. The test sends W and observes exact late bytes through that still-live writer before the target no-metrics assertion fails."
+      },
+      {
+        "case": "parent-leader-exit",
+        "classification": "old_public_behavior_red",
+        "evidence": "Actual public check_active sees worker0 and calls real record_compute_terminal with outcome completed while the daemon pidfd is live. The test fails on the resulting terminal.json. Transparent accounting spy delegates to the actual writer and records live=True."
+      },
+      {
+        "case": "standalone-zero",
+        "classification": "old_positive_control",
+        "evidence": "Actual standalone run_posthoc subprocess with the same registered adapter and no descendants exits0 and writes expected status, score0, adapter-origin and _source fields. No native-FSM/attempt authority claim."
+      },
+      {
+        "case": "standalone-seven",
+        "classification": "old_positive_control",
+        "evidence": "Actual standalone adapter calls os._exit(7) after the owned no-descendant handshake. Actual process returns7 and no metrics or compute terminal is fabricated. Synthetic adapter output exists."
+      }
+    ],
+    "additional_old_condition_not_counted": "The old posthoc launch does not publish CLAIMED to IN_PROGRESS. During the parent red, check_active writes the actual completed compute receipt and then raises RuntimeError: Could not persist terminal lifecycle for idea-posthoc-cpu; current state is CLAIMED. The test saves only RuntimeError, fails first at live terminal publication, and later requires error is None so a repaired implementation cannot pass merely by throwing. No artificial FSM repair and no additional defect count for this condition."
+  },
+  "test": {
+    "path": "tests/test_native_posthoc_tree_completion.py",
+    "sha256": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f",
+    "cases": 4,
+    "assert_ast_count": 33,
+    "assert_ast_sha256": "6fa585a9c481279122c0c2a6b1503c24508defe2993997ce71fe568b2fca7600",
+    "hash_unchanged_after_replay": true,
+    "frozen_after_first_actual_run": true,
+    "shared_fixtures": [
+      {
+        "path": "tests/test_native_training_tree_completion.py",
+        "sha256": "3ce22b8d37c29e918b7da69c02f973cfe993b943304f9b312232bf4c019138eb"
+      },
+      {
+        "path": "tests/test_native_training_caller_boundaries.py",
+        "sha256": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516"
+      },
+      {
+        "path": "tests/supervision_fixture.py",
+        "sha256": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f"
+      }
+    ],
+    "real_components": "Actual SQLite IdeaLake, public insertion and scheduler claim for an explicit posthoc task, idea_config.yaml, launcher.launch, real Python subprocess, real run_posthoc, compute start/terminal and parent lifecycle call. Existing training fixture restores actual prepare_supervised/Popen/process identity/reaper after inherited explicit doubles. New adapter injection does not replace Popen or supervision.",
+    "test_only_boundaries": "GPU allocation/telemetry and notifications remain disabled by inherited fixture. A private temporary sitecustomize registers an adapter in actual child Python imports; no production registry edits. Adapter only writes short posthoc.bin bytes and returns a dictionary, never writes metrics itself. A separate unused preclaimed training task from shared fixture is not launched or treated as posthoc authority.",
+    "cleanup": "Private Unix socket SO_PEERCRED verifies same-UID peer PID; pidfd is captured before release. Returned worker PID captured immediately, and inherited wrapper captures actual Popen roots. Leader cannot finish until daemon pidfd is registered and L/R handshake releases its pipe. Cleanup signals only those captured own pidfds, performs bounded waits/exact reaping, and restores the pytest process's prior subreaper setting. No PID/PGID scan or broad cleanup.",
+    "future_compatibility": "Fixture explicitly restores the real existing prepare_supervised entry and real OS boundaries. Adapter reports its actual work-output path so an eventual private attempt directory does not require a canonical output path assertion. Tests assert real behavior, not presence of a new attempt/ref API."
+  },
+  "limits": [
+    "The old posthoc path has no native AttemptRef. Tests do not assert invented native attempt rows, B1 artifact rows or observation records.",
+    "The old runner tries importing unavailable orze.artifact_catalog, catches the error and skips it. This report claims actual metrics/compute effects only, never a successful catalog registration.",
+    "Two entrypoints are separate producer/consumer acceptance boundaries of one unsafe whole-tree-completion path, not a scientific efficiency measurement.",
+    "Standalone controls are deliberately not represented as successful native lifecycle completion. Posthoc started lifecycle omission remains separately described.",
+    "Actual temporary CPU workers do not prove accelerator, namespace or real inference safety. No model, paid provider or holdout is involved.",
+    "Current-source green, full suites, inventories and remote closure must be recorded separately after implementation. Root owns whole-slice acceptance."
+  ],
+  "candidate_green": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_posthoc_tree_completion.py tests/test_native_posthoc_publication.py tests/test_posthoc_replication_authority.py tests/test_posthoc_budget_pinning.py --tb=short",
+    "exit_code": 0,
+    "footer": "13 passed in 10.37s",
+    "session_id": 98350,
+    "session_state": "completed",
+    "scope": "Original four public baseline cases + five first-green publication mechanisms + repaired B3 phase-route regression + three new budget pinning mechanisms. Independent candidate only; root confirmed native_posthoc/launcher frozen for this run but shutdown/report changes and whole-source freeze remained separate.",
+    "pre_run_source_hashes": {
+      "src/orze/engine/native_posthoc.py": "6ca2630164e5955bae7fb5b3da8814fd1b220518d64a916be10b454b550031a7",
+      "src/orze/engine/posthoc_attempts.py": "7b5e70ac38d26b383205c475b89b7ffd84b581bf0968a210ce3fb6704e21bab3",
+      "src/orze/engine/posthoc_worker.py": "794f3b6ce7ad6fa36294d48ed78ebd0e7929f1ea0b8d444fa39080685dee4803",
+      "src/orze/engine/posthoc_completion.py": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+      "src/orze/engine/posthoc_supervision.py": "7b6676f4b274d053633fd74dbfc33f10f1f3b8250d9a4d7718bd8eddef552cdd",
+      "src/orze/engine/process_supervision.py": "cf670c844f80d2be5de99f7d2a6f305ebd9d35bf7227cc8217867e31b168ed1e",
+      "src/orze/engine/launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+      "src/orze/engine/artifact_publication.py": "de752ad18c47e7c38b6ace3f5ee05bbdf15bb940c26e33ffd56568d983bf9ab6",
+      "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "src/orze/engine/accounting.py": "0282077bd368f14fc4af08e38fc47be66a593ed1c1fb8c5c782b30ebfabad043",
+      "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+      "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/compute_publication.py": "6bfcae4b1746a8855cc3f3467b8f2690e9bcd0926a7e72b49799ad12969f8091",
+      "src/orze/engine/execution_authority.py": "20f5dc0bc802db87d868d0662209c6a6e414ae2fa3e6c882feb2d9e3e1864ad8",
+      "src/orze/engine/process.py": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+      "src/orze/core/replication_requests.py": "f2f0a1191023d562099ba8bd6917adc2bca84c0d4cc1f7b4f08f81b061c34fc9",
+      "src/orze/engine/replication.py": "2cf98322c13444318e8eba5a5b2021d977d9eb799b7750acb4966828f314c6f0"
+    },
+    "post_run_source_hashes": {
+      "src/orze/engine/native_posthoc.py": "6ca2630164e5955bae7fb5b3da8814fd1b220518d64a916be10b454b550031a7",
+      "src/orze/engine/posthoc_attempts.py": "7b5e70ac38d26b383205c475b89b7ffd84b581bf0968a210ce3fb6704e21bab3",
+      "src/orze/engine/posthoc_worker.py": "794f3b6ce7ad6fa36294d48ed78ebd0e7929f1ea0b8d444fa39080685dee4803",
+      "src/orze/engine/posthoc_completion.py": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+      "src/orze/engine/posthoc_supervision.py": "7b6676f4b274d053633fd74dbfc33f10f1f3b8250d9a4d7718bd8eddef552cdd",
+      "src/orze/engine/process_supervision.py": "cf670c844f80d2be5de99f7d2a6f305ebd9d35bf7227cc8217867e31b168ed1e",
+      "src/orze/engine/launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+      "src/orze/engine/artifact_publication.py": "de752ad18c47e7c38b6ace3f5ee05bbdf15bb940c26e33ffd56568d983bf9ab6",
+      "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "src/orze/engine/accounting.py": "0282077bd368f14fc4af08e38fc47be66a593ed1c1fb8c5c782b30ebfabad043",
+      "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+      "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/compute_publication.py": "6bfcae4b1746a8855cc3f3467b8f2690e9bcd0926a7e72b49799ad12969f8091",
+      "src/orze/engine/execution_authority.py": "20f5dc0bc802db87d868d0662209c6a6e414ae2fa3e6c882feb2d9e3e1864ad8",
+      "src/orze/engine/process.py": "4ef508609d4a92256058223179886cae2f31d996db3ea3d52c9de8193f6c150d",
+      "src/orze/core/replication_requests.py": "f2f0a1191023d562099ba8bd6917adc2bca84c0d4cc1f7b4f08f81b061c34fc9",
+      "src/orze/engine/replication.py": "2cf98322c13444318e8eba5a5b2021d977d9eb799b7750acb4966828f314c6f0"
+    },
+    "matched_source_count": 18,
+    "pre_run_test_and_fixture_hashes": {
+      "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f",
+      "tests/test_native_posthoc_publication.py": "c07a9e2c363ebcbe4c322d430a40a9c6f8b64642a394e9e003766cd388de7417",
+      "tests/test_posthoc_replication_authority.py": "c66758eade03bdb1e882f586561c3e00fcf5abd98398513a94eb83822ef91b89",
+      "tests/test_posthoc_budget_pinning.py": "8c879e33f494cdf1da076a77dace0923e128c4646a32d6a62048c928feb2bc5d",
+      "tests/test_posthoc_ready_go_boundary.py": "24dc86ac3863566e203c7833f2ca91ed42b931fd1b68b27bfd146c7ff53434f9",
+      "tests/test_native_training_tree_completion.py": "3ce22b8d37c29e918b7da69c02f973cfe993b943304f9b312232bf4c019138eb",
+      "tests/test_native_training_caller_boundaries.py": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516",
+      "tests/supervision_fixture.py": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f"
+    },
+    "post_run_test_and_fixture_hashes": {
+      "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f",
+      "tests/test_native_posthoc_publication.py": "c07a9e2c363ebcbe4c322d430a40a9c6f8b64642a394e9e003766cd388de7417",
+      "tests/test_posthoc_replication_authority.py": "c66758eade03bdb1e882f586561c3e00fcf5abd98398513a94eb83822ef91b89",
+      "tests/test_posthoc_budget_pinning.py": "8c879e33f494cdf1da076a77dace0923e128c4646a32d6a62048c928feb2bc5d",
+      "tests/test_posthoc_ready_go_boundary.py": "24dc86ac3863566e203c7833f2ca91ed42b931fd1b68b27bfd146c7ff53434f9",
+      "tests/test_native_training_tree_completion.py": "3ce22b8d37c29e918b7da69c02f973cfe993b943304f9b312232bf4c019138eb",
+      "tests/test_native_training_caller_boundaries.py": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516",
+      "tests/supervision_fixture.py": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f"
+    },
+    "matched_test_and_fixture_count": 8,
+    "total_pre_post_matches": 26,
+    "original_four_public_and_five_publication_assertions_unchanged": true,
+    "count_rule": "Do not add this overlapping thirteen to earlier5 or root's unrelated suites. Budget3 are first independently green new requirements. Baseline/replay and draft-regression red counts remain separate.",
+    "findings": [],
+    "running_test_sessions": []
+  },
+  "final_bounded": null,
+  "running_test_sessions": [],
+  "publication_mechanisms": {
+    "path": "tests/test_native_posthoc_publication.py",
+    "sha256": "c07a9e2c363ebcbe4c322d430a40a9c6f8b64642a394e9e003766cd388de7417",
+    "cases": 5,
+    "assert_ast_count": 67,
+    "assert_ast_sha256": "fc8eafdc848ea2409286a77b64ca17c600d3e06b71b7af56f69caab06c99df1b",
+    "classification": "Five new native posthoc protocol/publication mechanisms. First independent run green; no draft behavioral reds, no old API-absence failures or setup/cleanup errors.",
+    "first_run": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_posthoc_publication.py --tb=short",
+      "exit_code": 0,
+      "footer": "5 passed in 5.21s",
+      "session_id": 89598,
+      "session_state": "completed",
+      "pre_run_source_hashes": {
+        "src/orze/engine/native_posthoc.py": "28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc",
+        "src/orze/engine/posthoc_attempts.py": "14e40df3557399b271a01dcbb55ce54dd7aba5a5b12ce33345b5a901cfa54882",
+        "src/orze/engine/posthoc_worker.py": "794f3b6ce7ad6fa36294d48ed78ebd0e7929f1ea0b8d444fa39080685dee4803",
+        "src/orze/engine/posthoc_completion.py": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+        "src/orze/engine/posthoc_supervision.py": "7b6676f4b274d053633fd74dbfc33f10f1f3b8250d9a4d7718bd8eddef552cdd",
+        "src/orze/engine/process_supervision.py": "cf670c844f80d2be5de99f7d2a6f305ebd9d35bf7227cc8217867e31b168ed1e",
+        "src/orze/engine/launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+        "src/orze/engine/artifact_publication.py": "de752ad18c47e7c38b6ace3f5ee05bbdf15bb940c26e33ffd56568d983bf9ab6",
+        "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+        "src/orze/engine/accounting.py": "0282077bd368f14fc4af08e38fc47be66a593ed1c1fb8c5c782b30ebfabad043"
+      },
+      "post_run_source_hashes": {
+        "src/orze/engine/native_posthoc.py": "28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc",
+        "src/orze/engine/posthoc_attempts.py": "14e40df3557399b271a01dcbb55ce54dd7aba5a5b12ce33345b5a901cfa54882",
+        "src/orze/engine/posthoc_worker.py": "794f3b6ce7ad6fa36294d48ed78ebd0e7929f1ea0b8d444fa39080685dee4803",
+        "src/orze/engine/posthoc_completion.py": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+        "src/orze/engine/posthoc_supervision.py": "7b6676f4b274d053633fd74dbfc33f10f1f3b8250d9a4d7718bd8eddef552cdd",
+        "src/orze/engine/process_supervision.py": "cf670c844f80d2be5de99f7d2a6f305ebd9d35bf7227cc8217867e31b168ed1e",
+        "src/orze/engine/launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+        "src/orze/engine/artifact_publication.py": "de752ad18c47e7c38b6ace3f5ee05bbdf15bb940c26e33ffd56568d983bf9ab6",
+        "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+        "src/orze/engine/accounting.py": "0282077bd368f14fc4af08e38fc47be66a593ed1c1fb8c5c782b30ebfabad043"
+      },
+      "matched_source_count": 10,
+      "test_hashes": {
+        "tests/test_native_posthoc_publication.py": "c07a9e2c363ebcbe4c322d430a40a9c6f8b64642a394e9e003766cd388de7417",
+        "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f"
+      },
+      "test_hashes_equal_pre_post": true,
+      "total_pre_post_source_and_test_matches": 12,
+      "snapshots": [
+        {
+          "source": "src/orze/engine/native_posthoc.py",
+          "sha256": "28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc",
+          "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-native-posthoc.py"
+        },
+        {
+          "source": "src/orze/engine/posthoc_attempts.py",
+          "sha256": "14e40df3557399b271a01dcbb55ce54dd7aba5a5b12ce33345b5a901cfa54882",
+          "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-posthoc-attempts.py"
+        },
+        {
+          "source": "src/orze/engine/posthoc_worker.py",
+          "sha256": "794f3b6ce7ad6fa36294d48ed78ebd0e7929f1ea0b8d444fa39080685dee4803",
+          "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-posthoc-worker.py"
+        },
+        {
+          "source": "src/orze/engine/posthoc_completion.py",
+          "sha256": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+          "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-posthoc-completion.py"
+        },
+        {
+          "source": "src/orze/engine/posthoc_supervision.py",
+          "sha256": "7b6676f4b274d053633fd74dbfc33f10f1f3b8250d9a4d7718bd8eddef552cdd",
+          "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-posthoc-supervision.py"
+        },
+        {
+          "source": "src/orze/engine/process_supervision.py",
+          "sha256": "cf670c844f80d2be5de99f7d2a6f305ebd9d35bf7227cc8217867e31b168ed1e",
+          "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-process-supervision.py"
+        },
+        {
+          "source": "src/orze/engine/launcher.py",
+          "sha256": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+          "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-launcher.py"
+        },
+        {
+          "source": "src/orze/engine/artifact_publication.py",
+          "sha256": "de752ad18c47e7c38b6ace3f5ee05bbdf15bb940c26e33ffd56568d983bf9ab6",
+          "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-artifact-publication.py"
+        },
+        {
+          "source": "src/orze/core/research_artifacts.py",
+          "sha256": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+          "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-research-artifacts.py"
+        },
+        {
+          "source": "src/orze/engine/accounting.py",
+          "sha256": "0282077bd368f14fc4af08e38fc47be66a593ed1c1fb8c5c782b30ebfabad043",
+          "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-accounting.py"
+        }
+      ],
+      "snapshot_provenance": "Ten complete current candidate modules saved via apply_patch and byte-compared with on-disk source before the run. These are new implementation drafts, not the preceding committed C2b source and not evidence of ten defects.",
+      "scope": "Candidate only. Not root's separately reported original4 green, any overlapping suite, full-source freeze or full acceptance."
+    },
+    "cases_detail": [
+      {
+        "id": "closed-current-declared-work",
+        "evidence": "Real launch/worker creates private work metrics and posthoc.bin; canonical metrics remains absent before parent check_active. Parent publishes one B1 artifact produced by exact posthoc AttemptRef, distinct inode with adapter bytes. Canonical posthoc.bin decoy and legacy root .npz remain untouched and do not appear as registered artifacts. Real compute start/terminal use worker PID and posthoc phase."
+      },
+      {
+        "id": "direct-live-then-natural-close",
+        "evidence": "Current direct posthoc_completion.finish rejects with posthoc_process_tree_unclosed while authenticated daemon is live, preserving full row/FSM/stage/file snapshot. Private W makes the exact open output FD write late bytes; Q lets the descendant close naturally and supervisor proves ECHILD without STOP. Actual finish snapshots those late bytes into a distinct inode; later scratch modification cannot change the registered copy."
+      },
+      {
+        "id": "owned-stop-zero",
+        "evidence": "Actual D1 terminate_execution uses real supervised reaper to close the live escaped writer with worker return0. Actual check_active publishes failed/posthoc_process_tree_stopped with exact stop closure and zero artifacts, retains actual compute PID/return0, increments failure count once, and closes effect/stop receipts."
+      },
+      {
+        "id": "supervisor-loss",
+        "evidence": "Only dup of this test's own authenticated supervisor pidfd is killed. Actual monitor twice returns no event, retains active RUNNING holder, latches uncertainty and preserves full row/FSM/stage/file state while daemon remains live. No artifact/terminal publication; cleanup only captured own pidfds."
+      },
+      {
+        "id": "old-and-duplicate-callbacks",
+        "evidence": "Actual worker7 completes FAILED, then explicit real _reset_idea_for_retry/set_status queued/claim creates a new attempt and worker0. Old attempt callback cannot alter the new RUNNING row or its files. Real successful finish publishes once; repeated same/new and old callbacks preserve complete row/FSM/stage/file bytes and failure count. Uses real generic generation and claim, not a fake ref or SQL replacement."
+      }
+    ],
+    "review": {
+      "source_scope": "Read complete native_posthoc, posthoc_attempts, posthoc_worker, posthoc_completion, posthoc_supervision and shared process_supervision before test construction. Actual integration keeps canonical task authority and attempt-local adapter outputs; only parent completion writes public metrics/catalog after exact closure. These metric dictionaries are not B2 observations.",
+      "findings": [],
+      "fixture_scope": "Reuses unchanged original CPU posthoc fixture and exact pidfd cleanup. New tests do not replace Popen, supervisor, adapter runner, publication, accounting or SQLite APIs. Resource/notification boundaries remain inherited simulation.",
+      "limits": "No native shutdown/slot-race/evaluation-dispatch coverage is claimed by these five tests; those routes are owned and tested separately. No real model/GPU/provider, scientific validity or restart recovery claim."
+    },
+    "production_or_old_test_edits": 0,
+    "running_test_sessions": []
+  },
+  "replication_route_regression": {
+    "path": "tests/test_posthoc_replication_authority.py",
+    "sha256": "c66758eade03bdb1e882f586561c3e00fcf5abd98398513a94eb83822ef91b89",
+    "cases": 1,
+    "assert_ast_count": 11,
+    "assert_ast_sha256": "cf9965ca1a24a6af7c7e9dc089ef894278f6e2bd019dd382fe71d2401d7d541f",
+    "classification": "One actual C2c draft cross-phase authorization bypass, not an old C2b bug, missing-API failure or real scientific replica.",
+    "evidence": "Existing explicit B1/B3 fixture creates a completed source with simulated source OS execution and real SQLite/artifact records. Real request_replication produces an immutable training-source request and real claim selects its target. Only the target's disk configuration is changed to kind=posthoc_eval/adapter=null; target Python is explicitly the current interpreter. Actual prepare_supervised/Popen/capture/reaper are restored; the real public launcher returns a new running posthoc holder instead of rejecting before preparation. Its null CPU worker runs and is reaped through owned captured pidfds.",
+    "required_behavior": "The mapped training-replica request does not authorize a different phase. Reject before preparing posthoc; keep target CLAIMED without posthoc/training attempt, compute start, work directory or occurrence slot. Retain exact request, claim, source row and original flat-owner bytes.",
+    "source_snapshots": [
+      {
+        "source": "src/orze/engine/native_posthoc.py",
+        "sha256": "28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc",
+        "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-native-posthoc.py"
+      },
+      {
+        "source": "src/orze/engine/launcher.py",
+        "sha256": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+        "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-launcher.py"
+      },
+      {
+        "source": "src/orze/engine/posthoc_attempts.py",
+        "sha256": "14e40df3557399b271a01dcbb55ce54dd7aba5a5b12ce33345b5a901cfa54882",
+        "snapshot": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-posthoc-attempts.py"
+      }
+    ],
+    "snapshot_provenance": "Reuses complete candidate snapshots already captured before the five mechanism tests; current native_posthoc/launcher were fully reread and all three source hashes rechecked equal before this run and after replay. These are draft implementation modules, not published baseline sources.",
+    "red": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_replication_authority.py --tb=short",
+      "exit_code": 1,
+      "footer": "1 failed in 1.34s",
+      "session_id": 10205,
+      "session_state": "completed",
+      "intended_failure": "DID NOT RAISE any of (ReplicationError, LaunchIntegrityError, AttemptEffectBusy). Real launcher returned instead of denying the cross-phase route.",
+      "setup_or_cleanup_errors": 0
+    },
+    "replay": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'import importlib; from pathlib import Path; import pytest; modules=[(\"orze.engine.posthoc_attempts\",\"posthoc-attempts\"),(\"orze.engine.native_posthoc\",\"native-posthoc\"),(\"orze.engine.launcher\",\"launcher\")]; [(lambda module,path: exec(compile(path.read_text(),str(path),\"exec\"),module.__dict__))(importlib.import_module(name),Path(\"docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-\"+label+\".py\")) for name,label in modules]; raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_posthoc_replication_authority.py\",\"--tb=short\"]))'",
+      "exit_code": 1,
+      "footer": "1 failed in 1.22s",
+      "session_id": 86588,
+      "session_state": "completed",
+      "scope": "Three complete modules loaded in memory before collection: posthoc_attempts/native_posthoc/launcher. Same real null CPU target and same DID NOT RAISE boundary; no source file replacement. Additional red count zero.",
+      "test_hash_unchanged": true
+    },
+    "safety": "Only the new null CPU target executes for real. READY wrapper captures actual worker pidfd and dup of actual supervisor pidfd before GO. Cleanup bounded-polls natural closure, uses owned stop if needed, and finally only those exact captured descriptors and own supervisor wait. No process scan, GPU/resource allocation, provider or hostile same-UID isolation claim.",
+    "green": {
+      "verified_in": "candidate_green",
+      "case_count": 1,
+      "containing_footer": "13 passed in 10.37s",
+      "containing_session_id": 98350,
+      "native_posthoc_sha256": "6ca2630164e5955bae7fb5b3da8814fd1b220518d64a916be10b454b550031a7",
+      "interpretation": "The unchanged frozen case now rejects before real preparation, and all exact request/claim/source/slot/no-start/no-work assertions pass. No standalone green timing or additional count is invented."
+    },
+    "production_or_existing_test_edits": 0,
+    "running_test_sessions": [],
+    "repair_review": {
+      "finding": "Read actual _require_supported_request and both callsites: authoritative request_for_task lookup rejects every existing mapped training-replica task before intent, and repeats the veto immediately before GO. It neither trusts authored config flags nor grants posthoc replica support. Malformed request reads propagate rejection; native launch requires its real Lake.",
+      "limits": "This is a training-request phase exclusion, not a general cross-phase replication implementation or distributed transaction across arbitrary external mutations.",
+      "source_sha256": "6ca2630164e5955bae7fb5b3da8814fd1b220518d64a916be10b454b550031a7"
+    }
+  },
+  "budget_pinning_mechanisms": {
+    "path": "tests/test_posthoc_budget_pinning.py",
+    "sha256": "8c879e33f494cdf1da076a77dace0923e128c4646a32d6a62048c928feb2bc5d",
+    "cases": 3,
+    "assert_ast_count": 30,
+    "assert_ast_sha256": "ce6365efb8d5e8872681589d646e0c8c5d17a0b868b1c358e1d75b23d2841647",
+    "classification": "New positive/default execution-budget pinning and READY/GO drift contract. First independent run green in candidate_green, not old behavior or missing-API reds.",
+    "cases_detail": [
+      {
+        "id": "default-budget",
+        "evidence": "Actual real READY returns with launch row LAUNCHING and persisted timeout_seconds=3600.0. Test independently hashes the canonical kind/config/python/timeout declaration and compares execution_identity. Real GO wrapper observes RUNNING with unchanged captured launch_inputs and no marker yet. Holder timeout matches; adapter runs normally and real parent publication completes."
+      },
+      {
+        "id": "explicit-positive-budget",
+        "evidence": "Same actual route with positive fractional37.5. Persisted launch_inputs, independent semantic digest and actual holder agree before GO and after completion. A different timeout produces a different expected digest; score0 is retained as operational output, not scientific validation."
+      },
+      {
+        "id": "changed-after-ready",
+        "evidence": "Transparent real prepare wrapper changes cfg posthoc_timeout97.5 to193 after READY. Actual launcher rejects posthoc_execution_inputs_changed, sends no GO, confirms owned STOP/ECHILD, and keeps RUNNING intent with original bound97.5. No adapter marker, work output, canonical metrics or compute terminal; real D1 stop receipts validate."
+      }
+    ],
+    "fixture_scope": "Reuses Pro's frozen _adapter and _remember test helpers only to create marker-writing CPU adapter and capture actual worker pidfd. No production or older test changes. Actual supervisor/worker/start/stop/SQLite/accounting/publication remain real.",
+    "verified_in": "candidate_green",
+    "production_or_existing_test_edits": 0
+  }
+}

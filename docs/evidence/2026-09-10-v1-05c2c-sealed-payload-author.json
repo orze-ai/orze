@@ -1,0 +1,149 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2c",
+  "subtask": "sealed launch-input bytes transport",
+  "author": "pro_review",
+  "status": "bounded_author_mechanisms_passed_not_full_c2c_acceptance",
+  "ownership": {
+    "new_source": "src/orze/engine/sealed_payload.py",
+    "new_test": "tests/test_sealed_payload.py",
+    "existing_source_or_tests_edited": false,
+    "commit_by_author": false,
+    "independent_review": false
+  },
+  "public_api": {
+    "error_class": "SealedPayloadError(ValueError), fixed content-free reason codes",
+    "writer": "sealed_payload(raw: bytes) -> context manager yielding one owned descriptor",
+    "reader": "read_sealed_payload(fd: int, expected_sha256: str) -> bytes; descriptor borrowed, never closed",
+    "input_bounds": {
+      "raw_type": "exact bytes, not a subclass",
+      "min_bytes": 1,
+      "max_bytes": 65536,
+      "descriptor": "exact int >= 3, not bool",
+      "sha256": "exact str, lowercase hexadecimal, length 64"
+    },
+    "protocol": [
+      "Linux os.memfd_create uses MFD_CLOEXEC | MFD_ALLOW_SEALING. There is no pipe or temporary-file fallback.",
+      "Bounded positive-progress write loop rejects zero, invalid length and I/O errors. Before yielding, F_SEAL_WRITE | F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_SEAL are applied and checked using F_GET_SEALS.",
+      "Writer reads the complete sealed bytes back and verifies SHA-256 before yield. No process is created by the module.",
+      "Reader checks a regular file, nonempty bounded size, all four seals, exact bytes/hash, and matching fstat identity before/after. pread leaves shared offset unchanged.",
+      "Writer context closes its descriptor once, including preparation/body errors. An uncertain close raises sealed_payload_close_failed and is not retried against a potentially reused descriptor.",
+      "The context must span prepare_supervised(worker_only_fds=(fd,)) until worker fork. A fixed caller driver must close the inherited FD after verification and before importing an adapter. Only FD number and expected digest need enter command arguments; payload bytes do not."
+    ]
+  },
+  "tests": {
+    "path": "tests/test_sealed_payload.py",
+    "sha256": "f2a1baaad054f92fc88354bc9a0aa501bcd44e1a9a0697b7c881aa13d696025d",
+    "distinct_cases": 23,
+    "new_mechanism_first_green": 23,
+    "old_release_red": 0,
+    "missing_api_counted_red": 0,
+    "working_draft_red": 0,
+    "groups": [
+      {
+        "cases": 1,
+        "kind": "real Linux kernel",
+        "coverage": "Real seals reject pwrite, file growth, file shrink and shared writable mmap; content remains identical, FD is CLOEXEC and context closes it."
+      },
+      {
+        "cases": 2,
+        "kind": "real memfd",
+        "coverage": "Both exact 1-byte and 65536-byte boundaries read correctly. Read/hash-mismatch leaves caller FD live and shared offset unchanged."
+      },
+      {
+        "cases": 1,
+        "kind": "real CPU supervisor/worker",
+        "coverage": "Actual prepare_supervised inherits worker-only sealed FD. Parent exits its context after READY and before GO; the actual worker still reads identical Unicode/NUL/non-UTF8 bytes, closes its copy and exits with exact TREE_CLOSED proof. No database or posthoc adapter is claimed."
+      },
+      {
+        "cases": 6,
+        "kind": "validation tripwire",
+        "coverage": "None, str, bytearray, bytes subclass, empty and oversized values reject before memfd creation."
+      },
+      {
+        "cases": 4,
+        "kind": "validation tripwire",
+        "coverage": "Boolean/stdio FD and noncanonical/nonstring digest reject before descriptor I/O or close."
+      },
+      {
+        "cases": 3,
+        "kind": "real descriptor rejection",
+        "coverage": "Unsealed memfd, WRITE-only seal and pipe reject while retaining caller ownership."
+      },
+      {
+        "cases": 4,
+        "kind": "explicit syscall faults",
+        "coverage": "Real descriptor with zero-write, actual positive partial write followed by EIO, seal syscall failure, or short readback. No context yield; exactly one close."
+      },
+      {
+        "cases": 1,
+        "kind": "explicit close fault with real descriptor reuse",
+        "coverage": "Close actually releases FD, a new devnull descriptor immediately reuses the number, then close raises. Replacement remains live; no second close is attempted."
+      },
+      {
+        "cases": 1,
+        "kind": "explicit capability absence",
+        "coverage": "Missing memfd_create fails closed without an alternate transport."
+      }
+    ],
+    "evidence_boundary": "Real-kernel/CPU assertions and selected syscall/capability doubles are separated explicitly. The new API was implemented before these tests were first executed; import absence was never counted as a failure."
+  },
+  "runs": [
+    {
+      "name": "first_new_mechanisms",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_sealed_payload.py --tb=short",
+      "exit_code": 0,
+      "footer": "23 passed in 0.69s",
+      "note": "First green before adding public type annotations and replacing test __import__('json') with a normal json import. No semantic production fix or red was observed; use the final captured hashes below."
+    },
+    {
+      "name": "final_bounded_with_supervisor_neighbors",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_sealed_payload.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py --tb=short",
+      "exit_code": 0,
+      "footer": "46 passed in 1.85s",
+      "pre_sha256": {
+        "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+        "tests/test_sealed_payload.py": "f2a1baaad054f92fc88354bc9a0aa501bcd44e1a9a0697b7c881aa13d696025d",
+        "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+        "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+        "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+        "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+        "tests/test_supervised_worker_fds.py": "3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7"
+      },
+      "post_sha256": {
+        "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+        "tests/test_sealed_payload.py": "f2a1baaad054f92fc88354bc9a0aa501bcd44e1a9a0697b7c881aa13d696025d",
+        "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+        "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+        "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+        "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+        "tests/test_supervised_worker_fds.py": "3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7"
+      },
+      "all_pre_post_identical": true,
+      "inventory_files": 7,
+      "note": "23 new sealed-payload tests plus 23 existing supervisor/worker-FD tests. Overlapping test totals are not distinct regressions. This is not full C2c native posthoc integration or whole-repository verification."
+    }
+  ],
+  "integration_handoff": {
+    "api_ready": true,
+    "source_sha256": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+    "close_after_spawn_warning": "Context exit can fail after prepare has forked a worker. The caller must save that created handle inside the context before exit and retain/stop it through existing supervision authority; SealedPayloadError at that point does not prove NOT_STARTED.",
+    "parent_responsibilities": [
+      "Build/validate payload before creation and retain its exact digest.",
+      "Pass the borrowed FD explicitly as worker_only_fds, retaining context until prepare returns.",
+      "Save any created handle before context exit; unknown close/spawn state follows owned STOP/HOLD rather than blind retry.",
+      "Fixed driver verifies sealed bytes, closes inherited descriptor before adapter imports, and separately enforces genuine attempt/scope/native publication authority."
+    ],
+    "source_frozen_by_author": true
+  },
+  "limitations": [
+    "Linux local in-memory immutable bytes, not durable storage, artifact registration, observation validity or crash recovery.",
+    "Descriptor owner must not concurrently close/reassign the borrowed FD during reading/preparation. Stable FD number alone is not persistent execution authority.",
+    "This module performs no SQLite admission, native posthoc policy, adapter loading, Popen, signalling, provider call or process recovery.",
+    "The actual CPU roundtrip tests generic supervisor inheritance, not the later fixed posthoc driver or the complete native posthoc workflow.",
+    "No real GPU, model training, paid provider, holdout or host process scan was used. No research-efficiency or whole-V1 completion claim.",
+    "The helper's constructor and read functions fail closed, but a caller integrating context exit after spawn must preserve its actual process ownership; the bytes module cannot resolve that externally."
+  ]
+}

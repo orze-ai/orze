@@ -1,0 +1,217 @@
+{
+  "schema": 1,
+  "milestone": "V1-05C2c",
+  "component": "native posthoc READY/GO independent review",
+  "reviewer": "/root/pro_review",
+  "date_utc": "2026-09-10",
+  "status": "candidate_review_with_authorized_descriptor_fix_complete_pending_final_source_epoch",
+  "ownership": {
+    "authored_in_this_subtask": [
+      "tests/test_posthoc_ready_go_boundary.py",
+      "docs/evidence/2026-09-10-v1-05c2c-ready-go-review.json"
+    ],
+    "production_review": "Read-only, non-author review of native_posthoc, posthoc_worker, posthoc_completion, posthoc_attempts/posthoc_supervision and launcher integration.",
+    "separate_author_work": "The reviewer authored sealed_payload.py and test_sealed_payload.py in a separate frozen subtask. This review does not describe that implementation as independently authored or independently reviewed.",
+    "unchanged": "During the original five-case review epoch, no production file, existing test, shared fixture, or frozen sealed-payload author evidence was edited. The later authorized descriptor author change is explicitly separated in followup_descriptor_binding."
+  },
+  "tests": {
+    "path": "tests/test_posthoc_ready_go_boundary.py",
+    "sha256": "24dc86ac3863566e203c7833f2ca91ed42b931fd1b68b27bfd146c7ff53434f9",
+    "distinct_cases": 5,
+    "classification": "All five are new native posthoc protocol mechanisms, initially green. No missing-API failures, test-fixture execution errors, historical public-behavior reds, or working-draft reds were observed in this run.",
+    "cases": [
+      {
+        "node": "test_posthoc_ready_does_not_authorize_changed_launch[config]",
+        "mechanism": "After actual blocked READY, change the idea configuration. Final launch validation refuses GO; exact STOP/ECHILD closure occurs, adapter marker remains absent, and native intent is not falsely published completed or failed under changed authority."
+      },
+      {
+        "node": "test_posthoc_ready_does_not_authorize_changed_launch[runtime]",
+        "mechanism": "After actual blocked READY, runtime attestation rejects. No GO/adapter execution or canonical publication; STOP is confirmed and no terminal callback is fabricated."
+      },
+      {
+        "node": "test_posthoc_constructor_fault_stops_ready_owner_before_failed_launch",
+        "mechanism": "Public TrainingProcess construction fails after actual READY/start accounting. The provisional owner is stopped with bound tree closure; failed attempt/compute terminal agree on actual worker PID and return code; task remains CLAIMED."
+      },
+      {
+        "node": "test_posthoc_payload_close_fault_after_go_requires_confirmed_stop",
+        "mechanism": "Actual GO reaches a tiny adapter marker before an actual parent memfd close completes and reports EIO. The created worker is stopped, exact failed-attempt/compute closure is published, task remains IN_PROGRESS for the separate failure-report consumer, and no successful metrics/artifacts are published."
+      },
+      {
+        "node": "test_posthoc_ready_uncertainty_survives_secondary_payload_close_fault",
+        "mechanism": "Actual prepare reaches READY but raises SupervisionUncertain before assignment; the actual parent payload close then reports EIO. The secondary error cannot produce NOT_STARTED: intent remains LAUNCHING, task CLAIMED, no terminal publication, and only fixture-owned cleanup subsequently stops the retained real handle."
+      }
+    ],
+    "transport_and_fixture": {
+      "inherited": [
+        "tests/test_native_posthoc_tree_completion.py::cpu_posthoc",
+        "tests/test_native_training_tree_completion.py::cpu_training",
+        "tests/test_native_training_caller_boundaries.py::case"
+      ],
+      "actual": [
+        "temporary SQLite lake and scheduler claim",
+        "native launcher and posthoc attempt lifecycle",
+        "prepare_supervised, Popen and process identity",
+        "bound STOP and supervisor tree-closure proof",
+        "sealed memfd creation, sealing and actual close",
+        "actual tiny Python adapter execution in the GO/close case",
+        "compute receipts and final attempt readback"
+      ],
+      "substituted_boundaries": [
+        "accelerator allocation/telemetry inherited from the explicit CPU fixture",
+        "temporary sitecustomize adapter registration",
+        "post-READY configuration or runtime-attestation injection",
+        "public TrainingProcess constructor fault",
+        "parent os.close exact captured payload FD fault",
+        "prepare-return and start-return observation seams"
+      ],
+      "cleanup": "Immediately capture actual worker pidfds. Tests stop only retained owned supervisor handles; inherited cleanup uses captured pidfds. No host scan, live external process kill, real accelerator job, provider call, model inference or holdout read."
+    }
+  },
+  "runs": [
+    {
+      "label": "first_candidate_independent_five",
+      "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_ready_go_boundary.py --tb=short",
+      "exit_code": 0,
+      "passed": 5,
+      "failed": 0,
+      "elapsed_seconds": 2.78,
+      "footer": "5 passed in 2.78s",
+      "execution_session": 44907,
+      "source_epoch": "C2c working candidate, before the root's subsequently planned budget/B3 validation fixes; not a full-suite or final-freeze result.",
+      "pre_post_file_count": 9,
+      "pre_post_identical": true,
+      "pre_sha256": {
+        "src/orze/engine/native_posthoc.py": "28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc",
+        "src/orze/engine/posthoc_worker.py": "794f3b6ce7ad6fa36294d48ed78ebd0e7929f1ea0b8d444fa39080685dee4803",
+        "src/orze/engine/posthoc_completion.py": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+        "src/orze/engine/posthoc_attempts.py": "14e40df3557399b271a01dcbb55ce54dd7aba5a5b12ce33345b5a901cfa54882",
+        "src/orze/engine/posthoc_supervision.py": "7b6676f4b274d053633fd74dbfc33f10f1f3b8250d9a4d7718bd8eddef552cdd",
+        "src/orze/engine/launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+        "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+        "tests/test_posthoc_ready_go_boundary.py": "24dc86ac3863566e203c7833f2ca91ed42b931fd1b68b27bfd146c7ff53434f9",
+        "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f"
+      },
+      "post_sha256": {
+        "src/orze/engine/native_posthoc.py": "28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc",
+        "src/orze/engine/posthoc_worker.py": "794f3b6ce7ad6fa36294d48ed78ebd0e7929f1ea0b8d444fa39080685dee4803",
+        "src/orze/engine/posthoc_completion.py": "af01a4959637c0a815b717adb96d34b9244c02ca59ed57a76435c3e1a0fd33ec",
+        "src/orze/engine/posthoc_attempts.py": "14e40df3557399b271a01dcbb55ce54dd7aba5a5b12ce33345b5a901cfa54882",
+        "src/orze/engine/posthoc_supervision.py": "7b6676f4b274d053633fd74dbfc33f10f1f3b8250d9a4d7718bd8eddef552cdd",
+        "src/orze/engine/launcher.py": "41f20bec6828c11589cf5e73ceb5da2e6955518d3057bffb98e5f50e9368927a",
+        "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+        "tests/test_posthoc_ready_go_boundary.py": "24dc86ac3863566e203c7833f2ca91ed42b931fd1b68b27bfd146c7ff53434f9",
+        "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f"
+      }
+    },
+    {
+      "label": "descriptor_first_working_draft_failure",
+      "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_configuration_descriptor.py --tb=short",
+      "source_sha256": "f75fccdaa32e287a74f3ef44c6806f1b9f156b2f9c0602a8096dbb751f4c3bac",
+      "test_sha256": "d1bcce2af0edc5137e5279ac842f04649f0d682d5ddd284ede06c6ca06fffdd8",
+      "exit_code": 1,
+      "passed": 1,
+      "failed": 1,
+      "elapsed_seconds": 0.23,
+      "footer": "1 failed, 1 passed in 0.23s",
+      "failure": "wrong-opened-inode accepted {'adapter': 'evil', 'kind': 'posthoc_eval'} instead of refusing the unbound FD.",
+      "classification": "One genuine candidate descriptor-contract failure; matching-opened-inode control passes. Not a released-version native behavior regression."
+    },
+    {
+      "label": "descriptor_complete_28c21_snapshot_in_memory_replay",
+      "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nimport hashlib\nimport importlib\nfrom pathlib import Path\nimport pytest\nmodule = importlib.import_module('orze.engine.native_posthoc')\nsnapshot = Path('docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-native-posthoc.py')\nraw = snapshot.read_bytes()\nassert hashlib.sha256(raw).hexdigest() == '28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc'\nexec(compile(raw, str(snapshot), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_posthoc_configuration_descriptor.py', '--tb=short']))\nPY",
+      "source_sha256": "28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc",
+      "test_sha256": "d1bcce2af0edc5137e5279ac842f04649f0d682d5ddd284ede06c6ca06fffdd8",
+      "exit_code": 1,
+      "passed": 1,
+      "failed": 1,
+      "elapsed_seconds": 0.09,
+      "footer": "1 failed, 1 passed in 0.09s",
+      "failure": "Same actual wrong-inode byte acceptance as the first direct run.",
+      "classification": "Full-module working-draft replay; no on-disk production restoration and no old-release claim."
+    },
+    {
+      "label": "descriptor_fix_focused_thirty",
+      "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "sha256sum src/orze/engine/native_posthoc.py tests/test_posthoc_configuration_descriptor.py\nPYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_posthoc_configuration_descriptor.py tests/test_posthoc_ready_go_boundary.py tests/test_sealed_payload.py --tb=short",
+      "exit_code": 0,
+      "passed": 30,
+      "failed": 0,
+      "elapsed_seconds": 3.22,
+      "footer": "30 passed in 3.22s",
+      "execution_session": 56629,
+      "pre_post_file_count": 2,
+      "pre_post_identical": true,
+      "pre_sha256": {
+        "src/orze/engine/native_posthoc.py": "6ca2630164e5955bae7fb5b3da8814fd1b220518d64a916be10b454b550031a7",
+        "tests/test_posthoc_configuration_descriptor.py": "d1bcce2af0edc5137e5279ac842f04649f0d682d5ddd284ede06c6ca06fffdd8"
+      },
+      "post_sha256": {
+        "src/orze/engine/native_posthoc.py": "6ca2630164e5955bae7fb5b3da8814fd1b220518d64a916be10b454b550031a7",
+        "tests/test_posthoc_configuration_descriptor.py": "d1bcce2af0edc5137e5279ac842f04649f0d682d5ddd284ede06c6ca06fffdd8"
+      },
+      "source_epoch": "C2c candidate after the authorized descriptor fix. Only these two anchors were collected both immediately before and after this run; no whole-repository pre/post claim."
+    }
+  ],
+  "hash_command": "sha256sum src/orze/engine/native_posthoc.py src/orze/engine/posthoc_worker.py src/orze/engine/posthoc_completion.py src/orze/engine/posthoc_attempts.py src/orze/engine/posthoc_supervision.py src/orze/engine/launcher.py src/orze/engine/sealed_payload.py tests/test_posthoc_ready_go_boundary.py tests/test_native_posthoc_tree_completion.py",
+  "review": {
+    "findings_in_tested_scope": "No new blocker found in the five tested boundaries. The prepare exception path sets _termination_unconfirmed inside the payload context, so a secondary context-close error cannot erase known creation uncertainty.",
+    "candidate_isolation": "posthoc_completion.finish requires bound tree closure before reading candidate receipt/metrics or preparing artifact publication. Success uses attempt-local work files; mutable canonical metrics are published by the parent.",
+    "status_compatibility": "Read-only inspection confirmed that normal adapter mappings without a status field are classified as completed by the fixed worker and accepted by the parent (status None is allowed). These five tests do not independently execute a successful native no-status completion; this claim is source review, not an extra passing case.",
+    "failure_semantics": "Bound STOP/forced cleanup overrides an apparently successful worker result. Constructor and post-GO close-fault tests verify failed launch receipts, not scientific validity or task failure-report delivery.",
+    "import_boundary": "posthoc_worker.main closes its payload FD before its explicit posthoc_runner/adapter import and invocation. This is not a sandbox claim: ordinary Python startup may execute permitted sitecustomize hooks before main. The temporary CPU fixture itself registers an adapter through sitecustomize. The guarantee must not be expanded to all Python startup hooks or arbitrary adapter imports. The supervisor uses isolated Python startup; these tests confirm that the adapter callable does not execute before GO.",
+    "additional_read_only_concerns": [
+      {
+        "topic": "posthoc_timeout",
+        "observation": "In the tested candidate, float(cfg.get('posthoc_timeout', 3600)) is evaluated after READY/start accounting; NaN makes the elapsed > timeout comparison false. Recommend explicit finite-positive validation before intent if that is the chosen launch contract.",
+        "evidence_level": "Source inspection only; not counted as a red or a tested fix. Root owns the separate policy cases and implementation."
+      },
+      {
+        "topic": "B3 reserved training task dispatch",
+        "observation": "The public launcher selects a non-train kind before entering training replication_authorization. The tested native_posthoc candidate lacks a request_for_task veto, so the training-only replication binding needs an explicit unsupported-path check.",
+        "evidence_level": "Source inspection only; not counted as a red or confirmed exploit in this report. Root/runtime own the separate actual replication case and implementation."
+      }
+    ],
+    "limits": [
+      "This is one candidate's bounded review, not full C2c completion.",
+      "The five mechanisms add no automatic restart adoption, resume enrollment, replication permission, observation/scientific validity, or provider proof.",
+      "No independent conclusion is claimed for the reviewer's own sealed-payload implementation.",
+      "Later source changes require a new run with fresh pre/post hashes; this run must remain preserved as candidate history."
+    ]
+  },
+  "followup_descriptor_binding": {
+    "ownership": "Root authorized this reviewer to author only the _configuration region of native_posthoc.py and a separate new test file. The earlier five-case non-author review remains preserved above; this descriptor fix is author work, not independent review of the reviewer's own change.",
+    "test_path": "tests/test_posthoc_configuration_descriptor.py",
+    "test_sha256": "d1bcce2af0edc5137e5279ac842f04649f0d682d5ddd284ede06c6ca06fffdd8",
+    "distinct_cases": 2,
+    "classification": {
+      "working_draft_regression": 1,
+      "matching_descriptor_control": 1,
+      "historical_release_red": 0,
+      "api_absence_failure": 0
+    },
+    "boundary": "The named configuration and every captured path identity stay unchanged. A narrowly injected os.open boundary returns a real regular FD for a different existing inode containing different YAML. The test asserts the actual FD's inode, exact one close and unchanged source bytes/metadata. The old reader accepted that unrelated content.",
+    "not_an_aba_claim": "No real pathname rename/ABA race was reproduced. Existing _verify_identities compares ctime as well as other file metadata, so restoring a pathname while changing captured metadata is already rejected. The regression isolates the missing comparison between the opened FD and the unchanged captured path identity.",
+    "first_failure_source_epoch": "The root's independent timeout/B3 edits landed while the full snapshot was being captured. The first direct run is therefore f75fcc... rather than 28c21.... _configuration was still unchanged; evidence uses the actual full-module hash.",
+    "snapshot": {
+      "path": "docs/evidence/snapshots/v1-05c2c-before-posthoc-configuration-descriptor.py",
+      "sha256": "f75fccdaa32e287a74f3ef44c6806f1b9f156b2f9c0602a8096dbb751f4c3bac",
+      "completeness": "Full then-current native_posthoc.py, preserved with apply_patch; byte-identical source and snapshot SHA verified before first failing run."
+    },
+    "replay_snapshot": {
+      "path": "docs/evidence/snapshots/v1-05c2c-before-native-posthoc-publication-native-posthoc.py",
+      "sha256": "28c21fe663168dd7f08bdf20bacef2eb3ce16c27929f650ae0b9a654dce6abbc",
+      "completeness": "Pre-existing complete C2c working-draft native_posthoc.py snapshot. Hash asserted and entire module executed in memory; no production file was replaced."
+    },
+    "change": "Only _configuration: import the existing _identity helper locally, compare _identity(before fstat) to captured[-1][2] before reading, and compare a fresh fstat to the same captured file identity after reading. Original named-path revalidation and one-owner finally close remain.",
+    "unchanged_by_followup": [
+      "all previously frozen tests",
+      "sealed_payload.py",
+      "sealed-payload author JSON",
+      "all native_posthoc launch/timeout/B3 logic owned by root"
+    ],
+    "author_verification_scope": "The 30-case target is exactly new descriptor 2 + existing READY/GO 5 + existing sealed-payload 23. It is an overlapping focused run, not 30 additional distinct cases or a full-suite result. Other agents may continue authorized production changes; final-source revalidation remains separate."
+  }
+}
