@@ -71,9 +71,6 @@ from orze.engine.execution_identity import (
 from orze.engine.termination_hold import (
     TerminationUnconfirmed, require_no_unconfirmed_stop, terminate_execution,
 )
-from orze.engine.supervised_process import (
-    SupervisedProcess, SupervisionUncertain, prepare_supervised,
-)
 from orze.core.fs import atomic_write, tail_file
 from orze.core.gpu_lease import gpu_execution_lease
 from orze.core.research_policy import validate_idea_against_research_policy
@@ -364,11 +361,6 @@ def _detect_zombie(tp) -> bool:
     continuously positive evidence. The time floor keeps behavior invariant
     when the scheduler poll interval changes.
     """
-    # This heuristic samples a worker-rooted PID tree. A subreaper can own
-    # useful descendants outside that root even while the worker is alive.
-    # Missing coverage is not evidence of inactivity or process-tree closure.
-    if isinstance(tp.process, SupervisedProcess):
-        return False
     pid = tp.process.pid
 
     # 1. Check CPU usage across the process tree.
@@ -550,8 +542,6 @@ def _watchdog_check(tp) -> bool:
     the configured consecutive-sample and elapsed-time floors post-grace.
     Mutates ``tp`` to keep watchdog state.
     """
-    if isinstance(tp.process, SupervisedProcess):
-        return False
     now = time.time()
     elapsed_min = (now - tp.start_time) / 60.0
 
@@ -1555,8 +1545,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
 
     F12: If the idea's YAML specifies ``kind`` other than 'train' (or the
     idea_lake row has such a kind), dispatch to posthoc_runner instead of
-    the training script. Native training uses a prelaunch-owned supervisor;
-    pre-native callers retain their explicitly limited compatibility path.
+    the training script. The 'train' path below is preserved byte-exact
+    for back-compat.
 
     Args:
         lake: IdeaLake instance for FSM transition recording (optional)
@@ -1840,35 +1830,20 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             # Keep the log open for the subprocess lifetime.  The GPU lease
             # descriptor is inherited alongside any lineage attestation FD.
             log_fh = open(log_path, "w", encoding="utf-8")
-            lineage_fds = (lineage_context["write_fd"],) if lineage_context else ()
+            pass_fds = list(lease_fds)
+            if lineage_context:
+                pass_fds.append(lineage_context["write_fd"])
             if replication is not None and compute_execution_identity(**identity_inputs) != execution_identity:
                 from orze.engine.attempt_effect_lock import AttemptEffectBusy
                 raise AttemptEffectBusy("replication_execution_inputs_changed")
-            if getattr(tp, "attempt_ref", None) is not None:
-                from orze.engine.training_supervision import identity
-                proc = prepare_supervised(
-                    cmd, identity=identity(tp, results_dir / idea_id),
-                    env=env, stdout=log_fh, stderr=subprocess.STDOUT,
-                    pass_fds=lease_fds, worker_only_fds=lineage_fds)
-            else:
-                proc = subprocess.Popen(
-                    cmd, env=env, stdout=log_fh, stderr=subprocess.STDOUT,
-                    preexec_fn=_new_process_group,
-                    pass_fds=tuple(lease_fds) + lineage_fds)
+            proc = subprocess.Popen(
+                cmd, env=env, stdout=log_fh, stderr=subprocess.STDOUT,
+                preexec_fn=_new_process_group,
+                pass_fds=tuple(pass_fds),
+            )
             tp.process = proc
             tp.start_time = time.time()
-            if getattr(tp, "attempt_ref", None) is not None:
-                from orze.engine.training_attempts import record_ready_start
-                record_ready_start(lake, tp, results_dir / idea_id, record_compute_start)
-            else:
-                record_compute_start(tp, results_dir / idea_id, phase="training")
-    except SupervisionUncertain as launch_error:
-        # The supervisor may already have forked even when prepare never
-        # returned. Neither proc=None nor a lost channel proves NOT_STARTED.
-        tp._termination_unconfirmed = True
-        close_model_lineage_attestation(lineage_context)
-        _close_launch_log(log_fh)
-        raise TerminationUnconfirmed("training_supervision_unconfirmed") from launch_error
+            record_compute_start(tp, results_dir / idea_id, phase="training")
     except Exception as launch_error:
         close_model_lineage_attestation(lineage_context)
         if proc is not None:
@@ -1905,54 +1880,15 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         )
         tp.replica_reservation = replica_reservation
         tp.replication_authorization = replication
+        # The allocation start is already durable before leaving the lease.
+        receive_model_lineage_attestation(
+            lineage_context, process_pid=proc.pid)
         if getattr(tp, "attempt_ref", None) is not None:
             from orze.engine.training_attempts import started
-            from orze.engine.execution_authority import canonical_identity_equal
-            from orze.engine.replication import replication_authorization
-            fresh_replication = replication_authorization(
-                lake, idea_id, results_dir / idea_id, cfg, execution_identity,
-                claim_id=attempt_id)
-            if ((replication is not None or fresh_replication is not None)
-                    and not canonical_identity_equal(replication, fresh_replication)):
-                raise LaunchIntegrityError("training_replication_authorization_changed")
-            fresh_resume = prepare_resume_launch(idea_id, results_dir, cfg)
-            def resume_pin(context):
-                # The internal launch context has exactly one Path field;
-                # project that field explicitly without weakening JSON identity.
-                if context is None:
-                    return {"present": False}
-                return {"present": True, "context": {
-                    **context, "request_path": str(context["request_path"])}}
-            if ((resume_context is not None or fresh_resume is not None)
-                    and not canonical_identity_equal(resume_pin(resume_context), resume_pin(fresh_resume))):
-                raise LaunchIntegrityError("training_resume_authorization_changed")
             identity = capture_process_identity(proc.pid)
             started(lake, tp, results_dir / idea_id, identity,
                     resume_context=resume_context)
-            # READY can wait. Recheck the captured executable/config inputs
-            # outside SQL before this one-shot GO, and recheck dynamic launch
-            # authorization last. No PID substitution for the actual worker.
-            if compute_execution_identity(**identity_inputs) != execution_identity:
-                raise LaunchIntegrityError("training_execution_inputs_changed")
-            if resume_context is not None:
-                from orze.engine.resume import validate_resume_evidence
-                _, _, receipt_sha = validate_resume_evidence(
-                    idea_id, results_dir, cfg, resume_context["checkpoint"])
-                if receipt_sha != resume_context["receipt_sha256"]:
-                    raise LaunchIntegrityError("training_resume_authorization_changed")
-            from orze.engine.training_attempts import current
-            if not current(lake, tp, results_dir / idea_id):
-                raise LaunchIntegrityError("training_launch_authority_changed")
-            _assert_controller_runtime_attested(cfg)
-            _assert_launch_authorized(idea_id, results_dir, cfg)
-            _assert_gpu_authorized(gpu, cfg)
-            _assert_campaign_evidence_authorized(cfg, lake)
-            require_no_unconfirmed_stop(results_dir / idea_id)
-            proc.start()
-            # The worker emits its nonce only AFTER GO and kernel setup.
-            receive_model_lineage_attestation(lineage_context, process_pid=proc.pid)
             return tp
-        receive_model_lineage_attestation(lineage_context, process_pid=proc.pid)
         if claim_path.exists():
             identity = capture_process_identity(proc.pid)
             claim_data = json.loads(claim_path.read_text(encoding="utf-8"))
@@ -1981,21 +1917,6 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             )
         if resume_context:
             mark_resume_launched(resume_context, claim_path)
-    except SupervisionUncertain as launch_error:
-        tp._termination_unconfirmed = True
-        close_model_lineage_attestation(lineage_context)
-        _close_launch_log(log_fh)
-        raise TerminationUnconfirmed("training_supervision_unconfirmed") from launch_error
-    except LaunchIntegrityError:
-        close_model_lineage_attestation(lineage_context)
-        try:
-            terminate_execution(tp, results_dir / idea_id, phase="training",
-                                reaper=_terminate_and_reap, timeout=3)
-        finally:
-            _close_launch_log(log_fh)
-        # Closed local OS effects do not authorize publishing under rejected
-        # runtime/inputs. Preserve native intent for explicit recovery.
-        raise
     except Exception as launch_error:
         close_model_lineage_attestation(lineage_context)
         _cleanup_failed_launch(tp, results_dir / idea_id, "training", log_fh, lake=lake)
@@ -2163,12 +2084,7 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
             continue
         # With multi-slot, gpu is a slot key like "0:42". Use tp.gpu for actual GPU ID.
         actual_gpu = tp.gpu if hasattr(tp, 'gpu') else gpu
-        try:
-            ret = tp.process.poll()
-        except SupervisionUncertain:
-            tp._termination_unconfirmed = True
-            logger.error("[TERMINATION-HOLD] %s supervision lost; remains active", tp.idea_id)
-            continue
+        ret = tp.process.poll()
         elapsed = time.time() - tp.start_time
 
         # --- Still running ---

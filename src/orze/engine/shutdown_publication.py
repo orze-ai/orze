@@ -47,6 +47,9 @@ def _current(lake, tracked, folder, phase, cfg):
     if phase == "evaluation":
         from orze.engine.evaluation_supervision import bound_binding
         bound_binding(tracked, row, folder)
+    elif row["binding"].get("origin") == "native_training":
+        from orze.engine.training_supervision import bound_binding
+        bound_binding(tracked, row, folder)
     return True
 
 
@@ -86,6 +89,10 @@ def handle_shutdown(tracked, results_dir, phase, stop, *, lake=None, cfg=None):
         closure = None
         if phase == "evaluation":
             from orze.engine.evaluation_supervision import require_closed
+            closure = require_closed(tracked, current_attempt(lake.conn, folder.name, phase),
+                                     folder, ret)
+        elif phase == "training":
+            from orze.engine.training_supervision import require_closed
             closure = require_closed(tracked, current_attempt(lake.conn, folder.name, phase),
                                      folder, ret)
         interruption = None

@@ -68,11 +68,6 @@ def test_created_child_requires_cleanup_after_lease_exit_failure(
     monkeypatch.setattr(launcher, "_verify_gpu_free", lambda *a, **k: None)
     monkeypatch.setattr(launcher.subprocess, "Popen", popen)
     monkeypatch.setattr(launcher, "_terminate_and_reap", reap)
-    if phase == "training":
-        from supervision_fixture import install_training
-        monkeypatch.setattr(launcher, "capture_process_identity", lambda pid: {
-            "pid": pid, "pgid": pid, "start_ticks": 2})
-        install_training(monkeypatch)
     try:
         with pytest.raises(Exception) as error:
             launcher.launch(idea_id, 0, results, cfg, lake=lake)

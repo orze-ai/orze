@@ -213,8 +213,6 @@ def test_launch_initialization_failure_needs_confirmed_cleanup_before_terminal(
     monkeypatch.setattr(launcher.subprocess, "Popen", popen)
     monkeypatch.setattr(launcher, "capture_process_identity", failed_identity)
     monkeypatch.setattr(launcher, "_terminate_and_reap", reap)
-    from supervision_fixture import install_training
-    install_training(monkeypatch, ready_start_ticks=2)
     try:
         with pytest.raises(Exception):
             launcher.launch(idea_id, 0, results, cfg, lake=lake)

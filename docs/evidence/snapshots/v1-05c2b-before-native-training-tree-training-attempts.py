@@ -111,15 +111,6 @@ def require_catalog(lake, idea_dir, cfg, *, handle=None):
     actual = str(Path(paths[0]).absolute())
     if any(value is not None and value != actual for value in (bound, declared)):
         raise AttemptEffectBusy("training_catalog_scope_mismatch")
-    if handle is not None and getattr(handle, "is_posthoc", False):
-        ref = getattr(handle, "attempt_ref", None)
-        row = current_attempt(lake.conn, Path(idea_dir).name, "training")
-        if (getattr(ref, "phase", None) == "training"
-                or row is not None and row["binding"].get("origin") == "native_training"
-                and row["state"] not in ("TERMINAL", "NOT_STARTED")):
-            # Mutable routing metadata cannot bypass native ownership, even
-            # when the callback strips its in-memory AttemptRef as well.
-            raise AttemptEffectBusy("training_native_phase_mismatch")
 
 
 def _legacy_start(tp, idea_dir):
@@ -185,9 +176,6 @@ def current(lake, tp, idea_dir):
         if not canonical_identity_equal(
                 lifecycle_fence(lake, tp.idea_id, "training"), row["binding"].get("lifecycle")):
             return False
-        if row["binding"].get("origin") == "native_training":
-            from orze.engine.training_supervision import bound_binding
-            bound_binding(tp, row, idea_dir)
         return row
     except StaleAttempt:
         return False
@@ -245,8 +233,6 @@ def begin(lake, tp, idea_dir, cfg=None):
             "origin": "native_training", "claim_sha256": claim_sha,
             "launch_lifecycle": launch_state,
         }
-        from orze.engine.training_supervision import PROTOCOL
-        binding["process_supervision_protocol"] = PROTOCOL
         if artifact_binding is not None:
             binding["artifact_publication"] = artifact_binding
         if replication is not None:
@@ -262,41 +248,11 @@ def begin(lake, tp, idea_dir, cfg=None):
     return ref
 
 
-def record_ready_start(lake, tp, idea_dir, record_start):
-    """Account for an actually allocated blocked worker before lease exit.
-
-    This does not advertise IN_PROGRESS or authorize GO. Check the pinned
-    protocol and exact READY before any start receipt, including old rows.
-    """
-    from orze.engine.training_supervision import PROTOCOL, ready_binding
-    from orze.engine.native_evaluation import _verify_compute
-    with execution_transaction(lake, idea_dir) as tx:
-        row = require_current(tx.conn, tp.attempt_ref, states=("LAUNCHING",))
-        if row["binding"].get("process_supervision_protocol") != PROTOCOL:
-            raise AttemptEffectBusy("training_supervision_unbound")
-        ready_binding(tp, idea_dir)
-        _, claim_sha = _claim(tp, idea_dir, lake)
-        if (claim_sha != row["binding"].get("claim_sha256")
-                or not canonical_identity_equal(_launch_state(lake, tp.idea_id),
-                                                row["binding"].get("launch_lifecycle"))):
-            raise StaleAttempt("training_launch_authority_changed")
-        record_start(tp, idea_dir, phase="training")
-        start, _ = _read(idea_dir / "_compute_receipts" / tp.attempt_id / "start.json")
-        _verify_compute(idea_dir, start, process=tp, phase="training",
-                        event="start", outcome="started")
-        tx.watch_attempt(tp.attempt_ref)
-
-
-def started(lake, tp, idea_dir, process_identity, *, resume_context=None,
-            record_start=None):
+def started(lake, tp, idea_dir, process_identity, *, resume_context=None):
     """Publish trainer identity and IN_PROGRESS in the observed attempt txn."""
     from orze.engine import launcher
     with execution_transaction(lake, idea_dir) as tx:
         row = require_current(tx.conn, tp.attempt_ref, states=("LAUNCHING",))
-        from orze.engine.training_supervision import PROTOCOL, ready_binding
-        if row["binding"].get("process_supervision_protocol") != PROTOCOL:
-            raise AttemptEffectBusy("training_supervision_unbound")
-        supervision = ready_binding(tp, idea_dir)
         claim, claim_sha = _claim(tp, idea_dir, lake)
         if (claim_sha != row["binding"].get("claim_sha256")
                 or not canonical_identity_equal(_launch_state(lake, tp.idea_id),
@@ -306,11 +262,7 @@ def started(lake, tp, idea_dir, process_identity, *, resume_context=None,
                 or type(process_identity.get("pid")) is not int
                 or type(process_identity.get("start_ticks")) is not int):
             raise AttemptAuthorityError("training_process_identity_mismatch")
-        if process_identity["start_ticks"] != supervision["worker"]["start_ticks"]:
-            raise AttemptAuthorityError("training_process_identity_mismatch")
         from orze.engine.native_evaluation import _verify_compute
-        if record_start is not None:
-            record_start(tp, idea_dir, phase="training")
         start, _ = _read(idea_dir / "_compute_receipts" / tp.attempt_id / "start.json")
         _verify_compute(idea_dir, start, process=tp, phase="training",
                         event="start", outcome="started")
@@ -330,9 +282,14 @@ def started(lake, tp, idea_dir, process_identity, *, resume_context=None,
                     reason=f"training_launched on gpu {tp.gpu}", host=socket.gethostname(),
                     pid=tp.process.pid, sop_type="training"):
                 raise AttemptAuthorityError("training_started_lifecycle_rejected")
-            binding = dict(row["binding"])
-            binding.update({"process_pid": tp.process.pid, "supervision": supervision,
-                            "lifecycle": lifecycle_fence(lake, tp.idea_id, "training")})
+            binding = {
+                "origin": "native_training", "process_pid": tp.process.pid,
+                "lifecycle": lifecycle_fence(lake, tp.idea_id, "training"),
+            }
+            if "artifact_publication" in row["binding"]:
+                binding["artifact_publication"] = row["binding"]["artifact_publication"]
+            if "replication" in row["binding"]:
+                binding["replication"] = row["binding"]["replication"]
             mark_running(tx.conn, tp.attempt_ref, binding=binding)
             if resume_context:
                 launcher.mark_resume_launched(resume_context, idea_dir / "claim.json", effect_lease=tx.lease)
@@ -347,32 +304,18 @@ def failed_launch(lake, tp, idea_dir, ret, *, not_started=False):
     """Close a known unstarted/stopped launch without inventing task completion."""
     from orze.engine.accounting import record_compute_terminal
     from orze.engine.native_evaluation import _verify_compute
-    from orze.engine.training_supervision import require_closed, bind_launch_cleanup
-    if not_started and (getattr(tp, "process", None) is not None
-                        or getattr(tp, "_termination_unconfirmed", False) is True):
-        raise AttemptEffectBusy("training_created_process_cannot_be_not_started")
     ref = tp.attempt_ref
-    closure = None
-    if not not_started:
-        row = require_current(lake.conn, ref, states=("LAUNCHING", "RUNNING"))
-        closure = require_closed(tp, row, idea_dir, ret, allow_launch_cleanup=True)
     with execution_transaction(lake, idea_dir) as tx:
         row = require_current(tx.conn, ref, states=("LAUNCHING", "RUNNING"))
         _claim(tp, idea_dir, lake)
         if not not_started and type(ret) is not int:
             raise AttemptEffectBusy("training_failed_launch_exit_unconfirmed")
-        if closure is not None and not canonical_identity_equal(closure, require_closed(
-                tp, row, idea_dir, ret, allow_launch_cleanup=True)):
-            raise AttemptEffectBusy("training_process_tree_receipt_changed")
-        plan = {
+        digest = tx.prepare(ref, {
             "operation": "training_failed_launch", "return_code": ret,
             "not_started": not_started,
-        }
-        if closure is not None:
-            plan["process_tree"] = closure
-        digest = tx.prepare(ref, plan)
+        })
         if row["state"] == "LAUNCHING" and not not_started:
-            mark_running(tx.conn, ref, binding=bind_launch_cleanup(row, closure))
+            mark_running(tx.conn, ref)
         if not not_started:
             payload = record_compute_terminal(
                 tp, idea_dir, "failed", "training_launch_initialization_failed",
@@ -383,7 +326,5 @@ def failed_launch(lake, tp, idea_dir, ret, *, not_started=False):
                             return_code=ret, require_start=row["state"] == "RUNNING")
         terminal = {"outcome": "not_started" if not_started else "failed",
                     "return_code": ret, "effect_receipt_sha256": digest}
-        if closure is not None:
-            terminal["process_tree"] = closure
         if finish_attempt(tx.conn, ref, terminal, not_started=not_started) != "committed":
             raise AttemptAuthorityError("training_failed_launch_not_new")

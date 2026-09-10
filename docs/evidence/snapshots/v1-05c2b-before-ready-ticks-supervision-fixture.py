@@ -133,7 +133,7 @@ def adapt_training_reaper(monkeypatch, module, *, unwrap=True):
     monkeypatch.setattr(module, "_terminate_and_reap", reap)
 
 
-def install_training(monkeypatch, *, ready_start_ticks=None):
+def install_training(monkeypatch):
     """Opt a pre-existing fake-training-Popen fixture into simulated READY.
 
     The captured worker ticks come from that fixture's identity boundary, not
@@ -146,11 +146,8 @@ def install_training(monkeypatch, *, ready_start_ticks=None):
         kwargs["pass_fds"] = tuple(kwargs.get("pass_fds", ())) + tuple(worker_only_fds)
         child = launcher.subprocess.Popen(cmd, preexec_fn=launcher._new_process_group, **kwargs)
         handle = SimulatedSupervisedProcess(child, identity, cmd)
-        # A test injecting a later claim-identity failure can separately
-        # declare READY's simulated ticks, preserving its original fault seam.
-        ticks = (launcher.capture_process_identity(handle.pid)["start_ticks"]
-                 if ready_start_ticks is None else ready_start_ticks)
-        handle._sim_binding["worker"]["start_ticks"] = ticks
+        captured = launcher.capture_process_identity(handle.pid)
+        handle._sim_binding["worker"]["start_ticks"] = captured["start_ticks"]
         return handle
 
     unwrap = launcher._terminate_and_reap is not process._terminate_and_reap

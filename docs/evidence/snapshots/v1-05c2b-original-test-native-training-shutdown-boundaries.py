@@ -27,8 +27,6 @@ def _stop_boundary(c, monkeypatch, *, confirmed=True):
         return confirmed
 
     monkeypatch.setattr(process, "_terminate_and_reap", stop)
-    from supervision_fixture import adapt_training_reaper
-    adapt_training_reaper(monkeypatch, process)
     return stops
 
 

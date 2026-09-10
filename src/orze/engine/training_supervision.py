@@ -1,38 +1,36 @@
-"""Compatible evaluation adapter for shared process-tree publication proof.
+"""Native training adapter for shared process-tree publication proof.
 
 The wrapper fixes the phase and preserves the public READY/closure operations.
-Evaluation error codes and call signatures remain unchanged.
+Only protocol-bound native rows qualify; legacy import is a caller decision.
 """
 from __future__ import annotations
 
 from orze.engine import process_supervision as _shared
 
 PROTOCOL = _shared.PROTOCOL
-_same = _shared._same
-_HEX = _shared._HEX
 
 
 def identity(ep, idea_dir):
-    return _shared.identity(ep, idea_dir, phase="evaluation")
+    return _shared.identity(ep, idea_dir, phase="training")
 
 
 def ready_binding(ep, idea_dir):
-    return _shared.ready_binding(ep, idea_dir, phase="evaluation")
+    return _shared.ready_binding(ep, idea_dir, phase="training")
 
 
 def bound_binding(ep, row, idea_dir, *, allow_launch_cleanup=False):
-    return _shared.bound_binding(ep, row, idea_dir, phase="evaluation",
+    return _shared.bound_binding(ep, row, idea_dir, phase="training",
                                  allow_launch_cleanup=allow_launch_cleanup)
 
 
 def require_closed(ep, row, idea_dir, ret, *, allow_launch_cleanup=False):
-    return _shared.require_closed(ep, row, idea_dir, ret, phase="evaluation",
+    return _shared.require_closed(ep, row, idea_dir, ret, phase="training",
                                   allow_launch_cleanup=allow_launch_cleanup)
 
 
 def failure_override(closure, forced):
-    return _shared.failure_override(closure, forced, phase="evaluation")
+    return _shared.failure_override(closure, forced, phase="training")
 
 
 def bind_launch_cleanup(row, closure):
-    return _shared.bind_launch_cleanup(row, closure, phase="evaluation")
+    return _shared.bind_launch_cleanup(row, closure, phase="training")

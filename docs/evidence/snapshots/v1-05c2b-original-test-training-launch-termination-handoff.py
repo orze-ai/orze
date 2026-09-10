@@ -72,8 +72,6 @@ def scenario(tmp_path, monkeypatch):
     monkeypatch.setattr(phases, "_try_executor_fix", fixer)
     # No real provider can be reached through optional proposal hooks.
     monkeypatch.setattr("orze.extensions.get_extension", lambda name: None)
-    from supervision_fixture import install_training
-    install_training(monkeypatch)
     try:
         yield runner, child, popen, fixer
     finally:
@@ -96,9 +94,6 @@ def test_phase_never_releases_unknown_started_execution(
 
     monkeypatch.setattr(launcher, "_terminate_and_reap", controlled_stop)
     monkeypatch.setattr(process, "_terminate_and_reap", controlled_stop)
-    from supervision_fixture import adapt_training_reaper
-    adapt_training_reaper(monkeypatch, launcher)
-    adapt_training_reaper(monkeypatch, process)
     if boundary == "initialization":
         def reject_attestation(*args, **kwargs):
             raise RuntimeError("injected post-Popen initialization failure")

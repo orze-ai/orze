@@ -20,14 +20,8 @@ def _fail_initialization(monkeypatch, child):
         assert proc is child
         child.returncode = -15
         return True
-    # This fixture represents failure after allocation but before RUNNING.
-    # Lineage receive now occurs after GO; reject the public post-Popen
-    # constructor instead to retain the original CLAIMED/rollover contract.
-    monkeypatch.setattr("orze.engine.launcher.TrainingProcess", reject)
+    monkeypatch.setattr("orze.core.model_lineage.receive_model_lineage_attestation", reject)
     monkeypatch.setattr("orze.engine.launcher._terminate_and_reap", stop)
-    from orze.engine import launcher
-    from supervision_fixture import adapt_training_reaper
-    adapt_training_reaper(monkeypatch, launcher)
     return error
 
 

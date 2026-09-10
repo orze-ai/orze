@@ -1857,10 +1857,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
                     pass_fds=tuple(lease_fds) + lineage_fds)
             tp.process = proc
             tp.start_time = time.time()
-            if getattr(tp, "attempt_ref", None) is not None:
-                from orze.engine.training_attempts import record_ready_start
-                record_ready_start(lake, tp, results_dir / idea_id, record_compute_start)
-            else:
+            if getattr(tp, "attempt_ref", None) is None:
                 record_compute_start(tp, results_dir / idea_id, phase="training")
     except SupervisionUncertain as launch_error:
         # The supervisor may already have forked even when prepare never
@@ -1916,19 +1913,12 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
                     and not canonical_identity_equal(replication, fresh_replication)):
                 raise LaunchIntegrityError("training_replication_authorization_changed")
             fresh_resume = prepare_resume_launch(idea_id, results_dir, cfg)
-            def resume_pin(context):
-                # The internal launch context has exactly one Path field;
-                # project that field explicitly without weakening JSON identity.
-                if context is None:
-                    return {"present": False}
-                return {"present": True, "context": {
-                    **context, "request_path": str(context["request_path"])}}
             if ((resume_context is not None or fresh_resume is not None)
-                    and not canonical_identity_equal(resume_pin(resume_context), resume_pin(fresh_resume))):
+                    and not canonical_identity_equal(resume_context, fresh_resume)):
                 raise LaunchIntegrityError("training_resume_authorization_changed")
             identity = capture_process_identity(proc.pid)
             started(lake, tp, results_dir / idea_id, identity,
-                    resume_context=resume_context)
+                    resume_context=resume_context, record_start=record_compute_start)
             # READY can wait. Recheck the captured executable/config inputs
             # outside SQL before this one-shot GO, and recheck dynamic launch
             # authorization last. No PID substitution for the actual worker.

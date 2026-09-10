@@ -157,12 +157,6 @@ def _run(channel, config):
     state = {"worker_returncode": None, "reaped_children": 0}
     try:
         os.close(read_gate)
-        # Only the blocked worker keeps these copies (e.g. an attestation
-        # writer). Do not retain them through descendant drain or retry a
-        # failed close: the descriptor number may already have been reused.
-        # This runs inside owned cleanup and strictly before READY.
-        for fd in config.get("worker_only_fds", []):
-            os.close(fd)
         worker, parent = process_identity(worker_pid)
         supervisor, _ = process_identity(os.getpid())
         if parent != os.getpid():

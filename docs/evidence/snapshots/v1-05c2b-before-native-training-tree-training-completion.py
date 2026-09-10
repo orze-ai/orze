@@ -14,9 +14,7 @@ import time
 
 from orze.core.execution_attempts import AttemptAuthorityError, StaleAttempt, finish_attempt
 from orze.engine.attempt_effect_lock import AttemptEffectBusy
-from orze.engine.execution_authority import (
-    canonical_identity_equal, execution_transaction, lifecycle_fence,
-)
+from orze.engine.execution_authority import execution_transaction, lifecycle_fence
 from orze.engine.native_evaluation import CompletionEvent, _identities, _verify_compute
 from orze.engine.training_attempts import current, import_for_completion
 
@@ -47,11 +45,6 @@ def finish(lake, tp, slot, idea_dir, cfg, ret, failure_counts, *, forced=None, i
     initial_candidate = current(lake, tp, idea_dir)
     if not initial_candidate:
         return None
-    closure = None
-    if not initial_candidate.get("legacy"):
-        from orze.engine.training_supervision import require_closed, failure_override
-        closure = require_closed(tp, initial_candidate, idea_dir, ret)
-        forced = failure_override(closure, forced)
     artifact_binding = _artifact_binding(initial_candidate, tp, idea_dir, cfg)
     if type(ret) is not int:
         raise AttemptEffectBusy("training_exit_unconfirmed")
@@ -111,17 +104,12 @@ def finish(lake, tp, slot, idea_dir, cfg, ret, failure_counts, *, forced=None, i
             candidate = current(lake, tp, idea_dir)
             if not candidate or identities != _identities([metrics_path]):
                 return None
-            if closure is not None and not canonical_identity_equal(
-                    closure, require_closed(tp, candidate, idea_dir, ret)):
-                raise AttemptEffectBusy("training_process_tree_receipt_changed")
             _artifact_binding(candidate, tp, idea_dir, cfg)
             ref = import_for_completion(tx, tp, candidate)
             plan = {
                 "operation": "training_terminal", "outcome": outcome,
                 "reason_code": reason, "return_code": ret,
             }
-            if closure is not None:
-                plan["process_tree"] = closure
             artifact_records = None
             if artifacts is not None:
                 from orze.engine.artifact_publication import verify_prepared_artifacts
@@ -183,8 +171,6 @@ def finish(lake, tp, slot, idea_dir, cfg, ret, failure_counts, *, forced=None, i
                         "return_code": ret, "effect_receipt_sha256": digest,
                         "failure_count_after": target_count,
                         "lifecycle": lifecycle_fence(lake, tp.idea_id, "training")}
-            if closure is not None:
-                terminal["process_tree"] = closure
             if artifact_records is not None:
                 verify_prepared_artifacts(artifacts, ref, idea_dir, artifact_binding)
             if artifact_binding is not None:
@@ -216,32 +202,15 @@ def requeue(lake, tp, slot, idea_dir, cfg, ret, reason, *, input_identities=None
     from orze.engine.failure import _reset_idea_for_retry
     if type(ret) is not int:
         raise AttemptEffectBusy("training_requeue_exit_unconfirmed")
-    candidate = current(lake, tp, idea_dir)
-    if not candidate:
-        return None
-    closure = None
-    if not candidate.get("legacy"):
-        from orze.engine.training_supervision import require_closed
-        closure = require_closed(tp, candidate, idea_dir, ret)
-        # An explicit scheduler allocation rollback is different from a
-        # trainer's automatic VRAM retry. STOP must not authorize the latter.
-        if ((closure["stop_requested"] or closure["forced_cleanup"])
-                and reason != "scheduler_slot_race"):
-            raise AttemptEffectBusy("training_stopped_process_cannot_auto_requeue")
     with execution_transaction(lake, idea_dir) as tx:
         candidate = current(lake, tp, idea_dir)
         if not candidate:
             return None
-        if closure is not None and not canonical_identity_equal(
-                closure, require_closed(tp, candidate, idea_dir, ret)):
-            raise AttemptEffectBusy("training_process_tree_receipt_changed")
         if input_identities is not None and input_identities != _identities([idea_dir / "metrics.json"]):
             return None
         ref = import_for_completion(tx, tp, candidate)
-        plan = {"operation": "training_requeue", "reason_code": reason, "return_code": ret}
-        if closure is not None:
-            plan["process_tree"] = closure
-        digest = tx.prepare(ref, plan)
+        digest = tx.prepare(ref, {"operation": "training_requeue", "reason_code": reason,
+                                  "return_code": ret})
         receipt = record_compute_terminal(tp, idea_dir, "requeued", reason, return_code=ret)
         if candidate.get("legacy"):
             _verify_compute(idea_dir, receipt)
@@ -256,8 +225,6 @@ def requeue(lake, tp, slot, idea_dir, cfg, ret, reason, *, input_identities=None
         terminal = {"outcome": "requeued", "reason_code": reason, "return_code": ret,
                     "effect_receipt_sha256": digest,
                     "lifecycle": lifecycle_fence(lake, tp.idea_id, "training")}
-        if closure is not None:
-            terminal["process_tree"] = closure
         if finish_attempt(tx.conn, ref, terminal) != "committed":
             raise AttemptAuthorityError("training_requeue_not_new")
         _reset_idea_for_retry(idea_dir, release_claim=True, lake=lake, effect_lease=tx.lease)

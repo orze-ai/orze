@@ -32,11 +32,6 @@ def test_actual_native_started_consumes_prepared_request_inside_its_attempt_tran
                              start_time=time.time(), process=SimpleNamespace(pid=987654321),
                              execution_identity="a" * 64)
         tp.attempt_ref = training_attempts.begin(lake, tp, folder)
-        from dataclasses import asdict
-        from supervision_fixture import SimulatedSupervisedProcess
-        tp.process = SimulatedSupervisedProcess(tp.process, {
-            "attempt_ref": asdict(tp.attempt_ref), "scope": str(folder.absolute())}, ["unused"])
-        tp.process._sim_binding["worker"]["start_ticks"] = 1234
         accounting.record_compute_start(tp, folder)
         training_attempts.started(lake, tp, folder,
                                   {"pid": tp.process.pid, "pgid": tp.process.pid, "start_ticks": 1234},

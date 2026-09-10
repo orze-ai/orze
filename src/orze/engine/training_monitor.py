@@ -14,6 +14,7 @@ def poll(lake, tp, slot, idea_dir, cfg, ret, elapsed, failure_counts, stall_minu
     from orze.engine.health import check_stalled, detect_fatal_in_log
     from orze.engine.interruption_publication import prepare_interruption
     from orze.engine.resume import _interruption_reason_code
+    from orze.engine.supervised_process import SupervisionUncertain
     reason = None
     detail = ""
     if elapsed > tp.timeout:
@@ -26,7 +27,12 @@ def poll(lake, tp, slot, idea_dir, cfg, ret, elapsed, failure_counts, stall_minu
         reason, detail = "watchdog", "stuck_no_progress"
     else:
         fatal = detect_fatal_in_log(tp)
-        if fatal and tp.process.poll() is None:
+        try:
+            fatal_still_running = bool(fatal) and tp.process.poll() is None
+        except SupervisionUncertain:
+            tp._termination_unconfirmed = True
+            return None
+        if fatal_still_running:
             reason, detail = "fatal_log", f"Process hung after fatal error: {fatal[:500]}"
         elif (idea_dir / ".kill").exists():
             reason, detail = "admin_kill", "Killed by admin"
@@ -39,6 +45,12 @@ def poll(lake, tp, slot, idea_dir, cfg, ret, elapsed, failure_counts, stall_minu
         ret = terminate_execution(tp, idea_dir, phase="training", reaper=launcher._terminate_and_reap)
     except TerminationUnconfirmed:
         return None
+    candidate = current(lake, tp, idea_dir)
+    if not candidate:
+        return None
+    if not candidate.get("legacy"):
+        from orze.engine.training_supervision import require_closed
+        require_closed(tp, candidate, idea_dir, ret)
     tp.close_log()
     prepared = prepare_interruption(tp, idea_dir.parent, cfg, reason, "SIGTERM", ret)
     return finish(lake, tp, slot, idea_dir, cfg, ret, failure_counts,

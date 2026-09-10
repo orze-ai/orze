@@ -212,15 +212,8 @@ class SupervisedProcess:
 
 
 def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
-                       stderr=None, pass_fds=(), worker_only_fds=(), ready_timeout=10):
-    """Create a blocked worker; post-Popen failures carry a HOLD handle.
-
-    ``pass_fds`` are retained by both supervisor and worker until their own
-    close/exit (for example a shared lease). ``worker_only_fds`` are handed to
-    the blocked worker and closed by the supervisor before READY. Both groups
-    together accept at most 64 distinct, valid descriptors >= 3. The caller
-    still owns its original descriptors; no local inheritable flags change.
-    """
+                       stderr=None, pass_fds=(), ready_timeout=10):
+    """Create a blocked worker. Any post-Popen failure carries a HOLD handle."""
     try:
         if (sys.platform != "linux" or not hasattr(os, "pidfd_open")
                 or not hasattr(signal, "pidfd_send_signal")
@@ -239,19 +232,11 @@ def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
         if any(not isinstance(key, str) or not isinstance(value, str)
                or "\0" in key + value or "=" in key for key, value in environment.items()):
             raise ValueError("supervisor_environment_invalid")
-        if (not isinstance(pass_fds, (list, tuple))
-                or not isinstance(worker_only_fds, (list, tuple))):
+        fds = tuple(pass_fds)
+        if any(type(fd) is not int or fd < 3 for fd in fds):
             raise ValueError("supervisor_pass_fds_invalid")
-        worker_fds = tuple(worker_only_fds)
-        fds = (*pass_fds, *worker_fds)
-        if (len(fds) > 64 or any(type(fd) is not int or fd < 3 for fd in fds)
-                or len(set(fds)) != len(fds)):
-            raise ValueError("supervisor_pass_fds_invalid")
-        for fd in fds:
-            os.fstat(fd)
         nonce = secrets.token_hex(32)
-        config = {"cmd": list(cmd), "identity": identity, "env": environment, "nonce": nonce,
-                  "worker_only_fds": list(worker_fds)}
+        config = {"cmd": list(cmd), "identity": identity, "env": environment, "nonce": nonce}
         if len(canonical(config)) > MAX_FRAME:
             raise ValueError("supervisor_setup_limit")
         # Probe only ourselves, without installing a process-wide subreaper.

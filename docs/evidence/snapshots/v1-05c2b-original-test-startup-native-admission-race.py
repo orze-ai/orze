@@ -51,11 +51,6 @@ def test_native_admission_after_legacy_read_is_rechecked_before_any_publication(
             tp = SimpleNamespace(idea_id=idea, attempt_id=owner["attempt_id"], gpu=0,
                                  process=process, start_time=time.time(), execution_identity="a" * 64)
             tp.attempt_ref = training_attempts.begin(lake, tp, folder)
-            from dataclasses import asdict
-            from supervision_fixture import SimulatedSupervisedProcess
-            tp.process = SimulatedSupervisedProcess(tp.process, {
-                "attempt_ref": asdict(tp.attempt_ref), "scope": str(folder.absolute())}, ["unused"])
-            tp.process._sim_binding["worker"]["start_ticks"] = 1234
             accounting.record_compute_start(tp, folder)
             training_attempts.started(lake, tp, folder,
                                       {"pid": process.pid, "pgid": process.pid, "start_ticks": 1234})

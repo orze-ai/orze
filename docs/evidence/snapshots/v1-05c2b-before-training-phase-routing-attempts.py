@@ -111,15 +111,6 @@ def require_catalog(lake, idea_dir, cfg, *, handle=None):
     actual = str(Path(paths[0]).absolute())
     if any(value is not None and value != actual for value in (bound, declared)):
         raise AttemptEffectBusy("training_catalog_scope_mismatch")
-    if handle is not None and getattr(handle, "is_posthoc", False):
-        ref = getattr(handle, "attempt_ref", None)
-        row = current_attempt(lake.conn, Path(idea_dir).name, "training")
-        if (getattr(ref, "phase", None) == "training"
-                or row is not None and row["binding"].get("origin") == "native_training"
-                and row["state"] not in ("TERMINAL", "NOT_STARTED")):
-            # Mutable routing metadata cannot bypass native ownership, even
-            # when the callback strips its in-memory AttemptRef as well.
-            raise AttemptEffectBusy("training_native_phase_mismatch")
 
 
 def _legacy_start(tp, idea_dir):
@@ -260,31 +251,6 @@ def begin(lake, tp, idea_dir, cfg=None):
             raise AttemptEffectBusy("training_replication_authorization_changed")
         tx.watch_attempt(ref)
     return ref
-
-
-def record_ready_start(lake, tp, idea_dir, record_start):
-    """Account for an actually allocated blocked worker before lease exit.
-
-    This does not advertise IN_PROGRESS or authorize GO. Check the pinned
-    protocol and exact READY before any start receipt, including old rows.
-    """
-    from orze.engine.training_supervision import PROTOCOL, ready_binding
-    from orze.engine.native_evaluation import _verify_compute
-    with execution_transaction(lake, idea_dir) as tx:
-        row = require_current(tx.conn, tp.attempt_ref, states=("LAUNCHING",))
-        if row["binding"].get("process_supervision_protocol") != PROTOCOL:
-            raise AttemptEffectBusy("training_supervision_unbound")
-        ready_binding(tp, idea_dir)
-        _, claim_sha = _claim(tp, idea_dir, lake)
-        if (claim_sha != row["binding"].get("claim_sha256")
-                or not canonical_identity_equal(_launch_state(lake, tp.idea_id),
-                                                row["binding"].get("launch_lifecycle"))):
-            raise StaleAttempt("training_launch_authority_changed")
-        record_start(tp, idea_dir, phase="training")
-        start, _ = _read(idea_dir / "_compute_receipts" / tp.attempt_id / "start.json")
-        _verify_compute(idea_dir, start, process=tp, phase="training",
-                        event="start", outcome="started")
-        tx.watch_attempt(tp.attempt_ref)
 
 
 def started(lake, tp, idea_dir, process_identity, *, resume_context=None,

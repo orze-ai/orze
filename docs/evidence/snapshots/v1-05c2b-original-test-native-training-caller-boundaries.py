@@ -72,8 +72,6 @@ def case(tmp_path, monkeypatch):
         "pid": pid, "pgid": pid, "start_ticks": 12001})
     monkeypatch.setattr(launcher, "_terminate_and_reap", reap)
     monkeypatch.setattr(launcher, "notify", lambda *a, **k: None)
-    from supervision_fixture import install_training
-    install_training(monkeypatch)
     try:
         yield c
     finally:

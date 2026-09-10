@@ -89,23 +89,18 @@ def report_launch_failure(lake, idea_dir, error, failure_counts, cfg):
                 status = "duplicate"
             else:
                 binding = source["binding"]
-                if "lifecycle" in binding:
-                    # A started attempt retains its prelaunch history too.
-                    # Prefer the published running fence, never fall back to
-                    # CLAIMED after an invalid or changed started identity.
-                    current = lifecycle_fence(lake, ref.task_id, "training")
-                    if (current["global_state"] != "IN_PROGRESS"
-                            or not canonical_identity_equal(current, binding["lifecycle"])):
-                        raise StaleAttempt("launch_failure_source_lifecycle_changed")
-                    from_state = "IN_PROGRESS"
-                elif "launch_lifecycle" in binding:
+                if "launch_lifecycle" in binding:
                     if (claim_sha != binding.get("claim_sha256")
                             or not canonical_identity_equal(_launch_state(lake, ref.task_id),
                                                             binding["launch_lifecycle"])):
                         raise StaleAttempt("launch_failure_source_lifecycle_changed")
                     from_state = "CLAIMED"
                 else:
-                    raise StaleAttempt("launch_failure_source_lifecycle_changed")
+                    current = lifecycle_fence(lake, ref.task_id, "training")
+                    if (current["global_state"] != "IN_PROGRESS"
+                            or not canonical_identity_equal(current, binding.get("lifecycle"))):
+                        raise StaleAttempt("launch_failure_source_lifecycle_changed")
+                    from_state = "IN_PROGRESS"
                 count = failure_counts.get(ref.task_id, 0)
                 if type(count) is not int or count < 0:
                     raise AttemptEffectBusy("launch_failure_counter_invalid")
