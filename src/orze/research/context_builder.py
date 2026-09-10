@@ -31,6 +31,11 @@ RECENT_RESULT_LIMIT = 200
 LEADER_CANDIDATE_LIMIT = 50
 
 
+def digest_path(results_dir: Path) -> Path:
+    """Automatic publication, separate from operator/role-authored notes."""
+    return Path(results_dir) / "knowledge" / "research_digest.md"
+
+
 def _load_metrics(idea_dir: Path) -> Optional[dict]:
     mf = idea_dir / "metrics.json"
     if mf.is_symlink() or not mf.is_file():
@@ -192,38 +197,69 @@ def build_digest(results_dir: Path,
     """
     results_dir = Path(results_dir)
     report_cfg = cfg.get("report", {})
-    primary = report_cfg.get("primary_metric", "")
+    report_cfg = report_cfg if isinstance(report_cfg, dict) else {}
+    primary = report_cfg.get("primary_metric")
+    direction = report_cfg.get("sort", "descending")
+    objective_reason = None
+    if not isinstance(primary, str) or not primary.strip():
+        primary = "unconfigured"
+        objective_reason = "report_primary_metric_invalid"
+    elif direction not in ("ascending", "descending"):
+        objective_reason = "report_sort_invalid"
 
     rows, historic_added = _candidate_rows(results_dir, primary)
-    # Bind qualification to the exact directory passed by the caller. The
-    # report resolver re-reads current artifacts, enforces configured source
-    # mappings/coverage/validation, and verifies benchmark receipts when a
-    # contract is configured. Raw values collected above are never ranked.
+    # Bind one authority snapshot to this project and requalify the bounded
+    # candidates. Artifact completion and cached scores cannot grant lifecycle
+    # authority to themselves. No database is created by this read path.
     scoped_cfg = dict(cfg)
+    scoped_cfg["report"] = report_cfg
     scoped_cfg["_env_ORZE_RESULTS_DIR"] = str(results_dir.resolve())
-    from orze.reporting.search_path import make_evidence_metric_resolver
-    metric_of, lower_is_better, resolved_primary, qualification = (
-        make_evidence_metric_resolver("unused.db", scoped_cfg)
+    from orze.reporting.evidence import (
+        authoritative_completed_idea_ids, report_lifecycle_db_path,
+        qualify_authoritative_report_evidence_with_identity,
     )
-    primary = resolved_primary
+    from orze.reporting.objective import objective_sort_key
+    completed_ids, lifecycle_reason = authoritative_completed_idea_ids(
+        report_lifecycle_db_path(results_dir, scoped_cfg))
+    available = (lifecycle_reason == "authoritative_lifecycle_loaded"
+                 and objective_reason is None)
+    qualification = {
+        "mode": (("benchmark_contract" if report_cfg.get("benchmark_contract")
+                  else "verified_local_artifact") if available else "unavailable"),
+        "accepted": 0, "rejected": Counter(),
+    }
+    lower_is_better = direction == "ascending"
     completed = []
     for row in rows:
-        value = metric_of({"idea_id": row["id"]})
+        if available:
+            _, values, value, reason, _ = (
+                qualify_authoritative_report_evidence_with_identity(
+                    row["id"], results_dir, scoped_cfg, completed_ids))
+        else:
+            values, value, reason = {}, None, objective_reason or lifecycle_reason
         if value is None:
+            qualification["rejected"][reason] += 1
             continue
         qualified = dict(row)
         qualified["qualified_metric"] = value
+        qualified["qualified_values"] = values
         completed.append(qualified)
-    failed = [r for r in rows if r["status"] and r["status"] != "COMPLETED"]
+        qualification["accepted"] += 1
+    failed = [r for r in rows if r["status"] in ("FAILED", "ERROR", "PARTIAL")]
 
-    completed.sort(key=lambda r: r["qualified_metric"],
-                   reverse=not lower_is_better)
+    completed.sort(key=lambda r: objective_sort_key(
+        r["qualified_metric"], r["qualified_values"], report_cfg, r["id"]))
 
     lines: List[str] = []
     lines.append(f"# Research context digest ({len(completed)} qualified "
-                 f"candidates, {len(failed)} recent failures)")
+                 f"candidates, {len(failed)} artifact-observed failures, unverified)")
+    sort_label = ("asc" if lower_is_better else "desc") if (
+        objective_reason is None) else "unavailable"
     lines.append(f"primary_metric: {primary}  sort: "
-                 f"{'asc' if lower_is_better else 'desc'}")
+                 f"{sort_label}")
+    if report_cfg.get("secondary_metric"):
+        lines.append(f"secondary_metric: {report_cfg['secondary_metric']}")
+    lines.append(f"lifecycle_authority: {lifecycle_reason}")
     lines.append(
         f"evidence_mode: {qualification.get('mode', 'unavailable')}  "
         "leaderboard_rank_comparable: false"
@@ -237,6 +273,10 @@ def build_digest(results_dir: Path,
         f"qualification: {qualification.get('accepted', 0)} accepted, "
         f"{rejected_count} rejected"
     )
+    if rejected_count:
+        lines.append("rejection_reasons: " + ", ".join(
+            f"{reason}={count}" for reason, count
+            in sorted(qualification["rejected"].items())))
     if qualification.get("mode") == "benchmark_contract":
         lines.append(
             "comparison_identity: benchmark contract verified; local ordering "
@@ -276,7 +316,9 @@ def build_digest(results_dir: Path,
             from orze.engine.failure import classify_failure
         except Exception:
             classify_failure = None
-        lines.append(f"## Recent failures (top {min(10, len(failed))})")
+        lines.append(
+            f"## Artifact-observed failures (unverified; top {min(10, len(failed))})")
+        lines.append("Artifact reports only; not authoritative current task outcomes.")
         for r in failed[:10]:
             err = r["metrics"].get("error_message") or r["metrics"].get("error") or ""
             cat = "?"

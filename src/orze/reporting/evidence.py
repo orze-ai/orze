@@ -12,6 +12,20 @@ from pathlib import Path
 from typing import Mapping
 
 
+def report_lifecycle_db_path(results_dir: Path, cfg: Mapping,
+                              override: Path | str | None = None) -> Path:
+    """Resolve a single project's authority without creating or probing DBs."""
+    root = cfg.get("_project_root")
+    if not root and cfg.get("_config_path"):
+        root = Path(cfg["_config_path"]).absolute().parent
+    root = Path(root or Path(results_dir).absolute().parent)
+    database = override or cfg.get("idea_lake_db")
+    if not database:
+        database = Path(cfg.get("_orze_dir") or ".orze") / "idea_lake.db"
+    path = Path(database)
+    return path if path.is_absolute() else root / path
+
+
 def _finite_number(value) -> bool:
     return (
         not isinstance(value, bool)

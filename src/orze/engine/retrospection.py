@@ -1,7 +1,8 @@
 """Periodic retrospection — lite.
 
-Schedules `research.context_builder.build_digest()` and writes the result
-to `<results>/_retrospection.txt` (tail-compacted to 64 KB).
+Schedules `research.context_builder.build_digest()` and atomically publishes
+`<results>/knowledge/research_digest.md`. Legacy retrospection files may be
+operator/role-authored notes and are never overwritten by this producer.
 
 Preserves the public API used by the orchestrator:
     run_retrospection(results_dir, cfg, completed_count, last_count,
@@ -17,11 +18,11 @@ import logging
 import time
 from pathlib import Path
 from typing import Optional
+from orze.core.fs import atomic_write
 
 logger = logging.getLogger("orze")
 
 PAUSE_SENTINEL = ".pause_research"
-_DIGEST_FILE = "_retrospection.txt"
 _COMPACT_BYTES = 64 * 1024
 
 
@@ -78,13 +79,19 @@ def run_retrospection(results_dir: Path, cfg: dict,
                 completed_count, last_count, interval)
 
     try:
-        from orze.research.context_builder import build_digest
+        from orze.research.context_builder import build_digest, digest_path
         digest = build_digest(results_dir, cfg)
-        out = results_dir / _DIGEST_FILE
-        out.write_text(digest, encoding="utf-8")
-        _compact_tail(out)
+        out = digest_path(results_dir)
+        if out.is_symlink() or out.parent.is_symlink():
+            raise OSError("digest publication path is redirected")
+        atomic_write(out, digest)
+        # The shared helper intentionally suppresses ENOSPC. Verify the
+        # publication before acknowledging the interval, including that case.
+        if out.read_bytes() != digest.encode("utf-8"):
+            raise OSError("digest publication not confirmed")
     except Exception as e:
         logger.warning("Retrospection digest failed: %s", e)
+        return last_count
 
     # Run competition diagnosis if not cached
     _run_diagnosis_if_needed(results_dir, cfg)
