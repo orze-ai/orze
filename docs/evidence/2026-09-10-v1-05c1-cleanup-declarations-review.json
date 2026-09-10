@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "date": "2026-09-10",
+  "milestone": "V1-05C1",
+  "subject": "Independent built-in cleanup scope and legacy declared-input review",
+  "reviewer": "pro_review",
+  "ownership": "Reviewer authored one new parameterized regression group and its exact pre-fix source snapshot; did not author or edit C1 production, old tests, other agents' tests, or the contract.",
+  "result": "No remaining blocker found in the bounded built-in pattern cleanup scope on the final source hashes below.",
+  "final_sha256_scope": "The five hashes below are the actual 37-test epoch, identical before and after that run. The later contract-only update is reviewed separately and does not replace the tested document hash.",
+  "final_sha256": {
+    "src/orze/engine/cleanup_patterns.py": "d0580f24e01990b30047c2890c8321841a14ebff7d38130012b7707088de44f1",
+    "src/orze/engine/scheduler.py": "191e5478fce27d3e2d8fc4cbf79bf937ff582f3aa08131b5a0125793f550e4a2",
+    "src/orze/engine/orchestrator.py": "13999f1bfb26699a6cb7b11e90f8f62505c88c4879c0eb6fc652146d3c100a1e",
+    "tests/test_cleanup_declared_legacy_inputs.py": "45ec90daa4698509f01f381fe2c511f2913b306be0a2536a77f4c2d5e38b5458",
+    "docs/cleanup-patterns.md": "ac9596781f9a7a074962b768c725bcca9d76a698e0d7f1ec4780214314c2dedb"
+  },
+  "doc_review_final": {
+    "path": "docs/cleanup-patterns.md",
+    "sha256": "26a5b4c6c6cccee909aab6f2ec37738bcb5afc04f066f2854f5ffa5e70f0ffe0",
+    "matched": true,
+    "review": "Read the complete current document after the 37-test run. Its added legacy path semantics, directory protection and evaluator best_model.pt default match the already reviewed implementation. This was a documentation-only review, with no source/test edits or rerun."
+  },
+  "own_test": {
+    "path": "tests/test_cleanup_declared_legacy_inputs.py",
+    "sha256": "45ec90daa4698509f01f381fe2c511f2913b306be0a2536a77f4c2d5e38b5458",
+    "groups": 1,
+    "cases": [
+      {
+        "declaration": "model_lineage.artifact",
+        "path_semantics": "Task-relative lineage-weights/model.bin",
+        "schema_evidence": "core/model_lineage.py validate_model_lineage_config and _idea_path are called by the fixture; validate_model_lineage_for_evaluation hashes the declared path at lines 650-664."
+      },
+      {
+        "declaration": "eval_checkpoint",
+        "path_semantics": "Task-relative evaluation-inputs/best.pt",
+        "schema_evidence": "engine/phases.py lines 960-966 use this existing declaration for evaluation backlog; engine/evaluation_retry_files.py also protects it."
+      },
+      {
+        "declaration": "resume.immutable_inputs",
+        "path_semantics": "Project-relative results/idea-legacy-input/resume-inputs directory, containing both a direct file and a nested file.",
+        "schema_evidence": "Fixture calls the real resume _project_root/_resolve_path. engine/resume.py lines 272-294 read/hash these project-relative declared inputs."
+      }
+    ],
+    "classification": "Three actual working-candidate behavior regressions, not missing APIs and not historical release-red claims.",
+    "entrypoint": "orze.engine.scheduler.run_cleanup(results_dir, cfg)",
+    "premise": "A genuine offline legacy directory with no catalog route, no outstanding claim and no native B1 artifact contract. The test does not claim that its synthetic model/input bytes have scientific validity.",
+    "positive_controls": "Each case first asserts ordinary scratch.tmp was actually removed, then checks all declared bytes retained, metrics preserved, public return None, no database and no native catalog declaration created. These assertions are part of the same three cases, not additional test counts.",
+    "fixture_errors": 0,
+    "existing_assertions_modified": false
+  },
+  "snapshot": {
+    "path": "docs/evidence/snapshots/v1-05c1-before-declared-legacy-inputs.py",
+    "sha256": "dbc0f6c5154e6182df369fe9c0ac674cd47c3c9a3ae8ba0086ca4c3f6e6dce25",
+    "provenance": "Entire original cleanup_patterns.py copied byte-for-byte with apply_patch before the production correction; source and snapshot SHA matched.",
+    "replay_scope": "Complete snapshot module executed in memory against the same frozen three cases. No production files were temporarily replaced on disk."
+  },
+  "runs": [
+    {
+      "id": "first_candidate_red",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_declared_legacy_inputs.py --tb=short",
+      "source_sha256": "dbc0f6c5154e6182df369fe9c0ac674cd47c3c9a3ae8ba0086ca4c3f6e6dce25",
+      "failed": 3,
+      "passed": 0,
+      "seconds": 0.33,
+      "exit_code": 1,
+      "failures": "The actual cleanup removed the lineage file, evaluation checkpoint and both resume directory inputs. All three had already passed their scratch-deleted control."
+    },
+    {
+      "id": "complete_snapshot_memory_replay",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nmodule = importlib.import_module('orze.engine.cleanup_patterns')\nfilename = 'docs/evidence/snapshots/v1-05c1-before-declared-legacy-inputs.py'\nexec(compile(Path(filename).read_bytes(), filename, 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_cleanup_declared_legacy_inputs.py','--tb=short']))\nPY",
+      "failed": 3,
+      "passed": 0,
+      "seconds": 0.49,
+      "exit_code": 1
+    },
+    {
+      "id": "independent_final_target",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_pattern_configuration.py tests/test_cleanup_pattern_containment.py tests/test_cleanup_pattern_mechanisms.py tests/test_cleanup_framework_authority.py tests/test_cleanup_controller_handoff.py tests/test_cleanup_bound_catalog.py tests/test_cleanup_bound_artifact_root.py tests/test_cleanup_glob_compatibility.py tests/test_cleanup_declared_legacy_inputs.py tests/test_orphan_cleanup_evidence.py --tb=short",
+      "failed": 0,
+      "passed": 37,
+      "seconds": 8.7,
+      "exit_code": 0,
+      "pre_post_hashes_identical": true,
+      "scope": "Ten files: all C1 targeted tests plus the existing orphan cleanup tests. Includes the same three declared-input cases; do not sum overlapping runs for distinct coverage."
+    }
+  ],
+  "source_review": [
+    "Only the periodic native caller gains lake=self.lake, and the public scheduler wrapper retains its None return. Built-in patterns use the new helper; GC and the explicit custom script retain their separate execution paths.",
+    "Whole-batch pattern validation, bounded per-task candidate discovery, no-follow directory access and regular single-link leaf identity checks precede confirmed unlink accounting.",
+    "The per-task effect guard is reused. A fresh existing-only read-only catalog checks agreed closed lifecycle and all current attempt phases; stop/effect HOLD and conflicting/unavailable authority do not downgrade to legacy.",
+    "Actual routed database and sidecars, framework-private trees, current configured paths and native launch-bound output/control roots are protected.",
+    "Actual cleanup.script, post_scripts[].script, pre_script, sealed_hashes, evaluation_bundle.files, selected config and report source paths are accounted for. Pro-owned state, quotas, results and manifests remain under protected control roots; no additional Pro run_cleanup caller exists.",
+    "The final narrow correction adds tree-aware protection for task-relative model_lineage.artifact and eval_checkpoint, plus project-relative resume.immutable_inputs. It does not read large model or input bodies.",
+    "The pre-existing scratch.json/scratch.log disposable contract remains covered by the unchanged orphan cleanup test. No blanket JSON/log/checkpoint-extension exemption was introduced.",
+    "The final contract is consistent with the implementation's bounded guarantees and explicitly excludes standalone GC, cold-storage movement, custom cleanup programs, Pro process control and natural-exit descendant closure."
+  ],
+  "evidence_limits": [
+    "No GPU, provider, live process signal or holdout access was used.",
+    "The helper coordinates cooperating framework writers; it is not a sandbox or an atomic multi-file filesystem transaction.",
+    "Only confirmed unlinks increment deletion counts; an I/O error after unlink can leave a removed file without a success count. No rollback or recoverable trash guarantee is claimed.",
+    "The root's interrupted candidate full suites are not counted as product failures here. Final full-suite and paired-test results belong to the root aggregate; this report claims only the actual independent targeted run above.",
+    "No GC/director implementation or tests were included in this C1 review."
+  ]
+}

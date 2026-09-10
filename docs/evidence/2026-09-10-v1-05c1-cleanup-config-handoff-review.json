@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "slice": "V1-05C1",
+  "reviewer": "root",
+  "status": "scoped_review_passed",
+  "baseline_commit": "b3dd833aa206b946639e7a6eaca330a1d36fef44",
+  "scope": "Whole destructive pattern-batch validation and actual periodic controller-to-public-cleanup Lake handoff. No GPU/process execution, standalone GC or custom script.",
+  "cases": {
+    "distinct_new": 9,
+    "old_behavior_failures": 4,
+    "legacy_positive_controls": 2,
+    "new_handoff_requirement": 1,
+    "note": "Four input cases exercise shared unchecked batch processing; not four distinct root causes. Handoff spy demonstrates wiring, not native deletion authority, which is independently tested.",
+    "new_draft_failures": 2
+  },
+  "tests": [
+    {
+      "path": "tests/test_cleanup_pattern_configuration.py",
+      "sha256": "cadbed106fdf4cf04a95a56ae1a5fe4c475d02a5900de471a650ad35f4f05aca",
+      "cases": 6,
+      "changed_after_first_run": false
+    },
+    {
+      "path": "tests/test_cleanup_controller_handoff.py",
+      "sha256": "0eec664a1ae11aae9a7772f90a2a667566c9f8f5e81211cf4272fdf67bc19b07",
+      "cases": 1,
+      "changed_after_first_run": false
+    },
+    {
+      "path": "tests/test_cleanup_bound_catalog.py",
+      "sha256": "8952e89bb5f9337181c7d157d1bfce60d6c1a71ba599d5bf021a987f6c0918f4",
+      "cases": 1,
+      "changed_after_first_run": false
+    },
+    {
+      "path": "tests/test_cleanup_glob_compatibility.py",
+      "sha256": "2b2b4a9c4f3541606a911b3197f73ba0a2a113d72ed346fc3e7dd50699b186f0",
+      "cases": 1,
+      "changed_after_first_run": false
+    }
+  ],
+  "baseline": {
+    "configuration": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_pattern_configuration.py --tb=short",
+      "exit_code": 1,
+      "summary": "4 failed, 2 passed in 0.84s",
+      "observed": "String patterns iterate characters and raise IndexError; mixed integer raises TypeError after valid deletions; upward pattern batch deletes scratch; absolute pattern raises NotImplementedError after valid deletions.",
+      "snapshot": "docs/evidence/snapshots/v1-05c1-before-cleanup-scheduler.py",
+      "snapshot_sha256": "b65511c4a83bc7b3bb57002f7861c11cabf94317ebca7016c3d592dc6adc602c",
+      "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport pathlib,pytest\nimport orze.engine.scheduler as target\nraw=pathlib.Path('docs/evidence/snapshots/v1-05c1-before-cleanup-scheduler.py').read_bytes()\nexec(compile(raw,'<V1-05C1-pre-fix-complete-scheduler>','exec'),target.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_cleanup_pattern_configuration.py','--tb=short']))\nPY",
+      "replay_exit_code": 1,
+      "replay_summary": "4 failed, 2 passed in 0.18s",
+      "excluded_harness_error": "An earlier inline replay omitted PYTHONPATH=src and imported an installed incompatible orze.core.fs, raising ImportError before tests. Excluded from product-red claims; rerun explicitly used local source."
+    },
+    "handoff": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_controller_handoff.py --tb=short",
+      "exit_code": 1,
+      "summary": "1 failed in 0.22s",
+      "source_path": "src/orze/engine/orchestrator.py",
+      "source_sha256": "7e1965fd02836efd1ca4f68d657e6987f0ce218f5488ff1e7a516c8a6ad7ad51",
+      "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport subprocess,pytest\nimport orze.engine.orchestrator as target\nraw=subprocess.check_output(['git','show','b3dd833aa206b946639e7a6eaca330a1d36fef44:src/orze/engine/orchestrator.py'])\nexec(compile(raw,'<V1-05C1-pre-fix-complete-orchestrator>','exec'),target.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_cleanup_controller_handoff.py','--tb=short']))\nPY",
+      "replay_exit_code": 1,
+      "replay_summary": "1 failed in 0.07s",
+      "note": "Exact complete old module from committed source, other dependencies current; not an old full-package environment. Installed optional-Pro stub warning on import is not tested production integration."
+    }
+  },
+  "final_green": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_pattern_configuration.py tests/test_cleanup_controller_handoff.py tests/test_cleanup_bound_catalog.py tests/test_cleanup_glob_compatibility.py --tb=short",
+    "exit_code": 0,
+    "summary": "9 passed in 0.53s",
+    "scope": "Nine unchanged root-owned configuration, actual periodic handoff, routed catalog and glob compatibility cases. Other authors' overlapping cases/full suites are not added."
+  },
+  "source_hashes": {
+    "src/orze/engine/cleanup_patterns.py": "d0580f24e01990b30047c2890c8321841a14ebff7d38130012b7707088de44f1",
+    "src/orze/engine/scheduler.py": "191e5478fce27d3e2d8fc4cbf79bf937ff582f3aa08131b5a0125793f550e4a2",
+    "src/orze/engine/orchestrator.py": "13999f1bfb26699a6cb7b11e90f8f62505c88c4879c0eb6fc652146d3c100a1e"
+  },
+  "limits": [
+    "Temporary files only, never production data.",
+    "Controller test enters real periodic maintenance branch and observes public-call arguments with an explicit consumer spy; no executor, GPU lease, daemon startup or paid provider.",
+    "Source/test epoch and actual full-suite/remote evidence are recorded separately."
+  ],
+  "draft_regressions": {
+    "snapshot": "docs/evidence/snapshots/v1-05c1-before-bound-storage-protection.py",
+    "sha256": "273ef28424e4a31249e875ece9e7c7511a83b00c11190757f6e11147d6672522",
+    "catalog": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_bound_catalog.py --tb=short",
+      "summary": "1 failed in 0.35s",
+      "exit_code": 1,
+      "reason": "Actual supplied Lake path nested in a closed task was removed when cfg omitted its pathname; no native attempt fabricated."
+    },
+    "paired_bound_replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nimport orze.engine.cleanup_patterns as target\nraw=Path('docs/evidence/snapshots/v1-05c1-before-bound-storage-protection.py').read_bytes()\nexec(compile(raw,'<V1-05C1-before-bound-storage>','exec'),target.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_cleanup_bound_catalog.py','tests/test_cleanup_bound_artifact_root.py','--tb=short']))\nPY",
+      "summary": "2 failed in 0.82s",
+      "exit_code": 1,
+      "note": "Includes one independent reviewer's artifact-root case; that case is not added to root's distinct nine."
+    },
+    "glob": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nimport orze.engine.cleanup_patterns as target\nraw=Path('docs/evidence/snapshots/v1-05c1-before-bound-storage-protection.py').read_bytes()\nexec(compile(raw,'<V1-05C1-first-draft-helper>','exec'),target.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_cleanup_glob_compatibility.py','--tb=short']))\nPY",
+      "summary": "1 failed in 0.11s",
+      "exit_code": 1,
+      "old_control_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nimport orze.engine.scheduler as target\nraw=Path('docs/evidence/snapshots/v1-05c1-before-cleanup-scheduler.py').read_bytes()\nexec(compile(raw,'<V1-05C1-previous-committed-scheduler>','exec'),target.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_cleanup_glob_compatibility.py','--tb=short']))\nPY",
+      "old_control_summary": "1 passed in 0.05s",
+      "old_control_exit_code": 0,
+      "reason": "Directory-only trailing ** patterns selected no regular files with pathlib; first draft incorrectly broadened them to destructive file selections."
+    },
+    "note": "These are first-draft regressions, not independently counted pre-existing product bugs. All snapshots are complete modules and other dependencies are current."
+  },
+  "review": "Main agent read complete first helper and all subsequent source diffs, existing authority/path consumers, all new tests and the contract. Two root-owned destructive draft defects were frozen before author fixes. Independent reviewers cover real B1/B2/B3 authority and legacy declared-input paths. No remaining scoped blocker on this source; whole-suite and remote publication evidence recorded separately."
+}

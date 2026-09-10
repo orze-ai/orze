@@ -1,0 +1,206 @@
+{
+  "schema": 1,
+  "slice": "V1-05C1",
+  "author": "core_review",
+  "role": "Production author and own bounded regression/mechanism tests; not an independent whole-slice review.",
+  "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "baseline": {
+    "core_head": "b3dd833aa206b946639e7a6eaca330a1d36fef44",
+    "pro_head": "2dcf2f98e54e5c98164852f590149843a083d24f",
+    "scheduler_snapshot": "docs/evidence/snapshots/v1-05c1-before-cleanup-scheduler.py",
+    "sha256": "b65511c4a83bc7b3bb57002f7861c11cabf94317ebca7016c3d592dc6adc602c",
+    "provenance": "Complete old scheduler captured byte-for-byte before production edits via apply_patch; matching file SHA verified. Not reconstructed after implementation."
+  },
+  "final_candidate_sources": {
+    "src/orze/engine/cleanup_patterns.py": "d0580f24e01990b30047c2890c8321841a14ebff7d38130012b7707088de44f1",
+    "src/orze/engine/scheduler.py": "191e5478fce27d3e2d8fc4cbf79bf937ff582f3aa08131b5a0125793f550e4a2",
+    "src/orze/engine/orchestrator.py": "13999f1bfb26699a6cb7b11e90f8f62505c88c4879c0eb6fc652146d3c100a1e"
+  },
+  "own_tests": {
+    "tests/test_cleanup_pattern_containment.py": {
+      "sha256": "fb9cc6ab2b9c07d73c406fefa1d1ef936b6e76767e945cfe73c083b6db141b42",
+      "cases": 6,
+      "classification": "Four reproduced pre-existing public destructive behaviors plus two pre-existing compatibility controls; all artifacts were pytest temporary files.",
+      "initial_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_pattern_containment.py --tb=short",
+      "initial_result": {
+        "failed": 4,
+        "passed": 2,
+        "seconds": 0.21,
+        "pytest_exit": 1,
+        "shell_exit": 0
+      },
+      "initial_shell_note": "Initial shell also ran sha256sum after pytest; shell status 0 was the hash command, not a successful test run.",
+      "observed_failures": [
+        "Upward pattern removed temporary project train.py.",
+        "Symlink task directory removed other-project weights.pt.",
+        "Intermediate directory symlink removed peer task weights.pt.",
+        "Broad JSON glob removed native routing/effect/stop/evaluation metadata."
+      ],
+      "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport orze.engine.scheduler as scheduler\nimport pytest\nsnapshot = Path('docs/evidence/snapshots/v1-05c1-before-cleanup-scheduler.py')\nexec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), scheduler.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_cleanup_pattern_containment.py', '--tb=short']))\nPY",
+      "replay_result": {
+        "failed": 4,
+        "passed": 2,
+        "seconds": 0.1,
+        "exit": 1
+      },
+      "assertions": "Frozen file unchanged throughout implementation."
+    },
+    "tests/test_cleanup_pattern_mechanisms.py": {
+      "sha256": "d781a5a12d117f41882290b920f93742c6bb6f82b6ec4feb78ade7f5e2f7f008",
+      "cases": 6,
+      "classification": "New helper mechanisms, not old API-absence reds.",
+      "coverage": [
+        "Missing/malformed explicitly routed DB cannot fall through to legacy cleanup (two cases).",
+        "Configured project scripts, cleanup.script, post_scripts, sealed hashes, bundle files, report sources and control tree survive broad selection.",
+        "Leaf symlinks and hardlinks are not deleted.",
+        "Denied unlink is not counted as success.",
+        "Disabled helper performs no authority read/bootstrap."
+      ],
+      "development_note": "Initial six-case draft was verified 6 passed / 0.32s. Before freezing, the configuration case was expanded to use actual cleanup.script/post_scripts/pre_script/sealed_hashes/evaluation_bundle.files fields; no existing frozen tests were edited. The revised six plus two storage draft regressions passed 8 / 1.03s. This field-coverage preparation was not classified as a product red.",
+      "assertions": "Final six frozen before final candidate target/full handoff."
+    }
+  },
+  "shared_frozen_tests": {
+    "tests/test_cleanup_pattern_configuration.py": "cadbed106fdf4cf04a95a56ae1a5fe4c475d02a5900de471a650ad35f4f05aca",
+    "tests/test_cleanup_framework_authority.py": "ad1df8a31f0206fd0edf3061f67132880ebf50acd6b06fa74f12ec20ef54b245",
+    "tests/test_cleanup_controller_handoff.py": "0eec664a1ae11aae9a7772f90a2a667566c9f8f5e81211cf4272fdf67bc19b07",
+    "tests/test_cleanup_bound_catalog.py": "8952e89bb5f9337181c7d157d1bfce60d6c1a71ba599d5bf021a987f6c0918f4",
+    "tests/test_cleanup_bound_artifact_root.py": "519e80a0c2c575e19b44dbbb2cbc9cb789857683ed7aa96706d6f0662cc7eb2e",
+    "tests/test_cleanup_glob_compatibility.py": "2b2b4a9c4f3541606a911b3197f73ba0a2a113d72ed346fc3e7dd50699b186f0",
+    "tests/test_orphan_cleanup_evidence.py": "774988459accc2d4d485185418342cea48252e63a43c6f0e1f23f99e3a884b14",
+    "tests/test_cleanup_declared_legacy_inputs.py": "45ec90daa4698509f01f381fe2c511f2913b306be0a2536a77f4c2d5e38b5458"
+  },
+  "candidate_history": [
+    {
+      "helper_sha256": "273ef28424e4a31249e875ece9e7c7511a83b00c11190757f6e11147d6672522",
+      "results": [
+        {
+          "passed": 24,
+          "seconds": 3.85
+        },
+        {
+          "passed": 1,
+          "seconds": 0.2
+        }
+      ],
+      "label": "Pre-final first candidate. Later independent storage protection and terminal-** compatibility regressions invalidated final-source interpretation."
+    },
+    {
+      "helper_sha256": "327c89cf0963af82ca3be0e783094e0a85e4b91ec2576df0cf0e9b05bed6b31c",
+      "result": {
+        "passed": 8,
+        "seconds": 1.03
+      },
+      "label": "Storage/config protections repaired, before final terminal-** compatibility fix."
+    },
+    {
+      "helper_sha256": "dbc0f6c5154e6182df369fe9c0ac674cd47c3c9a3ae8ba0086ca4c3f6e6dce25",
+      "label": "Superseded candidate: Pro independently found three declared legacy consumer inputs were still deletable. Prior candidate whole-suite runs were stopped by root, not final-source evidence.",
+      "author_validation": [
+        {
+          "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_pattern_containment.py tests/test_cleanup_pattern_configuration.py tests/test_cleanup_framework_authority.py tests/test_cleanup_controller_handoff.py tests/test_cleanup_pattern_mechanisms.py tests/test_cleanup_bound_catalog.py tests/test_cleanup_bound_artifact_root.py tests/test_cleanup_glob_compatibility.py tests/test_orphan_cleanup_evidence.py --tb=short",
+          "result": {
+            "passed": 34,
+            "seconds": 4.76,
+            "exit": 0
+          },
+          "counting": "Nine unique files: 28 C1 cases plus six unchanged orphan/evidence controls. Overlapping candidate runs must not be summed as distinct coverage."
+        },
+        {
+          "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_claim_catalog_routing.py tests/test_orphan_borrowed_lease.py tests/test_claim_effect_durability.py tests/test_training_claim_native_authority.py tests/test_training_claim_effect_boundaries.py tests/test_idea_source_lock.py tests/test_fs_lock.py tests/test_training_termination_authority.py --tb=short",
+          "result": {
+            "passed": 65,
+            "seconds": 11.15,
+            "exit": 0
+          }
+        }
+      ]
+    }
+  ],
+  "draft_regressions": {
+    "owner": "Root/runtime independently froze three actual destructive draft behaviors; author reran their unchanged tests against the complete first-draft helper.",
+    "classification": "Three draft regressions, not three released-version bugs. Ending ** was explicitly a passing old-scheduler compatibility control.",
+    "snapshot": "docs/evidence/snapshots/v1-05c1-before-bound-storage-protection.py",
+    "snapshot_sha256": "273ef28424e4a31249e875ece9e7c7511a83b00c11190757f6e11147d6672522",
+    "defects": [
+      "Supplied actual catalog located inside task deleted when cfg omitted its path.",
+      "Current launch-bound immutable artifact root deleted after mutable cfg control-root change.",
+      "New matcher incorrectly broadened terminal ** directory-only patterns to regular files."
+    ],
+    "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport orze.engine.cleanup_patterns as cleanup\nimport pytest\nsnapshot = Path('docs/evidence/snapshots/v1-05c1-before-bound-storage-protection.py')\nexec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), cleanup.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_cleanup_bound_catalog.py', 'tests/test_cleanup_bound_artifact_root.py', 'tests/test_cleanup_glob_compatibility.py', '--tb=short']))\nPY",
+    "replay_result": {
+      "failed": 3,
+      "seconds": 1.41,
+      "exit": 1
+    }
+  },
+  "final_author_validation": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_pattern_containment.py tests/test_cleanup_pattern_configuration.py tests/test_cleanup_framework_authority.py tests/test_cleanup_controller_handoff.py tests/test_cleanup_pattern_mechanisms.py tests/test_cleanup_bound_catalog.py tests/test_cleanup_bound_artifact_root.py tests/test_cleanup_glob_compatibility.py tests/test_cleanup_declared_legacy_inputs.py tests/test_orphan_cleanup_evidence.py --tb=short",
+      "result": {
+        "passed": 37,
+        "seconds": 5.11,
+        "exit": 0
+      },
+      "counting": "Ten unique files: 31 C1 cases plus six unchanged orphan/evidence controls. Do not sum overlapping candidate runs."
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_claim_catalog_routing.py tests/test_orphan_borrowed_lease.py tests/test_claim_effect_durability.py tests/test_training_claim_native_authority.py tests/test_training_claim_effect_boundaries.py tests/test_idea_source_lock.py tests/test_fs_lock.py tests/test_training_termination_authority.py --tb=short",
+      "result": {
+        "passed": 65,
+        "seconds": 14.16,
+        "exit": 0
+      }
+    }
+  ],
+  "contract": {
+    "helper": "cleanup_pattern_files(results_dir, cfg, *, lake=None) -> {status, deleted, skipped_tasks, errors}",
+    "status": [
+      "disabled",
+      "invalid",
+      "completed",
+      "partial"
+    ],
+    "public_compatibility": "run_cleanup returns None; optional keyword-only lake; actual periodic orchestrator passes self.lake. Default empty patterns remain no-op; real legacy scratch JSON/log cleanup retained.",
+    "policy": "Validate whole pattern batch before deletion. No absolute, upward, backslash, empty/noncanonical patterns; terminal ** remains directory-only/no regular-leaf match.",
+    "limits": {
+      "patterns": 128,
+      "pattern_utf8_bytes": 4096,
+      "pattern_components": 64,
+      "task_scan_entries": 16384,
+      "task_scan_depth": 64,
+      "matcher_memo_entries": 8192
+    },
+    "locking": "Candidate directory scan outside per-task effect guard. Acquire existing guard before fresh read-only DB transaction; require agreed closed lifecycle and all current native phases closed. Recheck effect lease before each unlink.",
+    "protection": "No-follow directory traversal; single-link regular leaves only; exact captured leaf identity before unlink plus parent fsync. Protect framework private trees, configured source/evidence paths, current pinned training outputs, actual authority DB/sidecars and pinned native control tree. Explicit legacy model-lineage artifacts, evaluation checkpoints and resume immutable-input directories are protected at the actual consumer path bases.",
+    "authority": "No DB bootstrap/migration/state updates. Missing/malformed/conflicting authority refuses task. A truly unbound legacy directory remains compatible; outstanding unconfirmed claim is conservative HOLD.",
+    "observable": "Only confirmed deletion calls increment deleted; exceptions produce partial/error diagnostics. No claim of transactional filesystem batch rollback."
+  },
+  "limits_and_nonclaims": [
+    "Built-in pattern cleanup only. Existing GC and explicit user cleanup script are separate authority and were not sandboxed or otherwise redesigned.",
+    "No director GPU ownership, natural child-process closure/C2, broad artifact GC, or lifecycle migration work.",
+    "No large checkpoint/content hashing is performed by cleanup.",
+    "Cooperating native claim/reset/begin/publication use the same guard. This is not a hostile external-writer filesystem sandbox or cross-host exactly-once guarantee.",
+    "No paid provider, GPU, or holdout used. Destructive repros operated only in pytest temporary directories.",
+    "This author report does not claim final whole-Core/Pro test results or independent reviewer sign-off; root records those separately.",
+    "No commits or pushes by this subagent."
+  ],
+  "legacy_declaration_draft_regressions": {
+    "owner": "pro_review independently froze three public cleanup cases before this repair.",
+    "classification": "Three draft regressions, not classified here as released-version bugs.",
+    "test": "tests/test_cleanup_declared_legacy_inputs.py",
+    "test_sha256": "45ec90daa4698509f01f381fe2c511f2913b306be0a2536a77f4c2d5e38b5458",
+    "snapshot": "docs/evidence/snapshots/v1-05c1-before-declared-legacy-inputs.py",
+    "snapshot_sha256": "dbc0f6c5154e6182df369fe9c0ac674cd47c3c9a3ae8ba0086ca4c3f6e6dce25",
+    "coverage": "Actual model_lineage.artifact, eval_checkpoint and project-relative resume.immutable_inputs directory paths. Each case also requires scratch deletion, unchanged metrics and no authority bootstrap.",
+    "author_replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport orze.engine.cleanup_patterns as cleanup\nimport pytest\nsnapshot = Path('docs/evidence/snapshots/v1-05c1-before-declared-legacy-inputs.py')\nexec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), cleanup.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_cleanup_declared_legacy_inputs.py', '--tb=short']))\nPY",
+    "author_replay_result": {
+      "failed": 3,
+      "seconds": 0.2,
+      "exit": 1
+    },
+    "fix": "Only declaration protection trees added; no content reads, new schema, or authority change. Also retains the exact existing best_model.pt default when eval_script is enabled, not all checkpoint extensions.",
+    "assertions": "Independent frozen three unchanged."
+  },
+  "final_source_hash_verified_after_tests": true
+}

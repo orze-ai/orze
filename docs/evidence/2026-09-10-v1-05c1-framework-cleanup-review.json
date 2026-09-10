@@ -1,0 +1,193 @@
+{
+  "schema": 1,
+  "slice": "V1-05C1",
+  "reviewer": "runtime_evidence",
+  "status": "independently_verified_final_frozen_source",
+  "scope": "Public cfg-only run_cleanup over real native training, replication, evaluation retry and partial-effect authority. No standalone GC or custom script.",
+  "baseline": {
+    "core_commit": "b3dd833aa206b946639e7a6eaca330a1d36fef44",
+    "source": "src/orze/engine/scheduler.py",
+    "source_sha256": "b65511c4a83bc7b3bb57002f7861c11cabf94317ebca7016c3d592dc6adc602c",
+    "snapshot": "docs/evidence/snapshots/v1-05c1-before-framework-cleanup.py",
+    "snapshot_sha256": "b65511c4a83bc7b3bb57002f7861c11cabf94317ebca7016c3d592dc6adc602c",
+    "snapshot_provenance": "Complete released scheduler obtained with git show; byte-identical to the on-disk pre-fix scheduler, not reconstructed.",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_framework_authority.py --tb=short",
+    "exit_code": 1,
+    "footer": "4 failed, 2 passed in 2.95s",
+    "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'from pathlib import Path; import orze.engine.scheduler as target; import pytest; snapshot=Path(\"docs/evidence/snapshots/v1-05c1-before-framework-cleanup.py\"); exec(compile(snapshot.read_text(), str(snapshot), \"exec\"), target.__dict__); raise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_cleanup_framework_authority.py\", \"--tb=short\"]))'",
+    "replay_exit_code": 1,
+    "replay_footer": "4 failed, 2 passed in 2.93s",
+    "recorded_command_verification": {
+      "method": "json.loads -> shlex.split -> compile and ast.parse of the -c payload; then exec_command invoked using the exact JSON-decoded replay_command",
+      "literal_backslash_doublequote_in_python": false,
+      "syntax_valid": true,
+      "command_changed": false,
+      "exit_code": 1,
+      "footer": "4 failed, 2 passed in 2.87s",
+      "note": "Outer JSON/tool display escaping was questioned but the recorded shell/Python command was valid. No invalid-command failure is counted."
+    },
+    "behavior_reds": 4,
+    "controls_passed": 2,
+    "missing_api_failures": 0
+  },
+  "tests": {
+    "path": "tests/test_cleanup_framework_authority.py",
+    "sha256": "ad1df8a31f0206fd0edf3061f67132880ebf50acd6b06fa74f12ec20ef54b245",
+    "cases": 6,
+    "fixture_migrations": 0,
+    "cases_detail": [
+      [
+        "test_completed_replica_broad_glob_preserves_real_framework_and_declared_outputs",
+        "old_behavior_red",
+        "Actual completed B3 replica and B1 source: broad glob deletes task config, catalog, effects and declared model output. Flat/replica slots and immutable external artifact bytes are preservation controls, not claimed deleted by the old loop."
+      ],
+      [
+        "test_completed_evaluation_keeps_real_retry_and_attempt_protocol_history",
+        "old_behavior_red",
+        "Actual B1 training then failed B2 eval, explicit retry and successful B2 eval: broad glob deletes attempt input manifests, entrypoints, outputs, retry manifest and framework records."
+      ],
+      [
+        "test_running_native_attempt_refuses_scratch_and_checkpoint_cleanup",
+        "old_behavior_red",
+        "Actual native RUNNING attempt loses live scratch, declared checkpoint and catalog; old log falsely advertises five deletions as cleanup success."
+      ],
+      [
+        "test_real_partial_effect_hold_does_not_delete_or_report_success",
+        "old_behavior_red",
+        "Actual terminal SQL RAISE(IGNORE) leaves RUNNING and a real prepared-but-uncommitted effect/retained owner. Old cleanup deletes checkpoint, scratch, intent and owner record and logs success."
+      ],
+      [
+        "test_confirmed_closed_native_attempt_allows_disposable_pattern",
+        "positive_control",
+        "Actual confirmed native terminal permits explicitly selected *.tmp without changing framework files or SQLite dump."
+      ],
+      [
+        "test_genuine_legacy_disposable_cleanup_does_not_create_native_authority",
+        "positive_control",
+        "Legacy no-DB task permits *.tmp; metrics preserved and no DB/catalog created."
+      ]
+    ]
+  },
+  "fixture_hashes": {
+    "tests/test_native_training_caller_boundaries.py": "9bcb1b763db3d90ca5963d506d76b83d7071730783cbbb3733b3ba4c2ffcf14d",
+    "tests/test_native_artifact_publication.py": "911a949f083c43a94cc45bb9e781f377289e53b2269a1ee1d58de8cdba892643",
+    "tests/test_replication_execution_slots.py": "25e77ae9c153e1ff992d25dcf909f53c5aaf8aa0c2e5a807157c2582f3d6e155",
+    "tests/test_artifact_snapshot_contract.py": "00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359",
+    "tests/test_observation_snapshot_contract.py": "835c42fddbf39fc5714d177c4f8acbfa540af74666900a331fa878d48add552c"
+  },
+  "baseline_runtime_hashes": {
+    "src/orze/engine/launcher.py": "ff1dd6442e6af2ba71f4ab3dbb4af4863b00cd52530d5893a6dd677fa845c5be",
+    "src/orze/engine/training_attempts.py": "62b0c0d1805c8cd21755ec6deb6a47073aa6b4f6f49646eb6f69a9ea4b5e5647",
+    "src/orze/engine/evaluator.py": "bc3f7bc6085986265fc1b32542624a9de621803ca48141fc61b5b77fff6394e6",
+    "src/orze/engine/observation_publication.py": "f6cd2e67b39d202f86c81dc1cbe331db3c4e5ce9100ab007bb763c524b0cc66e",
+    "src/orze/engine/replication.py": "2cf98322c13444318e8eba5a5b2021d977d9eb799b7750acb4966828f314c6f0"
+  },
+  "candidate_green": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_framework_authority.py tests/test_native_artifact_publication.py tests/test_observation_snapshot_contract.py tests/test_replication_execution_slots.py tests/test_claim_effect_durability.py --tb=short",
+    "exit_code": 0,
+    "footer": "42 passed in 18.62s",
+    "source_hashes": {
+      "src/orze/engine/cleanup_patterns.py": "273ef28424e4a31249e875ece9e7c7511a83b00c11190757f6e11147d6672522",
+      "src/orze/engine/scheduler.py": "191e5478fce27d3e2d8fc4cbf79bf937ff582f3aa08131b5a0125793f550e4a2",
+      "src/orze/engine/orchestrator.py": "13999f1bfb26699a6cb7b11e90f8f62505c88c4879c0eb6fc652146d3c100a1e"
+    },
+    "classification": "Candidate only: the subsequent bound-storage regression invalidates final clearance at this source hash.",
+    "excluded_invocation": "An earlier target command also named nonexistent tests/test_claim_authority.py, resulting in exit 4 and no tests run. This is an invocation error, not a product/test failure."
+  },
+  "bound_artifact_root_draft_regression": {
+    "test": "tests/test_cleanup_bound_artifact_root.py",
+    "sha256": "519e80a0c2c575e19b44dbbb2cbc9cb789857683ed7aa96706d6f0662cc7eb2e",
+    "cases": 1,
+    "snapshot": "docs/evidence/snapshots/v1-05c1-before-bound-storage-protection.py",
+    "snapshot_sha256": "273ef28424e4a31249e875ece9e7c7511a83b00c11190757f6e11147d6672522",
+    "snapshot_provenance": "Complete on-disk initial cleanup_patterns.py captured before this defect was fixed; byte-identical source and snapshot hashes.",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_bound_artifact_root.py --tb=short",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "exit_code": 1,
+    "footer": "1 failed in 0.70s",
+    "classification": "New draft implementation defect, not an additional old-release root cause or missing API.",
+    "cause": "Actual native B1 completion stores immutable content under a valid task-local control/artifacts root. A later cfg._orze_dir change causes cleanup to omit the launch-bound root, deleting content while the accepted artifact row and terminal remain.",
+    "original_six_unchanged": true,
+    "fixed_snapshot_replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'from pathlib import Path; import orze.engine.cleanup_patterns as target; import pytest; snapshot=Path(\"docs/evidence/snapshots/v1-05c1-before-bound-storage-protection.py\"); exec(compile(snapshot.read_text(), str(snapshot), \"exec\"), target.__dict__); raise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_cleanup_bound_artifact_root.py\", \"--tb=short\"]))'",
+      "exit_code": 1,
+      "footer": "1 failed in 0.55s"
+    },
+    "first_fix_verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_framework_authority.py tests/test_cleanup_bound_artifact_root.py --tb=short",
+      "source_sha256": "327c89cf0963af82ca3be0e783094e0a85e4b91ec2576df0cf0e9b05bed6b31c",
+      "exit_code": 0,
+      "footer": "7 passed in 3.45s",
+      "classification": "Intermediate candidate, superseded by final-source combined regression below."
+    }
+  },
+  "dbc0f6c5_candidate_green": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_framework_authority.py tests/test_cleanup_bound_artifact_root.py tests/test_cleanup_bound_catalog.py tests/test_cleanup_pattern_containment.py tests/test_cleanup_pattern_configuration.py tests/test_cleanup_pattern_mechanisms.py tests/test_cleanup_controller_handoff.py tests/test_cleanup_glob_compatibility.py tests/test_orphan_cleanup_evidence.py tests/test_native_artifact_publication.py tests/test_observation_snapshot_contract.py tests/test_replication_execution_slots.py tests/test_claim_effect_durability.py tests/test_training_claim_native_authority.py --tb=short",
+    "exit_code": 0,
+    "footer": "87 passed in 23.68s",
+    "files": 14,
+    "source_pre_post_equal": true,
+    "source_hashes": {
+      "src/orze/engine/cleanup_patterns.py": "dbc0f6c5154e6182df369fe9c0ac674cd47c3c9a3ae8ba0086ca4c3f6e6dce25",
+      "src/orze/engine/scheduler.py": "191e5478fce27d3e2d8fc4cbf79bf937ff582f3aa08131b5a0125793f550e4a2",
+      "src/orze/engine/orchestrator.py": "13999f1bfb26699a6cb7b11e90f8f62505c88c4879c0eb6fc652146d3c100a1e"
+    },
+    "owned_test_hashes_unchanged": {
+      "tests/test_cleanup_framework_authority.py": "ad1df8a31f0206fd0edf3061f67132880ebf50acd6b06fa74f12ec20ef54b245",
+      "tests/test_cleanup_bound_artifact_root.py": "519e80a0c2c575e19b44dbbb2cbc9cb789857683ed7aa96706d6f0662cc7eb2e"
+    },
+    "classification": "Source-specific candidate, not final clearance: later independent review found omitted actual legacy model_lineage.artifact, eval_checkpoint and resume.immutable_inputs protections. Preserve this historical result and source hash unchanged. Original six public cases plus one separately frozen draft regression all execute unchanged."
+  },
+  "final_green": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cleanup_framework_authority.py tests/test_cleanup_bound_artifact_root.py tests/test_cleanup_bound_catalog.py tests/test_cleanup_pattern_containment.py tests/test_cleanup_pattern_configuration.py tests/test_cleanup_pattern_mechanisms.py tests/test_cleanup_controller_handoff.py tests/test_cleanup_glob_compatibility.py tests/test_orphan_cleanup_evidence.py tests/test_native_artifact_publication.py tests/test_observation_snapshot_contract.py tests/test_replication_execution_slots.py tests/test_claim_effect_durability.py tests/test_training_claim_native_authority.py tests/test_cleanup_declared_legacy_inputs.py --tb=short",
+    "exit_code": 0,
+    "footer": "90 passed in 52.53s",
+    "files": 15,
+    "source_pre_post_equal": true,
+    "source_hashes": {
+      "src/orze/engine/cleanup_patterns.py": "d0580f24e01990b30047c2890c8321841a14ebff7d38130012b7707088de44f1",
+      "src/orze/engine/scheduler.py": "191e5478fce27d3e2d8fc4cbf79bf937ff582f3aa08131b5a0125793f550e4a2",
+      "src/orze/engine/orchestrator.py": "13999f1bfb26699a6cb7b11e90f8f62505c88c4879c0eb6fc652146d3c100a1e"
+    },
+    "test_hashes_unchanged": {
+      "tests/test_cleanup_framework_authority.py": "ad1df8a31f0206fd0edf3061f67132880ebf50acd6b06fa74f12ec20ef54b245",
+      "tests/test_cleanup_bound_artifact_root.py": "519e80a0c2c575e19b44dbbb2cbc9cb789857683ed7aa96706d6f0662cc7eb2e",
+      "tests/test_cleanup_declared_legacy_inputs.py": "45ec90daa4698509f01f381fe2c511f2913b306be0a2536a77f4c2d5e38b5458"
+    },
+    "docs_sha256": "26a5b4c6c6cccee909aab6f2ec37738bcb5afc04f066f2854f5ffa5e70f0ffe0",
+    "classification": "Final-source bounded independent acceptance. This adds the other reviewer's three legacy-declaration cases to the unchanged previous 87-case command; it is not a repository full suite and does not duplicate those cases' draft-red provenance."
+  },
+  "review": {
+    "blocking_findings_remaining": [],
+    "review_epoch_note": "The dbc0f6c5 run remains candidate history. Final clearance is limited to the d0580f24 source and 90-case result above, after the other reviewer's actual legacy-declaration gap was repaired.",
+    "read_scope": [
+      "Complete cleanup_patterns.py initial candidate and every final-source change",
+      "Complete scheduler/orchestrator production diff and actual periodic handoff",
+      "claim_change_guard, attempt_effect_lock, execution_catalog and native begin lock ownership",
+      "Actual shared mode-ro lifecycle opener and current native training/evaluation publication bindings",
+      "Complete docs/cleanup-patterns.md contract, including final legacy path-resolution paragraph",
+      "Final ten-line legacy declaration protection and the actual lineage, evaluation-backlog and resume consumer path resolution"
+    ],
+    "findings": [
+      "Candidate enumeration is no-follow and precedes locking; a fresh read-only SQLite snapshot is created only inside the same effect guard used by native claim/begin/reset. All-phase current attempts and agreed task lifecycle are both checked before unlink.",
+      "Incomplete effect/stop evidence and retained owners refuse cleanup. The supplied controller Lake is routing input, not an inherited transaction grant; cfg-only native paths discover only existing authority without bootstrap.",
+      "Actual main database plus sidecars and launch-bound B1 control roots are protected immediately before unlink, including old control/state identity slots after cfg drift. The independently reproduced artifact-root defect is closed.",
+      "Current B2 result publication explicitly inherits source_binding.root in observation_publication.py; it does not choose a separate mutable cfg root. Therefore the training-root protection also covers the current B2 result store. An initial static concern about a separate B2 root was ruled out by reading the actual producer; no test/failure or new requirement is counted.",
+      "Configured source/report/control locations and private framework namespaces are not disposable. Ending ** remains directory-only, preserving the old no-file-match semantics.",
+      "Final legacy protections resolve model_lineage.artifact and eval_checkpoint relative to the task, and resume.immutable_inputs relative to the project, retaining declared trees. The default best_model.pt is protected when eval_script enables the legacy evaluation path. The change adds declaration metadata only, not file hashing, DB writes or a new authority path.",
+      "Success counts follow completed unlink plus directory sync; refusals are observable. This is not atomic multi-file deletion or recovery from arbitrary same-user path races."
+    ],
+    "docs_assessment": "The contract correctly excludes standalone GC, cleanup.script execution, cold-storage moves, natural-exit descendant proof and research-efficiency claims. Pattern budgets, directory-only terminal **, legacy declaration bases and directory-tree retention match the final implementation."
+  },
+  "limits": [
+    "Real temporary files, SQLite state/receipts and public native callbacks; GPU/process creation substituted by established test-only fixtures.",
+    "No real CPU training/external evaluator execution; no paid provider, holdout, standalone GC or custom script.",
+    "No new result-schema absence asserted; public run_cleanup return None retained.",
+    "Four behavioral failures are not four independently isolated root causes; shared unsafe legacy deletion loop is exercised across four lifecycle contexts.",
+    "Root full suites, source inventories and remote publication are separate evidence."
+  ]
+}
