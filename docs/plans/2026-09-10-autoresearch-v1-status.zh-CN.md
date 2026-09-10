@@ -13,7 +13,8 @@
 | V1-01F：晋升资格与显式异常策略 | 已修复、机制已验证 | Core `2ef6b5b`；58 冻结行为测试旧模块 48 red / 10 pass，当前全绿，另 3 真实存储回归；最终 core 1460 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
 | V1-01G1：评估资格与真实完成 | 已修复、机制已验证 | Core `637ef59`；87 冻结测试旧模块 69 red / 18 pass，当前全绿；既有输出/同步/异步共用契约，None 不再被猜作成功；最终 core 1547 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
 | V1-01G2 / V1-05A：显式补评 | 已实现、机制已验证 | Core `1f375c4`；73 新机制验收与 G1 的 87 测试合计 160 passed；另有 5 个草稿边界红测及 1 个旧发布函数行为红测可重放；最终 core 1620 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
-| V1-01 整体 | 进行中 | 冠军选择与进步/重复观察语义、无 finished 时撤销、report/admin 与旧 verifier 消费者仍待收口 |
+| V1-01H1：选择不等于局部改善 | 已修复、机制已验证 | Core `858dc31`；31 冻结测试旧模块 24 red / 7 pass，当前全绿；idle tick 重验/撤销，stable ID、缺测及失格替换不冒充改善；最终 core 1651 passed / 6 optional Pro skips，Pro 394 passed，跨仓相关 30 passed |
+| V1-01 整体 | 进行中 | 历史修订/重复观察/重启计数、native report/admin 与旧 verifier、显式 convergence/director 消费者仍待收口 |
 | V1-02 至 V1-07 | 未验收完成 | 后续按方案逐项核实与修复；已有主干能力也必须提供对应验收证据 |
 
 [V1-01A 机器可读证据](../evidence/2026-09-10-v1-01a-champion-recovery.json)包含基线、修复提交、红测内容哈希、命令、退出码、通过/跳过数量和适用边界。方案定稿、代码推送、机制验证、真实研究收益是四种不同状态。
@@ -31,3 +32,5 @@ V1-01B 的完整证据保存在 Pro 仓 `docs/evidence/2026-09-10-v1-01b-researc
 [V1-01G1 机器可读证据](../evidence/2026-09-10-v1-01g1-evaluation-contract.json)记录三入口、调度保留、失败来源/缓存、封存与回执故障的冻结测试、固定旧模块重放命令和全量结果；[评估契约](../evaluation-contract.md)明确无目标任务、metrics 原位评估兼容及已知恢复边界。没有真实 GPU/LLM 或科研效率收益声明。
 
 [V1-01G2 机器可读证据](../evidence/2026-09-10-v1-01g2-evaluation-retry.json)记录显式补评的状态事务、文件恢复、重启调度、真实 CLI 和 benchmark look/nonce 验收；[使用与边界](../evaluation-retry.md)说明归档位置和拒绝条件。此项是紧接 G1 提前收口的 V1-05A 依赖切片，不代表跳过 V1-02 至 V1-04，也不代表整个 V1-05 完成。新增 API 的缺失检查与真正行为红测分开记录；独立 generation、复验、过期 attempt fencing、预约后未启动的预算处理和调度公平性仍未验收。
+
+[V1-01H1 机器可读证据](../evidence/2026-09-10-v1-01h1-objective-progress.json)提供公共通知路径的冻结红绿重放、真实 guard history 边界与最终全量结果；[语义与限制](../objective-progress.md)区分当前局部比较、历史修订与科学判决。空闲 tick 重验增加读 I/O，不声称效率净收益；旧 mtime 恢复和逐 host 状态尚未改为唯一 observation 计数。

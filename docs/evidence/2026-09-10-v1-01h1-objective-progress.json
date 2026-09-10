@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "item": "V1-01H1",
+  "status": "mechanism_verified",
+  "claim": "Champion reselection is not automatically local objective improvement. Only comparable strict declared-objective improvement can reset the live plateau counter or trigger new_best; idle ticks still reconcile current qualified candidates.",
+  "baseline": {
+    "core": "e8c0e1f1ba971e3e53bdc9f6dc136010ca87a7f8",
+    "pro": "d0d27f103efbda043de6607224d33e3323c17ba4"
+  },
+  "frozen_tests": [
+    {
+      "file": "tests/test_notification_progress_contract.py",
+      "sha256": "07ba218de7702d857d735b091236ee468ab24a1e2fad1302964b6b9a976fc96c"
+    },
+    {
+      "file": "tests/test_notification_progress_boundaries.py",
+      "sha256": "90f3dd731a1f817610416b9391ba849c2a406d6575acd73807f1892e6fa560ac"
+    }
+  ],
+  "reproducible_frozen_baseline_recheck": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport subprocess\nimport pytest\nimport orze.reporting.leaderboard as leaderboard\nbaseline = 'e8c0e1f1ba971e3e53bdc9f6dc136010ca87a7f8'\nsource = subprocess.check_output(['git', 'show', baseline + ':src/orze/reporting/leaderboard.py'], text=True)\nexec(compile(source, leaderboard.__file__ + '@' + baseline, 'exec'), leaderboard.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_notification_progress_contract.py', 'tests/test_notification_progress_boundaries.py', '--tb=short']))\nPY",
+    "exit_code": 1,
+    "failed": 24,
+    "passed": 7,
+    "elapsed_seconds": 12.77,
+    "scope": "Only the previous committed leaderboard module is restored in an isolated Python process; final frozen tests and other code remain the paired feature checkout. Every failure is a public behavior assertion, not an import/setup failure."
+  },
+  "targeted_green": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_notification_progress_contract.py tests/test_notification_progress_boundaries.py --tb=short",
+    "exit_code": 0,
+    "passed": 31,
+    "elapsed_seconds": 13.44
+  },
+  "related_regression": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_notification_progress_contract.py tests/test_notification_authority_contract.py tests/test_notification_processing_boundaries.py tests/test_notification_snapshot_boundary.py tests/test_champion_guard_authority.py --tb=short",
+    "exit_code": 0,
+    "passed": 67,
+    "elapsed_seconds": 12.21
+  },
+  "final_pro_regression": {
+    "command": "PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+    "exit_code": 0,
+    "passed": 394,
+    "skipped": 0,
+    "elapsed_seconds": 32.36
+  },
+  "final_cross_repository_regression": {
+    "command": "PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"--tb=short\",\"-rs\"]))'",
+    "exit_code": 0,
+    "passed": 30,
+    "skipped": 0,
+    "elapsed_seconds": 0.58
+  },
+  "independent_review": [
+    {
+      "passed": 38,
+      "elapsed_seconds": 8.28,
+      "scope": "Progress16 + champion history12 + processing boundary10. Read-only source/doc review, no blockers."
+    },
+    {
+      "passed": 15,
+      "elapsed_seconds": 2.86,
+      "scope": "Additional optional-secondary and idle-revocation boundary tests; old module 13 failed / 2 passed in 2.90s. No production changes by the reviewer."
+    }
+  ],
+  "verified_boundaries": [
+    "Ascending/descending objectives, exact-source zero and negative numbers keep their declared semantics.",
+    "Stable ID, equal metrics, undeclared secondary fields and missing/nonfinite/boolean optional secondary values do not prove objective improvement.",
+    "When primary values differ, a valid strict primary improvement does not depend on optional secondary availability.",
+    "An absent/revoked old champion is replaced without a new_best claim or improvement reset. Zero qualified rows revokes champion and derived plateau state.",
+    "Empty finished batches still requalify and reconcile, without completed/plateau/periodic delivery or completion-count increments.",
+    "The optional operational guard only sees a comparable improvement; a hold or qualification exception cannot overwrite the still-qualified prior champion, and cannot retain a revoked champion merely due to anomaly policy."
+  ],
+  "limits": [
+    "See docs/objective-progress.md. This compares two currently requalified rows, not immutable historical observations, statistical significance, independent replication or a scientific breakthrough.",
+    "Same-ID revisions, historical best regression and distinct observation identity are not fixed. A revised old source changes the current comparison baseline.",
+    "Duplicate finished batches and cross-controller/restart unique observation accounting remain open. Existing startup recovery still recomputes counters using metrics.json mtime and persists per-host state.",
+    "Idle reconciliation adds candidate evidence IO. Current content identities alone cannot safely skip lifecycle/policy checks. No net research-efficiency benefit is inferred from this correctness fix.",
+    "No actual GPU, evaluator subprocess, paid provider, production license activation, package publication or deployment. Real temporary SQLite/artifact/report/persistence boundaries are exercised; notification transport and bookkeeping callbacks are test doubles.",
+    "Native report/admin and remaining opt-in Pro verifier/convergence/director consumers still need qualification and safe-decision-boundary closure. V1-01 and V1 overall remain incomplete.",
+    "The original dirty workspace remains untouched (281 status entries observed); no live result artifacts were moved or deleted."
+  ],
+  "fix": {
+    "core": "858dc3187f32ae33d8fc0eba10a7b9a5a7fa7ee6"
+  },
+  "remote_verification": "Push succeeded; git ls-remote origin refs/heads/feat/autoresearch-v1 matched exactly 858dc3187f32ae33d8fc0eba10a7b9a5a7fa7ee6.",
+  "final_core_regression": {
+    "command": "python3 -m pytest -q tests --tb=short -rs",
+    "exit_code": 0,
+    "passed": 1651,
+    "skipped": 6,
+    "elapsed_seconds": 133.55,
+    "skip_scope": "Existing optional Pro tests in the core-only source environment."
+  }
+}
