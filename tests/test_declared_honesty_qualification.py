@@ -192,8 +192,9 @@ def test_report_requalifies_old_accepted_cache_after_honesty_policy_change(
     folder = _publish(project, "idea-rejected", 0, honest=False, mtime=200)
     original_qualifier = evidence.qualify_local_report_evidence
 
-    def pre_honesty_policy(idea_dir, full_cfg):
-        metrics, values, primary, reason = original_qualifier(idea_dir, full_cfg)
+    def pre_honesty_policy(idea_dir, full_cfg, **kwargs):
+        metrics, values, primary, reason = original_qualifier(
+            idea_dir, full_cfg, **kwargs)
         if metrics.get("honest") is False:
             # Simulate only the previous policy's acceptance of this otherwise
             # valid fixture. Real update_report writes its own cache and hashes.

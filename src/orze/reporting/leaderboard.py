@@ -77,7 +77,7 @@ _CMP_OPS = {
 }
 
 _REPORT_UPDATED_TOKEN = "__ORZE_UPDATED_AT__"
-_RESULT_CACHE_SCHEMA_VERSION = 7
+_RESULT_CACHE_SCHEMA_VERSION = 8
 
 
 def _evidence_content_hash(paths) -> str:
@@ -337,6 +337,16 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
     evidence_report = dict(report_cfg)
     evidence_report["columns"] = columns
     evidence_cfg["report"] = evidence_report
+    from orze.reporting.native_report import (
+        native_report_evidence, report_authority,
+    )
+    native_authority, authoritative_ids, authority_reason = report_authority(
+        results_dir, cfg, lake)
+    lifecycle_authority = (
+        "agreed_idea_lake" if authority_reason == "authoritative_lifecycle_loaded"
+        else "unavailable_idea_lake" if native_authority
+        else "unverified_local_artifact"
+    )
     _col_hash = hashlib.sha256(json.dumps(
         {
             "columns": columns,
@@ -350,6 +360,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             "model_lineage": cfg.get("model_lineage", {}),
             "data_boundaries": cfg.get("data_boundaries", {}),
             "data_separation": cfg.get("data_separation", {}),
+            "lifecycle_authority": lifecycle_authority,
             "cache_schema_version": _RESULT_CACHE_SCHEMA_VERSION,
         },
         sort_keys=True, default=str,
@@ -404,6 +415,13 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
                         all_ideas[arch_id] = {"title": arch_title, "priority": "archived"}
             except (json.JSONDecodeError, OSError):
                 pass
+
+    # The loaded project policy can specify an authoritative database without
+    # passing an open Lake object (e.g. report-only callers). Completed IDs are
+    # still candidates; an empty inbox must not hide archived observations.
+    if native_authority:
+        for idea_id in authoritative_ids:
+            all_ideas.setdefault(idea_id, {"title": idea_id, "priority": "archived"})
 
     # Determine report title
     report_title = report_cfg.get("title") or "Orze Report"
@@ -461,6 +479,42 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             "archived": "ARCHIVED",
             "completed": "ARCHIVED",
         }.get(lake_status)
+
+        if native_authority:
+            # A cache is a derived presentation, not evidence. Requalify using
+            # the original full policy, without display/harvest source guesses,
+            # and bind the row to the shared before/after evidence identity.
+            metrics, values, primary_val, evidence_reason, identity = (
+                native_report_evidence(
+                    idea_id, results_dir, cfg, authoritative_ids, authority_reason)
+            )
+            lifecycle_completed = idea_id in authoritative_ids
+            evidence_ok = primary_val is not None and identity is not None
+            row_data = {
+                "id": idea_id, "title": curr_idea_title,
+                "status": metrics.get("status") or status_without_metrics or (
+                    "COMPLETED" if lifecycle_completed else "UNKNOWN"),
+                "lifecycle_completed": lifecycle_completed,
+                "lifecycle_authority": lifecycle_authority,
+                "values": values, "primary_val": primary_val, "metrics": metrics,
+                "evidence_qualified": evidence_ok,
+                "evidence_reason": evidence_reason,
+                "benchmark_contract_ok": evidence_ok if benchmark_contract else True,
+                "benchmark_contract_reason": evidence_reason if benchmark_contract
+                    else "benchmark_contract_disabled",
+                "evidence_sha256": identity, "evidence_identity": identity,
+            }
+            rows.append(row_data)
+            snapshot = {
+                "cache_schema_version": _RESULT_CACHE_SCHEMA_VERSION,
+                "col_hash": _col_hash, "evidence_hash": identity,
+                "lifecycle_signature": lifecycle_signature,
+                "row_hash": _cache_row_hash(row_data), "row": row_data,
+            }
+            if cache.get(idea_id) != snapshot:
+                cache[idea_id] = snapshot
+                updated_cache = True
+            continue
 
         if idea_dir.is_symlink():
             rows.append({
@@ -639,6 +693,10 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             counts[r["status"]] = counts.get(r["status"], 0) + 1
 
     pipeline_total = sum(counts.values())
+    pipeline_scope = (
+        "lake_catalog" if lake else "provided_and_completed_candidates"
+        if native_authority else "provided_offline_candidates"
+    )
 
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     lines = [
@@ -646,6 +704,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         f"**Updated:** {_REPORT_UPDATED_TOKEN} | **Host:** {socket.gethostname()}",
         "",
         "## Pipeline Status",
+        f"Coverage: `{pipeline_scope}` (not the qualified ranking count).",
         "| Total | Completed | Failed | In Progress | Queued |",
         "|-------|-----------|--------|-------------|--------|",
         f"| {pipeline_total} | {counts.get('COMPLETED', 0)} "
@@ -721,6 +780,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         "accepted": len(completed),
         "rejected": rejection_counts,
         "leaderboard_rank_comparable": False,
+        "lifecycle_authority": lifecycle_authority,
+        "lifecycle_authority_reason": authority_reason,
     }
     if benchmark_contract:
         qualification_summary.update({
@@ -734,11 +795,19 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         "## Evidence Qualification",
         "",
         f"- Mode: `{qualification_summary['mode']}`",
+        f"- Lifecycle authority: `{lifecycle_authority}`",
         f"- Accepted completed rows: {qualification_summary['accepted']}",
         f"- Rejected completed rows: {sum(rejection_counts.values())}",
         "- Metric fallback: disabled",
         "- Rank scope: **local evidence ordering; not an official leaderboard rank**",
     ]
+    if not native_authority:
+        qualification_lines.append(
+            "- Lifecycle is unverified: this legacy offline display is not "
+            "research steering authority.")
+    elif authority_reason != "authoritative_lifecycle_loaded":
+        qualification_lines.append(
+            f"- Required lifecycle evidence unavailable: `{authority_reason}`")
     if rejection_counts:
         qualification_lines.append(
             "- Rejection reasons: " + ", ".join(
@@ -977,6 +1046,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
             "top": lb_entries,
             "metric": primary_metric,
             "rank_scope": "local",
+            "lifecycle_authority": lifecycle_authority,
+            "pipeline_scope": pipeline_scope,
             "benchmark_contract": benchmark_contract,
             "benchmark_exposure": exposure_summary,
             "evidence_qualification": qualification_summary,
@@ -1014,6 +1085,7 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         _atomic_write_if_changed(view_lb_path, json.dumps(
             {"top": view_entries, "metric": primary_metric, "view": vname,
              "title": vtitle, "rank_scope": "local",
+             "lifecycle_authority": lifecycle_authority,
              "benchmark_contract": benchmark_contract,
              "benchmark_exposure": exposure_summary,
              "evidence_qualification": qualification_summary}, default=str))
