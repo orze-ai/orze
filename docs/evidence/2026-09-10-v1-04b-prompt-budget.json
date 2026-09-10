@@ -1,0 +1,294 @@
+{
+  "schema": 1,
+  "date": "2026-09-10",
+  "slice": "V1-04B",
+  "status": "implemented, offline mechanisms verified, implementation commits pushed and exact remote refs read back",
+  "product_scope": "General autoresearch prompt/context boundary; no ASR-specific objective, configuration recipe, provider/model migration or claimed research-efficiency uplift.",
+  "predecessor": {
+    "core": "e1f6fd9db871ea0dfe9771727c58fd09ca6fc7e1",
+    "pro": "d8571b5f8bb0a8e70d8702b0b609a7e8e7ecdb4b"
+  },
+  "implementation_commits": {
+    "orze": "ec2f981d63028bc901f5464bf20b02077af4bb66",
+    "orze-pro": "9c82209dc678abf2f6e4842788e81d1b0153946c"
+  },
+  "contract": {
+    "path": "docs/prompt-budget.md",
+    "sha256": "e3fd9eeea2cb3034a50fc7889ca0e9b1b78874d3f70a15212e15b6117f4efc33",
+    "unit": "UTF-8 bytes of complete prompt text",
+    "default": 131072,
+    "maximum": 2097152,
+    "minimum": 1,
+    "optional_file_bytes": 65536,
+    "optional_aggregate_read_bytes": 1048576,
+    "knowledge_directory_capacity": 128,
+    "maximum_observed_directory_entries_including_overflow_detection": 129,
+    "max_source_records": 144,
+    "max_native_manifest_bytes": 262144
+  },
+  "source_freeze": {
+    "inventory": "docs/evidence/2026-09-10-v1-04b-source-inventory.json",
+    "sha256": "a50fb26fea1449f212fd0cc781cf0c1fe3a1ee15adb2a98527ce86898cbfea78",
+    "core_files": 486,
+    "pro_files": 213,
+    "core_pre_post_identical": true,
+    "pro_pre_post_identical": true,
+    "core_full_suite_reused": false
+  },
+  "case_accounting": {
+    "distinct_new_core_cases": 18,
+    "distinct_new_pro_cases": 39,
+    "total_distinct_new_cases": 57,
+    "historical_public_behavior_reds": 1,
+    "historical_controls": 2,
+    "new_configuration_requirements_with_old_validator_failures": 18,
+    "other_new_mechanism_acceptance": 34,
+    "working_draft_behavior_reds": 2,
+    "existing_rules_fixture_cases_not_new": 19,
+    "note": "Target, replay, independent and full runs overlap; their counts are not added as distinct defects."
+  },
+  "historical_behavior": {
+    "test": "orze-pro/tests/test_prompt_budget_boundaries.py",
+    "sha256": "f13c1a7b9a27aa997ac8768c619c2f5f210e2db3f890a21fae32870808064aca",
+    "formal_baseline": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"-s\",\"-p\",\"no:cacheprovider\",\"tests/test_prompt_budget_boundaries.py\",\"--tb=short\"]))'",
+      "failed": 1,
+      "passed": 2,
+      "seconds": 0.74,
+      "exit_code": 1,
+      "source": "Pre-production final V104A source; single authored Unicode line was duplicated. Many-file size and two-project separation are measurement/compatibility controls, not preexisting total-budget enforcement."
+    },
+    "fixed_old_module_replay": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'import importlib,subprocess; from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); baseline=\"d8571b5f8bb0a8e70d8702b0b609a7e8e7ecdb4b\"; names=(\"rules_integrity\",\"research\"); [(lambda module,raw: exec(compile(raw,baseline+\":\"+module.__file__,\"exec\"),module.__dict__))(importlib.import_module(\"orze_pro.agents.\"+name),subprocess.check_output([\"git\",\"show\",baseline+\":src/orze_pro/agents/\"+name+\".py\"],text=True)) for name in names]; raise SystemExit(pytest.main([\"-q\",\"-s\",\"-p\",\"no:cacheprovider\",\"tests/test_prompt_budget_boundaries.py\",\"--tb=short\"]))'",
+      "failed": 1,
+      "passed": 2,
+      "seconds": 1.14,
+      "exit_code": 1,
+      "scope": "Exactly A rules_integrity.py and research.py loaded from predecessor Pro commit into memory. Other dependencies are current; not an entire historical installation."
+    },
+    "final_same_test": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"-s\",\"-p\",\"no:cacheprovider\",\"tests/test_prompt_budget_boundaries.py\",\"--tb=short\"]))'",
+      "passed": 3,
+      "seconds": 1.15,
+      "exit_code": 0
+    },
+    "measurements_before": [
+      {
+        "case": "single_line_unicode",
+        "existing_retrospection_char_limit": 50000,
+        "marker_occurrences": 2,
+        "notes_chars": 50042,
+        "notes_utf8_bytes": 150044,
+        "prompt_chars": 104961,
+        "prompt_sha256": "9c004fc327e0a91ecd3b8e624029773633782f5e364b09ee51c0cd15a1767476",
+        "prompt_utf8_bytes": 304967,
+        "required_rules_sha256": "edc827a7d8b22e08f915309185c85d6722df8e074a1eeefac62bc78fccf4eae4"
+      },
+      {
+        "case": "many_knowledge_files",
+        "existing_retrospection_char_limit": 50000,
+        "knowledge_file_count": 24,
+        "knowledge_input_utf8_bytes": 295392,
+        "prompt_chars": 103993,
+        "prompt_sha256": "3ba2c085d3fa83c5fb00875a43cf57fa40e955899afbbe2a1335d46ca7fa9094",
+        "prompt_utf8_bytes": 300603,
+        "required_rules_sha256": "ef0db02444dc5bbdb978f5c4c4cfb50bd97f5b5a51b70b19f4d4565a439f0383",
+        "source_markers_in_prompt": 24
+      },
+      {
+        "case": "project_a",
+        "prompt_chars": 4823,
+        "prompt_sha256": "97f7f479d53789ea748f4bec4c61fd37501f1726abf42c2f6e0dbe35322bf067",
+        "prompt_utf8_bytes": 4825,
+        "required_rules_sha256": "763c63d6b171a823afdfd16a54d3e1ab22e37dee8601d61b13987cfd2ef97d66"
+      },
+      {
+        "case": "project_b",
+        "prompt_chars": 4823,
+        "prompt_sha256": "fca84ff2ca4462d8ed2c79c637516d84af4531fcb76a5c9c7e8a6eb79ab14d96",
+        "prompt_utf8_bytes": 4825,
+        "required_rules_sha256": "c47614ea22004432bafd2505ff618c2eabdcc4366ae4024197643da0525d8d5d"
+      }
+    ],
+    "measurements_after": [
+      {
+        "case": "single_line_unicode",
+        "existing_retrospection_char_limit": 50000,
+        "marker_occurrences": 1,
+        "notes_chars": 50042,
+        "notes_utf8_bytes": 150044,
+        "prompt_chars": 26826,
+        "prompt_sha256": "d92030648c4d276d2181b3389d1779bda7f0083c858b677826d22223bc4db295",
+        "prompt_utf8_bytes": 70500,
+        "required_rules_sha256": "edc827a7d8b22e08f915309185c85d6722df8e074a1eeefac62bc78fccf4eae4"
+      },
+      {
+        "case": "many_knowledge_files",
+        "existing_retrospection_char_limit": 50000,
+        "knowledge_file_count": 24,
+        "knowledge_input_utf8_bytes": 295392,
+        "prompt_chars": 48850,
+        "prompt_sha256": "8a26c326cb52f5c938039a935d947ced28d2628e5562d28a20b9f28581b63536",
+        "prompt_utf8_bytes": 131070,
+        "required_rules_sha256": "ef0db02444dc5bbdb978f5c4c4cfb50bd97f5b5a51b70b19f4d4565a439f0383",
+        "source_markers_in_prompt": 11
+      },
+      {
+        "case": "project_a",
+        "prompt_chars": 4963,
+        "prompt_sha256": "07d492d88209d1ecea7aeba6cb3c1911fd4e49189680f2b03f2a717891b6de2c",
+        "prompt_utf8_bytes": 4965,
+        "required_rules_sha256": "763c63d6b171a823afdfd16a54d3e1ab22e37dee8601d61b13987cfd2ef97d66"
+      },
+      {
+        "case": "project_b",
+        "prompt_chars": 4963,
+        "prompt_sha256": "13e3ad2c22801056fcc93c9b3f5ef3ba303a33068228cdf35e840e5d2656064b",
+        "prompt_utf8_bytes": 4965,
+        "required_rules_sha256": "c47614ea22004432bafd2505ff618c2eabdcc4366ae4024197643da0525d8d5d"
+      }
+    ],
+    "measurement_limits": "Fixed synthetic context inputs and fake provider recorder, not quality-preserving compression or a research-efficiency benchmark."
+  },
+  "core_configuration": {
+    "test": "tests/test_prompt_limit_config.py",
+    "sha256": "6de97f148513568013ed234ec1d25c8647167fc76476176fb19ca78231ad0185",
+    "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_prompt_limit_config.py --tb=short",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "before": {
+      "failed": 18,
+      "seconds": 0.44,
+      "exit_code": 1
+    },
+    "after": {
+      "passed": 18,
+      "seconds": 0.18,
+      "exit_code": 0
+    },
+    "classification": "New declaration/validation requirements. Prior code had no research_prompt configuration contract; not eighteen old provider/runtime defects."
+  },
+  "draft_boundaries": {
+    "source_snapshot": "orze-pro/docs/evidence/snapshots/v1-04b-before-optional-source-boundaries.py",
+    "source_sha256": "6a8b412c6edde2dff22cf96ca20b9f5932b0374571160f8592d5b623e82b8644",
+    "test": "orze-pro/tests/test_prompt_source_boundaries.py",
+    "test_sha256": "02de7296514018d9f48ac709d01b8bac1ef373ef0b3bba4385f43bb02752a4d5",
+    "failed": 2,
+    "seconds": 0.11,
+    "exit_code": 1,
+    "replayed_full_snapshot_in_memory": true,
+    "details": "Exactly-128 rejection and one cyclic optional filename aborting independent good-file loading. Author report preserves actual original/replay commands; these are draft, not historical product defects."
+  },
+  "rules_fixture_migration": {
+    "test": "orze-pro/tests/test_research_required_rules.py",
+    "original_snapshot": "orze-pro/docs/evidence/snapshots/v1-04b-original-required-rules-tests.py",
+    "original_sha256": "9946159a578b97bfd46857dbc87272ef5253b20437519b88f46cf3e41befc8a3",
+    "migrated_sha256": "ed38883324be9b3c3d49e43e37e463990648229c6787a946a18ee4bbc598ae00",
+    "original_test_before_bounded_reader": {
+      "passed": 19,
+      "seconds": 0.14,
+      "exit_code": 0
+    },
+    "original_instrumentation_after_reader_change": {
+      "failed": 3,
+      "passed": 16,
+      "seconds": 0.24,
+      "exit_code": 1
+    },
+    "migrated_test": {
+      "passed": 19,
+      "seconds": 0.17,
+      "exit_code": 0
+    },
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_research_required_rules.py\",\"--tb=short\"]))'",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+    "assertion_ast_proof": {
+      "command": "python3 -c 'import ast; from pathlib import Path; paths=[Path(\"docs/evidence/snapshots/v1-04b-original-required-rules-tests.py\"),Path(\"tests/test_research_required_rules.py\")]; assertions=[[ast.dump(n,include_attributes=False) for n in ast.walk(ast.parse(p.read_text())) if isinstance(n,ast.Assert)] for p in paths]; assert assertions[0]==assertions[1]; print({\"assertions\":len(assertions[0]),\"identical\":True})'",
+      "assert_nodes": 18,
+      "identical": true,
+      "exit_code": 0
+    },
+    "scope": "Only read-count instrumentation moved from Path.read_bytes to the actual bounded _read_rules_bytes(path,max_bytes). Original complete test is preserved. No assertion relaxation; the three measurement-seam failures are not counted as product bugs."
+  },
+  "full_verification": {
+    "core": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "passed": 2606,
+      "skipped": 7,
+      "seconds": 268.85,
+      "exit_code": 0,
+      "skip_scope": "Installed optional Pro stub in Core-only suite. Real paired-source tests below run with the actual Pro source; licensing is replaced only in the test process."
+    },
+    "pro": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "passed": 937,
+      "seconds": 97.05,
+      "exit_code": 0
+    },
+    "paired": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "passed": 60,
+      "seconds": 0.78,
+      "exit_code": 0
+    },
+    "stdout_note": "These records preserve executed commands, summaries, hashes and selected diagnostic measurements, not an archive of every full-suite stdout byte."
+  },
+  "reviews": [
+    {
+      "repository": "orze-pro",
+      "path": "docs/evidence/2026-09-10-v1-04b-prompt-budget-author.json",
+      "sha256": "fe0bf050c65b30cb6ff6d2d9ba87212343dbef8da48fe87af51dec697d88ebfd",
+      "role": "implementation author, not self-independent review",
+      "final_passed": 72,
+      "seconds": 3.58
+    },
+    {
+      "repository": "orze-pro",
+      "path": "docs/evidence/2026-09-10-v1-04b-prompt-budget-review.json",
+      "sha256": "48986bfcbe91cfba18ee83c28c6cf29c6ff7c27c0c1b634510436eb665f1e0c8",
+      "role": "independent public-consumer and source review",
+      "final_passed": 74,
+      "seconds": 7.91,
+      "blocking_findings_remaining": 0
+    },
+    {
+      "repository": "orze-pro",
+      "path": "docs/evidence/2026-09-10-v1-04b-native-prompt-manifest.json",
+      "sha256": "1f4dfe3c07044601f537f01bf590640726972eba5674ce00f5a12d463b5465f3",
+      "role": "separate native delivery implementation, integration and cross-component verification",
+      "final_passed": 60,
+      "seconds": 13.77,
+      "blocking_findings_remaining": 0
+    }
+  ],
+  "remote_verification": {
+    "branch": "feat/autoresearch-v1",
+    "core": "ec2f981d63028bc901f5464bf20b02077af4bb66\trefs/heads/feat/autoresearch-v1\n5ca2680dbd0139e63cd35a4f83da438b5b47ab99\trefs/heads/main",
+    "pro": "9c82209dc678abf2f6e4842788e81d1b0153946c\trefs/heads/feat/autoresearch-v1\n57feb6e0af19dcf62a80b1e447f0771936d39afe\trefs/heads/main",
+    "both_push_exit_codes": 0,
+    "main_unchanged": true,
+    "code_refs_exact": true
+  },
+  "workspace_guard": {
+    "checked_utc": "2026-09-10 15:24:39 UTC",
+    "original_workspace_dirty_entries": 281,
+    "original_workspace_modified_by_this_work": false,
+    "holdout_content_read": false,
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245"
+  },
+  "limits": [
+    "Only the bounded prompt/context slice is closed; the whole V1 plan is not complete.",
+    "Prepared metadata does not prove HTTP dispatch, acceptance, billing, provider completion, scientific validity or general research-efficiency gains.",
+    "Complete UTF-8 prompt size is not tokenizer count, HTTP request envelope size, whole-process memory usage or the sum of every legacy context input read.",
+    "Partial-read hashes are not hashes of unread full files; generated-context and digest hashes do not invent provenance for all underlying inputs.",
+    "Native hash-bound rules remain mandatory. Bare legacy empty-hash calls retain their missing-optional-rule behavior.",
+    "No cross-file global atomic snapshot, malicious in-process plugin isolation, generic filesystem defense or network exactly-once property is claimed.",
+    "Sidecar publication may succeed before a later fsync/readback fails; the cycle still refuses the provider, and sidecar presence is not execution proof.",
+    "No real provider, paid account, GPU training, production licensing, holdout task, online migration, main-branch merge or deployment was performed."
+  ]
+}
