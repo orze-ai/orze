@@ -140,199 +140,26 @@ def get_active_idea_ids(results_dir: Path) -> Set[str]:
 
 
 def gc_checkpoints(checkpoints_dir: Path, keep_ids: Set[str],
-                   dry_run: bool = False) -> Dict[str, Any]:
-    """Delete checkpoint directories for ideas NOT in keep_ids.
-
-    Returns stats: {deleted: int, freed_bytes: int, kept: int, errors: int}
-    """
-    stats = {"deleted": 0, "freed_bytes": 0, "kept": 0, "errors": 0}
-
-    if not checkpoints_dir.exists():
-        logger.info("Checkpoints dir does not exist: %s", checkpoints_dir)
-        return stats
-
-    # Scan all subdirectories (may be nested one level: checkpoints/subdir/idea-*)
-    dirs_to_check: List[Path] = []
-    for entry in os.scandir(checkpoints_dir):
-        if not entry.is_dir(follow_symlinks=False):
-            continue
-        # Check if this is an idea dir directly
-        if entry.name.startswith("idea-"):
-            dirs_to_check.append(Path(entry.path))
-        else:
-            # Check one level deeper (e.g. checkpoints/project/idea-*)
-            subdir = Path(entry.path)
-            try:
-                for sub_entry in os.scandir(subdir):
-                    if sub_entry.is_dir(follow_symlinks=False) and \
-                       sub_entry.name.startswith("idea-"):
-                        dirs_to_check.append(Path(sub_entry.path))
-            except OSError:
-                pass
-
-    # Expand keep_ids: for each full ID like "idea-123-ht-1", also keep "idea-123"
-    expanded_keep = set(keep_ids)
-    for kid in keep_ids:
-        base = kid.split("~")[0]
-        if "-ht-" in base:
-            base = base.split("-ht-")[0]
-        expanded_keep.add(base)
-
-    for idea_dir in sorted(dirs_to_check):
-        # Check full name first, then stripped base
-        full_name = idea_dir.name
-        base_id = full_name.split("~")[0]
-        if "-ht-" in base_id:
-            base_id = base_id.split("-ht-")[0]
-
-        if full_name in expanded_keep or base_id in expanded_keep:
-            stats["kept"] += 1
-            # Write a protection marker so humans know this checkpoint is important
-            if not dry_run:
-                try:
-                    marker = idea_dir / ".orze_protected"
-                    marker.write_text(
-                        f"idea_id: {full_name}\nprotected: true\n"
-                        f"DO NOT DELETE — this checkpoint is in the top-{len(keep_ids)} keep set.\n",
-                        encoding="utf-8",
-                    )
-                except OSError:
-                    pass
-            continue
-
-        if dry_run:
-            logger.info("[DRY RUN] Would delete: %s", idea_dir)
-            stats["deleted"] += 1
-            continue
-
-        try:
-            shutil.rmtree(idea_dir)
-            stats["deleted"] += 1
-        except Exception as e:
-            logger.warning("Failed to delete %s: %s", idea_dir, e)
-            stats["errors"] += 1
-
-    return stats
+                   dry_run: bool = False, *, scope=None) -> Dict[str, Any]:
+    """Explicitly scoped checkpoint cleanup; missing scope is a safe refusal."""
+    from orze.engine.gc_safety import collect
+    return collect(scope, checkpoints_dir, keep_ids, mode="checkpoints", dry_run=dry_run)
 
 
 def gc_results(results_dir: Path, keep_ids: Set[str],
-               dry_run: bool = False) -> Dict[str, Any]:
-    """Delete large artifacts (.pt, .pth) from results/ directories of non-top ideas.
-
-    Unlike checkpoints_dir (which deletes the entire dir), this only prunes
-    large files to keep logs and metrics intact.
-    """
-    stats = {"deleted_files": 0, "freed_bytes": 0, "kept": 0, "errors": 0}
-
-    if not results_dir.exists():
-        return stats
-
-    try:
-        with os.scandir(results_dir) as it:
-            for entry in it:
-                if not entry.is_dir(follow_symlinks=False):
-                    continue
-                if not entry.name.startswith("idea-"):
-                    continue
-
-                base_id = entry.name.split("~")[0]
-                if base_id in keep_ids:
-                    stats["kept"] += 1
-                    continue
-
-                # Prune large files in this results dir
-                idea_path = Path(entry.path)
-                for ext in ["*.pt", "*.pth", "*.ckpt", "*.bin"]:
-                    for f in idea_path.glob(ext):
-                        if dry_run:
-                            logger.info("[DRY RUN] Would delete artifact: %s", f)
-                            stats["deleted_files"] += 1
-                            continue
-                        try:
-                            f_size = f.stat().st_size
-                            f.unlink()
-                            stats["deleted_files"] += 1
-                            stats["freed_bytes"] += f_size
-                        except Exception as e:
-                            logger.warning("Failed to delete %s: %s", f, e)
-                            stats["errors"] += 1
-    except OSError:
-        pass
-
-    return stats
+               dry_run: bool = False, *, scope=None) -> Dict[str, Any]:
+    """Prune only scoped, closed, undeclared result artifacts."""
+    from orze.engine.gc_safety import collect
+    return collect(scope, results_dir, keep_ids, mode="results", dry_run=dry_run)
 
 
 def archive_to_cold_storage(results_dir: Path, archive_dir: Path, keep_ids: Set[str],
-                            dry_run: bool = False) -> Dict[str, Any]:
-    """Move bulky items (overlays, .pt files) to cold storage.
-    Leaves metadata (json, log, yaml) on hot storage so framework stays functional.
-    """
-    stats = {"archived_files": 0, "freed_bytes": 0, "kept": 0, "errors": 0}
-
-    if not results_dir.exists():
-        return stats
-
-    if not archive_dir.exists() and not dry_run:
-        try:
-            archive_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.error("Could not create archive dir: %s", e)
-            return stats
-
-    try:
-        with os.scandir(results_dir) as it:
-            for entry in it:
-                if not entry.is_dir(follow_symlinks=False):
-                    continue
-                if not entry.name.startswith("idea-"):
-                    continue
-
-                base_id = entry.name.split("~")[0]
-                if base_id in keep_ids:
-                    stats["kept"] += 1
-                    continue
-
-                idea_path = Path(entry.path)
-                archive_idea_path = archive_dir / entry.name
-
-                # 1. Archive overlays directory (recursive)
-                overlays_path = idea_path / "overlays"
-                if overlays_path.exists() and overlays_path.is_dir():
-                    if dry_run:
-                        logger.info("[DRY RUN] Would archive overlays: %s -> %s",
-                                     overlays_path, archive_idea_path / "overlays")
-                        stats["archived_files"] += 1
-                    else:
-                        try:
-                            archive_idea_path.mkdir(parents=True, exist_ok=True)
-                            shutil.move(str(overlays_path), str(archive_idea_path / "overlays"))
-                            stats["archived_files"] += 1
-                            logger.info("Archived overlays for %s", entry.name)
-                        except Exception as e:
-                            logger.warning("Failed to archive overlays for %s: %s", entry.name, e)
-                            stats["errors"] += 1
-
-                # 2. Archive large model files
-                for ext in ["*.pt", "*.pth", "*.ckpt", "*.bin"]:
-                    for f in idea_path.glob(ext):
-                        if dry_run:
-                            logger.info("[DRY RUN] Would archive artifact: %s -> %s",
-                                         f, archive_idea_path / f.name)
-                            stats["archived_files"] += 1
-                            continue
-                        try:
-                            archive_idea_path.mkdir(parents=True, exist_ok=True)
-                            f_size = f.stat().st_size
-                            shutil.move(str(f), str(archive_idea_path / f.name))
-                            stats["archived_files"] += 1
-                            stats["freed_bytes"] += f_size
-                        except Exception as e:
-                            logger.warning("Failed to archive %s: %s", f, e)
-                            stats["errors"] += 1
-    except OSError:
-        pass
-
-    return stats
+                            dry_run: bool = False, *, scope=None) -> Dict[str, Any]:
+    """Same-filesystem no-overwrite archive; no implicit copy/delete fallback."""
+    from orze.engine.gc_safety import collect, GCScope, GCRefused
+    if not isinstance(scope, GCScope) or Path(archive_dir).absolute() != scope.archive_dir:
+        raise GCRefused("gc_archive_scope_required")
+    return collect(scope, results_dir, keep_ids, mode="archive", dry_run=dry_run)
 
 
 def run_gc(
@@ -348,8 +175,19 @@ def run_gc(
     archive_dir: Optional[Path] = None,
     extra_keep_ids: Optional[Set[str]] = None,
     sort_order: str = "descending",
+    *, cfg: Optional[dict] = None, lake=None,
 ) -> Dict[str, Any]:
-    """Run garbage collection. Returns stats dict."""
+    """Run explicitly scoped GC; unsafe or unknown authority is not deletion."""
+    from orze.engine.gc_safety import gc_scope
+    try:
+        scope = gc_scope(results_dir, cfg, lake=lake, lake_db_path=lake_db_path,
+                         checkpoints_dir=checkpoints_dir, archive_dir=archive_dir)
+        results_dir = scope.results_dir
+        checkpoints_dir, archive_dir = scope.checkpoints_dir, scope.archive_dir
+    except Exception as exc:
+        logger.warning("GC blocked: %s", exc)
+        return {"blocked": True, "reason": str(exc), "checkpoints": {},
+                "results": {}, "archive": {}}
     logger.info("=" * 50)
     logger.info("GARBAGE COLLECTION%s", " (DRY RUN)" if dry_run else "")
     logger.info("=" * 50)
@@ -395,7 +233,7 @@ def run_gc(
     # GC checkpoints
     if checkpoints_dir:
         stats["checkpoints"] = gc_checkpoints(
-            checkpoints_dir, keep_ids, dry_run=dry_run)
+            checkpoints_dir, keep_ids, dry_run=dry_run, scope=scope)
         cs = stats["checkpoints"]
         logger.info("Checkpoints: deleted=%d, kept=%d, errors=%d",
                      cs["deleted"], cs["kept"], cs["errors"])
@@ -403,18 +241,18 @@ def run_gc(
     # Cold Storage Archival
     if archive_dir:
         stats["archive"] = archive_to_cold_storage(
-            results_dir, archive_dir, keep_ids, dry_run=dry_run)
+            results_dir, archive_dir, keep_ids, dry_run=dry_run, scope=scope)
         as_ = stats["archive"]
-        freed_gb = as_["freed_bytes"] / (1024**3)
-        logger.info("Archive: items=%d, freed=%.1fGB, kept=%d",
-                     as_["archived_files"], freed_gb, as_["kept"])
+        moved_gb = as_.get("moved_bytes", 0) / (1024**3)
+        logger.info("Archive: items=%d, logical-moved=%.1fGB, kept=%d",
+                     as_["archived_files"], moved_gb, as_["kept"])
 
     # GC results artifacts (Deletes from hot storage without archive)
     if gc_results_enabled and not archive_dir:
-        stats["results"] = gc_results(results_dir, keep_ids, dry_run=dry_run)
+        stats["results"] = gc_results(results_dir, keep_ids, dry_run=dry_run, scope=scope)
         rs = stats["results"]
         freed_mb = rs["freed_bytes"] / (1024 * 1024)
-        logger.info("Results artifacts: deleted=%d, freed=%.1fMB, kept=%d",
+        logger.info("Results artifacts: deleted=%d, logical-removed=%.1fMB, kept=%d",
                      rs["deleted_files"], freed_mb, rs["kept"])
 
     # Report final disk state
@@ -426,6 +264,8 @@ def run_gc(
         except Exception:
             pass
 
+    if any(stats[name].get("errors", 0) for name in ("checkpoints", "results", "archive")):
+        stats["blocked"] = True
     return stats
 
 
@@ -457,72 +297,105 @@ Examples:
 
     parser.add_argument("-c", "--config", default="orze.yaml",
                         help="Path to orze.yaml")
-    parser.add_argument("--checkpoints-dir", default="",
-                        help="Checkpoints directory (overrides orze.yaml gc.checkpoints_dir)")
-    parser.add_argument("--keep-top", type=int, default=0,
+    parser.add_argument("--checkpoints-dir", default=None,
+                        help="Checkpoint override, relative to the invocation directory")
+    parser.add_argument("--keep-top", type=int, default=None,
                         help="Keep top N by primary metric (overrides orze.yaml)")
-    parser.add_argument("--keep-recent", type=int, default=0,
+    parser.add_argument("--keep-recent", type=int, default=None,
                         help="Also keep N most recently completed")
-    parser.add_argument("--min-free-gb", type=float, default=0,
+    parser.add_argument("--min-free-gb", type=float, default=None,
                         help="Only run if disk free < this (0 = always run)")
-    parser.add_argument("--lake-db", default="",
-                        help="Path to idea_lake.db")
+    parser.add_argument("--lake-db", default=None,
+                        help="Database override, relative to the invocation directory")
     parser.add_argument("--gc-results", action="store_true",
                         help="Delete large artifacts (.pt) from results/ too")
-    parser.add_argument("--archive-dir", default="",
-                        help="Move bulky result assets to this secondary storage path")
+    parser.add_argument("--archive-dir", default=None,
+                        help="Archive override, relative to the invocation directory")
     parser.add_argument("--dry-run", action="store_true",
                         help="Show what would be deleted without deleting")
 
     args = parser.parse_args()
 
-    # Load orze.yaml
-    cfg = {}
-    config_path = Path(args.config)
-    if config_path.exists():
-        try:
-            cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-        except Exception as e:
-            logger.warning("Could not load %s: %s", args.config, e)
+    # Destructive maintenance never falls back after a missing/bad selected
+    # configuration. Read a bounded UTF-8 document without dumping its values
+    # into parser errors (a YAML failure can contain credentials).
+    import math
+    config_path = Path(os.path.abspath(args.config))
+    try:
+        with config_path.open("rb") as stream:
+            raw = stream.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            parser.error("gc_configuration_too_large")
+        cfg = yaml.safe_load(raw.decode("utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError, RecursionError):
+        parser.error("gc_configuration_unavailable_or_invalid")
+    if cfg is None:
+        cfg = {}
+    if type(cfg) is not dict:
+        parser.error("gc_configuration_requires_mapping")
+    gc_cfg, report_cfg = cfg.get("gc"), cfg.get("report")
+    if gc_cfg is None:
+        gc_cfg = {}
+    if report_cfg is None:
+        report_cfg = {}
+    if type(gc_cfg) is not dict or type(report_cfg) is not dict:
+        parser.error("gc_configuration_sections_require_mapping")
+    project_root, invocation_root = config_path.parent, Path.cwd()
 
-    gc_cfg = cfg.get("gc") or {}
-    report_cfg = cfg.get("report") or {}
+    def selected_path(value, root, *, optional=False):
+        if optional and value in (None, ""):
+            return None
+        if type(value) is not str or not value or "\0" in value:
+            parser.error("gc_configuration_path_invalid")
+        return Path(os.path.abspath(root / value))
 
-    results_dir = Path(cfg.get("results_dir", "orze_results"))
-    ideas_path = Path(cfg.get("ideas_file", "ideas.md"))
+    def optional_override(argument, configured):
+        return selected_path(argument, invocation_root, optional=True) if argument is not None else selected_path(
+            configured, project_root, optional=True)
+
+    results_dir = selected_path(cfg.get("results_dir", "orze_results"), project_root)
+    checkpoints_dir = optional_override(args.checkpoints_dir, gc_cfg.get("checkpoints_dir"))
+    archive_dir = optional_override(args.archive_dir, gc_cfg.get("archive_dir"))
+    control = selected_path(cfg.get("_orze_dir", ".orze"), project_root)
+    if args.lake_db is not None:
+        lake_db_path = selected_path(args.lake_db, invocation_root)
+    elif "idea_lake_db" in cfg:
+        lake_db_path = selected_path(cfg["idea_lake_db"], project_root)
+    else:
+        default_lake = control / "idea_lake.db"
+        lake_db_path = default_lake if default_lake.exists() or default_lake.is_symlink() else None
+    keep_top = args.keep_top if args.keep_top is not None else gc_cfg.get("keep_top", 50)
+    keep_recent = args.keep_recent if args.keep_recent is not None else gc_cfg.get("keep_recent", 20)
+    min_free_gb = args.min_free_gb if args.min_free_gb is not None else gc_cfg.get("min_free_gb", 0)
+    if any(type(value) is not int or value < 0 for value in (keep_top, keep_recent)):
+        parser.error("gc_keep_counts_require_nonnegative_integers")
+    if type(min_free_gb) not in (int, float) or min_free_gb < 0:
+        parser.error("gc_disk_threshold_requires_finite_nonnegative_number")
+    try:
+        finite_threshold = math.isfinite(min_free_gb)
+    except OverflowError:
+        finite_threshold = False
+    if not finite_threshold:
+        parser.error("gc_disk_threshold_requires_finite_nonnegative_number")
+    results_artifacts = gc_cfg.get("results_artifacts", False)
+    if type(results_artifacts) is not bool:
+        parser.error("gc_results_artifacts_requires_boolean")
+    gc_results_enabled = args.gc_results or results_artifacts
     primary_metric = report_cfg.get("primary_metric", "")
-
-    checkpoints_dir = args.checkpoints_dir or gc_cfg.get("checkpoints_dir", "")
-    if checkpoints_dir:
-        checkpoints_dir = Path(checkpoints_dir)
-    else:
-        checkpoints_dir = None
-
-    keep_top = args.keep_top or gc_cfg.get("keep_top", 50)
-    keep_recent = args.keep_recent or gc_cfg.get("keep_recent", 20)
-    min_free_gb = args.min_free_gb or gc_cfg.get("min_free_gb", 0)
-    gc_results_enabled = args.gc_results or gc_cfg.get("results_artifacts", False)
-
-    archive_dir = args.archive_dir or gc_cfg.get("archive_dir", "")
-    if archive_dir:
-        archive_dir = Path(archive_dir)
-    else:
-        archive_dir = None
-
-    if args.lake_db:
-        lake_db_path = Path(args.lake_db)
-    elif cfg.get("idea_lake_db"):
-        lake_db_path = Path(cfg["idea_lake_db"])
-        if not lake_db_path.is_absolute():
-            lake_db_path = config_path.parent / lake_db_path
-    else:
-        lake_db_path = config_path.parent / ".orze" / "idea_lake.db"
+    sort_order = report_cfg.get("sort", "descending")
+    if type(primary_metric) is not str or sort_order not in ("ascending", "descending"):
+        parser.error("gc_report_selection_invalid")
+    cfg.update(_project_root=str(project_root), _config_path=str(config_path),
+               _orze_dir=str(control), results_dir=str(results_dir),
+               gc=gc_cfg, report=report_cfg)
+    if lake_db_path is not None:
+        cfg["idea_lake_db"] = str(lake_db_path)
 
     stats = run_gc(
         results_dir=results_dir,
         checkpoints_dir=checkpoints_dir,
         primary_metric=primary_metric,
-        sort_order=report_cfg.get("sort", "descending"),
+        sort_order=sort_order,
         lake_db_path=lake_db_path,
         keep_top=keep_top,
         keep_recent=keep_recent,
@@ -530,10 +403,12 @@ Examples:
         dry_run=args.dry_run,
         gc_results_enabled=gc_results_enabled,
         archive_dir=archive_dir,
+        cfg=cfg,
     )
 
     print(json.dumps(stats, indent=2))
+    return 2 if stats.get("blocked") else 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

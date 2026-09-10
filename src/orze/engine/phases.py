@@ -1135,6 +1135,7 @@ class OrzePhaseMixin:
                                    "(protecting %d running experiments)", len(running_ids))
                     run_gc(
                         results_dir=self.results_dir,
+                        cfg=cfg, lake=self.lake,
                         checkpoints_dir=Path(gc_cfg["checkpoints_dir"]) if gc_cfg.get("checkpoints_dir") else None,
                         primary_metric=report_cfg.get("primary_metric", ""),
                         sort_order=report_cfg.get("sort", "descending"),

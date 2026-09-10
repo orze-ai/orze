@@ -524,6 +524,7 @@ def run_cleanup(results_dir: Path, cfg: dict, *, lake=None):
             lake_path = Path(cfg.get("idea_lake_db") or Path(cfg.get("results_dir", "orze_results")) / "idea_lake.db")
             stats = run_gc(
                 results_dir=results_dir,
+                cfg=cfg, lake=lake,
                 checkpoints_dir=Path(gc_cfg["checkpoints_dir"]),
                 primary_metric=report_cfg.get("primary_metric", ""),
                 sort_order=report_cfg.get("sort", "descending"),
