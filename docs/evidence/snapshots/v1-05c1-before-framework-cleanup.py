@@ -509,11 +509,9 @@ def _is_protected_evidence(idea_dir: Path, path: Path) -> bool:
     )
 
 
-def run_cleanup(results_dir: Path, cfg: dict, *, lake=None):
+def run_cleanup(results_dir: Path, cfg: dict):
     """Run periodic cleanup: GC checkpoints, delete file patterns, run script."""
     cleanup_cfg = cfg.get("cleanup") or {}
-    if not isinstance(cleanup_cfg, dict):
-        cleanup_cfg = {}
 
     # GC: delete checkpoint dirs for non-top experiments
     gc_cfg = cfg.get("gc") or {}
@@ -540,12 +538,23 @@ def run_cleanup(results_dir: Path, cfg: dict, *, lake=None):
             logger.warning("GC failed: %s", e)
 
     # Built-in: delete files matching glob patterns in results dirs
-    from orze.engine.cleanup_patterns import cleanup_pattern_files
-    report = cleanup_pattern_files(results_dir, cfg, lake=lake)
-    if report["deleted"]:
-        logger.info("Cleanup: deleted %d confirmed disposable files", report["deleted"])
-    if report["errors"]:
-        logger.warning("Cleanup patterns %s: %s", report["status"], ", ".join(report["errors"]))
+    patterns = cleanup_cfg.get("patterns") or []
+    if patterns:
+        deleted = 0
+        for d in results_dir.iterdir():
+            if not d.is_dir() or not d.name.startswith("idea-"):
+                continue
+            for pattern in patterns:
+                for f in d.glob(pattern):
+                    try:
+                        if f.is_file() and not _is_protected_evidence(d, f):
+                            f.unlink()
+                            deleted += 1
+                    except Exception:
+                        pass
+        if deleted:
+            logger.info("Cleanup: deleted %d files matching %s",
+                        deleted, patterns)
 
     # Custom cleanup script
     script = cleanup_cfg.get("script")

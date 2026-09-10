@@ -1225,7 +1225,7 @@ class Orze(OrzePhaseMixin):
                             if cleaned:
                                 logger.info("Cleaned %d orphaned claims",
                                             cleaned)
-                        run_cleanup(self.results_dir, cfg)
+                        run_cleanup(self.results_dir, cfg, lake=self.lake)
                     finally:
                         _fs_unlock(cleanup_lock)
                 else:
