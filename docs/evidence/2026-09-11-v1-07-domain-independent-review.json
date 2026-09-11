@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "slice": "V1-07A",
+  "reviewer": "/root/core_review",
+  "status": "independent_bounded_review_complete_not_full_acceptance",
+  "authorship_boundary": "Reviewer authored sorting only. compression.py and common.py are independently reviewed; no reviewed source/test or prior author report was edited.",
+  "sources": [
+    {
+      "path": "examples/acceptance/compression.py",
+      "sha256": "e97cdf45f538ef6d0d009bb8b8e95a5e228b5fc8d8a09b14bd90cce394c36779",
+      "read_scope": "complete file, lines 1-213",
+      "read_command": "nl -ba examples/acceptance/compression.py",
+      "read_result": {
+        "chunk_id": "48e59d",
+        "exit_code": 0,
+        "complete": true
+      }
+    },
+    {
+      "path": "examples/acceptance/common.py",
+      "sha256": "d83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068",
+      "read_scope": "complete file, lines 1-131",
+      "read_command": "nl -ba examples/acceptance/common.py",
+      "read_result": {
+        "chunk_id": "970bfb",
+        "exit_code": 0,
+        "complete": true
+      }
+    },
+    {
+      "path": "tests/test_acceptance_compression.py",
+      "sha256": "533e6cc0be8f052b86881919ec53acae68783ade2d1cd9f9c6f5192c2ff2d14a",
+      "read_scope": "complete file",
+      "read_command": "sed -n '1,340p' tests/test_acceptance_compression.py",
+      "read_result": {
+        "chunk_id": "9cd621",
+        "exit_code": 0,
+        "complete": true
+      }
+    }
+  ],
+  "runs": [
+    {
+      "kind": "pre_hashes",
+      "command": "sha256sum examples/acceptance/compression.py examples/acceptance/common.py tests/test_acceptance_compression.py",
+      "result": {
+        "chunk_id": "62c047",
+        "exit_code": 0,
+        "output": "e97cdf45f538ef6d0d009bb8b8e95a5e228b5fc8d8a09b14bd90cce394c36779  examples/acceptance/compression.py\nd83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068  examples/acceptance/common.py\n533e6cc0be8f052b86881919ec53acae68783ade2d1cd9f9c6f5192c2ff2d14a  tests/test_acceptance_compression.py\n"
+      }
+    },
+    {
+      "kind": "independent_existing_domain_tests",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_acceptance_compression.py --tb=short",
+      "result": {
+        "chunk_id": "23b130",
+        "wall_time_seconds": 0.429574699,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "...............................                                          [100%]\n31 passed in 0.28s\n"
+      }
+    },
+    {
+      "kind": "post_hashes",
+      "command": "sha256sum examples/acceptance/compression.py examples/acceptance/common.py tests/test_acceptance_compression.py",
+      "result": {
+        "chunk_id": "a36919",
+        "wall_time_seconds": 0.000003785,
+        "exit_code": 0,
+        "original_token_count": 75,
+        "output": "e97cdf45f538ef6d0d009bb8b8e95a5e228b5fc8d8a09b14bd90cce394c36779  examples/acceptance/compression.py\nd83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068  examples/acceptance/common.py\n533e6cc0be8f052b86881919ec53acae68783ade2d1cd9f9c6f5192c2ff2d14a  tests/test_acceptance_compression.py\n"
+      }
+    }
+  ],
+  "measured_result": {
+    "passed": 31,
+    "failed": 0,
+    "pytest_seconds": 0.28,
+    "source_and_test_hash_count": 3,
+    "pre_post_exact": true
+  },
+  "review_conclusions": [
+    {
+      "path": "examples/acceptance/compression.py",
+      "lines": "39-62, 163-169, 197-209",
+      "topic": "complete-container metric",
+      "conclusion": "Cost is the actual byte length of the four-byte magic, four-byte original length and full payload. It is not just RLE payload size and not JSON hex-transport size. Default known-wire controls verify 137/12/266 bytes."
+    },
+    {
+      "path": "examples/acceptance/compression.py",
+      "lines": "65-110",
+      "topic": "scientific invalid versus protocol failure",
+      "conclusion": "The bounded versioned decoder rejects mismatched lengths, bad HEX alphabet, malformed/zero RLE counts and trailing content; decoded bytes are compared with the original dataset. A syntactically valid measurement envelope containing a lossy or malformed container is classified invalid, not misreported as an infrastructure HOLD."
+    },
+    {
+      "path": "examples/acceptance/compression.py",
+      "lines": "170-171",
+      "topic": "unknown means validation not performed",
+      "conclusion": "Unchecked measurement returns a normal unknown claim before invoking the roundtrip oracle. An existing direct oracle-tripwire test independently passes in this run. This review does not re-count the author's prior draft failure as a new failure."
+    },
+    {
+      "path": "examples/acceptance/compression.py",
+      "lines": "122-149, 172-194, 202-205",
+      "topic": "source-bound analysis",
+      "conclusion": "The worker reads three distinct candidate measurements for the same dataset, verifies complete container cost and roundtrip, and emits a new analysis envelope carrying the original unchecked container. Domain interpretation checks the stated containers, results and source-ID order. Analysis does not rerun the encoder or mutate the original unknown record; it is not a statistically independent algorithm measurement."
+    },
+    {
+      "path": "examples/acceptance/common.py",
+      "lines": "28-54, 73-90, 106-131",
+      "topic": "binding and comparability",
+      "conclusion": "Prepared inputs pin candidate, operation, dataset and ordered source identities. Source reads require the exact descriptor-ID set and actual raw-byte SHA-256. Claims require exact envelope fields, matching metadata, strict nonnegative integer cost and finite nonnegative timings. Comparison scope hashes the protocol fingerprint with dataset identity, not candidate identity."
+    },
+    {
+      "path": "examples/acceptance/common.py",
+      "lines": "19-25, 93-103",
+      "topic": "digest and timing units",
+      "conclusion": "dataset_sha256 hashes canonical JSON; compression represents its bytes as a JSON hex string. Worker timers start inside main before input reads and are sampled while constructing the envelope, excluding interpreter startup/imports and final JSON encoding/output. They are neither pure algorithm-only timing nor full CLI/native elapsed."
+    }
+  ],
+  "blocking_findings": [],
+  "trust_boundary": [
+    "The source FD bytes are provenance-bound by the existing native adapter and checked by the worker; common.py does not independently establish Core attempt/effect/SQLite authority.",
+    "Domain interpret revalidates reported container/trace evidence but does not itself re-read source FDs. Scientific source interpretation relies on the pinned trusted local worker implementation; this is not adversarial-worker containment or an OS sandbox.",
+    "The real supervised worker in the 31-case unit group reads golden sealed source fixtures, not three prior SQLite/native campaign attempts.",
+    "The finite datasets and deliberately fixed candidates do not establish universal lossless-compression, sorting correctness, candidate discovery or research-efficiency improvements.",
+    "Actual CLI/SQLite/Policy/replication/Stop campaign results and the full repository suite remain the root's separately recorded evidence."
+  ],
+  "document_review": {
+    "path": "docs/cross-domain-acceptance.md",
+    "sha256_at_read": "caf3e7ac4568e5b770c4f2fd4b8edc2699e1e8fc5cd46135f6a253e60723e474",
+    "command": "cat docs/cross-domain-acceptance.md",
+    "result": {
+      "chunk_id": "b33057",
+      "exit_code": 0,
+      "complete": true
+    },
+    "hash_command": "sha256sum docs/cross-domain-acceptance.md examples/acceptance/compression.py examples/acceptance/common.py tests/test_acceptance_compression.py",
+    "hash_result": {
+      "chunk_id": "bce029",
+      "exit_code": 0
+    },
+    "conclusion": "Read completely. The documented full-container metric, canonical-JSON dataset digest, unknown-before-oracle semantics, analysis-not-new-measurement distinction, occurrence-versus-statistical-independence limit and worker-main timing scope agree with the reviewed implementation. The document explicitly excludes interpreter startup/final JSON output from worker timing and rejects subtracting worker wall from CLI wall to claim pure framework CPU or general percentage savings.",
+    "not_independently_recomputed": [
+      "The four exported product-report numeric timing rows",
+      "Native/CLI timer implementation outside these two reviewed modules",
+      "The final full-suite status"
+    ],
+    "scope": "This hashes the document actually read, not any subsequent edited version."
+  },
+  "prohibited_actions_performed": [],
+  "mutation_scope": [
+    "New docs/evidence/2026-09-11-v1-07-domain-independent-review.json only"
+  ],
+  "limitations": "No new tests were introduced, no old assertions were changed, no holdout was read, and no GPU/provider/network or host-wide process operation was run."
+}

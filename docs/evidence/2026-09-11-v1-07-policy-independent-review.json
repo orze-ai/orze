@@ -1,0 +1,819 @@
+{
+  "schema": 1,
+  "slice": "V1-07A",
+  "status": "target_and_full_archives_verified",
+  "reviewer": "/root/pro_review",
+  "roles": {
+    "authored": [
+      "tests/test_acceptance_policy_review.py",
+      "docs/evidence/2026-09-11-v1-07-policy-independent-review.json"
+    ],
+    "independently_reviewed": [
+      "examples/acceptance/policy.py",
+      "examples/acceptance/common.py",
+      "examples/acceptance/sorting.py",
+      "examples/acceptance/compression.py",
+      "examples/acceptance/__main__.py",
+      "examples/acceptance/testing.py",
+      "tests/test_acceptance_product.py"
+    ],
+    "not_claimed": "The reviewer did not author the Policy, Domain implementations, entry, shared fixture, or product tests. Authored decision tests are not presented as independent review of their own implementation."
+  },
+  "scope": {
+    "fixed_core_code": "8f61ae5f68c0846d5149aceb4df55c69263c9df2",
+    "protocol_commit_reference": "c6a033e",
+    "protocol": "docs/plans/2026-09-11-v1-07-acceptance.zh-CN.md",
+    "holdout_read": false,
+    "source_or_old_test_edits": false,
+    "production_experiments": false,
+    "gpu_or_provider_execution": false,
+    "pytest_executed_by_this_reviewer": false,
+    "no_before_source_snapshot_claim": "All example files are new candidate application code, not blobs of the fixed Core baseline. This review has not observed a behavioral failure or edited an example implementation."
+  },
+  "static_audit": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, subprocess\nfrom datetime import datetime, timezone\nfrom pathlib import Path\nbase='8f61ae5f68c0846d5149aceb4df55c69263c9df2'\npaths=['examples/acceptance/policy.py','examples/acceptance/common.py','examples/acceptance/sorting.py','examples/acceptance/compression.py','examples/acceptance/__main__.py','examples/acceptance/testing.py','tests/test_acceptance_product.py','tests/test_acceptance_policy_review.py','docs/plans/2026-09-11-v1-07-acceptance.zh-CN.md']\nrows=[]\nfor name in paths:\n    raw=Path(name).read_bytes()\n    record={'path':name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}\n    if name.endswith('.py'):\n        tree=ast.parse(raw,filename=name)\n        record['literal_asserts']=sum(isinstance(node,ast.Assert) for node in ast.walk(tree))\n        if name=='tests/test_acceptance_policy_review.py':\n            cases=0\n            functions=[]\n            for node in tree.body:\n                if isinstance(node,ast.FunctionDef) and node.name.startswith('test_'):\n                    count=1\n                    for dec in node.decorator_list:\n                        if isinstance(dec,ast.Call) and isinstance(dec.func,ast.Attribute) and dec.func.attr=='parametrize':\n                            count*=len(ast.literal_eval(dec.args[1]))\n                    cases+=count\n                    functions.append({'name':node.name,'static_parameter_cases':count})\n            record.update(static_parameter_cases=cases,functions=functions)\n    rows.append(record)\nold=[p for p in subprocess.check_output(['git','ls-tree','-r','--name-only',base,'tests'],text=True).splitlines() if p.endswith('.py')]\nchanged=[name for name in old if Path(name).read_bytes()!=subprocess.check_output(['git','show',base+':'+name])]\nsrcdiff=subprocess.check_output(['git','diff',base,'--','src'],text=True)\nassert not changed and not srcdiff\nprint(json.dumps({'checked_utc':datetime.now(timezone.utc).isoformat(),'baseline':base,'files':rows,'old_python_tests':len(old),'changed_old_tests':changed,'tracked_src_diff':srcdiff,'classification':'static inspection only; parameter count is not pytest collection or execution'},sort_keys=True))\nPY",
+    "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "execution": {
+      "chunk_id": "b3fdc1",
+      "wall_time_seconds": 0.862072495,
+      "exit_code": 0,
+      "original_token_count": 543,
+      "output": "{\"baseline\": \"8f61ae5f68c0846d5149aceb4df55c69263c9df2\", \"changed_old_tests\": [], \"checked_utc\": \"2026-09-11T13:57:46.269286+00:00\", \"classification\": \"static inspection only; parameter count is not pytest collection or execution\", \"files\": [{\"bytes\": 8102, \"literal_asserts\": 0, \"path\": \"examples/acceptance/policy.py\", \"sha256\": \"c54a67739341935dd1a0d6789ee4289c32d497118ab54912e35abb76f494dc2f\"}, {\"bytes\": 6586, \"literal_asserts\": 0, \"path\": \"examples/acceptance/common.py\", \"sha256\": \"d83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068\"}, {\"bytes\": 12710, \"literal_asserts\": 0, \"path\": \"examples/acceptance/sorting.py\", \"sha256\": \"b1d3f2ec9d33e8942c91a5a3b49fa57ccd2f086efbdc0c29b6772e851c5ea96c\"}, {\"bytes\": 9717, \"literal_asserts\": 0, \"path\": \"examples/acceptance/compression.py\", \"sha256\": \"e97cdf45f538ef6d0d009bb8b8e95a5e228b5fc8d8a09b14bd90cce394c36779\"}, {\"bytes\": 627, \"literal_asserts\": 0, \"path\": \"examples/acceptance/__main__.py\", \"sha256\": \"5cc04a310205f5d29a9dd66f1f21ae7ad9d8cbd4c3e03ea5a19a77679b751055\"}, {\"bytes\": 6802, \"literal_asserts\": 7, \"path\": \"examples/acceptance/testing.py\", \"sha256\": \"e3e5d909ab1cd5b106fde04c38e868634e1c317c8e49fb55d045e910364b151a\"}, {\"bytes\": 7802, \"literal_asserts\": 56, \"path\": \"tests/test_acceptance_product.py\", \"sha256\": \"253dab92b00644c6409ad49f83d8c7cb8fc27e239c97cd97d8e18d2e806eb74e\"}, {\"bytes\": 5817, \"functions\": [{\"name\": \"test_real_unknown_with_best_cost_still_requires_analysis\", \"static_parameter_cases\": 2}, {\"name\": \"test_only_valid_cost_change_selects_exact_analysis_evaluator\", \"static_parameter_cases\": 2}, {\"name\": \"test_incomparable_best_observation_is_not_a_winner\", \"static_parameter_cases\": 2}, {\"name\": \"test_actual_queued_replica_is_not_completed_stop_evidence\", \"static_parameter_cases\": 2}], \"literal_asserts\": 26, \"path\": \"tests/test_acceptance_policy_review.py\", \"sha256\": \"13b7a93b965668c22bc6e0c1c240c1b77ba8e2e5db7a20acc07941c718d7bdd6\", \"static_parameter_cases\": 8}, {\"bytes\": 6141, \"path\": \"docs/plans/2026-09-11-v1-07-acceptance.zh-CN.md\", \"sha256\": \"2f0f4d863443fb4992636dab22dc71d816dbd75a666a7076ea4182603082fcfe\"}], \"old_python_tests\": 457, \"tracked_src_diff\": \"\"}\n"
+    },
+    "parsed_result": {
+      "baseline": "8f61ae5f68c0846d5149aceb4df55c69263c9df2",
+      "changed_old_tests": [],
+      "checked_utc": "2026-09-11T13:57:46.269286+00:00",
+      "classification": "static inspection only; parameter count is not pytest collection or execution",
+      "files": [
+        {
+          "bytes": 8102,
+          "literal_asserts": 0,
+          "path": "examples/acceptance/policy.py",
+          "sha256": "c54a67739341935dd1a0d6789ee4289c32d497118ab54912e35abb76f494dc2f"
+        },
+        {
+          "bytes": 6586,
+          "literal_asserts": 0,
+          "path": "examples/acceptance/common.py",
+          "sha256": "d83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068"
+        },
+        {
+          "bytes": 12710,
+          "literal_asserts": 0,
+          "path": "examples/acceptance/sorting.py",
+          "sha256": "b1d3f2ec9d33e8942c91a5a3b49fa57ccd2f086efbdc0c29b6772e851c5ea96c"
+        },
+        {
+          "bytes": 9717,
+          "literal_asserts": 0,
+          "path": "examples/acceptance/compression.py",
+          "sha256": "e97cdf45f538ef6d0d009bb8b8e95a5e228b5fc8d8a09b14bd90cce394c36779"
+        },
+        {
+          "bytes": 627,
+          "literal_asserts": 0,
+          "path": "examples/acceptance/__main__.py",
+          "sha256": "5cc04a310205f5d29a9dd66f1f21ae7ad9d8cbd4c3e03ea5a19a77679b751055"
+        },
+        {
+          "bytes": 6802,
+          "literal_asserts": 7,
+          "path": "examples/acceptance/testing.py",
+          "sha256": "e3e5d909ab1cd5b106fde04c38e868634e1c317c8e49fb55d045e910364b151a"
+        },
+        {
+          "bytes": 7802,
+          "literal_asserts": 56,
+          "path": "tests/test_acceptance_product.py",
+          "sha256": "253dab92b00644c6409ad49f83d8c7cb8fc27e239c97cd97d8e18d2e806eb74e"
+        },
+        {
+          "bytes": 5817,
+          "functions": [
+            {
+              "name": "test_real_unknown_with_best_cost_still_requires_analysis",
+              "static_parameter_cases": 2
+            },
+            {
+              "name": "test_only_valid_cost_change_selects_exact_analysis_evaluator",
+              "static_parameter_cases": 2
+            },
+            {
+              "name": "test_incomparable_best_observation_is_not_a_winner",
+              "static_parameter_cases": 2
+            },
+            {
+              "name": "test_actual_queued_replica_is_not_completed_stop_evidence",
+              "static_parameter_cases": 2
+            }
+          ],
+          "literal_asserts": 26,
+          "path": "tests/test_acceptance_policy_review.py",
+          "sha256": "13b7a93b965668c22bc6e0c1c240c1b77ba8e2e5db7a20acc07941c718d7bdd6",
+          "static_parameter_cases": 8
+        },
+        {
+          "bytes": 6141,
+          "path": "docs/plans/2026-09-11-v1-07-acceptance.zh-CN.md",
+          "sha256": "2f0f4d863443fb4992636dab22dc71d816dbd75a666a7076ea4182603082fcfe"
+        }
+      ],
+      "old_python_tests": 457,
+      "tracked_src_diff": ""
+    },
+    "limitation": "This is a source-read point, not a global frozen runtime epoch. The eight authored cases are counted from literal parameter decorators, not claimed as executed or collected."
+  },
+  "full_read_tools": [
+    {
+      "chunk_id": "f51f61",
+      "paths": [
+        "docs/plans/2026-09-11-v1-07-acceptance.zh-CN.md"
+      ],
+      "note": "Entire frozen protocol read."
+    },
+    {
+      "chunk_id": "86283f",
+      "paths": [
+        "examples/acceptance/policy.py",
+        "examples/acceptance/__main__.py"
+      ],
+      "note": "Complete module reads."
+    },
+    {
+      "chunk_id": "855be7",
+      "paths": [
+        "examples/acceptance/common.py"
+      ],
+      "note": "Complete shared transport read; historical Core observation schema was also inspected."
+    },
+    {
+      "chunk_id": "cc1b46",
+      "paths": [
+        "examples/acceptance/sorting.py",
+        "examples/acceptance/compression.py"
+      ],
+      "note": "Both complete Domain/worker modules read."
+    },
+    {
+      "chunk_id": "f21b2c",
+      "paths": [
+        "examples/acceptance/testing.py",
+        "tests/test_acceptance_product.py"
+      ],
+      "note": "Complete product test and earlier helper 1cbb689c read."
+    },
+    {
+      "chunk_id": "96102a",
+      "paths": [
+        "examples/acceptance/testing.py"
+      ],
+      "note": "Complete later helper e3e5d909 read, including actual-report serialization/session footer."
+    }
+  ],
+  "decision_tests": {
+    "path": "tests/test_acceptance_policy_review.py",
+    "sha256": "13b7a93b965668c22bc6e0c1c240c1b77ba8e2e5db7a20acc07941c718d7bdd6",
+    "literal_asserts": 26,
+    "static_parameter_cases": 8,
+    "classification": "New acceptance decision-logic requirements, not old product bugs or missing-API reds.",
+    "base": "The session-scoped acceptance_runs fixture supplies the actual four CLI trajectories. Tests select original trace entries and deepcopy their snapshots/budgets; no forged data enters the Core execution/admission path.",
+    "groups": [
+      {
+        "cases": 2,
+        "domains": [
+          "sorting",
+          "compression"
+        ],
+        "claim": "Changing only an unknown measure cost to zero must still select the same source-bound analysis rather than a validated winner."
+      },
+      {
+        "cases": 2,
+        "domains": [
+          "sorting",
+          "compression"
+        ],
+        "claim": "Changing only the valid analysis cost to zero changes Replicate to that analysis observation's exact evaluator Ref; the original unchecked measure remains unknown and is not borrowed as its origin."
+      },
+      {
+        "cases": 2,
+        "domains": [
+          "sorting"
+        ],
+        "claim": "A best challenger with only protocol_fingerprint or comparison_scope changed cannot remain the selected comparable winner; explicit ValueError refusal is allowed."
+      },
+      {
+        "cases": 2,
+        "domains": [
+          "sorting",
+          "compression"
+        ],
+        "claim": "An actual queued-replica snapshot selects Execute, not completed confirmation/Stop."
+      }
+    ],
+    "mutation_limits": "Every modified snapshot is restored at the edited field and compared to its original; original captured snapshot equality is asserted. These synthetic value/protocol changes are not new observations, source verification, grants, replica executions, or additional native actions.",
+    "fixture_updates": [],
+    "results": "Formal combined epoch and durable actual reports are pending review."
+  },
+  "source_findings": {
+    "blocking_findings": [],
+    "bounded_conclusion": "No source-level blocker was found for the frozen finite two-domain protocol. Runtime success and complete evidence are not inferred from this source review.",
+    "checks": [
+      {
+        "area": "Shared selection",
+        "result": "CommonPolicy has fixed config={} and no domain-name/data-pattern branch. TASKS names determine the declared finite exploration prior, while early challenger selection and final minimum use actual validation, cost, protocol_fingerprint, comparison_scope and dataset_sha256. Zero valid cost is eligible; an invalid cheap result is not a winner."
+      },
+      {
+        "area": "Unknown versus unavailable or execution failure",
+        "result": "An explicit unknown observation is distinct from recorded_evidence.unavailable/more_available (ValueError refusal), and from failed/interrupted action outcomes (separate stop reason). Analysis is requested from the three actual result artifact IDs; it creates a new evaluator/observation rather than overwriting unknown."
+      },
+      {
+        "area": "Analysis evaluator identity",
+        "result": "The winning completed result supplies the full Replicate source_ref. If a pure decision counterfactual makes analysis best, its evaluator action is repeated, not the input algorithm's original unknown action. This does not promote the original observation or imply statistical independence."
+      },
+      {
+        "area": "Comparable measurements",
+        "result": "Subject specifications can differ by candidate. Comparison requires the shared Domain protocol, comparison scope and exact dataset digest; raw costs from different datasets/domains are not globally comparable. The policy's deterministic task-ID tiebreaker is not a statistical equivalence claim."
+      },
+      {
+        "area": "Sorting validity and cost",
+        "result": "The actual worker records every comparison, including False. A separate pivot/shifting replay checks the swap-based insertion trace, and the oracle checks exact integer outputs, multiplicity and nondecreasing order. Initial unchecked measurements deliberately defer that scientific oracle. Analysis verifies source traces and creates a new validity assessment; it reuses the recorded cost rather than claiming a fresh sorting measurement."
+      },
+      {
+        "area": "Compression validity and cost",
+        "result": "Cost is the complete decoded container-byte length, including 8-byte framing, not JSON hex transport length. RAW/HEX enforce exact lengths; RLE rejects zero counts, truncated pairs, excess or incomplete decoded length; round-trip additionally compares original bytes. The intentionally stripped-NUL candidate keeps the original declared length, so its failure is not hidden by changing that header."
+      },
+      {
+        "area": "Actual input route",
+        "result": "The shared application transport declares fixed argv, outputs and 2-second bounds. Native-provided source FDs are read boundedly, their IDs must exactly match captured bindings and bytes must match source content hashes. The entry only registers Domains/Policy and calls the unchanged actual Core CLI; it does not insert tasks or launch an alternate runner."
+      },
+      {
+        "area": "Completion and repetition",
+        "result": "Queued work is executed before the idle winner/confirmation branch, and active work/reservations wait. The product tests separately require completed TREE_CLOSED/ECHILD_WALL/effect terminals, SETTLED reservations, exact request key/source Ref, unchanged raw config/spec and distinct occurrences before confirmed_selection Stop."
+      },
+      {
+        "area": "Actual trace retention",
+        "result": "The initial helper 1cbb689c retained trace only in memory; this reviewer notified root rather than treating a passing footer as preserved runtime data. The read e3e5d909 helper now serializes each actual completed run (trace, stdout, stderr, rows, timings) into its own project acceptance-report.json and reports path/SHA/bytes at pytest_sessionfinish. The implementation has been read; produced files and checksums still require actual-epoch verification."
+      }
+    ]
+  },
+  "required_limitations": [
+    "The final Policy correlates equivalent materialized-action occurrences by artifact logical names/specification fingerprints. That predicate is not a replication_requests key check, a request ACK, a GO grant or a generic recovery/adoption capability. Product trace and the real request table must separately establish that these fresh scenarios confirmed the requested replica.",
+    "The test helper uses real repeated CLI main invocations in one Python interpreter, with temporary argv/cwd and registry-map isolation. It does not prove fresh-controller-process restart or handoff.",
+    "A shared fixture session is intended to run four known projects with 16 native actions plus four sticky-Stop CLI refusals: eight CLI invocations. Pure Policy assertions reuse these records. Separate worker units or later pytest sessions must be accounted separately.",
+    "Default five actions exhaust the declared ten-second envelope, so confirmed_selection must be read from the actual Policy trace and durable Stop row; counterfactual three-action runs must stop with four seconds remaining. A runtime footer alone cannot establish the stated branch.",
+    "The sorting no-op is valid only on the declared already-sorted counterfactual suite; stripping NUL is valid only on a dataset without NUL. These are intentionally limited validity changes, not universally correct algorithms.",
+    "Both known domains are deterministic finite-candidate single-objective minimization examples. They do not establish statistical independence, stochastic research quality, general search effectiveness, ASR improvement, efficiency percentages or whole-V1 completion.",
+    "Worker CPU/wall, terminal elapsed wall, CLI wall and conservative reservations have different meanings. Wall differences are not pure framework CPU overhead. Interpreter/Policy callback execution remains trusted application code, not a new sandbox or worker-envelope budget.",
+    "Healthy four-run evidence does not replace existing HOLD/source-tamper/commit-uncertainty/recovery boundaries. Holdout content was not read, and the independent holdout is not replaced by the counterfactuals."
+  ],
+  "target_archive_addendum": {
+    "status": "target_archives_verified_full_epoch_pending",
+    "previous_status": "source_review_complete_formal_epoch_pending",
+    "supersedes_previous_status": true,
+    "runtime_test_result_reference": {
+      "owner": "/root",
+      "reported_footer": "70 passed in 12.95s",
+      "reported_exit_code": 0,
+      "reported_chunk_id": "d94ff3",
+      "limitation": "Parent-owned pytest execution; this reviewer did not rerun pytest, fabricate its command, or create additional native actions."
+    },
+    "checker": {
+      "path": "docs/evidence/checks/v1-07a-runs-check.py",
+      "sha256": "80efa4fbd7378e27b7263f0d49a93ce29f87a5543452f6d2ef3999a2dc12a27b",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/checks/v1-07a-runs-check.py",
+      "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "execution": {
+        "chunk_id": "7a2162",
+        "wall_time_seconds": 0.000022587,
+        "exit_code": 0,
+        "original_token_count": 1160,
+        "output": "{\"additional_workers_started\": 0, \"authority_limit\": \"No archived effect SHA/tree record is promoted into a fresh kernel or filesystem proof; stopped rerun database equality is checked by the source fixture, whose second DB copy is not archived.\", \"classification\": \"read-only archive consistency, not execution authority\", \"cli_invocations\": 8, \"native_actions\": 16, \"reports\": [{\"actions\": 5, \"bytes\": 282093, \"control_steps\": 11, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-sorting_default.json\", \"replica_ref\": {\"attempt_id\": \"d9d262642022fc2aa5708de22ddbe5b7\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-1d76b5ac2b2d4af49281af23432a1117\"}, \"reserved_wall_seconds\": 10, \"selected_ref\": {\"attempt_id\": \"4a61845d4ff47a42099d02a4c104ab40\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-baseline\"}, \"sha256\": \"6193b31e7252ebe1aca64bdee8e9baabd9a9b9200a30de41b62d988865980f2d\", \"timings\": {\"cli_wall_seconds\": 3.860514411702752, \"first_policy_visible_seconds\": {\"idea-analysis\": 2.8673269115388393, \"idea-baseline\": 0.7726120017468929, \"idea-challenger\": 1.3435252998024225, \"idea-rep-1d76b5ac2b2d4af49281af23432a1117\": 3.849116090685129, \"idea-unchecked\": 1.9394348748028278}, \"native_terminal_elapsed_wall_seconds\": 0.37868789210915565, \"worker_cpu_seconds\": 0.0009822560000000008, \"worker_wall_seconds\": 0.0009643621742725372}}, {\"actions\": 3, \"bytes\": 121523, \"control_steps\": 7, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-sorting_counterfactual.json\", \"replica_ref\": {\"attempt_id\": \"41e2dae563beb2952d8da586f325ff00\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-37da6c9debcb4aebba2684ef72492f1e\"}, \"reserved_wall_seconds\": 6, \"selected_ref\": {\"attempt_id\": \"1583651fbda549407d51da632a27ba31\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-challenger\"}, \"sha256\": \"751e0c84b1e71854e6393f15a49ecd2d4f50c974300be67954149b8527f6ebe2\", \"timings\": {\"cli_wall_seconds\": 2.256073797121644, \"first_policy_visible_seconds\": {\"idea-baseline\": 0.7376220859587193, \"idea-challenger\": 1.30687565356493, \"idea-rep-37da6c9debcb4aebba2684ef72492f1e\": 2.2453360334038734}, \"native_terminal_elapsed_wall_seconds\": 0.21755501255393028, \"worker_cpu_seconds\": 0.00031438200000000194, \"worker_wall_seconds\": 0.0003033839166164398}}, {\"actions\": 5, \"bytes\": 276998, \"control_steps\": 11, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-compression_default.json\", \"replica_ref\": {\"attempt_id\": \"77ac0aafc651b79b96c783cac6520c1d\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-7d3a1c4da2b54abbb301a7c5ad8a26b4\"}, \"reserved_wall_seconds\": 10, \"selected_ref\": {\"attempt_id\": \"99bcb27e9ad7069d3c0612c82acc5394\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-baseline\"}, \"sha256\": \"2aa810c347c5fcee86470764d970db481e0659226e6cd49531e266cc2423000f\", \"timings\": {\"cli_wall_seconds\": 3.83446229621768, \"first_policy_visible_seconds\": {\"idea-analysis\": 2.8446538634598255, \"idea-baseline\": 0.7490748725831509, \"idea-challenger\": 1.3261639103293419, \"idea-rep-7d3a1c4da2b54abbb301a7c5ad8a26b4\": 3.823004812002182, \"idea-unchecked\": 1.9407312851399183}, \"native_terminal_elapsed_wall_seconds\": 0.3684583716094494, \"worker_cpu_seconds\": 0.0005791570000000003, \"worker_wall_seconds\": 0.0005617085844278336}}, {\"actions\": 3, \"bytes\": 121114, \"control_steps\": 7, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-compression_counterfactual.json\", \"replica_ref\": {\"attempt_id\": \"74570df65d302a52e3b0257c24066b87\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-332eef21c18e4f758b6402549be989fc\"}, \"reserved_wall_seconds\": 6, \"selected_ref\": {\"attempt_id\": \"78aeb1520ae0fa152330d7fde1c3e7fc\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-challenger\"}, \"sha256\": \"5c44f8ba1ccc3ab4c19d46186bedb324c675b922605657aee86ccb1fa5e3856a\", \"timings\": {\"cli_wall_seconds\": 2.258679550141096, \"first_policy_visible_seconds\": {\"idea-baseline\": 0.7537545152008533, \"idea-challenger\": 1.3218275867402554, \"idea-rep-332eef21c18e4f758b6402549be989fc\": 2.2479827888309956}, \"native_terminal_elapsed_wall_seconds\": 0.21724016405642033, \"worker_cpu_seconds\": 0.00029322499999999765, \"worker_wall_seconds\": 0.0002832859754562378}}], \"reserved_wall_seconds\": 32, \"status\": \"passed\", \"sticky_stop_refusals\": 4, \"timing_limit\": \"first_policy_visible is first recorded decision visibility, not exact publication time; wall residual is not pure overhead\"}\n"
+      },
+      "parsed_result": {
+        "additional_workers_started": 0,
+        "authority_limit": "No archived effect SHA/tree record is promoted into a fresh kernel or filesystem proof; stopped rerun database equality is checked by the source fixture, whose second DB copy is not archived.",
+        "classification": "read-only archive consistency, not execution authority",
+        "cli_invocations": 8,
+        "native_actions": 16,
+        "reports": [
+          {
+            "actions": 5,
+            "bytes": 282093,
+            "control_steps": 11,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-sorting_default.json",
+            "replica_ref": {
+              "attempt_id": "d9d262642022fc2aa5708de22ddbe5b7",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-rep-1d76b5ac2b2d4af49281af23432a1117"
+            },
+            "reserved_wall_seconds": 10,
+            "selected_ref": {
+              "attempt_id": "4a61845d4ff47a42099d02a4c104ab40",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-baseline"
+            },
+            "sha256": "6193b31e7252ebe1aca64bdee8e9baabd9a9b9200a30de41b62d988865980f2d",
+            "timings": {
+              "cli_wall_seconds": 3.860514411702752,
+              "first_policy_visible_seconds": {
+                "idea-analysis": 2.8673269115388393,
+                "idea-baseline": 0.7726120017468929,
+                "idea-challenger": 1.3435252998024225,
+                "idea-rep-1d76b5ac2b2d4af49281af23432a1117": 3.849116090685129,
+                "idea-unchecked": 1.9394348748028278
+              },
+              "native_terminal_elapsed_wall_seconds": 0.37868789210915565,
+              "worker_cpu_seconds": 0.0009822560000000008,
+              "worker_wall_seconds": 0.0009643621742725372
+            }
+          },
+          {
+            "actions": 3,
+            "bytes": 121523,
+            "control_steps": 7,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-sorting_counterfactual.json",
+            "replica_ref": {
+              "attempt_id": "41e2dae563beb2952d8da586f325ff00",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-rep-37da6c9debcb4aebba2684ef72492f1e"
+            },
+            "reserved_wall_seconds": 6,
+            "selected_ref": {
+              "attempt_id": "1583651fbda549407d51da632a27ba31",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-challenger"
+            },
+            "sha256": "751e0c84b1e71854e6393f15a49ecd2d4f50c974300be67954149b8527f6ebe2",
+            "timings": {
+              "cli_wall_seconds": 2.256073797121644,
+              "first_policy_visible_seconds": {
+                "idea-baseline": 0.7376220859587193,
+                "idea-challenger": 1.30687565356493,
+                "idea-rep-37da6c9debcb4aebba2684ef72492f1e": 2.2453360334038734
+              },
+              "native_terminal_elapsed_wall_seconds": 0.21755501255393028,
+              "worker_cpu_seconds": 0.00031438200000000194,
+              "worker_wall_seconds": 0.0003033839166164398
+            }
+          },
+          {
+            "actions": 5,
+            "bytes": 276998,
+            "control_steps": 11,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-compression_default.json",
+            "replica_ref": {
+              "attempt_id": "77ac0aafc651b79b96c783cac6520c1d",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-rep-7d3a1c4da2b54abbb301a7c5ad8a26b4"
+            },
+            "reserved_wall_seconds": 10,
+            "selected_ref": {
+              "attempt_id": "99bcb27e9ad7069d3c0612c82acc5394",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-baseline"
+            },
+            "sha256": "2aa810c347c5fcee86470764d970db481e0659226e6cd49531e266cc2423000f",
+            "timings": {
+              "cli_wall_seconds": 3.83446229621768,
+              "first_policy_visible_seconds": {
+                "idea-analysis": 2.8446538634598255,
+                "idea-baseline": 0.7490748725831509,
+                "idea-challenger": 1.3261639103293419,
+                "idea-rep-7d3a1c4da2b54abbb301a7c5ad8a26b4": 3.823004812002182,
+                "idea-unchecked": 1.9407312851399183
+              },
+              "native_terminal_elapsed_wall_seconds": 0.3684583716094494,
+              "worker_cpu_seconds": 0.0005791570000000003,
+              "worker_wall_seconds": 0.0005617085844278336
+            }
+          },
+          {
+            "actions": 3,
+            "bytes": 121114,
+            "control_steps": 7,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-compression_counterfactual.json",
+            "replica_ref": {
+              "attempt_id": "74570df65d302a52e3b0257c24066b87",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-rep-332eef21c18e4f758b6402549be989fc"
+            },
+            "reserved_wall_seconds": 6,
+            "selected_ref": {
+              "attempt_id": "78aeb1520ae0fa152330d7fde1c3e7fc",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-challenger"
+            },
+            "sha256": "5c44f8ba1ccc3ab4c19d46186bedb324c675b922605657aee86ccb1fa5e3856a",
+            "timings": {
+              "cli_wall_seconds": 2.258679550141096,
+              "first_policy_visible_seconds": {
+                "idea-baseline": 0.7537545152008533,
+                "idea-challenger": 1.3218275867402554,
+                "idea-rep-332eef21c18e4f758b6402549be989fc": 2.2479827888309956
+              },
+              "native_terminal_elapsed_wall_seconds": 0.21724016405642033,
+              "worker_cpu_seconds": 0.00029322499999999765,
+              "worker_wall_seconds": 0.0002832859754562378
+            }
+          }
+        ],
+        "reserved_wall_seconds": 32,
+        "status": "passed",
+        "sticky_stop_refusals": 4,
+        "timing_limit": "first_policy_visible is first recorded decision visibility, not exact publication time; wall residual is not pure overhead"
+      }
+    },
+    "verified": [
+      "Exactly four named default/counterfactual archive files were completely JSON-decoded with duplicate-key/nonfinite rejection. Each reported envelope's explicit canonical bytes match its artifact content SHA and size.",
+      "Sixteen distinct attempt, artifact and observation identities; completed action state, exact supervision identity/fullRef, TREE_CLOSED/ECHILD_WALL, zero return code/no forced STOP, terminal receipt SHA shape, and each terminal digest equals its SETTLED reservation record.",
+      "The actual stdout decision records equal the archive trace. Every snapshot SHA matches, every historical visible observation/artifact record equals its final archived immutable record, and all native results become visible before the final selection Stop.",
+      "Selected fullRef and request ID/reason match the actual replication record; source raw configuration, decoded source-row digest, terminal digest, artifact/observation set digests, Domain metadata digest and action specification match their pinned replica fields. Target raw configuration is unchanged and identities are independent.",
+      "Default invalid and unknown remain separate; the new valid-but-worse analysis references exactly the actual three source IDs/fullRef/spec/content bindings. The original unknown is unchanged across all archived snapshots and final rows.",
+      "Only declared datasets differ between each domain's default and counterfactual configuration after removing necessary private-project paths. No unchecked/analysis task exists in counterfactual archives, and their actual selected source is the valid cheaper challenger.",
+      "Proposal decisions match actual request rows/configuration, their record hashes validate, and the durable control decisions are proposal Wait(s), replication-created Wait and confirmed-selection Stop.",
+      "Default final budget has zero remaining and counterfactual has four seconds remaining, both after active reservations reach zero. Total actual pre-reservations are 32 seconds, not 40 seconds of configured run caps.",
+      "Four second CLI invocations explicitly return 75 without a decision trace. The source fixture separately asserted unchanged nine-table database state; the second database dump is not present in the archive and is not independently reconstructed here."
+    ],
+    "timing_definitions": {
+      "first_policy_visible_seconds": "Elapsed from _invoke's recorded start to the first logged decision snapshot containing the result. This is a recorded visibility observation, not an exact publication timestamp or causal-isolation measurement.",
+      "cli_wall_seconds": "The measured in-process CLI invocation scope excludes fresh interpreter startup and helper imports performed before the start timestamp.",
+      "worker_cpu_and_wall_seconds": "Worker-body timing excludes interpreter/import startup and the final result JSON serialization/write performed afterward.",
+      "native_terminal_elapsed_wall_seconds": "Native interval begins before GO and ends during harvest closure handling; it excludes subsequent Domain interpretation and publication/commit.",
+      "prohibition": "No subtraction is labeled pure framework CPU overhead; no efficiency percentage, research gain, independent statistics or new execution authority is inferred."
+    },
+    "authority_and_integrity_limits": [
+      "The stdlib-only checker reads archived records, not temporary database/artifact/effect files or live kernel state. Receipt/tree values remain captured observations, not fresh authorization or cryptographic attestation.",
+      "Archive hashes must also be bound to the parent epoch's emitted ACCEPTANCE_REPORTS and canonical metadata; this semantic checker does not replace that external provenance linkage.",
+      "This target epoch contains the parent-owned eight authored pure decision cases plus product/domain tests. Repeated full-suite epochs and separate domain worker units must remain separately counted.",
+      "The initial large exploratory metadata print at db0d0d was truncated and is not used as a complete transcript. The actual checker output here is complete and the checker reads each whole archived JSON file.",
+      "The later complete-suite four-run archives are not yet verified by this addendum; the same checker can accept their filename prefix without running a worker."
+    ]
+  },
+  "checker_optimization_guard_addendum": {
+    "classification": "Static checker invocation-mode correction, not a product behavioral failure",
+    "review_origin": "/root independently identified that optimized Python disables assert statements.",
+    "previous_checker_sha256": "80efa4fbd7378e27b7263f0d49a93ce29f87a5543452f6d2ef3999a2dc12a27b",
+    "previous_successful_target_chunk": "7a2162",
+    "current_checker_sha256": "7ce6bc94ef9ee5b0d395dc4960e9d0f028942a6c0ea48b1590ec66fd00ab022e",
+    "change": "Import sys and refuse any sys.flags.optimize before checking reports.",
+    "optimized_invocation": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -O docs/evidence/checks/v1-07a-runs-check.py",
+      "execution": {
+        "chunk_id": "d20a47",
+        "wall_time_seconds": 0.003107499,
+        "exit_code": 1,
+        "original_token_count": 17,
+        "output": "v1-07a-runs-check requires assertions; optimized Python is refused\n"
+      },
+      "expected_exit_code": 1
+    },
+    "normal_target_reverification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/checks/v1-07a-runs-check.py",
+      "execution": {
+        "chunk_id": "c9392d",
+        "wall_time_seconds": 0.000004013,
+        "exit_code": 0,
+        "original_token_count": 1160,
+        "output": "{\"additional_workers_started\": 0, \"authority_limit\": \"No archived effect SHA/tree record is promoted into a fresh kernel or filesystem proof; stopped rerun database equality is checked by the source fixture, whose second DB copy is not archived.\", \"classification\": \"read-only archive consistency, not execution authority\", \"cli_invocations\": 8, \"native_actions\": 16, \"reports\": [{\"actions\": 5, \"bytes\": 282093, \"control_steps\": 11, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-sorting_default.json\", \"replica_ref\": {\"attempt_id\": \"d9d262642022fc2aa5708de22ddbe5b7\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-1d76b5ac2b2d4af49281af23432a1117\"}, \"reserved_wall_seconds\": 10, \"selected_ref\": {\"attempt_id\": \"4a61845d4ff47a42099d02a4c104ab40\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-baseline\"}, \"sha256\": \"6193b31e7252ebe1aca64bdee8e9baabd9a9b9200a30de41b62d988865980f2d\", \"timings\": {\"cli_wall_seconds\": 3.860514411702752, \"first_policy_visible_seconds\": {\"idea-analysis\": 2.8673269115388393, \"idea-baseline\": 0.7726120017468929, \"idea-challenger\": 1.3435252998024225, \"idea-rep-1d76b5ac2b2d4af49281af23432a1117\": 3.849116090685129, \"idea-unchecked\": 1.9394348748028278}, \"native_terminal_elapsed_wall_seconds\": 0.37868789210915565, \"worker_cpu_seconds\": 0.0009822560000000008, \"worker_wall_seconds\": 0.0009643621742725372}}, {\"actions\": 3, \"bytes\": 121523, \"control_steps\": 7, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-sorting_counterfactual.json\", \"replica_ref\": {\"attempt_id\": \"41e2dae563beb2952d8da586f325ff00\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-37da6c9debcb4aebba2684ef72492f1e\"}, \"reserved_wall_seconds\": 6, \"selected_ref\": {\"attempt_id\": \"1583651fbda549407d51da632a27ba31\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-challenger\"}, \"sha256\": \"751e0c84b1e71854e6393f15a49ecd2d4f50c974300be67954149b8527f6ebe2\", \"timings\": {\"cli_wall_seconds\": 2.256073797121644, \"first_policy_visible_seconds\": {\"idea-baseline\": 0.7376220859587193, \"idea-challenger\": 1.30687565356493, \"idea-rep-37da6c9debcb4aebba2684ef72492f1e\": 2.2453360334038734}, \"native_terminal_elapsed_wall_seconds\": 0.21755501255393028, \"worker_cpu_seconds\": 0.00031438200000000194, \"worker_wall_seconds\": 0.0003033839166164398}}, {\"actions\": 5, \"bytes\": 276998, \"control_steps\": 11, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-compression_default.json\", \"replica_ref\": {\"attempt_id\": \"77ac0aafc651b79b96c783cac6520c1d\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-7d3a1c4da2b54abbb301a7c5ad8a26b4\"}, \"reserved_wall_seconds\": 10, \"selected_ref\": {\"attempt_id\": \"99bcb27e9ad7069d3c0612c82acc5394\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-baseline\"}, \"sha256\": \"2aa810c347c5fcee86470764d970db481e0659226e6cd49531e266cc2423000f\", \"timings\": {\"cli_wall_seconds\": 3.83446229621768, \"first_policy_visible_seconds\": {\"idea-analysis\": 2.8446538634598255, \"idea-baseline\": 0.7490748725831509, \"idea-challenger\": 1.3261639103293419, \"idea-rep-7d3a1c4da2b54abbb301a7c5ad8a26b4\": 3.823004812002182, \"idea-unchecked\": 1.9407312851399183}, \"native_terminal_elapsed_wall_seconds\": 0.3684583716094494, \"worker_cpu_seconds\": 0.0005791570000000003, \"worker_wall_seconds\": 0.0005617085844278336}}, {\"actions\": 3, \"bytes\": 121114, \"control_steps\": 7, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-target-compression_counterfactual.json\", \"replica_ref\": {\"attempt_id\": \"74570df65d302a52e3b0257c24066b87\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-332eef21c18e4f758b6402549be989fc\"}, \"reserved_wall_seconds\": 6, \"selected_ref\": {\"attempt_id\": \"78aeb1520ae0fa152330d7fde1c3e7fc\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-challenger\"}, \"sha256\": \"5c44f8ba1ccc3ab4c19d46186bedb324c675b922605657aee86ccb1fa5e3856a\", \"timings\": {\"cli_wall_seconds\": 2.258679550141096, \"first_policy_visible_seconds\": {\"idea-baseline\": 0.7537545152008533, \"idea-challenger\": 1.3218275867402554, \"idea-rep-332eef21c18e4f758b6402549be989fc\": 2.2479827888309956}, \"native_terminal_elapsed_wall_seconds\": 0.21724016405642033, \"worker_cpu_seconds\": 0.00029322499999999765, \"worker_wall_seconds\": 0.0002832859754562378}}], \"reserved_wall_seconds\": 32, \"status\": \"passed\", \"sticky_stop_refusals\": 4, \"timing_limit\": \"first_policy_visible is first recorded decision visibility, not exact publication time; wall residual is not pure overhead\"}\n"
+      },
+      "expected_exit_code": 0
+    },
+    "report_data_or_test_changes": false,
+    "contract_final_read": {
+      "path": "docs/cross-domain-acceptance.md",
+      "sha256": "caf3e7ac4568e5b770c4f2fd4b8edc2699e1e8fc5cd46135f6a253e60723e474",
+      "chunk_id": "477368",
+      "conclusion": "No overclaim found in the read contract: finite priors, independent analysis evaluator, same-spec correlation versus request ACK, actual snapshot-based counterfactual, eight in-process CLI invocations, metric-layer timing exclusions and unverified efficiency/holdout/recovery boundaries are explicit. The rounded target timing table agrees with the independently checked archived values."
+    }
+  },
+  "full_archive_addendum": {
+    "classification": "Independent read-only full-epoch archive consistency verification; not a new pytest or worker execution",
+    "supersedes_pending_scope": "The earlier target addendum and pending_runtime_verification retain their historical status. This addendum completes full-epoch archive verification.",
+    "prior_report_sha256": "980c48d0d5e2c039fc3eb33a4a72d9733bd3d4bcb263c1d33f01a0a3e2396b11",
+    "checker": {
+      "path": "docs/evidence/checks/v1-07a-runs-check.py",
+      "sha256": "7ce6bc94ef9ee5b0d395dc4960e9d0f028942a6c0ea48b1590ec66fd00ab022e"
+    },
+    "verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/checks/v1-07a-runs-check.py --prefix v1-07a-full",
+      "execution": {
+        "chunk_id": "5332fb",
+        "wall_time_seconds": 0.000005978,
+        "exit_code": 0,
+        "original_token_count": 1157,
+        "output": "{\"additional_workers_started\": 0, \"authority_limit\": \"No archived effect SHA/tree record is promoted into a fresh kernel or filesystem proof; stopped rerun database equality is checked by the source fixture, whose second DB copy is not archived.\", \"classification\": \"read-only archive consistency, not execution authority\", \"cli_invocations\": 8, \"native_actions\": 16, \"reports\": [{\"actions\": 5, \"bytes\": 282154, \"control_steps\": 11, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-full-sorting_default.json\", \"replica_ref\": {\"attempt_id\": \"3de9d4fb76486a10e3e004fdbd16ad53\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-50a2d3f85f914859883bc7a3e3807209\"}, \"reserved_wall_seconds\": 10, \"selected_ref\": {\"attempt_id\": \"9d7f19c9aa89d4543057ffff191f5df7\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-baseline\"}, \"sha256\": \"26a31df45103845ffa2a5ad8e5f2de5b4a5103e0c7e782580a39827486f5e65a\", \"timings\": {\"cli_wall_seconds\": 5.416909256950021, \"first_policy_visible_seconds\": {\"idea-analysis\": 4.112607596442103, \"idea-baseline\": 1.187799908220768, \"idea-challenger\": 2.0311607718467712, \"idea-rep-50a2d3f85f914859883bc7a3e3807209\": 5.395790245383978, \"idea-unchecked\": 2.9101790357381105}, \"native_terminal_elapsed_wall_seconds\": 0.3823086842894554, \"worker_cpu_seconds\": 0.0009836440000000023, \"worker_wall_seconds\": 0.0009699687361717224}}, {\"actions\": 3, \"bytes\": 121538, \"control_steps\": 7, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-full-sorting_counterfactual.json\", \"replica_ref\": {\"attempt_id\": \"a9e3918057b9c003a490a1607b170608\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-989cedf4ed6c48ffaaf0b9976c5fb26d\"}, \"reserved_wall_seconds\": 6, \"selected_ref\": {\"attempt_id\": \"1c666d04ef491aee14bdac67ccfa93e7\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-challenger\"}, \"sha256\": \"d090903126025e7972510107cdd5f3b02aadf0d8652e4ebe54c8620b9746eafa\", \"timings\": {\"cli_wall_seconds\": 3.4638854395598173, \"first_policy_visible_seconds\": {\"idea-baseline\": 1.174668850377202, \"idea-challenger\": 2.015467582270503, \"idea-rep-989cedf4ed6c48ffaaf0b9976c5fb26d\": 3.437092198058963}, \"native_terminal_elapsed_wall_seconds\": 0.22743750549852848, \"worker_cpu_seconds\": 0.00032878900000000294, \"worker_wall_seconds\": 0.0003213975578546524}}, {\"actions\": 5, \"bytes\": 277001, \"control_steps\": 11, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-full-compression_default.json\", \"replica_ref\": {\"attempt_id\": \"d6bc18b264ad9f02d9f7f07b09b0e9e6\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-531c8bdb4e464bf4946e16705abecbbc\"}, \"reserved_wall_seconds\": 10, \"selected_ref\": {\"attempt_id\": \"9d42c299314ad14ed9831f1134d6b004\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-baseline\"}, \"sha256\": \"b8b7bf6a88b4886a47579d643c4238bc1a19bc967d649bf1e21019e625ed877f\", \"timings\": {\"cli_wall_seconds\": 5.78373895958066, \"first_policy_visible_seconds\": {\"idea-analysis\": 4.497368924319744, \"idea-baseline\": 1.433199256658554, \"idea-challenger\": 2.4426003992557526, \"idea-rep-531c8bdb4e464bf4946e16705abecbbc\": 5.7616212740540504, \"idea-unchecked\": 3.30940318480134}, \"native_terminal_elapsed_wall_seconds\": 0.38745578937232494, \"worker_cpu_seconds\": 0.0005885839999999996, \"worker_wall_seconds\": 0.0005780309438705444}}, {\"actions\": 3, \"bytes\": 121103, \"control_steps\": 7, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-full-compression_counterfactual.json\", \"replica_ref\": {\"attempt_id\": \"45c758ea6608636daa503b9bc43baec6\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-rep-4915e5ed1c4f462fa490f490069df3d3\"}, \"reserved_wall_seconds\": 6, \"selected_ref\": {\"attempt_id\": \"d16353150a6000135525f963192ead8a\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-challenger\"}, \"sha256\": \"1a5a058bc340f58bc9e98dfc60a535a74f30c3c1c466d4d1fa33375e4f6648ad\", \"timings\": {\"cli_wall_seconds\": 3.2351535744965076, \"first_policy_visible_seconds\": {\"idea-baseline\": 1.1830222643911839, \"idea-challenger\": 2.009639460593462, \"idea-rep-4915e5ed1c4f462fa490f490069df3d3\": 3.2182424440979958}, \"native_terminal_elapsed_wall_seconds\": 0.22248935885727406, \"worker_cpu_seconds\": 0.0002953350000000042, \"worker_wall_seconds\": 0.00028399936854839325}}], \"reserved_wall_seconds\": 32, \"status\": \"passed\", \"sticky_stop_refusals\": 4, \"timing_limit\": \"first_policy_visible is first recorded decision visibility, not exact publication time; wall residual is not pure overhead\"}\n"
+      },
+      "parsed_result": {
+        "additional_workers_started": 0,
+        "authority_limit": "No archived effect SHA/tree record is promoted into a fresh kernel or filesystem proof; stopped rerun database equality is checked by the source fixture, whose second DB copy is not archived.",
+        "classification": "read-only archive consistency, not execution authority",
+        "cli_invocations": 8,
+        "native_actions": 16,
+        "reports": [
+          {
+            "actions": 5,
+            "bytes": 282154,
+            "control_steps": 11,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-full-sorting_default.json",
+            "replica_ref": {
+              "attempt_id": "3de9d4fb76486a10e3e004fdbd16ad53",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-rep-50a2d3f85f914859883bc7a3e3807209"
+            },
+            "reserved_wall_seconds": 10,
+            "selected_ref": {
+              "attempt_id": "9d7f19c9aa89d4543057ffff191f5df7",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-baseline"
+            },
+            "sha256": "26a31df45103845ffa2a5ad8e5f2de5b4a5103e0c7e782580a39827486f5e65a",
+            "timings": {
+              "cli_wall_seconds": 5.416909256950021,
+              "first_policy_visible_seconds": {
+                "idea-analysis": 4.112607596442103,
+                "idea-baseline": 1.187799908220768,
+                "idea-challenger": 2.0311607718467712,
+                "idea-rep-50a2d3f85f914859883bc7a3e3807209": 5.395790245383978,
+                "idea-unchecked": 2.9101790357381105
+              },
+              "native_terminal_elapsed_wall_seconds": 0.3823086842894554,
+              "worker_cpu_seconds": 0.0009836440000000023,
+              "worker_wall_seconds": 0.0009699687361717224
+            }
+          },
+          {
+            "actions": 3,
+            "bytes": 121538,
+            "control_steps": 7,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-full-sorting_counterfactual.json",
+            "replica_ref": {
+              "attempt_id": "a9e3918057b9c003a490a1607b170608",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-rep-989cedf4ed6c48ffaaf0b9976c5fb26d"
+            },
+            "reserved_wall_seconds": 6,
+            "selected_ref": {
+              "attempt_id": "1c666d04ef491aee14bdac67ccfa93e7",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-challenger"
+            },
+            "sha256": "d090903126025e7972510107cdd5f3b02aadf0d8652e4ebe54c8620b9746eafa",
+            "timings": {
+              "cli_wall_seconds": 3.4638854395598173,
+              "first_policy_visible_seconds": {
+                "idea-baseline": 1.174668850377202,
+                "idea-challenger": 2.015467582270503,
+                "idea-rep-989cedf4ed6c48ffaaf0b9976c5fb26d": 3.437092198058963
+              },
+              "native_terminal_elapsed_wall_seconds": 0.22743750549852848,
+              "worker_cpu_seconds": 0.00032878900000000294,
+              "worker_wall_seconds": 0.0003213975578546524
+            }
+          },
+          {
+            "actions": 5,
+            "bytes": 277001,
+            "control_steps": 11,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-full-compression_default.json",
+            "replica_ref": {
+              "attempt_id": "d6bc18b264ad9f02d9f7f07b09b0e9e6",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-rep-531c8bdb4e464bf4946e16705abecbbc"
+            },
+            "reserved_wall_seconds": 10,
+            "selected_ref": {
+              "attempt_id": "9d42c299314ad14ed9831f1134d6b004",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-baseline"
+            },
+            "sha256": "b8b7bf6a88b4886a47579d643c4238bc1a19bc967d649bf1e21019e625ed877f",
+            "timings": {
+              "cli_wall_seconds": 5.78373895958066,
+              "first_policy_visible_seconds": {
+                "idea-analysis": 4.497368924319744,
+                "idea-baseline": 1.433199256658554,
+                "idea-challenger": 2.4426003992557526,
+                "idea-rep-531c8bdb4e464bf4946e16705abecbbc": 5.7616212740540504,
+                "idea-unchecked": 3.30940318480134
+              },
+              "native_terminal_elapsed_wall_seconds": 0.38745578937232494,
+              "worker_cpu_seconds": 0.0005885839999999996,
+              "worker_wall_seconds": 0.0005780309438705444
+            }
+          },
+          {
+            "actions": 3,
+            "bytes": 121103,
+            "control_steps": 7,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/v1-07a-full-compression_counterfactual.json",
+            "replica_ref": {
+              "attempt_id": "45c758ea6608636daa503b9bc43baec6",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-rep-4915e5ed1c4f462fa490f490069df3d3"
+            },
+            "reserved_wall_seconds": 6,
+            "selected_ref": {
+              "attempt_id": "d16353150a6000135525f963192ead8a",
+              "generation": 1,
+              "phase": "action",
+              "task_id": "idea-challenger"
+            },
+            "sha256": "1a5a058bc340f58bc9e98dfc60a535a74f30c3c1c466d4d1fa33375e4f6648ad",
+            "timings": {
+              "cli_wall_seconds": 3.2351535744965076,
+              "first_policy_visible_seconds": {
+                "idea-baseline": 1.1830222643911839,
+                "idea-challenger": 2.009639460593462,
+                "idea-rep-4915e5ed1c4f462fa490f490069df3d3": 3.2182424440979958
+              },
+              "native_terminal_elapsed_wall_seconds": 0.22248935885727406,
+              "worker_cpu_seconds": 0.0002953350000000042,
+              "worker_wall_seconds": 0.00028399936854839325
+            }
+          }
+        ],
+        "reserved_wall_seconds": 32,
+        "status": "passed",
+        "sticky_stop_refusals": 4,
+        "timing_limit": "first_policy_visible is first recorded decision visibility, not exact publication time; wall residual is not pure overhead"
+      }
+    },
+    "cross_epoch_check": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json\nfrom pathlib import Path\nroot=Path('docs/evidence/runs'); data={}; walls={}; ids={key:set() for key in ('attempt_id','artifact_id','observation_id')}\nfor epoch in ('target','full'):\n rows=[]; walls[epoch]=[]\n for domain in ('sorting','compression'):\n  for variant in ('default','counterfactual'):\n   name=domain+'_'+variant\n   path=root/('v1-07a-'+epoch+'-'+name+'.json'); raw=path.read_bytes(); value=json.loads(raw)\n   data[epoch,name]=value; walls[epoch].append(value['wall_seconds'])\n   rows.append({'name':name,'sha256':hashlib.sha256(raw).hexdigest(),'cli_wall_seconds':value['wall_seconds']})\n   for key, records in [('attempt_id',value['database']['execution_attempts']),('artifact_id',value['artifacts']),('observation_id',value['observations'])]:\n    for item in records:\n     assert item[key] not in ids[key]\n     ids[key].add(item[key])\n print(json.dumps({'epoch':epoch,'reports':rows},sort_keys=True))\nfor name in ('sorting_default','sorting_counterfactual','compression_default','compression_counterfactual'):\n def facts(value):\n  return sorted((o['values']['candidate'],o['values']['operation'],o['values']['cost'],o['validation']['status'],o['values']['dataset_sha256'],o['protocol_fingerprint'],o['comparison_scope']) for o in value['observations'])\n assert facts(data['target',name])==facts(data['full',name])\nassert all(len(value)==32 for value in ids.values())\nprint(json.dumps({'cross_epoch_independent_ids':{k:len(v) for k,v in ids.items()},'same_domain_measurement_facts':True,'cli_wall_range_seconds':{k:[min(v),max(v)] for k,v in walls.items()},'interpretation':'Two separately accounted epochs, not efficiency control arms; no best-case selection or speedup claim.'},sort_keys=True))\nPY",
+      "execution": {
+        "chunk_id": "b546be",
+        "wall_time_seconds": 0.000004266,
+        "exit_code": 0,
+        "original_token_count": 415,
+        "output": "{\"epoch\": \"target\", \"reports\": [{\"cli_wall_seconds\": 3.860514411702752, \"name\": \"sorting_default\", \"sha256\": \"6193b31e7252ebe1aca64bdee8e9baabd9a9b9200a30de41b62d988865980f2d\"}, {\"cli_wall_seconds\": 2.256073797121644, \"name\": \"sorting_counterfactual\", \"sha256\": \"751e0c84b1e71854e6393f15a49ecd2d4f50c974300be67954149b8527f6ebe2\"}, {\"cli_wall_seconds\": 3.83446229621768, \"name\": \"compression_default\", \"sha256\": \"2aa810c347c5fcee86470764d970db481e0659226e6cd49531e266cc2423000f\"}, {\"cli_wall_seconds\": 2.258679550141096, \"name\": \"compression_counterfactual\", \"sha256\": \"5c44f8ba1ccc3ab4c19d46186bedb324c675b922605657aee86ccb1fa5e3856a\"}]}\n{\"epoch\": \"full\", \"reports\": [{\"cli_wall_seconds\": 5.416909256950021, \"name\": \"sorting_default\", \"sha256\": \"26a31df45103845ffa2a5ad8e5f2de5b4a5103e0c7e782580a39827486f5e65a\"}, {\"cli_wall_seconds\": 3.4638854395598173, \"name\": \"sorting_counterfactual\", \"sha256\": \"d090903126025e7972510107cdd5f3b02aadf0d8652e4ebe54c8620b9746eafa\"}, {\"cli_wall_seconds\": 5.78373895958066, \"name\": \"compression_default\", \"sha256\": \"b8b7bf6a88b4886a47579d643c4238bc1a19bc967d649bf1e21019e625ed877f\"}, {\"cli_wall_seconds\": 3.2351535744965076, \"name\": \"compression_counterfactual\", \"sha256\": \"1a5a058bc340f58bc9e98dfc60a535a74f30c3c1c466d4d1fa33375e4f6648ad\"}]}\n{\"cli_wall_range_seconds\": {\"full\": [3.2351535744965076, 5.78373895958066], \"target\": [2.256073797121644, 3.860514411702752]}, \"cross_epoch_independent_ids\": {\"artifact_id\": 32, \"attempt_id\": 32, \"observation_id\": 32}, \"interpretation\": \"Two separately accounted epochs, not efficiency control arms; no best-case selection or speedup claim.\", \"same_domain_measurement_facts\": true}\n"
+      },
+      "parsed_output": [
+        {
+          "epoch": "target",
+          "reports": [
+            {
+              "cli_wall_seconds": 3.860514411702752,
+              "name": "sorting_default",
+              "sha256": "6193b31e7252ebe1aca64bdee8e9baabd9a9b9200a30de41b62d988865980f2d"
+            },
+            {
+              "cli_wall_seconds": 2.256073797121644,
+              "name": "sorting_counterfactual",
+              "sha256": "751e0c84b1e71854e6393f15a49ecd2d4f50c974300be67954149b8527f6ebe2"
+            },
+            {
+              "cli_wall_seconds": 3.83446229621768,
+              "name": "compression_default",
+              "sha256": "2aa810c347c5fcee86470764d970db481e0659226e6cd49531e266cc2423000f"
+            },
+            {
+              "cli_wall_seconds": 2.258679550141096,
+              "name": "compression_counterfactual",
+              "sha256": "5c44f8ba1ccc3ab4c19d46186bedb324c675b922605657aee86ccb1fa5e3856a"
+            }
+          ]
+        },
+        {
+          "epoch": "full",
+          "reports": [
+            {
+              "cli_wall_seconds": 5.416909256950021,
+              "name": "sorting_default",
+              "sha256": "26a31df45103845ffa2a5ad8e5f2de5b4a5103e0c7e782580a39827486f5e65a"
+            },
+            {
+              "cli_wall_seconds": 3.4638854395598173,
+              "name": "sorting_counterfactual",
+              "sha256": "d090903126025e7972510107cdd5f3b02aadf0d8652e4ebe54c8620b9746eafa"
+            },
+            {
+              "cli_wall_seconds": 5.78373895958066,
+              "name": "compression_default",
+              "sha256": "b8b7bf6a88b4886a47579d643c4238bc1a19bc967d649bf1e21019e625ed877f"
+            },
+            {
+              "cli_wall_seconds": 3.2351535744965076,
+              "name": "compression_counterfactual",
+              "sha256": "1a5a058bc340f58bc9e98dfc60a535a74f30c3c1c466d4d1fa33375e4f6648ad"
+            }
+          ]
+        },
+        {
+          "cli_wall_range_seconds": {
+            "full": [
+              3.2351535744965076,
+              5.78373895958066
+            ],
+            "target": [
+              2.256073797121644,
+              3.860514411702752
+            ]
+          },
+          "cross_epoch_independent_ids": {
+            "artifact_id": 32,
+            "attempt_id": 32,
+            "observation_id": 32
+          },
+          "interpretation": "Two separately accounted epochs, not efficiency control arms; no best-case selection or speedup claim.",
+          "same_domain_measurement_facts": true
+        }
+      ],
+      "interpretation": "The 32 distinct attempt/artifact/observation IDs are identity separation across two separately accounted epochs, not statistical independence. All four scenarios retain identical declared scientific facts across epochs."
+    },
+    "parent_full_suite_reference": {
+      "ownership": "Reported by /root; this reviewer did not rerun these test suites.",
+      "core": {
+        "chunk_id": "590155",
+        "exit_code": 0,
+        "passed": 4106,
+        "skipped": 7,
+        "seconds": 711.15
+      },
+      "pro": {
+        "chunk_id": "eab1eb",
+        "exit_code": 0,
+        "passed": 974,
+        "seconds": 170.42
+      },
+      "paired": {
+        "chunk_id": "f7895d",
+        "exit_code": 0,
+        "passed": 60,
+        "seconds": 0.97
+      },
+      "inventory": {
+        "files": 969,
+        "core_files": 746,
+        "pro_files": 223,
+        "before_after_exact": true,
+        "core_chunks": [
+          "01b2ff",
+          "142cf5"
+        ],
+        "pro_chunks": [
+          "73df49",
+          "2419f9"
+        ]
+      },
+      "root_archive_check": {
+        "chunk_id": "a82438",
+        "exit_code": 0
+      }
+    },
+    "accounting_and_timing": {
+      "per_epoch": {
+        "native_actions": 16,
+        "reserved_wall_seconds": 32,
+        "in_process_cli_invocations": 8
+      },
+      "target_and_full_combined": {
+        "native_actions": 32,
+        "reserved_wall_seconds": 64,
+        "in_process_cli_invocations": 16
+      },
+      "reviewer_additional_workers": 0,
+      "cli_wall_seconds_range": {
+        "target": [
+          2.256073797121644,
+          3.860514411702752
+        ],
+        "full": [
+          3.2351535744965076,
+          5.78373895958066
+        ]
+      },
+      "interpretation": "The full-suite and target timings are different observations, not controlled efficiency comparisons. No faster subset is selected as evidence of benefit; no speedup, percentage gain or pure framework CPU overhead is claimed. Separate domain-worker unit executions are not included in the sixteen-action per-epoch count."
+    },
+    "unchanged_readback": {
+      "chunk_id": "2906a8",
+      "checker_sha256": "7ce6bc94ef9ee5b0d395dc4960e9d0f028942a6c0ea48b1590ec66fd00ab022e",
+      "review_test_sha256": "13b7a93b965668c22bc6e0c1c240c1b77ba8e2e5db7a20acc07941c718d7bdd6",
+      "policy_sha256": "c54a67739341935dd1a0d6789ee4289c32d497118ab54912e35abb76f494dc2f",
+      "testing_helper_sha256": "e3e5d909ab1cd5b106fde04c38e868634e1c317c8e49fb55d045e910364b151a",
+      "contract_sha256": "caf3e7ac4568e5b770c4f2fd4b8edc2699e1e8fc5cd46135f6a253e60723e474"
+    },
+    "conclusion": "No contradiction found in the four full-epoch archives or their comparison with the target archives. Exact selected evaluator references, replication/request linkage, immutable unknown observations, three analysis inputs, SETTLED terminal digests and recorded tree closure agree. Existing authority, finite-domain, timing and no-holdout limitations remain unchanged."
+  },
+  "pending_runtime_verification": {
+    "root_reported_initial_session": 59953,
+    "root_reported_initial_chunk": "e1fd62",
+    "status": "Only start notification was received at this report point; no completion/green claim is made here.",
+    "next": "Read the formal combined epoch's actual report files, verify path/SHA, traces/fullRefs, dataset-only intervention, exact request/occurrence relationships, timing/budget counts and source hashes. Do not reconstruct first-epoch observations or IDs."
+  }
+}

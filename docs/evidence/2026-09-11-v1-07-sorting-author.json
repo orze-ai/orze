@@ -1,0 +1,162 @@
+{
+  "schema": 1,
+  "slice": "V1-07A",
+  "author": "/root/core_review",
+  "objective": "Finite sorting acceptance Domain and worker instrumentation; no Core changes",
+  "status": "bounded_author_validation_complete_not_full_acceptance",
+  "baseline": {
+    "core_implementation_commit": "8f61ae5f68c0846d5149aceb4df55c69263c9df2",
+    "classification": "new application-level mechanisms; no historical Core defect claimed"
+  },
+  "owned_files": [
+    {
+      "path": "examples/acceptance/sorting.py",
+      "sha256": "b1d3f2ec9d33e8942c91a5a3b49fa57ccd2f086efbdc0c29b6772e851c5ea96c",
+      "bytes": 12710
+    },
+    {
+      "path": "tests/test_acceptance_sorting.py",
+      "sha256": "8afc4125b7b935f17da1bb5d2622e7e9dba1d39f4f1a58c3ad02010f90516cde",
+      "bytes": 10414
+    }
+  ],
+  "shared_dependency": {
+    "path": "examples/acceptance/common.py",
+    "sha256": "d83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068",
+    "owner": "/root"
+  },
+  "test_counts": {
+    "pytest_cases": 22,
+    "literal_asserts": 31,
+    "historical_red_cases": 0,
+    "actual_draft_failure_cases": 0,
+    "first_target_run": "22 passed in 0.20s"
+  },
+  "runs": [
+    {
+      "kind": "pre_hashes",
+      "command": "sha256sum examples/acceptance/sorting.py examples/acceptance/common.py tests/test_acceptance_sorting.py",
+      "result": {
+        "chunk_id": "a15c2e",
+        "wall_time_seconds": 0.000003619,
+        "exit_code": 0,
+        "original_token_count": 73,
+        "output": "b1d3f2ec9d33e8942c91a5a3b49fa57ccd2f086efbdc0c29b6772e851c5ea96c  examples/acceptance/sorting.py\nd83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068  examples/acceptance/common.py\n8afc4125b7b935f17da1bb5d2622e7e9dba1d39f4f1a58c3ad02010f90516cde  tests/test_acceptance_sorting.py\n"
+      }
+    },
+    {
+      "kind": "first_and_final_owned_candidate_tests",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_acceptance_sorting.py --tb=short",
+      "result": {
+        "chunk_id": "1ffa86",
+        "wall_time_seconds": 0.347495085,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "......................                                                   [100%]\n22 passed in 0.20s\n"
+      }
+    },
+    {
+      "kind": "post_hashes",
+      "command": "sha256sum examples/acceptance/sorting.py examples/acceptance/common.py tests/test_acceptance_sorting.py",
+      "result": {
+        "chunk_id": "400725",
+        "wall_time_seconds": 0.000007456,
+        "exit_code": 0,
+        "original_token_count": 73,
+        "output": "b1d3f2ec9d33e8942c91a5a3b49fa57ccd2f086efbdc0c29b6772e851c5ea96c  examples/acceptance/sorting.py\nd83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068  examples/acceptance/common.py\n8afc4125b7b935f17da1bb5d2622e7e9dba1d39f4f1a58c3ad02010f90516cde  tests/test_acceptance_sorting.py\n"
+      }
+    },
+    {
+      "kind": "static_scope_and_literal_assert_audit",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\npaths=[\"examples/acceptance/sorting.py\",\"tests/test_acceptance_sorting.py\"]\nfor path in paths:ast.parse(pathlib.Path(path).read_bytes())\ntests=ast.parse(pathlib.Path(paths[1]).read_bytes())\nchanged_src=subprocess.check_output([\"git\",\"diff\",\"8f61ae5f68c0846d5149aceb4df55c69263c9df2\",\"--name-only\",\"--\",\"src\"],text=True).splitlines()\noldtests=set(subprocess.check_output([\"git\",\"ls-tree\",\"-r\",\"--name-only\",\"8f61ae5f68c0846d5149aceb4df55c69263c9df2\",\"tests\"],text=True).splitlines())\nchangedtests=set(subprocess.check_output([\"git\",\"diff\",\"8f61ae5f68c0846d5149aceb4df55c69263c9df2\",\"--name-only\",\"--\",\"tests\"],text=True).splitlines())\nassert not changed_src\nassert not oldtests&changedtests\nprint(json.dumps({\"files\":[{\"path\":p,\"sha256\":hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest(),\"bytes\":pathlib.Path(p).stat().st_size} for p in paths],\n \"literal_asserts\":sum(isinstance(n,ast.Assert) for n in ast.walk(tests)),\n \"core_src_changed\":[],\"old_tests_changed\":sorted(oldtests&changedtests),\"exit\":0},sort_keys=True))\nPY",
+      "result": {
+        "chunk_id": "b441e6",
+        "wall_time_seconds": 0.000004419,
+        "exit_code": 0,
+        "original_token_count": 94,
+        "output": "{\"core_src_changed\": [], \"exit\": 0, \"files\": [{\"bytes\": 12710, \"path\": \"examples/acceptance/sorting.py\", \"sha256\": \"b1d3f2ec9d33e8942c91a5a3b49fa57ccd2f086efbdc0c29b6772e851c5ea96c\"}, {\"bytes\": 10414, \"path\": \"tests/test_acceptance_sorting.py\", \"sha256\": \"8afc4125b7b935f17da1bb5d2622e7e9dba1d39f4f1a58c3ad02010f90516cde\"}], \"literal_asserts\": 31, \"old_tests_changed\": []}\n"
+      }
+    }
+  ],
+  "metric": {
+    "unit": "executed value-comparator calls, including comparisons returning False",
+    "excluded": [
+      "loop-condition checks",
+      "copies",
+      "Python instruction counts",
+      "CPU seconds",
+      "wall seconds"
+    ],
+    "implementation": "Insertion baseline and unchecked selection sort increment cost by appending each actual operand/relation/result trace event; challenger returns the input unchanged and executes zero value comparisons.",
+    "independent_checks": "Trace checker replays insertion with saved-pivot shifts rather than measured adjacent exchanges, verifies every exact typed event and output; independent Counter multiplicity and adjacent-order oracle evaluates finite-suite correctness.",
+    "expected_not_hardcoded_costs": {
+      "default": {
+        "baseline": 9,
+        "challenger": 0,
+        "unchecked": 29
+      },
+      "counterfactual": {
+        "baseline": 8,
+        "challenger": 0,
+        "unchecked": 29
+      }
+    },
+    "scope": "Only the pinned finite dataset. No universal algorithm-correctness or asymptotic-performance claim."
+  },
+  "scientific_semantics": {
+    "default_statuses": {
+      "baseline": "valid",
+      "challenger": "invalid",
+      "unchecked": "unknown"
+    },
+    "counterfactual_statuses": {
+      "baseline": "valid",
+      "challenger": "valid",
+      "unchecked": "unknown"
+    },
+    "unchecked_measurement": "Trace/output instrumentation is checked, but the scientific multiset/order oracle is deliberately not called; a direct tripwire test enforces this boundary.",
+    "analysis": "A later unchecked analyze action reads all three original result artifacts through source FDs, revalidates their data and traces, applies the finite oracle and emits a new valid, higher-cost result. It does not rerun selection sort or mutate the original unknown artifact/claim.",
+    "independence": "Distinct provenance-bound analysis artifact/observation is not a new algorithm measurement or statistically independent repeat."
+  },
+  "fd_unit_boundary": {
+    "real_operations": [
+      "sealed memfd inputs and three source byte streams",
+      "read-only descriptors",
+      "actual source SHA-256 verification",
+      "worker main() descriptor reads",
+      "canonical result.json write",
+      "Domain interpretation"
+    ],
+    "fixture_origins": "The three source results are golden unit fixtures produced from actual sorting measurement and shared write_result in the pytest process. They are not claimed to be three prior CLI/native executions.",
+    "excluded": [
+      "SQLite admission/attempts/observations",
+      "native supervised process launch",
+      "Policy progression",
+      "budget accounting",
+      "actual replica",
+      "full acceptance harness"
+    ],
+    "controls": [
+      "analysis measure() tripwire proves no algorithm rerun",
+      "tampered source descriptor bytes are rejected",
+      "three original source objects and unknown interpretation remain unchanged"
+    ]
+  },
+  "coverage": [
+    "Default and counterfactual three-candidate costs and statuses",
+    "False-inclusive handwritten insertion and selection traces",
+    "Empty rows, negatives, duplicates, and finite multiset/order oracle",
+    "Forged count, operand, boolean, early trace termination and output rejected",
+    "Unchecked oracle bypass tripwire",
+    "Three real sealed source FDs and source checksum corruption",
+    "Missing sources, duplicate candidate, wrong dataset and bad source trace rejected",
+    "Detached and strictly typed dataset configuration"
+  ],
+  "limitations": [
+    "No holdout was read.",
+    "No Core src file or pre-existing test was changed.",
+    "No GPU/provider/network or host process discovery was used.",
+    "The 22-case author run is not the root actual-CLI acceptance run or final full-suite evidence.",
+    "No initial API absence or manually inferred expected failure is reported as a historical red."
+  ]
+}

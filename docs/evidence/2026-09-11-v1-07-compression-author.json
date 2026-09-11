@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "slice": "V1-07",
+  "author": "runtime_evidence",
+  "status": "compression_application_and_tests_frozen_after_one_candidate_semantics_fix",
+  "product_code_modified": false,
+  "old_tests_modified": false,
+  "holdout_read": false,
+  "protocol": {
+    "path": "docs/plans/2026-09-11-v1-07-acceptance.zh-CN.md",
+    "read_chunk": "b150eb",
+    "plan_commit": "c6a033e",
+    "core_boundary": "Example application only; no change to src, schema, registered-interface protocol or product scheduler."
+  },
+  "owned_files": [
+    "examples/acceptance/compression.py",
+    "tests/test_acceptance_compression.py"
+  ],
+  "application": {
+    "configuration": "Exact {'dataset': canonical lower-case hex string}; DEFAULT_DATASET = A*64 + NUL + B*64, COUNTERFACTUAL_DATASET removes only the NUL. Explicit JSON hex transport, JSON-canonical dataset identity shared with common.py.",
+    "framing": "4-byte RAW1/RLE1/HEX1 magic + uint32 big-endian original length + payload. RAW exact bytes, RLE nonzero count/value pairs, HEX exact lowercase hexadecimal. Strict length, alphabet and complete-payload checks; arbitrary trailing bytes are not silently discarded.",
+    "metric": "len(actual complete container), including the 8-byte header; neither JSON hex output size nor payload-only count.",
+    "fixed_candidates": "baseline RAW; challenger discards NUL before RLE but retains the original declared length; unchecked HEX. Default expected costs 137/12/266, with challenger invalid. Actual no-NUL counterfactual uses the same encoder/decoder/policy rules and challenger becomes valid at 12 bytes.",
+    "unknown": "Unchecked measure validates envelope structure and container-byte cost but does not call the round-trip oracle. Explicit analysis reads all three source FDs through common.read_source_results, verifies captured SHA, recomputes strict decode and exact dataset bytes, and emits a new valid/worse unchecked observation rather than overwriting the original unknown.",
+    "worker": "Actual command [sys.executable, absolute compression.py]; worker imports only stdlib and sibling common. Controller methods import .common. No application-owned runner.",
+    "finite_scope": "Only the declared finite datasets and versioned format are acceptance claims, not universal compression gains or arbitrary workload resource guarantees."
+  },
+  "test_scope": {
+    "final_cases": 31,
+    "literal_asserts": 34,
+    "independent_oracles": "Hand-written RAW/RLE/HEX golden wire bytes and expected decoded bytes. The negative decoder cases do not call the tested encoder to manufacture expected results.",
+    "pure_cases": 30,
+    "actual_worker_cases": 1,
+    "actual_worker_boundary": "One isolated real supervised stdlib analysis worker consumes three sealed read-only memfds whose envelopes are explicit hand-written unit fixtures. Actual common FD-list and content-SHA checks execute. No SQLite/published-source provenance is claimed for these unit inputs, and this worker is not added to the four full acceptance runs' 16-action accounting.",
+    "controls": "Malformed magic/truncated or wrong lengths, RLE zero/odd/overrun/underrun counts, HEX alphabet/whitespace/case/trailing bytes; default invalid vs changed-input valid; foreign/missing/miscosted source; new valid-but-worse analysis leaves original unknown unchanged; unchecked oracle-call refusal.",
+    "cleanup": "Only this test's captured supervisor handle is waited/stopped, and every created memfd is closed in finally. No host enumeration, bare host signal, provider or GPU."
+  },
+  "initial_green_history": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_acceptance_compression.py --tb=short",
+      "chunk": "fdbf15",
+      "exit_code": 0,
+      "footer": "29 passed in 0.28s",
+      "note": "Before appending one Domain.prepare/interpret unknown-to-new-valid control; no candidate failure or API/setup error."
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_acceptance_compression.py --tb=short",
+      "session_id": 92997,
+      "initial_chunk": "d0b6c2",
+      "final_chunk": "4e321c",
+      "exit_code": 0,
+      "footer": "30 passed in 1.05s",
+      "pre_chunk": "920421",
+      "post_chunk": "697c8c",
+      "files_exact": 6,
+      "source_sha256": "dcda77882347f38fdeb01da7610c69cc475c8ef66613de8f65d47d7d2634d243",
+      "test_sha256": "7b1d1255924f6ae3cc9fb61c6316c78ca36309764a1c4396087e2c135fa0c50b",
+      "superseded": true
+    }
+  ],
+  "candidate_finding": {
+    "discovered_by": "Root's independent complete read of compression.interpret",
+    "classification": "One example-application draft semantic deviation from the frozen protocol, not a Core or old-product bug, not missing API, not a source-FD/setup failure.",
+    "cause": "First candidate called check_roundtrip for unchecked measure and only then changed its result to unknown. That still performed the scientific criterion, contrary to 'initially unvalidated'.",
+    "snapshots": [
+      {
+        "path": "docs/evidence/snapshots/v1-07-before-unchecked-oracle-compression.py",
+        "sha256": "dcda77882347f38fdeb01da7610c69cc475c8ef66613de8f65d47d7d2634d243",
+        "source": "examples/acceptance/compression.py",
+        "complete": true,
+        "origin": "Actual full first application candidate, not a committed Core baseline"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-07-before-unchecked-oracle-compression-tests.py",
+        "sha256": "7b1d1255924f6ae3cc9fb61c6316c78ca36309764a1c4396087e2c135fa0c50b",
+        "source": "tests/test_acceptance_compression.py",
+        "complete": true,
+        "origin": "Whole initial thirty-case test file"
+      }
+    ],
+    "snapshot_byte_exact_chunk": "e72107",
+    "regression": "test_unchecked_measurement_does_not_call_roundtrip_oracle uses real Domain.prepare and interpret with a raising/counting round-trip spy; scientific oracle is forbidden only for unchecked measure.",
+    "first_red": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_acceptance_compression.py::test_unchecked_measurement_does_not_call_roundtrip_oracle --tb=short",
+      "chunk_id": "38fe5c",
+      "wall_time_seconds": 0.328080799,
+      "exit_code": 1,
+      "original_token_count": 235,
+      "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n__________ test_unchecked_measurement_does_not_call_roundtrip_oracle ___________\ntests/test_acceptance_compression.py:207: in test_unchecked_measurement_does_not_call_roundtrip_oracle\n    claims = domain.interpret(prepared, sources()[\"source-unchecked\"])\nexamples/acceptance/compression.py:191: in interpret\n    status, reason = check_roundtrip(container, data)\ntests/test_acceptance_compression.py:200: in forbidden\n    raise AssertionError(\"unchecked measurement must defer scientific validation\")\nE   AssertionError: unchecked measurement must defer scientific validation\n=========================== short test summary info ============================\nFAILED tests/test_acceptance_compression.py::test_unchecked_measurement_does_not_call_roundtrip_oracle\n1 failed in 0.18s\n"
+    },
+    "correction": "Move unknown measure common.claim return before roundtrip; no encoder/decoder/validity criterion change. Only one new test function appended.",
+    "original_test_preservation": {
+      "original_top_level_functions_ast_exact": 10,
+      "original_asserts_preserved": 31,
+      "final_asserts": 34,
+      "comparison_chunks": [
+        "6108c0",
+        "7ce1a1"
+      ]
+    },
+    "whole_candidate_replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests:. CUDA_VISIBLE_DEVICES= python3 -c 'import pathlib,pytest; import examples.acceptance.compression as m; p=pathlib.Path(\"docs/evidence/snapshots/v1-07-before-unchecked-oracle-compression.py\"); exec(compile(p.read_bytes(),str(p),\"exec\"),m.__dict__); raise SystemExit(pytest.main([\"-q\",\"tests/test_acceptance_compression.py::test_unchecked_measurement_does_not_call_roundtrip_oracle\",\"--tb=short\"]))'",
+      "chunk_id": "626033",
+      "wall_time_seconds": 0.330524785,
+      "exit_code": 1,
+      "original_token_count": 243,
+      "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n__________ test_unchecked_measurement_does_not_call_roundtrip_oracle ___________\ntests/test_acceptance_compression.py:207: in test_unchecked_measurement_does_not_call_roundtrip_oracle\n    claims = domain.interpret(prepared, sources()[\"source-unchecked\"])\ndocs/evidence/snapshots/v1-07-before-unchecked-oracle-compression.py:191: in interpret\n    status, reason = check_roundtrip(container, data)\ntests/test_acceptance_compression.py:200: in forbidden\n    raise AssertionError(\"unchecked measurement must defer scientific validation\")\nE   AssertionError: unchecked measurement must defer scientific validation\n=========================== short test summary info ============================\nFAILED tests/test_acceptance_compression.py::test_unchecked_measurement_does_not_call_roundtrip_oracle\n1 failed in 0.18s\n",
+      "meaning": "Full saved dcda module executed into actual examples.acceptance.compression namespace; same final regression again reaches forbidden oracle and fails. No partial method replacement or missing import."
+    }
+  },
+  "final_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_acceptance_compression.py --tb=short",
+    "chunk_id": "14e6b2",
+    "wall_time_seconds": 0.434251064,
+    "exit_code": 0,
+    "original_token_count": 25,
+    "output": "...............................                                          [100%]\n31 passed in 0.28s\n",
+    "pre_chunk": "6108c0",
+    "post_chunk": "7ce1a1",
+    "pre": [
+      {
+        "path": "examples/acceptance/compression.py",
+        "sha256": "e97cdf45f538ef6d0d009bb8b8e95a5e228b5fc8d8a09b14bd90cce394c36779",
+        "assert_count": 0
+      },
+      {
+        "path": "examples/acceptance/common.py",
+        "sha256": "d83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068",
+        "assert_count": 0
+      },
+      {
+        "path": "tests/test_acceptance_compression.py",
+        "sha256": "533e6cc0be8f052b86881919ec53acae68783ade2d1cd9f9c6f5192c2ff2d14a",
+        "assert_count": 34
+      },
+      {
+        "path": "src/orze/core/research_interfaces.py",
+        "sha256": "26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee",
+        "assert_count": 0
+      },
+      {
+        "path": "src/orze/engine/native_cpu_action.py",
+        "sha256": "b3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687",
+        "assert_count": 0
+      },
+      {
+        "path": "src/orze/engine/supervised_process.py",
+        "sha256": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+        "assert_count": 0
+      }
+    ],
+    "post": [
+      {
+        "path": "examples/acceptance/compression.py",
+        "sha256": "e97cdf45f538ef6d0d009bb8b8e95a5e228b5fc8d8a09b14bd90cce394c36779",
+        "assert_count": 0
+      },
+      {
+        "path": "examples/acceptance/common.py",
+        "sha256": "d83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068",
+        "assert_count": 0
+      },
+      {
+        "path": "tests/test_acceptance_compression.py",
+        "sha256": "533e6cc0be8f052b86881919ec53acae68783ade2d1cd9f9c6f5192c2ff2d14a",
+        "assert_count": 34
+      },
+      {
+        "path": "src/orze/core/research_interfaces.py",
+        "sha256": "26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee",
+        "assert_count": 0
+      },
+      {
+        "path": "src/orze/engine/native_cpu_action.py",
+        "sha256": "b3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687",
+        "assert_count": 0
+      },
+      {
+        "path": "src/orze/engine/supervised_process.py",
+        "sha256": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+        "assert_count": 0
+      }
+    ],
+    "pre_post_exact": true,
+    "manifest_and_original_ast_command": "python3 - <<'PY'\nimport ast,hashlib,json,pathlib\nfor p in ['examples/acceptance/compression.py','examples/acceptance/common.py','tests/test_acceptance_compression.py','src/orze/core/research_interfaces.py','src/orze/engine/native_cpu_action.py','src/orze/engine/supervised_process.py']:\n raw=pathlib.Path(p).read_bytes(); tree=ast.parse(raw)\n print(json.dumps({'path':p,'sha256':hashlib.sha256(raw).hexdigest(),'assert_count':sum(isinstance(n,ast.Assert) for n in ast.walk(tree))}))\nold=ast.parse(pathlib.Path('docs/evidence/snapshots/v1-07-before-unchecked-oracle-compression-tests.py').read_bytes())\nnew=ast.parse(pathlib.Path('tests/test_acceptance_compression.py').read_bytes())\nold_asserts=[ast.dump(n,include_attributes=False) for n in ast.walk(old) if isinstance(n,ast.Assert)]\nnew_asserts=[ast.dump(n,include_attributes=False) for n in ast.walk(new) if isinstance(n,ast.Assert)]\nassert all(item in new_asserts for item in old_asserts)\nold_functions={n.name:ast.dump(n,include_attributes=False) for n in old.body if isinstance(n,ast.FunctionDef)}\nnew_functions={n.name:ast.dump(n,include_attributes=False) for n in new.body if isinstance(n,ast.FunctionDef)}\nassert all(new_functions[name]==dump for name,dump in old_functions.items())\nprint(json.dumps({'all_original_functions_ast_exact':len(old_functions),'original_asserts_preserved':len(old_asserts),'new_asserts':len(new_asserts)}))\nPY",
+    "diff_check": {
+      "command": "git diff --check",
+      "chunk": "04d32c",
+      "exit_code": 0
+    }
+  },
+  "diagnostic_not_product_failure": "One functions JavaScript orchestration call had a parse SyntaxError before a read-only cat; it executed no shell command or test and was immediately corrected. No application/source change was based on this tool diagnostic.",
+  "excludes": [
+    "No actual full acceptance campaign result claimed by this author report",
+    "No fabricated old-source red for a newly added application",
+    "No universal scientific benefit, RSS or CPU-efficiency percentage",
+    "No holdout opened, selected or changed"
+  ]
+}
