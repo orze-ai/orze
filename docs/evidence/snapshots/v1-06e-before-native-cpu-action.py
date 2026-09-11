@@ -3,8 +3,6 @@
 No GPU allocation, training phase, implicit observation, process adoption or
 failure retry. Inputs are sealed bytes, not a sandbox for the chosen command.
 Unknown preparation/publication retains the strong owner and its reservation.
-Only confirmed terminal publication and settled budget retire heavy ownership.
-The same live handle retains a detached terminal readback, not new authority.
 """
 from __future__ import annotations
 
@@ -19,7 +17,6 @@ import secrets
 import stat
 import subprocess
 import time
-import weakref
 
 import yaml
 
@@ -73,8 +70,7 @@ class _Owner:
     domain_run: object = None
 
 
-_OWNERS = {}  # Strong active/unknown owners; never released by age, PID or GC.
-_TERMINALS = weakref.WeakKeyDictionary()  # JSON + weak witness; no strong key/process backreference.
+_OWNERS = {}  # Strong unresolved and terminal owners; no global memory-cap claim.
 
 
 def _canonical(value):
@@ -178,46 +174,6 @@ def _owner(handle, results_dir, permit):
             or not same(permit, owner.permit)):
         raise CPUActionHOLD("cpu_action_owner_unavailable")
     return owner
-
-
-def _cached_terminal(handle, results_dir, permit):
-    if type(handle) is not CPUActionHandle:
-        raise CPUActionHOLD("cpu_action_owner_unavailable")
-    entry = _TERMINALS.get(handle)
-    if entry is None:
-        return None
-    cached, process = entry["record"], entry["process"]
-    if (type(handle.attempt_ref) is not AttemptRef
-            or not same(asdict(handle.attempt_ref), cached["ref"])
-            or handle.idea_id != cached["ref"]["task_id"]
-            or handle.attempt_id != cached["ref"]["attempt_id"]
-            or type(process) is not weakref.ReferenceType or process() is not handle.process
-            or handle.process is None
-            or str(Path(results_dir).absolute()) != cached["scope"]
-            or not same(permit, cached["permit"])):
-        raise CPUActionHOLD("cpu_action_owner_unavailable")
-    return copy.deepcopy(cached["terminal"])
-
-
-def _retire(owner, terminal):
-    """Called only after real publication and budget's confirmed settle return.
-
-    The independent private weak witness preserves exact process identity
-    without trusting mutable handle fields or recycled PID/id. Neither the
-    JSON record nor the weak reference retains its key or process strongly.
-    No shared DomainRun or source capability is invalidated by retirement.
-    """
-    handle = owner.handle
-    if owner.held or _OWNERS.get(id(handle)) is not owner:
-        raise CPUActionHOLD("cpu_action_retirement_unconfirmed")
-    cached = json.loads(_canonical({"ref": asdict(handle.attempt_ref),
-        "scope": str(owner.folder.parent), "permit": owner.permit, "terminal": terminal}))
-    _TERMINALS[handle] = {"record": cached, "process": weakref.ref(owner.process)}
-    del _OWNERS[id(handle)]
-    owner.admission = None
-    owner.domain_run = None
-    owner.action = {}
-    owner.binding = {}
 
 
 def _owned(owner, lake, cfg, *, states=("RUNNING",)):
@@ -394,9 +350,6 @@ def harvest(handle, results_dir, cfg, *, lake, permit):
     """Nonblocking until closure, then publish and settle the captured action."""
     owner = None
     try:
-        cached = _cached_terminal(handle, results_dir, permit)
-        if cached is not None:
-            return cached
         owner = _owner(handle, results_dir, permit)
         if owner.terminal is not None:
             return copy.deepcopy(owner.terminal)
@@ -467,11 +420,8 @@ def harvest(handle, results_dir, cfg, *, lake, permit):
             _watch_replication(tx, owner.binding["source"])
         owner.binding = copy.deepcopy(updated)
         from orze.core.cpu_action_budget import settle
-        settled = settle(lake, owner.permit, handle.attempt_ref, terminal)
-        if type(settled) is not str or settled not in ("settled", "duplicate"):
-            raise CPUActionHOLD("cpu_action_settlement_unconfirmed")
+        settle(lake, owner.permit, handle.attempt_ref, terminal)
         owner.terminal = copy.deepcopy(terminal)
-        _retire(owner, terminal)
         return terminal
     except BaseException as exc:
         _hold(owner, exc)
@@ -481,9 +431,6 @@ def stop(handle, results_dir, cfg, *, lake, permit):
     """Explicit shutdown uses the same once-STOP and terminal publisher."""
     owner = None
     try:
-        cached = _cached_terminal(handle, results_dir, permit)
-        if cached is not None:
-            return cached
         owner = _owner(handle, results_dir, permit)
         if owner.terminal is not None:
             return copy.deepcopy(owner.terminal)

@@ -5,17 +5,14 @@ by a queued task. Each invocation captures its selected implementations. These
 callbacks receive detached bounded data, not Lake or executor authority; this is
 an API boundary, not an OS sandbox or a time limit for arbitrary trusted Python.
 Prepared runs are strong process-local captures, not serializable permissions.
-The handles own their captures; lookup registries do not keep unused handles or
-callback cycles alive. Collection grants no execution or settlement authority.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import hashlib
 import json
 import math
 import re
-from weakref import WeakValueDictionary
 
 import yaml
 
@@ -30,19 +27,7 @@ class ResearchInterfaceError(ValueError):
 
 _TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
-_DOMAINS, _POLICIES = {}, {}
-_CONTEXTS, _RUNS = WeakValueDictionary(), WeakValueDictionary()
-
-
-class _CaptureState(dict):
-    """Weakly indexed state, strongly owned by its exact opaque handle.
-
-    The original-handle witness may form a cycle, including through a trusted
-    callback. Only weak registry values point into that cycle, so an abandoned
-    capture is collectable while external consumers retain the complete state.
-    """
-
-    __slots__ = ("__weakref__",)
+_DOMAINS, _POLICIES, _CONTEXTS, _RUNS = {}, {}, {}, {}
 
 
 def _fail(reason):
@@ -208,14 +193,10 @@ def proposal_sources(snapshot, decision):
 class InterfaceContext:
     """Opaque invocation handle; constructing a lookalike confers no authority."""
 
-    _state: object = field(default=None, init=False, repr=False)
-
 
 @dataclass(eq=False, frozen=True)
 class DomainRun:
     """Opaque prepared-run handle, valid only while its strong owner is retained."""
-
-    _state: object = field(default=None, init=False, repr=False)
 
     @property
     def action(self):
@@ -240,19 +221,16 @@ def capture_interfaces(cfg):
     if dentry is not None and (not callable(prepare) or not callable(interpret)):
         _fail("domain must implement prepare and interpret")
     handle = InterfaceContext()
-    state = _CaptureState({"handle": handle, "domain": domain, "policy": policy,
+    _CONTEXTS[id(handle)] = {"handle": handle, "domain": domain, "policy": policy,
         "domain_entry": dentry, "policy_entry": pentry, "domain_object": domain_object,
         "policy_object": policy_object, "prepare": prepare, "interpret": interpret,
-        "decide": decide})
-    object.__setattr__(handle, "_state", state)
-    _CONTEXTS[id(handle)] = state
+        "decide": decide}
     return handle
 
 
 def _context(context):
     state = _CONTEXTS.get(id(context))
-    if (type(context) is not InterfaceContext or state is None
-            or state["handle"] is not context or context._state is not state):
+    if state is None or state["handle"] is not context or type(context) is not InterfaceContext:
         _fail("invocation capture unavailable")
     if _entry(_POLICIES, state["policy"]["kind"]) is not state["policy_entry"]:
         _fail("selected policy registration changed")
@@ -364,17 +342,14 @@ def prepare_domain_run(context, raw_config, prepared_sources):
         "source_snapshot": snapshot(prepared_sources), "observation": prepared["observation"]})
     _context(context)
     handle = DomainRun()
-    captured = _CaptureState({"handle": handle, "context": context, "prepared": prepared,
-        "metadata": metadata, "sources": prepared_sources, "interpret": state["interpret"]})
-    object.__setattr__(handle, "_state", captured)
-    _RUNS[id(handle)] = captured
+    _RUNS[id(handle)] = {"handle": handle, "context": context, "prepared": prepared,
+        "metadata": metadata, "sources": prepared_sources, "interpret": state["interpret"]}
     return handle
 
 
 def _run(run):
     state = _RUNS.get(id(run))
-    if (type(run) is not DomainRun or state is None
-            or state["handle"] is not run or run._state is not state):
+    if type(run) is not DomainRun or state is None or state["handle"] is not run:
         _fail("prepared domain run unavailable")
     _context(state["context"])
     return state

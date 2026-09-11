@@ -74,7 +74,7 @@ class _Owner:
 
 
 _OWNERS = {}  # Strong active/unknown owners; never released by age, PID or GC.
-_TERMINALS = weakref.WeakKeyDictionary()  # JSON + weak witness; no strong key/process backreference.
+_TERMINALS = weakref.WeakKeyDictionary()  # JSON values cannot retain their keys.
 
 
 def _canonical(value):
@@ -183,10 +183,10 @@ def _owner(handle, results_dir, permit):
 def _cached_terminal(handle, results_dir, permit):
     if type(handle) is not CPUActionHandle:
         raise CPUActionHOLD("cpu_action_owner_unavailable")
-    entry = _TERMINALS.get(handle)
-    if entry is None:
+    cached = _TERMINALS.get(handle)
+    if cached is None:
         return None
-    cached, process = entry["record"], entry["process"]
+    process = getattr(handle, "_retired_process", None)
     if (type(handle.attempt_ref) is not AttemptRef
             or not same(asdict(handle.attempt_ref), cached["ref"])
             or handle.idea_id != cached["ref"]["task_id"]
@@ -202,9 +202,8 @@ def _cached_terminal(handle, results_dir, permit):
 def _retire(owner, terminal):
     """Called only after real publication and budget's confirmed settle return.
 
-    The independent private weak witness preserves exact process identity
-    without trusting mutable handle fields or recycled PID/id. Neither the
-    JSON record nor the weak reference retains its key or process strongly.
+    The weak process witness lives on the externally held key, not in a global
+    value. It preserves exact object identity without trusting recycled PID/id.
     No shared DomainRun or source capability is invalidated by retirement.
     """
     handle = owner.handle
@@ -212,7 +211,8 @@ def _retire(owner, terminal):
         raise CPUActionHOLD("cpu_action_retirement_unconfirmed")
     cached = json.loads(_canonical({"ref": asdict(handle.attempt_ref),
         "scope": str(owner.folder.parent), "permit": owner.permit, "terminal": terminal}))
-    _TERMINALS[handle] = {"record": cached, "process": weakref.ref(owner.process)}
+    handle._retired_process = weakref.ref(owner.process)
+    _TERMINALS[handle] = cached
     del _OWNERS[id(handle)]
     owner.admission = None
     owner.domain_run = None

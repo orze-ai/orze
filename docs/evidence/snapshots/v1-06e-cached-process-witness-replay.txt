@@ -1,0 +1,31 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___ test_cached_terminal_cannot_rebind_process_using_handle_supplied_weakref ___
+
+context = (<orze.idea_lake.IdeaLake object at 0x15435f55aef0>, PosixPath('/tmp/pytest-of-erik/pytest-5009/test_cached_terminal_c...text.<locals>.create at 0x154360b9e050>, [<orze.engine.supervised_process.SupervisedProcess object at 0x15435f467190>])
+
+    def test_cached_terminal_cannot_rebind_process_using_handle_supplied_weakref(context):
+        lake, results, scope, cfg, create, processes = context
+        action, permit = create("pass")
+        handle = native.launch("idea-cpu", results, cfg, lake=lake, action=action,
+                               permit=permit, admission=lambda: None)
+        terminal = _finish(handle, results, cfg, lake, permit)
+        assert terminal["outcome"] == "completed"
+        assert lake.conn.execute("SELECT state FROM cpu_action_reservations").fetchone()[0] == "SETTLED"
+    
+        class ForeignProcess:
+            pass
+    
+        actual = handle.process
+        supplied = getattr(handle, "_retired_process", None)
+        foreign = ForeignProcess()
+        try:
+            handle.process = foreign
+            handle._retired_process = weakref.ref(foreign)
+>           with pytest.raises(native.CPUActionHOLD):
+E           Failed: DID NOT RAISE CPUActionHOLD
+
+tests/test_cpu_retirement_interfaces_review.py:168: Failed
+=========================== short test summary info ============================
+FAILED tests/test_cpu_retirement_interfaces_review.py::test_cached_terminal_cannot_rebind_process_using_handle_supplied_weakref
+1 failed in 0.62s

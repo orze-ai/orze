@@ -1,0 +1,288 @@
+{
+  "schema": 1,
+  "slice": "V1-06E",
+  "role": "native CPU retirement author with bounded cross-layer review",
+  "status": "complete_source_specific_bounded_verification_not_whole_suite",
+  "baseline": {
+    "core_commit": "188af473184463fd2b5835f57cdcc3b5ed9af569",
+    "source": "src/orze/engine/native_cpu_action.py",
+    "sha256": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09",
+    "complete_snapshot": "docs/evidence/snapshots/v1-06e-before-native-cpu-action.py",
+    "byte_exact_git_show": true,
+    "initial_check_chunk": "d595d2",
+    "final_snapshot_check_chunk": "1c8742"
+  },
+  "ownership": {
+    "production": [
+      "src/orze/engine/native_cpu_action.py"
+    ],
+    "new_tests": [
+      "tests/test_native_cpu_retirement.py"
+    ],
+    "old_tests_modified": [],
+    "commits_by_this_agent": [],
+    "no_holdout_read": true,
+    "no_gpu_provider_or_host_scan": true
+  },
+  "implementation": {
+    "final_native_sha256": "b3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687",
+    "retirement_prerequisites": [
+      "real supervised tree closure",
+      "successful terminal/artifact/observation/lifecycle effect transaction",
+      "budget.settle returns exact string settled or duplicate after its own committed readback"
+    ],
+    "strong_retention": "Active, held, failed-publication and uncertain-settlement owners remain in _OWNERS[id(handle)]. No GC, age or PID observation releases authority or refunds budget.",
+    "retired_cache": "WeakKeyDictionary exact handle -> {record: detached JSON fullRef/scope/permit/terminal, process: independent weakref to the original process}. Neither record nor process weakref strongly references the key or process. The weakref has no callback.",
+    "identity_correction": "The first candidate used a mutable handle._retired_process witness. The final candidate trusts only the independent private cache weakref and compares its referent with handle.process by is; it does not trust the handle-provided weakref or PID/id.",
+    "consumers": "Same live terminal handle harvest/stop returns a detached historical terminal. Wrong scope, permit, fullRef, process or fake handle is refused. Cached terminal readback is not permission for new GO, source publication or settlement.",
+    "shared_capture": "Retirement drops this owner's admission/domain/action/binding roots, without explicit removal or invalidation of a shared externally held DomainRun or PreparedSources."
+  },
+  "frozen_own_test": {
+    "path": "tests/test_native_cpu_retirement.py",
+    "sha256": "2b5a426359155a15634cc1d916b64a5355c321d65775e7dbd39d42aefdec3741",
+    "cases": 5,
+    "assert_count": 21,
+    "assert_ast_sha256": "fad31ea629e82039f1ac497140f28ad04115d3ed3c1bcbeb9248e700e17589c2",
+    "assert_digest_algorithm": "sha256(json.dumps([ast.dump(n, include_attributes=False) for n in ast.walk(ast.parse(file_bytes)) if isinstance(n, ast.Assert)], ensure_ascii=False, separators=(',', ':')).encode())",
+    "fixture_changed_after_baseline": false,
+    "cases_description": [
+      "completed/0 releases callback after closure and SETTLED",
+      "failed/7 releases callback after closure and SETTLED",
+      "explicit STOP returning worker 0 is interrupted and releases callback only after SETTLED",
+      "live owner remains strongly held under collection",
+      "actual terminal publication followed by injected settle OSError retains strong HOLD owner and BOUND reservation without retry/refund"
+    ]
+  },
+  "scope": {
+    "actual": "Real CPU Popen worker/supervisor, SQLite claims, execution authority, terminal effect and CPU budget; inherited test_native_cpu_action.context transparently captures actual returned supervisor handles and finally closes only those handles.",
+    "controlled": "A 65536-byte callback-held object and weakref observe reachability. Only the last case injects budget.settle OSError after actual terminal publication; closure itself is never mocked.",
+    "gc": "gc.collect is solely a reachability observation, never proof of process closure or permission to settle.",
+    "exclusions": [
+      "not an RSS benchmark or universal memory cap",
+      "not release of unknown/HOLD resources",
+      "not provider/GPU or scientific performance evidence",
+      "not a new reaper, adoption or restart protocol",
+      "no claim that cached historical terminal is revalidated against later Lake/source mutation",
+      "no whole-suite result attributed to this agent"
+    ]
+  },
+  "baseline_run": {
+    "command": "PYTHONPATH=src:tests python3 -m pytest -q tests/test_native_cpu_retirement.py",
+    "session_id": 21626,
+    "initial_chunk": "20d872",
+    "final_chunk": "2b1084",
+    "exit_code": 1,
+    "footer": "3 failed, 2 passed in 3.68s",
+    "source_sha256": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09",
+    "classification": "Three existing-public-API behavioral failures for one shared strong-terminal-owner retention cause; two strong-owner uncertainty/live controls. New retirement requirement, no missing API or fixture failure.",
+    "failure": "All three fail assert observed() is None after real tree closure and DB SETTLED.",
+    "full_repo_baseline_claim": false
+  },
+  "baseline_replay": {
+    "command": "PYTHONPATH=src:tests python3 -c 'import pathlib,pytest; import orze.engine.native_cpu_action as m; p=pathlib.Path(\"docs/evidence/snapshots/v1-06e-before-native-cpu-action.py\"); exec(compile(p.read_bytes(),str(p),\"exec\"),m.__dict__); raise SystemExit(pytest.main([\"-q\",\"tests/test_native_cpu_retirement.py\"]))'",
+    "session_id": 45592,
+    "initial_chunk": "65f71f",
+    "final_chunk": "9a524c",
+    "exit_code": 1,
+    "footer": "3 failed, 2 passed in 2.97s",
+    "mechanism": "Complete fixed baseline native module executed into the actual imported module namespace; same frozen own5. Other dependencies remain current; no partial patched methods or missing-import red.",
+    "log": "docs/evidence/snapshots/v1-06e-native-retirement-baseline-replay.txt"
+  },
+  "candidate_history": [
+    {
+      "command": "PYTHONPATH=src:tests python3 -m pytest -q tests/test_native_cpu_retirement.py tests/test_cpu_retirement_interfaces_review.py tests/test_native_cpu_action.py",
+      "native_sha256": "822d2d068883a197d56f76360ffd7c6c55e564eaeeba689595ffb50a145dfe40",
+      "session_id": 29586,
+      "initial_chunk": "d87ce2",
+      "final_chunk": "4c83a4",
+      "exit_code": 0,
+      "footer": "17 passed in 8.91s",
+      "composition": "own5 + Pro then3 + old native9",
+      "full_pre_post_manifest_recorded": false,
+      "superseded": true
+    },
+    {
+      "command": "PYTHONPATH=src:tests python3 -m pytest -q tests/test_native_cpu_retirement.py tests/test_cpu_retirement_interfaces_review.py tests/test_native_cpu_action.py",
+      "native_sha256": "b3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687",
+      "session_id": 78800,
+      "initial_chunk": "a0f6a0",
+      "final_chunk": "acb81e",
+      "exit_code": 0,
+      "footer": "19 passed in 11.09s",
+      "composition": "own5 + Pro then5 + old native9",
+      "full_pre_post_manifest_recorded": false,
+      "superseded_by_final_bounded": true
+    }
+  ],
+  "candidate_identity_regression": {
+    "first_observer": "/root/pro_review; not this author's independent first run",
+    "first_reported_chunk": "8c8dd2",
+    "first_reported_footer": "1 failed in 0.82s",
+    "first_reported_exit_code": 1,
+    "test": "tests/test_cpu_retirement_interfaces_review.py::test_cached_terminal_cannot_rebind_process_using_handle_supplied_weakref",
+    "frozen_at_discovery_test_sha256": "5084bf8e405d7032bd23e28b4916874f95e1716b103619e968475f314602db7e",
+    "complete_candidate_snapshot": "docs/evidence/snapshots/v1-06e-before-cached-process-witness-native.py",
+    "classification": "A real candidate identity regression, distinct from baseline retention: after actual completed + SETTLED, a real handle's process and handle-supplied weakref could both be changed to a foreign object and still pass.",
+    "independent_whole_module_replay": {
+      "command": "PYTHONPATH=src:tests python3 -c 'import pathlib,pytest; import orze.engine.native_cpu_action as m; p=pathlib.Path(\"docs/evidence/snapshots/v1-06e-before-cached-process-witness-native.py\"); exec(compile(p.read_bytes(),str(p),\"exec\"),m.__dict__); raise SystemExit(pytest.main([\"-q\",\"tests/test_cpu_retirement_interfaces_review.py::test_cached_terminal_cannot_rebind_process_using_handle_supplied_weakref\"]))'",
+      "chunk": "5e7b70",
+      "exit_code": 1,
+      "footer": "1 failed in 0.62s",
+      "failure": "DID NOT RAISE CPUActionHOLD",
+      "log": "docs/evidence/snapshots/v1-06e-cached-process-witness-replay.txt"
+    },
+    "final_fix": "Private independent weak process witness; no handle-supplied witness trust. Values are JSON plus weakref, not claimed to be pure JSON."
+  },
+  "final_bounded": {
+    "command": "PYTHONPATH=src:tests python3 -m pytest -q tests/test_native_cpu_retirement.py tests/test_cpu_retirement_interfaces_review.py tests/test_cpu_interface_lifetime.py tests/test_cpu_retirement_product.py tests/test_native_cpu_action.py",
+    "session_id": 52253,
+    "initial_chunk": "bd2dc6",
+    "final_chunk": "83841e",
+    "exit_code": 0,
+    "footer": "37 passed in 25.29s",
+    "composition": {
+      "native_author_new": 5,
+      "pro_review_new": 5,
+      "core_interface_new": 13,
+      "root_product_new": 5,
+      "old_native_compatibility": 9
+    },
+    "counts_overlap_other_reports": true,
+    "not_added_to_root_full_suite_count": true,
+    "manifest_command": "python3 - <<'PY'\nimport ast, hashlib, json, pathlib, subprocess\npaths = ['src/orze/engine/native_cpu_action.py','src/orze/core/research_interfaces.py','src/orze/engine/cpu_phase.py','src/orze/core/cpu_action_budget.py','src/orze/engine/cpu_action_sources.py','src/orze/engine/execution_authority.py','src/orze/engine/supervised_process.py','src/orze/engine/process_supervision.py','src/orze/engine/controller_members.py','src/orze/core/execution_attempts.py','src/orze/engine/orchestrator.py','src/orze/cli.py','tests/test_native_cpu_retirement.py','tests/test_cpu_retirement_interfaces_review.py','tests/test_cpu_interface_lifetime.py','tests/test_cpu_retirement_product.py','tests/test_native_cpu_action.py','tests/test_cpu_proposal_product.py','tests/conftest.py','pyproject.toml']\nmanifest={p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\nprint(json.dumps(manifest,sort_keys=True,indent=2))\nfor p in paths:\n if p.startswith('tests/') and p!='tests/conftest.py':\n  tree=ast.parse(pathlib.Path(p).read_bytes()); a=[ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Assert)]\n  print(json.dumps({'test':p,'assert_count':len(a),'assert_json_compact_sha256':hashlib.sha256(json.dumps(a,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()}))\nold=subprocess.check_output(['git','ls-tree','-r','--name-only','188af473184463fd2b5835f57cdcc3b5ed9af569','--','tests']).decode().splitlines()\nchanged=[p for p in old if pathlib.Path(p).read_bytes()!=subprocess.check_output(['git','show','188af473184463fd2b5835f57cdcc3b5ed9af569:'+p])]\nprint(json.dumps({'baseline_tracked_test_files':len(old),'changed':changed}))\nPY",
+    "pre_chunk": "620c16",
+    "post_chunk": "345134",
+    "file_count": 20,
+    "pre": {
+      "pyproject.toml": "5d0ecda4eef929c4808a11631cb016c360187a3d5d6acd5ca845323d882d5ab3",
+      "src/orze/cli.py": "35227ff834b38c9259c33c9c1c8c0218fd0ee9c5c02c271a27505b91ca41093b",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/research_interfaces.py": "26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee",
+      "src/orze/engine/controller_members.py": "4c432af7df0c6bb0bd8742e66866503b1e1f011f98cb13affe5b38bc21fd905d",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_phase.py": "0508c838d5a3dadeac62d7ab6fe20d21d0b62c7aeb270ba9bcac345cec970c6b",
+      "src/orze/engine/execution_authority.py": "ed080cabb0a7a7bc48e36fdb1512c2ecf96aa9cde3577e18c22b5622e93da471",
+      "src/orze/engine/native_cpu_action.py": "b3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687",
+      "src/orze/engine/orchestrator.py": "a4fee1b5a2ce4456fece2f6b91722ec3427eb53d931610e54a42aad026c60bcd",
+      "src/orze/engine/process_supervision.py": "cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053",
+      "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "tests/conftest.py": "22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641",
+      "tests/test_cpu_interface_lifetime.py": "8de3b1844d4018382d44f1fe527bbe51b043feff6c0b8a1711701244e00bf19c",
+      "tests/test_cpu_proposal_product.py": "a613831bd98f659ea118137b3b9e73d2ec98471cbc382bd5286ae6712a9dabca",
+      "tests/test_cpu_retirement_interfaces_review.py": "4a7b1d88ea907d4a4785f83e2b21565670de2f4b8c093698900a3a5e7661208c",
+      "tests/test_cpu_retirement_product.py": "61fd434ba9401d29c7aca906258c658e2027302a4629e9926f24332992c62a73",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b",
+      "tests/test_native_cpu_retirement.py": "2b5a426359155a15634cc1d916b64a5355c321d65775e7dbd39d42aefdec3741"
+    },
+    "post": {
+      "pyproject.toml": "5d0ecda4eef929c4808a11631cb016c360187a3d5d6acd5ca845323d882d5ab3",
+      "src/orze/cli.py": "35227ff834b38c9259c33c9c1c8c0218fd0ee9c5c02c271a27505b91ca41093b",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/research_interfaces.py": "26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee",
+      "src/orze/engine/controller_members.py": "4c432af7df0c6bb0bd8742e66866503b1e1f011f98cb13affe5b38bc21fd905d",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_phase.py": "0508c838d5a3dadeac62d7ab6fe20d21d0b62c7aeb270ba9bcac345cec970c6b",
+      "src/orze/engine/execution_authority.py": "ed080cabb0a7a7bc48e36fdb1512c2ecf96aa9cde3577e18c22b5622e93da471",
+      "src/orze/engine/native_cpu_action.py": "b3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687",
+      "src/orze/engine/orchestrator.py": "a4fee1b5a2ce4456fece2f6b91722ec3427eb53d931610e54a42aad026c60bcd",
+      "src/orze/engine/process_supervision.py": "cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053",
+      "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "tests/conftest.py": "22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641",
+      "tests/test_cpu_interface_lifetime.py": "8de3b1844d4018382d44f1fe527bbe51b043feff6c0b8a1711701244e00bf19c",
+      "tests/test_cpu_proposal_product.py": "a613831bd98f659ea118137b3b9e73d2ec98471cbc382bd5286ae6712a9dabca",
+      "tests/test_cpu_retirement_interfaces_review.py": "4a7b1d88ea907d4a4785f83e2b21565670de2f4b8c093698900a3a5e7661208c",
+      "tests/test_cpu_retirement_product.py": "61fd434ba9401d29c7aca906258c658e2027302a4629e9926f24332992c62a73",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b",
+      "tests/test_native_cpu_retirement.py": "2b5a426359155a15634cc1d916b64a5355c321d65775e7dbd39d42aefdec3741"
+    },
+    "pre_post_exact": true,
+    "baseline_tracked_test_audit": {
+      "commit": "188af473184463fd2b5835f57cdcc3b5ed9af569",
+      "file_count": 452,
+      "changed": [],
+      "method": "git ls-tree lists baseline tests; compare every current byte sequence with git show baseline:path, included in the manifest command"
+    },
+    "tests_ast": [
+      {
+        "test": "tests/test_native_cpu_retirement.py",
+        "assert_count": 21,
+        "assert_json_compact_sha256": "fad31ea629e82039f1ac497140f28ad04115d3ed3c1bcbeb9248e700e17589c2"
+      },
+      {
+        "test": "tests/test_cpu_retirement_interfaces_review.py",
+        "assert_count": 27,
+        "assert_json_compact_sha256": "d7d8a04ebbec920a33f76a1705e64512a64ddde632e8eb410aec0ba05ad6f06a"
+      },
+      {
+        "test": "tests/test_cpu_interface_lifetime.py",
+        "assert_count": 16,
+        "assert_json_compact_sha256": "61bcf6ae1cfc711951417cae9d7024ce2b57145deec4c18f0afdb623f27ee9c9"
+      },
+      {
+        "test": "tests/test_cpu_retirement_product.py",
+        "assert_count": 17,
+        "assert_json_compact_sha256": "1c38671c43f969be552c47dfb3f18068c6b6ce8f4bdffc0c6fce21bf7e94ab0b"
+      },
+      {
+        "test": "tests/test_native_cpu_action.py",
+        "assert_count": 45,
+        "assert_json_compact_sha256": "ae1aa46c816e83755b5e63263be01434cff6da51ec5ba830566d419c93cc66a7"
+      },
+      {
+        "test": "tests/test_cpu_proposal_product.py",
+        "assert_count": 50,
+        "assert_json_compact_sha256": "a33eb79b4477ea823bac1fde65756f1af2b3e4f1c891589fecefe0c9ac3e0219"
+      }
+    ],
+    "diff_check": {
+      "command": "git diff --check",
+      "chunk": "df6235",
+      "exit_code": 0
+    },
+    "cleanup": "All actual CPU supervisor processes captured by the reused fixtures reached their bounded finally closure assertions. The deliberate logical HOLD/BOUND reservation is retained; successful test cleanup is not represented as product retirement or refund."
+  },
+  "final_readonly_review": {
+    "phase_sha256": "0508c838d5a3dadeac62d7ab6fe20d21d0b62c7aeb270ba9bcac345cec970c6b",
+    "read_chunks": [
+      "adab10",
+      "128fac"
+    ],
+    "interface_native_diff_chunk": "36cefe",
+    "outcome": "No blocking contradiction found in the limited retirement contract.",
+    "details": [
+      "Successful cpu_phase.close alone clears invocation roots and unregisters only its unique exit callback; any native/Lake-close uncertainty retains roots.",
+      "Signal restoration occurs only when the current handler is this invocation's exact handler. _ShutdownHandler.predecessor skips retired internal predecessors, and retired handlers drop engine references, so non-LIFO close cannot restore an engine-retaining handler.",
+      "Interface weak-value registry captures are held by exact opaque handles and external owners; retirement is not a shared-run invalidation.",
+      "No final pass result here proves a general bound on user-held references, interpreter registries, unknown execution, RSS or arbitrary trusted callback behavior."
+    ],
+    "peer_fixture_note": "Pro fourth case representation-only bound-method assertion was adapted to callable for the explicit _ShutdownHandler. Its original snapshot and 26/27 assertion audit belong to the Pro report; this author did not edit that test. Final hash is in the manifest."
+  },
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-06e-before-native-cpu-action.py",
+      "sha256": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09",
+      "bytes": 22924,
+      "origin": "Complete baseline source, exact git 188af473184463fd2b5835f57cdcc3b5ed9af569:src/orze/engine/native_cpu_action.py"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06e-native-retirement-baseline-replay.txt",
+      "sha256": "cc5e2ee91d4e08747b2682e667e1f15d57747abbe54ffd9af24b1a963d213e4c",
+      "bytes": 5047,
+      "origin": "Complete actual baseline replay output"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06e-before-cached-process-witness-native.py",
+      "sha256": "822d2d068883a197d56f76360ffd7c6c55e564eaeeba689595ffb50a145dfe40",
+      "bytes": 25379,
+      "origin": "Complete first native retirement candidate, saved by independent Pro reviewer before its process-witness red; not a committed baseline"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06e-cached-process-witness-replay.txt",
+      "sha256": "1c158666786cc19fa0cb102bf5383dd5d58fa7f309453cf7f0aa71eab64d7b6c",
+      "bytes": 1743,
+      "origin": "Complete actual whole-first-candidate replay output"
+    }
+  ]
+}

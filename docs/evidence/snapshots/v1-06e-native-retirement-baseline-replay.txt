@@ -1,0 +1,74 @@
+FFF..                                                                    [100%]
+=================================== FAILURES ===================================
+_ test_confirmed_terminal_and_settled_budget_release_heavy_callback[pass-completed] _
+
+context = (<orze.idea_lake.IdeaLake object at 0x153d93380a30>, PosixPath('/tmp/pytest-of-erik/pytest-5002/test_confirmed_termina...text.<locals>.create at 0x153d94b37f40>, [<orze.engine.supervised_process.SupervisedProcess object at 0x153d93508790>])
+code = 'pass', outcome = 'completed'
+
+    @pytest.mark.parametrize("code,outcome", [("pass", "completed"), ("raise SystemExit(7)", "failed")])
+    def test_confirmed_terminal_and_settled_budget_release_heavy_callback(context, code, outcome):
+        lake, results, scope, cfg, create, processes = context
+        handle, permit, observed = launch(context, code)
+        terminal = _finish(handle, results, cfg, lake, permit)
+        assert terminal["outcome"] == outcome
+        assert terminal["process_tree"]["wait_proof"] == "ECHILD_WALL"
+        assert lake.conn.execute("SELECT state FROM cpu_action_reservations").fetchone()[0] == "SETTLED"
+        gc.collect()
+>       assert observed() is None
+E       AssertionError: assert <test_native_cpu_retirement.Resource object at 0x153d935fe440> is None
+E        +  where <test_native_cpu_retirement.Resource object at 0x153d935fe440> = <weakref at 0x153d94aeb060; to 'Resource' at 0x153d935fe440>()
+
+tests/test_native_cpu_retirement.py:45: AssertionError
+_ test_confirmed_terminal_and_settled_budget_release_heavy_callback[raise SystemExit(7)-failed] _
+
+context = (<orze.idea_lake.IdeaLake object at 0x153d93383a30>, PosixPath('/tmp/pytest-of-erik/pytest-5002/test_confirmed_termina...text.<locals>.create at 0x153d936dab00>, [<orze.engine.supervised_process.SupervisedProcess object at 0x153d93a84040>])
+code = 'raise SystemExit(7)', outcome = 'failed'
+
+    @pytest.mark.parametrize("code,outcome", [("pass", "completed"), ("raise SystemExit(7)", "failed")])
+    def test_confirmed_terminal_and_settled_budget_release_heavy_callback(context, code, outcome):
+        lake, results, scope, cfg, create, processes = context
+        handle, permit, observed = launch(context, code)
+        terminal = _finish(handle, results, cfg, lake, permit)
+        assert terminal["outcome"] == outcome
+        assert terminal["process_tree"]["wait_proof"] == "ECHILD_WALL"
+        assert lake.conn.execute("SELECT state FROM cpu_action_reservations").fetchone()[0] == "SETTLED"
+        gc.collect()
+>       assert observed() is None
+E       AssertionError: assert <test_native_cpu_retirement.Resource object at 0x153d934c7c40> is None
+E        +  where <test_native_cpu_retirement.Resource object at 0x153d934c7c40> = <weakref at 0x153d933f1990; to 'Resource' at 0x153d934c7c40>()
+
+tests/test_native_cpu_retirement.py:45: AssertionError
+___ test_explicit_stop_zero_settled_interruption_can_release_heavy_callback ____
+
+context = (<orze.idea_lake.IdeaLake object at 0x153d935083d0>, PosixPath('/tmp/pytest-of-erik/pytest-5002/test_explicit_stop_zer...text.<locals>.create at 0x153d933f80d0>, [<orze.engine.supervised_process.SupervisedProcess object at 0x153d93561150>])
+
+    def test_explicit_stop_zero_settled_interruption_can_release_heavy_callback(context):
+        lake, results, scope, cfg, create, processes = context
+        code = """import signal
+    from pathlib import Path
+    signal.signal(signal.SIGTERM, lambda *_: exit(0))
+    Path('ready').write_text('ready')
+    signal.pause()
+    """
+        handle, permit, observed = launch(context, code)
+        ready = results / "idea-cpu" / "_action_attempts" / handle.attempt_id / "work" / "ready"
+        until = time.monotonic() + 2
+        while not ready.exists() and time.monotonic() < until:
+            time.sleep(.005)
+        assert ready.exists()
+        terminal = native.stop(handle, results, cfg, lake=lake, permit=permit)
+        assert terminal["outcome"] == "interrupted"
+        assert terminal["return_code"] == 0
+        assert terminal["process_tree"]["stop_requested"] is True
+        assert lake.conn.execute("SELECT state FROM cpu_action_reservations").fetchone()[0] == "SETTLED"
+        gc.collect()
+>       assert observed() is None
+E       AssertionError: assert <test_native_cpu_retirement.Resource object at 0x153d934c5750> is None
+E        +  where <test_native_cpu_retirement.Resource object at 0x153d934c5750> = <weakref at 0x153d934a3d80; to 'Resource' at 0x153d934c5750>()
+
+tests/test_native_cpu_retirement.py:68: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_native_cpu_retirement.py::test_confirmed_terminal_and_settled_budget_release_heavy_callback[pass-completed]
+FAILED tests/test_native_cpu_retirement.py::test_confirmed_terminal_and_settled_budget_release_heavy_callback[raise SystemExit(7)-failed]
+FAILED tests/test_native_cpu_retirement.py::test_explicit_stop_zero_settled_interruption_can_release_heavy_callback
+3 failed, 2 passed in 2.97s

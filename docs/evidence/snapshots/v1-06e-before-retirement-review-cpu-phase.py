@@ -25,24 +25,6 @@ from orze.core.cpu_execution import (
 logger = logging.getLogger("orze")
 
 
-class _ShutdownHandler:
-    """Invocation-owned hook; retired predecessors never revive an engine."""
-
-    def __init__(self, engine):
-        self.engine = engine
-        self.previous = {}
-
-    def __call__(self, signum, frame):
-        if self.engine is not None:
-            self.engine._shutdown(signum, frame)
-
-    def predecessor(self, sig):
-        previous = self.previous[sig]
-        while type(previous) is _ShutdownHandler and previous.engine is None:
-            previous = previous.previous[sig]
-        return previous
-
-
 class QueuePolicy:
     """A real policy consumer, not a scientific convergence judgment."""
     def __init__(self, declaration):
@@ -110,20 +92,9 @@ def initialize(engine, gpu_ids, cfg, once):
     if not cfg.get("idea_lake_db"):
         raise CPUExecutionError("execution: CPU actions require an IdeaLake path")
     engine.lake = IdeaLake(cfg["idea_lake_db"])
-    engine._cpu_signal_handlers = {}
-    handler = _ShutdownHandler(engine)
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        previous = signal.signal(sig, handler)
-        handler.previous[sig] = previous
-        engine._cpu_signal_handlers[sig] = (previous, handler)
-
-    # unregister compares callbacks by equality. A unique wrapper is an
-    # invocation-owned token, unlike another caller's equal bound method.
-    def cleanup():
-        engine._atexit_cleanup()
-
-    engine._cpu_exit_callback = cleanup
-    atexit.register(cleanup)
+    signal.signal(signal.SIGINT, engine._shutdown)
+    signal.signal(signal.SIGTERM, engine._shutdown)
+    atexit.register(engine._atexit_cleanup)
 
 
 def require_admission(engine):
@@ -343,16 +314,3 @@ def close(engine):
         failures.append(type(exc).__name__)
     if failures:
         raise CPUExecutionError("execution: CPU cleanup remains unconfirmed: " + ",".join(failures))
-    # The close-attempt latch alone is not proof of cleanup. Only this success
-    # path releases invocation roots; unknown native owners keep their captures.
-    # Never overwrite a signal handler installed by another caller after ours.
-    for sig, (previous, installed) in engine._cpu_signal_handlers.items():
-        if signal.getsignal(sig) is installed:
-            signal.signal(sig, installed.predecessor(sig))
-    atexit.unregister(engine._cpu_exit_callback)
-    for _, installed in engine._cpu_signal_handlers.values():
-        installed.engine = None
-    engine._cpu_exit_callback = None
-    engine._cpu_signal_handlers = {}
-    engine._cpu_interfaces = None
-    engine._cpu_policy = None

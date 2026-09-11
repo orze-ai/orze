@@ -1,0 +1,231 @@
+{
+  "schema": 1,
+  "slice": "V1-06E",
+  "role": "Core interface implementation author; independent bounded native read-only reviewer",
+  "baseline_commit": "188af473184463fd2b5835f57cdcc3b5ed9af569",
+  "status": "owned source and tests frozen; candidate bounded verification, not final full-suite closure",
+  "owned_source": "src/orze/core/research_interfaces.py",
+  "owned_tests": "tests/test_cpu_interface_lifetime.py",
+  "scope": {
+    "goal": "Remove unconditional capture-registry roots without invalidating external Context/DomainRun owners or unresolved native work.",
+    "implementation": [
+      "Opaque exact-type handles strongly own a private weakref-capable dict state.",
+      "Global id-to-state registries use WeakValueDictionary; neither registry strongly roots callback-to-handle cycles.",
+      "State retains the original-handle identity witness; lookup requires registry state, handle state and original handle to match.",
+      "All public APIs are unchanged. Fake/copied handles and selected registration replacement remain fail-closed.",
+      "No public release API, no GC authority, no dropping unknown/HOLD owners, no alteration of other agents' native/loop code."
+    ],
+    "limits": [
+      "Collection requires all external consumers to release their references and a GC pass for cycles. It is not an immediate-memory-release or global-cap guarantee.",
+      "Trusted registration factories or callers can intentionally retain a handle; that is not removed.",
+      "In-process private registry mutation remains trusted-Python scope, not an OS security sandbox.",
+      "PreparedSources payload test measures actual six bytes from two real CPU publications, not RSS or a maximum-size memory benchmark.",
+      "Interface lifetime changes alone do not retire native owners or unregister controller-loop exit/signal hooks."
+    ]
+  },
+  "source_and_snapshot_audit": {
+    "baseline": "188af473184463fd2b5835f57cdcc3b5ed9af569",
+    "baseline_snapshot_exact": true,
+    "changed_old_tests": [],
+    "files": [
+      {
+        "bytes": 19893,
+        "path": "src/orze/core/research_interfaces.py",
+        "sha256": "26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee"
+      },
+      {
+        "bytes": 18880,
+        "path": "docs/evidence/snapshots/v1-06e-before-research-interfaces.py",
+        "sha256": "0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557"
+      },
+      {
+        "bytes": 6008,
+        "path": "docs/evidence/snapshots/v1-06e-first-cpu-interface-lifetime-tests.py",
+        "sha256": "e6cfc3d3a0e05c910a0d666c7ae87cc463c06ec44a494684879bd0f38aea5b6f"
+      },
+      {
+        "bytes": 6863,
+        "path": "tests/test_cpu_interface_lifetime.py",
+        "sha256": "8de3b1844d4018382d44f1fe527bbe51b043feff6c0b8a1711701244e00bf19c"
+      }
+    ],
+    "final_asserts": 16,
+    "first_asserts": 15,
+    "first_functions_unchanged": {
+      "prepare": true,
+      "project": true,
+      "selection": true,
+      "test_bound_policy_is_an_external_consumer": true,
+      "test_external_run_keeps_context_sources_and_interpreter_valid": true,
+      "test_live_handle_copies_and_lookalikes_still_fail_closed": true,
+      "test_live_registration_replacement_still_refuses_run": true,
+      "test_unused_context_is_not_a_global_strong_root": true,
+      "test_unused_run_releases_real_source_bytes_even_with_callback_cycle": true
+    },
+    "old_test_files": 452
+  },
+  "tests": {
+    "final_cases": 13,
+    "final_assert_ast": 16,
+    "original_nine": {
+      "actual_baseline_failures": 3,
+      "controls": "External run and BoundPolicy remain usable; fake/copied context/run and domain/policy registration replacement are refused.",
+      "initial_test_sha256": "e6cfc3d3a0e05c910a0d666c7ae87cc463c06ec44a494684879bd0f38aea5b6f",
+      "failure_meaning": [
+        "Unused InterfaceContext survives gc.collect solely through the baseline capture registry.",
+        "The same survives a trusted Domain/Policy callback back-reference cycle.",
+        "Unused DomainRun/context/PreparedSources owner survives after two genuine CPU artifact publications (six bytes), including a Domain callback back-reference."
+      ],
+      "classification": "Confirmed baseline retention behavior, one lifetime root cause; not missing API or constructor error."
+    },
+    "added_four": {
+      "classification": "New mechanism requirements for exact handle-owned state witness; not run against a baseline without that private field.",
+      "cases": "Context and run, each private state removed or replaced by a plain copied dictionary.",
+      "original_functions_and_asserts_unchanged": true
+    },
+    "old_tracked_python_tests": 452,
+    "old_test_changes": [],
+    "fixture_changes": "None. The complete original nine-case file is archived; four new parameterized mechanism cases were appended."
+  },
+  "executions": {
+    "baseline": {
+      "classification": "actual fixed baseline red",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_interface_lifetime.py --tb=short",
+      "initial": {
+        "chunk_id": "236dea",
+        "wall_time_seconds": 1.001247397,
+        "session_id": 17079,
+        "original_token_count": 1,
+        "output": "FF"
+      },
+      "completion": {
+        "chunk_id": "9d62ce",
+        "wall_time_seconds": 0.000002891,
+        "exit_code": 1,
+        "original_token_count": 434,
+        "output": "F......                                                                [100%]\n=================================== FAILURES ===================================\n____________ test_unused_context_is_not_a_global_strong_root[False] ____________\ntests/test_cpu_interface_lifetime.py:88: in test_unused_context_is_not_a_global_strong_root\n    assert reference() is None\nE   AssertionError: assert InterfaceContext() is None\nE    +  where InterfaceContext() = <weakref at 0x14d2a8d390d0; to 'InterfaceContext' at 0x14d2a8d213f0>()\n____________ test_unused_context_is_not_a_global_strong_root[True] _____________\ntests/test_cpu_interface_lifetime.py:88: in test_unused_context_is_not_a_global_strong_root\n    assert reference() is None\nE   AssertionError: assert InterfaceContext() is None\nE    +  where InterfaceContext() = <weakref at 0x14d2a91300e0; to 'InterfaceContext' at 0x14d2a93abd30>()\n_____ test_unused_run_releases_real_source_bytes_even_with_callback_cycle ______\ntests/test_cpu_interface_lifetime.py:104: in test_unused_run_releases_real_source_bytes_even_with_callback_cycle\n    assert all(reference() is None for reference in references)\nE   assert False\nE    +  where False = all(<generator object test_unused_run_releases_real_source_bytes_even_with_callback_cycle.<locals>.<genexpr> at 0x14d2a9453b50>)\n=========================== short test summary info ============================\nFAILED tests/test_cpu_interface_lifetime.py::test_unused_context_is_not_a_global_strong_root[False]\nFAILED tests/test_cpu_interface_lifetime.py::test_unused_context_is_not_a_global_strong_root[True]\nFAILED tests/test_cpu_interface_lifetime.py::test_unused_run_releases_real_source_bytes_even_with_callback_cycle\n3 failed, 6 passed in 1.74s\n"
+      },
+      "pre": {
+        "chunk_id": "1bc947",
+        "wall_time_seconds": 0.000003841,
+        "exit_code": 0,
+        "original_token_count": 78,
+        "output": "0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557  src/orze/core/research_interfaces.py\ne6cfc3d3a0e05c910a0d666c7ae87cc463c06ec44a494684879bd0f38aea5b6f  tests/test_cpu_interface_lifetime.py\n54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09  src/orze/engine/native_cpu_action.py\n"
+      },
+      "post": {
+        "chunk_id": "8bc3ce",
+        "wall_time_seconds": 0.000003826,
+        "exit_code": 0,
+        "original_token_count": 78,
+        "output": "0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557  src/orze/core/research_interfaces.py\ne6cfc3d3a0e05c910a0d666c7ae87cc463c06ec44a494684879bd0f38aea5b6f  tests/test_cpu_interface_lifetime.py\n54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09  src/orze/engine/native_cpu_action.py\n"
+      },
+      "pre_post_exact": true
+    },
+    "first_candidate": {
+      "classification": "first implementation candidate, original9 plus unchanged old6",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_interface_lifetime.py tests/test_research_interfaces.py tests/test_research_interfaces_review.py --tb=short",
+      "initial": {
+        "chunk_id": "5a710d",
+        "wall_time_seconds": 1.000226054,
+        "session_id": 96334,
+        "original_token_count": 1,
+        "output": ".."
+      },
+      "completion": {
+        "chunk_id": "0b119f",
+        "wall_time_seconds": 0.000002994,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": ".............                                                          [100%]\n15 passed in 2.67s\n"
+      }
+    },
+    "final_bounded": {
+      "classification": "candidate final bounded group, not full suite",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_interface_lifetime.py tests/test_research_interfaces.py tests/test_research_interfaces_review.py tests/test_native_cpu_domain_publication.py tests/test_cpu_domain_product.py tests/test_cpu_proposal_product.py tests/test_cpu_replication_product.py --tb=short",
+      "initial": {
+        "chunk_id": "b30d4a",
+        "wall_time_seconds": 1.001435932,
+        "session_id": 31790,
+        "original_token_count": 1,
+        "output": ".."
+      },
+      "completion": {
+        "chunk_id": "465879",
+        "wall_time_seconds": 0.00000273,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "....................................................                   [100%]\n54 passed in 29.34s\n"
+      },
+      "pre": {
+        "chunk_id": "137ad0",
+        "wall_time_seconds": 0.00000506,
+        "exit_code": 0,
+        "original_token_count": 101,
+        "output": "26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee  src/orze/core/research_interfaces.py\n8de3b1844d4018382d44f1fe527bbe51b043feff6c0b8a1711701244e00bf19c  tests/test_cpu_interface_lifetime.py\n822d2d068883a197d56f76360ffd7c6c55e564eaeeba689595ffb50a145dfe40  src/orze/engine/native_cpu_action.py\n12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34  src/orze/engine/cpu_phase.py\n"
+      },
+      "post": {
+        "chunk_id": "12504b",
+        "wall_time_seconds": 0.0000035,
+        "exit_code": 0,
+        "original_token_count": 101,
+        "output": "26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee  src/orze/core/research_interfaces.py\n8de3b1844d4018382d44f1fe527bbe51b043feff6c0b8a1711701244e00bf19c  tests/test_cpu_interface_lifetime.py\n822d2d068883a197d56f76360ffd7c6c55e564eaeeba689595ffb50a145dfe40  src/orze/engine/native_cpu_action.py\n12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34  src/orze/engine/cpu_phase.py\n"
+      },
+      "pre_post_exact": true,
+      "cases": 54
+    },
+    "full_baseline_module_replay": {
+      "classification": "entire git-baseline module loaded only inside fresh test process; production disk source and all tests unchanged",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, pathlib, sys, types\nimport pytest\nparent = importlib.import_module(\"orze.core\")\ncurrent = importlib.import_module(\"orze.core.research_interfaces\")\npath = pathlib.Path(\"docs/evidence/snapshots/v1-06e-before-research-interfaces.py\")\nreplacement = types.ModuleType(current.__name__)\nreplacement.__file__ = str(path.absolute())\nreplacement.__package__ = current.__package__\nsys.modules[current.__name__] = replacement\nsetattr(parent, \"research_interfaces\", replacement)\nexec(compile(path.read_bytes(), str(path), \"exec\"), replacement.__dict__)\nraise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\",\n    \"tests/test_cpu_interface_lifetime.py\", \"-k\", \"not private_state_changes\", \"--tb=short\"]))\nPY",
+      "initial": {
+        "chunk_id": "01f92e",
+        "wall_time_seconds": 1.000374557,
+        "session_id": 82414,
+        "original_token_count": 1,
+        "output": "FF"
+      },
+      "completion": {
+        "chunk_id": "8aad8d",
+        "wall_time_seconds": 0.00000321,
+        "exit_code": 1,
+        "original_token_count": 437,
+        "output": "F......                                                                [100%]\n=================================== FAILURES ===================================\n____________ test_unused_context_is_not_a_global_strong_root[False] ____________\ntests/test_cpu_interface_lifetime.py:88: in test_unused_context_is_not_a_global_strong_root\n    assert reference() is None\nE   AssertionError: assert InterfaceContext() is None\nE    +  where InterfaceContext() = <weakref at 0x151e512c6930; to 'InterfaceContext' at 0x151e512b01c0>()\n____________ test_unused_context_is_not_a_global_strong_root[True] _____________\ntests/test_cpu_interface_lifetime.py:88: in test_unused_context_is_not_a_global_strong_root\n    assert reference() is None\nE   AssertionError: assert InterfaceContext() is None\nE    +  where InterfaceContext() = <weakref at 0x151e512c4220; to 'InterfaceContext' at 0x151e5165e7a0>()\n_____ test_unused_run_releases_real_source_bytes_even_with_callback_cycle ______\ntests/test_cpu_interface_lifetime.py:104: in test_unused_run_releases_real_source_bytes_even_with_callback_cycle\n    assert all(reference() is None for reference in references)\nE   assert False\nE    +  where False = all(<generator object test_unused_run_releases_real_source_bytes_even_with_callback_cycle.<locals>.<genexpr> at 0x151e51778f90>)\n=========================== short test summary info ============================\nFAILED tests/test_cpu_interface_lifetime.py::test_unused_context_is_not_a_global_strong_root[False]\nFAILED tests/test_cpu_interface_lifetime.py::test_unused_context_is_not_a_global_strong_root[True]\nFAILED tests/test_cpu_interface_lifetime.py::test_unused_run_releases_real_source_bytes_even_with_callback_cycle\n3 failed, 6 passed, 4 deselected in 1.73s\n"
+      }
+    },
+    "static": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, pathlib, subprocess\nbase=\"188af473184463fd2b5835f57cdcc3b5ed9af569\"\nsource=pathlib.Path(\"src/orze/core/research_interfaces.py\")\nsnapshot=pathlib.Path(\"docs/evidence/snapshots/v1-06e-before-research-interfaces.py\")\nfirst=pathlib.Path(\"docs/evidence/snapshots/v1-06e-first-cpu-interface-lifetime-tests.py\")\ntest=pathlib.Path(\"tests/test_cpu_interface_lifetime.py\")\nold=ast.parse(first.read_text()); new=ast.parse(test.read_text())\noldfunctions={n.name:n for n in old.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}\nnewfunctions={n.name:n for n in new.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}\nsame={name:ast.dump(value,include_attributes=False)==ast.dump(newfunctions[name],include_attributes=False) for name,value in oldfunctions.items()}\ntracked=subprocess.check_output([\"git\",\"ls-tree\",\"-r\",\"--name-only\",base,\"tests\"],text=True).splitlines()\ntracked=[name for name in tracked if name.endswith(\".py\")]\nchanged=subprocess.check_output([\"git\",\"diff\",base,\"--name-only\",\"--\",\"tests\"],text=True).splitlines()\nprint(json.dumps({\n \"baseline\":base,\"baseline_snapshot_exact\":snapshot.read_bytes()==subprocess.check_output([\"git\",\"show\",base+\":\"+str(source)]),\n \"old_test_files\":len(tracked),\"changed_old_tests\":sorted(set(changed)&set(tracked)),\n \"first_functions_unchanged\":same,\"first_asserts\":sum(isinstance(n,ast.Assert) for n in ast.walk(old)),\n \"final_asserts\":sum(isinstance(n,ast.Assert) for n in ast.walk(new)),\n \"files\":[{\"path\":str(p),\"sha256\":hashlib.sha256(p.read_bytes()).hexdigest(),\"bytes\":len(p.read_bytes())} for p in (source,snapshot,first,test)]\n},sort_keys=True))\nassert all(same.values())\nassert not set(changed)&set(tracked)\nassert snapshot.read_bytes()==subprocess.check_output([\"git\",\"show\",base+\":\"+str(source)])\nPY",
+      "result": {
+        "chunk_id": "9b75ac",
+        "wall_time_seconds": 0.000003917,
+        "exit_code": 0,
+        "original_token_count": 323,
+        "output": "{\"baseline\": \"188af473184463fd2b5835f57cdcc3b5ed9af569\", \"baseline_snapshot_exact\": true, \"changed_old_tests\": [], \"files\": [{\"bytes\": 19893, \"path\": \"src/orze/core/research_interfaces.py\", \"sha256\": \"26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee\"}, {\"bytes\": 18880, \"path\": \"docs/evidence/snapshots/v1-06e-before-research-interfaces.py\", \"sha256\": \"0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557\"}, {\"bytes\": 6008, \"path\": \"docs/evidence/snapshots/v1-06e-first-cpu-interface-lifetime-tests.py\", \"sha256\": \"e6cfc3d3a0e05c910a0d666c7ae87cc463c06ec44a494684879bd0f38aea5b6f\"}, {\"bytes\": 6863, \"path\": \"tests/test_cpu_interface_lifetime.py\", \"sha256\": \"8de3b1844d4018382d44f1fe527bbe51b043feff6c0b8a1711701244e00bf19c\"}], \"final_asserts\": 16, \"first_asserts\": 15, \"first_functions_unchanged\": {\"prepare\": true, \"project\": true, \"selection\": true, \"test_bound_policy_is_an_external_consumer\": true, \"test_external_run_keeps_context_sources_and_interpreter_valid\": true, \"test_live_handle_copies_and_lookalikes_still_fail_closed\": true, \"test_live_registration_replacement_still_refuses_run\": true, \"test_unused_context_is_not_a_global_strong_root\": true, \"test_unused_run_releases_real_source_bytes_even_with_callback_cycle\": true}, \"old_test_files\": 452}\n"
+      }
+    }
+  },
+  "independent_native_review": {
+    "path": "src/orze/engine/native_cpu_action.py",
+    "sha256": "822d2d068883a197d56f76360ffd7c6c55e564eaeeba689595ffb50a145dfe40",
+    "coverage": "Read complete candidate module plus full baseline diff. Native implementation authored by runtime_evidence, not this agent.",
+    "findings": [
+      "Retirement occurs after real tree closure, terminal effect transaction exit and exact settled/duplicate budget result.",
+      "Active and unknown owners remain in the strong native registry; no age or GC-based cleanup was introduced.",
+      "Terminal weak-key cache values contain detached JSON, with no value-to-key strong path.",
+      "Shared external DomainRun and source captures are not popped or invalidated.",
+      "Cached results are historical detached completion records and do not authorize another launch."
+    ],
+    "limitations": [
+      "No new native production edit by this reviewer; the 54-case group exercised existing CPU product neighbors, not all fault timings.",
+      "The retired-process witness is private state on the handle, not a sandbox against arbitrary trusted-Python mutation of every private field.",
+      "Root loop callback restoration and runtime's dedicated terminal-HOLD regression matrix are separate owners' work."
+    ],
+    "conclusion": "No blocking issue found within the reviewed successful retirement and historical-cache contract."
+  },
+  "operations": {
+    "gpu_provider_network_holdout": false,
+    "host_process_scan": false,
+    "process_cleanup": "The unchanged published fixture launches actual CPU workers and uses their actual captured supervisors for bounded cleanup; no adopted PID or host scan.",
+    "source_edits": "apply_patch only; single owned production module",
+    "snapshots": "apply_patch complete module/test contents; baseline snapshot byte-equal to git show",
+    "commits": false
+  }
+}

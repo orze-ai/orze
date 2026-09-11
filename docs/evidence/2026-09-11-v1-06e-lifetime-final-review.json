@@ -1,0 +1,193 @@
+{
+  "schema": 1,
+  "slice": "V1-06E",
+  "role": "Independent final-candidate CPU native/loop lifetime reviewer; author of signal-order counterexample only",
+  "baseline_commit": "188af473184463fd2b5835f57cdcc3b5ed9af569",
+  "status": "source/test frozen; bounded independent review complete, full-suite closure belongs to root",
+  "review_epoch": {
+    "supersedes_readonly_candidate": "The 822d2d native review in the immutable interface author report was a previous candidate, not this final native review.",
+    "implementation_authors": {
+      "native": "runtime_evidence",
+      "cpu_phase": "root",
+      "research_interfaces": "core_review"
+    },
+    "source_scope": "Full native module and complete baseline diff; full CPU phase module and both successive phase diffs; surrounding Orze CPU init/close/signal delegation points.",
+    "hashes": {
+      "files": [
+        {
+          "bytes": 17901,
+          "path": "src/orze/engine/cpu_phase.py",
+          "sha256": "0508c838d5a3dadeac62d7ab6fe20d21d0b62c7aeb270ba9bcac345cec970c6b"
+        },
+        {
+          "bytes": 25457,
+          "path": "src/orze/engine/native_cpu_action.py",
+          "sha256": "b3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687"
+        },
+        {
+          "bytes": 19893,
+          "path": "src/orze/core/research_interfaces.py",
+          "sha256": "26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee"
+        },
+        {
+          "bytes": 2715,
+          "path": "tests/test_cpu_signal_retirement_review.py",
+          "sha256": "dadbfd89cf8eb2af1a18fa847322a10a285f2673fce9ed724f8cd04f9cf1559a"
+        },
+        {
+          "bytes": 17203,
+          "path": "docs/evidence/snapshots/v1-06e-before-nonlifo-signal-cpu-phase.py",
+          "sha256": "1226df04fe4ed081e6929bfce1855da6942b51175e06dcac42a53aeb9aca3225"
+        },
+        {
+          "bytes": 19899,
+          "path": "docs/evidence/2026-09-11-v1-06e-interface-lifetime-author.json",
+          "sha256": "6a950558a21ed7db543116ba3181c38b614cfa0786a392f18494b844e5b69345"
+        }
+      ],
+      "new_signal_assert_ast": 5,
+      "new_signal_cases": 2,
+      "old_test_changes": []
+    }
+  },
+  "findings": {
+    "confirmed_draft_bug": {
+      "title": "Non-LIFO successful invocation closure restored a retired signal owner",
+      "origin": "Root's E candidate phase1226, not the fixed release baseline",
+      "proof": "Two actual CPU Orze instances with independent private SQLite files and zero admitted actions. Closing A then B reinstalls A._shutdown; both close and clear interfaces, but signal roots retain A. LIFO is the passing control.",
+      "first_readonly_script": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport gc, json, pathlib, signal, tempfile, weakref\nfrom orze.engine.orchestrator import Orze\nfrom orze.engine import cpu_phase\nsaved={sig:signal.getsignal(sig) for sig in (signal.SIGINT,signal.SIGTERM)}\nfirst=second=None\ntry:\n    with tempfile.TemporaryDirectory(prefix=\"orze-e-nested-hooks-\") as temp:\n        def configuration(name):\n            scope=pathlib.Path(temp)/name\n            return {\n                \"execution\":{\"version\":1,\"resource\":\"cpu\",\"slots\":1,\"wall_budget_seconds\":5},\n                \"results_dir\":str(scope/\"results\"),\"ideas_file\":str(scope/\"ideas.md\"),\n                \"idea_lake_db\":str(scope/\"lake.db\"),\"min_disk_gb\":0,\n                \"action_domain\":{\"version\":1,\"kind\":\"command\",\"config\":{}},\n                \"action_policy\":{\"version\":1,\"kind\":\"queue\",\"idle\":\"wait\",\"wait_seconds\":.05}}\n        first=Orze([],configuration(\"first\"),once=True)\n        second=Orze([],configuration(\"second\"),once=True)\n        first_ref,second_ref=weakref.ref(first),weakref.ref(second)\n        cpu_phase.close(first)\n        protected_second=all(getattr(signal.getsignal(sig),\"__self__\",None) is second for sig in saved)\n        cpu_phase.close(second)\n        result={\n            \"first_closed\":first._cpu_closed,\"second_closed\":second._cpu_closed,\n            \"first_interfaces_released\":first._cpu_interfaces is None,\n            \"second_interfaces_released\":second._cpu_interfaces is None,\n            \"newer_handler_was_protected\":protected_second,\n            \"closed_first_reinstalled\":all(getattr(signal.getsignal(sig),\"__self__\",None) is first for sig in saved),\n            \"handlers_restored_original\":all(signal.getsignal(sig) is old for sig,old in saved.items()),\n            \"first_actions\":len(first._cpu_handles),\"second_actions\":len(second._cpu_handles)}\n        first=second=None\n        gc.collect()\n        result.update(first_retained=first_ref() is not None,second_retained=second_ref() is not None)\n        print(json.dumps(result,sort_keys=True),flush=True)\n        assert first_ref() is None, \"successful older invocation is re-rooted by restoring its stale handler\"\nfinally:\n    for sig,handler in saved.items():\n        signal.signal(sig,handler)\n    for engine in (first,second):\n        if engine is not None:\n            cpu_phase.close(engine)\nPY",
+        "pre": {
+          "chunk_id": "caacfe",
+          "wall_time_seconds": 0.000004771,
+          "exit_code": 0,
+          "original_token_count": 76,
+          "output": "1226df04fe4ed081e6929bfce1855da6942b51175e06dcac42a53aeb9aca3225  src/orze/engine/cpu_phase.py\nb3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687  src/orze/engine/native_cpu_action.py\n26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee  src/orze/core/research_interfaces.py\n"
+        },
+        "result": {
+          "chunk_id": "b92599",
+          "wall_time_seconds": 0.248229718,
+          "exit_code": 1,
+          "original_token_count": 248,
+          "output": "\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\norze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n{\"closed_first_reinstalled\": true, \"first_actions\": 0, \"first_closed\": true, \"first_interfaces_released\": true, \"first_retained\": true, \"handlers_restored_original\": false, \"newer_handler_was_protected\": true, \"second_actions\": 0, \"second_closed\": true, \"second_interfaces_released\": true, \"second_retained\": false}\nTraceback (most recent call last):\n  File \"<stdin>\", line 34, in <module>\nAssertionError: successful older invocation is re-rooted by restoring its stale handler\n"
+        }
+      },
+      "frozen_public_test": {
+        "path": "tests/test_cpu_signal_retirement_review.py",
+        "sha256": "dadbfd89cf8eb2af1a18fa847322a10a285f2673fce9ed724f8cd04f9cf1559a",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_signal_retirement_review.py --tb=short",
+        "pre": {
+          "chunk_id": "d800f9",
+          "wall_time_seconds": 0.000003867,
+          "exit_code": 0,
+          "original_token_count": 84,
+          "output": "1226df04fe4ed081e6929bfce1855da6942b51175e06dcac42a53aeb9aca3225  src/orze/engine/cpu_phase.py\n1226df04fe4ed081e6929bfce1855da6942b51175e06dcac42a53aeb9aca3225  docs/evidence/snapshots/v1-06e-before-nonlifo-signal-cpu-phase.py\ndadbfd89cf8eb2af1a18fa847322a10a285f2673fce9ed724f8cd04f9cf1559a  tests/test_cpu_signal_retirement_review.py\n"
+        },
+        "result": {
+          "chunk_id": "1510ab",
+          "wall_time_seconds": 0.800101904,
+          "exit_code": 1,
+          "original_token_count": 227,
+          "output": "F.                                                                       [100%]\n=================================== FAILURES ===================================\n___ test_closed_invocations_do_not_restore_a_retired_signal_owner[non_lifo] ____\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_signal_retirement_review.py:59: in test_closed_invocations_do_not_restore_a_retired_signal_owner\n    assert all(signal.getsignal(sig) is handler for sig, handler in original.items())\nE   assert False\nE    +  where False = all(<generator object test_closed_invocations_do_not_restore_a_retired_signal_owner.<locals>.<genexpr> at 0x1527aa2c7f40>)\n=========================== short test summary info ============================\nFAILED tests/test_cpu_signal_retirement_review.py::test_closed_invocations_do_not_restore_a_retired_signal_owner[non_lifo]\n1 failed, 1 passed in 0.66s\n"
+        },
+        "post": {
+          "chunk_id": "421da1",
+          "wall_time_seconds": 0.00000381,
+          "exit_code": 0,
+          "original_token_count": 51,
+          "output": "1226df04fe4ed081e6929bfce1855da6942b51175e06dcac42a53aeb9aca3225  src/orze/engine/cpu_phase.py\ndadbfd89cf8eb2af1a18fa847322a10a285f2673fce9ed724f8cd04f9cf1559a  tests/test_cpu_signal_retirement_review.py\n"
+        },
+        "expected_result": "1 failed, 1 passed; same complete candidate module and tests before/after.",
+        "all_original_asserts_retained": true
+      },
+      "whole_candidate_snapshot": {
+        "path": "docs/evidence/snapshots/v1-06e-before-nonlifo-signal-cpu-phase.py",
+        "sha256": "1226df04fe4ed081e6929bfce1855da6942b51175e06dcac42a53aeb9aca3225",
+        "origin": "Complete actual E candidate captured before the non-LIFO fix, not git baseline.",
+        "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, pathlib, sys, types\nimport pytest\nparent=importlib.import_module(\"orze.engine\")\ncurrent=importlib.import_module(\"orze.engine.cpu_phase\")\npath=pathlib.Path(\"docs/evidence/snapshots/v1-06e-before-nonlifo-signal-cpu-phase.py\")\nreplacement=types.ModuleType(current.__name__)\nreplacement.__file__=str(path.absolute())\nreplacement.__package__=current.__package__\nsys.modules[current.__name__]=replacement\nsetattr(parent,\"cpu_phase\",replacement)\nexec(compile(path.read_bytes(),str(path),\"exec\"),replacement.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\n    \"tests/test_cpu_signal_retirement_review.py\",\"--tb=short\"]))\nPY",
+        "replay_result": {
+          "chunk_id": "5d2141",
+          "wall_time_seconds": 0.800986141,
+          "exit_code": 1,
+          "original_token_count": 227,
+          "output": "F.                                                                       [100%]\n=================================== FAILURES ===================================\n___ test_closed_invocations_do_not_restore_a_retired_signal_owner[non_lifo] ____\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_signal_retirement_review.py:59: in test_closed_invocations_do_not_restore_a_retired_signal_owner\n    assert all(signal.getsignal(sig) is handler for sig, handler in original.items())\nE   assert False\nE    +  where False = all(<generator object test_closed_invocations_do_not_restore_a_retired_signal_owner.<locals>.<genexpr> at 0x14e1e8d64510>)\n=========================== short test summary info ============================\nFAILED tests/test_cpu_signal_retirement_review.py::test_closed_invocations_do_not_restore_a_retired_signal_owner[non_lifo]\n1 failed, 1 passed in 0.60s\n"
+        },
+        "replay_method": "Preimport real parent/module; bind entire snapshot module in sys.modules and parent attribute in child interpreter. No disk source/test edit."
+      },
+      "repaired_by": "Root's phase0508: a unique owned wrapper records predecessors by signal, detaches its engine only after successful cleanup, and skips exactly retired own wrappers on restoration."
+    },
+    "final_native": [
+      "Actual TREE_CLOSED and terminal effect exit precede budget settlement; only exact settled/duplicate returns permit retirement.",
+      "Active and unknown/HOLD owners remain strongly retained; no age, PID, slot-map emptiness or GC decision substitutes for closure.",
+      "Terminal cache values are detached JSON plus an independent weak reference to the captured process. Neither value retains the key, process, callback or source strongly.",
+      "Simultaneous mutation of handle.process and a handle-supplied _retired_process cannot change the independent cached witness.",
+      "Same-handle cached results are detached historical records; they do not reauthorize execution or claim current database authority.",
+      "Retirement never pops or invalidates a caller's shared DomainRun or PreparedSources capability."
+    ],
+    "final_phase": [
+      "close-attempt _cpu_closed is not used as a cleanup proof to detach hooks: failure collection raises before new retirement actions.",
+      "Successful cleanup unregisters its unique atexit wrapper, leaving equal unrelated bound callbacks alone.",
+      "Signal restoration changes only the currently installed exact owned hook; later external handlers are not overwritten.",
+      "Non-LIFO retirement bypasses only exact retired _ShutdownHandler predecessors. Active/HOLD predecessor wrappers retain their engine.",
+      "After successful hook cleanup, engine-side interface/policy references are cleared, so externally held engines do not retain unused domain captures."
+    ],
+    "interface_composition": "Weak-value capture indexing removes unconditional roots; caller handles, active native owners and active/HOLD signal wrappers still strongly own their actual captured states. GC authorizes nothing.",
+    "conclusion": "No remaining blocking issue found in the reviewed candidate contract after the actual non-LIFO regression was fixed."
+  },
+  "validation": {
+    "final_bounded": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_signal_retirement_review.py tests/test_cpu_retirement_product.py tests/test_cpu_interface_lifetime.py tests/test_native_cpu_retirement.py tests/test_research_interfaces.py tests/test_research_interfaces_review.py --tb=short",
+      "pre": {
+        "chunk_id": "fee166",
+        "wall_time_seconds": 0.000003877,
+        "exit_code": 0,
+        "original_token_count": 232,
+        "output": "0508c838d5a3dadeac62d7ab6fe20d21d0b62c7aeb270ba9bcac345cec970c6b  src/orze/engine/cpu_phase.py\nb3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687  src/orze/engine/native_cpu_action.py\n26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee  src/orze/core/research_interfaces.py\ndadbfd89cf8eb2af1a18fa847322a10a285f2673fce9ed724f8cd04f9cf1559a  tests/test_cpu_signal_retirement_review.py\n61fd434ba9401d29c7aca906258c658e2027302a4629e9926f24332992c62a73  tests/test_cpu_retirement_product.py\n8de3b1844d4018382d44f1fe527bbe51b043feff6c0b8a1711701244e00bf19c  tests/test_cpu_interface_lifetime.py\n2b5a426359155a15634cc1d916b64a5355c321d65775e7dbd39d42aefdec3741  tests/test_native_cpu_retirement.py\n061b3c4b5e46fa62a510b3a2bc385abd0644988b43ef1508799c55c5b946f7d3  tests/test_research_interfaces.py\n20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5  tests/test_research_interfaces_review.py\n"
+      },
+      "initial": {
+        "chunk_id": "9f28b5",
+        "wall_time_seconds": 1.001697861,
+        "session_id": 52596,
+        "original_token_count": 1,
+        "output": "."
+      },
+      "completion": {
+        "chunk_id": "252d41",
+        "wall_time_seconds": 0.000002662,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "..............................                                          [100%]\n31 passed in 10.05s\n"
+      },
+      "post": {
+        "chunk_id": "09a426",
+        "wall_time_seconds": 0.000004114,
+        "exit_code": 0,
+        "original_token_count": 232,
+        "output": "0508c838d5a3dadeac62d7ab6fe20d21d0b62c7aeb270ba9bcac345cec970c6b  src/orze/engine/cpu_phase.py\nb3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687  src/orze/engine/native_cpu_action.py\n26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee  src/orze/core/research_interfaces.py\ndadbfd89cf8eb2af1a18fa847322a10a285f2673fce9ed724f8cd04f9cf1559a  tests/test_cpu_signal_retirement_review.py\n61fd434ba9401d29c7aca906258c658e2027302a4629e9926f24332992c62a73  tests/test_cpu_retirement_product.py\n8de3b1844d4018382d44f1fe527bbe51b043feff6c0b8a1711701244e00bf19c  tests/test_cpu_interface_lifetime.py\n2b5a426359155a15634cc1d916b64a5355c321d65775e7dbd39d42aefdec3741  tests/test_native_cpu_retirement.py\n061b3c4b5e46fa62a510b3a2bc385abd0644988b43ef1508799c55c5b946f7d3  tests/test_research_interfaces.py\n20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5  tests/test_research_interfaces_review.py\n"
+      },
+      "pre_post_files_exact": 9,
+      "cases": 31,
+      "composition": "signal2 + root product5 + interface13 + native5 + existing interface6"
+    },
+    "static": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\npaths=[\"src/orze/engine/cpu_phase.py\",\"src/orze/engine/native_cpu_action.py\",\n       \"src/orze/core/research_interfaces.py\",\"tests/test_cpu_signal_retirement_review.py\",\n       \"docs/evidence/snapshots/v1-06e-before-nonlifo-signal-cpu-phase.py\",\n       \"docs/evidence/2026-09-11-v1-06e-interface-lifetime-author.json\"]\nitems=[{\"path\":p,\"sha256\":hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest(),\n        \"bytes\":len(pathlib.Path(p).read_bytes())} for p in paths]\nassert items[4][\"sha256\"]==\"1226df04fe4ed081e6929bfce1855da6942b51175e06dcac42a53aeb9aca3225\"\nassert items[5][\"sha256\"]==\"6a950558a21ed7db543116ba3181c38b614cfa0786a392f18494b844e5b69345\"\nbase=\"188af473184463fd2b5835f57cdcc3b5ed9af569\"\nold=set(subprocess.check_output([\"git\",\"ls-tree\",\"-r\",\"--name-only\",base,\"tests\"],text=True).splitlines())\nchanged=set(subprocess.check_output([\"git\",\"diff\",base,\"--name-only\",\"--\",\"tests\"],text=True).splitlines())\nchanged_old=sorted(old&changed)\nassert not changed_old\nprint(json.dumps({\"files\":items,\"new_signal_cases\":2,\"new_signal_assert_ast\":sum(\n isinstance(n,ast.Assert) for n in ast.walk(ast.parse(pathlib.Path(paths[3]).read_text()))),\n \"old_test_changes\":changed_old},sort_keys=True))\nPY",
+      "result": {
+        "chunk_id": "c64d69",
+        "wall_time_seconds": 0.000005662,
+        "exit_code": 0,
+        "original_token_count": 251,
+        "output": "{\"files\": [{\"bytes\": 17901, \"path\": \"src/orze/engine/cpu_phase.py\", \"sha256\": \"0508c838d5a3dadeac62d7ab6fe20d21d0b62c7aeb270ba9bcac345cec970c6b\"}, {\"bytes\": 25457, \"path\": \"src/orze/engine/native_cpu_action.py\", \"sha256\": \"b3b926954bdc0f4b0d652bc3953ce8ac67c9ff8b24978401d6e651e03479d687\"}, {\"bytes\": 19893, \"path\": \"src/orze/core/research_interfaces.py\", \"sha256\": \"26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee\"}, {\"bytes\": 2715, \"path\": \"tests/test_cpu_signal_retirement_review.py\", \"sha256\": \"dadbfd89cf8eb2af1a18fa847322a10a285f2673fce9ed724f8cd04f9cf1559a\"}, {\"bytes\": 17203, \"path\": \"docs/evidence/snapshots/v1-06e-before-nonlifo-signal-cpu-phase.py\", \"sha256\": \"1226df04fe4ed081e6929bfce1855da6942b51175e06dcac42a53aeb9aca3225\"}, {\"bytes\": 19899, \"path\": \"docs/evidence/2026-09-11-v1-06e-interface-lifetime-author.json\", \"sha256\": \"6a950558a21ed7db543116ba3181c38b614cfa0786a392f18494b844e5b69345\"}], \"new_signal_assert_ast\": 5, \"new_signal_cases\": 2, \"old_test_changes\": []}\n"
+      }
+    },
+    "no_old_tests_changed": true,
+    "independent_of_root_full_suite": true
+  },
+  "limits": [
+    "This is bounded process-local lifecycle review, not memory/RSS benchmarking or a global memory cap.",
+    "Transient source bytes and cycles are collected only when no external consumer remains and GC runs.",
+    "Explicitly external trusted callbacks/factories may keep handles alive; arbitrary private Python-state tampering is not sandboxed.",
+    "Interrupted initialization or hook-restoration errors remain conservative and may retain owners; no retry, recovery or controller ACK mechanism was added.",
+    "No GPU/provider/network request, holdout access, process-table scan, adopted process or signal delivery was used.",
+    "No native, phase, or existing interface source edit by this reviewer during this review; the new two-case test and complete candidate snapshot were authorized."
+  ]
+}

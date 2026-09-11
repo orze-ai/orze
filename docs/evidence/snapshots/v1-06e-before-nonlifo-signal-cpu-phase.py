@@ -25,24 +25,6 @@ from orze.core.cpu_execution import (
 logger = logging.getLogger("orze")
 
 
-class _ShutdownHandler:
-    """Invocation-owned hook; retired predecessors never revive an engine."""
-
-    def __init__(self, engine):
-        self.engine = engine
-        self.previous = {}
-
-    def __call__(self, signum, frame):
-        if self.engine is not None:
-            self.engine._shutdown(signum, frame)
-
-    def predecessor(self, sig):
-        previous = self.previous[sig]
-        while type(previous) is _ShutdownHandler and previous.engine is None:
-            previous = previous.previous[sig]
-        return previous
-
-
 class QueuePolicy:
     """A real policy consumer, not a scientific convergence judgment."""
     def __init__(self, declaration):
@@ -111,10 +93,9 @@ def initialize(engine, gpu_ids, cfg, once):
         raise CPUExecutionError("execution: CPU actions require an IdeaLake path")
     engine.lake = IdeaLake(cfg["idea_lake_db"])
     engine._cpu_signal_handlers = {}
-    handler = _ShutdownHandler(engine)
+    handler = engine._shutdown
     for sig in (signal.SIGINT, signal.SIGTERM):
         previous = signal.signal(sig, handler)
-        handler.previous[sig] = previous
         engine._cpu_signal_handlers[sig] = (previous, handler)
 
     # unregister compares callbacks by equality. A unique wrapper is an
@@ -348,10 +329,8 @@ def close(engine):
     # Never overwrite a signal handler installed by another caller after ours.
     for sig, (previous, installed) in engine._cpu_signal_handlers.items():
         if signal.getsignal(sig) is installed:
-            signal.signal(sig, installed.predecessor(sig))
+            signal.signal(sig, previous)
     atexit.unregister(engine._cpu_exit_callback)
-    for _, installed in engine._cpu_signal_handlers.values():
-        installed.engine = None
     engine._cpu_exit_callback = None
     engine._cpu_signal_handlers = {}
     engine._cpu_interfaces = None
