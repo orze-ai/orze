@@ -1,0 +1,846 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2a",
+  "status": "frozen_source_validation_passed",
+  "whole_v1_complete": false,
+  "baseline_core": "b7e9524f73c2053346bac13075e7849751cb6cac",
+  "baseline_pro": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+  "classification": {
+    "cases": 32,
+    "old_public_behavior_failures": 2,
+    "old_controls": 2,
+    "new_requirements_and_mechanisms": 24,
+    "draft_behavior_failures": 4,
+    "new_test_files": 9,
+    "new_assert_nodes": 196,
+    "not_additive_to_full_or_paired": true,
+    "old_migration": {
+      "changed_files": 13,
+      "baseline_snapshots": 17,
+      "original_assert_nodes": 298,
+      "current_assert_nodes": 308,
+      "identical_original_assert_expressions": 295,
+      "removed_assert_expressions": 3,
+      "added_assert_expressions": 13,
+      "original_mock_observations": 46,
+      "current_mock_observations": 45,
+      "raises_ast_sites": 1,
+      "business_contract_revised_cases": 1,
+      "wrapper_identity_observation_sites": 1,
+      "wrapper_identity_parameter_cases": 4
+    },
+    "snapshots": {
+      "total": 28,
+      "fixed_baseline": 21,
+      "draft_and_fixture_diagnostic": 7
+    }
+  },
+  "static_audit_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, collections, hashlib, json, pathlib, subprocess\nroot=pathlib.Path('.').resolve(); pro=root.parent/'orze-pro'\nnew={'core':['test_role_supervision.py','test_role_supervision_holder_fence.py','test_role_supervision_sticky_hold.py','test_role_owned_consumers.py','test_role_delivery_snapshot.py','test_role_shutdown_slot.py'], 'pro':['test_role_owned_tree_closure.py','test_role_launch_admission.py','test_role_supervision_lifecycle.py']}\nout={'new_tests':[], 'baseline_snapshots':[], 'draft_snapshots':[], 'old_test_assert_changes':[]}\nsha=lambda raw:hashlib.sha256(raw).hexdigest()\nfor repo,base,commit in [('core',root,'b7e9524f73c2053346bac13075e7849751cb6cac'),('pro',pro,'97eaa905452b63553015143486c89e1b2ddf4b9f')]:\n    for file in new[repo]:\n        path=base/'tests'/file; raw=path.read_bytes(); tree=ast.parse(raw)\n        out['new_tests'].append({'repo':repo,'path':'tests/'+file,'sha256':sha(raw),'assert_nodes':sum(isinstance(n,ast.Assert) for n in ast.walk(tree))})\n    for path in sorted((base/'docs/evidence/snapshots').glob('v1-05c2e2a-*.py')):\n        raw=path.read_bytes(); ast.parse(raw)\n        name=path.name; source=None\n        if '-original-test_' in name: source='tests/'+name.split('-original-')[1]\n        elif name in ['v1-05c2e2a-before-process.py','v1-05c2e2a-before-roles.py','v1-05c2e2a-before-lifecycle.py','v1-05c2e2a-before-role_runner.py']:\n            source=('src/orze/engine/' if repo=='core' else 'src/orze_pro/engine/')+name.split('-before-')[1]\n        entry={'repo':repo,'path':str(path.relative_to(base)),'sha256':sha(raw)}\n        if source:\n            assert raw==subprocess.check_output(['git','-C',str(base),'show',commit+':'+source]),str(path)\n            entry.update(source=source,baseline=commit); out['baseline_snapshots'].append(entry)\n            current=(base/source).read_bytes()\n            if source.startswith('tests/') and current!=raw:\n                asserts=lambda text:collections.Counter(ast.dump(n,include_attributes=False) for n in ast.walk(ast.parse(text)) if isinstance(n,ast.Assert))\n                old,new_asserts=asserts(raw),asserts(current)\n                out['old_test_assert_changes'].append({'repo':repo,'path':source,'before_sha256':sha(raw),'after_sha256':sha(current),'old_assert_count':sum(old.values()),'new_assert_count':sum(new_asserts.values()),'removed_asserts':list((old-new_asserts).elements()),'added_asserts':list((new_asserts-old).elements())})\n        else: out['draft_snapshots'].append(entry)\nout['new_assert_nodes_total']=sum(x['assert_nodes'] for x in out['new_tests'])\nprint(json.dumps(out,sort_keys=True))\nPY",
+  "static_audit_exit_code": 0,
+  "static_audit": {
+    "baseline_snapshots": [
+      {
+        "baseline": "b7e9524f73c2053346bac13075e7849751cb6cac",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-before-lifecycle.py",
+        "repo": "core",
+        "sha256": "4ea8b94e16928403f4bf8298f3319e68717af22b932516dcdbc110c2a12a50eb",
+        "source": "src/orze/engine/lifecycle.py"
+      },
+      {
+        "baseline": "b7e9524f73c2053346bac13075e7849751cb6cac",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-before-process.py",
+        "repo": "core",
+        "sha256": "08bbd7ae0352708b815089b4183f69dbb89488fc510fac1d142c1702d6af4d6e",
+        "source": "src/orze/engine/process.py"
+      },
+      {
+        "baseline": "b7e9524f73c2053346bac13075e7849751cb6cac",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-before-roles.py",
+        "repo": "core",
+        "sha256": "42ec07b396141fba3d5bdcad84a003c943c80ba53556291e20996df0d1b36b80",
+        "source": "src/orze/engine/roles.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-before-role_runner.py",
+        "repo": "pro",
+        "sha256": "a688cb113ee50aebbf23036df3a74b93eae1c6a69612f243c305d4102b166eb4",
+        "source": "src/orze_pro/engine/role_runner.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_fsm_config_handoff.py",
+        "repo": "pro",
+        "sha256": "617864990a8c06ac9188e8cc204c16878d7a03f225e80cee0c9442fcb75be124",
+        "source": "tests/test_fsm_config_handoff.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_native_result_delivery.py",
+        "repo": "pro",
+        "sha256": "588b5fc32ee37483afb1d39f81ea32ffc486dbad6bba2ac09a98580552dafd53",
+        "source": "tests/test_native_result_delivery.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_optional_role_presets.py",
+        "repo": "pro",
+        "sha256": "f3617c28c09c43c2e50e641839ebaacaeb5f46c822f0476f8e5413960e57f1ba",
+        "source": "tests/test_optional_role_presets.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_persistent_research_demand.py",
+        "repo": "pro",
+        "sha256": "8b5983ed14085dc539e448f49ac29472508d99c12046dde494c1c637270a1df8",
+        "source": "tests/test_persistent_research_demand.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_research_result_classification.py",
+        "repo": "pro",
+        "sha256": "0f5b58b72f7dac1915af1125955473aa2c441ade13db37ffec4b3065e79c52f9",
+        "source": "tests/test_research_result_classification.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_research_result_compatibility.py",
+        "repo": "pro",
+        "sha256": "2b54dde2fd1878d5e1beacd1830df38ca9c5886adcad3bbad0e1301cf83d8b19",
+        "source": "tests/test_research_result_compatibility.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_role_presets_loaded_dispatch.py",
+        "repo": "pro",
+        "sha256": "52840c05a11d7a7f676b75aa59ad36a686922f01b80bbbbd6663092341bca40c",
+        "source": "tests/test_role_presets_loaded_dispatch.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_skill_activation_dispatch.py",
+        "repo": "pro",
+        "sha256": "1af44145b1c63c9006eeb71e84cca37dbeb3a7c4c600667584f48176c169e5ce",
+        "source": "tests/test_skill_activation_dispatch.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_skill_native_gating.py",
+        "repo": "pro",
+        "sha256": "a0169746bd2467871d713be85658d26ec7619cc6d49b8568eba084b27fbaa4ce",
+        "source": "tests/test_skill_native_gating.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_skill_payload_directory_collision.py",
+        "repo": "pro",
+        "sha256": "4107a16492b354b26199608b8c8d5a6653cc08bae0acaa92ebe462d5272fe892",
+        "source": "tests/test_skill_payload_directory_collision.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_skill_payload_dispatch_boundaries.py",
+        "repo": "pro",
+        "sha256": "d22e88cff68d819e90814916d3f43806ea0b2cd03f0f42513c113bd8ce7e6c5a",
+        "source": "tests/test_skill_payload_dispatch_boundaries.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_thinker_activation_boundaries.py",
+        "repo": "pro",
+        "sha256": "4468cc66b74e4c2c584d1ab2c3c2d21eb33d5496fa9a6ac3147df08e9e310bc8",
+        "source": "tests/test_thinker_activation_boundaries.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_thinker_qualified_trigger.py",
+        "repo": "pro",
+        "sha256": "b75950bf9be789f533fabae08a3ca60163395afbe7c4e937524069fc2f9fdd37",
+        "source": "tests/test_thinker_qualified_trigger.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_trigger_condition_delivery.py",
+        "repo": "pro",
+        "sha256": "fca3ba65682c083240620fad0624833cf90030ca77347798cbcb1bd90d50d43d",
+        "source": "tests/test_trigger_condition_delivery.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_trigger_delivery_caller.py",
+        "repo": "pro",
+        "sha256": "505812a9858939471e63f125947a1461e5ee927d27d4b7f2ceea4ede6390f98e",
+        "source": "tests/test_trigger_delivery_caller.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_trigger_payload_consumer.py",
+        "repo": "pro",
+        "sha256": "d6ae0347878a76a1c7563166e95108c4dd4fbaa6cf56eadf8e14a246844ccf9b",
+        "source": "tests/test_trigger_payload_consumer.py"
+      },
+      {
+        "baseline": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+        "path": "docs/evidence/snapshots/v1-05c2e2a-original-test_trigger_workflow_delivery.py",
+        "repo": "pro",
+        "sha256": "83a67f71db74c4788f581ed06d3ade86cb0e68fc0a6bbaefcd361862a08e3733",
+        "source": "tests/test_trigger_workflow_delivery.py"
+      }
+    ],
+    "draft_snapshots": [
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2a-before-delivery-authority-consumer.py",
+        "repo": "core",
+        "sha256": "e4fd1ded7f5ab1d237ec1d9f335e13f673ffe6f64bf705d7996b894d7dc3b4b1"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2a-before-delivery-authority-helper.py",
+        "repo": "core",
+        "sha256": "4113c95a9c776b922bff73242e6946264e247b9887e2b59f49c710502b948676"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2a-before-role-holder-fence.py",
+        "repo": "core",
+        "sha256": "4f10fba49f5053a64f45958cda29a4af037e3fae053806dc6f23c7fae682968d"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2a-before-role-sticky-hold.py",
+        "repo": "core",
+        "sha256": "79fceed49779eaf92f0c2c2ec47e85d5850dda6a57c6d73c64197e937e44006a"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2a-before-shutdown-slot.py",
+        "repo": "core",
+        "sha256": "d9599a38d856abcf5472f6102ba99d64a67e438ec3d549e056cc8fdd62899d23"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2a-consumer-test-first-diagnostic.py",
+        "repo": "core",
+        "sha256": "979c1064e34084874f516e4c15805f24eedc7edb993cf58db3e984da4ae5950b"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2a-before-scan-fixture-refinement.py",
+        "repo": "pro",
+        "sha256": "d5d466679a43534a45db8fddfe73ea846cc5dc9d86b63972dbe5c5f16cf4df8e"
+      }
+    ],
+    "new_assert_nodes_total": 196,
+    "new_tests": [
+      {
+        "assert_nodes": 50,
+        "path": "tests/test_role_supervision.py",
+        "repo": "core",
+        "sha256": "06537e68b00b38adb4be42af5737e665e061cb244c5cf35fd50acfebab542baa"
+      },
+      {
+        "assert_nodes": 4,
+        "path": "tests/test_role_supervision_holder_fence.py",
+        "repo": "core",
+        "sha256": "b856fa28463c6991006204cd7eb28f86c49fe87eb9230e1c04e4e7c475c24450"
+      },
+      {
+        "assert_nodes": 6,
+        "path": "tests/test_role_supervision_sticky_hold.py",
+        "repo": "core",
+        "sha256": "cc62583d23f1d7b87c63c0aeb42d9b485837f37b4a572e51a3e4e3bf78190204"
+      },
+      {
+        "assert_nodes": 17,
+        "path": "tests/test_role_owned_consumers.py",
+        "repo": "core",
+        "sha256": "f91deb3e1437b130075039fbf547e5a7fc65f2408201d743bce4faa1431826e1"
+      },
+      {
+        "assert_nodes": 6,
+        "path": "tests/test_role_delivery_snapshot.py",
+        "repo": "core",
+        "sha256": "cfc63e0f76b6955880cba61e1ea43f40abdc28414c00233547d1ed384a84a134"
+      },
+      {
+        "assert_nodes": 4,
+        "path": "tests/test_role_shutdown_slot.py",
+        "repo": "core",
+        "sha256": "bf78870bb06a19b9b3cee35e4b3767ff63d82537429f04d95e0702a62d838764"
+      },
+      {
+        "assert_nodes": 40,
+        "path": "tests/test_role_owned_tree_closure.py",
+        "repo": "pro",
+        "sha256": "b153d9b6e1c4d7354c59a203ca800104f935490b203e114fdf4b78d048c2b8b0"
+      },
+      {
+        "assert_nodes": 44,
+        "path": "tests/test_role_launch_admission.py",
+        "repo": "pro",
+        "sha256": "4d1fae9bc74e2090d96e9cc323fb732c24e1af657ca18a3b2c78c45211cdd9fc"
+      },
+      {
+        "assert_nodes": 25,
+        "path": "tests/test_role_supervision_lifecycle.py",
+        "repo": "pro",
+        "sha256": "b03d832222c03e0d797d7824dbbdc134522259969c6cbc4f466ecbd722756bfc"
+      }
+    ],
+    "old_test_assert_changes": [
+      {
+        "added_asserts": [
+          "Assert(test=Compare(left=Attribute(value=Attribute(value=Subscript(value=Attribute(value=Name(id='ctx', ctx=Load()), attr='active_roles', ctx=Load()), slice=Constant(value='fsm'), ctx=Load()), attr='process', ctx=Load()), attr='wrapped', ctx=Load()), ops=[Is()], comparators=[Name(id='process', ctx=Load())]))"
+        ],
+        "after_sha256": "62d0d293cf8ad69e24fa23385703b0ddfb3fcd3561f29d2c1f6525e42bb4620d",
+        "before_sha256": "617864990a8c06ac9188e8cc204c16878d7a03f225e80cee0c9442fcb75be124",
+        "new_assert_count": 8,
+        "old_assert_count": 8,
+        "path": "tests/test_fsm_config_handoff.py",
+        "removed_asserts": [
+          "Assert(test=Compare(left=Attribute(value=Subscript(value=Attribute(value=Name(id='ctx', ctx=Load()), attr='active_roles', ctx=Load()), slice=Constant(value='fsm'), ctx=Load()), attr='process', ctx=Load()), ops=[Is()], comparators=[Name(id='process', ctx=Load())]))"
+        ],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "e293f172ceee479b333a623e805de8742026b2e41f161f3741ab8d689a0a7e98",
+        "before_sha256": "588b5fc32ee37483afb1d39f81ea32ffc486dbad6bba2ac09a98580552dafd53",
+        "new_assert_count": 33,
+        "old_assert_count": 33,
+        "path": "tests/test_native_result_delivery.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "5fd55df643c07106b5ccfeb348b2812de37ee70ae3ca8b5c42c1ae20a0a4b014",
+        "before_sha256": "8b5983ed14085dc539e448f49ac29472508d99c12046dde494c1c637270a1df8",
+        "new_assert_count": 16,
+        "old_assert_count": 16,
+        "path": "tests/test_persistent_research_demand.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "40e48f437f9e1401ee36c48bd67a1a4c4fb8726738a196f6539883e25cf9b1f8",
+        "before_sha256": "0f5b58b72f7dac1915af1125955473aa2c441ade13db37ffec4b3065e79c52f9",
+        "new_assert_count": 32,
+        "old_assert_count": 32,
+        "path": "tests/test_research_result_classification.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "7dfd243732eee9090090a7b5cb960600a005bab0ec51984bb45a631193720321",
+        "before_sha256": "52840c05a11d7a7f676b75aa59ad36a686922f01b80bbbbd6663092341bca40c",
+        "new_assert_count": 21,
+        "old_assert_count": 21,
+        "path": "tests/test_role_presets_loaded_dispatch.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "91acb0fc51a1016186dc2618442bd34d025da46b99998f3c32b3c8c738e0d680",
+        "before_sha256": "1af44145b1c63c9006eeb71e84cca37dbeb3a7c4c600667584f48176c169e5ce",
+        "new_assert_count": 14,
+        "old_assert_count": 14,
+        "path": "tests/test_skill_activation_dispatch.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "3ccb3c5060a7706d9e8dcc43c1ae914caf171a780a8c7eda5160e3aee6c2b9bf",
+        "before_sha256": "a0169746bd2467871d713be85658d26ec7619cc6d49b8568eba084b27fbaa4ce",
+        "new_assert_count": 14,
+        "old_assert_count": 14,
+        "path": "tests/test_skill_native_gating.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "b1229d54fd40321446819eab48427c9d0e5bcd46457e7a29c4940d4ebc9d0911",
+        "before_sha256": "4468cc66b74e4c2c584d1ab2c3c2d21eb33d5496fa9a6ac3147df08e9e310bc8",
+        "new_assert_count": 33,
+        "old_assert_count": 33,
+        "path": "tests/test_thinker_activation_boundaries.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "6704abc9cf7a7ca68c5d442f61b048889d77105a8ff74bc2fc2e2f687475369b",
+        "before_sha256": "b75950bf9be789f533fabae08a3ca60163395afbe7c4e937524069fc2f9fdd37",
+        "new_assert_count": 38,
+        "old_assert_count": 38,
+        "path": "tests/test_thinker_qualified_trigger.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "9ed0c565c4c1fed96fb1b2a3cd81d77e29c3f0dd001c7fcec93c0d43ec0dfb24",
+        "before_sha256": "fca3ba65682c083240620fad0624833cf90030ca77347798cbcb1bd90d50d43d",
+        "new_assert_count": 23,
+        "old_assert_count": 23,
+        "path": "tests/test_trigger_condition_delivery.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [
+          "Assert(test=Compare(left=Subscript(value=Call(func=Name(id='_row', ctx=Load()), args=[Name(id='p', ctx=Load())], keywords=[]), slice=Constant(value='state'), ctx=Load()), ops=[Eq()], comparators=[Constant(value='PENDING')]))",
+          "Assert(test=Compare(left=Subscript(value=Call(func=Name(id='_row', ctx=Load()), args=[Name(id='p', ctx=Load())], keywords=[]), slice=Constant(value='state'), ctx=Load()), ops=[Eq()], comparators=[Constant(value='PENDING')]))",
+          "Assert(test=Compare(left=Call(func=Name(id='len', ctx=Load()), args=[Attribute(value=Name(id='p', ctx=Load()), attr='supervised', ctx=Load())], keywords=[]), ops=[Eq()], comparators=[Constant(value=1)]))",
+          "Assert(test=Compare(left=Attribute(value=Subscript(value=Attribute(value=Name(id='p', ctx=Load()), attr='supervised', ctx=Load()), slice=Constant(value=0), ctx=Load()), attr='_started', ctx=Load()), ops=[Is()], comparators=[Constant(value=False)]))",
+          "Assert(test=Compare(left=Subscript(value=Name(id='closure', ctx=Load()), slice=Constant(value='event'), ctx=Load()), ops=[Eq()], comparators=[Constant(value='TREE_CLOSED')]))",
+          "Assert(test=Compare(left=Subscript(value=Name(id='closure', ctx=Load()), slice=Constant(value='stop_requested'), ctx=Load()), ops=[Is()], comparators=[Constant(value=True)]))",
+          "Assert(test=Compare(left=Subscript(value=Name(id='closure', ctx=Load()), slice=Constant(value='wait_proof'), ctx=Load()), ops=[Eq()], comparators=[Constant(value='ECHILD_WALL')]))",
+          "Assert(test=Compare(left=Attribute(value=Attribute(value=Name(id='p', ctx=Load()), attr='popen', ctx=Load()), attr='call_count', ctx=Load()), ops=[Eq()], comparators=[Constant(value=2)]))",
+          "Assert(test=Compare(left=Call(func=Name(id='len', ctx=Load()), args=[Attribute(value=Name(id='p', ctx=Load()), attr='supervised', ctx=Load())], keywords=[]), ops=[Eq()], comparators=[Constant(value=2)]))",
+          "Assert(test=Compare(left=Attribute(value=Subscript(value=Attribute(value=Name(id='p', ctx=Load()), attr='supervised', ctx=Load()), slice=Constant(value=1), ctx=Load()), attr='_started', ctx=Load()), ops=[Is()], comparators=[Constant(value=False)]))",
+          "Assert(test=Compare(left=Subscript(value=Call(func=Attribute(value=Subscript(value=Attribute(value=Name(id='p', ctx=Load()), attr='supervised', ctx=Load()), slice=Constant(value=1), ctx=Load()), attr='closure_receipt', ctx=Load()), args=[], keywords=[]), slice=Constant(value='stop_requested'), ctx=Load()), ops=[Is()], comparators=[Constant(value=True)]))",
+          "Assert(test=Compare(left=Call(func=Name(id='_attempts', ctx=Load()), args=[Name(id='p', ctx=Load())], keywords=[]), ops=[Eq()], comparators=[Constant(value=2)]))"
+        ],
+        "after_sha256": "1fe8ff89dd0df1ca67122ccc4fe498d3d31d7f805cdfeb725f4217ea117d139b",
+        "before_sha256": "505812a9858939471e63f125947a1461e5ee927d27d4b7f2ceea4ede6390f98e",
+        "new_assert_count": 35,
+        "old_assert_count": 25,
+        "path": "tests/test_trigger_delivery_caller.py",
+        "removed_asserts": [
+          "Assert(test=Compare(left=Subscript(value=Call(func=Name(id='_row', ctx=Load()), args=[Name(id='p', ctx=Load())], keywords=[]), slice=Constant(value='state'), ctx=Load()), ops=[In()], comparators=[Tuple(elts=[Constant(value='LAUNCHING'), Constant(value='IN_DOUBT')], ctx=Load())]))",
+          "Assert(test=Compare(left=Subscript(value=Call(func=Name(id='_row', ctx=Load()), args=[Name(id='p', ctx=Load())], keywords=[]), slice=Constant(value='state'), ctx=Load()), ops=[In()], comparators=[Tuple(elts=[Constant(value='LAUNCHING'), Constant(value='IN_DOUBT')], ctx=Load())]))"
+        ],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "eacfdc34214d6874c384dc387e4a062e878c0626de101c649e6f6f4c2c6029c5",
+        "before_sha256": "d6ae0347878a76a1c7563166e95108c4dd4fbaa6cf56eadf8e14a246844ccf9b",
+        "new_assert_count": 34,
+        "old_assert_count": 34,
+        "path": "tests/test_trigger_payload_consumer.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      },
+      {
+        "added_asserts": [],
+        "after_sha256": "4de93a02e14940af95e70a20f7228ffec91f1df33bc94a0e98ea4be5f11ed57d",
+        "before_sha256": "83a67f71db74c4788f581ed06d3ade86cb0e68fc0a6bbaefcd361862a08e3733",
+        "new_assert_count": 7,
+        "old_assert_count": 7,
+        "path": "tests/test_trigger_workflow_delivery.py",
+        "removed_asserts": [],
+        "repo": "pro"
+      }
+    ]
+  },
+  "core_independent_epoch": {
+    "freeze": {
+      "current_time": "2026-09-11 03:57:59 UTC"
+    },
+    "manifest_command": "git ls-files -c -o --exclude-standard -z -- src tests pyproject.toml | sort -zu | xargs -0 sha256sum",
+    "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+    "initial": {
+      "chunk_id": "312de4",
+      "wall_time_seconds": 1.001369961,
+      "session_id": 12660,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "chunks": [
+      {
+        "chunk_id": "38e7e5",
+        "wall_time_seconds": 5.001478706,
+        "session_id": 12660,
+        "original_token_count": 233,
+        "output": "........................................................................ [  2%]\n........................................................................ [  4%]\n........................................................................ [  6%]\n........................................................................ [  8%]\n........................................................................ [ 10%]\n........................................................................ [ 12%]\n........................................................................ [ 14%]\n........................................................................ [ 17%]\n........................................................................ [ 19%]\n........................................................................ [ 21%]\n........................................................................ [ 23%]\n..................................................."
+      },
+      {
+        "chunk_id": "9dd170",
+        "wall_time_seconds": 5.001055583,
+        "session_id": 12660,
+        "original_token_count": 297,
+        "output": "..................... [ 25%]\n........................................................................ [ 27%]\n........................................................................ [ 29%]\n........................sss............................................. [ 32%]\n........................................................................ [ 34%]\n........................................................................ [ 36%]\n........................................................................ [ 38%]\n..................s..................................................... [ 40%]\n........................................................................ [ 42%]\n........................................................................ [ 44%]\n........................................................................ [ 46%]\n........................................................................ [ 49%]\n........................................................................ [ 51%]\n........................................................................ [ 53%]\n........................................................................ [ 55%]\n......................................"
+      },
+      {
+        "chunk_id": "1e01e9",
+        "wall_time_seconds": 5.001771337,
+        "session_id": 12660,
+        "original_token_count": 328,
+        "output": ".................................. [ 57%]\n........................................................................ [ 59%]\n........................................................................ [ 61%]\n........................................................................ [ 64%]\n........................................................................ [ 66%]\n........................................................................ [ 68%]\n........................................................................ [ 70%]\n........................................................................ [ 72%]\n........................................................................ [ 74%]\n........................................................................ [ 76%]\n........................................................................ [ 79%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 85%]\n........................................................................ [ 87%]\n........................................................................ [ 89%]\n...............ss....................................................."
+      },
+      {
+        "chunk_id": "2b499d",
+        "wall_time_seconds": 0.000002816,
+        "exit_code": 0,
+        "original_token_count": 375,
+        "output": ".. [ 91%]\n........................................................................ [ 93%]\n........................................................................ [ 96%]\n........................................................................ [ 98%]\n...........................................................              [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n3365 passed, 7 skipped in 565.33s (0:09:25)\n"
+      }
+    ],
+    "scope": "Independent Core only; Pro companion not on PYTHONPATH. Pro fixture migration proceeds separately; paired and Pro full tests freeze later.",
+    "completion": {
+      "chunk_id": "2b499d",
+      "wall_time_seconds": 0.000002816,
+      "exit_code": 0,
+      "original_token_count": 375,
+      "output": ".. [ 91%]\n........................................................................ [ 93%]\n........................................................................ [ 96%]\n........................................................................ [ 98%]\n...........................................................              [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n3365 passed, 7 skipped in 565.33s (0:09:25)\n"
+    },
+    "pre_post_exact": true,
+    "checked": {
+      "current_time": "2026-09-11 04:08:21 UTC"
+    }
+  },
+  "final_paired_epoch": {
+    "freeze": {
+      "current_time": "2026-09-11 04:03:52 UTC"
+    },
+    "manifest_command": "git ls-files -c -o --exclude-standard -z -- src tests pyproject.toml | sort -zu | xargs -0 sha256sum",
+    "commands": {
+      "pro": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "paired": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "new_core": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_role_supervision.py tests/test_role_supervision_holder_fence.py tests/test_role_supervision_sticky_hold.py tests/test_role_owned_consumers.py tests/test_role_delivery_snapshot.py tests/test_role_shutdown_slot.py --tb=short",
+      "new_pro": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_role_owned_tree_closure.py\",\"tests/test_role_launch_admission.py\",\"tests/test_role_supervision_lifecycle.py\",\"--tb=short\"]))'"
+    },
+    "groups": {
+      "paired": {
+        "initial": {
+          "chunk_id": "001632",
+          "wall_time_seconds": 1.000375362,
+          "session_id": 73530,
+          "original_token_count": 9,
+          "output": "..................................."
+        },
+        "chunks": [
+          {
+            "chunk_id": "9b1b84",
+            "wall_time_seconds": 0.00000187,
+            "exit_code": 0,
+            "original_token_count": 16,
+            "output": ".........................             [100%]\n60 passed in 1.08s\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "9b1b84",
+          "wall_time_seconds": 0.00000187,
+          "exit_code": 0,
+          "original_token_count": 16,
+          "output": ".........................             [100%]\n60 passed in 1.08s\n"
+        }
+      },
+      "pro": {
+        "initial": {
+          "chunk_id": "6ef5b9",
+          "wall_time_seconds": 1.000373083,
+          "session_id": 24283,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "4b7aa5",
+            "wall_time_seconds": 5.001005415,
+            "session_id": 24283,
+            "original_token_count": 153,
+            "output": "........................................................................ [  7%]\n........................................................................ [ 14%]\n........................................................................ [ 22%]\n........................................................................ [ 29%]\n........................................................................ [ 37%]\n........................................................................ [ 44%]\n........................................................................ [ 51%]\n................................................."
+          },
+          {
+            "chunk_id": "b091d7",
+            "wall_time_seconds": 4.046798334,
+            "exit_code": 0,
+            "original_token_count": 136,
+            "output": "....................... [ 59%]\n........................................................................ [ 66%]\n........................................................................ [ 74%]\n........................................................................ [ 81%]\n........................................................................ [ 88%]\n........................................................................ [ 96%]\n...................................                                      [100%]\n971 passed in 180.69s (0:03:00)\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "b091d7",
+          "wall_time_seconds": 4.046798334,
+          "exit_code": 0,
+          "original_token_count": 136,
+          "output": "....................... [ 59%]\n........................................................................ [ 66%]\n........................................................................ [ 74%]\n........................................................................ [ 81%]\n........................................................................ [ 88%]\n........................................................................ [ 96%]\n...................................                                      [100%]\n971 passed in 180.69s (0:03:00)\n"
+        }
+      },
+      "new_core": {
+        "initial": {
+          "chunk_id": "798085",
+          "wall_time_seconds": 1.000533418,
+          "session_id": 7956,
+          "original_token_count": 2,
+          "output": "....."
+        },
+        "chunks": [
+          {
+            "chunk_id": "001a21",
+            "wall_time_seconds": 0.000002925,
+            "exit_code": 0,
+            "original_token_count": 24,
+            "output": "................                                                    [100%]\n21 passed in 4.04s\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "001a21",
+          "wall_time_seconds": 0.000002925,
+          "exit_code": 0,
+          "original_token_count": 24,
+          "output": "................                                                    [100%]\n21 passed in 4.04s\n"
+        }
+      },
+      "new_pro": {
+        "initial": {
+          "chunk_id": "4a01a8",
+          "wall_time_seconds": 1.000794849,
+          "session_id": 40781,
+          "original_token_count": 1,
+          "output": "."
+        },
+        "chunks": [
+          {
+            "chunk_id": "1a05c3",
+            "wall_time_seconds": 5.54e-7,
+            "exit_code": 0,
+            "original_token_count": 25,
+            "output": "..........                                                              [100%]\n11 passed in 7.16s\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "1a05c3",
+          "wall_time_seconds": 5.54e-7,
+          "exit_code": 0,
+          "original_token_count": 25,
+          "output": "..........                                                              [100%]\n11 passed in 7.16s\n"
+        }
+      }
+    },
+    "pre_post_exact": true,
+    "checked": {
+      "current_time": "2026-09-11 04:08:21 UTC"
+    },
+    "manifest_counts": {
+      "core": 637,
+      "pro": 221
+    }
+  },
+  "inventory_semantics": "Core full suite started while only Pro fixtures were still migrating. It loaded Core without companion Pro and reported seven optional-Pro skips. Its entire 637-file Core manifest equals the later paired freeze and postcheck. Pro full, paired and final new targets share the 637/221 freeze; no claim that the earlier Pro fixture bytes were identical.",
+  "candidate_runs": [
+    {
+      "repo": "core",
+      "command": "PYTHONPATH=src pytest -q tests/test_role_owned_consumers.py tests/test_trigger_role_completion.py tests/test_role_shutdown_reaping.py",
+      "exit_code": 0,
+      "result": "25 passed in 6.00s",
+      "completion_chunk": "ba5fe1",
+      "manifest_captured": false
+    },
+    {
+      "repo": "core",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= pytest -q tests/test_role_owned_consumers.py tests/test_role_operator_visibility.py tests/test_role_progress_watchdog.py tests/test_roles_soft_failure.py tests/test_native_role_result_boundaries.py tests/test_trigger_role_completion.py tests/test_role_shutdown_reaping.py tests/test_shutdown_termination_authority.py tests/test_managed_run.py --tb=short",
+      "exit_code": 0,
+      "result": "113 passed in 15.86s",
+      "completion_chunk": "abfbbf",
+      "manifest_captured": false
+    },
+    {
+      "repo": "core",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= pytest -q tests/test_role_owned_consumers.py --tb=short",
+      "exit_code": 0,
+      "result": "5 passed in 0.50s",
+      "chunk": "3b31d9",
+      "scope": "upgrade case strengthened to real _restart_in_place -> actual _kill_and_save; asserts no remove_pid/execv/lake.close; no source change",
+      "manifest_captured": false
+    }
+  ],
+  "root_new_group_candidate": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= pytest -q tests/test_role_delivery_snapshot.py tests/test_role_shutdown_slot.py tests/test_role_owned_consumers.py tests/test_role_supervision.py tests/test_role_supervision_holder_fence.py tests/test_role_supervision_sticky_hold.py --tb=short",
+    "result": "21 passed in 2.55s",
+    "exit_code": 0,
+    "chunk": "91fb78"
+  },
+  "root_draft_regressions": [
+    {
+      "first": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= pytest -q tests/test_role_delivery_snapshot.py --tb=short",
+        "exit_code": 1,
+        "result": "1 failed in 0.46s",
+        "chunk": "c39288",
+        "reason": "actual foreign SQLite changed STARTED to TERMINAL after mutable RP DB substitution after first holder validation; release HOLD was too late",
+        "production_snapshots": [
+          "docs/evidence/snapshots/v1-05c2e2a-before-delivery-authority-helper.py",
+          "docs/evidence/snapshots/v1-05c2e2a-before-delivery-authority-consumer.py"
+        ]
+      },
+      "replay": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, pathlib, pytest\nfor name, snapshot in [\n    ('orze.engine.role_supervision', 'docs/evidence/snapshots/v1-05c2e2a-before-delivery-authority-helper.py'),\n    ('orze.engine.role_delivery', 'docs/evidence/snapshots/v1-05c2e2a-before-delivery-authority-consumer.py'),\n]:\n    module = importlib.import_module(name)\n    exec(compile(pathlib.Path(snapshot).read_bytes(), snapshot, 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', 'tests/test_role_delivery_snapshot.py', '--tb=short']))\nPY",
+        "initial": {
+          "chunk_id": "0128b6",
+          "wall_time_seconds": 0.60078875,
+          "exit_code": 1,
+          "original_token_count": 230,
+          "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n___ test_settlement_does_not_use_database_replaced_after_first_holder_check ____\ntests/test_role_delivery_snapshot.py:53: in test_settlement_does_not_use_database_replaced_after_first_holder_check\n    assert _state(foreign, launch[\"delivery_id\"]) == \"STARTED\"\nE   AssertionError: assert 'TERMINAL' == 'STARTED'\nE     \nE     - STARTED\nE     + TERMINAL\n------------------------------ Captured log call -------------------------------\nERROR    orze:v1-05c2e2a-before-delivery-authority-consumer.py:88 Role completion HOLD: RoleSupervisionHOLD\n=========================== short test summary info ============================\nFAILED tests/test_role_delivery_snapshot.py::test_settlement_does_not_use_database_replaced_after_first_holder_check\n1 failed in 0.40s\n"
+        }
+      }
+    },
+    {
+      "first": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= pytest -q tests/test_role_shutdown_slot.py --tb=short",
+        "exit_code": 1,
+        "result": "1 failed in 0.16s",
+        "chunk": "b0c6d0",
+        "reason": "graceful_shutdown clear/update overwrote same-name replacement during lake.close; controlled pending INTENT fixture, no executed tree",
+        "production_snapshots": [
+          "docs/evidence/snapshots/v1-05c2e2a-before-shutdown-slot.py"
+        ]
+      },
+      "replay": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, pathlib, pytest\nsnapshot = 'docs/evidence/snapshots/v1-05c2e2a-before-shutdown-slot.py'\nmodule = importlib.import_module('orze.engine.lifecycle')\nexec(compile(pathlib.Path(snapshot).read_bytes(), snapshot, 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', 'tests/test_role_shutdown_slot.py', '--tb=short']))\nPY",
+        "initial": {
+          "chunk_id": "24b747",
+          "wall_time_seconds": 0.302155311,
+          "exit_code": 1,
+          "original_token_count": 179,
+          "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n______ test_shutdown_preserves_replacement_slot_and_original_strong_hold _______\ntests/test_role_shutdown_slot.py:18: in test_shutdown_preserves_replacement_slot_and_original_strong_hold\n    assert active[\"engineer\"] is replacement\nE   assert <orze.engine.role_supervision.RoleLaunch object at 0x1545b5e549d0> is <object object at 0x1545b7a5eda0>\n=========================== short test summary info ============================\nFAILED tests/test_role_shutdown_slot.py::test_shutdown_preserves_replacement_slot_and_original_strong_hold\n1 failed in 0.10s\n"
+        }
+      }
+    }
+  ],
+  "diagnostics_not_product_reds": [
+    {
+      "cmd": "PYTHONPATH=src:../orze/src pytest -q tests/test_role_owned_tree_closure.py tests/test_role_supervised_admission.py",
+      "repo": "pro",
+      "exit": 4,
+      "chunk": "77877d",
+      "reason": "incorrect guessed test filename; no tests ran"
+    },
+    {
+      "cmd": "PYTHONPATH=src:../orze/src pytest -q tests/test_role_owned_tree_closure.py tests/test_role_launch_admission.py",
+      "repo": "pro",
+      "exit": 2,
+      "chunk": "54a8d0",
+      "reason": "test-only license gate patch omitted; two collection errors"
+    },
+    {
+      "cmd": "PYTHONPATH=src pytest -q tests/test_role_owned_consumers.py tests/test_trigger_role_completion.py tests/test_role_shutdown_reaping.py",
+      "repo": "core",
+      "exit": 1,
+      "chunk": "899511",
+      "result": "1 failed, 24 passed in 5.41s",
+      "reason": "new test called nonexistent get_delivery; fixed diagnostic query to real SQLite; not a production red",
+      "snapshot": "docs/evidence/snapshots/v1-05c2e2a-consumer-test-first-diagnostic.py"
+    },
+    {
+      "kind": "orchestration_only",
+      "exit_code": null,
+      "reason": "functions.exec metadata inspection called .map on stored final_epoch.groups object; TypeError before planned pytest command, no shell test executed or files changed"
+    }
+  ],
+  "precommit_safety": {
+    "checked": {
+      "current_time": "2026-09-11 04:04:35 UTC"
+    },
+    "core": {
+      "chunk_id": "5ac7c3",
+      "wall_time_seconds": 0.086311533,
+      "exit_code": 0,
+      "original_token_count": 33,
+      "output": "b7e9524f73c2053346bac13075e7849751cb6cac\trefs/heads/feat/autoresearch-v1\n5ca2680dbd0139e63cd35a4f83da438b5b47ab99\trefs/heads/main\n"
+    },
+    "pro": {
+      "chunk_id": "2e7820",
+      "wall_time_seconds": 0.373193342,
+      "exit_code": 0,
+      "original_token_count": 33,
+      "output": "97eaa905452b63553015143486c89e1b2ddf4b9f\trefs/heads/feat/autoresearch-v1\n57feb6e0af19dcf62a80b1e447f0771936d39afe\trefs/heads/main\n"
+    },
+    "original_status_lines": {
+      "chunk_id": "7f8e61",
+      "wall_time_seconds": 0.000004375,
+      "exit_code": 0,
+      "original_token_count": 1,
+      "output": "281\n"
+    },
+    "holdout_sha256_only": {
+      "chunk_id": "1af904",
+      "wall_time_seconds": 0.00000368,
+      "exit_code": 0,
+      "original_token_count": 22,
+      "output": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245  holdout-challenge.md\n"
+    },
+    "limits": "Original tree not modified; status-line count is not a content hash. Holdout text not read."
+  },
+  "staged_diff_checks": {
+    "core": {
+      "chunk_id": "d5b5f4",
+      "wall_time_seconds": 0.000002563,
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "pro": {
+      "chunk_id": "af494b",
+      "wall_time_seconds": 0.000002717,
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": ""
+    }
+  },
+  "limits": [
+    "Role-local owned tree closure only, not controller registration/drain/exit/restart ACK.",
+    "Legacy schema1/raw RoleProcess remains legacy; unknown v2 receipts are held, not adopted by nonce/PID/age.",
+    "Pending-owner four-route tests do not execute a CPU tree; actual tree tests and two-SQLite mutation regression are separately identified.",
+    "STOP0 and uncertain owners cannot become productive success; operational outcome is not scientific validity.",
+    "No real GPU/model/data/provider/live-campaign execution; original dirty worktree unchanged and holdout text unread.",
+    "Whole V1, generic CPU autoresearch loop, explicit native repair, recovery and durable progress consumers remain incomplete."
+  ],
+  "independent_staged_audit": {
+    "role": "non-root independent read-only staged audit",
+    "files_modified": 0,
+    "commits_made": 0,
+    "current_manifest_index_worktree_files": 858,
+    "staged_files": 62,
+    "source_test_staged_files": 30,
+    "python_ast_files": 58,
+    "snapshots": {
+      "total": 28,
+      "exact_baseline": 21,
+      "draft": 7
+    },
+    "command_occurrences": 47,
+    "valid_python_bodies": 30,
+    "expected_python_syntax_errors": 1,
+    "old_test_files": 13,
+    "old_asserts": 298,
+    "new_asserts": 308,
+    "old_mock_asserts": 46,
+    "new_mock_asserts": 45,
+    "raises_sites": 1,
+    "new_assert_nodes": 196,
+    "successful_checks": [
+      {
+        "chunk": "ea0d2f",
+        "exit_code": 0,
+        "scope": "62 staged files, snapshots and Python AST"
+      },
+      {
+        "chunk": "e3d9d4",
+        "exit_code": 0,
+        "scope": "five JSON reports, shell/Python commands including declared syntax-error diagnostic"
+      },
+      {
+        "chunk": "ade213",
+        "exit_code": 0,
+        "scope": "13 old test files, exact declared exceptions and new Assert counts"
+      }
+    ],
+    "diagnostics": [
+      {
+        "chunk": "3099f2",
+        "exit_code": 1,
+        "reason": "Auditor initially assumed inventory final_files was a dict; actual list schema corrected before checking files."
+      },
+      {
+        "chunk": "9a6528",
+        "exit_code": 1,
+        "reason": "Corrected general hash audit verified all 858 current manifest/index/worktree entries and 1219 entity-backed hash occurrences, then rejected one explicitly historical superseded Pro candidate prehash without current entity; not a conflicting current-file hash.",
+        "historical_hash_prefix": "02623b79"
+      }
+    ],
+    "conclusion": "No in-scope blocker; final fixed-commit aggregate check remains root's responsibility."
+  }
+}
