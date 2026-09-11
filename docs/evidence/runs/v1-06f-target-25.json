@@ -1,0 +1,920 @@
+{
+  "admissions": [
+    {
+      "after": "1:admit:idea-first:after",
+      "before": "0:admit:idea-first:before",
+      "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+      "result": {
+        "idea_id": "idea-first",
+        "reason": "proposal_admitted",
+        "status": "inserted",
+        "transition_id": 1
+      },
+      "task_id": "idea-first"
+    }
+  ],
+  "calls": [
+    {
+      "after": "3:first_controller_crash:after",
+      "before": "2:first_controller_crash:before",
+      "command": [
+        "/usr/bin/python3",
+        "-m",
+        "cpu_terminal_recovery_helpers",
+        "--crash-before-settle",
+        "-c",
+        "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/orze.yaml",
+        "--once"
+      ],
+      "controller_binding": {
+        "command_sha256": "f220b0be22a4f6d38156798ba6ecdfcc09db394641cb71109174156263008929",
+        "identity": {
+          "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0",
+          "terminal_recovery_controller": "first_controller_crash"
+        },
+        "nonce_sha256": "8e33e9f8070d6e2842a28791a407ec87e56118676f082f0471bdb01372cdee93",
+        "protocol": "orze.linux_subreaper.v1",
+        "schema": 1,
+        "supervisor": {
+          "pid": 2075306,
+          "start_ticks": 1061930154
+        },
+        "worker": {
+          "pid": 2075307,
+          "start_ticks": 1061930157
+        }
+      },
+      "controller_closure": {
+        "binding": {
+          "command_sha256": "f220b0be22a4f6d38156798ba6ecdfcc09db394641cb71109174156263008929",
+          "identity": {
+            "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0",
+            "terminal_recovery_controller": "first_controller_crash"
+          },
+          "nonce_sha256": "8e33e9f8070d6e2842a28791a407ec87e56118676f082f0471bdb01372cdee93",
+          "protocol": "orze.linux_subreaper.v1",
+          "schema": 1,
+          "supervisor": {
+            "pid": 2075306,
+            "start_ticks": 1061930154
+          },
+          "worker": {
+            "pid": 2075307,
+            "start_ticks": 1061930157
+          }
+        },
+        "event": "TREE_CLOSED",
+        "forced_cleanup": false,
+        "reaped_children": 1,
+        "schema": 1,
+        "stop_requested": false,
+        "wait_proof": "ECHILD_WALL",
+        "worker_returncode": 86
+      },
+      "cwd": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0",
+      "exit_code": 86,
+      "finished_monotonic": 10619302.48612479,
+      "label": "first_controller_crash",
+      "metadata": [
+        {
+          "event": "start",
+          "monotonic": 10619301.802379347,
+          "pid": 2075307,
+          "start_ticks": 1061930157
+        },
+        {
+          "current_row": {
+            "attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+            "binding": {
+              "action_sha256": "bcbdb623eabb6eea4c260faccf81a15b37dad7dbb0670b48420144aba039f90c",
+              "artifact_publication": {
+                "contract": {
+                  "outputs": {
+                    "answer": {
+                      "max_bytes": 128,
+                      "path": "answer.json"
+                    }
+                  },
+                  "version": 1
+                },
+                "root": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/.orze/artifacts",
+                "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results",
+                "spec_fingerprint": "bcbdb623eabb6eea4c260faccf81a15b37dad7dbb0670b48420144aba039f90c"
+              },
+              "attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+              "attempt_ref": {
+                "attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+                "generation": 1,
+                "phase": "action",
+                "task_id": "idea-first"
+              },
+              "command_sha256": "8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606",
+              "inputs_sha256": "6ff8107eefbf7bdaeea78e2cfc220e46d72ce4f69e4089f4c87fa756b58d27fb",
+              "kind": "native_cpu_action",
+              "lifecycle": {
+                "global_state": "COMPLETE",
+                "global_transition_id": 4,
+                "legacy_status": "completed",
+                "phase_state": "COMPLETE",
+                "phase_transition_id": 3
+              },
+              "lifecycle_phase": "action",
+              "origin": "native_cpu_action",
+              "process_pid": 2075309,
+              "process_supervision_protocol": "orze.linux_subreaper.v1",
+              "reservation_id": "ab70e581ef78f8330264536da196f33554a0cb5d5465a369",
+              "resource": "cpu",
+              "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first",
+              "source": {
+                "claim_attempt_id": "819dff3ab058c8116ec62e13493b5c1e",
+                "claim_sha256": "30c528bc0b94cfabab4072b8d95b8ac4e869a02ca595c4ec543aab316dad6f58",
+                "config_sha256": "b80c02d22ae65fda355d255f042d2f098fff4af583a935afab5b25eb4da7aea6",
+                "database": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db"
+              },
+              "supervision": {
+                "command_sha256": "8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606",
+                "identity": {
+                  "attempt_ref": {
+                    "attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+                    "generation": 1,
+                    "phase": "action",
+                    "task_id": "idea-first"
+                  },
+                  "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first"
+                },
+                "nonce_sha256": "8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5",
+                "protocol": "orze.linux_subreaper.v1",
+                "schema": 1,
+                "supervisor": {
+                  "pid": 2075308,
+                  "start_ticks": 1061930216
+                },
+                "worker": {
+                  "pid": 2075309,
+                  "start_ticks": 1061930219
+                }
+              },
+              "timeout_seconds": 2,
+              "work_dir": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first/_action_attempts/73de447a7bc7b4260e3f76d1f4571445/work"
+            },
+            "generation": 1,
+            "hold_reason": null,
+            "phase": "action",
+            "state": "TERMINAL",
+            "task_id": "idea-first",
+            "terminal": {
+              "artifact_ids": [
+                "ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c"
+              ],
+              "effect_receipt_sha256": "caa80cea3a82affaf276a9f5330169b5d86a4de17dd521963624d049677144ed",
+              "elapsed_wall_seconds": 0.057039106264710426,
+              "lifecycle": {
+                "global_state": "COMPLETE",
+                "global_transition_id": 4,
+                "legacy_status": "completed",
+                "phase_state": "COMPLETE",
+                "phase_transition_id": 3
+              },
+              "lifecycle_phase": "action",
+              "observation_ids": [],
+              "outcome": "completed",
+              "process_tree": {
+                "binding": {
+                  "command_sha256": "8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606",
+                  "identity": {
+                    "attempt_ref": {
+                      "attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+                      "generation": 1,
+                      "phase": "action",
+                      "task_id": "idea-first"
+                    },
+                    "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first"
+                  },
+                  "nonce_sha256": "8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5",
+                  "protocol": "orze.linux_subreaper.v1",
+                  "schema": 1,
+                  "supervisor": {
+                    "pid": 2075308,
+                    "start_ticks": 1061930216
+                  },
+                  "worker": {
+                    "pid": 2075309,
+                    "start_ticks": 1061930219
+                  }
+                },
+                "event": "TREE_CLOSED",
+                "forced_cleanup": false,
+                "reaped_children": 1,
+                "schema": 1,
+                "stop_requested": false,
+                "wait_proof": "ECHILD_WALL",
+                "worker_returncode": 0
+              },
+              "reason_code": "cpu_action_completed",
+              "return_code": 0
+            }
+          },
+          "deliberate_exit_code": 86,
+          "effect_confirmed": true,
+          "effect_guard_absent": true,
+          "event": "crash_before_settle",
+          "monotonic": 10619302.466701593,
+          "permit": {
+            "budget_scope": {
+              "database": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db",
+              "database_identity": [
+                66306,
+                42346098
+              ],
+              "declaration": {
+                "resource": "cpu",
+                "slots": 2,
+                "version": 1,
+                "wall_budget_seconds": 6
+              },
+              "directory_identity": [
+                66306,
+                42346132
+              ],
+              "policy_sha256": "7707b31b7edb90bc0270bdc11534fd15a5ca86534818d4ab8116b717ac2ecea4",
+              "results_dir": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results",
+              "schema": 1
+            },
+            "reservation_id": "ab70e581ef78f8330264536da196f33554a0cb5d5465a369",
+            "reserved_nanoseconds": "2000000000",
+            "schema": 1,
+            "slot": 0,
+            "task_id": "idea-first",
+            "wall_limit_seconds": 2
+          },
+          "pid": 2075307,
+          "ref": {
+            "attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+            "generation": 1,
+            "phase": "action",
+            "task_id": "idea-first"
+          },
+          "start_ticks": 1061930157,
+          "terminal": {
+            "artifact_ids": [
+              "ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c"
+            ],
+            "effect_receipt_sha256": "caa80cea3a82affaf276a9f5330169b5d86a4de17dd521963624d049677144ed",
+            "elapsed_wall_seconds": 0.057039106264710426,
+            "lifecycle": {
+              "global_state": "COMPLETE",
+              "global_transition_id": 4,
+              "legacy_status": "completed",
+              "phase_state": "COMPLETE",
+              "phase_transition_id": 3
+            },
+            "lifecycle_phase": "action",
+            "observation_ids": [],
+            "outcome": "completed",
+            "process_tree": {
+              "binding": {
+                "command_sha256": "8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606",
+                "identity": {
+                  "attempt_ref": {
+                    "attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+                    "generation": 1,
+                    "phase": "action",
+                    "task_id": "idea-first"
+                  },
+                  "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first"
+                },
+                "nonce_sha256": "8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5",
+                "protocol": "orze.linux_subreaper.v1",
+                "schema": 1,
+                "supervisor": {
+                  "pid": 2075308,
+                  "start_ticks": 1061930216
+                },
+                "worker": {
+                  "pid": 2075309,
+                  "start_ticks": 1061930219
+                }
+              },
+              "event": "TREE_CLOSED",
+              "forced_cleanup": false,
+              "reaped_children": 1,
+              "schema": 1,
+              "stop_requested": false,
+              "wait_proof": "ECHILD_WALL",
+              "worker_returncode": 0
+            },
+            "reason_code": "cpu_action_completed",
+            "return_code": 0
+          },
+          "transaction_open": false
+        }
+      ],
+      "started_monotonic": 10619301.54911949,
+      "stderr": "\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\norze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n2026-09-11 18:39:16 [INFO] Loaded config from /tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/orze.yaml\n2026-09-11 18:39:16 [INFO] v4.5 migration already applied (both tables have sop_type)\n2026-09-11 18:39:16 [INFO] Orze CPU actions: /tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results, declared slots=2 (no GPU resource allocation)\n2026-09-11 18:39:17 [INFO] [LIFECYCLE_TRANSITION] idea=idea-first QUEUED \u2192 CLAIMED reason=\"claimed by a100-41 on cpu\"\n",
+      "stdout": "CPU_RECOVERY_META={\"event\": \"start\", \"monotonic\": 10619301.802379347, \"pid\": 2075307, \"start_ticks\": 1061930157}\nCPU_RECOVERY_META={\"current_row\": {\"attempt_id\": \"73de447a7bc7b4260e3f76d1f4571445\", \"binding\": {\"action_sha256\": \"bcbdb623eabb6eea4c260faccf81a15b37dad7dbb0670b48420144aba039f90c\", \"artifact_publication\": {\"contract\": {\"outputs\": {\"answer\": {\"max_bytes\": 128, \"path\": \"answer.json\"}}, \"version\": 1}, \"root\": \"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/.orze/artifacts\", \"scope\": \"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\", \"spec_fingerprint\": \"bcbdb623eabb6eea4c260faccf81a15b37dad7dbb0670b48420144aba039f90c\"}, \"attempt_id\": \"73de447a7bc7b4260e3f76d1f4571445\", \"attempt_ref\": {\"attempt_id\": \"73de447a7bc7b4260e3f76d1f4571445\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-first\"}, \"command_sha256\": \"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\", \"inputs_sha256\": \"6ff8107eefbf7bdaeea78e2cfc220e46d72ce4f69e4089f4c87fa756b58d27fb\", \"kind\": \"native_cpu_action\", \"lifecycle\": {\"global_state\": \"COMPLETE\", \"global_transition_id\": 4, \"legacy_status\": \"completed\", \"phase_state\": \"COMPLETE\", \"phase_transition_id\": 3}, \"lifecycle_phase\": \"action\", \"origin\": \"native_cpu_action\", \"process_pid\": 2075309, \"process_supervision_protocol\": \"orze.linux_subreaper.v1\", \"reservation_id\": \"ab70e581ef78f8330264536da196f33554a0cb5d5465a369\", \"resource\": \"cpu\", \"scope\": \"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\", \"source\": {\"claim_attempt_id\": \"819dff3ab058c8116ec62e13493b5c1e\", \"claim_sha256\": \"30c528bc0b94cfabab4072b8d95b8ac4e869a02ca595c4ec543aab316dad6f58\", \"config_sha256\": \"b80c02d22ae65fda355d255f042d2f098fff4af583a935afab5b25eb4da7aea6\", \"database\": \"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db\"}, \"supervision\": {\"command_sha256\": \"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\", \"identity\": {\"attempt_ref\": {\"attempt_id\": \"73de447a7bc7b4260e3f76d1f4571445\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-first\"}, \"scope\": \"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\"}, \"nonce_sha256\": \"8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5\", \"protocol\": \"orze.linux_subreaper.v1\", \"schema\": 1, \"supervisor\": {\"pid\": 2075308, \"start_ticks\": 1061930216}, \"worker\": {\"pid\": 2075309, \"start_ticks\": 1061930219}}, \"timeout_seconds\": 2, \"work_dir\": \"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first/_action_attempts/73de447a7bc7b4260e3f76d1f4571445/work\"}, \"generation\": 1, \"hold_reason\": null, \"phase\": \"action\", \"state\": \"TERMINAL\", \"task_id\": \"idea-first\", \"terminal\": {\"artifact_ids\": [\"ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c\"], \"effect_receipt_sha256\": \"caa80cea3a82affaf276a9f5330169b5d86a4de17dd521963624d049677144ed\", \"elapsed_wall_seconds\": 0.057039106264710426, \"lifecycle\": {\"global_state\": \"COMPLETE\", \"global_transition_id\": 4, \"legacy_status\": \"completed\", \"phase_state\": \"COMPLETE\", \"phase_transition_id\": 3}, \"lifecycle_phase\": \"action\", \"observation_ids\": [], \"outcome\": \"completed\", \"process_tree\": {\"binding\": {\"command_sha256\": \"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\", \"identity\": {\"attempt_ref\": {\"attempt_id\": \"73de447a7bc7b4260e3f76d1f4571445\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-first\"}, \"scope\": \"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\"}, \"nonce_sha256\": \"8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5\", \"protocol\": \"orze.linux_subreaper.v1\", \"schema\": 1, \"supervisor\": {\"pid\": 2075308, \"start_ticks\": 1061930216}, \"worker\": {\"pid\": 2075309, \"start_ticks\": 1061930219}}, \"event\": \"TREE_CLOSED\", \"forced_cleanup\": false, \"reaped_children\": 1, \"schema\": 1, \"stop_requested\": false, \"wait_proof\": \"ECHILD_WALL\", \"worker_returncode\": 0}, \"reason_code\": \"cpu_action_completed\", \"return_code\": 0}}, \"deliberate_exit_code\": 86, \"effect_confirmed\": true, \"effect_guard_absent\": true, \"event\": \"crash_before_settle\", \"monotonic\": 10619302.466701593, \"permit\": {\"budget_scope\": {\"database\": \"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db\", \"database_identity\": [66306, 42346098], \"declaration\": {\"resource\": \"cpu\", \"slots\": 2, \"version\": 1, \"wall_budget_seconds\": 6}, \"directory_identity\": [66306, 42346132], \"policy_sha256\": \"7707b31b7edb90bc0270bdc11534fd15a5ca86534818d4ab8116b717ac2ecea4\", \"results_dir\": \"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\", \"schema\": 1}, \"reservation_id\": \"ab70e581ef78f8330264536da196f33554a0cb5d5465a369\", \"reserved_nanoseconds\": \"2000000000\", \"schema\": 1, \"slot\": 0, \"task_id\": \"idea-first\", \"wall_limit_seconds\": 2}, \"pid\": 2075307, \"ref\": {\"attempt_id\": \"73de447a7bc7b4260e3f76d1f4571445\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-first\"}, \"start_ticks\": 1061930157, \"terminal\": {\"artifact_ids\": [\"ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c\"], \"effect_receipt_sha256\": \"caa80cea3a82affaf276a9f5330169b5d86a4de17dd521963624d049677144ed\", \"elapsed_wall_seconds\": 0.057039106264710426, \"lifecycle\": {\"global_state\": \"COMPLETE\", \"global_transition_id\": 4, \"legacy_status\": \"completed\", \"phase_state\": \"COMPLETE\", \"phase_transition_id\": 3}, \"lifecycle_phase\": \"action\", \"observation_ids\": [], \"outcome\": \"completed\", \"process_tree\": {\"binding\": {\"command_sha256\": \"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\", \"identity\": {\"attempt_ref\": {\"attempt_id\": \"73de447a7bc7b4260e3f76d1f4571445\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-first\"}, \"scope\": \"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\"}, \"nonce_sha256\": \"8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5\", \"protocol\": \"orze.linux_subreaper.v1\", \"schema\": 1, \"supervisor\": {\"pid\": 2075308, \"start_ticks\": 1061930216}, \"worker\": {\"pid\": 2075309, \"start_ticks\": 1061930219}}, \"event\": \"TREE_CLOSED\", \"forced_cleanup\": false, \"reaped_children\": 1, \"schema\": 1, \"stop_requested\": false, \"wait_proof\": \"ECHILD_WALL\", \"worker_returncode\": 0}, \"reason_code\": \"cpu_action_completed\", \"return_code\": 0}, \"transaction_open\": false}\n",
+      "wall_seconds": 0.9370053000748158
+    }
+  ],
+  "cfg": {
+    "action_policy": {
+      "idle": "wait",
+      "kind": "queue",
+      "version": 1,
+      "wait_seconds": 0.05
+    },
+    "execution": {
+      "resource": "cpu",
+      "slots": 2,
+      "version": 1,
+      "wall_budget_seconds": 6
+    },
+    "idea_lake_db": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db",
+    "ideas_file": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/ideas.md",
+    "min_disk_gb": 0,
+    "results_dir": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results"
+  },
+  "root": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0",
+  "snapshots": [
+    {
+      "database": {
+        "cpu_action_decisions": [],
+        "cpu_action_recovery": [],
+        "cpu_action_reservations": [],
+        "cpu_action_scopes": [],
+        "execution_attempts": [],
+        "idea_stage_state": [],
+        "idea_stage_transitions": [],
+        "idea_state": [],
+        "idea_transitions": [],
+        "ideas": [],
+        "research_artifacts": [],
+        "research_observations": []
+      },
+      "files": {},
+      "label": "0:admit:idea-first:before",
+      "worker_events": []
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [],
+        "cpu_action_recovery": [],
+        "cpu_action_reservations": [],
+        "cpu_action_scopes": [],
+        "execution_attempts": [],
+        "idea_stage_state": [],
+        "idea_stage_transitions": [],
+        "idea_state": [
+          {
+            "claimed_at": null,
+            "completed_at": null,
+            "current_state": "QUEUED",
+            "first_queued_at": "2026-09-11T18:39:16.595Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-11T18:39:16.595Z",
+            "sop_type": "action",
+            "started_at": null,
+            "terminal_at": null,
+            "updated_at": "2026-09-11T18:39:16.595Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2073903
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2073903,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-11T18:39:16.595Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-11T18:39:16.595Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "0ef8b6423e362e782edd682fa479bb231e2279ffd4065234ea8a01a7d5dfc371",
+            "config_source_sha256": "b80c02d22ae65fda355d255f042d2f098fff4af583a935afab5b25eb4da7aea6",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-11T18:39:16.595Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1393136177,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "queued",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [],
+        "research_observations": []
+      },
+      "files": {},
+      "label": "1:admit:idea-first:after",
+      "worker_events": []
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [],
+        "cpu_action_recovery": [],
+        "cpu_action_reservations": [],
+        "cpu_action_scopes": [],
+        "execution_attempts": [],
+        "idea_stage_state": [],
+        "idea_stage_transitions": [],
+        "idea_state": [
+          {
+            "claimed_at": null,
+            "completed_at": null,
+            "current_state": "QUEUED",
+            "first_queued_at": "2026-09-11T18:39:16.595Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-11T18:39:16.595Z",
+            "sop_type": "action",
+            "started_at": null,
+            "terminal_at": null,
+            "updated_at": "2026-09-11T18:39:16.595Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2073903
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2073903,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-11T18:39:16.595Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-11T18:39:16.595Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "0ef8b6423e362e782edd682fa479bb231e2279ffd4065234ea8a01a7d5dfc371",
+            "config_source_sha256": "b80c02d22ae65fda355d255f042d2f098fff4af583a935afab5b25eb4da7aea6",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-11T18:39:16.595Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1393136177,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "queued",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [],
+        "research_observations": []
+      },
+      "files": {},
+      "label": "2:first_controller_crash:before",
+      "worker_events": []
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [],
+        "cpu_action_recovery": [],
+        "cpu_action_reservations": [
+          {
+            "permit_json": "{\"budget_scope\":{\"database\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db\",\"database_identity\":[66306,42346098],\"declaration\":{\"resource\":\"cpu\",\"slots\":2,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,42346132],\"policy_sha256\":\"7707b31b7edb90bc0270bdc11534fd15a5ca86534818d4ab8116b717ac2ecea4\",\"results_dir\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\",\"schema\":1},\"reservation_id\":\"ab70e581ef78f8330264536da196f33554a0cb5d5465a369\",\"reserved_nanoseconds\":\"2000000000\",\"schema\":1,\"slot\":0,\"task_id\":\"idea-first\",\"wall_limit_seconds\":2}",
+            "ref_json": "{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"}",
+            "reservation_id": "ab70e581ef78f8330264536da196f33554a0cb5d5465a369",
+            "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results",
+            "slot": 0,
+            "state": "BOUND",
+            "task_id": "idea-first",
+            "terminal_sha256": null
+          }
+        ],
+        "cpu_action_scopes": [
+          {
+            "binding_json": "{\"database\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db\",\"database_identity\":[66306,42346098],\"declaration\":{\"resource\":\"cpu\",\"slots\":2,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,42346132],\"policy_sha256\":\"7707b31b7edb90bc0270bdc11534fd15a5ca86534818d4ab8116b717ac2ecea4\",\"results_dir\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\",\"schema\":1}",
+            "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results",
+            "stop_json": null
+          }
+        ],
+        "execution_attempts": [
+          {
+            "attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+            "binding_json": "{\"action_sha256\":\"bcbdb623eabb6eea4c260faccf81a15b37dad7dbb0670b48420144aba039f90c\",\"artifact_publication\":{\"contract\":{\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"version\":1},\"root\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/.orze/artifacts\",\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\",\"spec_fingerprint\":\"bcbdb623eabb6eea4c260faccf81a15b37dad7dbb0670b48420144aba039f90c\"},\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"attempt_ref\":{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"inputs_sha256\":\"6ff8107eefbf7bdaeea78e2cfc220e46d72ce4f69e4089f4c87fa756b58d27fb\",\"kind\":\"native_cpu_action\",\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"origin\":\"native_cpu_action\",\"process_pid\":2075309,\"process_supervision_protocol\":\"orze.linux_subreaper.v1\",\"reservation_id\":\"ab70e581ef78f8330264536da196f33554a0cb5d5465a369\",\"resource\":\"cpu\",\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\",\"source\":{\"claim_attempt_id\":\"819dff3ab058c8116ec62e13493b5c1e\",\"claim_sha256\":\"30c528bc0b94cfabab4072b8d95b8ac4e869a02ca595c4ec543aab316dad6f58\",\"config_sha256\":\"b80c02d22ae65fda355d255f042d2f098fff4af583a935afab5b25eb4da7aea6\",\"database\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db\"},\"supervision\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\"},\"nonce_sha256\":\"8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5\",\"protocol\":\"orze.linux_subreaper.v1\",\"schema\":1,\"supervisor\":{\"pid\":2075308,\"start_ticks\":1061930216},\"worker\":{\"pid\":2075309,\"start_ticks\":1061930219}},\"timeout_seconds\":2,\"work_dir\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first/_action_attempts/73de447a7bc7b4260e3f76d1f4571445/work\"}",
+            "generation": 1,
+            "hold_reason": null,
+            "phase": "action",
+            "state": "TERMINAL",
+            "task_id": "idea-first",
+            "terminal_json": "{\"artifact_ids\":[\"ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c\"],\"effect_receipt_sha256\":\"caa80cea3a82affaf276a9f5330169b5d86a4de17dd521963624d049677144ed\",\"elapsed_wall_seconds\":0.057039106264710426,\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\"},\"nonce_sha256\":\"8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5\",\"protocol\":\"orze.linux_subreaper.v1\",\"schema\":1,\"supervisor\":{\"pid\":2075308,\"start_ticks\":1061930216},\"worker\":{\"pid\":2075309,\"start_ticks\":1061930219}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"reaped_children\":1,\"schema\":1,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0}"
+          }
+        ],
+        "idea_stage_state": [
+          {
+            "current_state": "COMPLETE",
+            "idea_id": "idea-first",
+            "stage": "action",
+            "started_at": "2026-09-11T18:39:17.295Z",
+            "terminal_at": "2026-09-11T18:39:17.479Z",
+            "updated_at": "2026-09-11T18:39:17.479Z"
+          }
+        ],
+        "idea_stage_transitions": [
+          {
+            "from_state": "NOT_STARTED",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2075307,
+            "reason": "claimed by a100-41 on cpu",
+            "stage": "action",
+            "to_state": "PENDING",
+            "ts": "2026-09-11T18:39:17.059Z"
+          },
+          {
+            "from_state": "PENDING",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2075309,
+            "reason": "cpu_action_ready",
+            "stage": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-11T18:39:17.295Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2075309,
+            "reason": "cpu_action_completed",
+            "stage": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-11T18:39:17.479Z"
+          }
+        ],
+        "idea_state": [
+          {
+            "claimed_at": "2026-09-11T18:39:17.059Z",
+            "completed_at": "2026-09-11T18:39:17.479Z",
+            "current_state": "COMPLETE",
+            "first_queued_at": "2026-09-11T18:39:16.595Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-11T18:39:16.595Z",
+            "sop_type": "action",
+            "started_at": "2026-09-11T18:39:17.295Z",
+            "terminal_at": "2026-09-11T18:39:17.479Z",
+            "updated_at": "2026-09-11T18:39:17.479Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2075309
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2073903,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-11T18:39:16.595Z"
+          },
+          {
+            "from_state": "QUEUED",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2075307,
+            "reason": "claimed by a100-41 on cpu",
+            "sop_type": "action",
+            "to_state": "CLAIMED",
+            "ts": "2026-09-11T18:39:17.059Z"
+          },
+          {
+            "from_state": "CLAIMED",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2075309,
+            "reason": "cpu_action_ready",
+            "sop_type": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-11T18:39:17.295Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 4,
+            "idea_id": "idea-first",
+            "pid": 2075309,
+            "reason": "cpu_action_completed",
+            "sop_type": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-11T18:39:17.479Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-11T18:39:16.595Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "0ef8b6423e362e782edd682fa479bb231e2279ffd4065234ea8a01a7d5dfc371",
+            "config_source_sha256": "b80c02d22ae65fda355d255f042d2f098fff4af583a935afab5b25eb4da7aea6",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-11T18:39:16.595Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1393136177,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "completed",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [
+          {
+            "artifact_id": "ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c",
+            "logical_name": "answer",
+            "producer_attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+            "producer_generation": 1,
+            "producer_phase": "action",
+            "producer_task_id": "idea-first",
+            "record_json": "{\"artifact_id\":\"ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c\",\"content_sha256\":\"e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1\",\"logical_name\":\"answer\",\"path\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/.orze/artifacts/ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c/content\",\"producer\":{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"schema\":1,\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\",\"size_bytes\":16,\"spec_fingerprint\":\"bcbdb623eabb6eea4c260faccf81a15b37dad7dbb0670b48420144aba039f90c\"}"
+          }
+        ],
+        "research_observations": []
+      },
+      "files": {
+        "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/.orze/artifacts/ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c/content": {
+          "bytes": 16,
+          "sha256": "e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1",
+          "utf8": "{\"tag\": \"first\"}"
+        },
+        "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first/_execution_effects/73de447a7bc7b4260e3f76d1f4571445/committed.json": {
+          "bytes": 235,
+          "sha256": "4d8eaff6f39fccaaf7127eff256214ed179c3b31ba81bda235abeadecbba8dd0",
+          "utf8": "{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"event\":\"effect_committed\",\"generation\":1,\"phase\":\"action\",\"prepared_sha256\":\"caa80cea3a82affaf276a9f5330169b5d86a4de17dd521963624d049677144ed\",\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        },
+        "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first/_execution_effects/73de447a7bc7b4260e3f76d1f4571445/prepared.json": {
+          "bytes": 1173,
+          "sha256": "caa80cea3a82affaf276a9f5330169b5d86a4de17dd521963624d049677144ed",
+          "utf8": "{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"event\":\"effect_prepared\",\"generation\":1,\"phase\":\"action\",\"plan\":{\"artifact_ids\":[\"ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c\"],\"elapsed_wall_seconds\":0.057039106264710426,\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"operation\":\"cpu_action_terminal\",\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\"},\"nonce_sha256\":\"8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5\",\"protocol\":\"orze.linux_subreaper.v1\",\"schema\":1,\"supervisor\":{\"pid\":2075308,\"start_ticks\":1061930216},\"worker\":{\"pid\":2075309,\"start_ticks\":1061930219}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"reaped_children\":1,\"schema\":1,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0},\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        }
+      },
+      "label": "3:first_controller_crash:after",
+      "worker_events": [
+        {
+          "pid": 2075309,
+          "start_ticks": 1061930219,
+          "tag": "first"
+        }
+      ]
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [],
+        "cpu_action_recovery": [
+          {
+            "binding_json": "{\"database\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db\",\"database_identity\":[66306,42346098],\"declaration\":{\"resource\":\"cpu\",\"slots\":2,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,42346132],\"policy_sha256\":\"7707b31b7edb90bc0270bdc11534fd15a5ca86534818d4ab8116b717ac2ecea4\",\"results_dir\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\",\"schema\":1}",
+            "nonce": "333a062266de45a1d76a77c5320eb616238368ee6b54c094",
+            "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results",
+            "state": "COMPLETE",
+            "summary_json": "{\"already_settled\":[],\"examined\":2,\"retained\":[{\"reason\":\"reserved\",\"reservation_id\":\"46135fc53ca4561d312329d854bd4c69140030af19ee4f1a\"}],\"schema\":1,\"settled\":[\"ab70e581ef78f8330264536da196f33554a0cb5d5465a369\"]}"
+          }
+        ],
+        "cpu_action_reservations": [
+          {
+            "permit_json": "{\"budget_scope\":{\"database\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db\",\"database_identity\":[66306,42346098],\"declaration\":{\"resource\":\"cpu\",\"slots\":2,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,42346132],\"policy_sha256\":\"7707b31b7edb90bc0270bdc11534fd15a5ca86534818d4ab8116b717ac2ecea4\",\"results_dir\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\",\"schema\":1},\"reservation_id\":\"ab70e581ef78f8330264536da196f33554a0cb5d5465a369\",\"reserved_nanoseconds\":\"2000000000\",\"schema\":1,\"slot\":0,\"task_id\":\"idea-first\",\"wall_limit_seconds\":2}",
+            "ref_json": "{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"}",
+            "reservation_id": "ab70e581ef78f8330264536da196f33554a0cb5d5465a369",
+            "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results",
+            "slot": 0,
+            "state": "SETTLED",
+            "task_id": "idea-first",
+            "terminal_sha256": "a2340d594e21f3b4c06fc7bbf8ce1c9156c3a5c167d4c7722341279c3663f9ca"
+          },
+          {
+            "permit_json": "{\"budget_scope\":{\"database\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db\",\"database_identity\":[66306,42346098],\"declaration\":{\"resource\":\"cpu\",\"slots\":2,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,42346132],\"policy_sha256\":\"7707b31b7edb90bc0270bdc11534fd15a5ca86534818d4ab8116b717ac2ecea4\",\"results_dir\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\",\"schema\":1},\"reservation_id\":\"46135fc53ca4561d312329d854bd4c69140030af19ee4f1a\",\"reserved_nanoseconds\":\"1000000000\",\"schema\":1,\"slot\":1,\"task_id\":\"existing-peer\",\"wall_limit_seconds\":1}",
+            "ref_json": null,
+            "reservation_id": "46135fc53ca4561d312329d854bd4c69140030af19ee4f1a",
+            "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results",
+            "slot": 1,
+            "state": "RESERVED",
+            "task_id": "existing-peer",
+            "terminal_sha256": null
+          }
+        ],
+        "cpu_action_scopes": [
+          {
+            "binding_json": "{\"database\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db\",\"database_identity\":[66306,42346098],\"declaration\":{\"resource\":\"cpu\",\"slots\":2,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,42346132],\"policy_sha256\":\"7707b31b7edb90bc0270bdc11534fd15a5ca86534818d4ab8116b717ac2ecea4\",\"results_dir\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\",\"schema\":1}",
+            "scope": "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results",
+            "stop_json": null
+          }
+        ],
+        "execution_attempts": [
+          {
+            "attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+            "binding_json": "{\"action_sha256\":\"bcbdb623eabb6eea4c260faccf81a15b37dad7dbb0670b48420144aba039f90c\",\"artifact_publication\":{\"contract\":{\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"version\":1},\"root\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/.orze/artifacts\",\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\",\"spec_fingerprint\":\"bcbdb623eabb6eea4c260faccf81a15b37dad7dbb0670b48420144aba039f90c\"},\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"attempt_ref\":{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"inputs_sha256\":\"6ff8107eefbf7bdaeea78e2cfc220e46d72ce4f69e4089f4c87fa756b58d27fb\",\"kind\":\"native_cpu_action\",\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"origin\":\"native_cpu_action\",\"process_pid\":2075309,\"process_supervision_protocol\":\"orze.linux_subreaper.v1\",\"reservation_id\":\"ab70e581ef78f8330264536da196f33554a0cb5d5465a369\",\"resource\":\"cpu\",\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\",\"source\":{\"claim_attempt_id\":\"819dff3ab058c8116ec62e13493b5c1e\",\"claim_sha256\":\"30c528bc0b94cfabab4072b8d95b8ac4e869a02ca595c4ec543aab316dad6f58\",\"config_sha256\":\"b80c02d22ae65fda355d255f042d2f098fff4af583a935afab5b25eb4da7aea6\",\"database\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/lake.db\"},\"supervision\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\"},\"nonce_sha256\":\"8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5\",\"protocol\":\"orze.linux_subreaper.v1\",\"schema\":1,\"supervisor\":{\"pid\":2075308,\"start_ticks\":1061930216},\"worker\":{\"pid\":2075309,\"start_ticks\":1061930219}},\"timeout_seconds\":2,\"work_dir\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first/_action_attempts/73de447a7bc7b4260e3f76d1f4571445/work\"}",
+            "generation": 1,
+            "hold_reason": null,
+            "phase": "action",
+            "state": "TERMINAL",
+            "task_id": "idea-first",
+            "terminal_json": "{\"artifact_ids\":[\"ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c\"],\"effect_receipt_sha256\":\"caa80cea3a82affaf276a9f5330169b5d86a4de17dd521963624d049677144ed\",\"elapsed_wall_seconds\":0.057039106264710426,\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\"},\"nonce_sha256\":\"8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5\",\"protocol\":\"orze.linux_subreaper.v1\",\"schema\":1,\"supervisor\":{\"pid\":2075308,\"start_ticks\":1061930216},\"worker\":{\"pid\":2075309,\"start_ticks\":1061930219}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"reaped_children\":1,\"schema\":1,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0}"
+          }
+        ],
+        "idea_stage_state": [
+          {
+            "current_state": "COMPLETE",
+            "idea_id": "idea-first",
+            "stage": "action",
+            "started_at": "2026-09-11T18:39:17.295Z",
+            "terminal_at": "2026-09-11T18:39:17.479Z",
+            "updated_at": "2026-09-11T18:39:17.479Z"
+          }
+        ],
+        "idea_stage_transitions": [
+          {
+            "from_state": "NOT_STARTED",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2075307,
+            "reason": "claimed by a100-41 on cpu",
+            "stage": "action",
+            "to_state": "PENDING",
+            "ts": "2026-09-11T18:39:17.059Z"
+          },
+          {
+            "from_state": "PENDING",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2075309,
+            "reason": "cpu_action_ready",
+            "stage": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-11T18:39:17.295Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2075309,
+            "reason": "cpu_action_completed",
+            "stage": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-11T18:39:17.479Z"
+          }
+        ],
+        "idea_state": [
+          {
+            "claimed_at": "2026-09-11T18:39:17.059Z",
+            "completed_at": "2026-09-11T18:39:17.479Z",
+            "current_state": "COMPLETE",
+            "first_queued_at": "2026-09-11T18:39:16.595Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-11T18:39:16.595Z",
+            "sop_type": "action",
+            "started_at": "2026-09-11T18:39:17.295Z",
+            "terminal_at": "2026-09-11T18:39:17.479Z",
+            "updated_at": "2026-09-11T18:39:17.479Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2075309
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2073903,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-11T18:39:16.595Z"
+          },
+          {
+            "from_state": "QUEUED",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2075307,
+            "reason": "claimed by a100-41 on cpu",
+            "sop_type": "action",
+            "to_state": "CLAIMED",
+            "ts": "2026-09-11T18:39:17.059Z"
+          },
+          {
+            "from_state": "CLAIMED",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2075309,
+            "reason": "cpu_action_ready",
+            "sop_type": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-11T18:39:17.295Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 4,
+            "idea_id": "idea-first",
+            "pid": 2075309,
+            "reason": "cpu_action_completed",
+            "sop_type": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-11T18:39:17.479Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-11T18:39:16.595Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "0ef8b6423e362e782edd682fa479bb231e2279ffd4065234ea8a01a7d5dfc371",
+            "config_source_sha256": "b80c02d22ae65fda355d255f042d2f098fff4af583a935afab5b25eb4da7aea6",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-11T18:39:16.595Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1393136177,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "completed",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [
+          {
+            "artifact_id": "ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c",
+            "logical_name": "answer",
+            "producer_attempt_id": "73de447a7bc7b4260e3f76d1f4571445",
+            "producer_generation": 1,
+            "producer_phase": "action",
+            "producer_task_id": "idea-first",
+            "record_json": "{\"artifact_id\":\"ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c\",\"content_sha256\":\"e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1\",\"logical_name\":\"answer\",\"path\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/.orze/artifacts/ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c/content\",\"producer\":{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"schema\":1,\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results\",\"size_bytes\":16,\"spec_fingerprint\":\"bcbdb623eabb6eea4c260faccf81a15b37dad7dbb0670b48420144aba039f90c\"}"
+          }
+        ],
+        "research_observations": []
+      },
+      "files": {
+        "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/.orze/artifacts/ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c/content": {
+          "bytes": 16,
+          "sha256": "e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1",
+          "utf8": "{\"tag\": \"first\"}"
+        },
+        "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first/_execution_effects/73de447a7bc7b4260e3f76d1f4571445/committed.json": {
+          "bytes": 235,
+          "sha256": "4d8eaff6f39fccaaf7127eff256214ed179c3b31ba81bda235abeadecbba8dd0",
+          "utf8": "{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"event\":\"effect_committed\",\"generation\":1,\"phase\":\"action\",\"prepared_sha256\":\"caa80cea3a82affaf276a9f5330169b5d86a4de17dd521963624d049677144ed\",\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        },
+        "/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first/_execution_effects/73de447a7bc7b4260e3f76d1f4571445/prepared.json": {
+          "bytes": 1173,
+          "sha256": "caa80cea3a82affaf276a9f5330169b5d86a4de17dd521963624d049677144ed",
+          "utf8": "{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"event\":\"effect_prepared\",\"generation\":1,\"phase\":\"action\",\"plan\":{\"artifact_ids\":[\"ef470737cda75e79fb1f327e90573643479b9a8944c8b8ce6578a9a3d1e8f27c\"],\"elapsed_wall_seconds\":0.057039106264710426,\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"operation\":\"cpu_action_terminal\",\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"73de447a7bc7b4260e3f76d1f4571445\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/pytest-of-erik/pytest-5046/test_in_progress_denies_alread1/project-0/results/idea-first\"},\"nonce_sha256\":\"8fad5105578384ed3eaf9b132d0bde1172d9b78ceb8b6ac4417b5990caad10e5\",\"protocol\":\"orze.linux_subreaper.v1\",\"schema\":1,\"supervisor\":{\"pid\":2075308,\"start_ticks\":1061930216},\"worker\":{\"pid\":2075309,\"start_ticks\":1061930219}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"reaped_children\":1,\"schema\":1,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0},\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        }
+      },
+      "label": "4:independent-proof-after",
+      "worker_events": [
+        {
+          "pid": 2075309,
+          "start_ticks": 1061930219,
+          "tag": "first"
+        }
+      ]
+    }
+  ]
+}

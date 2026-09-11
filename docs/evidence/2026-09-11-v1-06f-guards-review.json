@@ -1,0 +1,439 @@
+{
+  "schema": 1,
+  "status": "first_candidate_guards_verified_not_final_full",
+  "role": {
+    "author": [
+      "tests/test_cpu_terminal_recovery_guards.py",
+      "this review report"
+    ],
+    "independent_review": [
+      "budget/cpu_phase production design and candidate diff",
+      "root real baseline and candidate execution archives",
+      "root offline checker consistency"
+    ],
+    "not_author": [
+      "production recovery implementation",
+      "shared crash fixture",
+      "root product/barrier/control tests",
+      "root worker executions or full suites"
+    ],
+    "extra_execution": "This reviewer authored tests but root ran the shared target once. Review tools performed only source/static/archive checks and started no worker."
+  },
+  "baseline": {
+    "core": "55c2ed321dc759b6b96d721e0b3b423151bbc49b",
+    "pro": "af8e3c7f4c83a1883d11ef4756efd4c4a8ee48cc",
+    "history": {
+      "path": "docs/evidence/2026-09-11-v1-06f-baseline-history.json",
+      "sha256": "60ac95ace16a562ebd5866ac7c7d0483125215f7083ca656b0506064c5cf689e"
+    },
+    "classification": "Two real behavior-red parameter cases (worker return 0 and 7) establish one missing restart consumer; both actual controllers exited 86 at settle entrance, then a fresh CLI exited 0 while the new task remained queued. Not API absence, fixture failure, or two independent product gaps.",
+    "independent_checks": [
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/checks/v1-06f-runs-check.py --mode baseline docs/evidence/runs/v1-06f-baseline-completed.json docs/evidence/runs/v1-06f-baseline-failed.json",
+        "execution": {
+          "chunk_id": "7f807c",
+          "wall_time_seconds": 0.000004018,
+          "exit_code": 0,
+          "original_token_count": 144,
+          "output": "{\"mode\": \"baseline\", \"reports\": [{\"controller_births\": [[2024508, 1061766715], [2024516, 1061766789]], \"fresh_cli_invocations\": 2, \"native_actions\": 1, \"root\": \"/tmp/pytest-of-erik/pytest-5042/test_restart_settles_confirmed0/project-0\", \"wall_seconds\": 1.0797975324094296, \"worker_exit_code\": 0}, {\"controller_births\": [[2024557, 1061766842], [2024597, 1061766912]], \"fresh_cli_invocations\": 2, \"native_actions\": 1, \"root\": \"/tmp/pytest-of-erik/pytest-5042/test_restart_settles_confirmed1/project-0\", \"wall_seconds\": 1.038909973576665, \"worker_exit_code\": 7}], \"schema\": 1}\n"
+        }
+      },
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,re,subprocess\nfrom pathlib import Path\nroot=Path('.').resolve(); hp=Path('docs/evidence/2026-09-11-v1-06f-baseline-history.json'); h=json.loads(hp.read_bytes())\ndef manifest(raw):\n result={}\n for line in raw.splitlines():\n  sha,path=line.split('  ',1); assert re.fullmatch('[0-9a-f]{64}',sha) and path not in result; result[path]=sha\n return result\nbefore,after=(manifest(h[k]['output']) for k in ('before','after'))\nassert before==after and len(before)==757\nbase=h['core_baseline']; paths=subprocess.check_output(['git','ls-tree','-r','--name-only',base,'--','src','tests','examples','pyproject.toml'],text=True).splitlines()\nassert set(before)==set(paths)|{'tests/cpu_terminal_recovery_helpers.py','tests/test_cpu_terminal_settlement_recovery.py'}\nrequest=''.join(base+':'+p+'\\n' for p in paths).encode(); blob=subprocess.check_output(['git','cat-file','--batch'],input=request); offset=0\nfor path in paths:\n end=blob.index(b'\\n',offset); header=blob[offset:end].split(); assert header[1]==b'blob'; size=int(header[2]); data=blob[end+1:end+1+size]; assert hashlib.sha256(data).hexdigest()==before[path],path; assert blob[end+1+size:end+2+size]==b'\\n'; offset=end+2+size\nassert offset==len(blob)\narchived=manifest(h['archive_readback']['output']); snapshots={\n 'docs/evidence/snapshots/v1-06f-baseline-cpu-action-budget.py':'src/orze/core/cpu_action_budget.py',\n 'docs/evidence/snapshots/v1-06f-baseline-cpu-phase.py':'src/orze/engine/cpu_phase.py',\n 'docs/evidence/snapshots/v1-06f-baseline-product-tests.py':'tests/test_cpu_terminal_settlement_recovery.py',\n 'docs/evidence/snapshots/v1-06f-baseline-recovery-helpers.py':'tests/cpu_terminal_recovery_helpers.py'}\nfor path,original in snapshots.items():\n raw=Path(path).read_bytes(); assert hashlib.sha256(raw).hexdigest()==archived[path]==before[original]; ast.parse(raw)\nfooter=h['invocations'][-1]; assert footer['chunk_id']=='ea62af' and footer['exit_code']==1\nout=footer['output']; assert '2 failed, 1 warning in 2.82s' in out and 'ModuleNotFoundError' not in out and 'ImportError' not in out\nassert out.count(\"E   assert 'queued' == 'completed'\")==2\nmarker=json.loads(next(line.split('CPU_RECOVERY_REPORTS=',1)[1] for line in out.splitlines() if 'CPU_RECOVERY_REPORTS=' in line))\nreports=[]\nfor meta in h['reports']:\n expected={k:v for k,v in meta.items() if k!='archive'}; assert expected in marker\n raw=Path(meta['archive']).read_bytes(); assert len(raw)==meta['bytes'] and hashlib.sha256(raw).hexdigest()==meta['sha256']==archived[meta['archive']]\n report=json.loads(raw); assert str(Path(meta['path']).parent)==report['root']\n report_before=next(s for s in report['snapshots'] if s['label']==report['calls'][0]['after']); db=report_before['database']; row=db['execution_attempts'][0]; ref={k:row[k] for k in ('task_id','phase','attempt_id','generation')}; terminal=json.loads(row['terminal_json']); binding=json.loads(row['binding_json'])\n assert ref['phase']=='action' and type(ref['generation']) is int and ref['generation']>0\n assert binding['origin']==binding['kind']=='native_cpu_action' and binding['resource']=='cpu'\n assert binding['scope']==report['root']+'/results/'+ref['task_id']\n assert binding['supervision']['identity']=={'attempt_ref':ref,'scope':binding['scope']}\n effectdir=binding['scope']+'/_execution_effects/'+ref['attempt_id']\n for name,event in [('prepared.json','effect_prepared'),('committed.json','effect_committed')]:\n  payload=json.loads(report_before['files'][effectdir+'/'+name]['utf8']); assert payload['event']==event and type(payload['schema_version']) is int and payload['schema_version']==1\n  assert {k:payload[k] for k in ref}==ref\n reports.append({'archive':meta['archive'],'sha256':meta['sha256'],'worker_exit_code':terminal['return_code'],'native_actions':len(db['execution_attempts']),'controller_invocations':len(report['calls'])})\nassert sorted(r['worker_exit_code'] for r in reports)==[0,7] and len(marker)==2\nchecker=Path('docs/evidence/checks/v1-06f-runs-check.py'); ast.parse(checker.read_bytes())\nprint(json.dumps({'status':'passed','history_sha256':hashlib.sha256(hp.read_bytes()).hexdigest(),'checker_sha256':hashlib.sha256(checker.read_bytes()).hexdigest(),'baseline_manifest_prepost_exact':len(before),'fixed_commit_files_exact':len(paths),'new_fixture_files':2,'snapshots':[{ 'path':p,'source':s,'sha256':archived[p],'origin':'fixed_baseline_source' if s.startswith('src/') else 'new_frozen_behavior_fixture'} for p,s in snapshots.items()],'raw_footer_chunk':footer['chunk_id'],'historical_product_gaps':1,'behavior_red_cases':2,'reports':reports,'workers_started_by_this_check':0},sort_keys=True))\nPY",
+        "execution": {
+          "chunk_id": "026394",
+          "wall_time_seconds": 0.173078794,
+          "exit_code": 0,
+          "original_token_count": 455,
+          "output": "{\"baseline_manifest_prepost_exact\": 757, \"behavior_red_cases\": 2, \"checker_sha256\": \"b1a1690a0acce9b1ddca2f32740bfbd77b1eb87aa0ac7288df5fb3b3e0c33fd5\", \"fixed_commit_files_exact\": 755, \"historical_product_gaps\": 1, \"history_sha256\": \"60ac95ace16a562ebd5866ac7c7d0483125215f7083ca656b0506064c5cf689e\", \"new_fixture_files\": 2, \"raw_footer_chunk\": \"ea62af\", \"reports\": [{\"archive\": \"docs/evidence/runs/v1-06f-baseline-completed.json\", \"controller_invocations\": 2, \"native_actions\": 1, \"sha256\": \"daf920ba002c4a971e91efda970e2d79f63872f6fb34c9d63cfa06037fd14d91\", \"worker_exit_code\": 0}, {\"archive\": \"docs/evidence/runs/v1-06f-baseline-failed.json\", \"controller_invocations\": 2, \"native_actions\": 1, \"sha256\": \"87cccd2ec83e0499dbc2a1a4660aefd67ae849dc78d5a1742069ad03c87e2e49\", \"worker_exit_code\": 7}], \"snapshots\": [{\"origin\": \"fixed_baseline_source\", \"path\": \"docs/evidence/snapshots/v1-06f-baseline-cpu-action-budget.py\", \"sha256\": \"de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761\", \"source\": \"src/orze/core/cpu_action_budget.py\"}, {\"origin\": \"fixed_baseline_source\", \"path\": \"docs/evidence/snapshots/v1-06f-baseline-cpu-phase.py\", \"sha256\": \"0508c838d5a3dadeac62d7ab6fe20d21d0b62c7aeb270ba9bcac345cec970c6b\", \"source\": \"src/orze/engine/cpu_phase.py\"}, {\"origin\": \"new_frozen_behavior_fixture\", \"path\": \"docs/evidence/snapshots/v1-06f-baseline-product-tests.py\", \"sha256\": \"406a62346e0877a45cdbfbc9b7f7285bc47afe37c5d9dfe879934ced29172c33\", \"source\": \"tests/test_cpu_terminal_settlement_recovery.py\"}, {\"origin\": \"new_frozen_behavior_fixture\", \"path\": \"docs/evidence/snapshots/v1-06f-baseline-recovery-helpers.py\", \"sha256\": \"95487954cd41c4eb47362f0545b5da8363efadc8863e3e87ca488a1b167446d7\", \"source\": \"tests/cpu_terminal_recovery_helpers.py\"}], \"status\": \"passed\", \"workers_started_by_this_check\": 0}\n"
+        }
+      }
+    ],
+    "checker_source_at_those_checks": "b1a1690a0acce9b1ddca2f32740bfbd77b1eb87aa0ac7288df5fb3b3e0c33fd5",
+    "checker_history_note": "The checker was subsequently statically hardened by root. Its historical source hash above is not a claim that the current file still has those bytes."
+  },
+  "owned_tests": {
+    "path": "tests/test_cpu_terminal_recovery_guards.py",
+    "sha256": "324ac530f37b82b0409fab2486acfb4a01d75b12ee9d2ec7a7f60ed8f9b1fd1c",
+    "bytes": 11593,
+    "cases": 20,
+    "test_functions": 10,
+    "literal_asserts": 21,
+    "classification": "20 first-green new recovery refusal requirements. Zero observed product-red or fixture-failure cases in this group.",
+    "case_groups": {
+      "native_binding": 7,
+      "source_binding": 3,
+      "current_lifecycle": 1,
+      "prepared_effect_plan": 1,
+      "catalog_route": 1,
+      "ready_member_type": 1,
+      "post_enumeration_source_change": 1,
+      "preexisting_stop_or_hold": 3,
+      "replication_metadata": 1,
+      "artifact_root_record_relation": 1
+    },
+    "source_data": "Each case starts from make_crashed_project's real native terminal/controller crash. Only then does the test introduce an explicitly invalid temporary metadata input or a real durable Stop. Original TREE evidence is never synthesized as positive authority.",
+    "kernel_seam": "One case transparently wraps _settle after enumeration, uses another real SQLite connection to change source metadata, then calls the original guarded kernel. Its later CLI is a fresh interpreter and cannot access the test callback.",
+    "growth": {
+      "initial_18_sha256": "0727735b93a19c2efeebdd78d10c7472180e5681d48365cf62b8f9f8ee03f0f8",
+      "initial_test_functions": 8,
+      "initial_literal_asserts": 19,
+      "added_test_functions": 2,
+      "added_cases": 2,
+      "original_complete_file_is_exact_prefix": true,
+      "comparison": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json\nfrom pathlib import Path\np=Path('tests/test_cpu_terminal_recovery_guards.py'); raw=p.read_bytes()\nprefix=raw.split(b'\\n\\ndef test_recovery_refuses_unbound_replication_request_field',1)[0]\nassert hashlib.sha256(prefix).hexdigest()=='0727735b93a19c2efeebdd78d10c7472180e5681d48365cf62b8f9f8ee03f0f8'\ntree=ast.parse(raw)\nprint(json.dumps({'path':str(p),'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'old_18_case_file_prefix_byte_exact':True,'test_functions':sum(isinstance(n,ast.FunctionDef) and n.name.startswith('test_') for n in tree.body),'literal_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(tree)),'planned_cases':20,'executed_cases':0},sort_keys=True))\nPY",
+        "execution": {
+          "chunk_id": "839f6c",
+          "wall_time_seconds": 0.000004097,
+          "exit_code": 0,
+          "original_token_count": 70,
+          "output": "{\"bytes\": 11593, \"executed_cases\": 0, \"literal_asserts\": 21, \"old_18_case_file_prefix_byte_exact\": true, \"path\": \"tests/test_cpu_terminal_recovery_guards.py\", \"planned_cases\": 20, \"sha256\": \"324ac530f37b82b0409fab2486acfb4a01d75b12ee9d2ec7a7f60ed8f9b1fd1c\", \"test_functions\": 10}\n"
+        }
+      }
+    },
+    "frozen_snapshot": {
+      "archive": "docs/evidence/snapshots/v1-06f-candidate1-tests-test-cpu-terminal-recovery-guards.py",
+      "read_chunk": "e1ad65",
+      "sha256": "324ac530f37b82b0409fab2486acfb4a01d75b12ee9d2ec7a7f60ed8f9b1fd1c",
+      "source": "tests/test_cpu_terminal_recovery_guards.py"
+    }
+  },
+  "first_candidate": {
+    "attribution": "Executed by root. This report independently checked the saved original command/chunks, manifests and archive bytes; it did not repeat pytest.",
+    "history": {
+      "path": "docs/evidence/2026-09-11-v1-06f-candidate1-history.json",
+      "sha256": "cdb9e6d8af51960b265e3a8c52ceb2e8e844b29c4cfc19d0b56117d3af1d67f6"
+    },
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_terminal_settlement_recovery.py tests/test_cpu_terminal_recovery_guards.py tests/test_cpu_terminal_recovery_barrier.py tests/test_cpu_terminal_recovery_controls.py --tb=short",
+    "invocations": [
+      {
+        "chunk_id": "4582ea",
+        "original_token_count": 0,
+        "output": "",
+        "session_id": 1671,
+        "wall_time_seconds": 1.001034234
+      },
+      {
+        "chunk_id": "1803ba",
+        "original_token_count": 8,
+        "output": "................................",
+        "session_id": 1671,
+        "wall_time_seconds": 5.001743942
+      },
+      {
+        "chunk_id": "c6582e",
+        "exit_code": 0,
+        "original_token_count": 2894,
+        "output": ".......                                  [100%]CPU_RECOVERY_REPORTS=[{\"bytes\": 202277, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_restart_settles_confirmed0/project-0/recovery-report.json\", \"sha256\": \"d1be45107d81fa7bbdbb0fc6908aed9b2c6f9c974fff7d4bcf2a0a6db40ccf5f\", \"test\": \"tests/test_cpu_terminal_settlement_recovery.py::test_restart_settles_confirmed_terminal_without_repeating_original_worker[0]\"}, {\"bytes\": 190274, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_restart_settles_confirmed1/project-0/recovery-report.json\", \"sha256\": \"2e731ccd1e361cbf455d74f3aeb54c84ffedb8f7becbcdff74d2e80e95724c34\", \"test\": \"tests/test_cpu_terminal_settlement_recovery.py::test_restart_settles_confirmed_terminal_without_repeating_original_worker[7]\"}, {\"bytes\": 141106, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_0/project-0/recovery-report.json\", \"sha256\": \"632c24c73e1312938e5eb4e9f1b67933ca195db783c2150cbf3404788f589b16\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[origin]\"}, {\"bytes\": 141079, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_1/project-0/recovery-report.json\", \"sha256\": \"59390bc6335e7cb15405a77e33da4313a9b35aa7166d581465b65d6631de922c\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[kind]\"}, {\"bytes\": 141135, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_2/project-0/recovery-report.json\", \"sha256\": \"85f98415a8d03f793e5cf80760806df5a57bfcb222d3166046949b8ea54a4d48\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[resource]\"}, {\"bytes\": 141165, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_3/project-0/recovery-report.json\", \"sha256\": \"fe68ce58e8eaf20d68f353873b076feb413f2e79082e9c5e14b1ad3158ceb489\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[attempt_ref]\"}, {\"bytes\": 141152, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_4/project-0/recovery-report.json\", \"sha256\": \"4722dfdc847d04f0ac4491ba624d33003a08429bc828cb1c513f1ff8e5015834\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[process_pid]\"}, {\"bytes\": 141172, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_5/project-0/recovery-report.json\", \"sha256\": \"91ad2a9f2af5480021da1cbdf7045777eb5af1e3846cb537d84806ed6f29d62b\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[command_sha256]\"}, {\"bytes\": 141177, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_6/project-0/recovery-report.json\", \"sha256\": \"ff52545817a33a28ad1eee9e29b41ade5ddc6f323952075b0e3367564e0801d6\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[timeout_seconds]\"}, {\"bytes\": 141128, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_7/project-0/recovery-report.json\", \"sha256\": \"99142a6009cc4a94bebf7bcb4518097bf0f597697de87bde2563211062beec6f\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[database]\"}, {\"bytes\": 141137, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_8/project-0/recovery-report.json\", \"sha256\": \"362b4fd90ff60919b82195355ba85f97e7ae80325caab252b00c8813eddbaf0e\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[claim_sha256]\"}, {\"bytes\": 141160, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_9/project-0/recovery-report.json\", \"sha256\": \"9e76b88081c3cb26850da1b251eee81a6d1479d7bcda5b3928b73098bf11f9d3\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[config_sha256]\"}, {\"bytes\": 141334, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_10/project-0/recovery-report.json\", \"sha256\": \"5dd454a2eb46363492b070012bf5d5697bf92d1f0fa7c1287f7ae866f8de55da\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_current_lifecycle\"}, {\"bytes\": 141180, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_rehashed0/project-0/recovery-report.json\", \"sha256\": \"198b439d240886b5955c3ace3c513e9f827914202add71cf1fc79e583121155d\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_rehashed_non_cpu_prepared_plan\"}, {\"bytes\": 141332, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_11/project-0/recovery-report.json\", \"sha256\": \"b270248e2935ff06e8068efa5ec8929078ab3a1015c922a04f66f33cb3ff5738\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_catalog_route\"}, {\"bytes\": 141371, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_12/project-0/recovery-report.json\", \"sha256\": \"4aa32433ecdf5c193739a83565568a7847703e39864937df972d85ad9732fa46\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_ready_member_identity\"}, {\"bytes\": 182511, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_rechecks_source_0/project-0/recovery-report.json\", \"sha256\": \"e2717690e32d90c94977c6de47bab9541ccd40acc1a05b97585bc408622dfc6a\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_rechecks_source_after_enumeration_before_settlement\"}, {\"bytes\": 142709, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au0/project-0/recovery-report.json\", \"sha256\": \"1b08a93c82436252de4dedee10b5dd0be27ca9253e40b189fd70fc1319377ebc\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[ordinary_stop]\"}, {\"bytes\": 142584, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au1/project-0/recovery-report.json\", \"sha256\": \"47d4f39c17a3c0c089557211c9ea36c3f221d3689f308f59c1b0b1f173078791\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[storage_hold]\"}, {\"bytes\": 142753, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au2/project-0/recovery-report.json\", \"sha256\": \"84732b9a46b0e4ecc350551733a3f8b17aec22506e693820be9b619594a73302\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[masked_storage_hold]\"}, {\"bytes\": 141291, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_unbound_0/project-0/recovery-report.json\", \"sha256\": \"ae64f707265d592718f55dd19cb7360c99c0245bdaafbec3b83017ed52547e4d\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_unbound_replication_request_field\"}, {\"bytes\": 141245, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_artifact0/project-0/recovery-report.json\", \"sha256\": \"afa1667c0fed5e43e9b29d10178786d2557f480888917ecc35928fb27c226f89\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_artifact_root_unrelated_to_published_records\"}, {\"bytes\": 99293, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_post_delete_fsync_uncerta0/project-0/recovery-report.json\", \"sha256\": \"feff76ee4e2292c629d8df9185c8e4b4a52a29d8cd1c520ed754b30411e644f7\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_post_delete_fsync_uncertainty_blocks_fresh_restart_with_zero_bound[effect]\"}, {\"bytes\": 99295, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_post_delete_fsync_uncerta1/project-0/recovery-report.json\", \"sha256\": \"65f5fc32d0735c826efaed4c526360426def1062ae6f9e14b55232a852770a50\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_post_delete_fsync_uncertainty_blocks_fresh_restart_with_zero_bound[recovery]\"}, {\"bytes\": 63496, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_in_progress_denies_alread0/project-0/recovery-report.json\", \"sha256\": \"7ab93f64c5c32886a6b5aeb8a0e504b3dd4bf07fed8880a8f4f693b14a13c97b\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_in_progress_denies_already_running_peer_admission[reserve]\"}, {\"bytes\": 63501, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_in_progress_denies_alread1/project-0/recovery-report.json\", \"sha256\": \"afdab4f9912b9e66663f3b2d4844227be23a3de83fb979bff6d7488fa1672724\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_in_progress_denies_already_running_peer_admission[require_permit]\"}, {\"bytes\": 62309, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_two_recovery_consumers_do0/project-0/recovery-report.json\", \"sha256\": \"907d51cbaa5e69fbd881d82f9f6d8490248f26ef13b825219dfdfbdb16710953\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_two_recovery_consumers_do_not_repeat_settlement_or_poison_owner\"}, {\"bytes\": 62737, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_legal_peer_decision_after0/project-0/recovery-report.json\", \"sha256\": \"0c1903c9c6fbf61c18e00b63bb6ec93f0480063a73e42cc895be71830c596665\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_legal_peer_decision_after_complete_commit_preserves_exact_owner_result\"}, {\"bytes\": 96911, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_transaction_unkn0/project-0/recovery-report.json\", \"sha256\": \"65b8bf41fe321e8150e8ceb020129373c89c5c6a1d3d9e74c51d93926a6072b6\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_recovery_transaction_unknown_is_not_an_ordinary_success[IN_PROGRESS-rollback]\"}, {\"bytes\": 99203, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_transaction_unkn1/project-0/recovery-report.json\", \"sha256\": \"af8b17b07f743b4a12c36c737cad16a0a8593c08e4394fc8d25ebc9ea9b9e4c4\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_recovery_transaction_unknown_is_not_an_ordinary_success[COMPLETE-rollback]\"}, {\"bytes\": 100666, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_transaction_unkn2/project-0/recovery-report.json\", \"sha256\": \"97e3ebdb270d9b1c201bd1eedd9592e353fa95560a405149f515627d4fd50815\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_recovery_transaction_unknown_is_not_an_ordinary_success[COMPLETE-committed_raise]\"}, {\"bytes\": 61340, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_existing_unqualified_gate0/project-0/recovery-report.json\", \"sha256\": \"96d6070696436ec1df564e7af68d5f5dd762a3f253bb96e06c6e08984ce7e473\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_existing_unqualified_gate_owner_is_preserved\"}, {\"bytes\": 61332, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_caller_t0/project-0/recovery-report.json\", \"sha256\": \"735ef6977e9abc4f3a4e6faaa5d28ded80745ac555c291c1ce5d48e915d8cc44\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_recovery_refuses_caller_transaction_without_consuming_it\"}, {\"bytes\": 62187, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_actual_peer_nonce_replace0/project-0/recovery-report.json\", \"sha256\": \"0201762364e1e9c2377f8a857e90d7b2b5b326d282f68cbfd611f9ddb600a7ff\", \"test\": \"tests/test_cpu_terminal_recovery_barrier.py::test_actual_peer_nonce_replacement_cannot_be_completed_by_old_owner\"}]\n\n=============================== warnings summary ===============================\n../../../../../../home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885\n  /home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; cpu_terminal_recovery_helpers\n    self.import_plugin(import_spec)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n39 passed, 1 warning in 44.20s\n",
+        "wall_time_seconds": 0.000002579
+      }
+    ],
+    "result": {
+      "passed": 39,
+      "failed": 0,
+      "warnings": 1,
+      "seconds": 44.2
+    },
+    "source_points": {
+      "src/orze/core/cpu_action_budget.py": "b862ba337cbde23b89016fc4a9f0cc0a28dafd192817df8d9d4b5ff4d1c2cf14",
+      "src/orze/engine/cpu_phase.py": "f27f9f096d429c276dbcc7e24b1fdb6e2f849d46b0a3a7e55a712fe383dcddf8",
+      "tests/test_cpu_terminal_recovery_guards.py": "324ac530f37b82b0409fab2486acfb4a01d75b12ee9d2ec7a7f60ed8f9b1fd1c"
+    },
+    "prepost": {
+      "files": 760,
+      "before_chunk": "790ff3",
+      "after_chunk": "1b24b4",
+      "exact": true
+    },
+    "counts": {
+      "own_guard_cases": 20,
+      "root_original_product_cases": 2,
+      "root_barrier_cases": 12,
+      "no_process_compatibility_controls": 5,
+      "raw_projects": 34
+    },
+    "snapshots": [
+      {
+        "archive": "docs/evidence/snapshots/v1-06f-candidate1-src-orze-core-cpu-action-budget.py",
+        "read_chunk": "3d86b6",
+        "sha256": "b862ba337cbde23b89016fc4a9f0cc0a28dafd192817df8d9d4b5ff4d1c2cf14",
+        "source": "src/orze/core/cpu_action_budget.py"
+      },
+      {
+        "archive": "docs/evidence/snapshots/v1-06f-candidate1-src-orze-engine-cpu-phase.py",
+        "read_chunk": "5f09ca",
+        "sha256": "f27f9f096d429c276dbcc7e24b1fdb6e2f849d46b0a3a7e55a712fe383dcddf8",
+        "source": "src/orze/engine/cpu_phase.py"
+      },
+      {
+        "archive": "docs/evidence/snapshots/v1-06f-candidate1-tests-cpu-terminal-recovery-helpers.py",
+        "read_chunk": "3a1262",
+        "sha256": "6222c9d58bee79fcfafcefd8d634101b1d2f690267dd48e1fcecad2cc37d020b",
+        "source": "tests/cpu_terminal_recovery_helpers.py"
+      },
+      {
+        "archive": "docs/evidence/snapshots/v1-06f-candidate1-tests-test-cpu-terminal-settlement-recovery.py",
+        "read_chunk": "09568e",
+        "sha256": "406a62346e0877a45cdbfbc9b7f7285bc47afe37c5d9dfe879934ced29172c33",
+        "source": "tests/test_cpu_terminal_settlement_recovery.py"
+      },
+      {
+        "archive": "docs/evidence/snapshots/v1-06f-candidate1-tests-test-cpu-terminal-recovery-guards.py",
+        "read_chunk": "e1ad65",
+        "sha256": "324ac530f37b82b0409fab2486acfb4a01d75b12ee9d2ec7a7f60ed8f9b1fd1c",
+        "source": "tests/test_cpu_terminal_recovery_guards.py"
+      },
+      {
+        "archive": "docs/evidence/snapshots/v1-06f-candidate1-tests-test-cpu-terminal-recovery-barrier.py",
+        "read_chunk": "a5ef12",
+        "sha256": "4cf56de07db9b0db30df9a1e22b4e89360e6eb660373936937b8e79a6aaa858c",
+        "source": "tests/test_cpu_terminal_recovery_barrier.py"
+      },
+      {
+        "archive": "docs/evidence/snapshots/v1-06f-candidate1-tests-test-cpu-terminal-recovery-controls.py",
+        "read_chunk": "f57f5d",
+        "sha256": "d75dff5461d95fc7af60ba096633d0e330bbe3083cf58ddc021f2c478c943c13",
+        "source": "tests/test_cpu_terminal_recovery_controls.py"
+      },
+      {
+        "archive": "docs/evidence/snapshots/v1-06f-candidate1-docs-evidence-checks-v1-06f-runs-check.py",
+        "read_chunk": "f0f900",
+        "sha256": "f8467952f89a35ab869dda2d203d92334913c7c55f691a2372b64229c41872d7",
+        "source": "docs/evidence/checks/v1-06f-runs-check.py"
+      }
+    ],
+    "independent_archive_binding": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,re,subprocess\nfrom pathlib import Path\nhp=Path('docs/evidence/2026-09-11-v1-06f-candidate1-history.json'); h=json.loads(hp.read_bytes())\ndef manifest(text):\n out={}\n for line in text.splitlines():\n  sha,path=line.split('  ',1); assert re.fullmatch('[0-9a-f]{64}',sha) and path not in out; out[path]=sha\n return out\npre,post=(manifest(h[k]['output']) for k in ('before','after')); assert pre==post and len(pre)==760\nstdout=''.join(r['output'] for r in h['invocations']); assert h['invocations'][-1]['exit_code']==0 and '39 passed, 1 warning in 44.20s' in stdout\nmarker=json.loads(next(s.split('CPU_RECOVERY_REPORTS=',1)[1] for s in stdout.splitlines() if 'CPU_RECOVERY_REPORTS=' in s))\nassert len(marker)==len(h['reports'])==34\nowned=[]\nfor item in h['reports']:\n assert {k:v for k,v in item.items() if k!='archive'} in marker\n raw=Path(item['archive']).read_bytes(); assert len(raw)==item['bytes'] and hashlib.sha256(raw).hexdigest()==item['sha256']\n assert raw==Path(item['path']).read_bytes()\n if item['test'].startswith('tests/test_cpu_terminal_recovery_guards.py::'): owned.append(item)\nassert len(owned)==20 and len({x['test'] for x in owned})==20\nfor item in h['snapshots']:\n raw=Path(item['archive']).read_bytes(); ast.parse(raw); assert hashlib.sha256(raw).hexdigest()==item['sha256']\n if item['source'] in pre: assert item['sha256']==pre[item['source']]\nbase='55c2ed321dc759b6b96d721e0b3b423151bbc49b'\nold=[p for p in subprocess.check_output(['git','ls-tree','-r','--name-only',base,'--','tests'],text=True).splitlines() if p.endswith('.py')]\nfor path in old:\n assert Path(path).read_bytes()==subprocess.check_output(['git','show',base+':'+path]),path\np=Path('tests/test_cpu_terminal_recovery_guards.py'); raw=p.read_bytes(); prefix=raw.split(b'\\n\\ndef test_recovery_refuses_unbound_replication_request_field',1)[0]\nassert hashlib.sha256(prefix).hexdigest()=='0727735b93a19c2efeebdd78d10c7472180e5681d48365cf62b8f9f8ee03f0f8'\nprint(json.dumps({'status':'passed','history_path':str(hp),'history_sha256':hashlib.sha256(hp.read_bytes()).hexdigest(),'prepost_files_exact':len(pre),'source_before_chunk':h['before']['chunk_id'],'source_after_chunk':h['after']['chunk_id'],'footer_chunk':h['invocations'][-1]['chunk_id'],'cases':39,'archived_reports_exact':len(h['reports']),'archived_report_bytes':sum(x['bytes'] for x in h['reports']),'candidate_snapshots_exact':len(h['snapshots']),'old_tracked_python_tests_byte_exact':len(old),'owned_guard_reports':owned,'original_18_case_file_prefix_exact':True,'source_points':{k:pre[k] for k in ('src/orze/core/cpu_action_budget.py','src/orze/engine/cpu_phase.py','tests/test_cpu_terminal_recovery_guards.py')},'additional_workers_started':0},sort_keys=True))\nPY",
+      "execution": {
+        "chunk_id": "08730b",
+        "wall_time_seconds": 0.895247066,
+        "exit_code": 0,
+        "original_token_count": 2108,
+        "output": "{\"additional_workers_started\": 0, \"archived_report_bytes\": 4194542, \"archived_reports_exact\": 34, \"candidate_snapshots_exact\": 8, \"cases\": 39, \"footer_chunk\": \"c6582e\", \"history_path\": \"docs/evidence/2026-09-11-v1-06f-candidate1-history.json\", \"history_sha256\": \"cdb9e6d8af51960b265e3a8c52ceb2e8e844b29c4cfc19d0b56117d3af1d67f6\", \"old_tracked_python_tests_byte_exact\": 465, \"original_18_case_file_prefix_exact\": true, \"owned_guard_reports\": [{\"archive\": \"docs/evidence/runs/v1-06f-candidate1-02.json\", \"bytes\": 141106, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_0/project-0/recovery-report.json\", \"sha256\": \"632c24c73e1312938e5eb4e9f1b67933ca195db783c2150cbf3404788f589b16\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[origin]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-03.json\", \"bytes\": 141079, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_1/project-0/recovery-report.json\", \"sha256\": \"59390bc6335e7cb15405a77e33da4313a9b35aa7166d581465b65d6631de922c\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[kind]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-04.json\", \"bytes\": 141135, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_2/project-0/recovery-report.json\", \"sha256\": \"85f98415a8d03f793e5cf80760806df5a57bfcb222d3166046949b8ea54a4d48\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[resource]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-05.json\", \"bytes\": 141165, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_3/project-0/recovery-report.json\", \"sha256\": \"fe68ce58e8eaf20d68f353873b076feb413f2e79082e9c5e14b1ad3158ceb489\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[attempt_ref]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-06.json\", \"bytes\": 141152, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_4/project-0/recovery-report.json\", \"sha256\": \"4722dfdc847d04f0ac4491ba624d33003a08429bc828cb1c513f1ff8e5015834\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[process_pid]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-07.json\", \"bytes\": 141172, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_5/project-0/recovery-report.json\", \"sha256\": \"91ad2a9f2af5480021da1cbdf7045777eb5af1e3846cb537d84806ed6f29d62b\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[command_sha256]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-08.json\", \"bytes\": 141177, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_6/project-0/recovery-report.json\", \"sha256\": \"ff52545817a33a28ad1eee9e29b41ade5ddc6f323952075b0e3367564e0801d6\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[timeout_seconds]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-09.json\", \"bytes\": 141128, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_7/project-0/recovery-report.json\", \"sha256\": \"99142a6009cc4a94bebf7bcb4518097bf0f597697de87bde2563211062beec6f\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[database]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-10.json\", \"bytes\": 141137, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_8/project-0/recovery-report.json\", \"sha256\": \"362b4fd90ff60919b82195355ba85f97e7ae80325caab252b00c8813eddbaf0e\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[claim_sha256]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-11.json\", \"bytes\": 141160, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_9/project-0/recovery-report.json\", \"sha256\": \"9e76b88081c3cb26850da1b251eee81a6d1479d7bcda5b3928b73098bf11f9d3\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[config_sha256]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-12.json\", \"bytes\": 141334, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_10/project-0/recovery-report.json\", \"sha256\": \"5dd454a2eb46363492b070012bf5d5697bf92d1f0fa7c1287f7ae866f8de55da\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_current_lifecycle\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-13.json\", \"bytes\": 141180, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_rehashed0/project-0/recovery-report.json\", \"sha256\": \"198b439d240886b5955c3ace3c513e9f827914202add71cf1fc79e583121155d\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_rehashed_non_cpu_prepared_plan\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-14.json\", \"bytes\": 141332, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_11/project-0/recovery-report.json\", \"sha256\": \"b270248e2935ff06e8068efa5ec8929078ab3a1015c922a04f66f33cb3ff5738\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_catalog_route\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-15.json\", \"bytes\": 141371, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_12/project-0/recovery-report.json\", \"sha256\": \"4aa32433ecdf5c193739a83565568a7847703e39864937df972d85ad9732fa46\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_ready_member_identity\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-16.json\", \"bytes\": 182511, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_rechecks_source_0/project-0/recovery-report.json\", \"sha256\": \"e2717690e32d90c94977c6de47bab9541ccd40acc1a05b97585bc408622dfc6a\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_rechecks_source_after_enumeration_before_settlement\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-17.json\", \"bytes\": 142709, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au0/project-0/recovery-report.json\", \"sha256\": \"1b08a93c82436252de4dedee10b5dd0be27ca9253e40b189fd70fc1319377ebc\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[ordinary_stop]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-18.json\", \"bytes\": 142584, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au1/project-0/recovery-report.json\", \"sha256\": \"47d4f39c17a3c0c089557211c9ea36c3f221d3689f308f59c1b0b1f173078791\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[storage_hold]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-19.json\", \"bytes\": 142753, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au2/project-0/recovery-report.json\", \"sha256\": \"84732b9a46b0e4ecc350551733a3f8b17aec22506e693820be9b619594a73302\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[masked_storage_hold]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-20.json\", \"bytes\": 141291, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_unbound_0/project-0/recovery-report.json\", \"sha256\": \"ae64f707265d592718f55dd19cb7360c99c0245bdaafbec3b83017ed52547e4d\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_unbound_replication_request_field\"}, {\"archive\": \"docs/evidence/runs/v1-06f-candidate1-21.json\", \"bytes\": 141245, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_artifact0/project-0/recovery-report.json\", \"sha256\": \"afa1667c0fed5e43e9b29d10178786d2557f480888917ecc35928fb27c226f89\", \"test\": \"tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_artifact_root_unrelated_to_published_records\"}], \"prepost_files_exact\": 760, \"source_after_chunk\": \"1b24b4\", \"source_before_chunk\": \"790ff3\", \"source_points\": {\"src/orze/core/cpu_action_budget.py\": \"b862ba337cbde23b89016fc4a9f0cc0a28dafd192817df8d9d4b5ff4d1c2cf14\", \"src/orze/engine/cpu_phase.py\": \"f27f9f096d429c276dbcc7e24b1fdb6e2f849d46b0a3a7e55a712fe383dcddf8\", \"tests/test_cpu_terminal_recovery_guards.py\": \"324ac530f37b82b0409fab2486acfb4a01d75b12ee9d2ec7a7f60ed8f9b1fd1c\"}, \"status\": \"passed\"}\n"
+      }
+    },
+    "independent_guard_record_consistency": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json\nfrom pathlib import Path\nroot=Path('/tmp/pytest-of-erik/pytest-5044')\nexpected={*(f'binding_{k}' for k in ('origin','kind','resource','attempt_ref','process_pid','command_sha256','timeout_seconds')),*(f'source_{k}' for k in ('database','claim_sha256','config_sha256')),'stage_projection_changed','wrong_effect_operation','catalog_route_changed','ready_identity_type_changed','restart_after_enumeration_fault','ordinary_stop','storage_hold','masked_storage_hold','forged_replication_metadata','artifact_root_record_mismatch'}\nprotected=('ideas','idea_state','idea_transitions','idea_stage_state','idea_stage_transitions','execution_attempts','research_artifacts','research_observations','cpu_action_reservations')\nrows=[]; identities=set(); workers=set(); observed=set()\nfor path in sorted(root.rglob('recovery-report.json')):\n raw=path.read_bytes(); report=json.loads(raw); calls=report['calls']\n if not calls or calls[-1]['label'] not in expected: continue\n label=calls[-1]['label']; assert label not in observed; observed.add(label)\n assert [call['exit_code'] for call in calls]==[86,75]\n shots={s['label']:s for s in report['snapshots']}; assert len(shots)==len(report['snapshots'])\n for call in calls:\n  closure=call['controller_closure']; binding=call['controller_binding']\n  assert closure['event']=='TREE_CLOSED' and closure['wait_proof']=='ECHILD_WALL' and closure['stop_requested'] is False and closure['forced_cleanup'] is False\n  assert closure['binding']==binding and closure['worker_returncode']==call['exit_code']\n  birth=tuple(binding['worker'][key] for key in ('pid','start_ticks')); assert birth not in identities; identities.add(birth)\n  assert [json.loads(line.split('=',1)[1]) for line in call['stdout'].splitlines() if line.startswith('CPU_RECOVERY_META=')]==call['metadata']\n  assert all({k:m[k] for k in ('pid','start_ticks')}==binding['worker'] for m in call['metadata'])\n first=shots[calls[0]['after']]; terminal=json.loads(first['database']['execution_attempts'][0]['terminal_json'])\n assert terminal['outcome']=='completed' and terminal['return_code']==0\n assert terminal['process_tree']['event']=='TREE_CLOSED' and terminal['process_tree']['wait_proof']=='ECHILD_WALL'\n assert len(first['worker_events'])==1\n worker=tuple(first['worker_events'][0][key] for key in ('pid','start_ticks')); assert worker not in workers; workers.add(worker)\n before,after=(shots[calls[-1][key]] for key in ('before','after'))\n for table in protected: assert before['database'][table]==after['database'][table],(label,table)\n assert before['files']==after['files'] and before['worker_events']==after['worker_events']==first['worker_events']\n assert len(after['database']['execution_attempts'])==1 and after['database']['cpu_action_reservations'][0]['state']=='BOUND'\n assert next(r['status'] for r in after['database']['ideas'] if r['idea_id']=='idea-second')=='queued'\n if label in ('ordinary_stop','storage_hold','masked_storage_hold'):\n  assert before['database']['cpu_action_scopes']==after['database']['cpu_action_scopes']\n rows.append({'label':label,'path':str(path),'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'native_workers':1,'controller_calls':2,'exit_codes':[86,75]})\nassert observed==expected and len(rows)==20 and len(identities)==40 and len(workers)==20\nprint(json.dumps({'status':'passed','reports':rows,'cases':20,'actual_native_worker_occurrences':20,'fresh_controller_occurrences':40,'negative_inputs':'Only after the real first terminal: explicitly controlled temporary metadata faults or durable Stops; no forged positive TREE proof.','business_rows_files_and_worker_log_unchanged_across_refusal':True,'additional_workers_started_by_this_audit':0},sort_keys=True))\nPY",
+      "execution": {
+        "chunk_id": "292141",
+        "wall_time_seconds": 0.000003823,
+        "exit_code": 0,
+        "original_token_count": 1621,
+        "output": "{\"actual_native_worker_occurrences\": 20, \"additional_workers_started_by_this_audit\": 0, \"business_rows_files_and_worker_log_unchanged_across_refusal\": true, \"cases\": 20, \"fresh_controller_occurrences\": 40, \"negative_inputs\": \"Only after the real first terminal: explicitly controlled temporary metadata faults or durable Stops; no forged positive TREE proof.\", \"reports\": [{\"bytes\": 142709, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"ordinary_stop\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au0/project-0/recovery-report.json\", \"sha256\": \"1b08a93c82436252de4dedee10b5dd0be27ca9253e40b189fd70fc1319377ebc\"}, {\"bytes\": 142584, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"storage_hold\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au1/project-0/recovery-report.json\", \"sha256\": \"47d4f39c17a3c0c089557211c9ea36c3f221d3689f308f59c1b0b1f173078791\"}, {\"bytes\": 142753, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"masked_storage_hold\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au2/project-0/recovery-report.json\", \"sha256\": \"84732b9a46b0e4ecc350551733a3f8b17aec22506e693820be9b619594a73302\"}, {\"bytes\": 182511, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"restart_after_enumeration_fault\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_rechecks_source_0/project-0/recovery-report.json\", \"sha256\": \"e2717690e32d90c94977c6de47bab9541ccd40acc1a05b97585bc408622dfc6a\"}, {\"bytes\": 141245, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"artifact_root_record_mismatch\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_artifact0/project-0/recovery-report.json\", \"sha256\": \"afa1667c0fed5e43e9b29d10178786d2557f480888917ecc35928fb27c226f89\"}, {\"bytes\": 141106, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"binding_origin\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_0/project-0/recovery-report.json\", \"sha256\": \"632c24c73e1312938e5eb4e9f1b67933ca195db783c2150cbf3404788f589b16\"}, {\"bytes\": 141079, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"binding_kind\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_1/project-0/recovery-report.json\", \"sha256\": \"59390bc6335e7cb15405a77e33da4313a9b35aa7166d581465b65d6631de922c\"}, {\"bytes\": 141334, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"stage_projection_changed\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_10/project-0/recovery-report.json\", \"sha256\": \"5dd454a2eb46363492b070012bf5d5697bf92d1f0fa7c1287f7ae866f8de55da\"}, {\"bytes\": 141332, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"catalog_route_changed\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_11/project-0/recovery-report.json\", \"sha256\": \"b270248e2935ff06e8068efa5ec8929078ab3a1015c922a04f66f33cb3ff5738\"}, {\"bytes\": 141371, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"ready_identity_type_changed\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_12/project-0/recovery-report.json\", \"sha256\": \"4aa32433ecdf5c193739a83565568a7847703e39864937df972d85ad9732fa46\"}, {\"bytes\": 141135, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"binding_resource\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_2/project-0/recovery-report.json\", \"sha256\": \"85f98415a8d03f793e5cf80760806df5a57bfcb222d3166046949b8ea54a4d48\"}, {\"bytes\": 141165, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"binding_attempt_ref\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_3/project-0/recovery-report.json\", \"sha256\": \"fe68ce58e8eaf20d68f353873b076feb413f2e79082e9c5e14b1ad3158ceb489\"}, {\"bytes\": 141152, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"binding_process_pid\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_4/project-0/recovery-report.json\", \"sha256\": \"4722dfdc847d04f0ac4491ba624d33003a08429bc828cb1c513f1ff8e5015834\"}, {\"bytes\": 141172, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"binding_command_sha256\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_5/project-0/recovery-report.json\", \"sha256\": \"91ad2a9f2af5480021da1cbdf7045777eb5af1e3846cb537d84806ed6f29d62b\"}, {\"bytes\": 141177, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"binding_timeout_seconds\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_6/project-0/recovery-report.json\", \"sha256\": \"ff52545817a33a28ad1eee9e29b41ade5ddc6f323952075b0e3367564e0801d6\"}, {\"bytes\": 141128, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"source_database\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_7/project-0/recovery-report.json\", \"sha256\": \"99142a6009cc4a94bebf7bcb4518097bf0f597697de87bde2563211062beec6f\"}, {\"bytes\": 141137, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"source_claim_sha256\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_8/project-0/recovery-report.json\", \"sha256\": \"362b4fd90ff60919b82195355ba85f97e7ae80325caab252b00c8813eddbaf0e\"}, {\"bytes\": 141160, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"source_config_sha256\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_9/project-0/recovery-report.json\", \"sha256\": \"9e76b88081c3cb26850da1b251eee81a6d1479d7bcda5b3928b73098bf11f9d3\"}, {\"bytes\": 141180, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"wrong_effect_operation\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_rehashed0/project-0/recovery-report.json\", \"sha256\": \"198b439d240886b5955c3ace3c513e9f827914202add71cf1fc79e583121155d\"}, {\"bytes\": 141291, \"controller_calls\": 2, \"exit_codes\": [86, 75], \"label\": \"forged_replication_metadata\", \"native_workers\": 1, \"path\": \"/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_unbound_0/project-0/recovery-report.json\", \"sha256\": \"ae64f707265d592718f55dd19cb7360c99c0245bdaafbec3b83017ed52547e4d\"}], \"status\": \"passed\"}\n"
+      }
+    },
+    "guard_epoch_accounting": {
+      "native_worker_occurrences": 20,
+      "fresh_controller_occurrences": 40,
+      "controller_exit_codes_per_case": [
+        86,
+        75
+      ],
+      "additional_workers_started_by_review": 0
+    },
+    "archive_links": [
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-02.json",
+        "bytes": 141106,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_0/project-0/recovery-report.json",
+        "sha256": "632c24c73e1312938e5eb4e9f1b67933ca195db783c2150cbf3404788f589b16",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[origin]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-03.json",
+        "bytes": 141079,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_1/project-0/recovery-report.json",
+        "sha256": "59390bc6335e7cb15405a77e33da4313a9b35aa7166d581465b65d6631de922c",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[kind]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-04.json",
+        "bytes": 141135,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_2/project-0/recovery-report.json",
+        "sha256": "85f98415a8d03f793e5cf80760806df5a57bfcb222d3166046949b8ea54a4d48",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[resource]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-05.json",
+        "bytes": 141165,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_3/project-0/recovery-report.json",
+        "sha256": "fe68ce58e8eaf20d68f353873b076feb413f2e79082e9c5e14b1ad3158ceb489",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[attempt_ref]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-06.json",
+        "bytes": 141152,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_4/project-0/recovery-report.json",
+        "sha256": "4722dfdc847d04f0ac4491ba624d33003a08429bc828cb1c513f1ff8e5015834",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[process_pid]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-07.json",
+        "bytes": 141172,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_5/project-0/recovery-report.json",
+        "sha256": "91ad2a9f2af5480021da1cbdf7045777eb5af1e3846cb537d84806ed6f29d62b",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[command_sha256]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-08.json",
+        "bytes": 141177,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_6/project-0/recovery-report.json",
+        "sha256": "ff52545817a33a28ad1eee9e29b41ade5ddc6f323952075b0e3367564e0801d6",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[timeout_seconds]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-09.json",
+        "bytes": 141128,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_7/project-0/recovery-report.json",
+        "sha256": "99142a6009cc4a94bebf7bcb4518097bf0f597697de87bde2563211062beec6f",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[database]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-10.json",
+        "bytes": 141137,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_8/project-0/recovery-report.json",
+        "sha256": "362b4fd90ff60919b82195355ba85f97e7ae80325caab252b00c8813eddbaf0e",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[claim_sha256]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-11.json",
+        "bytes": 141160,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_9/project-0/recovery-report.json",
+        "sha256": "9e76b88081c3cb26850da1b251eee81a6d1479d7bcda5b3928b73098bf11f9d3",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[config_sha256]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-12.json",
+        "bytes": 141334,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_10/project-0/recovery-report.json",
+        "sha256": "5dd454a2eb46363492b070012bf5d5697bf92d1f0fa7c1287f7ae866f8de55da",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_current_lifecycle"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-13.json",
+        "bytes": 141180,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_rehashed0/project-0/recovery-report.json",
+        "sha256": "198b439d240886b5955c3ace3c513e9f827914202add71cf1fc79e583121155d",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_rehashed_non_cpu_prepared_plan"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-14.json",
+        "bytes": 141332,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_11/project-0/recovery-report.json",
+        "sha256": "b270248e2935ff06e8068efa5ec8929078ab3a1015c922a04f66f33cb3ff5738",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_catalog_route"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-15.json",
+        "bytes": 141371,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_changed_12/project-0/recovery-report.json",
+        "sha256": "4aa32433ecdf5c193739a83565568a7847703e39864937df972d85ad9732fa46",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_ready_member_identity"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-16.json",
+        "bytes": 182511,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_rechecks_source_0/project-0/recovery-report.json",
+        "sha256": "e2717690e32d90c94977c6de47bab9541ccd40acc1a05b97585bc408622dfc6a",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_rechecks_source_after_enumeration_before_settlement"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-17.json",
+        "bytes": 142709,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au0/project-0/recovery-report.json",
+        "sha256": "1b08a93c82436252de4dedee10b5dd0be27ca9253e40b189fd70fc1319377ebc",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[ordinary_stop]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-18.json",
+        "bytes": 142584,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au1/project-0/recovery-report.json",
+        "sha256": "47d4f39c17a3c0c089557211c9ea36c3f221d3689f308f59c1b0b1f173078791",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[storage_hold]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-19.json",
+        "bytes": 142753,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_preexisting_stop_never_au2/project-0/recovery-report.json",
+        "sha256": "84732b9a46b0e4ecc350551733a3f8b17aec22506e693820be9b619594a73302",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[masked_storage_hold]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-20.json",
+        "bytes": 141291,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_unbound_0/project-0/recovery-report.json",
+        "sha256": "ae64f707265d592718f55dd19cb7360c99c0245bdaafbec3b83017ed52547e4d",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_unbound_replication_request_field"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-candidate1-21.json",
+        "bytes": 141245,
+        "path": "/tmp/pytest-of-erik/pytest-5044/test_recovery_refuses_artifact0/project-0/recovery-report.json",
+        "sha256": "afa1667c0fed5e43e9b29d10178786d2557f480888917ecc35928fb27c226f89",
+        "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_artifact_root_unrelated_to_published_records"
+      }
+    ]
+  },
+  "source_review": {
+    "examined_source_points": {
+      "src/orze/core/cpu_action_budget.py": "b862ba337cbde23b89016fc4a9f0cc0a28dafd192817df8d9d4b5ff4d1c2cf14",
+      "src/orze/engine/cpu_phase.py": "f27f9f096d429c276dbcc7e24b1fdb6e2f849d46b0a3a7e55a712fe383dcddf8",
+      "tests/test_cpu_terminal_recovery_guards.py": "324ac530f37b82b0409fab2486acfb4a01d75b12ee9d2ec7a7f60ed8f9b1fd1c"
+    },
+    "readonly_read_chunks": [
+      "977c83",
+      "590b72",
+      "e4b19c",
+      "b16dd2",
+      "476bff",
+      "b52093"
+    ],
+    "conclusions": [
+      "Recovery initializes the existing budget then runs before the normal reserve/GO path. It does not construct an old execution handle, resend GO, call Domain prepare/interpret or republish outputs.",
+      "The persisted nonce-bound IN_PROGRESS barrier precedes settlement, outlives both inner effect-guard and outer source-gate exits, and is checked even for zero BOUND. Existing peers' reserve/bind/require_permit also refuse an in-progress recovery.",
+      "The guarded kernel checks the captured native Ref/binding/source/lifecycle/prepared-plan snapshot in the actual writer and independent committed readback; input tampering is not authorized by an earlier enumeration.",
+      "Only after actual outer gate release does an exact nonce CAS make COMPLETE. A lost response after committed COMPLETE is distinct from a rolled-back/unconfirmed IN_PROGRESS; neither gives authority to replay execution.",
+      "The public settle entry still invokes the shared kernel without recovery qualification, preserving its explicit NOT_STARTED and after-Stop compatibility. The new automatic consumer retains NOT_STARTED/open reservations and forbids all preexisting Stops.",
+      "The formal b862 candidate includes request_for_task identity checks and artifact record path/root/spec/output-size correspondence. Two review negatives verify these requirements; neither was observed failing before its first shared run.",
+      "Known peer changes to unrelated data need not equal a whole-database snapshot. Recovery's metadata summary and slot settlement are not a whole-batch rollback guarantee."
+    ],
+    "observation_limit": "The reviewed recovery path checks typed observation records/evaluator and the exact captured ID/record set; this review does not claim fresh verification of each observation adapter/spec/protocol/input-binding against its publication declaration, scientific validity, or source content. Recovery does not revive a PreparedSources capability."
+  },
+  "static_history": {
+    "product_reds": 0,
+    "reviewer_pre_run_fixture_correction": {
+      "initial_static_chunk": "712014",
+      "initial_unexecuted_sha256": "aa91c3d48beab966bd55c5ee42905688055e9bc15af8e0f7d50cd8b78d76b2f8",
+      "description": "Before any test execution, source inspection showed effect encoding has no trailing newline. The new prepared-plan negative was corrected to canonical bytes and gained a _scan hash-chain control so refusal targets operation eligibility rather than malformed JSON. This unexecuted draft was not a legacy fixture migration or product red.",
+      "first_frozen_18_chunk": "92aa79"
+    },
+    "prefix_audit_diagnostic": {
+      "chunk_id": "74d2d0",
+      "exit_code": 1,
+      "output": "Traceback (most recent call last):\n  File \"<stdin>\", line 5, in <module>\nAssertionError\n",
+      "cause": "The audit mistakenly added a newline to a prefix that already retained the original final newline. This was the checker's premise, not an edited assertion or product failure.",
+      "diagnostic_chunk": "b0785a",
+      "corrected_audit_chunk": "839f6c",
+      "corrected_exit_code": 0,
+      "test_edits_due_to_diagnostic": 0
+    },
+    "concurrent_read_boundary": "The initial readonly diff 476bff showed an in-progress producer draft. Before the formally frozen b862 candidate and before any guard execution, the author statically added replication-ledger and artifact-path validation. Readback b52093 verified the actual formal bytes; these were not observed candidate-red defects.",
+    "root_checker_hardening": "Read-only review identified incomplete checks for the second green native occurrence and summary/barrier metadata. Root strengthened the offline checker before final evidence use. This was checker hardening, not a product red; candidate snapshot pins its later f846 source.",
+    "old_tracked_tests": {
+      "baseline_python_files": 465,
+      "byte_exact": true,
+      "verified_by_chunk": "08730b"
+    }
+  },
+  "limitations": [
+    "This report closes the first-candidate 20-case guard review, not the final 41-case target or full Core/Pro suites.",
+    "The two true historical behavior-red cases and the 20 newly specified refusal mechanisms have separate provenance; the latter do not multiply the historical defect count.",
+    "Candidate1 had 34 real project reports; five no-process controls are not native worker or controller-crash evidence. Do not equate test count with process count.",
+    "The original test body's static prefix is reconstructible from the current file and pinned hash. No separate pre-edit whole-file snapshot of the initial unexecuted aa91 draft is claimed.",
+    "Static/archive consistency is not a fresh kernel proof, filesystem authority token or independent authenticity signature. Original captured controller/worker evidence and source-bound execution records remain necessary.",
+    "New evaluation, RUNNING adoption, unknown publication adjudication, automatic old Stop removal, refunds and process recovery are not implemented by this scoped terminal settlement consumer.",
+    "The existing _totals scans historical reservations; the slots bound applies to selected live recovery rows, not total startup complexity.",
+    "No Domain-positive crash recovery, throughput gain, CPU saving, GPU/provider work, holdout rerun or final full-suite success is claimed by this candidate39 review."
+  ]
+}

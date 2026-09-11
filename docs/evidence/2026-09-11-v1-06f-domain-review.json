@@ -1,0 +1,301 @@
+{
+  "schema": 1,
+  "title": "V1-06F independent Domain terminal-recovery archive review",
+  "status": "target_domain_archives_verified_not_final_full",
+  "roles": {
+    "reviewer": "/root/pro_review",
+    "checker_author": "/root/pro_review",
+    "product_test_author": "/root",
+    "production_authors": [
+      "/root/core_review",
+      "/root"
+    ],
+    "independence": "Reviewer did not edit or import product/test code, execute workers, or rerun pytest in this review. The standalone stdlib checker is reviewer-authored; its own negative checks are not independent product tests."
+  },
+  "fixed_sources": {
+    "docs/evidence/checks/v1-06f-domain-check.py": {
+      "bytes": 19858,
+      "sha256": "d9b30ee1f142c3e6331cb0ba6c21cf39556ea3207ac8c3e1a71e5cd0f162bdf7"
+    },
+    "src/orze/core/cpu_action_budget.py": {
+      "bytes": 49274,
+      "sha256": "b862ba337cbde23b89016fc4a9f0cc0a28dafd192817df8d9d4b5ff4d1c2cf14"
+    },
+    "src/orze/engine/cpu_phase.py": {
+      "bytes": 18021,
+      "sha256": "f27f9f096d429c276dbcc7e24b1fdb6e2f849d46b0a3a7e55a712fe383dcddf8"
+    },
+    "tests/cpu_terminal_recovery_helpers.py": {
+      "bytes": 12681,
+      "sha256": "21ff43c3feb5367b9637a5498bc02881005ea777ec6614c4653ee3d7fcc8c1a3"
+    },
+    "tests/test_cpu_terminal_recovery_domain.py": {
+      "bytes": 9355,
+      "sha256": "9b57766a9e55e2cd5e19e6f9c2e8a1d75b16d687766b048b9dbba37165b05522"
+    }
+  },
+  "supporting_references": [
+    {
+      "path": "docs/evidence/2026-09-11-v1-06f-target-history.json",
+      "sha256": "e6f32d18b41f4ec4dc0295c9d8929208e513582f44c1b350978d19a9a7db08e1"
+    },
+    {
+      "path": "docs/evidence/2026-09-11-v1-06f-domain-first-history.json",
+      "sha256": "7fc4926cc7c39a92712fea801a3599c845a76770ba0fc042e751a3364f8bd5df"
+    },
+    {
+      "path": "docs/evidence/2026-09-11-v1-06f-guards-review.json",
+      "sha256": "7ad52214414ee6d4a658a5d4182c3a8cd067059d80253cd346f8c55bb4f54017"
+    }
+  ],
+  "source_review": {
+    "complete_test_read_chunk": "309423",
+    "complete_shared_child_read_chunk": "f527d2",
+    "findings": [
+      "Domain fixture registers the existing SchedulingDomain and uses real public IdeaLake.insert admission in a private CPU project.",
+      "The prepare and interpret wrappers call the captured original Domain methods. Native READY instrumentation calls the original prepare_supervised, records its binding, and performs owned STOP if recording fails; it does not supply worker results or closure.",
+      "The crash callback checks the exact current TERMINAL, effect scan, BOUND reservation, absent task effect guard and no transaction before os._exit(86). Evaluator exit0 is distinct from controller exit86.",
+      "Recovery and repeated idle controllers set ORZE_F_RECOVERY_DOMAIN_NO_CALLBACKS=1; the test's Domain wrappers raise if invoked. No new native READY or interpretation event appears, and original task/attempt/artifact/observation rows and files remain unchanged.",
+      "A valid v1 observation and an invalid v2 observation both belong to successfully completed evaluator executions. v2 capacity_overload carries no value; this is not worker failure and does not trigger scientific re-evaluation during settlement.",
+      "No blocking contradiction found within the supported confirmed-terminal, no-Stop metadata-recovery boundary."
+    ],
+    "archive_observability_limit": "domain_events is a final log, not a per-snapshot event log, and call records do not persist their environment. The archive alone proves consistency with exactly two recorded READY/interpret pairs and unchanged execution state; explicit callback prohibition additionally relies on the frozen actual test's environment/raise guards, not an invented per-call environment attestation."
+  },
+  "target_binding": {
+    "footer": "41 passed, 1 warning in 64.06s",
+    "footer_chunk": "73da5b",
+    "path": "docs/evidence/2026-09-11-v1-06f-target-history.json",
+    "reports": [
+      {
+        "archive": "docs/evidence/runs/v1-06f-target-34.json",
+        "bytes": 302542,
+        "path": "/tmp/pytest-of-erik/pytest-5046/test_fresh_cli_resumes_confirm0/domain-project/recovery-report.json",
+        "sha256": "c2943362ac42d7d654cb7994deba22603122b224eec518cfe7572b9be80cf44b",
+        "test": "tests/test_cpu_terminal_recovery_domain.py::test_fresh_cli_resumes_confirmed_domain_without_reinterpretation[schedule-feasibility-v1-valid]"
+      },
+      {
+        "archive": "docs/evidence/runs/v1-06f-target-35.json",
+        "bytes": 302480,
+        "path": "/tmp/pytest-of-erik/pytest-5046/test_fresh_cli_resumes_confirm1/domain-project/recovery-report.json",
+        "sha256": "87ddc6056d6721d63da057fc305d17f0122687b17d544ec434f3bf8c5e77f7eb",
+        "test": "tests/test_cpu_terminal_recovery_domain.py::test_fresh_cli_resumes_confirmed_domain_without_reinterpretation[schedule-feasibility-v2-invalid]"
+      }
+    ],
+    "sha256": "e6f32d18b41f4ec4dc0295c9d8929208e513582f44c1b350978d19a9a7db08e1"
+  },
+  "checks": [
+    {
+      "name": "standalone target archive check",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/checks/v1-06f-domain-check.py docs/evidence/runs/v1-06f-target-34.json docs/evidence/runs/v1-06f-target-35.json",
+      "result": {
+        "chunk_id": "c036d3",
+        "wall_time_seconds": 0.000004695,
+        "exit_code": 0,
+        "original_token_count": 588,
+        "output": "{\"charged_nanoseconds\": 8000000000, \"fresh_cli_invocations\": 8, \"native_actions\": 4, \"reports\": [{\"artifacts\": 2, \"attempt_refs\": [{\"attempt_id\": \"20c7c48b76d6d7f815512c54c123bee8\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-producer\"}, {\"attempt_id\": \"5f8ccc73c35cf56d982413a53182f465\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-evaluator\"}], \"bytes\": 302542, \"charged_nanoseconds\": 4000000000, \"cli_wall_seconds\": 3.1445514615625143, \"controller_births\": [[2075848, 1061931641], [2075852, 1061931751], [2075857, 1061931855], [2075911, 1061931916]], \"fresh_cli_invocations\": 4, \"native_actions\": 2, \"native_births\": [[2075850, 1061931704], [2075854, 1061931815]], \"observations\": 1, \"original_terminal_and_bytes_unchanged\": true, \"path\": \"docs/evidence/runs/v1-06f-target-34.json\", \"protocol\": \"schedule-feasibility-v1\", \"recovery_nonce\": \"267073f2c27c4fe75547d29370a36975fc641ef289ab96bf\", \"recovery_only_cli_invocations\": 2, \"root\": \"/tmp/pytest-of-erik/pytest-5046/test_fresh_cli_resumes_confirm0/domain-project\", \"sha256\": \"c2943362ac42d7d654cb7994deba22603122b224eec518cfe7572b9be80cf44b\", \"validation\": {\"reason_code\": \"feasible\", \"status\": \"valid\"}}, {\"artifacts\": 2, \"attempt_refs\": [{\"attempt_id\": \"7ba5561a39c07878d09a2ac979354140\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-producer\"}, {\"attempt_id\": \"52c5211fffdeb0179f6ae902570f5866\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-evaluator\"}], \"bytes\": 302480, \"charged_nanoseconds\": 4000000000, \"cli_wall_seconds\": 3.1538773011416197, \"controller_births\": [[2075932, 1061931987], [2075977, 1061932097], [2075981, 1061932204], [2076020, 1061932263]], \"fresh_cli_invocations\": 4, \"native_actions\": 2, \"native_births\": [[2075935, 1061932051], [2075979, 1061932164]], \"observations\": 1, \"original_terminal_and_bytes_unchanged\": true, \"path\": \"docs/evidence/runs/v1-06f-target-35.json\", \"protocol\": \"schedule-feasibility-v2\", \"recovery_nonce\": \"0274605c6e1d98c08c76d5ecd73d7f452ffc808a7f3d3e10\", \"recovery_only_cli_invocations\": 2, \"root\": \"/tmp/pytest-of-erik/pytest-5046/test_fresh_cli_resumes_confirm1/domain-project\", \"sha256\": \"87ddc6056d6721d63da057fc305d17f0122687b17d544ec434f3bf8c5e77f7eb\", \"validation\": {\"reason_code\": \"capacity_overload\", \"status\": \"invalid\"}}], \"schema\": 1, \"scope\": \"offline_record_consistency_only\", \"status\": \"passed\"}\n"
+      }
+    },
+    {
+      "name": "fixed source syntax and original target-history binding",
+      "command": "python3 - <<'PY'\nimport ast, hashlib, json\nfrom pathlib import Path\npaths = ['src/orze/core/cpu_action_budget.py','src/orze/engine/cpu_phase.py','tests/test_cpu_terminal_recovery_domain.py','tests/cpu_terminal_recovery_helpers.py','docs/evidence/checks/v1-06f-domain-check.py']\nfiles = {p: {'sha256':hashlib.sha256(Path(p).read_bytes()).hexdigest(),'bytes':Path(p).stat().st_size} for p in paths}\nfor p in paths: ast.parse(Path(p).read_bytes(),filename=p)\nhp=Path('docs/evidence/2026-09-11-v1-06f-target-history.json'); h=json.loads(hp.read_bytes())\nrawout=''.join(v['output'] for v in h['invocations'])\nassert h['invocations'][-1]['exit_code']==0 and '41 passed, 1 warning in 64.06s' in rawout\nmatches=[]\nfor n in (34,35):\n p=Path(f'docs/evidence/runs/v1-06f-target-{n}.json'); b=p.read_bytes()\n m=[v for v in h['reports'] if v['archive']==str(p)];assert len(m)==1\n assert m[0]['sha256']==hashlib.sha256(b).hexdigest() and m[0]['bytes']==len(b)\n assert 'test_fresh_cli_resumes_confirmed_domain_without_reinterpretation' in m[0]['test']\n matches.append(m[0])\nprint(json.dumps({'files':files,'history':{'path':str(hp),'sha256':hashlib.sha256(hp.read_bytes()).hexdigest(),'footer_chunk':h['invocations'][-1]['chunk_id'],'footer':'41 passed, 1 warning in 64.06s','reports':matches},'syntax':'passed'},sort_keys=True))\nPY",
+      "result": {
+        "chunk_id": "956951",
+        "wall_time_seconds": 0.00000479,
+        "exit_code": 0,
+        "original_token_count": 446,
+        "output": "{\"files\": {\"docs/evidence/checks/v1-06f-domain-check.py\": {\"bytes\": 19858, \"sha256\": \"d9b30ee1f142c3e6331cb0ba6c21cf39556ea3207ac8c3e1a71e5cd0f162bdf7\"}, \"src/orze/core/cpu_action_budget.py\": {\"bytes\": 49274, \"sha256\": \"b862ba337cbde23b89016fc4a9f0cc0a28dafd192817df8d9d4b5ff4d1c2cf14\"}, \"src/orze/engine/cpu_phase.py\": {\"bytes\": 18021, \"sha256\": \"f27f9f096d429c276dbcc7e24b1fdb6e2f849d46b0a3a7e55a712fe383dcddf8\"}, \"tests/cpu_terminal_recovery_helpers.py\": {\"bytes\": 12681, \"sha256\": \"21ff43c3feb5367b9637a5498bc02881005ea777ec6614c4653ee3d7fcc8c1a3\"}, \"tests/test_cpu_terminal_recovery_domain.py\": {\"bytes\": 9355, \"sha256\": \"9b57766a9e55e2cd5e19e6f9c2e8a1d75b16d687766b048b9dbba37165b05522\"}}, \"history\": {\"footer\": \"41 passed, 1 warning in 64.06s\", \"footer_chunk\": \"73da5b\", \"path\": \"docs/evidence/2026-09-11-v1-06f-target-history.json\", \"reports\": [{\"archive\": \"docs/evidence/runs/v1-06f-target-34.json\", \"bytes\": 302542, \"path\": \"/tmp/pytest-of-erik/pytest-5046/test_fresh_cli_resumes_confirm0/domain-project/recovery-report.json\", \"sha256\": \"c2943362ac42d7d654cb7994deba22603122b224eec518cfe7572b9be80cf44b\", \"test\": \"tests/test_cpu_terminal_recovery_domain.py::test_fresh_cli_resumes_confirmed_domain_without_reinterpretation[schedule-feasibility-v1-valid]\"}, {\"archive\": \"docs/evidence/runs/v1-06f-target-35.json\", \"bytes\": 302480, \"path\": \"/tmp/pytest-of-erik/pytest-5046/test_fresh_cli_resumes_confirm1/domain-project/recovery-report.json\", \"sha256\": \"87ddc6056d6721d63da057fc305d17f0122687b17d544ec434f3bf8c5e77f7eb\", \"test\": \"tests/test_cpu_terminal_recovery_domain.py::test_fresh_cli_resumes_confirmed_domain_without_reinterpretation[schedule-feasibility-v2-invalid]\"}], \"sha256\": \"e6f32d18b41f4ec4dc0295c9d8929208e513582f44c1b350978d19a9a7db08e1\"}, \"syntax\": \"passed\"}\n"
+      }
+    },
+    {
+      "name": "optimized-interpreter refusal control",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -O docs/evidence/checks/v1-06f-domain-check.py docs/evidence/runs/v1-06f-target-34.json docs/evidence/runs/v1-06f-target-35.json",
+      "expected_exit_code": 1,
+      "result": {
+        "chunk_id": "799749",
+        "wall_time_seconds": 0.000004789,
+        "exit_code": 1,
+        "original_token_count": 14,
+        "output": "assertions required; do not run this checker with -O\n"
+      }
+    },
+    {
+      "name": "in-memory checker refusal controls and seven-file pre/post hashes",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport copy, hashlib, json, runpy\nfrom pathlib import Path\npaths=['docs/evidence/checks/v1-06f-domain-check.py','docs/evidence/runs/v1-06f-target-34.json','docs/evidence/runs/v1-06f-target-35.json','src/orze/core/cpu_action_budget.py','src/orze/engine/cpu_phase.py','tests/test_cpu_terminal_recovery_domain.py','tests/cpu_terminal_recovery_helpers.py']\nsha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()\npre={p:sha(p) for p in paths}\nns=runpy.run_path(paths[0],run_name='offline_checker_validation')\nbase=json.loads(Path(paths[1]).read_bytes()); other=json.loads(Path(paths[2]).read_bytes())\nclass MemoryReport:\n def __init__(self,record):self.raw=json.dumps(record).encode()\n def read_bytes(self):return self.raw\n def __str__(self):return '<in-memory-negative-not-an-execution-report>'\ndef record_change(r,shot,table,field,value,index=0):\n row=r['snapshots'][shot]['database'][table][index];obj=json.loads(row['record_json']);obj[field]=value;row['record_json']=json.dumps(obj)\ndef summary_change(r,field,value):\n row=r['snapshots'][9]['database']['cpu_action_recovery'][0];obj=json.loads(row['summary_json']);obj[field]=value;row['summary_json']=json.dumps(obj)\ncases=[]\ndef add(name,mutator,source=base):\n r=copy.deepcopy(source);mutator(r);cases.append((name,r))\nadd('controller_no_real_closure',lambda r:r['calls'][2]['controller_closure'].__setitem__('event','STOP_REQUESTED'))\nadd('native_ready_missing',lambda r:r['domain_events'][0]['binding']['worker'].__setitem__('start_ticks',1))\nadd('extra_domain_callback',lambda r:r['domain_events'].append({'event':'interpret','operation':'evaluate'}))\nadd('duplicate_controller_birth',lambda r:r['calls'][3].__setitem__('controller_binding',copy.deepcopy(r['calls'][2]['controller_binding'])))\nadd('observation_wrong_evaluator',lambda r:record_change(r,7,'research_observations','evaluator',{'task_id':'foreign','phase':'action','generation':1,'attempt_id':'foreign'}))\nadd('invalid_observation_has_value',lambda r:record_change(r,7,'research_observations','values',{'direction':'maximize','instance_sha256':json.loads(r['snapshots'][7]['database']['research_observations'][0]['record_json'])['values']['instance_sha256'],'value':30}),other)\nadd('retired_observation_rewritten',lambda r:record_change(r,9,'research_observations','name','changed'))\nadd('artifact_bytes_changed',lambda r:next(iter(r['snapshots'][9]['files'].values())).__setitem__('utf8','changed'))\nadd('recovery_summary_bool_schema',lambda r:summary_change(r,'schema',True))\nadd('recovery_wrong_scope',lambda r:r['snapshots'][9]['database']['cpu_action_recovery'][0].__setitem__('scope','/foreign'))\nadd('recovery_wrong_nonce',lambda r:r['snapshots'][9]['database']['cpu_action_recovery'][0].__setitem__('nonce','z'*48))\nadd('budget_refunded',lambda r:r['snapshots'][9]['database']['cpu_action_reservations'][1].__setitem__('permit_json',r['snapshots'][9]['database']['cpu_action_reservations'][1]['permit_json'].replace('2000000000','0')))\nadd('new_go_during_recovery',lambda r:r['snapshots'][9]['database']['execution_attempts'].append(copy.deepcopy(r['snapshots'][9]['database']['execution_attempts'][0])))\nrejected=[]\nfor name,record in cases:\n try:ns['one'](MemoryReport(record))\n except (AssertionError,KeyError,ValueError,TypeError):rejected.append(name)\n else:raise AssertionError('checker accepted '+name)\npost={p:sha(p) for p in paths};assert pre==post\nprint(json.dumps({'classification':'checker-only in-memory negative inputs, not product tests or execution reports','negative_cases':len(cases),'rejected':rejected,'files_pre_post_exact':pre},sort_keys=True))\nPY",
+      "result": {
+        "chunk_id": "58b075",
+        "wall_time_seconds": 0.016564224,
+        "exit_code": 0,
+        "original_token_count": 323,
+        "output": "{\"classification\": \"checker-only in-memory negative inputs, not product tests or execution reports\", \"files_pre_post_exact\": {\"docs/evidence/checks/v1-06f-domain-check.py\": \"d9b30ee1f142c3e6331cb0ba6c21cf39556ea3207ac8c3e1a71e5cd0f162bdf7\", \"docs/evidence/runs/v1-06f-target-34.json\": \"c2943362ac42d7d654cb7994deba22603122b224eec518cfe7572b9be80cf44b\", \"docs/evidence/runs/v1-06f-target-35.json\": \"87ddc6056d6721d63da057fc305d17f0122687b17d544ec434f3bf8c5e77f7eb\", \"src/orze/core/cpu_action_budget.py\": \"b862ba337cbde23b89016fc4a9f0cc0a28dafd192817df8d9d4b5ff4d1c2cf14\", \"src/orze/engine/cpu_phase.py\": \"f27f9f096d429c276dbcc7e24b1fdb6e2f849d46b0a3a7e55a712fe383dcddf8\", \"tests/cpu_terminal_recovery_helpers.py\": \"21ff43c3feb5367b9637a5498bc02881005ea777ec6614c4653ee3d7fcc8c1a3\", \"tests/test_cpu_terminal_recovery_domain.py\": \"9b57766a9e55e2cd5e19e6f9c2e8a1d75b16d687766b048b9dbba37165b05522\"}, \"negative_cases\": 13, \"rejected\": [\"controller_no_real_closure\", \"native_ready_missing\", \"extra_domain_callback\", \"duplicate_controller_birth\", \"observation_wrong_evaluator\", \"invalid_observation_has_value\", \"retired_observation_rewritten\", \"artifact_bytes_changed\", \"recovery_summary_bool_schema\", \"recovery_wrong_scope\", \"recovery_wrong_nonce\", \"budget_refunded\", \"new_go_during_recovery\"]}\n"
+      }
+    }
+  ],
+  "result": {
+    "charged_nanoseconds": 8000000000,
+    "fresh_cli_invocations": 8,
+    "native_actions": 4,
+    "reports": [
+      {
+        "artifacts": 2,
+        "attempt_refs": [
+          {
+            "attempt_id": "20c7c48b76d6d7f815512c54c123bee8",
+            "generation": 1,
+            "phase": "action",
+            "task_id": "idea-producer"
+          },
+          {
+            "attempt_id": "5f8ccc73c35cf56d982413a53182f465",
+            "generation": 1,
+            "phase": "action",
+            "task_id": "idea-evaluator"
+          }
+        ],
+        "bytes": 302542,
+        "charged_nanoseconds": 4000000000,
+        "cli_wall_seconds": 3.1445514615625143,
+        "controller_births": [
+          [
+            2075848,
+            1061931641
+          ],
+          [
+            2075852,
+            1061931751
+          ],
+          [
+            2075857,
+            1061931855
+          ],
+          [
+            2075911,
+            1061931916
+          ]
+        ],
+        "fresh_cli_invocations": 4,
+        "native_actions": 2,
+        "native_births": [
+          [
+            2075850,
+            1061931704
+          ],
+          [
+            2075854,
+            1061931815
+          ]
+        ],
+        "observations": 1,
+        "original_terminal_and_bytes_unchanged": true,
+        "path": "docs/evidence/runs/v1-06f-target-34.json",
+        "protocol": "schedule-feasibility-v1",
+        "recovery_nonce": "267073f2c27c4fe75547d29370a36975fc641ef289ab96bf",
+        "recovery_only_cli_invocations": 2,
+        "root": "/tmp/pytest-of-erik/pytest-5046/test_fresh_cli_resumes_confirm0/domain-project",
+        "sha256": "c2943362ac42d7d654cb7994deba22603122b224eec518cfe7572b9be80cf44b",
+        "validation": {
+          "reason_code": "feasible",
+          "status": "valid"
+        }
+      },
+      {
+        "artifacts": 2,
+        "attempt_refs": [
+          {
+            "attempt_id": "7ba5561a39c07878d09a2ac979354140",
+            "generation": 1,
+            "phase": "action",
+            "task_id": "idea-producer"
+          },
+          {
+            "attempt_id": "52c5211fffdeb0179f6ae902570f5866",
+            "generation": 1,
+            "phase": "action",
+            "task_id": "idea-evaluator"
+          }
+        ],
+        "bytes": 302480,
+        "charged_nanoseconds": 4000000000,
+        "cli_wall_seconds": 3.1538773011416197,
+        "controller_births": [
+          [
+            2075932,
+            1061931987
+          ],
+          [
+            2075977,
+            1061932097
+          ],
+          [
+            2075981,
+            1061932204
+          ],
+          [
+            2076020,
+            1061932263
+          ]
+        ],
+        "fresh_cli_invocations": 4,
+        "native_actions": 2,
+        "native_births": [
+          [
+            2075935,
+            1061932051
+          ],
+          [
+            2075979,
+            1061932164
+          ]
+        ],
+        "observations": 1,
+        "original_terminal_and_bytes_unchanged": true,
+        "path": "docs/evidence/runs/v1-06f-target-35.json",
+        "protocol": "schedule-feasibility-v2",
+        "recovery_nonce": "0274605c6e1d98c08c76d5ecd73d7f452ffc808a7f3d3e10",
+        "recovery_only_cli_invocations": 2,
+        "root": "/tmp/pytest-of-erik/pytest-5046/test_fresh_cli_resumes_confirm1/domain-project",
+        "sha256": "87ddc6056d6721d63da057fc305d17f0122687b17d544ec434f3bf8c5e77f7eb",
+        "validation": {
+          "reason_code": "capacity_overload",
+          "status": "invalid"
+        }
+      }
+    ],
+    "schema": 1,
+    "scope": "offline_record_consistency_only",
+    "status": "passed"
+  },
+  "assertions_covered": [
+    "Four fresh CLI worker PID/start_ticks identities per report, exact command modes, controller closure bindings and ECHILD_WALL, start/crash-or-finish marker consistency and monotonic intervals.",
+    "Two distinct native READY identities per report, full action AttemptRefs and source DB, completed/return0 terminals, unchanged lifecycle, exact effect PREPARED plan and COMMITTED hash linkage.",
+    "Original producer artifact full record, recorded content bytes/size/SHA, evaluator captured source snapshot including original full-row SHA/effect SHA and DB/scope identities.",
+    "Observation evaluator full Ref, per-input producer/spec/hash bindings, current evaluator result artifact, publication metadata, valid/value30 versus invalid/capacity_overload/no-value fields.",
+    "Strict crash boundary evidence and old evaluator BOUND reservation; only BOUND to SETTLED plus terminal hash is changed, original permit/ref/reservation preserved and four reserved seconds remain charged per report.",
+    "Recovery-only and idle snapshots preserve original business DB rows and all recorded artifact/effect bytes; two new Wait/queue_empty decisions are allowed, no Execute is recorded.",
+    "Single COMPLETE recovery row with exact scope and budget binding, 48-hex nonce, exact five-field summary, and identical nonce/summary on the subsequent idle controller.",
+    "All JSON rejects duplicate keys/nonfinite constants; comparison distinguishes bool from int; -O is explicitly refused. No embedded filesystem path is opened."
+  ],
+  "historical_loss": {
+    "status": "initial_domain_logs_preserved_raw_unavailable",
+    "history_path": "docs/evidence/2026-09-11-v1-06f-domain-first-history.json",
+    "initial_parent_footer": "5d2c28: 2 passed in 5.69s",
+    "original_reports": [
+      {
+        "sha256": "2f6bb009a8ca5807e761a16fd610e84dc80416f33b3f81b35c78f52ce223982d",
+        "bytes": 302545
+      },
+      {
+        "sha256": "b4a1f2a11e97bef85d9b5f618505af565cac345cb05ee933f844089a9ce01227",
+        "bytes": 302459
+      }
+    ],
+    "explanation": "Pytest temporary retention removed the two /tmp5045 files before archival. The reviewer never fully read or cached them. No reconstruction was attempted. This report verifies separately generated target /tmp5046 archives, not replacements for the lost first epoch."
+  },
+  "limits": [
+    "This is recorded consistency checking, not independent cryptographic attestation or new execution authority. No live process, pidfd, lock or database is consulted.",
+    "The checker does not independently re-evaluate arbitrary scheduling inputs or claim scientific validity was recomputed during recovery. It checks the fixed v1/v2 output/observation fields and their provenance.",
+    "Successful terminal recovery does not adopt an uncertain controller/tree, clear Stop/HOLD, recreate PreparedSources or DomainRun capabilities, rerun GO, or refund reservations.",
+    "Thirteen mutated in-memory reports and the -O refusal are checker-only controls, not additional pytest cases, actual corrupted research runs, historical product reds, or a full security proof.",
+    "Recorded CLI wall totals include this fixture's actual controller subprocess invocation interval. No CPU efficiency, overhead decomposition, ASR gain or statistical independence is claimed.",
+    "Parent's 41-case target footer is reference-bound; reviewer independently executed only offline commands. Final Core/Pro full-suite status is not claimed here."
+  ]
+}
