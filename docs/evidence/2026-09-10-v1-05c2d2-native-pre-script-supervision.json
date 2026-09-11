@@ -1,0 +1,237 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2d2",
+  "status": "implemented_mechanisms_verified",
+  "whole_v1_complete": false,
+  "plan_commit": "1b3fc3e0365cf805017c8b3bcee32025af4beabe",
+  "baseline_core": "975bd31a2964cea2e4bf2178e7e0c90bffbee530",
+  "baseline_pro": "e635a085e79a1efd1639d2494d8072efc02ed6bc",
+  "code_commit": "670fc02355cd3d10b51db08a5db98f40b0a88c49",
+  "pro_code_changed": false,
+  "scope": "Claim-bound native CPU pre-script invocation and exact-source failed-admission reporting through actual dispatch. Independent pre_script Ref, captured inputs, READY/GO and tree-closed terminal; no GPU allocation. Existing-history gates cover removed configuration, missing routing and direct training/posthoc starts. Genuinely legacy bool execution is not upgraded.",
+  "case_classification": {
+    "total_new_cases": 60,
+    "preceding_commit_public_behavior_failures": 2,
+    "preceding_commit_controls": 2,
+    "new_mechanisms": 45,
+    "draft_behavior_failures": 10,
+    "draft_controls": 1,
+    "note": "Original four are two real CPU behavior failures sharing incomplete tree-closure cause plus two normal-exit controls. New mechanisms include seven invalid-budget requirements (not tested as seven historical incidents). Draft failures: five nonexistent-training-stage cases, two omitted configured-scope cases, and three reporter cases (self-pending, cached PID identity, malformed terminal); one unclosed-source draft control. Overlapping groups and repeated failures are never added.",
+    "by_file": [
+      {
+        "path": "tests/test_native_pre_script_tree_completion.py",
+        "cases": 4,
+        "classification": "2 preceding behavior failures + 2 controls"
+      },
+      {
+        "path": "tests/test_pre_script_supervision_binding.py",
+        "cases": 10,
+        "classification": "5 new mechanisms + 5 draft failures"
+      },
+      {
+        "path": "tests/test_pre_script_admission_authority.py",
+        "cases": 22,
+        "classification": "22 new mechanisms (including 7 invalid-budget requirements)"
+      },
+      {
+        "path": "tests/test_pre_script_scope_fallback.py",
+        "cases": 2,
+        "classification": "2 configured-scope draft failures"
+      },
+      {
+        "path": "tests/test_pre_script_failure_report.py",
+        "cases": 17,
+        "classification": "13 new mechanisms + 3 draft failures + 1 draft control"
+      },
+      {
+        "path": "tests/test_native_pre_script_supervision.py",
+        "cases": 5,
+        "classification": "5 first-green real CPU mechanisms"
+      }
+    ]
+  },
+  "verification": {
+    "epoch": 1,
+    "freeze_utc": "2026-09-11 00:10:10 UTC",
+    "checked_utc": "2026-09-11 00:18:34 UTC",
+    "core": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "exit_code": 0,
+      "footer": "3186 passed, 7 skipped in 488.78s (0:08:08)"
+    },
+    "pro": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "exit_code": 0,
+      "footer": "944 passed in 162.62s (0:02:42)"
+    },
+    "paired": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "exit_code": 0,
+      "footer": "60 passed in 0.89s"
+    },
+    "new": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_native_pre_script_tree_completion.py tests/test_pre_script_supervision_binding.py tests/test_pre_script_admission_authority.py tests/test_pre_script_scope_fallback.py tests/test_pre_script_failure_report.py tests/test_native_pre_script_supervision.py --tb=short",
+      "exit_code": 0,
+      "footer": "60 passed in 42.01s"
+    },
+    "source_test_files_pre_post_equal": {
+      "core": 599,
+      "pro": 214
+    },
+    "optional_pro_skips": "Seven Core optional-Pro skips are covered by the fresh paired-source 60-test run. License gate patched only in offline test processes; no activation or production license change.",
+    "evidence_granularity": "Exact executed commands, observed exit codes/footers, complete pre/post manifests and source-specific snapshots. Not every stdout chunk is archived; overlapping suite counts are not summed."
+  },
+  "root_validation": {
+    "path": "docs/evidence/2026-09-10-v1-05c2d2-root-validation.json",
+    "sha256": "68ecdee9b6cd1ea030e35a18ea78b8ad9d8213ea07a0ca7779d19097df6090ee"
+  },
+  "inventory": {
+    "path": "docs/evidence/2026-09-10-v1-05c2d2-file-inventory.json",
+    "sha256": "dad5265a78d20c771706c61f87038d541812e9a3e5c5e7baa771ff5af39df0c8"
+  },
+  "references": [
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2d2-root-validation.json",
+      "sha256": "68ecdee9b6cd1ea030e35a18ea78b8ad9d8213ea07a0ca7779d19097df6090ee"
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2d2-file-inventory.json",
+      "sha256": "dad5265a78d20c771706c61f87038d541812e9a3e5c5e7baa771ff5af39df0c8"
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2d2-pre-script-author.json",
+      "sha256": "3f8c44fa9510121271cd2da89b56d9d340dca0721b666cb2cc6df7d4d6490311"
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2d2-native-pre-script-tree-review.json",
+      "sha256": "d82a8da07bb3f0b63dfdda9346c1e6a031b1a72d9b5420f26218ad1ad2ee5f0a"
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2d2-failure-report-author.json",
+      "sha256": "eb062b3a6b5cc43912e22a8f2549d1e61aa1757a58b9aca4e4d94b5e4a284d4d"
+    },
+    {
+      "path": "docs/native-pre-script-supervision.md",
+      "sha256": "900d1fc768068c9b8976290826ab93a82fb7e4648b7acea7124ebb4e94e72700"
+    }
+  ],
+  "changed_source_test_files": [
+    {
+      "path": "src/orze/engine/launcher.py",
+      "sha256": "fc27e2401ba637bbb2a6a01f9aa9a6303fe328078895daa372ffdfe5839212b0"
+    },
+    {
+      "path": "src/orze/engine/native_posthoc.py",
+      "sha256": "31cef10cee075c38890af7fb376c18c5ffcdc64280b23b32f33673082febc0e0"
+    },
+    {
+      "path": "src/orze/engine/native_pre_script.py",
+      "sha256": "5b1c4b1fba789ed1630c51f5988d80ff6c54dbdb5431d7b22f5b89aa02b38e72"
+    },
+    {
+      "path": "src/orze/engine/phases.py",
+      "sha256": "24e3cf574231e43128c5373116c69be61629c0ae5152b65086816e7c4ec62415"
+    },
+    {
+      "path": "src/orze/engine/posthoc_attempts.py",
+      "sha256": "e65749e1bae6b835300567f2b22b43cd05a6a29829e27927745d8c909d48cb72"
+    },
+    {
+      "path": "src/orze/engine/pre_script_failure_report.py",
+      "sha256": "6e1d7bab9833ffc8b676c0bc37f2b49ae1947a3a0fd78032b3f9bdb7c481c8e8"
+    },
+    {
+      "path": "src/orze/engine/pre_script_supervision.py",
+      "sha256": "fffa08401152176343903b450740d723918d89713d422a74a264e61161664653"
+    },
+    {
+      "path": "src/orze/engine/process.py",
+      "sha256": "fb635451f8db5b44c008fc8a100c33468d552da61a444c7af5baac7e947d2c41"
+    },
+    {
+      "path": "src/orze/engine/process_supervision.py",
+      "sha256": "be532e923a6e90b21d25af8674f25a0cc57c5dc04cd109f816e341297b72f253"
+    },
+    {
+      "path": "src/orze/engine/training_attempts.py",
+      "sha256": "887287b1dcfb75f310f581b4394a8546d7250fff4307d9263b7106cfcf1cea48"
+    },
+    {
+      "path": "tests/test_force_pack_admission.py",
+      "sha256": "27021dc91a0bca9f2b71a3318d6706f0564cf08ae87d08149a56e9eac62519e0"
+    },
+    {
+      "path": "tests/test_native_pre_script_supervision.py",
+      "sha256": "6e0bd35a6f58f0306e814748a0e58ed272e089c4c7bcac8fe3479ddaceea72bf"
+    },
+    {
+      "path": "tests/test_native_pre_script_tree_completion.py",
+      "sha256": "7827ad9f0dd21e06e22e8d3b5d20e4c60f607ced4235534dd47ae3020c4b9cf8"
+    },
+    {
+      "path": "tests/test_pre_script_admission_authority.py",
+      "sha256": "763d41a8361574472d0f4940a90ad7f22062486a7fd8f7e7bdea4b16593c445c"
+    },
+    {
+      "path": "tests/test_pre_script_failure_report.py",
+      "sha256": "4384364470fc5e403f8f76c99f98826ec64983c936a1fc5aed5e0318bfb39c31"
+    },
+    {
+      "path": "tests/test_pre_script_scope_fallback.py",
+      "sha256": "b5cce4fdafab9b1c9c308108ff35a6af284f67bf8f0e6db8694ecd81b7882215"
+    },
+    {
+      "path": "tests/test_pre_script_supervision_binding.py",
+      "sha256": "1542688a748aaa1273c13efade8d1ae6425eb5113ca78e4cb84c6e2779161ed9"
+    },
+    {
+      "path": "tests/test_training_launch_termination_handoff.py",
+      "sha256": "ed5d9f44dca74decbf568d7de51ea51dcdf23fbd238799728d70c64bc7bb8055"
+    }
+  ],
+  "fixture_and_test_premise_disclosures": [
+    "Two old fixture modules accept the new Lake keyword in three lambdas only. All 29 original Assert and 3 mock checks, plus full normalized module AST, are identical; complete prior-commit snapshots retained. Candidate5F32P is a fixture migration record, not an old product red or failed full epoch.",
+    "Initial reporter14 draft had6F8P:3 self-pending failures and3 observed over-narrow exception expectations. Four exception sites ultimately accept the existing public HOLD superclass. Two file-comparison AST sites exclude only retained HOLD guard metadata; one compound assert splits into two. Fifty of52 original Assert ASTs stay identical; all business-file/counter conditions are preserved. Complete initial file was reconstructed via known inverse hunks and matched its recorded original SHA, not claimed as a pre-edit capture.",
+    "Root's first two static-checker assumptions failed on that documented premise migration (identical prefix and identical assertion count). Final semantic audit allows only the exact guard exclusion/conjunction split. No product/test edit was made to satisfy those checker corrections.",
+    "Fourteen complete snapshot files contain12 unique SHA values; five are byte-identical to fixed preceding-commit source or fixtures. Duplicate reviewer captures are not counted as extra evidence incidents."
+  ],
+  "independent_reviews": {
+    "runtime": "Original four plus new five actual CPU cases passed9/8.10s with18 source/test hashes unchanged. Actual claim/SQLite, private SO_PEERCRED/pidfd-owned escaped writers, STOP0, policy veto, supervisor loss and unreturned READY; no fake tree closure.",
+    "core": "Native adapter author independently reviewed the other author's failed-admission reporter, root wiring and final contract; own mechanism results explicitly author validation.",
+    "pro": "Reporter author independently reviewed root public gates/scope fallback and final contract; own17 and overlapping67 cases explicitly author validation.",
+    "root": "Read complete new adapters and all six tests; independently identified reporter PID/error-class gaps, froze configured-scope draft regression, audited snapshots/fixtures and ran final Core/Pro/paired/new groups."
+  },
+  "audit": {
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\nroot=pathlib.Path('.').resolve()\nsha=lambda raw:hashlib.sha256(raw).hexdigest()\ncanonical=json.loads((root/'docs/evidence/2026-09-10-v1-05c2d2-native-pre-script-supervision.json').read_bytes())\nassert canonical['whole_v1_complete'] is False\nfor item in canonical['references']:\n    assert sha((root/item['path']).read_bytes())==item['sha256'],item['path']\ninventory=json.loads((root/canonical['inventory']['path']).read_bytes())\nepoch=inventory['final_epoch'];counts={}\nfor name,folder,commit in [('core',root,canonical['code_commit']),('pro',root.parent/'orze-pro',inventory['pro_source_commit'])]:\n    assert epoch['pre'][name]==epoch['post'][name]\n    rawpaths=subprocess.check_output(['git','ls-files','-c','-o','--exclude-standard','-z','--','src','tests','pyproject.toml'],cwd=folder).split(b'\\0')\n    paths=sorted(set(p.decode() for p in rawpaths if p))\n    actual=[{'path':p,'sha256':sha((folder/p).read_bytes())} for p in paths]\n    assert actual==epoch['post'][name],name\n    subprocess.run(['git','diff','--exit-code',commit,'--','src','tests','pyproject.toml'],cwd=folder,check=True,stdout=subprocess.PIPE)\n    assert subprocess.check_output(['git','ls-files','-o','--exclude-standard','--','src','tests','pyproject.toml'],cwd=folder)==b''\n    subprocess.run(['git','merge-base','--is-ancestor',commit,'HEAD'],cwd=folder,check=True)\n    counts[name]=len(actual)\nfor item in canonical['changed_source_test_files']:\n    assert sha(subprocess.check_output(['git','show',canonical['code_commit']+':'+item['path']],cwd=root))==item['sha256']\nreport=json.loads((root/canonical['root_validation']['path']).read_bytes())\nfor snapshot in report['static_audit']['snapshots']:\n    raw=(root/snapshot['path']).read_bytes()\n    assert sha(raw)==snapshot['sha256'] and len(raw)==snapshot['bytes'];ast.parse(raw)\n    if 'baseline_source' in snapshot:\n        assert raw==subprocess.check_output(['git','show',snapshot['baseline_commit']+':'+snapshot['baseline_source']],cwd=root)\nfor test in report['static_audit']['new_test_files']:\n    raw=(root/test['path']).read_bytes();assert sha(raw)==test['sha256']\n    items=[ast.dump(n,include_attributes=False) for n in ast.walk(ast.parse(raw)) if isinstance(n,ast.Assert)]\n    assert len(items)==test['assert_count'] and sha(json.dumps(items,separators=(',',':')).encode())==test['assert_ast_sha256']\nclassification=canonical['case_classification']\nassert sum(classification[k] for k in ['preceding_commit_public_behavior_failures','preceding_commit_controls','new_mechanisms','draft_behavior_failures','draft_controls'])==classification['total_new_cases']==60\nassert all(canonical['verification'][group]['exit_code']==0 for group in ['core','pro','paired','new'])\nprint(json.dumps({'references_verified':len(canonical['references']),'source_test_files':counts,'all_pre_post_current_and_fixed_commit_equal':True,'changed_source_test_files':len(canonical['changed_source_test_files']),'complete_snapshots':len(report['static_audit']['snapshots']),'whole_v1_complete':False},indent=2))\nPY",
+    "expected": {
+      "references_verified": 6,
+      "source_test_files": {
+        "core": 599,
+        "pro": 214
+      },
+      "all_pre_post_current_and_fixed_commit_equal": true,
+      "changed_source_test_files": 18,
+      "complete_snapshots": 14,
+      "whole_v1_complete": false
+    }
+  },
+  "safety": {
+    "checked_utc": "2026-09-11 00:16:15 UTC",
+    "original_dirty_status_lines": 281,
+    "qualification": "Status-line count only, not a full original-worktree content hash; original workspace not edited by this task",
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+    "holdout_plaintext_read": false,
+    "core_main": "5ca2680dbd0139e63cd35a4f83da438b5b47ab99",
+    "pro_main": "57feb6e0af19dcf62a80b1e447f0771936d39afe"
+  },
+  "limits": [
+    "Native normal failure now records pending_explicit_action, not an automatic unsupervised fixer. No repair worker or FAILED-to-CLAIMED recovery workflow was implemented.",
+    "Setup outputs are neither sandboxed nor automatically B1 artifacts/B2 observations. Environment hashes are not immutable script/input contents; stdout/stderr are discarded with stable reason/exit diagnostics.",
+    "No restart adoption, detached-handle reconstruction, artifact-preflight/fixer/director ownership or general CPU research loop completion.",
+    "No real GPU/model/paid provider run, scientific qualification or measured research-efficiency improvement. Whole V1 remains incomplete."
+  ]
+}
