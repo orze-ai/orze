@@ -37,13 +37,13 @@ CALLING SPEC:
     _new_process_group() -> None
         preexec_fn for subprocess.Popen; calls os.setpgrp() to create a new process group
 
-    run_pre_script(idea_id, gpu, cfg, results_dir=None, *, lake=None)
+    run_pre_script(idea_id, gpu, cfg, results_dir=None) -> bool
         idea_id: str
         gpu: int — accepted for API compatibility; never exposed to child
         cfg: dict — uses 'pre_script', 'pre_args', 'pre_timeout', 'python', 'train_extra_env'
-        results_dir: task scope; native execution requires the claim's Lake
-        returns: legacy bool or native PreScriptResult carrying its exact ref
-        side effects: CPU-only; native continuation requires owned tree closure
+        results_dir: accepted for API compatibility; accounting belongs to claim
+        returns: True if no pre_script configured or script exited 0, False on failure/timeout
+        side effects: runs a blocking CPU-only subprocess
 
     run_artifact_preflight(idea_id, results_dir, cfg) -> bool
         returns: True if disabled or resolver exited 0, False otherwise
@@ -65,8 +65,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from pathlib import Path
-
-from orze.engine.supervised_process import prepare_supervised
 
 logger = logging.getLogger("orze")
 
@@ -1225,31 +1223,18 @@ def terminate_role_process(
 
 
 def run_pre_script(idea_id: str, gpu: int, cfg: dict,
-                   results_dir: Optional[Path] = None, *, lake=None):
+                   results_dir: Optional[Path] = None) -> bool:
     """Run project setup without granting it an accelerator.
 
     Admission continues after this hook, so allocating a GPU here would let a
     subsequently rejected idea consume compute while its claim is recorded as
     zero-GPU.  Keep the historical ``gpu`` and ``results_dir`` parameters for
     callers, but do not expose the selected physical GPU, acquire its lease, or
-    create a GPU compute attempt. Native calls return a truth-valued result
-    with a captured pre-script reference, independent of the training claim.
-    Unknown execution raises HOLD; only confirmed failure may be reported as
-    a zero-GPU admission outcome. The no-Lake compatibility path remains bool.
+    create a separate compute attempt.  The scheduler records a terminal
+    zero-GPU outcome against the original claim if this hook ultimately fails.
     """
     import sys
     pre_script = cfg.get("pre_script")
-    from orze.engine.native_pre_script import (
-        PreScriptHOLD, require_launch_ready, run_native_pre_script,
-    )
-    if results_dir is None and cfg.get("results_dir") is not None:
-        results_dir = Path(cfg["results_dir"])
-    if results_dir is None and lake is not None:
-        raise PreScriptHOLD("pre_script_scope_required")
-    if results_dir is not None and (not pre_script or lake is None):
-        # Removing configuration or in-memory wiring cannot erase an existing
-        # unresolved native action. This precedes even the no-script return.
-        require_launch_ready(lake, Path(results_dir) / idea_id, cfg)
     if not pre_script:
         return True
 
@@ -1273,9 +1258,6 @@ def run_pre_script(idea_id: str, gpu: int, cfg: dict,
     env["ROCR_VISIBLE_DEVICES"] = ""
 
     logger.info("Running CPU-only pre-script for %s", idea_id)
-    if lake is not None:
-        return run_native_pre_script(
-            idea_id, gpu, results_dir, cfg, lake, cmd, pre_timeout, env)
     proc = None
     try:
         proc = subprocess.Popen(

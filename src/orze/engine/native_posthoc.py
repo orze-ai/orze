@@ -134,6 +134,8 @@ def launch(idea_id, gpu, results_dir, cfg, *, kind, idea_cfg_path, lake):
     from orze.engine.execution_authority import canonical_identity_equal
     folder = Path(os.path.abspath(results_dir)) / idea_id
     attempts.require_catalog(lake, folder, cfg)
+    from orze.engine.native_pre_script import require_launch_ready
+    require_launch_ready(lake, folder, cfg)
     if lake is None:
         raise AttemptEffectBusy("posthoc_native_catalog_required")
     timeout = _timeout(cfg)

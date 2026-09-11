@@ -229,6 +229,8 @@ def begin(lake, tp, idea_dir, cfg=None):
     artifact_binding = artifact_publication_binding(
         cfg or {}, idea_dir, getattr(tp, "execution_identity", None))
     with execution_transaction(lake, idea_dir) as tx:
+        from orze.engine.native_pre_script import require_launch_ready
+        require_launch_ready(lake, idea_dir, cfg or {})
         from orze.engine.execution_catalog import bind_catalog
         bind_catalog(lake, idea_dir, tx.lease)
         _, claim_sha = _claim(tp, idea_dir, lake)

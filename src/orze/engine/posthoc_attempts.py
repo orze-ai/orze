@@ -108,6 +108,8 @@ def begin(lake, tp, idea_dir, *, launch_inputs, artifact_binding=None):
         if artifact["scope"] != str(folder.parent):
             raise AttemptEffectBusy("posthoc_artifact_scope_mismatch")
     with execution_transaction(lake, folder) as tx:
+        from orze.engine.native_pre_script import require_launch_ready
+        require_launch_ready(lake, folder, {})
         _other_phases_closed(lake, tp.idea_id)
         _, claim_sha = _claim(tp, folder, lake)
         state = _launch_state(lake, tp.idea_id)

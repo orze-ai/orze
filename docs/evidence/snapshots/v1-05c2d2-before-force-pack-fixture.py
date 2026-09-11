@@ -72,7 +72,7 @@ def test_force_pack_artifact_failure_cannot_reach_gpu_launch(
     )
     monkeypatch.setattr(
         "orze.engine.phases.run_pre_script",
-        lambda *args, **kwargs: events.append(("pre_script", args[0])) or True,
+        lambda *args: events.append(("pre_script", args[0])) or True,
     )
     monkeypatch.setattr(
         "orze.engine.phases.launch",
@@ -104,7 +104,7 @@ def test_force_pack_success_runs_preflight_and_setup_before_assignment(
     )
     monkeypatch.setattr(
         "orze.engine.phases.run_pre_script",
-        lambda *args, **kwargs: events.append(("pre_script", args[0])) or True,
+        lambda *args: events.append(("pre_script", args[0])) or True,
     )
 
     def fake_launch(idea_id, gpu, *args, **kwargs):

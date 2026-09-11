@@ -1611,18 +1611,8 @@ class OrzePhaseMixin:
                     # Project setup runs only after every static validator and
                     # the zero-GPU artifact resolver have passed. This avoids
                     # spending setup work on rejected or unlaunchable ideas.
-                    pre_result = run_pre_script(
-                        idea_id, gpu, cfg, self.results_dir, lake=self.lake)
-                    if not pre_result:
-                        from orze.engine.native_pre_script import PreScriptResult
-                        if isinstance(pre_result, PreScriptResult):
-                            from orze.engine.pre_script_failure_report import report_pre_script_failure
-                            report_pre_script_failure(
-                                self.lake, self.results_dir / idea_id,
-                                pre_result.attempt_ref, self.failure_counts, cfg)
-                            # The existing fixer is not a supervised native
-                            # repair action. Keep repair explicitly pending.
-                            continue
+                    if not run_pre_script(
+                            idea_id, gpu, cfg, self.results_dir):
                         logger.warning(
                             "Pre-script failed for %s, marking FAILED",
                             idea_id)
@@ -1633,7 +1623,7 @@ class OrzePhaseMixin:
                             _reset_idea_for_retry(
                                 self.results_dir / idea_id)
                             if run_pre_script(
-                                    idea_id, gpu, cfg, self.results_dir, lake=self.lake):
+                                    idea_id, gpu, cfg, self.results_dir):
                                 pass  # fixed — fall through to launch
                             else:
                                 _write_failure(

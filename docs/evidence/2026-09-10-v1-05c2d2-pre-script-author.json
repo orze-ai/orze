@@ -1,0 +1,186 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2d2",
+  "role": "native CPU pre-script action author",
+  "scope": "Claim-bound pre_script intent/READY/GO/closed publication and read-only existing-history launch gate. No GPU accounting, subprocess adoption, or script/input sandbox.",
+  "ownership": {
+    "authored_source": [
+      "src/orze/engine/native_pre_script.py",
+      "src/orze/engine/pre_script_supervision.py"
+    ],
+    "modified_source": [
+      "src/orze/engine/process_supervision.py"
+    ],
+    "own_new_test": "tests/test_pre_script_supervision_binding.py",
+    "excluded": "Root owns public dispatcher, phase handling, launcher/direct-begin gates and fixture migrations. Pro owns the subsequent failure-report action. Runtime owns actual CPU tree tests."
+  },
+  "baseline": {
+    "core_commit": "975bd31a2964cea2e4bf2178e7e0c90bffbee530",
+    "classification": "Preceding committed implementation-branch source, not an upstream released-version claim.",
+    "own_preceding_commit_behavior_reds": 0,
+    "independent_behavior_evidence": "docs/evidence/2026-09-10-v1-05c2d2-native-pre-script-tree-review.json",
+    "independent_signal": "Runtime reported 2 failed, 2 passed in 3.33s before source authoring; these are not this author's test runs.",
+    "shared_snapshot": {
+      "path": "docs/evidence/snapshots/v1-05c2d2-before-process-supervision.py",
+      "sha256": "50eb54482a16ff1f95fbd50154c64f14d45a27e95589b1fae6a11805c4607744",
+      "provenance": "Recovered byte-exact complete file via git show HEAD after the additive working-tree phase edit; not represented as a pre-edit filesystem capture. HEAD was the preceding baseline commit."
+    }
+  },
+  "new_mechanisms": {
+    "path": "tests/test_pre_script_supervision_binding.py",
+    "sha256": "1542688a748aaa1273c13efade8d1ae6425eb5113ca78e4cb84c6e2779161ed9",
+    "count": 10,
+    "classification": "New requirements, not missing-API or preceding-commit bugs. Five initially reached a genuine first-draft stage-availability defect; five initially passed.",
+    "tests_unchanged_since_initial_run": true,
+    "coverage": [
+      "same-claim success and failure cache with exact source Ref and zero GPU receipts",
+      "explicit new claim produces independent generation and distinct action ID",
+      "changed same-claim command cannot rerun",
+      "active training/evaluation intents prevent pre-script execution",
+      "changed SQL terminal cannot forge cached success",
+      "pre_script phase, missing closure, STOP0 proof boundaries"
+    ],
+    "doubles": "Real temporary SQLite, real scheduler claim/CLAIMED transition, real effect receipts. Explicit SimulatedSupervisedProcess/ProtocolDouble boundaries supply declared OS facts. These are not real CPU tree proofs."
+  },
+  "claimed_stage_draft": {
+    "source_sha256": "1cf9d6fe989f385bfeb605ef053e4128242f5c145a521d0756a7207dc60366bf",
+    "snapshot": "docs/evidence/snapshots/v1-05c2d2-before-claimed-stage-boundary.py",
+    "snapshot_sha256": "1cf9d6fe989f385bfeb605ef053e4128242f5c145a521d0756a7207dc60366bf",
+    "provenance": "Complete then-current native_pre_script.py captured after first failing mechanism run and before correction; sha256 equality verified.",
+    "first": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_supervision_binding.py --tb=short",
+      "session_id": 59462,
+      "exit_code": 1,
+      "footer": "5 failed, 5 passed in 2.29s"
+    },
+    "cause": "A legitimate fresh claim has only global CLAIMED, not a training-stage transition. The first draft incorrectly required lifecycle_fence(training) when publishing its CPU terminal, after preparing an effect. This was an implementation-draft defect, not a fixture failure.",
+    "fix": "Do not manufacture a training stage. Pin global launch_lifecycle, revalidate exact claim/CLAIMED revision after finish and commit, and watch the exact closed attempt row.",
+    "replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.engine import native_pre_script\nsnapshot = Path('docs/evidence/snapshots/v1-05c2d2-before-claimed-stage-boundary.py')\nexec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), native_pre_script.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_pre_script_supervision_binding.py', '--tb=short']))\nPY",
+      "session_id": 46790,
+      "exit_code": 1,
+      "footer": "5 failed, 5 passed in 2.08s",
+      "limits": "Complete fixed native_pre_script module replay with current dependencies, not a whole baseline checkout replay."
+    },
+    "first_green": {
+      "session_id": 57489,
+      "exit_code": 0,
+      "footer": "10 passed in 2.42s",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_supervision_binding.py --tb=short"
+    }
+  },
+  "bounded_history": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_supervision_binding.py tests/test_evaluation_supervision_binding.py tests/test_training_supervision_binding.py tests/test_posthoc_supervision_binding.py tests/test_post_script_supervision_binding.py --tb=short",
+      "session_id": 56571,
+      "exit_code": 0,
+      "footer": "74 passed in 8.44s",
+      "classification": "Bounded author validation; includes overlapping own10 and shared adapter mechanisms. Not 74 distinct new tests or whole-Core validation.",
+      "source_observation": "Own source hashes were observed while/after this running cell; not claimed as a separate pre/post whole-inventory epoch.",
+      "source_sha256": {
+        "src/orze/engine/native_pre_script.py": "a13006c830c987a844a26c847dac10dc2552c31c57ab569fe586bfa9e6468427",
+        "src/orze/engine/pre_script_supervision.py": "fffa08401152176343903b450740d723918d89713d422a74a264e61161664653",
+        "src/orze/engine/process_supervision.py": "be532e923a6e90b21d25af8674f25a0cc57c5dc04cd109f816e341297b72f253"
+      }
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_supervision_binding.py --tb=short",
+      "session_id": 57336,
+      "exit_code": 0,
+      "footer": "10 passed in 2.43s",
+      "source_sha256": "5b1c4b1fba789ed1630c51f5988d80ff6c54dbdb5431d7b22f5b89aa02b38e72",
+      "classification": "Own unchanged10 after cached-consumer correction."
+    }
+  ],
+  "limits": [
+    "CPU visibility variables are cooperatively emptied; arbitrary script code is not an accelerator sandbox.",
+    "No GPU lease or compute receipt is emitted by this action. A later confirmed failure reporter has separate zero-allocation controller semantics.",
+    "stdout/stderr go to DEVNULL; persisted diagnostics are bounded stable outcome/reason/exit code, not raw output or secret environment.",
+    "No pre-script history preserves legacy direct-launch compatibility; existing unresolved history cannot be bypassed by removing configuration or in-memory catalog wiring.",
+    "Same-claim cached facts are historical exact publication records, not fresh OS or scientific permission.",
+    "No full-suite results are claimed in this author report.",
+    "Actual supplied Lake plus existing declared/claim routing remain authority; no new cfg-route policy was added. No invalid-ID destructive claim was made from an unverified hypothesis."
+  ],
+  "final_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_supervision_binding.py tests/test_native_pre_script_tree_completion.py tests/test_pre_script_failure_report.py -k 'not pre_script_failure_report or confirmed_failure_once or changed_source_process_pid' --tb=short",
+    "workdir": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "session_id": 67699,
+    "exit_code": 0,
+    "footer": "16 passed, 15 deselected in 8.54s",
+    "counts": {
+      "own_new_mechanisms": 10,
+      "unchanged_actual_CPU_public_tests": 4,
+      "reporter_selected_consumer_cases": 2
+    },
+    "source_sha256": {
+      "src/orze/engine/native_pre_script.py": "5b1c4b1fba789ed1630c51f5988d80ff6c54dbdb5431d7b22f5b89aa02b38e72",
+      "src/orze/engine/pre_script_supervision.py": "fffa08401152176343903b450740d723918d89713d422a74a264e61161664653",
+      "src/orze/engine/process_supervision.py": "be532e923a6e90b21d25af8674f25a0cc57c5dc04cd109f816e341297b72f253",
+      "src/orze/engine/pre_script_failure_report.py": "6e1d7bab9833ffc8b676c0bc37f2b49ae1947a3a0fd78032b3f9bdb7c481c8e8"
+    },
+    "test_sha256_observed_after_run": {
+      "tests/test_pre_script_supervision_binding.py": "1542688a748aaa1273c13efade8d1ae6425eb5113ca78e4cb84c6e2779161ed9",
+      "tests/test_native_pre_script_tree_completion.py": "7827ad9f0dd21e06e22e8d3b5d20e4c60f607ced4235534dd47ae3020c4b9cf8",
+      "tests/test_pre_script_failure_report.py": "4384364470fc5e403f8f76c99f98826ec64983c936a1fc5aed5e0318bfb39c31"
+    },
+    "precision": "Producer and reporter source SHA values were read before and after this test invocation. This is not claimed as a full pre/post repository inventory. Source-wide epoch validation belongs to root.",
+    "limits": "The selected real CPU cases prove producer/public-consumer closure, not GPU training, provider work, research efficiency, or all failure-report mechanisms. Counts overlap earlier groups and must not be added."
+  },
+  "cached_consumer_draft": {
+    "classification": "Two concrete new-draft consumer boundaries, not preceding-commit behavior bugs. Tests and initial red run belong to pro_review.",
+    "independent_reported_red": {
+      "footer": "2 failed, 13 deselected in 1.36s",
+      "test": "tests/test_pre_script_failure_report.py",
+      "test_sha256_at_red": "eaa16910798ac59d999bfd997fab114f73cd0eb3022039cbca542e6ff1694bf9",
+      "selection": "confirmed_failure_once or changed_source_process_pid",
+      "attribution": "Communicated by pro_review, not represented as this author's test invocation."
+    },
+    "snapshots": [
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d2-before-cached-source-publication.py",
+        "sha256": "a13006c830c987a844a26c847dac10dc2552c31c57ab569fe586bfa9e6468427"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d2-before-first-consumer-report-pre-script-failure-report.py",
+        "sha256": "a9b639498829aa1cf9af5e62e292d6e9e28db507ad1ca9b88b241d3c33ba5839"
+      }
+    ],
+    "observations": [
+      "The reporter's final source recheck scanned its own currently prepared, not-yet-confirmed effect and rejected every new report.",
+      "Historical consumers bypassed _owned's CLAIMED-only path, so _cached also needed its own strict process_pid/READY worker equality check before report file effects."
+    ],
+    "fix_ownership": {
+      "core_review": "Added optional exact pending tuple to _cached/_scan and strict integer process_pid equality with READY worker. No other source changes.",
+      "pro_review": "Passes only tx.prepared_ref/tx.prepared_sha256 from its actual owned writer, and normalizes public uncertainty."
+    },
+    "followup_test_file": "Pro later added two bounded mechanism cases; this author's final selected run collected that 17-case file, hence 15 deselected. Do not equate its final hash with the initial 15-case red hash."
+  },
+  "independent_read_review": {
+    "role_boundary": "Independent of Pro's reporter and root's public/phase/direct-launch edits; self-review, not independent review, for this author's native_pre_script/shared wrapper changes.",
+    "conclusion": "No remaining blocker identified within this slice after the exact-pending/typed-PID correction.",
+    "source_sha256": {
+      "src/orze/engine/pre_script_failure_report.py": "6e1d7bab9833ffc8b676c0bc37f2b49ae1947a3a0fd78032b3f9bdb7c481c8e8",
+      "src/orze/engine/process.py": "fb635451f8db5b44c008fc8a100c33468d552da61a444c7af5baac7e947d2c41",
+      "src/orze/engine/phases.py": "24e3cf574231e43128c5373116c69be61629c0ae5152b65086816e7c4ec62415",
+      "src/orze/engine/launcher.py": "fc27e2401ba637bbb2a6a01f9aa9a6303fe328078895daa372ffdfe5839212b0",
+      "src/orze/engine/native_posthoc.py": "31cef10cee075c38890af7fb376c18c5ffcdc64280b23b32f33673082febc0e0",
+      "src/orze/engine/posthoc_attempts.py": "e65749e1bae6b835300567f2b22b43cd05a6a29829e27927745d8c909d48cb72",
+      "src/orze/engine/training_attempts.py": "887287b1dcfb75f310f581b4394a8546d7250fff4307d9263b7106cfcf1cea48"
+    },
+    "coverage": [
+      "Read the complete final reporter, including exact source Ref, historical closure/effect, claim bytes, zero-allocation receipt, CLAIMED-to-FAILED transition, counter projection and duplicate/stale handling.",
+      "Read the complete root diff: configured-scope fallback before no-script/no-Lake early returns; native captured-result routing; training/posthoc launch and writer gates before resource admission.",
+      "Confirmed native False branches report then continue; they do not enter legacy fixer/reset code. HOLD propagates. The legacy no-Lake branch retains its existing behavior.",
+      "Final reporter source recheck permits only its own exact pending effect while preserving source metadata and confirmed-source proof checks.",
+      "Read the complete contract and reread unchanged _reset_idea_for_retry: it rotates claim identity but does not itself transition FAILED back to CLAIMED."
+    ],
+    "reset_scope": "Own new-claim mechanism resets a confirmed CPU failure still in CLAIMED, without first reporting FAILED. It is not an end-to-end post-report repair/requeue workflow. After reporting, an authorized lifecycle transition back to CLAIMED is still required; this slice provides no automatic repair/adoption.",
+    "contract": {
+      "path": "docs/native-pre-script-supervision.md",
+      "sha256": "900d1fc768068c9b8976290826ab93a82fb7e4648b7acea7124ebb4e94e72700",
+      "read": "Full final document read after the at-most-once-invocation wording correction.",
+      "notes": "CPU/cooperative visibility, no GPU compute, DEVNULL diagnostics, active-wait timeout, no output sandbox, no generic CPU research-loop completion and pending explicit repair are accurately limited."
+    },
+    "limits": "No new production/test edits made during this independent review; no further matrix added. Runtime's later five real CPU fault cases and root full suites are not claimed as this author's runs."
+  }
+}

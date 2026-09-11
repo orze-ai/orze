@@ -1242,8 +1242,6 @@ def run_pre_script(idea_id: str, gpu: int, cfg: dict,
     from orze.engine.native_pre_script import (
         PreScriptHOLD, require_launch_ready, run_native_pre_script,
     )
-    if results_dir is None and cfg.get("results_dir") is not None:
-        results_dir = Path(cfg["results_dir"])
     if results_dir is None and lake is not None:
         raise PreScriptHOLD("pre_script_scope_required")
     if results_dir is not None and (not pre_script or lake is None):

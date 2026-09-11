@@ -68,7 +68,7 @@ def scenario(tmp_path, monkeypatch):
     monkeypatch.setattr(launcher, "capture_process_identity", simulated_child_identity)
     monkeypatch.setattr(launcher, "_verify_gpu_free", lambda *args: None)
     monkeypatch.setattr(phases, "get_gpu_memory_used", lambda gpu: 0)
-    monkeypatch.setattr(phases, "run_pre_script", lambda *args, **kwargs: True)
+    monkeypatch.setattr(phases, "run_pre_script", lambda *args: True)
     monkeypatch.setattr(phases, "_try_executor_fix", fixer)
     # No real provider can be reached through optional proposal hooks.
     monkeypatch.setattr("orze.extensions.get_extension", lambda name: None)

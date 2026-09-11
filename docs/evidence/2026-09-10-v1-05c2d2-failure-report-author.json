@@ -1,0 +1,219 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2d2",
+  "role": "Pre-script failure-report author; independent bounded review of other authors' admission wiring",
+  "ownership": {
+    "authored_source": [
+      "src/orze/engine/pre_script_failure_report.py"
+    ],
+    "own_test": "tests/test_pre_script_failure_report.py",
+    "not_authored": [
+      "src/orze/engine/native_pre_script.py",
+      "src/orze/engine/pre_script_supervision.py",
+      "src/orze/engine/process_supervision.py",
+      "src/orze/engine/process.py",
+      "src/orze/engine/phases.py",
+      "src/orze/engine/launcher.py",
+      "src/orze/engine/training_attempts.py",
+      "src/orze/engine/native_posthoc.py",
+      "src/orze/engine/posthoc_attempts.py"
+    ],
+    "scope": "Authored reporter is not independently reviewed by this author. The separate wiring review below concerns other authors' code. No existing source/test was edited by this author."
+  },
+  "new_cases": {
+    "path": "tests/test_pre_script_failure_report.py",
+    "sha256": "4384364470fc5e403f8f76c99f98826ec64983c936a1fc5aed5e0318bfb39c31",
+    "count": 17,
+    "classification": {
+      "new_mechanisms": 13,
+      "draft_behavior_regressions": 3,
+      "draft_control": 1,
+      "preceding_commit_behavior_regressions": 0
+    },
+    "description": "Actual scheduler claim and tiny CPU supervised producer feed the reporting API. Publication faults use explicitly injected metadata/SQL/file boundaries; these are not evidence of hostile arbitrary SQL tamper-proofing. New API absence was not run as a behavior red.",
+    "frozen_since_final_mechanism_run": true,
+    "limits": [
+      "The test named restart_projection only clears the in-memory counter in the same process and Lake, then re-delivers the exact source; this is durable-counter reprojection, not actual process restart or adoption.",
+      "No GPU lease, GPU/model training, fixer/provider request, external workload or holdout was used."
+    ]
+  },
+  "first_draft": {
+    "source_sha256": "a9b639498829aa1cf9af5e62e292d6e9e28db507ad1ca9b88b241d3c33ba5839",
+    "native_source_sha256": "a13006c830c987a844a26c847dac10dc2552c31c57ab569fe586bfa9e6468427",
+    "test_sha256": "ecf5448f59b6f1ef6ca903d87d7723fcc6bc2e91f90e00cc68b88869a7ff9608",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_failure_report.py --tb=short",
+    "session_id": 87448,
+    "exit_code": 1,
+    "footer": "6 failed, 8 passed in 6.30s",
+    "classification": "Three failures reached the same genuine self-pending scan defect (normal report and two cases needing an initial report). Three instead expected the inner PreScriptHOLD subclass, while the existing coordinator correctly exposes public AttemptEffectInDoubt. Those three exception-expectation errors are not product defects.",
+    "test_revision": "Four exception expectation sites were corrected to the public HOLD class. Two whole-file equality assertions now exclude only retained _attempt_effect.lock metadata, since a HOLD may retain that owner; all claim, metrics, compute, attempt, counter and lifecycle business-file assertions remain. This is a disclosed new-test draft correction, not byte/AST identity with the original test.",
+    "original_test_snapshot": {
+      "path": "docs/evidence/snapshots/v1-05c2d2-first-reporter-test-draft.py",
+      "sha256": "ecf5448f59b6f1ef6ca903d87d7723fcc6bc2e91f90e00cc68b88869a7ff9608",
+      "provenance": "Complete original text reconstructed after the correction by mechanically reversing the exact recorded edits; SHA-256 verified equal to the hash actually observed after the first run. Not represented as a pre-edit filesystem capture."
+    }
+  },
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-05c2d2-before-failure-report-pending.py",
+      "sha256": "a9b639498829aa1cf9af5e62e292d6e9e28db507ad1ca9b88b241d3c33ba5839",
+      "provenance": "Complete then-current reporter captured after initial failure, before production correction; source equality verified."
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c2d2-before-cached-source-publication.py",
+      "sha256": "a13006c830c987a844a26c847dac10dc2552c31c57ab569fe586bfa9e6468427",
+      "provenance": "Complete then-current native helper captured before its author changed pending and cached PID validation; source equality verified."
+    }
+  ],
+  "draft_regressions": {
+    "first_pair": {
+      "test_sha256": "eaa16910798ac59d999bfd997fab114f73cd0eb3022039cbca542e6ff1694bf9",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_failure_report.py -k 'confirmed_failure_once or changed_source_process_pid' --tb=short",
+      "session_id": 73109,
+      "exit_code": 1,
+      "footer": "2 failed, 13 deselected in 1.36s",
+      "source": "Complete a9b639 reporter and a13006 native helper before either correction."
+    },
+    "invalid_source_pair": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_failure_report.py -k nonstale_invalid --tb=short",
+      "session_id": 70393,
+      "exit_code": 1,
+      "footer": "1 failed, 1 passed, 15 deselected in 1.19s",
+      "epoch_limit": "This run overlapped the other author's native helper update; it is not claimed as a stable source-inventory epoch. Fixed complete-module replay below establishes the result on recorded draft bytes."
+    },
+    "fixed_replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 - <<'PY'\nfrom pathlib import Path\nimport importlib\nimport pytest\nfor name, snapshot in (\n    ('orze.engine.native_pre_script', 'docs/evidence/snapshots/v1-05c2d2-before-cached-source-publication.py'),\n    ('orze.engine.pre_script_failure_report', 'docs/evidence/snapshots/v1-05c2d2-before-failure-report-pending.py'),\n):\n    module = importlib.import_module(name)\n    raw = Path(snapshot).read_bytes()\n    exec(compile(raw, str(Path(snapshot).absolute()), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_pre_script_failure_report.py', '-k', 'confirmed_failure_once or changed_source_process_pid or nonstale_invalid', '--tb=short']))\nPY",
+      "session_id": 28252,
+      "exit_code": 1,
+      "footer": "3 failed, 1 passed, 13 deselected in 2.00s",
+      "limits": "Two complete fixed draft modules executed in memory with current other dependencies. No on-disk source replacement; not a full baseline checkout or preceding-commit behavior claim."
+    },
+    "causes": [
+      {
+        "test": "test_confirmed_failure_once_and_restart_projection_without_fixer",
+        "cause": "Final source verification scanned the report's own unconfirmed intent and rejected a legitimate fresh report.",
+        "fix": "Reporter passes only its own transaction's exact prepared Ref/digest; native helper author forwards that explicit exception to the existing strict scan."
+      },
+      {
+        "test": "test_changed_source_process_pid_refuses_before_any_report_effect",
+        "cause": "Cached source reader omitted the already-required typed process_pid/worker.pid equality. Changed metadata reached metrics/zero writes, then happened to HOLD on the separate pending defect.",
+        "fix": "Native helper author validates typed PID equality in historical cached proof before reporting effects. Not a claim of successful invalid report completion on the original draft."
+      },
+      {
+        "test": "test_nonstale_invalid_source_is_always_a_hold_not_ordinary_failure[malformed_terminal]",
+        "cause": "A malformed source terminal omitted reason_code and escaped as KeyError.",
+        "fix": "Reporter preserves explicit stale and public HOLD handling; other exceptions from publication are wrapped as PreScriptHOLD."
+      }
+    ],
+    "control": "An unclosed source already yields the public HOLD class and stays nonproductive."
+  },
+  "final_validation": {
+    "own17": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_failure_report.py --tb=short",
+      "session_id": 45466,
+      "exit_code": 0,
+      "footer": "17 passed in 7.32s",
+      "classification": "Author validation of 17 distinct new tests, after the three draft corrections; no additional distinct test count."
+    },
+    "bounded": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_failure_report.py tests/test_pre_script_supervision_binding.py tests/test_pre_script_admission_authority.py tests/test_pre_script_scope_fallback.py tests/test_native_pre_script_tree_completion.py tests/test_launch_failure_report.py tests/test_launch_failure_report_contract.py tests/test_training_launch_termination_handoff.py --tb=short",
+      "session_id": 91390,
+      "exit_code": 0,
+      "footer": "67 passed in 25.48s",
+      "test_files": 8,
+      "pre_sha256": {
+        "src/orze/engine/pre_script_failure_report.py": "6e1d7bab9833ffc8b676c0bc37f2b49ae1947a3a0fd78032b3f9bdb7c481c8e8",
+        "src/orze/engine/native_pre_script.py": "5b1c4b1fba789ed1630c51f5988d80ff6c54dbdb5431d7b22f5b89aa02b38e72",
+        "src/orze/engine/pre_script_supervision.py": "fffa08401152176343903b450740d723918d89713d422a74a264e61161664653",
+        "src/orze/engine/process_supervision.py": "be532e923a6e90b21d25af8674f25a0cc57c5dc04cd109f816e341297b72f253",
+        "src/orze/engine/process.py": "fb635451f8db5b44c008fc8a100c33468d552da61a444c7af5baac7e947d2c41",
+        "src/orze/engine/phases.py": "24e3cf574231e43128c5373116c69be61629c0ae5152b65086816e7c4ec62415",
+        "src/orze/engine/launcher.py": "fc27e2401ba637bbb2a6a01f9aa9a6303fe328078895daa372ffdfe5839212b0",
+        "src/orze/engine/training_attempts.py": "887287b1dcfb75f310f581b4394a8546d7250fff4307d9263b7106cfcf1cea48",
+        "src/orze/engine/native_posthoc.py": "31cef10cee075c38890af7fb376c18c5ffcdc64280b23b32f33673082febc0e0",
+        "src/orze/engine/posthoc_attempts.py": "e65749e1bae6b835300567f2b22b43cd05a6a29829e27927745d8c909d48cb72",
+        "src/orze/engine/execution_authority.py": "20f5dc0bc802db87d868d0662209c6a6e414ae2fa3e6c882feb2d9e3e1864ad8",
+        "src/orze/engine/launch_failure_report.py": "6b0a5ad87aa4d80c564bbf04020578a3369eb36a366174029f29c7dc9b3a7ebf",
+        "src/orze/engine/accounting.py": "0282077bd368f14fc4af08e38fc47be66a593ed1c1fb8c5c782b30ebfabad043",
+        "src/orze/engine/compute_publication.py": "6bfcae4b1746a8855cc3f3467b8f2690e9bcd0926a7e72b49799ad12969f8091",
+        "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+        "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+        "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+        "tests/test_pre_script_failure_report.py": "4384364470fc5e403f8f76c99f98826ec64983c936a1fc5aed5e0318bfb39c31",
+        "tests/test_pre_script_supervision_binding.py": "1542688a748aaa1273c13efade8d1ae6425eb5113ca78e4cb84c6e2779161ed9",
+        "tests/test_pre_script_admission_authority.py": "763d41a8361574472d0f4940a90ad7f22062486a7fd8f7e7bdea4b16593c445c",
+        "tests/test_pre_script_scope_fallback.py": "b5cce4fdafab9b1c9c308108ff35a6af284f67bf8f0e6db8694ecd81b7882215",
+        "tests/test_native_pre_script_tree_completion.py": "7827ad9f0dd21e06e22e8d3b5d20e4c60f607ced4235534dd47ae3020c4b9cf8",
+        "tests/test_launch_failure_report.py": "80cad6d5bb810a480a31d389a5e4ead896ef0be76a2f227a572c14a724853f23",
+        "tests/test_launch_failure_report_contract.py": "c25bef0fa232f1ad2f99075fa1d53c420573d68d838a898c754404f3fd21e6ae",
+        "tests/test_training_launch_termination_handoff.py": "ed5d9f44dca74decbf568d7de51ea51dcdf23fbd238799728d70c64bc7bb8055",
+        "tests/supervision_fixture.py": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f"
+      },
+      "post_sha256": {
+        "src/orze/engine/pre_script_failure_report.py": "6e1d7bab9833ffc8b676c0bc37f2b49ae1947a3a0fd78032b3f9bdb7c481c8e8",
+        "src/orze/engine/native_pre_script.py": "5b1c4b1fba789ed1630c51f5988d80ff6c54dbdb5431d7b22f5b89aa02b38e72",
+        "src/orze/engine/pre_script_supervision.py": "fffa08401152176343903b450740d723918d89713d422a74a264e61161664653",
+        "src/orze/engine/process_supervision.py": "be532e923a6e90b21d25af8674f25a0cc57c5dc04cd109f816e341297b72f253",
+        "src/orze/engine/process.py": "fb635451f8db5b44c008fc8a100c33468d552da61a444c7af5baac7e947d2c41",
+        "src/orze/engine/phases.py": "24e3cf574231e43128c5373116c69be61629c0ae5152b65086816e7c4ec62415",
+        "src/orze/engine/launcher.py": "fc27e2401ba637bbb2a6a01f9aa9a6303fe328078895daa372ffdfe5839212b0",
+        "src/orze/engine/training_attempts.py": "887287b1dcfb75f310f581b4394a8546d7250fff4307d9263b7106cfcf1cea48",
+        "src/orze/engine/native_posthoc.py": "31cef10cee075c38890af7fb376c18c5ffcdc64280b23b32f33673082febc0e0",
+        "src/orze/engine/posthoc_attempts.py": "e65749e1bae6b835300567f2b22b43cd05a6a29829e27927745d8c909d48cb72",
+        "src/orze/engine/execution_authority.py": "20f5dc0bc802db87d868d0662209c6a6e414ae2fa3e6c882feb2d9e3e1864ad8",
+        "src/orze/engine/launch_failure_report.py": "6b0a5ad87aa4d80c564bbf04020578a3369eb36a366174029f29c7dc9b3a7ebf",
+        "src/orze/engine/accounting.py": "0282077bd368f14fc4af08e38fc47be66a593ed1c1fb8c5c782b30ebfabad043",
+        "src/orze/engine/compute_publication.py": "6bfcae4b1746a8855cc3f3467b8f2690e9bcd0926a7e72b49799ad12969f8091",
+        "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+        "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+        "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+        "tests/test_pre_script_failure_report.py": "4384364470fc5e403f8f76c99f98826ec64983c936a1fc5aed5e0318bfb39c31",
+        "tests/test_pre_script_supervision_binding.py": "1542688a748aaa1273c13efade8d1ae6425eb5113ca78e4cb84c6e2779161ed9",
+        "tests/test_pre_script_admission_authority.py": "763d41a8361574472d0f4940a90ad7f22062486a7fd8f7e7bdea4b16593c445c",
+        "tests/test_pre_script_scope_fallback.py": "b5cce4fdafab9b1c9c308108ff35a6af284f67bf8f0e6db8694ecd81b7882215",
+        "tests/test_native_pre_script_tree_completion.py": "7827ad9f0dd21e06e22e8d3b5d20e4c60f607ced4235534dd47ae3020c4b9cf8",
+        "tests/test_launch_failure_report.py": "80cad6d5bb810a480a31d389a5e4ead896ef0be76a2f227a572c14a724853f23",
+        "tests/test_launch_failure_report_contract.py": "c25bef0fa232f1ad2f99075fa1d53c420573d68d838a898c754404f3fd21e6ae",
+        "tests/test_training_launch_termination_handoff.py": "ed5d9f44dca74decbf568d7de51ea51dcdf23fbd238799728d70c64bc7bb8055",
+        "tests/supervision_fixture.py": "bc6c8df66a09b5e811af91d095793ca9cf0dbd6d0a70217094501169d15d036f"
+      },
+      "pre_post_equal": true,
+      "classification": "Overlapping bounded targets, not full Core/Pro validation; does not include the runtime author's separate new five-case file."
+    }
+  },
+  "independent_wiring_review": {
+    "result": "No bounded wiring blocker found.",
+    "source_paths": [
+      "src/orze/engine/process.py",
+      "src/orze/engine/phases.py",
+      "src/orze/engine/launcher.py",
+      "src/orze/engine/training_attempts.py",
+      "src/orze/engine/native_posthoc.py",
+      "src/orze/engine/posthoc_attempts.py"
+    ],
+    "tests_read": [
+      "tests/test_pre_script_scope_fallback.py",
+      "tests/test_pre_script_admission_authority.py"
+    ],
+    "findings": [
+      "Configured results_dir is resolved before the no-script/no-Lake compatibility branch; existing unresolved history is not erased by optional argument omission.",
+      "Public training/posthoc launches and native intent writers check pre-script history before their resource/attempt creation; writer checks occur inside the existing authority transaction.",
+      "A native false result delivers its captured full pre-script Ref to the separate failure action then continues the scheduler loop without calling the legacy fixer. A stale report likewise cannot fall through to launch.",
+      "Genuinely legacy bool-returning pre-script/fixer behavior is not reclassified as new supervision. The slice adds no mandatory setup to no-history direct APIs.",
+      "Source verification is scope-only and does not recursively call the launch-ready gate, permitting legitimate failed-source reporting and exact duplicate checks at the new FAILED fence."
+    ],
+    "doc_review": {
+      "path": "docs/native-pre-script-supervision.md",
+      "sha256": "900d1fc768068c9b8976290826ab93a82fb7e4648b7acea7124ebb4e94e72700",
+      "matched": true,
+      "limits": "Clearly scoped to native project pre-script: cooperative CPU environment, Linux owned tree proof, no input/output sandbox, no automatic fixer/artifacts/observations/restart adoption or general CPU research loop."
+    }
+  },
+  "limitations": [
+    "This report does not claim independent review of the reporter it authored; the other agent supplies that review.",
+    "No full-suite result is claimed here. Root's later full inventory and canonical evidence own final aggregate acceptance.",
+    "Filesystem effects are not rolled back. SQL/final readback failures after prepare retain uncertain ownership and may leave FAILED metrics or a zero-allocation receipt while the task remains CLAIMED; neither is permission for repair or replay.",
+    "Claim ID and pre-script occurrence ID are distinct. Zero-allocation reporting refuses an existing start and never overwrites an allocation. This is admission accounting, not measured CPU/GPU efficiency.",
+    "The immutable source effect is historical evidence, not freshly adopted process authority. Duplicate reporting requires the same current source and exact raw claim plus current FAILED action fence."
+  ]
+}

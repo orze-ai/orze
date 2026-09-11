@@ -1186,6 +1186,8 @@ def _launch_posthoc(idea_id: str, gpu: int, results_dir: Path, cfg: dict,
     """
     from orze.engine.posthoc_attempts import require_catalog
     require_catalog(lake, Path(results_dir) / idea_id, cfg)
+    from orze.engine.native_pre_script import require_launch_ready
+    require_launch_ready(lake, Path(results_dir) / idea_id, cfg)
     if lake is not None:
         from orze.engine.native_posthoc import launch as native_launch
         return native_launch(idea_id, gpu, results_dir, cfg, kind=kind,
@@ -1583,6 +1585,8 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     require_catalog(lake, results_dir / idea_id, cfg)
     from orze.engine.posthoc_attempts import require_catalog as require_posthoc_catalog
     require_posthoc_catalog(lake, results_dir / idea_id, cfg)
+    from orze.engine.native_pre_script import require_launch_ready
+    require_launch_ready(lake, results_dir / idea_id, cfg)
     require_no_unconfirmed_stop(results_dir / idea_id)
     _assert_campaign_evidence_authorized(cfg, lake)
     from orze.core.decision_batches import validate_idea_decision_admission
