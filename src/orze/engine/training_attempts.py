@@ -231,6 +231,12 @@ def begin(lake, tp, idea_dir, cfg=None):
     with execution_transaction(lake, idea_dir) as tx:
         from orze.engine.native_pre_script import require_launch_ready
         require_launch_ready(lake, idea_dir, cfg or {})
+        from orze.engine.artifact_preflight_receipts import verify_preflight_source
+        preflight_source = verify_preflight_source(
+            lake, idea_dir, cfg or {}, getattr(tp, "artifact_preflight_capture", None),
+            check_inputs=False)
+        if preflight_source is not None:
+            tx.watch_dependency(AttemptRef(**preflight_source["attempt_ref"]))
         from orze.engine.execution_catalog import bind_catalog
         bind_catalog(lake, idea_dir, tx.lease)
         _, claim_sha = _claim(tp, idea_dir, lake)
@@ -247,6 +253,8 @@ def begin(lake, tp, idea_dir, cfg=None):
             "origin": "native_training", "claim_sha256": claim_sha,
             "launch_lifecycle": launch_state,
         }
+        if preflight_source is not None:
+            binding["artifact_preflight_source"] = preflight_source
         from orze.engine.training_supervision import PROTOCOL
         binding["process_supervision_protocol"] = PROTOCOL
         if artifact_binding is not None:

@@ -187,6 +187,8 @@ def require_launch_ready(lake, idea_dir, cfg):
 def _admission(lake, folder, cfg):
     from orze.engine import launcher
     _scope(lake, folder, cfg)
+    from orze.engine.artifact_preflight_receipts import require_preflight_history_closed
+    require_preflight_history_closed(lake, folder, cfg)
     if lake is None:
         raise PreScriptHOLD("pre_script_catalog_required")
     launcher._assert_launch_authorized(folder.name, folder.parent, cfg)

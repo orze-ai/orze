@@ -510,15 +510,8 @@ def _artifact_preflight_identity(idea_id: str, results_dir: Path,
 
 
 def verify_artifact_preflight_receipt(idea_id: str, results_dir: Path,
-                                      cfg: dict, *, lake=None) -> bool:
+                                      cfg: dict) -> bool:
     """True only when a passed receipt matches the current launch contract."""
-    from orze.engine.artifact_preflight_receipts import (
-        capture_preflight_source, require_preflight_history_closed,
-    )
-    if lake is not None:
-        capture_preflight_source(lake, Path(results_dir) / idea_id, cfg)
-        return True
-    require_preflight_history_closed(lake, Path(results_dir) / idea_id, cfg)
     spec = cfg.get("artifact_preflight") or {}
     if not isinstance(spec, dict) or not spec.get("enabled", False):
         return True
@@ -545,23 +538,14 @@ def verify_artifact_preflight_receipt(idea_id: str, results_dir: Path,
     )
 
 
-def run_artifact_preflight(idea_id: str, results_dir: Path, cfg: dict, *, lake=None):
+def run_artifact_preflight(idea_id: str, results_dir: Path, cfg: dict) -> bool:
     """Run a bounded dataset/model resolver with accelerators hidden.
 
     The configured script owns domain-specific resolution. Orze enforces the
     execution contract: no visible accelerator, explicit metadata-network
-    policy and a non-secret audit receipt. Native calls carry an independent
-    occurrence reference and require owned tree closure; legacy calls retain
-    their bool API and explicitly limited process-group compatibility path.
+    policy, process-group timeout, and a non-secret audit receipt.
     """
     spec = cfg.get("artifact_preflight") or {}
-    from orze.engine.artifact_preflight_receipts import require_preflight_history_closed
-    enabled = isinstance(spec, dict) and bool(spec.get("enabled", False))
-    if lake is None or not enabled:
-        require_preflight_history_closed(lake, Path(results_dir) / idea_id, cfg)
-    if lake is not None and enabled:
-        from orze.engine.native_artifact_preflight import run_native_artifact_preflight
-        return run_native_artifact_preflight(idea_id, results_dir, cfg, lake)
     if not isinstance(spec, dict) or not spec.get("enabled", False):
         return True
 
@@ -1262,9 +1246,6 @@ def run_pre_script(idea_id: str, gpu: int, cfg: dict,
         results_dir = Path(cfg["results_dir"])
     if results_dir is None and lake is not None:
         raise PreScriptHOLD("pre_script_scope_required")
-    if results_dir is not None:
-        from orze.engine.artifact_preflight_receipts import require_preflight_history_closed
-        require_preflight_history_closed(lake, Path(results_dir) / idea_id, cfg)
     if results_dir is not None and (not pre_script or lake is None):
         # Removing configuration or in-memory wiring cannot erase an existing
         # unresolved native action. This precedes even the no-script return.

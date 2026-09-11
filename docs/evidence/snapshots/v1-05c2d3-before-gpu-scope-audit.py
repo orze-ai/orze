@@ -62,7 +62,6 @@ _BOUNDARIES = {
 _EXPECTED_CUDA_WRITES = frozenset({
     ("benchmarks/launch_policy_latency.py", "run_benchmark", "empty"),
     ("engine/launcher.py", "_authorized_gpu_environment", "dynamic"),
-    ("engine/native_artifact_preflight.py", "_capture", "empty"),
     ("engine/process.py", "run_artifact_preflight", "empty"),
     ("engine/process.py", "run_pre_script", "empty"),
     ("engine/smoke_test.py", "run_smoke_test", "empty"),

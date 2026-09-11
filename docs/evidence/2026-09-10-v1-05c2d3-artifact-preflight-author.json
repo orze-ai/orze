@@ -1,0 +1,123 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2d3",
+  "agent": "core_review",
+  "scope": "Author of native artifact-preflight CPU producer, thin supervision wrapper and additive phase tokens; independent read reviewer of other authors' receipt/failure/launch consumers.",
+  "classification": {
+    "preceding_commit_public_behavior_reds_owned": 0,
+    "new_mechanisms_owned": 10,
+    "new_draft_decoder_validation_regressions_owned": 2,
+    "note": "Runtime's independent real CPU baseline is 2 failures and 2 controls against preceding implementation-branch commit f8cae57, not a released-version claim. This report does not add overlapping suites, API-absence failures or other agents' test totals."
+  },
+  "baseline": {
+    "core_commit": "f8cae57d23e582d21ed1cc34c083f992c1dcf725",
+    "new_native_module_had_no_preceding_API": true,
+    "snapshots": [
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d3-before-process-supervision.py",
+        "sha256": "be532e923a6e90b21d25af8674f25a0cc57c5dc04cd109f816e341297b72f253"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2d3-before-termination-hold.py",
+        "sha256": "55a04a8ab701613236c260f6d014bc4e2222c1c7cee7015664ea921e8bdba82f"
+      }
+    ],
+    "snapshot_validation": "Complete sources captured before additive edits using apply_patch; sha256sum matched git show HEAD:<path> bytes for both files.",
+    "independent_cpu_baseline_reference": "docs/evidence/2026-09-10-v1-05c2d3-native-artifact-preflight-tree-review.json"
+  },
+  "owned_sources": {
+    "src/orze/engine/native_artifact_preflight.py": "13f3e97ab9f434a7d13b403526acdd52933644acc08eb92ece545d9ab0e8d86a",
+    "src/orze/engine/artifact_preflight_supervision.py": "85f6d2622fa4bbb3c8fb7e2a158e8823af0cf29a7a224fd141769f2401b5365d",
+    "src/orze/engine/process_supervision.py": "86fe3f16ad41a8788834112135eb0911c2a0e3628800fef0325e322b98c51f70",
+    "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95"
+  },
+  "owned_tests": {
+    "tests/test_artifact_preflight_supervision_binding.py": "9d9b76d892dab16f256e7f2e2b92db2e36f7e640ebe22ff90df179582e74af49",
+    "tests/test_artifact_preflight_stream_hash_validation.py": "77babcb90c4077cdff2a98fcee8911605e282d7de578dd7287c6e6b02baf43af"
+  },
+  "first_new_mechanisms": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_artifact_preflight_supervision_binding.py --tb=short",
+    "observed": "10 passed in 2.58s",
+    "exit_code": 0,
+    "producer_sha256": "2dba173bba600b4b5847d0e0411562150e15fab58f8349b62198519fa613d2b3",
+    "boundary": "Real SQLite, claims and caller pipe bytes; explicitly simulated READY/tree facts. No real CPU-tree proof is claimed by these 10 tests."
+  },
+  "draft_hash_validation": {
+    "snapshot": "docs/evidence/snapshots/v1-05c2d3-before-stream-hash-validation.py",
+    "snapshot_sha256": "2dba173bba600b4b5847d0e0411562150e15fab58f8349b62198519fa613d2b3",
+    "complete_snapshot_byte_equal_to_pre_fix_source": true,
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_artifact_preflight_stream_hash_validation.py --tb=short",
+    "first_observed": "2 failed in 0.91s",
+    "first_exit_code": 1,
+    "target_assertions": "Both failed DID NOT RAISE ArtifactPreflightHOLD for missing stdout hash or malformed stderr hash.",
+    "seam": "An explicit decoder seam replaces one decoded receipt field while retaining the verified byte digest. This independently tests schema validation; it is NOT a claim that a real file edit bypassed SHA verification. A separate real-byte replacement test rejects changed receipt bytes.",
+    "fix": "Require two lowercase 64-hex measured SHA256 fields for executed receipts; static NOT_STARTED receipts must not contain fake output hashes.",
+    "additional_narrow_changes": "Use timeout=1 for native termination calls and an explicit monitor once-only stop guard. These defensive edits have no separate claimed preceding-source red.",
+    "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -c \"import pathlib, pytest; import orze.engine.native_artifact_preflight as native; path=pathlib.Path('docs/evidence/snapshots/v1-05c2d3-before-stream-hash-validation.py'); exec(compile(path.read_bytes(), str(path), 'exec'), native.__dict__); raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_artifact_preflight_stream_hash_validation.py', '--tb=short']))\"",
+    "replay_observed": "2 failed in 0.76s",
+    "replay_exit_code": 1,
+    "replay_scope": "Complete saved producer module loaded in memory against current dependencies; not a whole baseline checkout replay."
+  },
+  "post_fix_owned_target": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_artifact_preflight_supervision_binding.py tests/test_artifact_preflight_stream_hash_validation.py --tb=short",
+    "observed": "12 passed in 3.23s",
+    "exit_code": 0,
+    "producer_sha256": "13f3e97ab9f434a7d13b403526acdd52933644acc08eb92ece545d9ab0e8d86a"
+  },
+  "bounded_neighbor_run": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_artifact_preflight_supervision_binding.py tests/test_artifact_preflight_stream_hash_validation.py tests/test_artifact_preflight.py tests/test_pre_script_supervision_binding.py tests/test_pre_script_failure_report.py tests/test_evaluation_supervision_binding.py tests/test_training_supervision_binding.py --tb=short",
+    "observed": "78 passed in 14.47s",
+    "exit_code": 0,
+    "session_id": 30248,
+    "limitation": "Bounded author check, not Core/Pro whole-suite verification or an all-source frozen epoch. Owned producer/phase files remained at the listed hashes; other authors were still completing consumer changes. Counts overlap the 12-target and other agents' suites."
+  },
+  "implementation_contract": [
+    "One independent artifact_preflight AttemptRef per exact claim; action ID differs from the training claim ID. New claim permits a new generation. Same-claim replay returns only the exact confirmed historical result.",
+    "Strict finite positive nonboolean timeout and detached command/environment/cwd before intent. Persist legacy nonsecret preflight identity plus command hash, timeout, claim and supervision metadata, not ordinary environment values or their fingerprints.",
+    "Known static configuration rejection stays in a never-prepare branch, commits NOT_STARTED with a confirmed effect and hashed receipt, and has neither TREE_CLOSED nor invented stdout/stderr hashes. Missing native config input is also configuration_error.",
+    "After READY, bind real worker identity before GO and recheck source files, admission/runtime, current attempt and claim. CPU visibility hides CUDA/HIP/ROCR and preserves NVIDIA_VISIBLE_DEVICES=none; no GPU lease/start accounting.",
+    "Drain actual stdout/stderr bytes through two nonblocking caller-owned read FDs with bounded 64KiB chunks and repeated deadline checks. Both EOF and exact TREE_CLOSED are required before publication. Continuous output cannot suppress timeout checking.",
+    "STOP preserves the worker return code; STOP0/forced cleanup is not success. Unknown preparation, stop, stream EOF or closure remains HOLD, with no automatic replay or NOT_STARTED fiction.",
+    "Large file hashing and blocking process waiting are outside the effect/SQL writer. Writer uses bounded receipts/effects, stat fences and exact closure proof, then writes/readbacks/fsyncs receipt and current terminal in an owned effect transaction."
+  ],
+  "independent_read_review": {
+    "conclusion": "No remaining bounded-slice blocker observed in the reviewed consumer changes. The producer itself is authored here and is not counted as independently reviewed by this agent.",
+    "reviewed_sources": {
+      "src/orze/engine/artifact_preflight_receipts.py": "01748ef6ca11259e2c0d80359e8b9d6ca41b4afff40535e48e7bcb40f57b6979",
+      "src/orze/engine/artifact_preflight_failure_report.py": "8e80a47c9a66f4b145477abd8566b0cce01afe6fee2570cac1f374916e0e3a5c",
+      "src/orze/engine/cpu_admission_failure_report.py": "6dbff4e1ced1a73bdcc71027eae119e87d0724e0f5eece51914d2b67086044ac",
+      "src/orze/engine/pre_script_failure_report.py": "5d4d9d69ae17440c2da320ef35240132fe25893ee4764d638ad771f9651117a0",
+      "src/orze/engine/launcher.py": "713680eddb3990e8b94ae0486ad5b242ad5d098b5c4d0af00db6b7aff6730118",
+      "src/orze/engine/native_posthoc.py": "121cb61ab004bc247e5d69be10d22b10926d4fff1e8c7926a845760c341571ce",
+      "src/orze/engine/process.py": "08bbd7ae0352708b815089b4183f69dbb89488fc510fac1d142c1702d6af4d6e",
+      "src/orze/engine/phases.py": "cb6e99ebff57c85a2b7393e4f955d18444aca6c98e0bb04906ee115e87899cb8",
+      "src/orze/engine/training_attempts.py": "61b92d7a1edb8d997c863c07cb80c9014f501c242a651f147f925e870987b87d",
+      "src/orze/engine/posthoc_attempts.py": "6346cca92e848173c5b537e2f9339db93f56d9254786e872c66bd4dc3f70c73e"
+    },
+    "findings": [
+      "Receipt capture/projection retains original source claim hash, while the later RUNNING training/posthoc consumer is checked by exact current ref, same claim ID, supervision identity and lifecycle. Legitimate trainer fields added to claim.json do not incorrectly invalidate that original source.",
+      "Consumer capture/GO now reuse the producer's nonblocking regular-file observed-size reader; stat-only verification remains in the writer. Configured ordinary input links are not mislabeled immutable artifacts.",
+      "Shared fixed-policy failure reporting admits only explicitly delivered confirmed TERMINAL/NOT_STARTED failure sources, checks exact pending intent, and never dispatches native failures to the legacy fixer. It publishes a once-only pending_explicit_action report.",
+      "Root's last training/posthoc catch fix routes ArtifactPreflightHOLD through owned STOP and log cleanup without a generic failure terminal or NOT_STARTED fiction. Public handle reconstruction preserves the same preflight capture. No claim that this agent independently ran root's draft-four-red suite."
+    ],
+    "contract_document_review": {
+      "path": "docs/native-artifact-preflight-supervision.md",
+      "initial_review_sha256": "380ba1133a037544214decf9e436d931fa89d0afabed7a95615d2de4a14237f2",
+      "final_full_read_sha256": "d9039143df22d1ef969530aa8f1e222c02c4b155d42a91a9c9cf79b346e9d108",
+      "review": "Full document reread after root accepted three wording corrections: only pipe read ends are nonblocking; malformed command/argument forms and invalid budgets are distinct from known static configuration refusal; native receipt preserves common audit/identity fields, with timeout in the binding and actual exit code rather than exact legacy timeout-field parity. Claim/source/NOT_STARTED/real-stream/legacy limitations match implementation. No unchanged pre/post document hash is claimed across that edit."
+    },
+    "additional_gpu_audit_review": {
+      "source": "src/orze/engine/gpu_scope_audit.py",
+      "pre_fix_sha256": "454e8b73467f10c7abed8788f2eec00d906c7bcf980a4c5f6bb46132da81e8e4",
+      "tests_sha256": "3ac8ad1efb8ef25552cf881b8269f37cc5327e95a35c71e6020e8532ea70e8b6",
+      "ownership": "Root discovered and reproduces the omitted production writer allowlist tuple. This agent only inspected the proposed narrow production audit change, did not edit the audit/test or run its 14 tests.",
+      "conclusion": "Adding exactly (engine/native_artifact_preflight.py, _capture, empty) describes the actual constant-empty CUDA environment write. Keep strict all_cuda_writes equality, every other dynamic/new writer rejection, four GPU-boundary guards and source stability checks unchanged. This is a production audit integration correction, not a fixture migration or proof of GPU execution. Root's whole-suite first epoch is not promoted to a pass by this bounded read review."
+    }
+  },
+  "limitations": [
+    "This is native source-bound artifact preflight only. Legacy no-Lake behavior is an explicitly separate compatibility path; no general resolver sandbox, network enforcement sandbox or scientific artifact validation is claimed.",
+    "No filesystem freeze of script dependency closures, secret-value durable identity, process adoption, automatic retry/recovery, or future fixer supervision is implemented here.",
+    "Output hashes describe actually drained pipe bytes, not content approval or artifact admission.",
+    "No production source or existing fixture owned by another agent was edited. No commits, pushes, holdout access, providers or real GPU/model jobs were performed by this agent."
+  ]
+}

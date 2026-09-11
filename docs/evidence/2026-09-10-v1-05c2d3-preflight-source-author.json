@@ -1,0 +1,263 @@
+{
+  "schema": 1,
+  "milestone": "V1-05C2d3",
+  "role": "Author: shared CPU admission reporter extraction and native preflight source reader; non-author bounded reading of parent/native producer only.",
+  "status": "bounded_candidate_passed_superseded_by_gpu_audit_integration_fix_pending_root_final_aggregate",
+  "baseline": {
+    "core_commit": "f8cae57d23e582d21ed1cc34c083f992c1dcf725",
+    "scope": "Artifact preflight only. The runtime agent's existing-public 2F2P baseline is separate, not authored or independently reproduced in this report."
+  },
+  "ownership": {
+    "production": [
+      "src/orze/engine/artifact_preflight_failure_report.py",
+      "src/orze/engine/artifact_preflight_receipts.py",
+      "src/orze/engine/cpu_admission_failure_report.py",
+      "src/orze/engine/pre_script_failure_report.py"
+    ],
+    "new_tests": [
+      "tests/test_artifact_preflight_source.py",
+      "tests/test_artifact_preflight_input_read.py"
+    ],
+    "existing_tests_modified": [],
+    "independent_scope": "Read parent training/posthoc begin + READY/GO and native producer; no claim that author-reviewed own modules constitute independent acceptance."
+  },
+  "contract": {
+    "reporter": "Fixed internal policy, never worker/config-selected. Original pre_script action ID, report phase, stable errors, message, terminal and claim-owned zero receipt remain unchanged. Artifact preflight additionally permits exact NOT_STARTED source only through the native cached verifier. Duplicate checks source, claim, FAILED fence and confirmed effects; stale returns no effects. No fixer or automatic recovery.",
+    "source": "Capture is detached/transient. Durable source contains attempt_ref, receipt_sha256, claim_attempt_id, claim_sha256, preflight_identity. Writer verification performs bounded metadata/stat/policy only; GO verification outside writer reuses the producer's nonblocking observed-size file reader. The old raw preflight claim hash is not imposed on legitimately updated started claim bytes.",
+    "disabled": "Absent/disabled preflight with no native history does not bind unrelated config or environment and needs no mandatory resolver. Native history cannot be erased by dropping config/caller wiring.",
+    "limits": [
+      "Mutable input files are not globally locked or an immutable executable snapshot. Ordinary configured symlink/hardlink inputs retain producer semantics.",
+      "No large script/config hash runs under the SQLite writer. Optional check_inputs=False is accepted only inside the writer; default full verification is outside.",
+      "Same-process counter clearing/reprojection is not real process restart/adoption.",
+      "Only synthetic CPU scripts and temporary SQLite/filesystem; no accelerator, provider, real resolver, holdout or scientific qualification."
+    ]
+  },
+  "new_case_classification": {
+    "total": 10,
+    "new_mechanisms": 10,
+    "old_behavior_red": 0,
+    "draft_red": 0,
+    "details": {
+      "tests/test_artifact_preflight_source.py": {
+        "count": 9,
+        "description": "Real tiny CPU producer and static NOT_STARTED refusal; detached capture, writer no hash, copied static source rejection, new claim, two explicit metadata-only started consumers, two once-only reports, disabled absence."
+      },
+      "tests/test_artifact_preflight_input_read.py": {
+        "count": 1,
+        "description": "Real regular input replaced by FIFO after first stat; new nonblocking mechanism only, deliberately not executed against the old blocking code."
+      }
+    }
+  },
+  "runs": [
+    {
+      "name": "original_pre_script_compatibility",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_failure_report.py --tb=short",
+      "source_sha256": "6e1d7bab9833ffc8b676c0bc37f2b49ae1947a3a0fd78032b3f9bdb7c481c8e8",
+      "session_id": 9991,
+      "result": {
+        "exit_code": 0,
+        "passed": 17,
+        "seconds": 7.98
+      }
+    },
+    {
+      "name": "extracted_pre_script_compatibility",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_failure_report.py --tb=short",
+      "source_sha256": {
+        "shared": "72e522a64ff4d7965ef37ea2eda5373d5df1b3698428f22ec8d3eef0a1bd574e",
+        "wrapper": "5d4d9d69ae17440c2da320ef35240132fe25893ee4764d638ad771f9651117a0"
+      },
+      "session_id": 66228,
+      "result": {
+        "exit_code": 0,
+        "passed": 17,
+        "seconds": 7.3
+      },
+      "note": "Subsequent shared change only removes two trailing spaces, producing current 6dbff4e1 hash."
+    },
+    {
+      "name": "own_test_fixture_import_error",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_artifact_preflight_source.py --tb=short",
+      "result": {
+        "exit_code": 1,
+        "setup_errors": 9,
+        "seconds": 0.37
+      },
+      "classification": "Missing explicit import of nested cpu_pre_script pytest fixture. No producer execution and no product red. Corrected only the new, not-yet-frozen file import."
+    },
+    {
+      "name": "first_own_source_mechanisms_green",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_artifact_preflight_source.py --tb=short",
+      "session_id": 22568,
+      "result": {
+        "exit_code": 0,
+        "passed": 9,
+        "seconds": 3.98
+      },
+      "test_sha256": "a83a3adef2782c98f6141507bb6898ebe15d25be46bf7923f83ef281ea0357af",
+      "reader_sha256": "988879e6f857dc71646c2e626c19ed2e4194281a3e95c9335258c77867ec0465",
+      "note": "No full pre/post source inventory claimed for this editing candidate."
+    },
+    {
+      "name": "candidate_shared_and_source_26",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_failure_report.py tests/test_artifact_preflight_source.py --tb=short",
+      "session_id": 8160,
+      "result": {
+        "exit_code": 0,
+        "passed": 26,
+        "seconds": 11.61
+      },
+      "note": "Overlaps prior runs; not additive distinct cases."
+    },
+    {
+      "name": "nonblocking_reader_plus_shared_27",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_artifact_preflight_input_read.py tests/test_artifact_preflight_source.py tests/test_pre_script_failure_report.py --tb=short",
+      "session_id": 76319,
+      "result": {
+        "exit_code": 0,
+        "passed": 27,
+        "seconds": 11.6
+      },
+      "reader_sha256": "01748ef6ca11259e2c0d80359e8b9d6ca41b4afff40535e48e7bcb40f57b6979",
+      "note": "Includes the FIFO mechanism's first green. Original nine-case file unchanged. This is a candidate run, not final full-freeze validation."
+    }
+  ],
+  "draft_history": [
+    {
+      "name": "disabled_source_bound_unrelated_policy",
+      "snapshot": "docs/evidence/snapshots/v1-05c2d3-before-disabled-preflight-source.py",
+      "sha256": "563b82735fea4533731664f6828d696a8c14ab6f8f339123101c5a37cfe5c381",
+      "description": "Root reproduced four existing training handoff failures because disabled capture bound full cfg policy while the compatibility begin caller omitted cfg. Complete source saved before fix; root owns exact original-case replay/results. These are existing-test draft regressions, not ten new tests or historical release bugs."
+    },
+    {
+      "name": "consumer_GO_HOLD_cleanup",
+      "description": "Author's read of parent's generic cleanup path predicted rejected source HOLD could still publish consumer terminal. Root independently reproduced actual 4F11P and owns complete caller snapshots and fix evidence. Not counted as author-made new cases here."
+    }
+  ],
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-05c2d3-before-pre-script-failure-report.py",
+      "sha256": "6e1d7bab9833ffc8b676c0bc37f2b49ae1947a3a0fd78032b3f9bdb7c481c8e8",
+      "complete_module": true,
+      "description": "Full original pre-script reporter before extraction; source bytes matched on capture."
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c2d3-before-disabled-preflight-source.py",
+      "sha256": "563b82735fea4533731664f6828d696a8c14ab6f8f339123101c5a37cfe5c381",
+      "complete_module": true,
+      "description": "Full live source before disabled-policy correction; no reconstructed baseline."
+    }
+  ],
+  "candidate_sha256": {
+    "docs/evidence/snapshots/v1-05c2d3-before-disabled-preflight-source.py": "563b82735fea4533731664f6828d696a8c14ab6f8f339123101c5a37cfe5c381",
+    "docs/evidence/snapshots/v1-05c2d3-before-pre-script-failure-report.py": "6e1d7bab9833ffc8b676c0bc37f2b49ae1947a3a0fd78032b3f9bdb7c481c8e8",
+    "src/orze/engine/artifact_preflight_failure_report.py": "8e80a47c9a66f4b145477abd8566b0cce01afe6fee2570cac1f374916e0e3a5c",
+    "src/orze/engine/artifact_preflight_receipts.py": "01748ef6ca11259e2c0d80359e8b9d6ca41b4afff40535e48e7bcb40f57b6979",
+    "src/orze/engine/cpu_admission_failure_report.py": "6dbff4e1ced1a73bdcc71027eae119e87d0724e0f5eece51914d2b67086044ac",
+    "src/orze/engine/pre_script_failure_report.py": "5d4d9d69ae17440c2da320ef35240132fe25893ee4764d638ad771f9651117a0",
+    "tests/test_artifact_preflight_input_read.py": "8815e3653219498cb477ffd5852337f6599af0d70581c8ff81b613ebf8a58bc3",
+    "tests/test_artifact_preflight_source.py": "a83a3adef2782c98f6141507bb6898ebe15d25be46bf7923f83ef281ea0357af",
+    "tests/test_pre_script_failure_report.py": "4384364470fc5e403f8f76c99f98826ec64983c936a1fc5aed5e0318bfb39c31"
+  },
+  "final_bounded_validation": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_pre_script_failure_report.py tests/test_artifact_preflight_source.py tests/test_artifact_preflight_input_read.py tests/test_artifact_preflight_launch_boundaries.py tests/test_artifact_preflight.py tests/test_native_artifact_preflight_tree_completion.py tests/test_native_artifact_preflight_supervision.py tests/test_native_pre_script_tree_completion.py tests/test_pre_script_admission_authority.py tests/test_pre_script_scope_fallback.py tests/test_training_launch_termination_handoff.py --tb=short",
+    "session_id": 80029,
+    "result": {
+      "exit_code": 0,
+      "passed": 93,
+      "seconds": 72.75
+    },
+    "hash_command": "python3 - <<'PY'\nimport hashlib,json,subprocess\nfrom datetime import datetime,timezone\nfrom pathlib import Path\nchanged=subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()\nnew=subprocess.check_output(['git','ls-files','--others','--exclude-standard'],text=True).splitlines()\npaths=sorted(p for p in set(changed+new) if p.startswith(('src/','tests/')) or p=='pyproject.toml')\nprint(json.dumps({'utc':datetime.now(timezone.utc).isoformat(),'files':{p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}},sort_keys=True))\nPY",
+    "pre": {
+      "files": {
+        "src/orze/engine/artifact_preflight_failure_report.py": "8e80a47c9a66f4b145477abd8566b0cce01afe6fee2570cac1f374916e0e3a5c",
+        "src/orze/engine/artifact_preflight_receipts.py": "01748ef6ca11259e2c0d80359e8b9d6ca41b4afff40535e48e7bcb40f57b6979",
+        "src/orze/engine/artifact_preflight_supervision.py": "85f6d2622fa4bbb3c8fb7e2a158e8823af0cf29a7a224fd141769f2401b5365d",
+        "src/orze/engine/cpu_admission_failure_report.py": "6dbff4e1ced1a73bdcc71027eae119e87d0724e0f5eece51914d2b67086044ac",
+        "src/orze/engine/launcher.py": "713680eddb3990e8b94ae0486ad5b242ad5d098b5c4d0af00db6b7aff6730118",
+        "src/orze/engine/native_artifact_preflight.py": "13f3e97ab9f434a7d13b403526acdd52933644acc08eb92ece545d9ab0e8d86a",
+        "src/orze/engine/native_posthoc.py": "121cb61ab004bc247e5d69be10d22b10926d4fff1e8c7926a845760c341571ce",
+        "src/orze/engine/native_pre_script.py": "05fef456966d87914dbcaab3a0070415b542e80273bb2c3c4b4925af516b2471",
+        "src/orze/engine/phases.py": "cb6e99ebff57c85a2b7393e4f955d18444aca6c98e0bb04906ee115e87899cb8",
+        "src/orze/engine/posthoc_attempts.py": "6346cca92e848173c5b537e2f9339db93f56d9254786e872c66bd4dc3f70c73e",
+        "src/orze/engine/pre_script_failure_report.py": "5d4d9d69ae17440c2da320ef35240132fe25893ee4764d638ad771f9651117a0",
+        "src/orze/engine/process.py": "08bbd7ae0352708b815089b4183f69dbb89488fc510fac1d142c1702d6af4d6e",
+        "src/orze/engine/process_supervision.py": "86fe3f16ad41a8788834112135eb0911c2a0e3628800fef0325e322b98c51f70",
+        "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95",
+        "src/orze/engine/training_attempts.py": "61b92d7a1edb8d997c863c07cb80c9014f501c242a651f147f925e870987b87d",
+        "tests/test_artifact_preflight_input_read.py": "8815e3653219498cb477ffd5852337f6599af0d70581c8ff81b613ebf8a58bc3",
+        "tests/test_artifact_preflight_launch_boundaries.py": "316440b031e59bff30df7be365bb833f6cbcddc419224a62c9ed6e348527e039",
+        "tests/test_artifact_preflight_source.py": "a83a3adef2782c98f6141507bb6898ebe15d25be46bf7923f83ef281ea0357af",
+        "tests/test_artifact_preflight_stream_hash_validation.py": "77babcb90c4077cdff2a98fcee8911605e282d7de578dd7287c6e6b02baf43af",
+        "tests/test_artifact_preflight_supervision_binding.py": "9d9b76d892dab16f256e7f2e2b92db2e36f7e640ebe22ff90df179582e74af49",
+        "tests/test_force_pack_admission.py": "5c0fe680a9367ff960442f614ba832e1c577543b9477ede032ce108e2b4b1a69",
+        "tests/test_native_artifact_preflight_supervision.py": "a08d01197083ffe107b064cff46938b1892a69be99619e1842b8a7960b1b040f",
+        "tests/test_native_artifact_preflight_tree_completion.py": "687a8c9a7649ed336c0553e0193090bb953028fe59f3c75ff818aec21b0a829f"
+      },
+      "utc": "2026-09-11T01:12:12.255875+00:00"
+    },
+    "post": {
+      "files": {
+        "src/orze/engine/artifact_preflight_failure_report.py": "8e80a47c9a66f4b145477abd8566b0cce01afe6fee2570cac1f374916e0e3a5c",
+        "src/orze/engine/artifact_preflight_receipts.py": "01748ef6ca11259e2c0d80359e8b9d6ca41b4afff40535e48e7bcb40f57b6979",
+        "src/orze/engine/artifact_preflight_supervision.py": "85f6d2622fa4bbb3c8fb7e2a158e8823af0cf29a7a224fd141769f2401b5365d",
+        "src/orze/engine/cpu_admission_failure_report.py": "6dbff4e1ced1a73bdcc71027eae119e87d0724e0f5eece51914d2b67086044ac",
+        "src/orze/engine/launcher.py": "713680eddb3990e8b94ae0486ad5b242ad5d098b5c4d0af00db6b7aff6730118",
+        "src/orze/engine/native_artifact_preflight.py": "13f3e97ab9f434a7d13b403526acdd52933644acc08eb92ece545d9ab0e8d86a",
+        "src/orze/engine/native_posthoc.py": "121cb61ab004bc247e5d69be10d22b10926d4fff1e8c7926a845760c341571ce",
+        "src/orze/engine/native_pre_script.py": "05fef456966d87914dbcaab3a0070415b542e80273bb2c3c4b4925af516b2471",
+        "src/orze/engine/phases.py": "cb6e99ebff57c85a2b7393e4f955d18444aca6c98e0bb04906ee115e87899cb8",
+        "src/orze/engine/posthoc_attempts.py": "6346cca92e848173c5b537e2f9339db93f56d9254786e872c66bd4dc3f70c73e",
+        "src/orze/engine/pre_script_failure_report.py": "5d4d9d69ae17440c2da320ef35240132fe25893ee4764d638ad771f9651117a0",
+        "src/orze/engine/process.py": "08bbd7ae0352708b815089b4183f69dbb89488fc510fac1d142c1702d6af4d6e",
+        "src/orze/engine/process_supervision.py": "86fe3f16ad41a8788834112135eb0911c2a0e3628800fef0325e322b98c51f70",
+        "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95",
+        "src/orze/engine/training_attempts.py": "61b92d7a1edb8d997c863c07cb80c9014f501c242a651f147f925e870987b87d",
+        "tests/test_artifact_preflight_input_read.py": "8815e3653219498cb477ffd5852337f6599af0d70581c8ff81b613ebf8a58bc3",
+        "tests/test_artifact_preflight_launch_boundaries.py": "316440b031e59bff30df7be365bb833f6cbcddc419224a62c9ed6e348527e039",
+        "tests/test_artifact_preflight_source.py": "a83a3adef2782c98f6141507bb6898ebe15d25be46bf7923f83ef281ea0357af",
+        "tests/test_artifact_preflight_stream_hash_validation.py": "77babcb90c4077cdff2a98fcee8911605e282d7de578dd7287c6e6b02baf43af",
+        "tests/test_artifact_preflight_supervision_binding.py": "9d9b76d892dab16f256e7f2e2b92db2e36f7e640ebe22ff90df179582e74af49",
+        "tests/test_force_pack_admission.py": "5c0fe680a9367ff960442f614ba832e1c577543b9477ede032ce108e2b4b1a69",
+        "tests/test_native_artifact_preflight_supervision.py": "a08d01197083ffe107b064cff46938b1892a69be99619e1842b8a7960b1b040f",
+        "tests/test_native_artifact_preflight_tree_completion.py": "687a8c9a7649ed336c0553e0193090bb953028fe59f3c75ff818aec21b0a829f"
+      },
+      "utc": "2026-09-11T01:13:52.232496+00:00"
+    },
+    "files_equal": true,
+    "note": "11 test files; overlaps candidate and other-agent targets and is not additive distinct cases. This historical field name records the author's then-final bounded candidate, not the later accepted whole-repository epoch. The 93-case run precedes root's GPU audit integration correction and is superseded for final aggregate acceptance. Original command, result and all 23 pre/post hashes are retained unchanged."
+  },
+  "subsequent_gpu_audit_integration": {
+    "classification": "A production audit integration omission introduced in this slice, not a preceding-baseline defect and not an old-test fixture migration.",
+    "root_observation": "Root reported four existing GPU scope audit failures (isolated target 4 failed, 10 passed in 6.18s) because the newly added native resolver's explicit empty CUDA write was absent from _EXACT_EXPECTED_CUDA_WRITES.",
+    "bounded_correction": "Register the exact tuple ('engine/native_artifact_preflight.py', '_capture', 'empty') in the expected writer set. The original 14 tests remain unchanged; acknowledging this explicit CPU-only write does not relax rejection of dynamic CUDA writers.",
+    "evidence_boundary": "This report did not independently rerun that target or the repository suite. Root owns the exact audit-source snapshot, correction, final epoch and aggregate evidence. Do not use the earlier 93-case candidate as proof of the later complete audit integration.",
+    "publication_state": "Final root aggregate pending at this addendum; no new pytest run or source/test edit by this author."
+  },
+  "read_only_audit": {
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,shlex,subprocess\nfrom pathlib import Path\np=Path('docs/evidence/2026-09-10-v1-05c2d3-preflight-source-author.json')\nr=json.loads(p.read_text())\nfor run in r['runs']:\n    tokens=shlex.split(run['command'])\n    assert tokens and 'pytest' in tokens\nfor entry in r['snapshots']:\n    raw=Path(entry['path']).read_bytes()\n    assert hashlib.sha256(raw).hexdigest()==entry['sha256']\n    assert raw.endswith(b'\\n')\n    ast.parse(raw)\nold=subprocess.check_output(['git','show',r['baseline']['core_commit']+':src/orze/engine/pre_script_failure_report.py'])\nassert old==Path(r['snapshots'][0]['path']).read_bytes()\npath='tests/test_pre_script_failure_report.py'\nassert subprocess.check_output(['git','show',r['baseline']['core_commit']+':'+path])==Path(path).read_bytes()\nprint(json.dumps({'commands_valid':len(r['runs']),'complete_module_snapshots':len(r['snapshots']),'original_reporter_snapshot_byte_equal':True,'existing_17_test_file_byte_equal':True},sort_keys=True))\nPY",
+    "result": {
+      "exit_code": 0,
+      "commands_valid": 6,
+      "complete_module_snapshots": 2,
+      "original_reporter_snapshot_byte_equal": true,
+      "existing_17_test_file_byte_equal": true
+    },
+    "note": "The six original run commands were audited before final_bounded_validation was added. The complete original reporter snapshot and unchanged old 17-test file match the fixed baseline commit byte-for-byte."
+  },
+  "independent_integration_review": {
+    "production_scope": [
+      "src/orze/engine/launcher.py",
+      "src/orze/engine/native_posthoc.py",
+      "src/orze/engine/training_attempts.py",
+      "src/orze/engine/posthoc_attempts.py",
+      "src/orze/engine/native_artifact_preflight.py",
+      "src/orze/engine/process.py",
+      "src/orze/engine/phases.py",
+      "src/orze/engine/native_pre_script.py"
+    ],
+    "conclusion": "No remaining bounded C2d3 blocker found in reviewed non-authored integration. Both begin transactions use original captures, watch the exact source, and persist source metadata; actual GO rechecks outside writer after legitimate started claim updates. ArtifactPreflightHOLD now follows owned-stop/no-consumer-publication branches; returned handles retain capture. Native no-history-disabled compatibility keeps the no-source route, while no-Lake legacy uses its existing static receipt check and history gate.",
+    "ownership_limit": "This is independent reading/testing only for the listed other-authored source. The four owned source files remain author-validated, not an independent review.",
+    "evidence": "The 93-case bounded target includes the frozen actual training/posthoc GO cases and original CPU resolver tree cases. Explicit metadata-only started consumers in the author's own file are not described as actual worker launch tests."
+  }
+}

@@ -95,7 +95,7 @@ def _other_phases_closed(lake, idea_id):
             raise AttemptEffectBusy("posthoc_other_phase_active")
 
 
-def begin(lake, tp, idea_dir, *, launch_inputs, artifact_binding=None):
+def begin(lake, tp, idea_dir, *, launch_inputs, artifact_binding=None, cfg=None):
     """Pin intent before work-directory creation, READY allocation or GO."""
     from orze.core.artifact_contract import validate_artifact_publication_binding
     inputs = json.loads(_json(launch_inputs))
@@ -110,12 +110,20 @@ def begin(lake, tp, idea_dir, *, launch_inputs, artifact_binding=None):
     with execution_transaction(lake, folder) as tx:
         from orze.engine.native_pre_script import require_launch_ready
         require_launch_ready(lake, folder, {})
+        from orze.engine.artifact_preflight_receipts import verify_preflight_source
+        preflight_source = verify_preflight_source(
+            lake, folder, cfg or {}, getattr(tp, "artifact_preflight_capture", None),
+            check_inputs=False)
+        if preflight_source is not None:
+            tx.watch_dependency(AttemptRef(**preflight_source["attempt_ref"]))
         _other_phases_closed(lake, tp.idea_id)
         _, claim_sha = _claim(tp, folder, lake)
         state = _launch_state(lake, tp.idea_id)
         binding = {"origin": "native_posthoc", "claim_sha256": claim_sha,
                    "launch_lifecycle": state, "lifecycle_phase": "training",
                    "process_supervision_protocol": proof.PROTOCOL, "launch_inputs": inputs}
+        if preflight_source is not None:
+            binding["artifact_preflight_source"] = preflight_source
         if artifact is not None:
             binding["artifact_publication"] = artifact
         from orze.engine.execution_catalog import bind_catalog

@@ -1586,18 +1586,8 @@ class OrzePhaseMixin:
                     # dispatch tick and activates a global backoff, preventing
                     # one unavailable dependency from burning through every
                     # queued idea.
-                    preflight_result = run_artifact_preflight(
-                        idea_id, self.results_dir, cfg, lake=self.lake)
-                    if not preflight_result:
-                        from orze.engine.native_artifact_preflight import ArtifactPreflightResult
-                        native_preflight = isinstance(preflight_result, ArtifactPreflightResult)
-                        if native_preflight:
-                            from orze.engine.artifact_preflight_failure_report import report_artifact_preflight_failure
-                            reported = report_artifact_preflight_failure(
-                                self.lake, self.results_dir / idea_id,
-                                preflight_result.attempt_ref, self.failure_counts, cfg)
-                            if reported["status"] == "stale":
-                                return free
+                    if not run_artifact_preflight(
+                            idea_id, self.results_dir, cfg):
                         retry_interval = float(
                             preflight_cfg.get("retry_interval", 300))
                         self._artifact_preflight_blocked_until = (
@@ -1609,13 +1599,12 @@ class OrzePhaseMixin:
                         logger.warning(
                             "%s for %s — dispatch paused for %.1f second(s)",
                             reason, idea_id, retry_interval)
-                        if not native_preflight:
-                            _write_failure(
-                                self.results_dir / idea_id, reason,
-                                lake=self.lake, idea_id=idea_id, cfg=cfg)
-                            _record_failure(self.failure_counts, idea_id)
-                            account_zero_gpu(
-                                "rejected", "artifact_preflight_failed")
+                        _write_failure(
+                            self.results_dir / idea_id, reason,
+                            lake=self.lake, idea_id=idea_id, cfg=cfg)
+                        _record_failure(self.failure_counts, idea_id)
+                        account_zero_gpu(
+                            "rejected", "artifact_preflight_failed")
                         return free
                     self._artifact_preflight_blocked_until = 0.0
 

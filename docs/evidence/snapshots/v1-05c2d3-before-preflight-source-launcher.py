@@ -1590,7 +1590,6 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
     from orze.engine.artifact_preflight_receipts import (
         capture_preflight_source, require_preflight_history_closed, verify_preflight_source,
     )
-    from orze.engine.native_artifact_preflight import ArtifactPreflightHOLD
     if lake is not None:
         preflight_capture = capture_preflight_source(lake, results_dir / idea_id, cfg)
     else:
@@ -1937,7 +1936,6 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         )
         tp.replica_reservation = replica_reservation
         tp.replication_authorization = replication
-        tp.artifact_preflight_capture = preflight_capture
         if getattr(tp, "attempt_ref", None) is not None:
             from orze.engine.training_attempts import started
             from orze.engine.execution_authority import canonical_identity_equal
@@ -2021,7 +2019,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         close_model_lineage_attestation(lineage_context)
         _close_launch_log(log_fh)
         raise TerminationUnconfirmed("training_supervision_unconfirmed") from launch_error
-    except (LaunchIntegrityError, ArtifactPreflightHOLD):
+    except LaunchIntegrityError:
         close_model_lineage_attestation(lineage_context)
         try:
             terminate_execution(tp, results_dir / idea_id, phase="training",

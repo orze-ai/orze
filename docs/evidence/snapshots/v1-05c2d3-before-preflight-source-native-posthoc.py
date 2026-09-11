@@ -137,7 +137,6 @@ def launch(idea_id, gpu, results_dir, cfg, *, kind, idea_cfg_path, lake):
     from orze.engine.native_pre_script import require_launch_ready
     require_launch_ready(lake, folder, cfg)
     from orze.engine.artifact_preflight_receipts import capture_preflight_source, verify_preflight_source
-    from orze.engine.native_artifact_preflight import ArtifactPreflightHOLD
     preflight_capture = capture_preflight_source(lake, folder, cfg)
     if lake is None:
         raise AttemptEffectBusy("posthoc_native_catalog_required")
@@ -204,7 +203,6 @@ def launch(idea_id, gpu, results_dir, cfg, *, kind, idea_cfg_path, lake):
                 attempt_id=attempt_id, attempt_ref=tp.attempt_ref,
                 execution_identity=execution_identity, _log_fh=log_fh)
             tp.is_posthoc = True
-            tp.artifact_preflight_capture = preflight_capture
             attempts.started(lake, tp, folder, launcher.capture_process_identity(tp.process.pid))
             fresh = _configuration(Path(idea_cfg_path), cfg, kind)
             if (not canonical_identity_equal(configuration, fresh)
@@ -229,7 +227,7 @@ def launch(idea_id, gpu, results_dir, cfg, *, kind, idea_cfg_path, lake):
         tp._termination_unconfirmed = True
         launcher._close_launch_log(log_fh)
         raise TerminationUnconfirmed("posthoc_supervision_unconfirmed") from exc
-    except (launcher.LaunchIntegrityError, ArtifactPreflightHOLD):
+    except launcher.LaunchIntegrityError:
         try:
             if tp.process is not None:
                 from orze.engine.termination_hold import terminate_execution
