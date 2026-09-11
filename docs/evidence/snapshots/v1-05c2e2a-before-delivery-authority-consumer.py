@@ -75,11 +75,12 @@ def settle_role_delivery(rp, outcome, exit_code, cleanup_verified):
             if cleanup_verified is not True or getattr(rp, "is_pending_role", False):
                 return False
             owner.require_closed(exit_code)
-            db_path, launch = owner.delivery_authority()
+            launch = getattr(rp, "trigger_launch", None)
             if launch is not None:
+                delivery_reference(rp)
                 from orze.engine.trigger_delivery import record_terminal
                 if record_terminal(
-                        db_path, launch, outcome=outcome,
+                        rp.trigger_delivery_db, launch, outcome=outcome,
                         exit_code=exit_code, cleanup_verified=True) is not True:
                     return False
             return owner.release(outcome=outcome, exit_code=exit_code) is True

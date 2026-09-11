@@ -918,6 +918,19 @@ class Orze(OrzePhaseMixin):
 
     def _kill_and_save(self):
         """Kill all children, save state, close lake. Used as upgrade callback."""
+        from orze.engine.role_delivery import stop_owned_role
+        from orze.engine.role_supervision import RoleSupervisionHOLD
+        # Role-local gate only: this does not certify the earlier package
+        # installation or legacy training/evaluation upgrade paths as safe.
+        held_roles = False
+        for role_name, rp in list(self.active_roles.items()):
+            owned = stop_owned_role(rp)
+            if owned is False:
+                held_roles = True
+            elif owned is True and self.active_roles.get(role_name) is rp:
+                del self.active_roles[role_name]
+        if held_roles:
+            raise RoleSupervisionHOLD("upgrade_role_closure_unconfirmed")
         for gpu, tp in self.active.items():
             _kill_pg(tp.process, signal.SIGTERM)
         for role_name, rp in self.active_roles.items():

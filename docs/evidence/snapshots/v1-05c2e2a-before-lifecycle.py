@@ -939,10 +939,8 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     logger.info("Shutting down gracefully (kill_all=%s)...", kill_all)
     training_count = len(active)
     eval_count = len(active_evals)
-    held_training, held_evals, held_roles = {}, {}, {}
-    role_snapshot = dict(active_roles)
+    held_training, held_evals = {}, {}
     from orze.engine.shutdown_publication import handle_shutdown
-    from orze.engine.role_delivery import stop_owned_role
 
     def close_interrupted_evaluation(ep) -> None:
         """Close compute/stage evidence after a controlled evaluator stop."""
@@ -1020,12 +1018,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                 continue
             ep.close_log()
             close_interrupted_evaluation(ep)
-        for role_name, rp in role_snapshot.items():
-            owned = stop_owned_role(rp)
-            if owned is not None:
-                if not owned:
-                    held_roles[role_name] = rp
-                continue
+        for role_name, rp in active_roles.items():
             logger.info("Killing role '%s' (PID %d)",
                         role_name, rp.process.pid)
             reaped = terminate_role_process(rp, f"role {role_name}")
@@ -1060,12 +1053,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                 continue
             ep.close_log()
             close_interrupted_evaluation(ep)
-        for role_name, rp in role_snapshot.items():
-            owned = stop_owned_role(rp)
-            if owned is not None:
-                if not owned:
-                    held_roles[role_name] = rp
-                continue
+        for role_name, rp in active_roles.items():
             logger.info("Terminating role '%s' (PID %d)...",
                         role_name, rp.process.pid)
             reaped = terminate_role_process(rp, f"role {role_name}")
@@ -1126,9 +1114,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
 
     # Detached children must no longer be visible to atexit_cleanup, whose
     # last-resort contract is to kill every process still tracked here.
-    for role_name, rp in role_snapshot.items():
-        if role_name not in held_roles and active_roles.get(role_name) is rp:
-            del active_roles[role_name]
+    active_roles.clear()
     active.clear()
     active.update(held_training)
     active_evals.clear()
@@ -1184,12 +1170,6 @@ def atexit_cleanup(active: dict, active_evals: dict,
         close_compute(ep, "evaluation", "evaluation_atexit_cleanup")
         ep.close_log()
     for role_name, rp in list(active_roles.items()):
-        from orze.engine.role_delivery import stop_owned_role
-        owned = stop_owned_role(rp, timeout=2)
-        if owned is not None:
-            if owned and active_roles.get(role_name) is rp:
-                del active_roles[role_name]
-            continue
         terminate_role_process(rp, f"atexit role {role_name}", timeout=2)
         rp.close_log()
 

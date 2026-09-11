@@ -200,64 +200,6 @@ _consecutive_soft_failures: Dict[str, int] = {}
 _SOFT_FAILURE_ERROR_THRESHOLD = 5
 
 
-def _check_owned_role(rp, owner, ideas_file, role_stall_minutes):
-    """Return a completion only after tree proof, settlement and owned release."""
-    if getattr(rp, "is_pending_role", False):
-        return None
-    ret = rp.process.poll()
-    timed_out = getattr(rp, "_owned_role_timed_out", False) is True
-    if ret is None:
-        _ensure_default_progress_paths(rp, ideas_file)
-        timed_out = (time.time() - rp.start_time > rp.timeout
-                     or _is_role_stalled(rp, role_stall_minutes))
-        if not timed_out:
-            return None
-        rp._owned_role_timed_out = True
-        closure = owner.abort()
-        if closure is None:
-            return None
-        ret = closure["worker_returncode"]
-    closure = owner.require_closed(ret)
-    rp.close_log()
-    stopped = closure["stop_requested"] or closure["forced_cleanup"]
-    forced = "process_timeout" if timed_out else "process_stopped" if stopped else None
-    if getattr(rp, "native_result_ref", None) is not None:
-        bucket = native_role_outcome(
-            rp, ret, cleanup_verified=True, forced_reason=forced,
-            rate_limited=(ret != 0 and (ret == 42 or _is_rate_limit_exit(rp.log_path))))
-        outcome = {"ok": OUTCOME_OK, "error": OUTCOME_ERROR,
-                   "timeout": OUTCOME_TIMEOUT, "soft_failure": OUTCOME_SOFT_FAILURE,
-                   "rate_limited": OUTCOME_RATE_LIMITED}[bucket]
-    elif timed_out:
-        outcome = OUTCOME_TIMEOUT
-    elif stopped:
-        outcome = OUTCOME_ERROR
-    elif ret == 0:
-        outcome = (OUTCOME_OK if not getattr(rp, "writes_ideas_file", True)
-                   or _ideas_modified_credits(ideas_file, rp)["modified"]
-                   else OUTCOME_SOFT_FAILURE)
-    else:
-        outcome = (OUTCOME_RATE_LIMITED if ret == 42 or _is_rate_limit_exit(rp.log_path)
-                   else OUTCOME_ERROR)
-    # Do not repair ideas, advance failure counters or report a finished cycle
-    # while either settlement or release remains uncertain.
-    if not settle_role_delivery(rp, outcome.name.lower(), ret, True):
-        return None
-    try:
-        _check_ideas_integrity(ideas_file, rp)
-    except Exception as exc:
-        # Closure/settlement/release already committed; a diagnostic failure
-        # must not strand the released owner in active_roles.
-        logger.error("Role ideas integrity check failed: %s", type(exc).__name__)
-    if outcome == OUTCOME_OK:
-        _consecutive_soft_failures.pop(rp.role_name, None)
-    elif outcome == OUTCOME_SOFT_FAILURE:
-        _consecutive_soft_failures[rp.role_name] = (
-            _consecutive_soft_failures.get(rp.role_name, 0) + 1)
-    logger.info("%s cycle %d tree-closed result: %s", rp.role_name, rp.cycle_num, outcome.name)
-    return outcome
-
-
 def check_active_roles(active_roles: Dict[str, "RoleProcess"],
                        ideas_file: str = "ideas.md",
                        role_stall_minutes: int = 0) -> list:
@@ -271,18 +213,6 @@ def check_active_roles(active_roles: Dict[str, "RoleProcess"],
     finished = []
     for role_name in list(active_roles.keys()):
         rp = active_roles[role_name]
-        from orze.engine.role_supervision import supervised_role_owner
-        try:
-            owner = supervised_role_owner(rp)
-            if owner is not None:
-                outcome = _check_owned_role(rp, owner, ideas_file, role_stall_minutes)
-                if outcome is not None and active_roles.get(role_name) is rp:
-                    del active_roles[role_name]
-                    finished.append((role_name, outcome))
-                continue
-        except Exception as exc:
-            logger.error("Role %s completion HOLD: %s", role_name, type(exc).__name__)
-            continue
         # Snapshot descendants before polling the leader. If the role exits
         # after starting a detached child, ancestry disappears as soon as the
         # child is reparented; the stable identity remains safe to reap.

@@ -1,0 +1,235 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2a",
+  "role": "Core role-supervision author; independent reader of other-owned consumers",
+  "scope": "Role-local whole-tree closure and release; not controller-wide stop acknowledgement.",
+  "baseline": {
+    "core_commit": "b7e9524f73c2053346bac13075e7849751cb6cac",
+    "pro_commit": "97eaa905452b63553015143486c89e1b2ddf4b9f",
+    "classification": "Preceding implementation-branch commit, not a released-version assertion.",
+    "process_snapshot": {
+      "path": "docs/evidence/snapshots/v1-05c2e2a-before-process.py",
+      "sha256": "08bbd7ae0352708b815089b4183f69dbb89488fc510fac1d142c1702d6af4d6e",
+      "owner": "runtime_evidence"
+    },
+    "peer_public_baseline": {
+      "owner": "runtime_evidence",
+      "path": "orze-pro/tests/test_role_owned_tree_closure.py",
+      "sha256": "b153d9b6e1c4d7354c59a203ca800104f935490b203e114fdf4b78d048c2b8b0",
+      "reported_result": "2 failed, 2 passed in 1.25s",
+      "session": 85170,
+      "exit_code": 1,
+      "note": "Reported by peer; not an author-run result. Actual process completion and graceful shutdown behavior, not missing new API red."
+    }
+  },
+  "ownership": {
+    "production": [
+      "src/orze/engine/role_supervision.py",
+      "src/orze/engine/process.py"
+    ],
+    "new_tests": [
+      "tests/test_role_supervision.py",
+      "tests/test_role_supervision_holder_fence.py",
+      "tests/test_role_supervision_sticky_hold.py"
+    ],
+    "old_tests_changed": [],
+    "not_owned": [
+      "Core roles.py/lifecycle.py/role_delivery.py/orchestrator.py",
+      "Pro role_runner.py and its fixture migrations",
+      "Runtime actual CPU public tests"
+    ]
+  },
+  "classification": {
+    "own_unique_tests": 14,
+    "first_green_new_mechanisms": 12,
+    "draft_regressions": 2,
+    "own_preceding_commit_behavior_reds": 0,
+    "root_delivery_snapshot_regression": "Root-owned additional actual two-SQLite case; not added to own test count.",
+    "overlap": "All combined targets overlap; do not sum run totals or peer totals."
+  },
+  "test_hashes": {
+    "tests/test_role_supervision.py": "06537e68b00b38adb4be42af5737e665e061cb244c5cf35fd50acfebab542baa",
+    "tests/test_role_supervision_holder_fence.py": "b856fa28463c6991006204cd7eb28f86c49fe87eb9230e1c04e4e7c475c24450",
+    "tests/test_role_supervision_sticky_hold.py": "cc62583d23f1d7b87c63c0aeb42d9b485837f37b4a572e51a3e4e3bf78190204"
+  },
+  "candidate_runs": [
+    {
+      "label": "Initial new helper mechanisms",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_role_supervision.py --tb=short",
+      "result": "12 passed in 1.30s",
+      "exit_code": 0,
+      "chunk": "70c47f",
+      "helper_sha256": "4f10fba49f5053a64f45958cda29a4af037e3fae053806dc6f23c7fae682968d"
+    },
+    {
+      "label": "Initial compatibility neighborhood; historical candidate",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_role_supervision.py tests/test_role_shutdown_reaping.py tests/test_trigger_role_completion.py tests/test_native_role_result_boundaries.py --tb=short",
+      "result": "40 passed in 7.73s",
+      "exit_code": 0,
+      "chunk": "50720a",
+      "helper_sha256": "4f10fba49f5053a64f45958cda29a4af037e3fae053806dc6f23c7fae682968d"
+    },
+    {
+      "label": "Holder fix combined mechanisms; historical candidate",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_role_supervision_holder_fence.py tests/test_role_supervision.py --tb=short",
+      "result": "13 passed in 1.56s",
+      "exit_code": 0,
+      "chunk": "bd8205",
+      "helper_sha256": "79fceed49779eaf92f0c2c2ec47e85d5850dda6a57c6d73c64197e937e44006a"
+    },
+    {
+      "label": "Holder fix neighborhood; historical candidate",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_role_supervision.py tests/test_role_supervision_holder_fence.py tests/test_role_shutdown_reaping.py tests/test_trigger_role_completion.py tests/test_native_role_result_boundaries.py --tb=short",
+      "result": "41 passed in 11.43s",
+      "exit_code": 0,
+      "session": 65874,
+      "footer_chunk": "bdc597",
+      "helper_sha256": "79fceed49779eaf92f0c2c2ec47e85d5850dda6a57c6d73c64197e937e44006a",
+      "own_four_source_test_hashes_pre_post_equal": true
+    },
+    {
+      "label": "Sticky-HOLD fix mechanisms; historical candidate",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_role_supervision.py tests/test_role_supervision_holder_fence.py tests/test_role_supervision_sticky_hold.py --tb=short",
+      "result": "14 passed in 1.72s",
+      "exit_code": 0,
+      "chunk": "6a0fbe",
+      "helper_sha256": "4113c95a9c776b922bff73242e6946264e247b9887e2b59f49c710502b948676"
+    }
+  ],
+  "draft_regressions": [
+    {
+      "name": "Continuous bound-holder database fence",
+      "discovery": "Root independent source review",
+      "test": "tests/test_role_supervision_holder_fence.py",
+      "snapshot": "docs/evidence/snapshots/v1-05c2e2a-before-role-holder-fence.py",
+      "snapshot_sha256": "4f10fba49f5053a64f45958cda29a4af037e3fae053806dc6f23c7fae682968d",
+      "provenance": "Complete file captured byte-for-byte before this test's first red and before fix, not reconstructed.",
+      "first_red": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_role_supervision_holder_fence.py --tb=short",
+        "result": "1 failed in 0.42s",
+        "exit_code": 1,
+        "chunk": "001039",
+        "target": "DID NOT RAISE RoleSupervisionHOLD after changing the bound holder's trigger database."
+      },
+      "replay": {
+        "result": "1 failed in 0.34s",
+        "exit_code": 1,
+        "chunk": "b98aa1",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -c \"import pathlib, pytest; import orze.engine.role_supervision as module; path=pathlib.Path('docs/evidence/snapshots/v1-05c2e2a-before-role-holder-fence.py'); exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__); raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_role_supervision_holder_fence.py', '--tb=short']))\"",
+        "scope": "Complete captured helper module executed in memory against current process/dependencies; not a whole baseline checkout replay."
+      },
+      "boundary": "Actual READY worker and SQLite setup; proves dispatch rejection, not a foreign database write. Root later separately tested actual foreign database settlement.",
+      "fix": "Capture public authority fields at bind and compare continuously; never rebind mutable fields."
+    },
+    {
+      "name": "Sticky nonprotocol HOLD blocks later closure qualification",
+      "discovery": "runtime_evidence independent read, confirmed by author and approved by root",
+      "test": "tests/test_role_supervision_sticky_hold.py",
+      "snapshot": "docs/evidence/snapshots/v1-05c2e2a-before-role-sticky-hold.py",
+      "snapshot_sha256": "79fceed49779eaf92f0c2c2ec47e85d5850dda6a57c6d73c64197e937e44006a",
+      "provenance": "Complete file captured byte-for-byte before first red and before fix.",
+      "first_red": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_role_supervision_sticky_hold.py --tb=short",
+        "result": "1 failed in 0.26s",
+        "exit_code": 1,
+        "chunk": "222c44",
+        "target": "Actual GO succeeds and tiny worker writes marker; controlled STARTED publication failure leaves GO_REQUESTED. Later require_closed wrongly grants qualification despite held owner."
+      },
+      "replay": {
+        "result": "1 failed in 0.43s",
+        "exit_code": 1,
+        "chunk": "60cb6c",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -c \"import pathlib, pytest; import orze.engine.role_supervision as module; path=pathlib.Path('docs/evidence/snapshots/v1-05c2e2a-before-role-sticky-hold.py'); exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__); raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_role_supervision_sticky_hold.py', '--tb=short']))\"",
+        "scope": "Complete captured helper module executed in memory against current process/dependencies; not a whole baseline checkout replay."
+      },
+      "boundary": "Real CPU and real receipt IO except one explicit pre-write OSError injection; no claim of spontaneous storage fault or actual terminal publication.",
+      "fix": "require_closed rejects every latched HOLD. abort can still drain known owned process but cannot turn the owner into publishable authority."
+    }
+  ],
+  "limits": [
+    "No GPU/provider/holdout access or host-scanning test cleanup; tests retain exact own real handles.",
+    "Role supervision has no controller-wide ACK, persistent controller membership, adoption, or v2 crash recovery.",
+    "A role-local result does not verify research correctness or roll back permitted prior file/provider effects.",
+    "Current receipt and closure guards do not sandbox same-UID adversarial mutation.",
+    "Legacy v1 role paths remain; supervised branches do not use nonce/PGID discovery as closure proof. Existing stall progress diagnostics may still read /proc.",
+    "No native AttemptRef or new database was introduced; existing trigger records are operational authorization, not scientific observations.",
+    "Own helper/process review is author review; independent review covers root and Pro changes only.",
+    "No whole Core/Pro test run is claimed here."
+  ],
+  "final_owned_source_hashes": {
+    "src/orze/engine/role_supervision.py": "9c9e424a0187c543a35fb414a933f275faed847278ea1afdfceffe7b010f9835",
+    "src/orze/engine/process.py": "e42fabb207b6439319752704f61853168770b44793955784cb38d91994a11b93"
+  },
+  "final_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_role_supervision.py tests/test_role_supervision_holder_fence.py tests/test_role_supervision_sticky_hold.py tests/test_role_owned_consumers.py tests/test_role_delivery_snapshot.py tests/test_role_shutdown_reaping.py tests/test_trigger_role_completion.py tests/test_native_role_result_boundaries.py --tb=short",
+    "result": "48 passed in 8.83s",
+    "exit_code": 0,
+    "session": 48363,
+    "footer_chunk": "ad9fb5",
+    "pre_post_exact": {
+      "src/orze/engine/role_supervision.py": "9c9e424a0187c543a35fb414a933f275faed847278ea1afdfceffe7b010f9835",
+      "src/orze/engine/process.py": "e42fabb207b6439319752704f61853168770b44793955784cb38d91994a11b93",
+      "src/orze/engine/roles.py": "b07707b5fe7cdb45476093da2bcf0f812abd199cc77dc0293de748cdd2f21aad",
+      "src/orze/engine/role_delivery.py": "5f04c0891dc4a995acffedff46f687fd76d871dee03b698c9f59152d45caa690",
+      "src/orze/engine/lifecycle.py": "fe1db6140b117e892becc16502bbec0e05570e933d2ccff6e7bf48c7bb8319c9",
+      "src/orze/engine/orchestrator.py": "cfb3731d1d5b6a82d632510c9d18ee9071f9bb71d08e98afe15dd6b6d2541275",
+      "tests/test_role_supervision.py": "06537e68b00b38adb4be42af5737e665e061cb244c5cf35fd50acfebab542baa",
+      "tests/test_role_supervision_holder_fence.py": "b856fa28463c6991006204cd7eb28f86c49fe87eb9230e1c04e4e7c475c24450",
+      "tests/test_role_supervision_sticky_hold.py": "cc62583d23f1d7b87c63c0aeb42d9b485837f37b4a572e51a3e4e3bf78190204",
+      "tests/test_role_owned_consumers.py": "f91deb3e1437b130075039fbf547e5a7fc65f2408201d743bce4faa1431826e1",
+      "tests/test_role_delivery_snapshot.py": "cfc63e0f76b6955880cba61e1ea43f40abdc28414c00233547d1ed384a84a134"
+    },
+    "legacy_test_post_hash_only": {
+      "tests/test_role_shutdown_reaping.py": "24724a301ed949319efd92c0d45105a73277142c9f1bbbcc7b5c76a4cabb7961",
+      "tests/test_trigger_role_completion.py": "95ea1250d53623f8591b89df99b603370292112c1e63dc28bbdf4a0125bcc625",
+      "tests/test_native_role_result_boundaries.py": "5a62628828e015b6273c86138e28f96603de0b985095d756b045e8bf5448dd71"
+    },
+    "diagnostic_note": "Post-test hash command also attempted to read a not-yet-created root contract and exited 2 on that sed; pytest itself separately exited 0 with the shown footer. Not a test or product failure.",
+    "followup": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_role_shutdown_slot.py --tb=short",
+      "result": "1 passed in 0.14s",
+      "exit_code": 0,
+      "chunk": "9a286b",
+      "pre_post_exact": {
+        "src/orze/engine/lifecycle.py": "fe1db6140b117e892becc16502bbec0e05570e933d2ccff6e7bf48c7bb8319c9",
+        "tests/test_role_shutdown_slot.py": "bf78870bb06a19b9b3cee35e4b3767ff63d82537429f04d95e0702a62d838764"
+      },
+      "boundary": "One separate root-owned mechanism, mocked Lake.close map-replacement hook; not additional CPU process proof."
+    }
+  },
+  "delivery_snapshot_followup": {
+    "owner": "Root discovery, test and consumer fix; author supplied capture API only",
+    "test": "tests/test_role_delivery_snapshot.py",
+    "helper_before_snapshot": "docs/evidence/snapshots/v1-05c2e2a-before-delivery-authority-helper.py",
+    "helper_before_sha256": "4113c95a9c776b922bff73242e6946264e247b9887e2b59f49c710502b948676",
+    "reported_root_first_red": "1 failed in 0.46s; actual copied foreign SQLite moved STARTED to TERMINAL before release refused.",
+    "own_verification": "Included unchanged in final bounded 48.",
+    "change": "delivery_authority rechecks held/current/holder and returns captured database plus detached full hash-only token; root consumer does not reread public route or token to register terminal."
+  },
+  "independent_consumer_review": {
+    "status": "No remaining blocker found within the read scope after captured-delivery and exact-slot fixes.",
+    "files": [
+      "src/orze/engine/roles.py",
+      "src/orze/engine/role_delivery.py",
+      "src/orze/engine/lifecycle.py",
+      "src/orze/engine/orchestrator.py",
+      "orze-pro/src/orze_pro/engine/role_runner.py"
+    ],
+    "observations": [
+      "Pending/ambiguous owned roles are dispatched before legacy polling/reaping; protocol loss cannot grant closure or terminal delivery.",
+      "Harvest accepts outcome only after real TREE_CLOSED; STOP0 is operational failure/timeout, not success.",
+      "Trigger terminal registration consumes captured authority, and lock release verifies exact captured settlement before no-replace detach.",
+      "Shutdown role removal only deletes an exact captured slot; a replacement and an original strong held owner survive.",
+      "Pro launch installs strong pending owner before prepare, persists READY/trigger STARTED before GO, and ACKs activation only after GO.",
+      "Known pre-GO constructor failure and typed unavailable can take confirmed no-execution path. GO or protocol uncertainty never returns the trigger to PENDING.",
+      "Root upgrade callback role gate prevents proceeding on held role; it does not certify legacy package installation or training/evaluation upgrade stop paths."
+    ],
+    "pro_caller_read_hash": "ecb994953daeff43ed0f60a1a88303f05c532ec39167edfc18bd3cbb29c73a51",
+    "contract_review": {
+      "path": "docs/role-tree-supervision.md",
+      "sha256": "603edb30f30d476f25b7a1617c752172cdc18ea0e6c522f32863124ff5a57872",
+      "status": "Read completely after final bounded tests; no scope or implementation mismatch found.",
+      "notes": "Explicitly limits proof to owned v2 roles, distinguishes activation ACK from controller ACK, preserves legacy progress diagnostics and crash HOLD, and disclaims research efficiency and pre-existing upgrade safety. This document did not exist when the earlier post-test diagnostic attempted to read it."
+    }
+  }
+}

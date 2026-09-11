@@ -940,7 +940,6 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     training_count = len(active)
     eval_count = len(active_evals)
     held_training, held_evals, held_roles = {}, {}, {}
-    role_snapshot = dict(active_roles)
     from orze.engine.shutdown_publication import handle_shutdown
     from orze.engine.role_delivery import stop_owned_role
 
@@ -1020,7 +1019,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                 continue
             ep.close_log()
             close_interrupted_evaluation(ep)
-        for role_name, rp in role_snapshot.items():
+        for role_name, rp in list(active_roles.items()):
             owned = stop_owned_role(rp)
             if owned is not None:
                 if not owned:
@@ -1060,7 +1059,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                 continue
             ep.close_log()
             close_interrupted_evaluation(ep)
-        for role_name, rp in role_snapshot.items():
+        for role_name, rp in list(active_roles.items()):
             owned = stop_owned_role(rp)
             if owned is not None:
                 if not owned:
@@ -1126,9 +1125,8 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
 
     # Detached children must no longer be visible to atexit_cleanup, whose
     # last-resort contract is to kill every process still tracked here.
-    for role_name, rp in role_snapshot.items():
-        if role_name not in held_roles and active_roles.get(role_name) is rp:
-            del active_roles[role_name]
+    active_roles.clear()
+    active_roles.update(held_roles)
     active.clear()
     active.update(held_training)
     active_evals.clear()

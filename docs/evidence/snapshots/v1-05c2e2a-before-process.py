@@ -847,7 +847,6 @@ class RoleProcess:
     # from mutable role_state or shared ideas.md after the child exits.
     native_result_ref: Optional[dict] = field(default=None, repr=False)
     native_result_details: Optional[dict] = field(default=None, repr=False)
-    supervision_owner: Any = field(default=None, repr=False)
 
     def __post_init__(self):
         if self.trigger_launch is not None:
@@ -868,13 +867,6 @@ class RoleProcess:
             self._last_progress_at = float(self.start_time)
         if self._last_observed_at <= 0:
             self._last_observed_at = float(self.start_time)
-        from orze.engine.role_supervision import supervised_role_owner
-        owner = supervised_role_owner(self)
-        if owner is not None:
-            # The READY worker has not exec'd its user environment yet. Its
-            # exact protocol binding, not a pre-GO /proc nonce scan, is proof.
-            owner.bind_role(self)
-            return
         pid = getattr(self.process, "pid", None)
         if type(pid) is not int:
             return
@@ -925,11 +917,6 @@ def refresh_role_process_descendants(rp: RoleProcess) -> int:
     indefinitely. The return value is the current number of retained live
     descendants.
     """
-    from orze.engine.role_supervision import supervised_role_owner
-    if supervised_role_owner(rp) is not None:
-        # Complete descendant ownership belongs to the prelaunch subreaper.
-        # Legacy ancestry/nonce snapshots must not replace that authority.
-        return 0
     pid = getattr(rp.process, "pid", None)
     if type(pid) is not int:
         return 0
@@ -1056,10 +1043,6 @@ def _atomic_private_json(path: Path, payload: dict) -> None:
 
 def persist_role_process_receipt(rp: RoleProcess) -> bool:
     """Persist hash-only crash-recovery authority for one managed role."""
-    from orze.engine.role_supervision import supervised_role_owner
-    if supervised_role_owner(rp) is not None:
-        # The v2 owner already persists each exact protocol transition.
-        return True
     if rp.process_nonce is None or rp._root_start_ticks is None or rp._pgid is None:
         return False
     try:
@@ -1152,11 +1135,6 @@ def reconcile_orphaned_role_receipts(
         if not isinstance(receipt, dict):
             report["errors"].append(f"role_receipt_invalid:{role}")
             continue
-        if receipt.get("schema_version") == 2:
-            # A previous controller's v2 intent is never authority for the
-            # legacy nonce scanner, even if its recorded PID has disappeared.
-            report["errors"].append(f"role_supervision_recovery_required:{role}")
-            continue
         receipt_role = receipt.get("role_name")
         nonce_sha256 = receipt.get("nonce_sha256")
         descendants = receipt.get("descendants")
@@ -1222,14 +1200,6 @@ def terminate_role_process(
     reaper=None,
 ) -> bool:
     """Terminate a role using its stable root and descendant identities."""
-    from orze.engine.role_supervision import supervised_role_owner
-    owner = supervised_role_owner(rp)
-    if owner is not None:
-        owner.abort(timeout=timeout)
-        owner.require_closed()
-        # Receipt and lock release belong to exact delivery settlement, not
-        # this process stop. No None/truthy legacy reaper grants v2 closure.
-        return True
     refresh_role_process_descendants(rp)
     pid = getattr(rp.process, "pid", None)
     root_live = (
