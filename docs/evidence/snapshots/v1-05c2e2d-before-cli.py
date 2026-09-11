@@ -26,7 +26,6 @@ Extracted modules:
 import argparse
 import logging
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -40,7 +39,6 @@ from orze.cli_star import maybe_star
 from orze.core.config import load_project_config
 from orze.core.controller_profile import (
     ControllerProfileError, controller_profile, validate_profile_cli,
-    validate_successor_cli,
 )
 from orze.hardware.gpu import detect_all_gpus
 
@@ -67,25 +65,6 @@ def _stop_controller_command(cfg, timeout):
     if type(outcome) is CompletedControllerStop:
         return 0
     print("HOLD: registered controller stop is unconfirmed")
-    return 75
-
-
-def _restart_controller_command(cfg, request_id, timeout):
-    """Consume only the exact result of the Core-owned one-shot operation."""
-    try:
-        if controller_profile(cfg) != {"version": 2, "profile": "local_handoff_v1"}:
-            raise ValueError("controller_handoff_profile_required")
-        if type(request_id) is not str or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", request_id):
-            raise ValueError("controller_handoff_request_id_required")
-        from orze.engine.controller_handoff import CompletedControllerHandoff, restart_controller
-        outcome = restart_controller(cfg, request_id=request_id,
-                                     timeout=60 if timeout is None else timeout)
-    except Exception:
-        print("HOLD: registered controller handoff is unconfirmed; a stable --request-id is required")
-        return 75
-    if type(outcome) is CompletedControllerHandoff:
-        return 0
-    print("HOLD: registered controller handoff is unconfirmed")
     return 75
 
 
@@ -204,9 +183,7 @@ Examples:
     parser.add_argument("--stop", action="store_true",
                         help="Request cooperative stop; unconfirmed closure returns 75")
     parser.add_argument("--restart", action="store_true",
-                        help="Request stop; v2 one-shot handoff requires --request-id")
-    parser.add_argument("--request-id", dest="controller_request_id", default=None,
-                        help="Stable one-shot controller restart key (not a replication key)")
+                        help="Request stop; replacement waits for qualified closure (75)")
     parser.add_argument("--disable", action="store_true",
                         help="Stop and persistently disable Orze (survives restarts)")
     parser.add_argument("--enable", action="store_true",
@@ -348,16 +325,13 @@ Examples:
 
     # restart
     restart_parser = subparsers.add_parser(
-        "restart", help="Request stop; v2 permits source-qualified one-shot handoff")
-    restart_parser.add_argument("-c", "--config-file", type=str, default=argparse.SUPPRESS,
+        "restart", help="Request stop; no replacement until qualified closure (75)")
+    restart_parser.add_argument("-c", "--config-file", type=str, default=None,
                                 help="Path to orze.yaml")
     restart_parser.add_argument("--gpus", type=str, default=None,
                                 help="Comma-separated GPU IDs (default: auto-detect)")
     restart_parser.add_argument("--timeout", type=int, default=60,
-                                help="Controller stop/handoff wait budget in seconds")
-    restart_parser.add_argument("--request-id", dest="controller_request_id",
-                                default=argparse.SUPPRESS,
-                                help="Required stable request key for the v2 handoff profile")
+                                help="Compatibility timeout; request-only stop does not wait")
     restart_parser.add_argument("--foreground", action="store_true",
                                 help="Run in foreground after restart")
 
@@ -604,12 +578,6 @@ Examples:
 
     args = parser.parse_args()
 
-    try:
-        validate_successor_cli(args)
-    except ControllerProfileError as exc:
-        print(f"HOLD: successor entry rejected: {exc}")
-        return 75
-
     setup_logging(args.verbose)
 
     # A blocked operator needs a conclusive answer without the network prompt,
@@ -788,11 +756,7 @@ Examples:
 
     if command == "resume":
         from orze.engine.resume import admit_resume, ResumeValidationError
-        try:
-            cfg = _load_controller_config(args)
-        except ControllerProfileError as exc:
-            print(f"ERROR: {exc}")
-            return 2
+        cfg = load_project_config(args.config_file)
         results_dir = Path(cfg.get("results_dir", "orze_results"))
         if not results_dir.is_absolute():
             results_dir = Path.cwd() / results_dir
@@ -950,8 +914,6 @@ Examples:
         except ControllerProfileError as exc:
             print(f"ERROR: {exc}")
             return 2
-        if controller_profile(cfg) == {"version": 2, "profile": "local_handoff_v1"}:
-            return _restart_controller_command(cfg, args.controller_request_id, args.timeout)
         config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
         try:
             do_restart(cfg, timeout=args.timeout, foreground=args.foreground,
@@ -1338,8 +1300,6 @@ Examples:
 
     # --restart cannot proceed past an unconfirmed cooperative request.
     if args.restart:
-        if controller_profile(cfg) == {"version": 2, "profile": "local_handoff_v1"}:
-            return _restart_controller_command(cfg, args.controller_request_id, args.timeout)
         from orze.core.control_outcome import ControllerStopHOLD
         try:
             stop_running_instance(Path(cfg["results_dir"]))
@@ -1389,15 +1349,6 @@ Examples:
     # any admin thread or orchestrator state can be created.  Stop/disable
     # controls above intentionally remain reachable during runtime drift.
     _require_controller_runtime(cfg)
-
-    if "ORZE_CONTROLLER_HANDOFF_FD" in os.environ:
-        try:
-            from orze.engine.controller_handoff import prepare_successor_entry
-            if prepare_successor_entry(cfg, args) is not None:
-                raise ValueError("controller_successor_entry_unconfirmed")
-        except Exception:
-            print("HOLD: successor channel admission is unconfirmed")
-            return 75
 
     from orze.core.control_outcome import (
         ControllerStopHOLD, require_controller_start_allowed,

@@ -1,4 +1,4 @@
-"""Strict opt-in boundaries for local controller stop and one-shot handoff.
+"""Strict opt-in boundary for the local, stop-only controller profile.
 
 This module is metadata-only: it does not register a controller, open a
 database, discover GPUs, stop processes, clear markers or authorize restart.
@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 from pathlib import Path
 
 from orze.core.role_presets import configured_role_presets
@@ -53,10 +52,9 @@ def controller_profile(cfg):
     if declaration is None:
         return None
     if (type(declaration) is not dict or set(declaration) != {"version", "profile"}
-            or type(declaration["version"]) is not int
+            or type(declaration["version"]) is not int or declaration["version"] != 1
             or type(declaration["profile"]) is not str
-            or (declaration["version"], declaration["profile"]) not in (
-                (1, "local_stop_v1"), (2, "local_handoff_v1"))):
+            or declaration["profile"] != "local_stop_v1"):
         _reject("declaration_invalid")
     if any(name in cfg for name in ("_managed_idea_id", "_managed_idea_gpu")):
         _reject("managed_mode_unsupported")
@@ -90,7 +88,7 @@ def controller_profile(cfg):
     if any(type(key) is not str for key in cfg):
         _reject("json_invalid")
     _json_value({key: value for key, value in cfg.items() if not key.startswith("_")})
-    return {"version": declaration["version"], "profile": declaration["profile"]}
+    return {"version": 1, "profile": "local_stop_v1"}
 
 
 def _json_value(value, depth=0):
@@ -162,10 +160,6 @@ def validate_profile_cli(cfg, args):
             or getattr(args, "research_only", False) or getattr(args, "admin", False)
             or command == "start"):
         _reject("cli_mode_unsupported")
-    if profile["version"] == 2 and (
-            command == "resume" or getattr(args, "enable", False)
-            or (command == "restart" and getattr(args, "foreground", False))):
-        _reject("cli_mode_unsupported")
     raw = getattr(args, "gpus", None)
     if raw is not None:
         if (type(raw) is not str or not raw or any(not part.strip().isascii()
@@ -180,27 +174,3 @@ def validate_profile_cli(cfg, args):
         if value is not None and not (arg == "timeout" and stopping) and value != cfg.get(key):
             _reject("cli_override_unsupported")
     return profile
-
-
-def validate_successor_cli(args):
-    """Reject a claimed private entry on non-foreground CLI paths, without IO.
-
-    The environment key is only a claim. This check grants no registration or
-    launch authority; the actual inherited channel must be checked separately
-    after loading the complete configuration and before launch-side effects.
-    """
-    name = "ORZE_CONTROLLER_HANDOFF_FD"
-    if name not in os.environ:
-        return
-    raw = os.environ[name]
-    if (not raw or len(raw) > 7 or not raw.isascii() or not raw.isdecimal()
-            or not 3 <= int(raw) <= 2 ** 20):
-        _reject("handoff_fd_invalid")
-    if (getattr(args, "command", None) is not None
-            or getattr(args, "init", None) is not None
-            or getattr(args, "controller_request_id", None) is not None
-            or any(getattr(args, key, False) for key in (
-                "stop", "restart", "disable", "enable", "report_only", "role_only",
-                "research_only", "admin", "upgrade", "reinstall", "check",
-                "launch_status", "uninstall"))):
-        _reject("handoff_cli_mode_unsupported")

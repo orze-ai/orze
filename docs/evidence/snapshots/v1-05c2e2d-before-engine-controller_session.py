@@ -8,7 +8,7 @@ Persistent registration and stop history are intentionally never released.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from dataclasses import dataclass
 import errno
 import hashlib
@@ -151,8 +151,7 @@ def _fresh_inventory(orze, ctx=None):
         if number >= 4096:
             raise ControllerHOLD("controller_initial_scope_limit")
         info = path.lstat()
-        owner_root = (getattr(ctx, "_anchor_lease", None) or ctx._lease).lock_dir if ctx is not None else None
-        if ctx is not None and path.absolute() == owner_root:
+        if ctx is not None and path.absolute() == ctx._lease.lock_dir:
             ctx._paths()
             continue
         if (path.name.startswith((".orze.pid", ".orze_heartbeat", ".orze_leader", "heartbeat_"))
@@ -177,12 +176,15 @@ class ControllerSession:
         self._fingerprint = profile_fingerprint(orze.cfg, orze.gpu_ids)
         if orze.cfg.get("_controller_profile_fingerprint") != self._fingerprint:
             raise ControllerHOLD("controller_loaded_configuration_changed")
-        from orze.engine.controller_handoff import _admission_for_configuration
-        self._admission = _admission_for_configuration(orze.cfg)
-        if self._admission is None:
-            _fresh_inventory(orze)
-        else:
-            self._admission.validate_prior(orze)
+        _fresh_inventory(orze)
+        self.ctx = register_controller(orze.lake, orze.results_dir)
+        _SESSIONS[self.ctx.controller_id] = self
+        self._binding = {"schema": 1, "controller_id": self.ctx.controller_id,
+            "identity": self.ctx.identity, "profile": controller_profile(orze.cfg),
+            "config_sha256": self._fingerprint, "physical_gpus": sorted(orze.gpu_ids),
+            "workdir": str(self._workdir[0]), "workdir_device": self._workdir[1][0],
+            "workdir_inode": self._workdir[1][1]}
+        self._binding_json = _encode(self._binding)
         self._request_json = None
         self._ack_json = None
         self._stopping = threading.Event()
@@ -196,45 +198,23 @@ class ControllerSession:
         self._pid_witness = None
         self._lake = orze.lake
         self._lake_conn = orze.lake.conn
+        self.ctx._runtime_validator = self._validate_runtime
         try:
-            if controller_profile(orze.cfg)["version"] == 2:
-                self.ctx = register_controller(orze.lake, orze.results_dir, protocol=2,
-                    admission=self._admission, session_registrar=self._register_binding)
-            else:
-                self.ctx = register_controller(orze.lake, orze.results_dir)
-                with self.ctx._connection(write=True) as conn:
-                    conn.execute("BEGIN IMMEDIATE")
-                    self._register_binding(conn, self.ctx)
-                    conn.commit()
             with self.ctx.guard():
-                if self._admission is None:
-                    _fresh_inventory(orze, self.ctx)
-                else:
-                    self._admission.verify_consumed_in_context(self.ctx)
+                _fresh_inventory(orze, self.ctx)
+            with self.ctx._connection(write=True) as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                _schema(conn, create=True)
+                conn.execute("INSERT INTO main.controller_sessions VALUES (?,?,NULL,NULL)",
+                             (self.ctx.controller_id, self._binding_json))
+                conn.commit()
             with self.ctx._connection() as conn:
                 if _row(conn, self.ctx.controller_id) != (
                         self.ctx.controller_id, self._binding_json, None, None):
                     raise ControllerHOLD("controller_session_registration_unconfirmed")
         except BaseException as exc:
-            if getattr(self, "ctx", None) is not None:
-                self.fail(exc)
+            self.fail(exc)
             raise
-
-    def _register_binding(self, conn, ctx):
-        """Only bounded SQL inside the registration writer; no poll or OS work."""
-        from orze.core.controller_profile import controller_profile
-        self.ctx = ctx
-        _SESSIONS[ctx.controller_id] = self
-        self._binding = {"schema": 1, "controller_id": ctx.controller_id,
-            "identity": ctx.identity, "profile": controller_profile(self.orze.cfg),
-            "config_sha256": self._fingerprint, "physical_gpus": sorted(self.orze.gpu_ids),
-            "workdir": str(self._workdir[0]), "workdir_device": self._workdir[1][0],
-            "workdir_inode": self._workdir[1][1]}
-        self._binding_json = _encode(self._binding)
-        ctx._runtime_validator = self._validate_runtime
-        _schema(conn, create=True)
-        conn.execute("INSERT INTO main.controller_sessions VALUES (?,?,NULL,NULL)",
-                     (ctx.controller_id, self._binding_json))
 
     def _validate_runtime(self):
         from orze.core.controller_profile import profile_fingerprint
@@ -467,19 +447,17 @@ class _Observer:
         if cfg.get("_controller_profile_fingerprint") != self.fingerprint:
             raise ControllerHOLD("controller_loaded_configuration_changed")
         self.pidfd = None
-        self._history_only = False
-        self._protocol = controller_profile(cfg)["version"]
         workdir, workdir_witness = _path(Path.cwd(), directory=True)
         if str(workdir) != cfg.get("_controller_workdir", str(workdir)):
             raise ControllerHOLD("controller_loaded_workdir_changed")
         with self.connection() as conn:
-            from orze.engine.controller_control import current_instance, registration_version
-            if registration_version(conn) != self._protocol:
-                raise ControllerHOLD("controller_stop_storage_profile_mismatch")
-            current = current_instance(conn, self.scope)
-            if current[3] not in {"ACTIVE", "QUIESCING"} or current[5] is not None:
+            _registration_schema(conn)
+            rows = conn.execute("SELECT controller_id, identity_json, phase, request_id, hold_reason "
+                "FROM main.controller_instances WHERE scope=? COLLATE BINARY "
+                "AND length(CAST(identity_json AS BLOB))<=16384", (str(self.scope),)).fetchall()
+            if len(rows) != 1 or rows[0][2] not in {"ACTIVE", "QUIESCING"} or rows[0][4] is not None:
                 raise ControllerHOLD("controller_stop_registration_unavailable")
-            self.controller_id, self.identity_json = current[0], current[2]
+            self.controller_id, self.identity_json = rows[0][:2]
             self.identity = json.loads(self.identity_json)
             row = _row(conn, self.controller_id)
         self.binding_json = row[1]
@@ -492,8 +470,7 @@ class _Observer:
         if self.binding != expected or _encode(expected) != self.binding_json:
             raise ControllerHOLD("controller_stop_binding_mismatch")
         boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
-        if (type(self.identity.get("schema")) is not int or self.identity["schema"] != self._protocol
-                or self.identity.get("controller_id") != self.controller_id
+        if (self.identity.get("schema") != 1 or self.identity.get("controller_id") != self.controller_id
                 or self.identity.get("host") != socket.gethostname() or self.identity.get("boot_id") != boot
                 or self.identity.get("scope") != str(self.scope)
                 or (self.identity.get("scope_device"), self.identity.get("scope_inode")) != self.scope_witness
@@ -541,28 +518,6 @@ class _Observer:
 
     def owner_witness(self):
         lock = self.scope / "_controller_registration.lock"
-        if self._protocol == 2:
-            generation = self.identity.get("generation")
-            if type(generation) is not int or generation < 0:
-                raise ControllerHOLD("controller_stop_generation_invalid")
-            owner = lock / f"instance-{generation}-{self.controller_id}.lock"
-            if (self.identity.get("anchor_directory") != str(lock)
-                    or self.identity.get("owner_directory") != str(owner)
-                    or _path(lock, directory=True)[1] != (
-                        self.identity.get("anchor_device"), self.identity.get("anchor_inode"))):
-                raise ControllerHOLD("controller_stop_owner_changed")
-            anchor_meta, anchor_raw = _file_witness(lock / "lock.json")
-            anchor_marker, anchor_bytes = _file_witness(lock.with_name(lock.name + ".source-lock"))
-            if (_sha(anchor_raw) != self.identity.get("anchor_metadata_sha256")
-                    or anchor_bytes != b"orze-idea-source-lock-v1\n"):
-                raise ControllerHOLD("controller_stop_owner_changed")
-            directory = _path(owner, directory=True)
-            meta, raw = _file_witness(owner / "lock.json")
-            marker, marker_raw = _file_witness(owner.with_name(owner.name + ".source-lock"))
-            if (_sha(raw) != self.identity.get("owner_metadata_sha256")
-                    or marker_raw != b"orze-idea-source-lock-v1\n"):
-                raise ControllerHOLD("controller_stop_owner_changed")
-            return (_path(lock, directory=True), anchor_meta, anchor_marker, directory, meta, marker)
         directory = _path(lock, directory=True)
         meta, raw = _file_witness(lock / "lock.json")
         marker, marker_raw = _file_witness(lock.with_name(lock.name + ".source-lock"))
@@ -576,10 +531,6 @@ class _Observer:
             with self.connection() as actual:
                 return self.check(actual)
         _registration_schema(conn)
-        if self._protocol == 2 and not self._history_only:
-            from orze.engine.controller_control import current_instance
-            if current_instance(conn, self.scope)[0] != self.controller_id:
-                raise ControllerHOLD("controller_stop_current_head_changed")
         row = conn.execute("SELECT identity_json,phase,request_id,hold_reason "
             "FROM main.controller_instances WHERE controller_id=? COLLATE BINARY",
             (self.controller_id,)).fetchone()
@@ -594,12 +545,8 @@ class _Observer:
     def exited(self):
         return bool(select.select([self.pidfd], [], [], 0)[0])
 
-    def verify_drain(self, ack, *, conn=None):
-        """Read drain proof, optionally inside the caller's bound transaction.
-
-        A supplied connection is borrowed, never committed, closed or written;
-        its main database and current paths must match this observer's scope.
-        """
+    def verify_drain(self, ack):
+        """Re-read durable members and native effects; labels alone cannot ACK."""
         from orze.engine.controller_members import _schema as member_schema, MAX_MEMBERS, _NATIVE, _REPORTS
         from orze.core import execution_attempts as attempts
         from orze.engine.attempt_effect_receipts import _scan
@@ -622,11 +569,7 @@ class _Observer:
             raise ControllerHOLD("controller_stop_member_proof_invalid")
         digest = hashlib.sha256()
         effects = {}
-        with self.connection() if conn is None else nullcontext(conn) as conn:
-            if (_path(self.scope, directory=True) != (self.scope, self.scope_witness)
-                    or _path(self.db, directory=False) != (self.db, self.db_witness)
-                    or _route(conn) != (self.db, self.db_witness)):
-                raise ControllerHOLD("controller_stop_route_changed")
+        with self.connection() as conn:
             self.check(conn)
             member_schema(conn)
             rows = conn.execute("SELECT member_id, CASE WHEN typeof(payload_json)='text' "
@@ -663,10 +606,6 @@ class _Observer:
                     if effects[ref.task_id].get(ref.attempt_id) != (row["terminal"].get("effect_receipt_sha256"), True):
                         raise ControllerHOLD("controller_stop_effect_changed")
                 digest.update(canonical([key, _sha(raw.encode())]))
-            if (_path(self.scope, directory=True) != (self.scope, self.scope_witness)
-                    or _path(self.db, directory=False) != (self.db, self.db_witness)
-                    or _route(conn) != (self.db, self.db_witness)):
-                raise ControllerHOLD("controller_stop_route_changed")
         if digest.hexdigest() != proof["members_sha256"]:
             raise ControllerHOLD("controller_stop_members_digest_changed")
 
@@ -676,65 +615,60 @@ class _Observer:
             self.pidfd = None
 
 
-def _stop_observed(observer, timeout):
-    """Private shared stop operation; its caller retains the actual pidfd."""
-    deadline = time.monotonic() + timeout
-    with observer.connection(write=True) as conn:
-        registration, row = observer.check(conn)
-        if observer.exited():
-            raise ControllerHOLD("controller_exited_before_stop_request")
-        if row[2] is None:
-            request_json = _encode(_request(observer.binding))
-            if conn.execute("UPDATE main.controller_sessions SET request_json=? "
-                "WHERE controller_id=? AND binding_json=? AND request_json IS NULL AND ack_json IS NULL",
-                (request_json, observer.controller_id, observer.binding_json)).rowcount != 1:
-                raise ControllerHOLD("controller_stop_request_unconfirmed")
-        else:
-            request_json = row[2]
-        request = _validate_request(request_json, observer.binding)
-    while True:
-        registration, row = observer.check()
-        if row[2] != request_json:
-            raise ControllerHOLD("controller_stop_request_replaced")
-        if row[3] is not None:
-            ack = json.loads(row[3])
-            if (type(ack) is not dict or set(ack) != {"schema", "kind", "controller_id", "request_id",
-                    "request_sha256", "binding_sha256", "members", "resources"}
-                    or type(ack["schema"]) is not int or ack["schema"] != 1
-                    or ack["kind"] != "controller_drained" or ack["controller_id"] != observer.controller_id
-                    or ack["request_id"] != request["request_id"]
-                    or ack["request_sha256"] != _sha(request_json.encode())
-                    or ack["binding_sha256"] != _sha(observer.binding_json.encode())
-                    or registration[1:3] != ("QUIESCING", request["request_id"])
-                    or _encode(ack) != row[3]):
-                raise ControllerHOLD("controller_stop_ack_invalid")
-            if observer.exited():
-                # Re-read after observing kernel exit: a replaced request,
-                # registration or ACK is never consumed from a stale read.
-                after_registration, after_row = observer.check()
-                if after_registration != registration or after_row != row:
-                    raise ControllerHOLD("controller_stop_final_readback_changed")
-                observer.verify_drain(ack)
-                if observer.check() != (after_registration, after_row):
-                    raise ControllerHOLD("controller_stop_final_readback_changed")
-                return CompletedControllerStop(observer.controller_id, request["request_id"],
-                    _sha(row[3].encode()), observer.fingerprint, str(observer.scope), str(observer.db),
-                    dict(observer.identity["process"]))
-        elif observer.exited():
-            raise ControllerHOLD("controller_exited_without_ack")
-        if time.monotonic() >= deadline:
-            raise ControllerHOLD("controller_stop_timeout_unconfirmed")
-        time.sleep(min(0.05, max(0, deadline - time.monotonic())))
-
-
 def stop_controller(cfg, timeout=60):
     """Observe an already registered live controller; never signal raw PIDs."""
     if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 3600:
         raise ControllerHOLD("controller_stop_timeout_invalid")
     observer = None
     try:
+        deadline = time.monotonic() + timeout
         observer = _Observer(cfg)
-        return _stop_observed(observer, timeout)
+        with observer.connection(write=True) as conn:
+            registration, row = observer.check(conn)
+            if observer.exited():
+                raise ControllerHOLD("controller_exited_before_stop_request")
+            if row[2] is None:
+                request_json = _encode(_request(observer.binding))
+                if conn.execute("UPDATE main.controller_sessions SET request_json=? "
+                    "WHERE controller_id=? AND binding_json=? AND request_json IS NULL AND ack_json IS NULL",
+                    (request_json, observer.controller_id, observer.binding_json)).rowcount != 1:
+                    raise ControllerHOLD("controller_stop_request_unconfirmed")
+            else:
+                request_json = row[2]
+            request = _validate_request(request_json, observer.binding)
+        while True:
+            registration, row = observer.check()
+            if row[2] != request_json:
+                raise ControllerHOLD("controller_stop_request_replaced")
+            if row[3] is not None:
+                ack = json.loads(row[3])
+                if (type(ack) is not dict or set(ack) != {"schema", "kind", "controller_id", "request_id",
+                        "request_sha256", "binding_sha256", "members", "resources"}
+                        or type(ack["schema"]) is not int or ack["schema"] != 1
+                        or ack["kind"] != "controller_drained" or ack["controller_id"] != observer.controller_id
+                        or ack["request_id"] != request["request_id"]
+                        or ack["request_sha256"] != _sha(request_json.encode())
+                        or ack["binding_sha256"] != _sha(observer.binding_json.encode())
+                        or registration[1:3] != ("QUIESCING", request["request_id"])
+                        or _encode(ack) != row[3]):
+                    raise ControllerHOLD("controller_stop_ack_invalid")
+                if observer.exited():
+                    # Re-read after observing kernel exit: a replaced request,
+                    # registration or ACK is never consumed from a stale read.
+                    after_registration, after_row = observer.check()
+                    if after_registration != registration or after_row != row:
+                        raise ControllerHOLD("controller_stop_final_readback_changed")
+                    observer.verify_drain(ack)
+                    if observer.check() != (after_registration, after_row):
+                        raise ControllerHOLD("controller_stop_final_readback_changed")
+                    return CompletedControllerStop(observer.controller_id, request["request_id"],
+                        _sha(row[3].encode()), observer.fingerprint, str(observer.scope), str(observer.db),
+                        dict(observer.identity["process"]))
+            elif observer.exited():
+                raise ControllerHOLD("controller_exited_without_ack")
+            if time.monotonic() >= deadline:
+                raise ControllerHOLD("controller_stop_timeout_unconfirmed")
+            time.sleep(min(0.05, max(0, deadline - time.monotonic())))
     except ControllerHOLD:
         raise
     except Exception as exc:

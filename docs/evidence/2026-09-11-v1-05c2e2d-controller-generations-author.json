@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2d",
+  "author": "core_review",
+  "status": "owned_initial_bounded_freeze_real_successor_integration_owned_by_root",
+  "recorded_at_utc": "2026-09-11 07:14:02 UTC",
+  "ownership": {
+    "production": [
+      "src/orze/engine/controller_control.py"
+    ],
+    "new_tests": [
+      "tests/test_controller_generations.py"
+    ],
+    "old_tests_modified": 0,
+    "not_owned": [
+      "controller_handoff",
+      "controller_session",
+      "CLI/profile",
+      "actual product successor tests"
+    ],
+    "no_commits_or_pushes": true,
+    "self_review_not_independent_of_own_source": true
+  },
+  "baseline": {
+    "commit": "e0b8eb79697d26beefe92546166a828b93f035c8",
+    "description": "Preceding implementation/evidence commit, not a released version claim",
+    "snapshot": "docs/evidence/snapshots/v1-05c2e2d-before-controller-control.py",
+    "sha256": "2743a75d05d5f64d84f9a1ca8c6ce474d0bf8d5f528520ce79985f1fd84d39dc",
+    "complete_byte_exact_to_git": true
+  },
+  "contract": {
+    "register_controller": "register_controller(lake, scope, *, protocol=1, admission=None, session_registrar=None)",
+    "read_helpers": [
+      "registration_version(conn) -> exact 1|2",
+      "current_instance(conn,scope) -> current six-field tuple, never latest historical candidate"
+    ],
+    "v1": "Default signature retains V1 stop-only table/owner. Nondefault handoff/callback options refuse. No online upgrade or mixed-schema fallback.",
+    "v2": "Fresh gen0 uses permanent root anchor plus create-only instance-<generation>-<48hex ID>.lock owner below anchor. Both leases revalidated. V2 schema removes scope uniqueness from history and adds generation/predecessor, UNIQUE(scope,generation), UNIQUE(predecessor). Scope-head primary key is sole current authority.",
+    "head": "controller_scope_heads(scope PK,current_id UNIQUE,generation,pending_grant BINARY). Pending grants remain observable but invalidate old live context admission. Every context row read also matches head(id,generation,NULL).",
+    "identity": "V2 schema2 adds generation, predecessor, derived owner_directory, anchor_directory/dev/ino/metadata SHA; original scope/database/host/boot/process remain bound. No supplied arbitrary owner path is trusted.",
+    "successor": "Lazy root _validated_admission returns a strong admission; exact target/source/grant IDs, generation, root anchor and actual current process are checked. One BEGIN IMMEDIATE: exact source pending head CAS -> target instance INSERT -> session_registrar -> admission.consume. Fresh connection rechecks instance/head and admission.verify_consumed. Root session separately reads its complete committed session row.",
+    "callback": "Trusted internal session_registrar only inserts bounded same-transaction metadata; no OS work, waiting or context polling before registration commit.",
+    "failure": "Unknown namespace/SQL/commit leaves strong context and owned directories held. No root or old generation lock release, age takeover, global reset or retry capability."
+  },
+  "tests": {
+    "new_cases": 13,
+    "new_requirements": 13,
+    "prior_commit_behavior_reds": 0,
+    "production_draft_reds": 0,
+    "assert_sites": {
+      "direct": 0,
+      "literal_child": 43
+    },
+    "groups": [
+      "fresh V2 exact identity/head and same-writer session callback",
+      "V1 schema/no migration and original owner preservation",
+      "fake admissions and malformed explicit protocol refuse before reservation",
+      "missing head/foreign unique index/head trigger refusal (3)",
+      "pending grant/generation/current ID fencing (3)",
+      "anchor/generation metadata changed (2)",
+      "session callback rollback",
+      "commit -> rollback ambiguity"
+    ],
+    "boundary": "Actual isolated Python exec/SQLite/own filesystem namespace. Uses existing pidfd-cleaned registration fixture; no real GPU/provider/host scan. No fake successful handoff capability is used."
+  },
+  "first_fixture_failure": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_generations.py tests/test_controller_control.py tests/test_controller_registration_boundaries.py --tb=short",
+    "exit_code": 1,
+    "failed": 2,
+    "passed": 28,
+    "seconds": 10.14,
+    "chunk": "94fa96",
+    "reason": "Two new tests compared exact tuple helper output with sqlite3.Row returned by the real IdeaLake connection. Production correctly returned the six-field tuple.",
+    "classification": "New fixture representation premise, not product failure or API absence",
+    "snapshot": "docs/evidence/snapshots/v1-05c2e2d-generation-tests-before-row-normalization.py",
+    "snapshot_sha256": "4a947606b51de3c371e83ffda4e7ee4471789f3ba607ce32dd9a85a47410a2d0",
+    "correction": "Exactly three tuple() normalizations, preserving compared values and all other source AST; two were reached in first run, third normalized the same anticipated Row/tuple comparison.",
+    "source_during_failure_and_after_fix": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe"
+  },
+  "runs": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_generations.py tests/test_controller_control.py tests/test_controller_registration_boundaries.py --tb=short",
+      "exit_code": 0,
+      "passed": 30,
+      "seconds": 11.6,
+      "chunk": "d33b0f",
+      "scope": "new13 + preceding registration17"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_generations.py tests/test_controller_control.py tests/test_controller_registration_boundaries.py tests/test_controller_members.py tests/test_controller_drain.py tests/test_controller_late_stop.py --tb=short",
+      "exit_code": 0,
+      "passed": 55,
+      "seconds": 22.54,
+      "chunk": "8b834f",
+      "scope": "new13 + old registration17 + old members15 + old drain8 + old late-stop2",
+      "pre": {
+        "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+        "src/orze/engine/controller_members.py": "0eaecc855f27bede4b70b9cf3b72b4019fcd3aa2054619ed7c81f94f53c4f656",
+        "src/orze/engine/execution_authority.py": "9a4225c60cc0a5e478b85c66d2c45c2d5ec8090b3c7a8dbb0e4ac758486f5b2e",
+        "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+        "tests/test_controller_control.py": "b339f1de7456f2b2077b5bdf4a3ba4d91266b6de957939234e9c603fd77affd3",
+        "tests/test_controller_drain.py": "6655794d391d4ca74c7abe2f2c2460e6a5a084411d86f85396afc35fc23c1c34",
+        "tests/test_controller_generations.py": "933e1eb6d4e693eceef2741f7454d331c9a03bbf0093d91bfcc026065a84d888",
+        "tests/test_controller_late_stop.py": "ae0f7cada388e9e0c8c7f7458fe93010e4d5580817140af2fad2cd13047a6182",
+        "tests/test_controller_members.py": "8d18ce58b7c4967b62df638a49f328d0e6e1fa5f619fc22729f6444d59facc56",
+        "tests/test_controller_registration_boundaries.py": "817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12"
+      },
+      "post": {
+        "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+        "src/orze/engine/controller_members.py": "0eaecc855f27bede4b70b9cf3b72b4019fcd3aa2054619ed7c81f94f53c4f656",
+        "src/orze/engine/execution_authority.py": "9a4225c60cc0a5e478b85c66d2c45c2d5ec8090b3c7a8dbb0e4ac758486f5b2e",
+        "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+        "tests/test_controller_control.py": "b339f1de7456f2b2077b5bdf4a3ba4d91266b6de957939234e9c603fd77affd3",
+        "tests/test_controller_drain.py": "6655794d391d4ca74c7abe2f2c2460e6a5a084411d86f85396afc35fc23c1c34",
+        "tests/test_controller_generations.py": "933e1eb6d4e693eceef2741f7454d331c9a03bbf0093d91bfcc026065a84d888",
+        "tests/test_controller_late_stop.py": "ae0f7cada388e9e0c8c7f7458fe93010e4d5580817140af2fad2cd13047a6182",
+        "tests/test_controller_members.py": "8d18ce58b7c4967b62df638a49f328d0e6e1fa5f619fc22729f6444d59facc56",
+        "tests/test_controller_registration_boundaries.py": "817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12"
+      },
+      "pre_post_exact": true,
+      "inventory_files": 10,
+      "inventory_command": "python3 - <<'PY'\nimport hashlib,json,pathlib\npaths=['src/orze/engine/'+n+'.py' for n in ['controller_control','controller_members','supervised_process','execution_authority']]+['tests/'+n+'.py' for n in ['test_controller_generations','test_controller_control','test_controller_registration_boundaries','test_controller_members','test_controller_drain','test_controller_late_stop']]\nprint(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths},sort_keys=True))\nPY"
+    }
+  ],
+  "audit": {
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\nbaseline='e0b8eb79697d26beefe92546166a828b93f035c8'\np=pathlib.Path('docs/evidence/snapshots/v1-05c2e2d-before-controller-control.py');raw=p.read_bytes()\nassert raw==subprocess.check_output(['git','show',baseline+':src/orze/engine/controller_control.py']);ast.parse(raw)\nfiles=['test_controller_control','test_controller_registration_boundaries','test_controller_members','test_controller_drain','test_controller_late_stop']\nfor name in files:\n path=pathlib.Path('tests/'+name+'.py')\n assert path.read_bytes()==subprocess.check_output(['git','show',baseline+':'+str(path)])\na=ast.parse(pathlib.Path('docs/evidence/snapshots/v1-05c2e2d-generation-tests-before-row-normalization.py').read_text())\nb=ast.parse(pathlib.Path('tests/test_controller_generations.py').read_text())\n# The only three edits are scalar-preserving row representation normalization.\nnewtext=pathlib.Path('tests/test_controller_generations.py').read_text().replace('==tuple(row(ctx))','==row(ctx)').replace(\"tuple(lake.conn.execute('SELECT current_id,generation,pending_grant FROM controller_scope_heads').fetchone())\",\"lake.conn.execute('SELECT current_id,generation,pending_grant FROM controller_scope_heads').fetchone()\")\nassert ast.dump(a)==ast.dump(ast.parse(newtext))\nassert sum(isinstance(n,ast.Assert) for n in ast.walk(a))==sum(isinstance(n,ast.Assert) for n in ast.walk(b))\nprint(json.dumps({'baseline_source_byte_exact':True,'old_test_files_byte_exact':len(files),'new_fixture_only_three_tuple_normalizations':True,'snapshot_sha256':hashlib.sha256(raw).hexdigest()}))\nPY",
+    "exit_code": 0,
+    "chunk": "9b4bcc",
+    "fixed_baseline_source_byte_exact": true,
+    "old_test_files_byte_exact": 5,
+    "new_fixture_only_three_tuple_normalizations": true
+  },
+  "tool_error": {
+    "exit_code": 2,
+    "chunk": "54587c",
+    "reason": "Initial read included nonexistent tests/test_controller_registration.py after successfully reading registration_boundaries; file discovery then selected actual test_controller_control.py. Read-command error only; not a pytest/setup failure."
+  },
+  "limits": [
+    "Real authenticated successor admission, grant consume/channel handshake and two-controller product flow are root/runtime work and were not executed by this author in these runs.",
+    "V2 fresh registration/schema/head mechanisms do not themselves grant stop, restart or workload recovery.",
+    "Root handoff protocol will enforce its finite successor bound (initially 64); SQL/context only impose nonnegative signed-64-bit generation bounds.",
+    "Current-instance observation alone does not mean ACTIVE or execution authorization; pending/HOLD must be rejected by the caller/context.",
+    "Historical ownership and task/claim eligibility remain explicit; this implementation does not erase old rows, reset old claims or import old private process owners.",
+    "No whole Core/Pro aggregate is claimed; all listed runs overlap and counts must not be summed."
+  ]
+}

@@ -1043,8 +1043,6 @@ class Orze(OrzePhaseMixin):
             session.bind_gpu_leases(leases)
             self._gpu_leases = leases
             current_controller().check_admission()
-            if session._admission is not None:
-                session._admission.mark_started(session)
             assert_gpu_scope_idle(self.gpu_ids)
             self._run_leased()
         except ControllerQuiescing:

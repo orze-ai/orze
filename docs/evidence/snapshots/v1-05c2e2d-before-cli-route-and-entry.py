@@ -349,7 +349,7 @@ Examples:
     # restart
     restart_parser = subparsers.add_parser(
         "restart", help="Request stop; v2 permits source-qualified one-shot handoff")
-    restart_parser.add_argument("-c", "--config-file", type=str, default=argparse.SUPPRESS,
+    restart_parser.add_argument("-c", "--config-file", type=str, default=None,
                                 help="Path to orze.yaml")
     restart_parser.add_argument("--gpus", type=str, default=None,
                                 help="Comma-separated GPU IDs (default: auto-detect)")
@@ -1393,8 +1393,7 @@ Examples:
     if "ORZE_CONTROLLER_HANDOFF_FD" in os.environ:
         try:
             from orze.engine.controller_handoff import prepare_successor_entry
-            if prepare_successor_entry(cfg, args) is not None:
-                raise ValueError("controller_successor_entry_unconfirmed")
+            prepare_successor_entry(cfg, args)
         except Exception:
             print("HOLD: successor channel admission is unconfirmed")
             return 75

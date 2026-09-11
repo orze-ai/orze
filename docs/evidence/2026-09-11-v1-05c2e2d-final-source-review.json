@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2d",
+  "reviewer": "core_review",
+  "status": "read_only_final_source_review_no_new_scoped_blocker",
+  "baseline_commit": "e0b8eb79697d26beefe92546166a828b93f035c8",
+  "review_scope": {
+    "tracked_source_diff_count": 6,
+    "new_source_full_read": "src/orze/engine/controller_handoff.py",
+    "paths_and_sha256": {
+      "src/orze/cli.py": "4254dce001a7d29b9008a55434fefb650cf10e6a23f1a8c045238a6364efb9f2",
+      "src/orze/core/control_outcome.py": "9e5f8ce529d2256715516dd0886bf2fcd63f606e93d881af5bb5b1a58d50db9c",
+      "src/orze/core/controller_profile.py": "d8606d7a610710e11dff6622911e08697be1406e332019a341f3e83ef52e6bee",
+      "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+      "src/orze/engine/controller_handoff.py": "cd2f91f863dda7b39e0909ea841c5413b83f45c5d32b929961e2fd830c6f3f4d",
+      "src/orze/engine/controller_session.py": "55d007ac9be73068d5e17b07f88854905ac57561bef792314fe581978cffc9a6",
+      "src/orze/engine/orchestrator.py": "45c36ce6018e7106103844097a9924cceb3da3a11ed0d8617dc235e1a86e1e03"
+    },
+    "related_read_paths": {
+      "src/orze/core/idea_source_lock.py": {
+        "sha256": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+        "scope": "SourceLockLease, acquisition, ownership validation, release for contrast; handoff never calls release"
+      },
+      "docs/controller-handoff.md": {
+        "sha256": "363bc8c195d7bbf7f6748e76c7b5a3719c3ecadc554dcb5bb19203af65cd1ab1",
+        "scope": "Full contract read as candidate wording, not an acceptance-completed claim"
+      }
+    },
+    "coverage": "All six tracked source diffs, the complete new handoff module, and relevant surrounding CLI/Profile/Session/SourceLock functions were read. The earlier combined diff display was truncated; the omitted V2 registration tail and Session constructor diff were subsequently read in smaller slices.",
+    "independence": "CLI/profile are Pro-owned; parent/child handoff and most Session changes are root/Pro-owned and independently reviewed here. Controller control V2, the two entrance hooks, and verify_drain are this reviewer's authored changes; their discussion is author inspection, not independent self-validation."
+  },
+  "checks": [
+    {
+      "boundary": "V1 schema and stop-only behavior",
+      "result": "The original _SQL and _COLUMNS AST are exact. Default register_controller remains protocol=1, rejects handoff arguments, and refuses mixed schemas instead of migrating. The extracted stop request-write plus ACK/exit loop is AST-identical to its prior implementation. V1 CLI restart is still refusal-only.",
+      "compatibility_note": "The deadline assignment now follows observer construction instead of preceding it; this does not change closure acceptance, but this review does not claim byte-identical whole-function timing or a strict wall-clock bound including observer setup."
+    },
+    {
+      "boundary": "Fresh V2 versus pending successor",
+      "result": "Fresh registration requires a new create-only namespace and rejects prior ownership/execution inventory. Pending successors require the exact process-local _ADMISSION class/object, PID/thread, live issuer channel, actual born identity, fixed config/runtime/routes and ISSUED head/grant. A None, bool, label, historical row or disk marker cannot authorize the namespace bypass."
+    },
+    {
+      "boundary": "Permanent SourceLock ownership",
+      "result": "Anchor and generation-directory paths are derived from exact scope/generation/controller ID. Both directory witnesses, nonce-bound metadata SHA and fixed marker bytes remain checked. No age takeover, namespace deletion, owner release or old-generation lock reclamation is introduced."
+    },
+    {
+      "boundary": "Same writer and uncertain registration",
+      "result": "Head CAS, new instance, Session row and grant consumption are in one real writer; consume revalidates the source history with that same connection. Fresh readback confirms current head/row and consumed grant, then Session independently reads its full row. Exceptions retain the private context/namespace and sticky HOLD; best-effort HOLD persistence is not misrepresented as guaranteed."
+    },
+    {
+      "boundary": "One-shot parent coordination",
+      "result": "Old controller ACK/drain and captured pidfd exit precede reservation. Source/request uniqueness and exact pending-head CAS prevent a second successor; SPAWNING commit/readback precede the sole Popen. Uncertain spawn or response is not reset to replayable state. Existing STARTED replay verifies the current captured successor instead of spawning."
+    },
+    {
+      "boundary": "Resources and wire messages",
+      "result": "Credentialled HELLO/GO/PREPARED/COMMIT/STARTED messages bind actual processes and canonical metadata. PREPARED is not execution permission. Both resource checks occur under context and GPU registry locks, including after COMMIT; first probe/shared loop follows real mark_started. Canonical COMMIT comparison rejects boolean/integer aliasing."
+    },
+    {
+      "boundary": "Read-only historical proof",
+      "result": "Source ancestry, registration/session/ACK/member digests, terminal/effect receipts and lifecycle projections are bounded and revalidated. Provided connections are borrowed rather than closed/committed; historical observers deliberately bypass current-head selection only for already-bound ancestry and do not capture or signal old PIDs."
+    },
+    {
+      "boundary": "Compatibility and consumer scope",
+      "result": "No tracked existing test was modified. The profile keeps common opt-in restrictions. V2 enable/offline resume/detached start and unsupported routes remain refused. Pro Director is not silently granted positive handoff authority."
+    }
+  ],
+  "known_limits": [
+    "No new blocker was found in this bounded source review; it is not a proof that all possible races or hostile modifications are excluded.",
+    "This turn ran no pytest tests, GPU/provider work, host census or process signalling. Previously reported six product passes and three draft fixes are not recounted.",
+    "The parent owns the ongoing full Core/Pro epoch; this report does not declare it complete or green.",
+    "At most 64 successor generations and at most 4096 aggregate closed historical members are admitted. Per-instance 2048 soft/4096 hard membership remains finite and may prevent the next handoff.",
+    "Unknown operation state, late corruption, dead observers and unsupported legacy ownership stay HOLD; no online V1 migration, general crash adoption, changed-configuration restart or unlimited research lifetime is claimed.",
+    "Runtime witnesses and process-local strong capabilities are not a sandbox against arbitrary malicious same-process/same-UID code or unrelated host writers.",
+    "SourceLock and SQLite route witnesses inherit the existing local-filesystem/database policy assumptions; no new cross-filesystem or distributed protocol is claimed."
+  ],
+  "evidence": {
+    "inventory_command": "python3 - <<'PY'\nimport hashlib,json,pathlib\nfiles=[\"src/orze/cli.py\",\"src/orze/core/controller_profile.py\",\"src/orze/core/control_outcome.py\",\"src/orze/engine/controller_control.py\",\"src/orze/engine/controller_session.py\",\"src/orze/engine/orchestrator.py\",\"src/orze/engine/controller_handoff.py\"]\nprint(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+    "pre_chunk": "e03399",
+    "post_chunk": "96d28f",
+    "pre": {
+      "src/orze/cli.py": "4254dce001a7d29b9008a55434fefb650cf10e6a23f1a8c045238a6364efb9f2",
+      "src/orze/core/control_outcome.py": "9e5f8ce529d2256715516dd0886bf2fcd63f606e93d881af5bb5b1a58d50db9c",
+      "src/orze/core/controller_profile.py": "d8606d7a610710e11dff6622911e08697be1406e332019a341f3e83ef52e6bee",
+      "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+      "src/orze/engine/controller_handoff.py": "cd2f91f863dda7b39e0909ea841c5413b83f45c5d32b929961e2fd830c6f3f4d",
+      "src/orze/engine/controller_session.py": "55d007ac9be73068d5e17b07f88854905ac57561bef792314fe581978cffc9a6",
+      "src/orze/engine/orchestrator.py": "45c36ce6018e7106103844097a9924cceb3da3a11ed0d8617dc235e1a86e1e03"
+    },
+    "post": {
+      "src/orze/cli.py": "4254dce001a7d29b9008a55434fefb650cf10e6a23f1a8c045238a6364efb9f2",
+      "src/orze/core/control_outcome.py": "9e5f8ce529d2256715516dd0886bf2fcd63f606e93d881af5bb5b1a58d50db9c",
+      "src/orze/core/controller_profile.py": "d8606d7a610710e11dff6622911e08697be1406e332019a341f3e83ef52e6bee",
+      "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+      "src/orze/engine/controller_handoff.py": "cd2f91f863dda7b39e0909ea841c5413b83f45c5d32b929961e2fd830c6f3f4d",
+      "src/orze/engine/controller_session.py": "55d007ac9be73068d5e17b07f88854905ac57561bef792314fe581978cffc9a6",
+      "src/orze/engine/orchestrator.py": "45c36ce6018e7106103844097a9924cceb3da3a11ed0d8617dc235e1a86e1e03"
+    },
+    "seven_source_files_exact": true,
+    "static_audit": {
+      "command": "python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\nbase='e0b8eb79697d26beefe92546166a828b93f035c8'\ncontrol='src/orze/engine/controller_control.py'\nsession='src/orze/engine/controller_session.py'\nold_control=ast.parse(subprocess.check_output(['git','show',base+':'+control]))\nnew_control=ast.parse(pathlib.Path(control).read_text())\ndef assigned(tree,name):\n    return next(n.value for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id==name for t in n.targets))\nfor name in ('_SQL','_COLUMNS'):\n    assert ast.dump(assigned(old_control,name),include_attributes=False)==ast.dump(assigned(new_control,name),include_attributes=False)\nold_session=ast.parse(subprocess.check_output(['git','show',base+':'+session]))\nnew_session=ast.parse(pathlib.Path(session).read_text())\nold_stop=next(n for n in old_session.body if isinstance(n,ast.FunctionDef) and n.name=='stop_controller')\nnew_stop=next(n for n in new_session.body if isinstance(n,ast.FunctionDef) and n.name=='_stop_observed')\nold_try=next(n for n in old_stop.body if isinstance(n,ast.Try))\nassert [ast.dump(n,include_attributes=False) for n in old_try.body[2:]]==[ast.dump(n,include_attributes=False) for n in new_stop.body[2:]]\ntracked=subprocess.check_output(['git','diff','--name-only','HEAD','--','src'],text=True).splitlines()\nassert len(tracked)==6\nnewsrc='src/orze/engine/controller_handoff.py'\nfor name in tracked+[newsrc]: ast.parse(pathlib.Path(name).read_text())\noldtests=subprocess.run(['git','diff','--quiet','HEAD','--','tests'],check=False)\nassert oldtests.returncode==0\nchanged= subprocess.check_output(['git','diff','--name-only','HEAD','--','tests'],text=True).splitlines()\nnewtests=subprocess.check_output(['git','ls-files','--others','--exclude-standard','tests'],text=True).splitlines()\nassert len(newtests)==9\nprint(json.dumps({'baseline':base,'v1_sql_and_columns_ast_exact':True,'stop_request_and_ack_loop_ast_exact':True,'stop_timeout_note':'Deadline assignment now follows observer construction; acceptance loop is unchanged. This is not a byte-identical whole-function claim.','tracked_source_diffs':tracked,'new_source':newsrc,'source_ast_parsed':7,'tracked_test_changes':changed,'new_test_paths':newtests},sort_keys=True))\nPY",
+      "chunk": "0726e3",
+      "exit_code": 0,
+      "results": {
+        "v1_sql_and_columns_ast_exact": true,
+        "stop_request_ack_loop_ast_exact": true,
+        "source_ast_parse_count": 7,
+        "tracked_test_changes": 0,
+        "new_test_files": 9
+      }
+    },
+    "diff_check": {
+      "command": "git diff --check HEAD -- src tests",
+      "chunk": "034223",
+      "exit_code": 0
+    },
+    "test_executions_this_review": 0
+  },
+  "writes": "Only this new final-review JSON was created; no source/test, prior author report, commit or push mutation."
+}

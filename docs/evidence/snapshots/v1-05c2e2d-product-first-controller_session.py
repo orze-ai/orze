@@ -8,7 +8,7 @@ Persistent registration and stop history are intentionally never released.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from dataclasses import dataclass
 import errno
 import hashlib
@@ -594,12 +594,8 @@ class _Observer:
     def exited(self):
         return bool(select.select([self.pidfd], [], [], 0)[0])
 
-    def verify_drain(self, ack, *, conn=None):
-        """Read drain proof, optionally inside the caller's bound transaction.
-
-        A supplied connection is borrowed, never committed, closed or written;
-        its main database and current paths must match this observer's scope.
-        """
+    def verify_drain(self, ack):
+        """Re-read durable members and native effects; labels alone cannot ACK."""
         from orze.engine.controller_members import _schema as member_schema, MAX_MEMBERS, _NATIVE, _REPORTS
         from orze.core import execution_attempts as attempts
         from orze.engine.attempt_effect_receipts import _scan
@@ -622,11 +618,7 @@ class _Observer:
             raise ControllerHOLD("controller_stop_member_proof_invalid")
         digest = hashlib.sha256()
         effects = {}
-        with self.connection() if conn is None else nullcontext(conn) as conn:
-            if (_path(self.scope, directory=True) != (self.scope, self.scope_witness)
-                    or _path(self.db, directory=False) != (self.db, self.db_witness)
-                    or _route(conn) != (self.db, self.db_witness)):
-                raise ControllerHOLD("controller_stop_route_changed")
+        with self.connection() as conn:
             self.check(conn)
             member_schema(conn)
             rows = conn.execute("SELECT member_id, CASE WHEN typeof(payload_json)='text' "
@@ -663,10 +655,6 @@ class _Observer:
                     if effects[ref.task_id].get(ref.attempt_id) != (row["terminal"].get("effect_receipt_sha256"), True):
                         raise ControllerHOLD("controller_stop_effect_changed")
                 digest.update(canonical([key, _sha(raw.encode())]))
-            if (_path(self.scope, directory=True) != (self.scope, self.scope_witness)
-                    or _path(self.db, directory=False) != (self.db, self.db_witness)
-                    or _route(conn) != (self.db, self.db_witness)):
-                raise ControllerHOLD("controller_stop_route_changed")
         if digest.hexdigest() != proof["members_sha256"]:
             raise ControllerHOLD("controller_stop_members_digest_changed")
 

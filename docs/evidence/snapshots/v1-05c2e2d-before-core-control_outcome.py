@@ -49,26 +49,19 @@ def require_controller_start_allowed(results_dir) -> None:
         root = Path(results_dir)
         # Once a scope has entered registered ownership, another framework
         # controller (including a legacy-mode invocation) cannot start there.
-        # Persistent namespace presence denies except for the exact ACTIVE
-        # context or a strongly validated pending successor. No age takeover.
+        # Persistent namespace presence denies; only the exact current ACTIVE
+        # context may continue its own startup. No owner age is consulted.
         namespace = root / "_controller_registration.lock.source-lock"
         try:
             namespace.lstat()
         except FileNotFoundError:
             pass
         else:
-            from orze.engine.controller_control import ControllerHOLD, current_controller
+            from orze.engine.controller_control import current_controller
             ctx = current_controller()
-            if ctx is None:
-                from orze.engine.controller_handoff import require_pending_start
-                try:
-                    require_pending_start(root.absolute())
-                except ControllerHOLD:
-                    raise ControllerStopHOLD("controller_start_blocked_by_registration") from None
-            elif ctx.scope != root.absolute():
+            if ctx is None or ctx.scope != root.absolute():
                 raise ControllerStopHOLD("controller_start_blocked_by_registration")
-            else:
-                ctx.check_admission()
+            ctx.check_admission()
         for name in STOP_SENTINELS:
             try:
                 (root / name).lstat()

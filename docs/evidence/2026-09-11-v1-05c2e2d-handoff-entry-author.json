@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2d",
+  "author": "core_review",
+  "status": "owned_entries_frozen_final_parent_coordinator_narrow_review_complete",
+  "baseline": {
+    "commit": "e0b8eb79697d26beefe92546166a828b93f035c8",
+    "provenance": "Immediately preceding implementation-branch commit, not a released-source claim",
+    "snapshots": {
+      "docs/evidence/snapshots/v1-05c2e2d-before-core-control_outcome.py": {
+        "byte_exact_baseline": true,
+        "sha256": "8c2467101aa4663acd1461b53bb89b195fb55ae1d8f278abf7006768505d38ea"
+      },
+      "docs/evidence/snapshots/v1-05c2e2d-before-engine-orchestrator.py": {
+        "byte_exact_baseline": true,
+        "sha256": "6db0fdfef6929ae4d7d92ea71548a2531a1491839bf6f1b18a7792a36a219788"
+      },
+      "new_assert_sites": 17,
+      "new_pytest_raises": 3,
+      "old_files_byte_exact": 4
+    }
+  },
+  "ownership": {
+    "production": [
+      "src/orze/core/control_outcome.py",
+      "src/orze/engine/orchestrator.py"
+    ],
+    "new_tests": [
+      "tests/test_controller_handoff_start_gate.py"
+    ],
+    "unchanged_owned_registration": "src/orze/engine/controller_control.py",
+    "not_edited": [
+      "controller_handoff.py",
+      "controller_session.py",
+      "all existing tests",
+      "Pro source"
+    ]
+  },
+  "changes": [
+    "A permanent registration namespace with no current controller delegates only to the real require_pending_start(scope) strong-admission validator; ControllerHOLD remains ControllerStopHOLD and old sentinel checks still run.",
+    "The actual Orze profile caller invokes admission.mark_started(session), only for non-None admission, after PID/GPU binding and current admission check but before first GPU probe and the shared scheduler."
+  ],
+  "classification": {
+    "new_requirements": 8,
+    "preceding_commit_public_behavior_reds": 0,
+    "draft_behavior_reds": 0,
+    "fixture_errors": 0,
+    "new_assert_sites": 17,
+    "pytest_raises_sites": 3,
+    "note": "No missing API or expected absence counted as a red. Invalid-cap tests execute the real validator. Positive delegation and Orze ordering/resource hooks use explicit doubles and do not establish actual handoff or kernel resource closure."
+  },
+  "runs": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_handoff_start_gate.py tests/test_control_outcome.py tests/test_controller_start_stop_admission.py tests/test_controller_profile_boot.py tests/test_managed_run.py --tb=short",
+      "session_id": 67004,
+      "footer_chunk": "52d58e",
+      "exit_code": 0,
+      "passed": 84,
+      "seconds": 2.62,
+      "label": "first owned entrance mechanisms plus unchanged neighbors"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_handoff_start_gate.py tests/test_control_outcome.py tests/test_controller_start_stop_admission.py tests/test_controller_profile_boot.py tests/test_managed_run.py --tb=short",
+      "session_id": 52443,
+      "footer_chunk": "184316",
+      "exit_code": 0,
+      "passed": 84,
+      "seconds": 2.68,
+      "label": "bounded owned-file freeze; not a whole-slice epoch"
+    }
+  ],
+  "inventories": {
+    "command": "python3 - <<'PY'\nimport hashlib,json,pathlib\nfiles=[\"src/orze/core/control_outcome.py\",\"src/orze/engine/orchestrator.py\",\"src/orze/engine/controller_control.py\",\"tests/test_controller_handoff_start_gate.py\",\"tests/test_control_outcome.py\",\"tests/test_controller_start_stop_admission.py\",\"tests/test_controller_profile_boot.py\",\"tests/test_managed_run.py\"]\nprint(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+    "pre_chunk": "4d0878",
+    "post_chunk": "cf4972",
+    "pre": {
+      "src/orze/core/control_outcome.py": "9e5f8ce529d2256715516dd0886bf2fcd63f606e93d881af5bb5b1a58d50db9c",
+      "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+      "src/orze/engine/orchestrator.py": "45c36ce6018e7106103844097a9924cceb3da3a11ed0d8617dc235e1a86e1e03",
+      "tests/test_control_outcome.py": "8a9618ec75d6ec0193287fe407a3e4f49c3dc893f979e1c570a7fb7443235d07",
+      "tests/test_controller_handoff_start_gate.py": "df3f6edad60f3c06608a0f4c0174b270d89cc1f859d85eff410c4916b8a2828e",
+      "tests/test_controller_profile_boot.py": "99b6ed91e8767a412a42efef4ad918183d335bba82e9a56e217981c2ddc15d43",
+      "tests/test_controller_start_stop_admission.py": "ea6c491a3a90478bdd9e4cc23e9658d50a065a9111b676db82aaee5476c6c045",
+      "tests/test_managed_run.py": "8dbb40c9f08f31cb084ab301434a0c8ca1c8298b0ca1d5e4ea6048a6ef7a73b7"
+    },
+    "post": {
+      "src/orze/core/control_outcome.py": "9e5f8ce529d2256715516dd0886bf2fcd63f606e93d881af5bb5b1a58d50db9c",
+      "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+      "src/orze/engine/orchestrator.py": "45c36ce6018e7106103844097a9924cceb3da3a11ed0d8617dc235e1a86e1e03",
+      "tests/test_control_outcome.py": "8a9618ec75d6ec0193287fe407a3e4f49c3dc893f979e1c570a7fb7443235d07",
+      "tests/test_controller_handoff_start_gate.py": "df3f6edad60f3c06608a0f4c0174b270d89cc1f859d85eff410c4916b8a2828e",
+      "tests/test_controller_profile_boot.py": "99b6ed91e8767a412a42efef4ad918183d335bba82e9a56e217981c2ddc15d43",
+      "tests/test_controller_start_stop_admission.py": "ea6c491a3a90478bdd9e4cc23e9658d50a065a9111b676db82aaee5476c6c045",
+      "tests/test_managed_run.py": "8dbb40c9f08f31cb084ab301434a0c8ca1c8298b0ca1d5e4ea6048a6ef7a73b7"
+    },
+    "all_eight_exact": true,
+    "note": "The parent coordinator and Session were outside this stable inventory and still under their author's development; no whole-slice freeze is claimed."
+  },
+  "static_audit": {
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\nbase='e0b8eb79697d26beefe92546166a828b93f035c8'\npairs=[('src/orze/core/control_outcome.py','docs/evidence/snapshots/v1-05c2e2d-before-core-control_outcome.py'),('src/orze/engine/orchestrator.py','docs/evidence/snapshots/v1-05c2e2d-before-engine-orchestrator.py')]\nresult={}\nfor source,snapshot in pairs:\n    original=subprocess.check_output(['git','show',base+':'+source])\n    saved=pathlib.Path(snapshot).read_bytes()\n    assert original==saved\n    result[snapshot]={'sha256':hashlib.sha256(saved).hexdigest(),'byte_exact_baseline':True}\nold=['tests/test_control_outcome.py','tests/test_controller_start_stop_admission.py','tests/test_controller_profile_boot.py','tests/test_managed_run.py']\nfor p in old:\n    assert pathlib.Path(p).read_bytes()==subprocess.check_output(['git','show',base+':'+p])\nnew='tests/test_controller_handoff_start_gate.py'\ntree=ast.parse(pathlib.Path(new).read_text())\nresult['new_assert_sites']=sum(isinstance(n,ast.Assert) for n in ast.walk(tree))\nresult['new_pytest_raises']=sum(isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and isinstance(n.func.value,ast.Name) and n.func.value.id=='pytest' and n.func.attr=='raises' for n in ast.walk(tree))\nresult['old_files_byte_exact']=len(old)\nfor p,_ in pairs: ast.parse(pathlib.Path(p).read_text())\nprint(json.dumps(result,sort_keys=True))\nPY",
+    "exit_code": 0,
+    "chunk": "b95556",
+    "old_test_files_byte_exact": 4,
+    "full_baseline_snapshots_exact": 2,
+    "ast_sources_parsed": 2,
+    "diff_check": {
+      "command": "git diff --check -- src/orze/core/control_outcome.py src/orze/engine/orchestrator.py",
+      "exit_code": 0,
+      "chunk": "cfe42d"
+    }
+  },
+  "independent_read_review": {
+    "scope": [
+      "Entire candidate controller_handoff.py, including Route, history verifier, Admission, parent Coordinator and restart_controller",
+      "Relevant actual Session validation, observer/ACK and resource binding interfaces"
+    ],
+    "candidate_read_hashes": {
+      "src/orze/engine/controller_handoff.py": "c0fd1c9999dfdc3b7cff8b01d3be02768830b3542a41a832d09aea441143399e",
+      "src/orze/engine/controller_session.py": "cbdc57e8305f6d89582e7415f440041d589695194a5d9fa1e70832fdfc67369a"
+    },
+    "not_self_review": "Parent coordinator and Session are root-owned; the two entrance changes and V2 registration module are this author's work and not independent self-validation.",
+    "supported_read_observations": [
+      "Source stop requires a live captured observer, ACK verification and kernel exit before grant reservation.",
+      "Reservation and SPAWNING are committed/read back before Popen; incomplete or repeated requests cannot spawn a second successor.",
+      "Actual birth identity and per-message kernel credentials precede ISSUED; child consume is integrated with the same registration/head/session writer.",
+      "PREPARED/COMMIT/STARTED separate resource preparation from successor continuation; unknown response does not grant a new launch."
+    ],
+    "open_reported_finding": {
+      "status": "read-only suspicion sent to root, not tested by this author and not counted as a red",
+      "code_location": "_Admission.mark_started: after COMMIT receipt, before STARTED write",
+      "detail": "Resource witnesses are checked before PREPARED, but the second critical section checks only ctx/route. Session runtime validation does not recheck GPU FD/list or PID-file witnesses. A controlled resource change during the COMMIT wait may therefore retain stale resource-ready authority. Root was asked to reproduce independently before a narrow fix."
+    },
+    "limits": [
+      "No independent real successor process or full grant-commit tests executed in this report; runtime agent owns product-level proof.",
+      "Aggregate closed-history membership is bounded at 4096 across generations; protocol grants at most 64 successors. No indefinite handoff lifetime claim.",
+      "Strong private capability/current-head checks do not sandbox arbitrary same-process or same-UID hostile code.",
+      "No full Core/Pro results attributed to this author."
+    ]
+  },
+  "final_followup": {
+    "prior_report_sha256": "6553f2871210126e9987f025c05bddff4387af0a8c7c41dc1bbf81b98c289bdb",
+    "historical_note": "The original open finding and read hashes above describe the first candidate review and are deliberately retained.",
+    "finding_resolution": "Root factored _check_resources and calls it again under context+GPU registry locks after COMMIT and before STARTED. This author read the complete narrow fix at cd2f91f8 and found the reported resource window addressed.",
+    "source_sha256": "cd2f91f863dda7b39e0909ea841c5413b83f45c5d32b929961e2fd830c6f3f4d",
+    "independent_followup_report": "docs/evidence/2026-09-11-v1-05c2e2d-observer-transaction-author.json",
+    "observed_original_product_neighbor": {
+      "passed": 6,
+      "seconds": 13.13,
+      "exit_code": 0,
+      "chunk": "dc5476",
+      "note": "Same actual run documented in the Observer report, not an additional six-test run."
+    },
+    "no_extra_authorship": "Actual resource fault regression and fix were performed by runtime/root respectively, not this author; no draft-red count transferred into this report."
+  }
+}

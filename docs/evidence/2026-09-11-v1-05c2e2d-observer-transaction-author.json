@@ -1,0 +1,180 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2d",
+  "author": "core_review",
+  "status": "owned_reader_final_bounded_and_original_product_neighbor_verified",
+  "ownership": {
+    "production_scope": "Only controller_session._Observer.verify_drain and the contextlib.nullcontext import",
+    "new_tests": "tests/test_controller_observer_transaction.py",
+    "unchanged": "All other Session function AST, existing tests, history and consume implementation"
+  },
+  "baseline": {
+    "kind": "Complete pre-change candidate, not preceding commit baseline",
+    "snapshot": "docs/evidence/snapshots/v1-05c2e2d-before-observer-transaction-reader.py",
+    "sha256": "cbdc57e8305f6d89582e7415f440041d589695194a5d9fa1e70832fdfc67369a"
+  },
+  "contract": {
+    "api": "_Observer.verify_drain(ack, *, conn=None)",
+    "default": "Uses the existing owned connection context; existing call sites are unchanged.",
+    "provided_connection": "Uses nullcontext. Revalidates bound scope/database path witnesses and main database route before and after proof reads. self.check, registration/session/member schemas and member/native reads use that same connection. Does not commit, rollback, close or write through the borrowed connection; does not alter query_only.",
+    "authority_limit": "This reader does not itself authorize handoff or prove exit. The caller retains responsibility for the actual observer/capability and commit/readback protocol."
+  },
+  "classification": {
+    "new_mechanisms": 6,
+    "preceding_commit_public_behavior_reds": 0,
+    "draft_behavior_reds": 0,
+    "fixture_premise_failures": 1,
+    "note": "No unsupported keyword or absent API counted as a red. Actual local Session/SQLite/GPU lease files are exercised in isolated subprocesses, using the existing explicit host double. Wrong route/schema and uncommitted member tests are controlled faults, not product-level handoff proof."
+  },
+  "tests": [
+    "Borrow a real current BEGIN IMMEDIATE writer without opening another connection; preserve in_transaction, total_changes, and SELECT access; only read statements observed.",
+    "Reject an in-memory main database.",
+    "Reject an unrelated persistent main database.",
+    "Reject replacement of the captured scope directory.",
+    "Reject an uncommitted member-schema trigger.",
+    "Observe and reject a member inserted in the caller's uncommitted transaction instead of reading an older committed view."
+  ],
+  "first_run": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_observer_transaction.py tests/test_controller_session.py --tb=short",
+    "session_id": 48803,
+    "footer_chunk": "8ecdce",
+    "exit_code": 1,
+    "failed": 1,
+    "passed": 28,
+    "seconds": 10.52,
+    "reason": "New positive trace assertion omitted SQLite-generated -- PRAGMA read traces for pragma virtual tables. Borrowing/transaction/total_changes assertions already passed; this was not a production write or new-connection failure."
+  },
+  "diagnostic": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport pathlib,tempfile\nimport test_controller_observer_transaction as test\nfrom test_controller_session import _run\n\ndef diagnose(root,code):\n    for number,line in enumerate(__import__('test_controller_session').BOOT.splitlines()+code.splitlines(),1):\n        if 43 <= number <= 49: print(number,line)\n    return _run(root,code.replace(\"for sql in calls)\",\"for sql in calls), calls\"))\ntest._run=diagnose\nwith tempfile.TemporaryDirectory(prefix='orze-observer-trace-') as folder:\n    test.test_given_writer_is_borrowed_without_new_connection_or_transaction_changes(pathlib.Path(folder))\nPY",
+    "chunk": "bb1b61",
+    "exit_code": 1,
+    "observed": "The exact failing assertion was child line47. Trace showed SELECT/PRAGMA plus SQLite-generated '-- PRAGMA ...'. The displayed final ROLLBACK was appended by fixture finally after the assertion failed, not by verify_drain."
+  },
+  "fixture_correction": {
+    "full_first_test_snapshot": "docs/evidence/snapshots/v1-05c2e2d-observer-tests-before-trace-normalization.py",
+    "sha256": "c1b046e806c50d21af2844f40228c6637595756fd3b337f67a58549fa0b28508",
+    "only_change": "sql.lstrip().upper() -> sql.lstrip().removeprefix('-- ').upper()",
+    "business_assertions_removed": 0
+  },
+  "runs": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_observer_transaction.py tests/test_controller_session.py --tb=short",
+      "session_id": 21835,
+      "footer_chunk": "29d850",
+      "exit_code": 0,
+      "passed": 29,
+      "seconds": 10.42
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_observer_transaction.py tests/test_controller_session.py --tb=short",
+      "session_id": 23974,
+      "footer_chunk": "948fe8",
+      "exit_code": 0,
+      "passed": 29,
+      "seconds": 10.96,
+      "label": "Final own-reader and unchanged default Session neighborhood, five files exact"
+    }
+  ],
+  "inventory": {
+    "command": "python3 - <<'PY'\nimport hashlib,json,pathlib\nfiles=[\"src/orze/engine/controller_session.py\",\"src/orze/engine/controller_control.py\",\"src/orze/engine/controller_members.py\",\"tests/test_controller_session.py\",\"tests/test_controller_observer_transaction.py\"]\nprint(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+    "pre": {
+      "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+      "src/orze/engine/controller_members.py": "0eaecc855f27bede4b70b9cf3b72b4019fcd3aa2054619ed7c81f94f53c4f656",
+      "src/orze/engine/controller_session.py": "55d007ac9be73068d5e17b07f88854905ac57561bef792314fe581978cffc9a6",
+      "tests/test_controller_observer_transaction.py": "77f112e04bfbccbfd0cef3542ff6cc40f33fd8c4ebd18b224ebf98e77ff65a56",
+      "tests/test_controller_session.py": "4d2cd51a4b9ae0e4dfc3886f46ba0378ed089dc7d13f97c300688ee432aeacbc"
+    },
+    "post": {
+      "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+      "src/orze/engine/controller_members.py": "0eaecc855f27bede4b70b9cf3b72b4019fcd3aa2054619ed7c81f94f53c4f656",
+      "src/orze/engine/controller_session.py": "55d007ac9be73068d5e17b07f88854905ac57561bef792314fe581978cffc9a6",
+      "tests/test_controller_observer_transaction.py": "77f112e04bfbccbfd0cef3542ff6cc40f33fd8c4ebd18b224ebf98e77ff65a56",
+      "tests/test_controller_session.py": "4d2cd51a4b9ae0e4dfc3886f46ba0378ed089dc7d13f97c300688ee432aeacbc"
+    },
+    "pre_chunk": "dbc764",
+    "post_chunk": "f9760e",
+    "all_five_exact": true
+  },
+  "static_audit": {
+    "chunk": "1830d5",
+    "exit_code": 0,
+    "result": "AST comparison after omitting only _Observer.verify_drain and the new nullcontext import is identical across the entire module. The new test's full text changes only the single trace normalization.",
+    "diff_check": {
+      "command": "git diff --check -- src/orze/engine/controller_session.py",
+      "chunk": "4b0f0d",
+      "exit_code": 0
+    },
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,pathlib\nsource=pathlib.Path('src/orze/engine/controller_session.py')\nold=pathlib.Path('docs/evidence/snapshots/v1-05c2e2d-before-observer-transaction-reader.py')\na,b=ast.parse(old.read_text()),ast.parse(source.read_text())\nfor tree in (a,b):\n    for node in ast.walk(tree):\n        if isinstance(node,ast.ImportFrom) and node.module=='contextlib':\n            node.names=[n for n in node.names if n.name!='nullcontext']\n        if isinstance(node,ast.ClassDef) and node.name=='_Observer':\n            node.body=[n for n in node.body if not(isinstance(n,ast.FunctionDef) and n.name=='verify_drain')]\nassert ast.dump(a,include_attributes=False)==ast.dump(b,include_attributes=False)\nnew=pathlib.Path('tests/test_controller_observer_transaction.py')\nfirst=pathlib.Path('docs/evidence/snapshots/v1-05c2e2d-observer-tests-before-trace-normalization.py')\nassert first.read_text().replace(\"sql.lstrip().upper()\",\"sql.lstrip().removeprefix('-- ').upper()\")==new.read_text()\nprint(json.dumps({'all_other_production_ast_unchanged':True,'test_change_only_trace_normalization':True,'hashes':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in (source,old,new,first)}}))\nPY",
+    "command_repeat": {
+      "chunk": "05e56e",
+      "exit_code": 0
+    }
+  },
+  "product_neighbor": {
+    "status": "Completed after runtime froze its product file and root's three narrow fixes",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_handoff_product.py::test_real_api_handoff_requires_old_tree_exit_and_live_successor_resources tests/test_controller_handoff_product.py::test_actual_cli_restart_uses_real_successor_not_transport_double tests/test_controller_handoff_product.py::test_concurrent_same_request_and_replay_create_only_one_real_successor tests/test_controller_handoff_product.py::test_configuration_changed_after_real_hello_cannot_start_successor tests/test_controller_handoff_product.py::test_lost_final_started_response_retains_one_independent_successor --tb=short",
+    "session_id": 1257,
+    "footer_chunk": "dc5476",
+    "exit_code": 0,
+    "passed": 6,
+    "seconds": 13.13,
+    "inventory_command": "python3 - <<'PY'\nimport hashlib,json,pathlib\nfiles=[\"src/orze/engine/controller_handoff.py\",\"src/orze/engine/controller_session.py\",\"src/orze/engine/controller_control.py\",\"src/orze/engine/controller_members.py\",\"src/orze/engine/orchestrator.py\",\"src/orze/core/control_outcome.py\",\"src/orze/core/controller_profile.py\",\"src/orze/cli.py\",\"tests/test_controller_handoff_product.py\",\"tests/test_controller_session.py\",\"tests/test_controller_observer_transaction.py\"]\nprint(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+    "pre_chunk": "798806",
+    "post_chunk": "be6b6a",
+    "pre": {
+      "src/orze/cli.py": "4254dce001a7d29b9008a55434fefb650cf10e6a23f1a8c045238a6364efb9f2",
+      "src/orze/core/control_outcome.py": "9e5f8ce529d2256715516dd0886bf2fcd63f606e93d881af5bb5b1a58d50db9c",
+      "src/orze/core/controller_profile.py": "d8606d7a610710e11dff6622911e08697be1406e332019a341f3e83ef52e6bee",
+      "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+      "src/orze/engine/controller_handoff.py": "cd2f91f863dda7b39e0909ea841c5413b83f45c5d32b929961e2fd830c6f3f4d",
+      "src/orze/engine/controller_members.py": "0eaecc855f27bede4b70b9cf3b72b4019fcd3aa2054619ed7c81f94f53c4f656",
+      "src/orze/engine/controller_session.py": "55d007ac9be73068d5e17b07f88854905ac57561bef792314fe581978cffc9a6",
+      "src/orze/engine/orchestrator.py": "45c36ce6018e7106103844097a9924cceb3da3a11ed0d8617dc235e1a86e1e03",
+      "tests/test_controller_handoff_product.py": "c8490f67ff60db2dd2a54dc38f070ac8e2f8cdc4172f2ff6c9051ea8bad63d39",
+      "tests/test_controller_observer_transaction.py": "77f112e04bfbccbfd0cef3542ff6cc40f33fd8c4ebd18b224ebf98e77ff65a56",
+      "tests/test_controller_session.py": "4d2cd51a4b9ae0e4dfc3886f46ba0378ed089dc7d13f97c300688ee432aeacbc"
+    },
+    "post": {
+      "src/orze/cli.py": "4254dce001a7d29b9008a55434fefb650cf10e6a23f1a8c045238a6364efb9f2",
+      "src/orze/core/control_outcome.py": "9e5f8ce529d2256715516dd0886bf2fcd63f606e93d881af5bb5b1a58d50db9c",
+      "src/orze/core/controller_profile.py": "d8606d7a610710e11dff6622911e08697be1406e332019a341f3e83ef52e6bee",
+      "src/orze/engine/controller_control.py": "2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe",
+      "src/orze/engine/controller_handoff.py": "cd2f91f863dda7b39e0909ea841c5413b83f45c5d32b929961e2fd830c6f3f4d",
+      "src/orze/engine/controller_members.py": "0eaecc855f27bede4b70b9cf3b72b4019fcd3aa2054619ed7c81f94f53c4f656",
+      "src/orze/engine/controller_session.py": "55d007ac9be73068d5e17b07f88854905ac57561bef792314fe581978cffc9a6",
+      "src/orze/engine/orchestrator.py": "45c36ce6018e7106103844097a9924cceb3da3a11ed0d8617dc235e1a86e1e03",
+      "tests/test_controller_handoff_product.py": "c8490f67ff60db2dd2a54dc38f070ac8e2f8cdc4172f2ff6c9051ea8bad63d39",
+      "tests/test_controller_observer_transaction.py": "77f112e04bfbccbfd0cef3542ff6cc40f33fd8c4ebd18b224ebf98e77ff65a56",
+      "tests/test_controller_session.py": "4d2cd51a4b9ae0e4dfc3886f46ba0378ed089dc7d13f97c300688ee432aeacbc"
+    },
+    "all_eleven_exact": true,
+    "scope": "Only the original six actual default handoff product cases; the other agent's four added cases were not run by this author.",
+    "no_count_inflation": "29 reader/default Session neighbors and six product neighbors are separate runs, not a 35-test combined command or new-case total."
+  },
+  "status_history": [
+    {
+      "prior_report_sha256": "9248e2013c9d6dd187bb7bb7872cc542ddde22fe3d42a14d8d2c6b7360637dbb",
+      "status": "owned_observer_reader_frozen_product_neighbor_waits_for_runtime_test_freeze"
+    }
+  ],
+  "final_read_review": {
+    "source": "src/orze/engine/controller_handoff.py",
+    "sha256": "cd2f91f863dda7b39e0909ea841c5413b83f45c5d32b929961e2fd830c6f3f4d",
+    "inspected": [
+      "Full _validate_history optional-connection implementation",
+      "Full _Admission.consume, _check_resources and mark_started after three narrow changes"
+    ],
+    "conclusion": "No additional blocker found within these three changed boundaries and the reader integration.",
+    "details": [
+      "Resource validation is invoked both before PREPARED and after authenticated COMMIT, each under ctx.guard and the GPU registry lock; real lease-set/list/fd witnesses, PID-file witness and Lake are rechecked.",
+      "COMMIT equality compares canonical encoded messages, preventing Python bool/integer equality from granting authority.",
+      "consume validates closed source history inside the actual registration writer before changing the grant to CONSUMED. The source-generation filter excludes the uncommitted successor row; the historical observer intentionally does not require the old generation to remain current head.",
+      "The supplied SQLite connection flows through all history reads, verify_drain and observer.check. No second read connection can hide a same-transaction source mutation."
+    ],
+    "attribution": "Root owns resource/wire/consume changes; Pro owns _validate_history connection propagation. This author owns only verify_drain/import and independently read their changes. Runtime owns the three actual product draft-red cases; their reported 10-pass run is not counted as this author's execution.",
+    "limits": [
+      "No full Core/Pro test run performed by this author.",
+      "Bounded stop/handoff profile retains finite history/member limits; no indefinite lifetime or unknown-process adoption claim."
+    ]
+  }
+}
