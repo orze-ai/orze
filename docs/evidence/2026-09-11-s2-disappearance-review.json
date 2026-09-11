@@ -1,0 +1,158 @@
+{
+  "schema": 1,
+  "review": "S2 claim-reader disappearance exception classification",
+  "classification": "test-expectation correction; not a demonstrated product regression",
+  "scope": {
+    "operation": "read-only product review with owned temporary-file fault injection",
+    "baseline_replay": "Two complete fixed reader modules were executed in separate in-memory module namespaces; this is not a whole-application replay.",
+    "candidate": "The actual candidate claim_authority.read_claim_snapshot was imported without replacement.",
+    "exclusions": [
+      "No pytest execution in this diagnostic",
+      "No CPU worker or controller execution",
+      "No product or old-test edits",
+      "No committed baseline artifact edits",
+      "No GPU, provider, or live-project activity"
+    ],
+    "injected_windows": [
+      "After actual bounded read, unlink the test-owned claim path; compare observed FD metadata before and after unlink.",
+      "Inside a transparent os.open hook after preceding reader path checks, unlink the test-owned claim path and delegate the actual OS open."
+    ]
+  },
+  "diagnostic": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "tool": "exec_command",
+    "arguments": {
+      "cmd": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib, importlib, json, os, subprocess, sys, tempfile, types\nfrom pathlib import Path\nfrom unittest.mock import patch\nfrom orze.engine import claim_authority as current\nfrom orze.engine.attempt_effect_lock import AttemptEffectBusy, AttemptEffectInDoubt\n\nbaseline = '694754b0927a251ace72a7600e7338142caa4d49'\npaths = ['src/orze/engine/claim_authority.py', 'src/orze/engine/native_cpu_action.py', 'src/orze/core/cpu_action_budget.py', 'tests/test_claim_reader_consolidation.py']\nhashes = lambda: {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}\nbefore = hashes()\nreaders = []\nfor stem, function, expected in [('claim_authority', 'read_claim', AttemptEffectInDoubt), ('training_attempts', '_read', AttemptEffectBusy)]:\n    importlib.import_module('orze.engine.' + stem)\n    raw = subprocess.check_output(['git', 'show', baseline + ':src/orze/engine/' + stem + '.py'])\n    module = types.ModuleType('orze.engine._s2_baseline_' + stem)\n    module.__package__ = 'orze.engine'\n    sys.modules[module.__name__] = module\n    exec(compile(raw, '<whole-baseline-' + stem + '>', 'exec'), module.__dict__)\n    readers.append((stem, getattr(module, function), expected))\n    print(json.dumps({'baseline_module': stem, 'commit': baseline, 'sha256': hashlib.sha256(raw).hexdigest(), 'bytes': len(raw)}))\nreaders.append(('candidate_snapshot', current.read_claim_snapshot, AttemptEffectBusy))\nresults = []\nwith tempfile.TemporaryDirectory(prefix='orze-s2-disappearance-review-') as directory:\n    for name, reader, expected in readers:\n        for window in ('after_read', 'before_open'):\n            path = Path(directory) / (name + '-' + window + '.json')\n            path.write_bytes(b'{}\\n')\n            real_open, real_read, real_fstat = os.open, os.read, os.fstat\n            opened, witness = [], {}\n            def observed_open(candidate, flags, *args, **kwargs):\n                if Path(candidate) == path and window == 'before_open':\n                    witness['present_before_open_hook'] = path.is_file()\n                    path.unlink()\n                fd = real_open(candidate, flags, *args, **kwargs)\n                if Path(candidate) == path:\n                    opened.append(fd)\n                return fd\n            def observed_read(fd, size):\n                raw = real_read(fd, size)\n                if fd in opened and window == 'after_read':\n                    pre = real_fstat(fd)\n                    path.unlink()\n                    post = real_fstat(fd)\n                    witness.update(nlink_before=pre.st_nlink, nlink_after=post.st_nlink, ctime_changed=pre.st_ctime_ns != post.st_ctime_ns)\n                return raw\n            error = None\n            with patch.object(os, 'open', observed_open), patch.object(os, 'read', observed_read):\n                try:\n                    reader(path)\n                except Exception as exc:\n                    error = exc\n            assert isinstance(error, expected if window == 'after_read' else FileNotFoundError), (name, window, error)\n            result = {'reader': name, 'window': window, 'exception': type(error).__name__, 'message': str(error), 'witness': witness}\n            results.append(result)\n            print(json.dumps(result))\nafter = hashes()\nassert before == after\nprint(json.dumps({'result': 'verified', 'cases': len(results), 'product_and_frozen_test_sha256': after, 'pre_post_exact': True, 'classification': 'after-read unlink expectation was too narrow; actual open errors still propagate'}))\nPY",
+      "workdir": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "max_output_tokens": 5000
+    },
+    "actual_tool_result": {
+      "chunk_id": "99aa15",
+      "wall_time_seconds": 0.016306187,
+      "exit_code": 0,
+      "original_token_count": 605,
+      "output": "{\"baseline_module\": \"claim_authority\", \"commit\": \"694754b0927a251ace72a7600e7338142caa4d49\", \"sha256\": \"e40097c649f48168e2d364a0515d90174d60904004a264e70c95c885e9556c37\", \"bytes\": 6934}\n{\"baseline_module\": \"training_attempts\", \"commit\": \"694754b0927a251ace72a7600e7338142caa4d49\", \"sha256\": \"61b92d7a1edb8d997c863c07cb80c9014f501c242a651f147f925e870987b87d\", \"bytes\": 21487}\n{\"reader\": \"claim_authority\", \"window\": \"after_read\", \"exception\": \"AttemptEffectInDoubt\", \"message\": \"claim_metadata_changed\", \"witness\": {\"nlink_before\": 1, \"nlink_after\": 0, \"ctime_changed\": false}}\n{\"reader\": \"claim_authority\", \"window\": \"before_open\", \"exception\": \"FileNotFoundError\", \"message\": \"[Errno 2] No such file or directory: '/tmp/orze-s2-disappearance-review-ayit61os/claim_authority-before_open.json'\", \"witness\": {\"present_before_open_hook\": true}}\n{\"reader\": \"training_attempts\", \"window\": \"after_read\", \"exception\": \"AttemptEffectBusy\", \"message\": \"training_identity_changed\", \"witness\": {\"nlink_before\": 1, \"nlink_after\": 0, \"ctime_changed\": false}}\n{\"reader\": \"training_attempts\", \"window\": \"before_open\", \"exception\": \"FileNotFoundError\", \"message\": \"[Errno 2] No such file or directory: '/tmp/orze-s2-disappearance-review-ayit61os/training_attempts-before_open.json'\", \"witness\": {\"present_before_open_hook\": true}}\n{\"reader\": \"candidate_snapshot\", \"window\": \"after_read\", \"exception\": \"AttemptEffectBusy\", \"message\": \"claim_metadata_changed\", \"witness\": {\"nlink_before\": 1, \"nlink_after\": 0, \"ctime_changed\": false}}\n{\"reader\": \"candidate_snapshot\", \"window\": \"before_open\", \"exception\": \"FileNotFoundError\", \"message\": \"[Errno 2] No such file or directory: '/tmp/orze-s2-disappearance-review-ayit61os/candidate_snapshot-before_open.json'\", \"witness\": {\"present_before_open_hook\": true}}\n{\"result\": \"verified\", \"cases\": 6, \"product_and_frozen_test_sha256\": {\"src/orze/engine/claim_authority.py\": \"a034f585c5cd25c32f26ea9b233ff1d7e170698d01fc703926c9c4417174659b\", \"src/orze/engine/native_cpu_action.py\": \"a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e\", \"src/orze/core/cpu_action_budget.py\": \"ab5e009a7bc20554ba4d47b6953b0d6b10da90217d415beecd9e287af0c10674\", \"tests/test_claim_reader_consolidation.py\": \"0bbf92f7b3ee1f718703a88b65785af7d7339984c96db51158fb06e0cb5799fb\"}, \"pre_post_exact\": true, \"classification\": \"after-read unlink expectation was too narrow; actual open errors still propagate\"}\n"
+    },
+    "completeness": "Exact original command and complete original exec_command return object copied from this agent's retained tool record; no synthetic timestamp or reconstructed stdout.",
+    "baseline_modules": [
+      {
+        "baseline_module": "claim_authority",
+        "commit": "694754b0927a251ace72a7600e7338142caa4d49",
+        "sha256": "e40097c649f48168e2d364a0515d90174d60904004a264e70c95c885e9556c37",
+        "bytes": 6934
+      },
+      {
+        "baseline_module": "training_attempts",
+        "commit": "694754b0927a251ace72a7600e7338142caa4d49",
+        "sha256": "61b92d7a1edb8d997c863c07cb80c9014f501c242a651f147f925e870987b87d",
+        "bytes": 21487
+      }
+    ],
+    "cases": [
+      {
+        "reader": "claim_authority",
+        "window": "after_read",
+        "exception": "AttemptEffectInDoubt",
+        "message": "claim_metadata_changed",
+        "witness": {
+          "nlink_before": 1,
+          "nlink_after": 0,
+          "ctime_changed": false
+        }
+      },
+      {
+        "reader": "claim_authority",
+        "window": "before_open",
+        "exception": "FileNotFoundError",
+        "message": "[Errno 2] No such file or directory: '/tmp/orze-s2-disappearance-review-ayit61os/claim_authority-before_open.json'",
+        "witness": {
+          "present_before_open_hook": true
+        }
+      },
+      {
+        "reader": "training_attempts",
+        "window": "after_read",
+        "exception": "AttemptEffectBusy",
+        "message": "training_identity_changed",
+        "witness": {
+          "nlink_before": 1,
+          "nlink_after": 0,
+          "ctime_changed": false
+        }
+      },
+      {
+        "reader": "training_attempts",
+        "window": "before_open",
+        "exception": "FileNotFoundError",
+        "message": "[Errno 2] No such file or directory: '/tmp/orze-s2-disappearance-review-ayit61os/training_attempts-before_open.json'",
+        "witness": {
+          "present_before_open_hook": true
+        }
+      },
+      {
+        "reader": "candidate_snapshot",
+        "window": "after_read",
+        "exception": "AttemptEffectBusy",
+        "message": "claim_metadata_changed",
+        "witness": {
+          "nlink_before": 1,
+          "nlink_after": 0,
+          "ctime_changed": false
+        }
+      },
+      {
+        "reader": "candidate_snapshot",
+        "window": "before_open",
+        "exception": "FileNotFoundError",
+        "message": "[Errno 2] No such file or directory: '/tmp/orze-s2-disappearance-review-ayit61os/candidate_snapshot-before_open.json'",
+        "witness": {
+          "present_before_open_hook": true
+        }
+      }
+    ],
+    "final_readback": {
+      "result": "verified",
+      "cases": 6,
+      "product_and_frozen_test_sha256": {
+        "src/orze/engine/claim_authority.py": "a034f585c5cd25c32f26ea9b233ff1d7e170698d01fc703926c9c4417174659b",
+        "src/orze/engine/native_cpu_action.py": "a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e",
+        "src/orze/core/cpu_action_budget.py": "ab5e009a7bc20554ba4d47b6953b0d6b10da90217d415beecd9e287af0c10674",
+        "tests/test_claim_reader_consolidation.py": "0bbf92f7b3ee1f718703a88b65785af7d7339984c96db51158fb06e0cb5799fb"
+      },
+      "pre_post_exact": true,
+      "classification": "after-read unlink expectation was too narrow; actual open errors still propagate"
+    }
+  },
+  "finding": {
+    "after_read_unlink": "All three readers rejected the opened descriptor's nlink transition from 1 to 0 before attempting final path lstat. The two old readers raised their existing InDoubt/Busy validation errors, and the candidate snapshot raised Busy.",
+    "observed_ctime": "The actual diagnostic observed ctime_changed=false in all three after-read cases; nlink alone changed.",
+    "before_open_unlink": "All three readers propagated actual FileNotFoundError from the delegated OS open rather than returning optional absence.",
+    "cause": "The new test required OSError for every disappearance, although the plan required actual OS errors to propagate and did not forbid an earlier identity refusal.",
+    "correction": "Require AttemptEffectBusy for the after-read unlink and add a separate real post-safe_file/pre-open disappearance test requiring FileNotFoundError with required=False.",
+    "product_change_for_this_failure": false
+  },
+  "test_revision": {
+    "path": "tests/test_claim_reader_consolidation.py",
+    "original": {
+      "commit": "ae0f8aeacf31b47588832aa08cf1849487084f88",
+      "git_blob_reference": "ae0f8aeacf31b47588832aa08cf1849487084f88:tests/test_claim_reader_consolidation.py",
+      "sha256": "0bbf92f7b3ee1f718703a88b65785af7d7339984c96db51158fb06e0cb5799fb",
+      "bytes": 10959,
+      "cases": 30,
+      "literal_asserts": 26,
+      "preservation": "Original committed blob remains unchanged."
+    },
+    "revised": {
+      "sha256": "b049d9aeec26567d9ca1a2d7747f4057d73a190794a39f311ae5c858cb5642e0",
+      "bytes": 12281,
+      "cases": 31,
+      "literal_asserts": 28,
+      "modified_function": "TestNewSnapshot.test_after_read_identity_changes_never_return_a_snapshot",
+      "new_function": "TestNewSnapshot.test_disappearance_after_safe_file_before_open_is_os_error",
+      "original_literal_asserts_preserved": 26,
+      "other_original_functions_ast_exact": true,
+      "verification": "AST-only tool chunk 96eabd, exit 0; no pytest run by this agent."
+    },
+    "authority": "Parent explicitly approved only this new-test expectation correction and one additional OS-error case after diagnosis."
+  }
+}

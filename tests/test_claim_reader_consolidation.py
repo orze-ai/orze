@@ -124,6 +124,34 @@ class TestNewSnapshot:
         with pytest.raises(FileNotFoundError):
             authority.read_claim_snapshot(path, required=True)
 
+    def test_disappearance_after_safe_file_before_open_is_os_error(self, tmp_path, monkeypatch):
+        path = tmp_path / "claim.json"
+        path.write_bytes(b"{}")
+        real_safe_file, real_open = authority.safe_file, os.open
+        captured, attempted = [], []
+
+        def observed_safe_file(candidate, **kwargs):
+            info = real_safe_file(candidate, **kwargs)
+            if Path(candidate) == path:
+                captured.append(info)
+            return info
+
+        def disappearing_open(candidate, flags, *args, **kwargs):
+            if Path(candidate) == path:
+                assert len(captured) == 1 and captured[0] is not None
+                attempted.append(path)
+                path.unlink()
+            # Let the actual OS open raise ENOENT, rather than fabricating the
+            # exception or treating a post-capture loss as optional absence.
+            return real_open(candidate, flags, *args, **kwargs)
+
+        monkeypatch.setattr(authority, "safe_file", observed_safe_file)
+        monkeypatch.setattr(authority.os, "open", disappearing_open)
+
+        with pytest.raises(FileNotFoundError):
+            authority.read_claim_snapshot(path, required=False)
+        assert attempted == [path]
+
     @pytest.mark.parametrize("limit", [8192, 65536])
     def test_explicit_size_limits(self, tmp_path, limit):
         path = tmp_path / "claim.json"
@@ -217,8 +245,9 @@ class TestNewSnapshot:
             return raw
 
         monkeypatch.setattr(authority.os, "read", changed_read)
-        rejection = OSError if change == "disappear" else AttemptEffectBusy
-        with pytest.raises(rejection):
+        # Real unlink changes the opened FD's nlink to zero. Both original
+        # readers reject that FD identity before reaching a path lstat error.
+        with pytest.raises(AttemptEffectBusy):
             authority.read_claim_snapshot(path, required=False)
         assert injected == [change]
 
