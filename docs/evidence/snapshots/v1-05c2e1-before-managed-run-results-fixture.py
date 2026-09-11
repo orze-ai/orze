@@ -213,7 +213,6 @@ def test_disabled_orchestrator_exits_before_gpu_lease_or_startup(
             calls.append("lake_close")
 
     runner = Orze.__new__(Orze)
-    runner.results_dir = tmp_path
     runner.gpu_ids = [4]
     runner._gpu_leases = None
     runner.lake = Lake()
@@ -240,7 +239,6 @@ def test_orchestrator_rejects_external_gpu_compute_before_startup(
             calls.append("lease_close")
 
     runner = Orze.__new__(Orze)
-    runner.results_dir = tmp_path
     runner.gpu_ids = [4, 5, 6, 7]
     runner._gpu_leases = None
     runner.lake = None

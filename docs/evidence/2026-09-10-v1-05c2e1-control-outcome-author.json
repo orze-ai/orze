@@ -1,0 +1,227 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e1",
+  "role": "shared explicit control outcome and read-only gate author",
+  "baseline_core_commit": "25e331c9aa06b415603a69fc299b435a51398891",
+  "implementation_scope": {
+    "production": ["src/orze/core/control_outcome.py"],
+    "new_tests": ["tests/test_control_outcome.py", "tests/test_controller_enable_stop_hold.py"],
+    "existing_source_or_test_edits": [],
+    "writes_commits_or_pushes_outside_owned_files": false,
+    "authorization_timing": "The parent explicitly unlocked the pure new module after Pro's public seven-case baseline froze. Core's four-module baseline was still unchanged and subsequently froze at 7 failed / 2 passed. The new shared module did not affect those old callers."
+  },
+  "classification": {
+    "distinct_owned_tests": 11,
+    "new_mechanisms_first_green": 10,
+    "preceding_commit_public_behavior_reds_owned": 0,
+    "draft_regressions_owned": 1,
+    "missing_api_red_runs": 0,
+    "note": "No missing-module or unsupported-API failure was run or counted. Ten status/gate tests are new mechanisms. One additional independent cross-entry test demonstrates a defect in the current C2e1 CLI candidate, not in the preceding implementation commit. Independent original public stop/orphan baselines belong to runtime_evidence and pro_review."
+  },
+  "api": {
+    "module": "orze.core.control_outcome",
+    "symbols": ["StopOutcome", "ControllerStopHOLD", "STOP_SENTINELS", "require_controller_start_allowed"],
+    "stop_outcome": "Frozen dataclass with exact fields status and reason_code; status is an exact str requested|hold|confirmed; reason is a lowercase stable token of 1..64 characters. All implicit truth-value use raises TypeError.",
+    "gate": "require_controller_start_allowed(results_dir) performs lstat on the three existing stop sentinels. Any existing marker, including dangling symlinks, refuses. Unverifiable I/O also refuses. Missing paths cause no mkdir, marker write, marker removal, process observation, signal, or lease change.",
+    "authority_limit": "A StopOutcome, including a confirmed label, is not process-closure proof. This module exposes no is_confirmed permission helper, no adoption API, and no positive controller restart authority."
+  },
+  "contract_document": {
+    "path": "docs/controller-stop-refusal.md",
+    "sha256": "39364469d87be4c49957f14fab627ed30f078431a28993841e0b628857a34d7f",
+    "previous_sha256": "fba860e31ea1d16854b9fbac9ec748eae782122b581f35e44db927b7067d4c88",
+    "authorship": "Written by this shared-module author; describes the joint refusal boundary and its deliberately incomplete positive controller lifecycle. The final revision explicitly includes the separate public upgrade subcommand after its implementation was corrected; it does not relabel earlier caller runs."
+  },
+  "files": {
+    "src/orze/core/control_outcome.py": "517d4626e4e69c13dbbe6877336dbad88137bdc3081b04403a16f384d208f8b1",
+    "tests/test_control_outcome.py": "7fd25c1339eb8f8a6f1305c8793b67d45346e91b181d5421c24fe228e4bf61c7",
+    "tests/test_controller_enable_stop_hold.py": "144a1f5f60e41b62754f4e42313caf3f89485c294782c0a62ea9a28abf51460a"
+  },
+  "actual_runs": [
+    {
+      "label": "new_mechanism_first_green",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_control_outcome.py --tb=short",
+      "passed": 10,
+      "failed": 0,
+      "seconds": 0.13,
+      "exit_code": 0,
+      "tool_chunk_id": "64f796",
+      "hash_timing": "Owned source and test hashes were captured after this first run; no unobserved prehash is claimed."
+    },
+    {
+      "label": "owned_handle_compatibility_bounded_run",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_control_outcome.py tests/test_native_shutdown_publication.py tests/test_shutdown_termination_authority.py tests/test_evaluation_supervision_shutdown.py tests/test_native_training_shutdown_boundaries.py tests/test_role_shutdown_reaping.py --tb=short",
+      "passed": 47,
+      "failed": 0,
+      "seconds": 12.85,
+      "exit_code": 0,
+      "session_id": 73751,
+      "hash_timing": "All ten entries in owned_handle_compatibility_hashes were observed equal before and after this run.",
+      "scope_note": "Ten new shared mechanisms and 37 existing owned-handle shutdown tests. Core CLI caller changes were still in progress; this is not their final acceptance epoch. It is not added to the first ten as distinct cases."
+    },
+    {
+      "label": "partial_stop_request_enable_candidate_regression",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_controller_enable_stop_hold.py --tb=short",
+      "passed": 0, "failed": 1, "seconds": 0.17, "exit_code": 1,
+      "tool_chunk_id": "0f25f2",
+      "scope_note": "Real temporary filesystem: actual do_stop publishes disabled, controlled second-marker atomic_write failure returns HOLD, then actual CLI --enable removes the sole latch. The failed assertion is latch.exists(), not an API or fixture setup failure."
+    },
+    {
+      "label": "partial_stop_enable_complete_cli_snapshot_replay",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -c \"import pathlib, pytest; import orze.cli as module; path=pathlib.Path('docs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py'); exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__); raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_controller_enable_stop_hold.py', '--tb=short']))\"",
+      "passed": 0, "failed": 1, "seconds": 0.13, "exit_code": 1,
+      "tool_chunk_id": "91925d",
+      "scope_note": "Complete CLI module replay against current dependencies, not a whole baseline checkout replay. The same sole-latch preservation assertion failed."
+    },
+    {
+      "label": "post_fix_bounded_caller_review",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_control_outcome.py tests/test_controller_enable_stop_hold.py tests/test_cli_stop_authority.py tests/test_cluster_orphan_authority.py tests/test_controller_runtime_cli.py --tb=short",
+      "passed": 28, "failed": 0, "seconds": 0.60, "exit_code": 0,
+      "tool_chunk_id": "50fcaa",
+      "scope_note": "Own ten mechanisms, the unchanged enable regression's first post-fix green, runtime's original nine public cases, and eight existing controller-runtime tests. No Pro tests or full-repository suite was run by this author.",
+      "hash_timing": "All twelve entries in post_fix_review_hashes were observed identical before and after this run. Pro director is a read-reviewed source inventory entry only, not evidence of a Pro test run."
+    },
+    {
+      "label": "latest_source_bounded_caller_review",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_control_outcome.py tests/test_controller_enable_stop_hold.py tests/test_cli_stop_authority.py tests/test_cluster_orphan_authority.py tests/test_controller_runtime_cli.py --tb=short",
+      "passed": 28, "failed": 0, "seconds": 0.83, "exit_code": 0,
+      "tool_chunk_id": "fcefc5",
+      "scope_note": "Same unchanged 28 tests, rerun after the parent changed lifecycle/cli_setup. Earlier 28/.60 remains historical, not silently relabeled.",
+      "hash_timing": "The six Core production entries in latest_core_source_hashes were captured immediately before and after this run and matched. All five tests and Pro director were post-run checked against their unchanged prior inventory; no new Pro test run is claimed."
+    }
+  ],
+  "latest_core_source_hashes": {
+    "src/orze/core/control_outcome.py": "517d4626e4e69c13dbbe6877336dbad88137bdc3081b04403a16f384d208f8b1",
+    "src/orze/lifecycle.py": "f0a22c5e9049cfb7b53f7922f6e4fe1c32912952b18eef6819b7ca574a129784",
+    "src/orze/cli.py": "b73b56bb2ae03bd2bec500e04ca954f67d96ab153d4ea80feaaf2779090806cf",
+    "src/orze/cli_setup.py": "b05fdbbf8980d77592a904b22a37c86606c92a96fea70e1cb7a1a8c47f8663aa",
+    "src/orze/engine/orchestrator.py": "b6909d30ecb6f5831ebb14e327f8a6432c0aaeefc86fcc9296218b9ed9f960fc",
+    "src/orze/engine/cluster.py": "d5737ba4dc8fd0a5da15cd17bc84caf40cf853d77b15adabba34869e3811d920"
+  },
+  "latest_read_review_update": {
+    "conclusion": "No additional blocker found at latest_core_source_hashes; unchanged scope and limitations apply.",
+    "read_scope": "Full current lifecycle module, cli_setup header and stop-helper/upgrade/reinstall call boundaries; other Core and Pro source hashes remained as previously reviewed.",
+    "changes_not_misclassified_as_comments_only": [
+      "Request marker readback is now bounded, nonblocking and no-follow, with regular-file/size and FD/path identity checks.",
+      "Fresh start rechecks the shared gate after log opening or immediately before foreground exec.",
+      "Stale descriptions of SIGTERM cleanup and automatic marker deletion were corrected."
+    ]
+  },
+  "post_fix_review_hashes": {
+    "src/orze/core/control_outcome.py": "517d4626e4e69c13dbbe6877336dbad88137bdc3081b04403a16f384d208f8b1",
+    "src/orze/lifecycle.py": "3cd824a9a8cd62e747c93597897cfc3d83162d2e4b364322bb171f88bef21c75",
+    "src/orze/cli.py": "b73b56bb2ae03bd2bec500e04ca954f67d96ab153d4ea80feaaf2779090806cf",
+    "src/orze/cli_setup.py": "13d85d96df42aac70e3819cbf904ddb3808b14dd124e4fec0e862a8b58b5c128",
+    "src/orze/engine/orchestrator.py": "b6909d30ecb6f5831ebb14e327f8a6432c0aaeefc86fcc9296218b9ed9f960fc",
+    "src/orze/engine/cluster.py": "d5737ba4dc8fd0a5da15cd17bc84caf40cf853d77b15adabba34869e3811d920",
+    "../orze-pro/src/orze_pro/agents/director.py": "80112f34b6b4c518181b2b6213af20fe999cf16ba669d8a31ae9060a5202a0a1",
+    "tests/test_control_outcome.py": "7fd25c1339eb8f8a6f1305c8793b67d45346e91b181d5421c24fe228e4bf61c7",
+    "tests/test_controller_enable_stop_hold.py": "144a1f5f60e41b62754f4e42313caf3f89485c294782c0a62ea9a28abf51460a",
+    "tests/test_cli_stop_authority.py": "895ee24a621fffb6754de40eaaf3d79850daa9374590da6b2fccd55309df3992",
+    "tests/test_cluster_orphan_authority.py": "dcf7fdb13eacba0e937200cc17b9c217aa6d7899b1128f2738c91df90285f2cf",
+    "tests/test_controller_runtime_cli.py": "5ad1a6eb6b9a7d1ab3eee49892df0162bd19ba6ca099c8a575f67ff40c7dee2e"
+  },
+  "enable_stop_hold_draft": {
+    "snapshot": "docs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py",
+    "snapshot_sha256": "2c71ad0783a18915cb5f061a55a957ff9c288075c8d97dd23fbe6b9c6e79fdc3",
+    "provenance": "Complete current CLI source captured using apply_patch before the actual failing run, byte-identical SHA to the live file. Parent held CLI changes while this independent case froze.",
+    "observed_pre_post_equal_during_first_red": {
+      "src/orze/cli.py": "2c71ad0783a18915cb5f061a55a957ff9c288075c8d97dd23fbe6b9c6e79fdc3",
+      "src/orze/lifecycle.py": "3cd824a9a8cd62e747c93597897cfc3d83162d2e4b364322bb171f88bef21c75",
+      "tests/test_controller_enable_stop_hold.py": "144a1f5f60e41b62754f4e42313caf3f89485c294782c0a62ea9a28abf51460a"
+    },
+    "fix_owner": "root; this author only wrote the independent frozen regression and source snapshot",
+    "fix_review": "Actual CLI --enable now verifies controller runtime then applies the shared three-marker gate. It neither deletes the sole disabled marker nor reclassifies a partial request as confirmed. The original test assertions were not edited."
+  },
+  "owned_handle_compatibility_hashes": {
+    "src/orze/core/control_outcome.py": "517d4626e4e69c13dbbe6877336dbad88137bdc3081b04403a16f384d208f8b1",
+    "src/orze/engine/lifecycle.py": "4ea8b94e16928403f4bf8298f3319e68717af22b932516dcdbc110c2a12a50eb",
+    "src/orze/engine/shutdown_publication.py": "13111d9ca88e56fea82dec95fb9a8f2c5c4a4e5f6e8976fb689cbcebaff07014",
+    "src/orze/engine/process.py": "08bbd7ae0352708b815089b4183f69dbb89488fc510fac1d142c1702d6af4d6e",
+    "tests/test_control_outcome.py": "7fd25c1339eb8f8a6f1305c8793b67d45346e91b181d5421c24fe228e4bf61c7",
+    "tests/test_native_shutdown_publication.py": "0cb9070ad879e481ab8d74f71b3bf2dca1ef5de184d52d34162252693521422c",
+    "tests/test_shutdown_termination_authority.py": "17bc5750f8ac8c9df2cc6bb35202d3e38c30ee1e799476fa3c6e003c06fff4b8",
+    "tests/test_evaluation_supervision_shutdown.py": "4ae1848681e3c31d18e17addc0c3e76721afc40e7c1370a6171c4788b7c38e0b",
+    "tests/test_native_training_shutdown_boundaries.py": "97f38baf61934028324b77109105edd74386d2c54b66d90de312b2f3c48cef7d",
+    "tests/test_role_shutdown_reaping.py": "24724a301ed949319efd92c0d45105a73277142c9f1bbbcc7b5c76a4cabb7961"
+  },
+  "coverage": [
+    "All three status labels are explicit frozen metadata.",
+    "Invalid status values and non-token/overlong reasons are refused.",
+    "No status label can be used as an implicit boolean.",
+    "An unmarked existing directory and a missing results directory are checked without modification or directory creation.",
+    "Each of the three existing sentinels refuses without interpreting its text, deleting it, or changing its inode/mtime/ctime.",
+    "A dangling sentinel symlink is present, not an absent target.",
+    "A controlled PermissionError during lstat is HOLD rather than absence; this is an explicit I/O fault injection, not a real host permission experiment."
+  ],
+  "preimplementation_read_review": {
+    "scope": [
+      "src/orze/engine/lifecycle.py::_stop_for_shutdown/graceful_shutdown/atexit_cleanup",
+      "src/orze/engine/shutdown_publication.py::handle_shutdown",
+      "src/orze/lifecycle.py::do_stop/do_start/do_restart",
+      "src/orze/cli.py::stop/start/restart/legacy --restart/--enable",
+      "src/orze/core/managed_run.py::prepare_managed_idea_run",
+      "src/orze/cli_setup.py::_runnable_blockers/stop_running_instance",
+      "src/orze/engine/orchestrator.py::run/_run_leased"
+    ],
+    "findings_delivered_to_parent": [
+      "Native handle_shutdown True includes stale-delivery no-op, so it is not controller-wide tree closure. Its exact ref/protocol and outer/inner TREE_CLOSED checks must remain unchanged.",
+      "Existing graceful shutdown can remove its PID file and write shutdown state while retaining held handles. Neither marker nor controller PID disappearance is an external stop ACK.",
+      "managed_run and cli_setup runnable checks already reject all three markers; they do not clear them. The actual automatic clear was in lifecycle.do_start and orchestrator._run_leased.",
+      "Legacy CLI --restart separately calls cli_setup.stop_running_instance, which is also used by upgrade/reinstall. Typed outcomes must not become implicit booleans or allow package mutation after unknown stop."
+    ],
+    "limit": "These are read-only design findings against the baseline, not a final independent audit of the parent's later caller edits. No host process scan, signal, provider, GPU operation, or holdout was used."
+  },
+  "post_fix_independent_read_review": {
+    "conclusion": "No remaining blocker identified in the reviewed C2e1 refusal scope at the exact post_fix_review_hashes.",
+    "checks": [
+      "Core do_stop is request-only and returns requested/HOLD; bare PID, parent-child enumeration and GPU-name cleanup compatibility functions no longer signal processes.",
+      "Core do_start and Orze.run apply the shared gate before PID/lease/launch side effects and no longer automatically clear the old stop markers. Direct managed/check/launcher marker refusals remain unchanged.",
+      "Both restart entry points reject even unexpected legacy returns or an unqualified confirmed label. Runtime contract validation remains independent of invoking do_start.",
+      "Legacy stop_running_instance requests a cooperative stop then raises ControllerStopHOLD. Upgrade/reinstall retain their prior implementation bodies but the actual helper interrupts before package mutation; CLI catches HOLD explicitly.",
+      "The independently discovered partial-request --enable bypass is closed without changing its frozen assertion.",
+      "Pro director's actual start applies the shared gate and does not perform GPU-name orphan scanning or marker removal. Restart/resume/pause/reallocation remain blocked without starting replacements, persisting reassignment, or claiming successful control completion."
+    ],
+    "limits": "Read review of Core caller and Pro director edits, not authorship of those edits and not a Pro test run. Existing owned-native closure adapters were not changed. Unrelated uninstall/self-upgrade legacy paths are outside this bounded slice; positive controller registration, qualified stop ACK, recovery and adoption remain unimplemented here."
+  },
+  "public_upgrade_final_review": {
+    "discovery_and_fix_ownership": "runtime_evidence identified and froze three public upgrade cases; root replaced the separate CLI branch. This shared-module author independently read the fix and ran the frozen cases with the preceding 28-case bounded group. No production or test was edited for this final review.",
+    "historical_scope_correction": "The earlier latest_core_source_hashes, latest_read_review_update and 28-case runs remain historical at CLI b73b56bb. Their upgrade/reinstall checks concerned cli_setup stop-helper consumers and did not establish safety of the separate public upgrade subcommand. The later public-subcommand finding supersedes any broader reading of those earlier bounded conclusions; none of their results is relabeled as a d963afa CLI run.",
+    "classification": "The three public-upgrade regressions belong to runtime_evidence's C2e1 candidate review, not this author's eleven owned tests. This author did not run their pre-fix reds or count missing APIs as failures.",
+    "actual_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_control_outcome.py tests/test_controller_enable_stop_hold.py tests/test_cli_stop_authority.py tests/test_cluster_orphan_authority.py tests/test_controller_runtime_cli.py tests/test_cli_upgrade_stop_authority.py --tb=short",
+      "passed": 31,
+      "failed": 0,
+      "seconds": 0.93,
+      "exit_code": 0,
+      "tool_chunk_id": "5e1770",
+      "hash_timing": "All twelve source/test entries below were captured immediately before and after this run and matched. The document was then revised separately, not claimed as a pre/post test inventory item.",
+      "scope_note": "The same frozen 28-case caller group plus the three new public-upgrade cases. These overlapping runs are not added as distinct cases; no whole-repository or Pro test run is claimed."
+    },
+    "final_bounded_hashes": {
+      "src/orze/core/control_outcome.py": "517d4626e4e69c13dbbe6877336dbad88137bdc3081b04403a16f384d208f8b1",
+      "src/orze/lifecycle.py": "f0a22c5e9049cfb7b53f7922f6e4fe1c32912952b18eef6819b7ca574a129784",
+      "src/orze/cli.py": "d963afaeadba4c64daa9266735162be2895572412b339531c4424b1a27f92b4a",
+      "src/orze/cli_setup.py": "b05fdbbf8980d77592a904b22a37c86606c92a96fea70e1cb7a1a8c47f8663aa",
+      "src/orze/engine/orchestrator.py": "b6909d30ecb6f5831ebb14e327f8a6432c0aaeefc86fcc9296218b9ed9f960fc",
+      "src/orze/engine/cluster.py": "d5737ba4dc8fd0a5da15cd17bc84caf40cf853d77b15adabba34869e3811d920",
+      "tests/test_control_outcome.py": "7fd25c1339eb8f8a6f1305c8793b67d45346e91b181d5421c24fe228e4bf61c7",
+      "tests/test_controller_enable_stop_hold.py": "144a1f5f60e41b62754f4e42313caf3f89485c294782c0a62ea9a28abf51460a",
+      "tests/test_cli_stop_authority.py": "895ee24a621fffb6754de40eaaf3d79850daa9374590da6b2fccd55309df3992",
+      "tests/test_cluster_orphan_authority.py": "dcf7fdb13eacba0e937200cc17b9c217aa6d7899b1128f2738c91df90285f2cf",
+      "tests/test_controller_runtime_cli.py": "5ad1a6eb6b9a7d1ab3eee49892df0162bd19ba6ca099c8a575f67ff40c7dee2e",
+      "tests/test_cli_upgrade_stop_authority.py": "e5d551a0068bd2fdd7c15408474217c7d45c2308003294b9d7300c8b60b63053"
+    },
+    "read_review": {
+      "conclusion": "No blocker found in this final public-upgrade refusal change and its interaction with the frozen shared gate/status component.",
+      "checks": [
+        "The complete former public upgrade package-install, bare-daemon-PID signal, PID unlink and replacement Popen branch is removed, not left behind a flag-specific branch.",
+        "The public default, --no-reinstall and --no-restart variants all load config, call actual do_stop and return 75. No label or boolean result from do_stop is consumed as closure authority.",
+        "Legacy --upgrade and --reinstall still use stop_running_instance's explicit HOLD before package mutation; the contract now distinguishes these flags from the public subcommand.",
+        "CLI help no longer promises automatic marker removal or confirmed kill/restart/installation completion for these request-only paths."
+      ],
+      "limits": "Real CLI dispatch and temporary request/PID files with explicit package/process boundary spies. No package manager, real signal, host scan, replacement controller, GPU or provider was invoked. Uninstall and internal self-upgrade remain outside this bounded review; no positive stop ACK or adoption is implemented."
+    },
+    "final_contract_sha256": "39364469d87be4c49957f14fab627ed30f078431a28993841e0b628857a34d7f"
+  },
+  "completion_limit": "This is the shared negative-admission/status component of C2e1, not the complete positive controller registration/stop-ACK/adoption product. No whole-Core, Pro, or paired test result is claimed by this author."
+}

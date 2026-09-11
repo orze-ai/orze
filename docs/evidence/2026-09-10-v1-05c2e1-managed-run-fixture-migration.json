@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e1",
+  "kind": "Explicit compatibility fixture migration after first full epoch",
+  "classification": "Two incomplete Orze.__new__ fixtures, not a process-stop product defect or two new product-red tests.",
+  "baseline_core_commit": "25e331c9aa06b415603a69fc299b435a51398891",
+  "ownership": {
+    "edited_existing_test": "tests/test_managed_run.py",
+    "production_edits": [],
+    "other_test_edits": [],
+    "commits_or_pushes": false
+  },
+  "cause": "The new run-entry stop gate reads self.results_dir. Real Orze.__init__ unconditionally assigns Path(cfg['results_dir']) at src/orze/engine/orchestrator.py:132. The two test objects bypass __init__ and lacked that invariant.",
+  "snapshot": {
+    "path": "docs/evidence/snapshots/v1-05c2e1-before-managed-run-results-fixture.py",
+    "sha256": "fe0ee3aa76bf4a252f59334e1c20355b6b5a7afc27da7a6592a01c2ebfdca57b",
+    "provenance": "Complete live test file captured with apply_patch before either fixture edit; the snapshot, live pre-edit file, and exact git baseline test blob had the same SHA-256.",
+    "baseline_check_command": "git show 25e331c9aa06b415603a69fc299b435a51398891:tests/test_managed_run.py | sha256sum",
+    "baseline_check_exit_code": 0
+  },
+  "migration": {
+    "added_statement": "runner.results_dir = tmp_path",
+    "added_statement_count": 2,
+    "functions": [
+      "test_disabled_orchestrator_exits_before_gpu_lease_or_startup",
+      "test_orchestrator_rejects_external_gpu_compute_before_startup"
+    ],
+    "placement": "Immediately after runner = Orze.__new__(Orze) in each target function.",
+    "final_test_sha256": "ad5346326960172370b875f82a5476b8c7f8788de30eb4375a8e36d11b6d1e3c",
+    "assertions_or_existing_setup_replaced": false
+  },
+  "actual_runs": [
+    {
+      "label": "original_unmodified_two_cases_on_current_production",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_managed_run.py::test_disabled_orchestrator_exits_before_gpu_lease_or_startup tests/test_managed_run.py::test_orchestrator_rejects_external_gpu_compute_before_startup --tb=short",
+      "session_id": 40332,
+      "passed": 0,
+      "failed": 2,
+      "seconds": 0.88,
+      "exit_code": 1,
+      "actual_failure": "Both raise AttributeError: 'Orze' object has no attribute 'results_dir' at orchestrator.py:954, before the tests reach their original disabled/external-GPU fault boundaries.",
+      "scope_note": "Original baseline-identical test file replayed on the current new implementation, not an old-production checkout replay."
+    },
+    {
+      "label": "whole_managed_run_file_after_only_two_assignments",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_managed_run.py --tb=short",
+      "session_id": 95641,
+      "passed": 45,
+      "failed": 0,
+      "seconds": 2.07,
+      "exit_code": 0
+    }
+  ],
+  "observed_production_pre_post_unchanged": {
+    "src/orze/engine/orchestrator.py": "b6909d30ecb6f5831ebb14e327f8a6432c0aaeefc86fcc9296218b9ed9f960fc",
+    "src/orze/core/control_outcome.py": "517d4626e4e69c13dbbe6877336dbad88137bdc3081b04403a16f384d208f8b1"
+  },
+  "audits": [
+    {
+      "kind": "complete_AST_and_all_assertions",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast\nimport hashlib\nimport json\nfrom pathlib import Path\n\nbefore_path = Path('docs/evidence/snapshots/v1-05c2e1-before-managed-run-results-fixture.py')\nafter_path = Path('tests/test_managed_run.py')\nbefore_raw, after_raw = before_path.read_bytes(), after_path.read_bytes()\nbefore, after = ast.parse(before_raw), ast.parse(after_raw)\ntargets = {\n    'test_disabled_orchestrator_exits_before_gpu_lease_or_startup',\n    'test_orchestrator_rejects_external_gpu_compute_before_startup',\n}\nexpected = ast.dump(ast.parse('runner.results_dir = tmp_path').body[0], include_attributes=False)\nremoved = []\nfor node in after.body:\n    if isinstance(node, ast.FunctionDef) and node.name in targets:\n        matches = [i for i, statement in enumerate(node.body)\n                   if ast.dump(statement, include_attributes=False) == expected]\n        assert len(matches) == 1, (node.name, matches)\n        index = matches[0]\n        assert isinstance(node.body[index - 1], ast.Assign)\n        assert ast.unparse(node.body[index - 1]) == 'runner = Orze.__new__(Orze)'\n        removed.append(node.name)\n        del node.body[index]\nassert set(removed) == targets\nnormalized_before = ast.dump(before, include_attributes=False)\nnormalized_after = ast.dump(after, include_attributes=False)\nassert normalized_before == normalized_after\noriginal_assertions = [ast.dump(node, include_attributes=False)\n                       for node in ast.walk(before) if isinstance(node, ast.Assert)]\nnew_assertions = [ast.dump(node, include_attributes=False)\n                  for node in ast.walk(ast.parse(after_raw)) if isinstance(node, ast.Assert)]\nassert original_assertions == new_assertions\nprint(json.dumps({\n    'before_sha256': hashlib.sha256(before_raw).hexdigest(),\n    'after_sha256': hashlib.sha256(after_raw).hexdigest(),\n    'added_assignment_count': len(removed),\n    'functions': sorted(removed),\n    'all_other_ast_equal': True,\n    'assert_count_before': len(original_assertions),\n    'assert_count_after': len(new_assertions),\n    'assert_asts_in_order_equal': True,\n    'normalized_complete_ast_sha256': hashlib.sha256(normalized_before.encode()).hexdigest(),\n}, sort_keys=True, indent=2))\nPY\nsha256sum src/orze/engine/orchestrator.py src/orze/core/control_outcome.py tests/test_managed_run.py\ngit diff -- tests/test_managed_run.py",
+      "exit_code": 0,
+      "tool_chunk_id": "f85e3a",
+      "original_assertions": 54,
+      "final_assertions": 54,
+      "assert_AST_order_identical": true,
+      "whole_other_AST_identical_after_removing_only_the_two_expected_assignments": true,
+      "normalized_AST_sha256": "a57e420ea7026fbb136ca101ae7b9989a68193102fa69a61a167db08e602d880"
+    },
+    {
+      "kind": "all_other_bytes",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast\nimport hashlib\nimport json\nfrom pathlib import Path\nbefore = Path('docs/evidence/snapshots/v1-05c2e1-before-managed-run-results-fixture.py').read_bytes()\nafter = Path('tests/test_managed_run.py').read_bytes()\nmodule = ast.parse(after)\nnames = {'test_disabled_orchestrator_exits_before_gpu_lease_or_startup', 'test_orchestrator_rejects_external_gpu_compute_before_startup'}\nline_numbers = []\nfor function in module.body:\n    if isinstance(function, ast.FunctionDef) and function.name in names:\n        added = [node for node in function.body if ast.unparse(node) == 'runner.results_dir = tmp_path']\n        assert len(added) == 1\n        line_numbers.append(added[0].lineno)\nlines = after.splitlines(keepends=True)\nassert len(line_numbers) == 2\nfor number in sorted(line_numbers, reverse=True):\n    assert lines[number - 1] == b'    runner.results_dir = tmp_path\\n'\n    del lines[number - 1]\nnormalized = b''.join(lines)\nassert normalized == before\nprint(json.dumps({'removed_line_numbers': sorted(line_numbers), 'all_other_bytes_equal': True, 'normalized_sha256': hashlib.sha256(normalized).hexdigest()}, sort_keys=True))\nPY",
+      "exit_code": 0,
+      "tool_chunk_id": "7b1578",
+      "removed_added_line_numbers": [
+        216,
+        243
+      ],
+      "remaining_bytes_identical_to_original": true,
+      "normalized_sha256": "fe0ee3aa76bf4a252f59334e1c20355b6b5a7afc27da7a6592a01c2ebfdca57b"
+    }
+  ],
+  "limits": "This author ran only the two original cases and the complete 45-case managed-run file. The parent's first full-repository epoch remains separately archived as failed; no whole-Core/Pro/paired result is claimed here. Production and all other source/tests were untouched by this migration.",
+  "freeze_status": "Only the one test file changed relative to the parent epoch-1 source/test inventory; its final hash was sent to the parent before epoch 2. The snapshot and this support report are documentation additions."
+}

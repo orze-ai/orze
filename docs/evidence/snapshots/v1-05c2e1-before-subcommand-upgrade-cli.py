@@ -155,13 +155,13 @@ Examples:
     parser.add_argument("--once", action="store_true",
                         help="Run one cycle and exit")
     parser.add_argument("--stop", action="store_true",
-                        help="Request cooperative stop; unconfirmed closure returns 75")
+                        help="Gracefully stop a running orze instance")
     parser.add_argument("--restart", action="store_true",
-                        help="Request stop; replacement waits for qualified closure (75)")
+                        help="Stop the running instance and start a new one")
     parser.add_argument("--disable", action="store_true",
                         help="Stop and persistently disable Orze (survives restarts)")
     parser.add_argument("--enable", action="store_true",
-                        help="Check enable admission; pending stop markers are preserved")
+                        help="Remove persistent disable flag to allow Orze to run")
     parser.add_argument("--report-only", action="store_true",
                         help="Only regenerate report")
     parser.add_argument("--role-only", type=str, default=None, metavar="NAME",
@@ -183,10 +183,12 @@ Examples:
     parser.add_argument("--no-admin", action="store_true",
                         help="Do not start the background admin panel")
     parser.add_argument("--upgrade", action="store_true",
-                        help="Request upgrade; installation requires confirmed stop (75)")
+                        help="Upgrade orze to the latest version from PyPI")
     parser.add_argument("--reinstall", action="store_true",
-                        help="Request reinstall; confirmed stop is required before "
-                             "package changes or restart (75 while unconfirmed)")
+                        help="Deep clean + fresh install: uninstall from every "
+                             "reachable Python env, purge stale dist-info and "
+                             "__pycache__, reinstall, verify single clean version, "
+                             "restart. Fixes drift from partial upgrades.")
     parser.add_argument("--reinstall-orze-version", type=str, default=None,
                         metavar="VER", help="Pin orze version for --reinstall")
     parser.add_argument("--reinstall-pro-version", type=str, default=None,
@@ -195,7 +197,7 @@ Examples:
                         metavar="URL",
                         help="Extra pip index URL for --reinstall (e.g. private PyPI)")
     parser.add_argument("--no-restart", action="store_true",
-                        help="Compatibility option; does not bypass confirmed-stop admission")
+                        help="Skip restart after --reinstall")
     parser.add_argument("--check", action="store_true",
                         help="Validate config, check files, API keys, GPUs, .env — then exit")
     parser.add_argument(
@@ -213,11 +215,12 @@ Examples:
 
     # stop
     stop_parser = subparsers.add_parser(
-        "stop", help="Request cooperative stop; closure remains unconfirmed (75)")
+        "stop", help="Stop orze: kill orchestrator + children, "
+                     "disable watchdog, clean up GPUs")
     stop_parser.add_argument("-c", "--config-file", type=str, default=None,
                              help="Path to orze.yaml")
     stop_parser.add_argument("--timeout", type=int, default=60,
-                             help="Compatibility timeout; request-only stop does not wait")
+                             help="Timeout for child processes (default: 60)")
 
     # resume — explicit, hash-validated checkpoint re-admission
     resume_parser = subparsers.add_parser(
@@ -299,13 +302,13 @@ Examples:
 
     # restart
     restart_parser = subparsers.add_parser(
-        "restart", help="Request stop; no replacement until qualified closure (75)")
+        "restart", help="Stop then start orze")
     restart_parser.add_argument("-c", "--config-file", type=str, default=None,
                                 help="Path to orze.yaml")
     restart_parser.add_argument("--gpus", type=str, default=None,
                                 help="Comma-separated GPU IDs (default: auto-detect)")
     restart_parser.add_argument("--timeout", type=int, default=60,
-                                help="Compatibility timeout; request-only stop does not wait")
+                                help="Timeout for child processes (default: 60)")
     restart_parser.add_argument("--foreground", action="store_true",
                                 help="Run in foreground after restart")
 
@@ -538,17 +541,17 @@ Examples:
     init_parser.add_argument("path", nargs="?", default=None,
                              help="Project directory (default: current directory)")
 
-    # --- upgrade: package changes require qualified controller closure ---
+    # --- upgrade: one-liner to reinstall orze + orze-pro and restart daemon ---
     upgrade_parser = subparsers.add_parser(
         "upgrade",
-        help="Request upgrade; package changes and restart await confirmed stop (75)"
+        help="Reinstall orze + orze-pro from source and restart daemon if running"
     )
     upgrade_parser.add_argument("-c", "--config-file", type=str, default=None,
                                 help="Path to orze.yaml")
     upgrade_parser.add_argument("--no-reinstall", action="store_true",
-                                help="Compatibility option; cannot bypass confirmed-stop admission")
+                                help="Skip pip reinstall (only restart daemon)")
     upgrade_parser.add_argument("--no-restart", action="store_true",
-                                help="Compatibility option; cannot authorize an unconfirmed package change")
+                                help="Skip daemon restart (only reinstall)")
 
     args = parser.parse_args()
 
@@ -645,15 +648,161 @@ Examples:
         return 0
 
     if command == "upgrade":
-        # The public subcommand has its own historical package/daemon path.
-        # Neither skipping reinstall nor skipping restart proves that the old
-        # controller and its writers are closed. Do not mutate the installation
-        # or signal/relaunch a daemon until a qualified closure consumer exists.
-        from orze.lifecycle import do_stop
+        import importlib.util
+        import signal
+        import subprocess
+        import sys
+        import time
+
+        # Load config to get orze_dir for daemon PID
         cfg = load_project_config(args.config_file)
-        do_stop(cfg)
-        print("HOLD: upgrade requires confirmed controller stop; no packages changed")
-        return 75
+        orze_dir = Path(cfg.get("_orze_dir", ".orze"))
+
+        def _editable_project_root(pkg_name: str):
+            """Return the project root (containing pyproject.toml/setup.py) for an
+            editable install of `pkg_name`, or None for a regular site-packages install."""
+            spec = importlib.util.find_spec(pkg_name)
+            if not spec or not spec.submodule_search_locations:
+                return None
+            pkg_dir = Path(spec.submodule_search_locations[0])
+            for parent in pkg_dir.parents:
+                if parent.name == "site-packages":
+                    return None  # regular install, not editable
+                if (parent / "pyproject.toml").exists() or (parent / "setup.py").exists():
+                    return parent
+            return None
+
+        def _pip_install(args_list, label):
+            """Run pip in the *current* interpreter; propagate failure.
+
+            Redacts any embedded basic-auth credentials in printed args so
+            license keys never leak to stdout / logs.
+            """
+            from orze.extensions import redact_basic_auth
+            cmd = [sys.executable, "-m", "pip", "install", *args_list]
+            redacted = [redact_basic_auth(a) for a in cmd]
+            print(f"Running: {' '.join(redacted)}")
+            rc = subprocess.run(cmd).returncode
+            if rc != 0:
+                print(f"ERROR: {label} install failed with code {rc}")
+            return rc
+
+        # Step 1: Reinstall / upgrade packages
+        if not args.no_reinstall:
+            # --- orze ---
+            if importlib.util.find_spec("orze") is None:
+                print("ERROR: orze not importable from this interpreter.")
+                return 1
+            orze_root = _editable_project_root("orze")
+            if orze_root:
+                print(f"Reinstalling orze (editable) from {orze_root}...")
+                rc = _pip_install(
+                    ["--force-reinstall", "--no-deps", "-e", str(orze_root)],
+                    "orze",
+                )
+            else:
+                print("Upgrading orze from PyPI...")
+                rc = _pip_install(["--upgrade", "orze"], "orze")
+            if rc != 0:
+                return rc
+
+            # --- orze-pro ---
+            if importlib.util.find_spec("orze_pro") is None:
+                print("orze-pro not installed — skipping.")
+            else:
+                pro_root = _editable_project_root("orze_pro")
+                if pro_root:
+                    print(f"Reinstalling orze-pro (editable) from {pro_root}...")
+                    rc = _pip_install(
+                        ["--force-reinstall", "--no-deps", "-e", str(pro_root)],
+                        "orze-pro",
+                    )
+                else:
+                    # Regular install: upgrade from license-gated private PyPI.
+                    try:
+                        from orze.extensions import _find_pro_key
+                        pro_key = _find_pro_key()
+                    except Exception:
+                        pro_key = ""
+                    if not pro_key:
+                        print("WARNING: orze-pro is installed but no ORZE_PRO_KEY found "
+                              "(env / .env / ~/.orze-pro.key) — cannot reach private PyPI; "
+                              "skipping orze-pro upgrade.")
+                        rc = 0
+                    else:
+                        print("Upgrading orze-pro from private PyPI...")
+                        rc = _pip_install(
+                            ["--upgrade", "orze-pro",
+                             "--extra-index-url",
+                             f"https://admin:{pro_key}@pypi.orze.ai/simple/"],
+                            "orze-pro",
+                        )
+                if rc != 0:
+                    return rc
+            print("Reinstall complete.")
+        
+        # Step 2: Daemon restart
+        if not args.no_restart:
+            daemon_pid_file = orze_dir / "state" / "daemon.pid"
+            daemon_was_running = False
+            
+            if daemon_pid_file.exists():
+                try:
+                    pid = int(daemon_pid_file.read_text().strip())
+                    # Check if alive
+                    try:
+                        os.kill(pid, 0)
+                        daemon_was_running = True
+                        print(f"Stopping daemon (PID {pid})...")
+                        
+                        # SIGTERM first
+                        os.kill(pid, signal.SIGTERM)
+                        
+                        # Wait up to 10s
+                        for _ in range(100):
+                            try:
+                                os.kill(pid, 0)
+                                time.sleep(0.1)
+                            except (ProcessLookupError, PermissionError):
+                                print("Daemon stopped gracefully.")
+                                break
+                        else:
+                            # Still alive — SIGKILL
+                            print("Daemon did not stop — sending SIGKILL...")
+                            try:
+                                os.kill(pid, signal.SIGKILL)
+                                time.sleep(0.5)
+                            except (ProcessLookupError, PermissionError):
+                                pass
+                        
+                        # Clean up PID file
+                        daemon_pid_file.unlink(missing_ok=True)
+                    except (ProcessLookupError, PermissionError):
+                        # Not running
+                        pass
+                except (ValueError, FileNotFoundError, OSError):
+                    pass
+            
+            if daemon_was_running:
+                # Relaunch daemon
+                print("Relaunching daemon...")
+                # Use subprocess.Popen to detach
+                null_fd = os.open(os.devnull, os.O_RDWR)
+                subprocess.Popen(
+                    ["orze", "start"] + (["-c", args.config_file] if args.config_file else []),
+                    stdin=null_fd,
+                    stdout=null_fd,
+                    stderr=null_fd,
+                    start_new_session=True,
+                    cwd=os.getcwd()
+                )
+                os.close(null_fd)
+                print("Daemon relaunched in background.")
+            else:
+                print("Daemon not running — migrations will run on next `orze run`.")
+        
+        print("\n✓ Upgrade complete.")
+        return 0
 
     if command == "admin":
         from orze.engine.migrate import migrate_v0_to_v1, write_layout_version

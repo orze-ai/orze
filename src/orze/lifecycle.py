@@ -1,13 +1,12 @@
 """Orze lifecycle management — stop, start, restart.
 
-Provides the core logic for `orze stop`, `orze start`, and `orze restart`
-subcommands.  Replaces the external shell scripts (shutdown.sh, start.sh,
-restart.sh) with built-in equivalents that work on the local node and
-signal remote nodes via shared-filesystem sentinels.
+Provides the core logic for `orze stop`, `orze start`, and `orze restart`.
+Stop publishes a cooperative request, not proof of controller/tree closure.
+Pending stop markers refuse start; restart requires a future qualified
+closure consumer. No process-name, integer-PID or GPU orphan cleanup is used.
 """
 
 import os
-import signal
 import socket
 import subprocess
 import sys
@@ -23,13 +22,6 @@ from pathlib import Path
 # cmdline is literally `orze start -c orze.yaml`, producing a phantom
 # "already running" error on the very first `orze start` from bash.
 _ORZE_PAT = r"^[^ ]+ -m [o]rze\.cli( |$).*orze\.yaml( |$)"
-
-# Child process script names to kill on stop.
-_CHILD_PAT = (
-    r"(train_idea|evaluate_dataset|evaluate_idea"
-    r"|extract_features|research_agent|validate_idea)[.]py"
-)
-
 
 def _log(prefix, msg):
     print(f"[{prefix}] {msg}", flush=True)
@@ -56,31 +48,9 @@ def _is_alive(pid: int) -> bool:
 
 
 def _kill_pid(pid: int, timeout: int = 10):
-    """SIGTERM a process (group), wait, then SIGKILL if needed."""
-    if not _is_alive(pid):
-        return
-    # Try process group first, fall back to single process
-    try:
-        os.killpg(os.getpgid(pid), signal.SIGTERM)
-    except (ProcessLookupError, PermissionError, OSError):
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
-            return
-
-    for _ in range(timeout * 2):
-        if not _is_alive(pid):
-            return
-        time.sleep(0.5)
-
-    # Force kill
-    try:
-        os.killpg(os.getpgid(pid), signal.SIGKILL)
-    except (ProcessLookupError, PermissionError, OSError):
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
+    """Deprecated: a bare PID cannot authorize signaling or prove closure."""
+    from orze.core.control_outcome import StopOutcome
+    return StopOutcome("hold", "owned_process_handle_required")
 
 
 def _pgrep(pattern: str) -> list:
@@ -99,192 +69,84 @@ def _pgrep(pattern: str) -> list:
 
 
 def _cleanup_gpu_orphans(workdir: str, gpu_ids=None):
-    """Kill matching orphans visible on the explicitly scoped GPUs."""
-    command = [
-        "nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader",
-    ]
-    if gpu_ids is not None:
-        scoped = sorted(set(gpu_ids))
-        if not scoped:
-            return
-        command.append("--id=" + ",".join(str(gpu) for gpu in scoped))
-    try:
-        result = subprocess.run(
-            command,
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode != 0:
-            return
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return
-
-    for line in result.stdout.strip().split("\n"):
-        pid_str = line.strip()
-        if not pid_str:
-            continue
-        try:
-            pid = int(pid_str)
-        except ValueError:
-            continue
-        try:
-            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().decode(
-                "utf-8", errors="replace")
-            if workdir in cmdline:
-                _log("stop", f"Releasing GPU from orphaned process {pid}")
-                os.kill(pid, signal.SIGTERM)
-        except (OSError, ProcessLookupError, PermissionError):
-            pass
+    """Deprecated: GPU/cmdline matching supplies no execution ownership."""
+    from orze.core.control_outcome import StopOutcome
+    return StopOutcome("hold", "owned_process_handle_required")
 
 
 def _kill_children_of(parent_pid: int, timeout: int = 60):
-    """Kill child processes of a specific PID (scoped, not global pkill)."""
-    import re
-    try:
-        result = subprocess.run(
-            ["ps", "--ppid", str(parent_pid), "-o", "pid=", "--no-headers"],
-            capture_output=True, text=True, timeout=5,
-        )
-        child_pids = [
-            int(p) for p in result.stdout.strip().split() if p.strip()
-        ]
-    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
-        child_pids = []
-
-    if not child_pids:
-        _log("stop", "No child processes")
-        return
-
-    # Filter to only known child script patterns
-    filtered = []
-    child_re = re.compile(_CHILD_PAT)
-    for cpid in child_pids:
-        try:
-            cmdline = Path(f"/proc/{cpid}/cmdline").read_bytes().decode(
-                "utf-8", errors="replace")
-            if child_re.search(cmdline):
-                filtered.append(cpid)
-        except OSError:
-            pass
-
-    if not filtered:
-        _log("stop", "No matching child processes")
-        return
-
-    _log("stop", f"SIGTERM {len(filtered)} child process(es) of PID {parent_pid}")
-    for cpid in filtered:
-        try:
-            os.kill(cpid, signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
-            pass
-
-    elapsed = 0
-    while elapsed < timeout:
-        still_alive = [p for p in filtered if _is_alive(p)]
-        if not still_alive:
-            _log("stop", f"All child processes exited after {elapsed}s")
-            return
-        _log("stop",
-             f"Waiting for {len(still_alive)} child process(es)... "
-             f"({elapsed}/{timeout}s)")
-        time.sleep(5)
-        elapsed += 5
-
-    still_alive = [p for p in filtered if _is_alive(p)]
-    if still_alive:
-        _log("stop", f"Timeout — SIGKILL {len(still_alive)} remaining children")
-        for cpid in still_alive:
-            try:
-                os.kill(cpid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
+    """Deprecated: enumerating children of an integer PID is not authority."""
+    from orze.core.control_outcome import StopOutcome
+    return StopOutcome("hold", "owned_process_handle_required")
 
 
 # ── stop ─────────────────────────────────────────────────────────────
 
 def do_stop(cfg: dict, timeout: int = 60):
-    """Stop orze on the local node.
+    """Publish a cooperative stop request, never claim controller closure.
 
-    1. Write .orze_disabled (prevents watchdog restart)
-    2. Write .orze_stop_all with "kill" (signals remote nodes)
-    3. Kill local orchestrator via PID file
-    4. Kill child processes (train, eval, etc.)
-    5. Clean up GPU orphans
+    Existing owned-handle shutdown consumes the stop sentinel. A PID file,
+    process name, GPU assignment, CLI return code or shutdown sentinel is not
+    proof that all former writers exited. The legacy timeout argument remains
+    accepted, but this request-only API performs no process wait or scan.
     """
-    results_dir = Path(cfg["results_dir"])
-    hostname = socket.gethostname()
-    workdir = os.getcwd()
+    from orze.core.control_outcome import StopOutcome
+    from orze.core.fs import atomic_write
+    import stat
 
-    _log("stop", f"{time.strftime('%c')} — Stopping orze (timeout={timeout}s)")
-
-    # 1. Disable watchdog
-    disabled_path = results_dir / ".orze_disabled"
-    if results_dir.exists():
-        disabled_path.write_text(
-            f"Stopped at {time.strftime('%Y-%m-%dT%H:%M:%S')}",
-            encoding="utf-8",
-        )
-        _log("stop", f"Watchdog disabled via {disabled_path}")
-
-    # 2. Signal remote nodes via shared filesystem
-    if results_dir.exists():
-        (results_dir / ".orze_stop_all").write_text("kill", encoding="utf-8")
-
-    # 3. Kill local orchestrator
-    pid = _read_pid(results_dir, hostname)
-    if pid and _is_alive(pid):
-        _log("stop", f"SIGTERM orchestrator (PID {pid})")
-        _kill_pid(pid, timeout=10)
-        if _is_alive(pid):
-            _log("stop", f"Orchestrator didn't exit, SIGKILL")
+    try:
+        results_dir = Path(cfg["results_dir"]).absolute()
+        # Refuse redirected request publication instead of overwriting another
+        # scope's markers. These checks do not create a global filesystem lock.
+        for path in (results_dir, *results_dir.parents):
             try:
-                os.kill(pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
-        _log("stop", "Orchestrator stopped")
-    elif pid:
-        _log("stop", f"PID file points at PID {pid} but it is not running")
-
-    # Also catch any orze process for OUR config not tracked by PID file
-    # (e.g. PID file missing / stale, or a parallel foreground daemon).
-    # Scope the pgrep to processes whose command line contains our results_dir
-    # or config path so we don't kill other tenants' instances.
-    our_results = str(results_dir.resolve())
-    config_path = cfg.get("_config_path") or ""
-    untracked_killed = 0
-    for extra_pid in _pgrep(_ORZE_PAT):
-        try:
-            cmdline = Path(f"/proc/{extra_pid}/cmdline").read_bytes().decode(
-                "utf-8", errors="replace")
-            if our_results not in cmdline and config_path not in cmdline:
-                _log("stop", f"Skipping orze PID {extra_pid} (belongs to another instance)")
+                info = path.lstat()
+            except FileNotFoundError:
                 continue
-        except OSError:
-            continue
-        _log("stop", f"Killing untracked orze process (PID {extra_pid})")
-        _kill_pid(extra_pid, timeout=10)
-        untracked_killed += 1
+            if not stat.S_ISDIR(info.st_mode):
+                raise OSError("stop_request_directory_unverifiable")
+        results_dir.mkdir(parents=True, exist_ok=True)
+        for name, content in (
+            (".orze_disabled", "Controller stop requested; closure unconfirmed"),
+            (".orze_stop_all", "kill"),
+        ):
+            path = results_dir / name
+            try:
+                info = path.lstat()
+            except FileNotFoundError:
+                pass
+            else:
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                    raise OSError("stop_request_marker_unverifiable")
+            atomic_write(path, content)
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                before = os.fstat(fd)
+                expected = content.encode("utf-8")
+                if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                        or before.st_size != len(expected)):
+                    raise OSError("stop_request_readback_unconfirmed")
+                raw = os.read(fd, len(expected) + 1)
+                after = os.fstat(fd)
+                witness = lambda info: (
+                    info.st_dev, info.st_ino, info.st_size,
+                    info.st_mtime_ns, info.st_ctime_ns, info.st_nlink)
+                if (raw != expected or witness(before) != witness(after)
+                        or witness(before) != witness(path.lstat())):
+                    raise OSError("stop_request_readback_unconfirmed")
+            finally:
+                os.close(fd)
+        directory = os.open(results_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    except (OSError, ValueError, TypeError, KeyError):
+        _log("stop", "HOLD: cooperative stop request publication unconfirmed")
+        return StopOutcome("hold", "controller_stop_request_unconfirmed")
 
-    # Summarise — especially helpful when there was no PID file but we still
-    # found (or didn't find) an untracked orchestrator via pgrep.
-    if pid is None and untracked_killed == 0:
-        _log("stop", "Nothing to stop — no PID file, no matching process")
-    elif pid is None and untracked_killed > 0:
-        _log("stop", f"No PID file but found and killed {untracked_killed} "
-             f"untracked orze process(es) for this config")
-
-    # 4. Kill child processes — only children of our orchestrator PID, not globally.
-    if pid:
-        _kill_children_of(pid, timeout)
-    else:
-        _log("stop", "No orchestrator PID — skipping child cleanup")
-
-    # 5. GPU orphan cleanup
-    configured_scope = (
-        (cfg.get("gpu_scheduling") or {}).get("allowed_gpus") or [])
-    _cleanup_gpu_orphans(
-        workdir, list(configured_scope) if configured_scope else None)
-
-    _log("stop", f"{time.strftime('%c')} — Stop complete")
+    _log("stop", "Cooperative stop requested; controller/process-tree closure unconfirmed")
+    return StopOutcome("requested", "controller_stop_confirmation_required")
 
 
 # ── start ────────────────────────────────────────────────────────────
@@ -295,7 +157,7 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
 
     1. Verify the opt-in controller runtime contract
     2. Check not already running
-    3. Clear sentinels (.orze_disabled, .orze_stop_all, .orze_shutdown)
+    3. Refuse any stop/shutdown sentinel without clearing it
     4. Build the child command
     5. Launch orze (detached daemon or foreground via os.execv)
 
@@ -313,6 +175,8 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
     require_controller_runtime_contract(cfg.get("controller_runtime"))
 
     results_dir = Path(cfg["results_dir"])
+    from orze.core.control_outcome import require_controller_start_allowed
+    require_controller_start_allowed(results_dir)
     hostname = socket.gethostname()
     config_path = config_path or cfg.get("_config_path", "orze.yaml")
     python = sys.executable
@@ -333,13 +197,9 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
              f"Use 'orze restart' instead.")
         sys.exit(1)
 
-    # 3. Clear sentinels
+    # 3. Recheck stop state at the final launch boundary. Never clear it here.
     results_dir.mkdir(parents=True, exist_ok=True)
-    for name in [".orze_disabled", ".orze_stop_all", ".orze_shutdown"]:
-        sentinel = results_dir / name
-        if sentinel.exists():
-            sentinel.unlink(missing_ok=True)
-            _log("start", f"Removed {name}")
+    require_controller_start_allowed(results_dir)
 
     # 4. Build command
     cmd = [python, "-m", "orze.cli", "-c", config_path]
@@ -352,10 +212,12 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
     if foreground:
         gpu_msg = f" on GPUs {gpus}" if gpus else ""
         _log("start", f"Starting orze in foreground{gpu_msg}...")
+        require_controller_start_allowed(results_dir)
         os.execv(python, cmd)
         # Never returns
 
     with open(log_file, "a") as lf:
+        require_controller_start_allowed(results_dir)
         proc = subprocess.Popen(
             cmd,
             stdout=lf, stderr=lf,
@@ -379,10 +241,16 @@ def do_start(cfg: dict, foreground: bool = False, config_path: str = None,
 
 def do_restart(cfg: dict, timeout: int = 60, foreground: bool = False,
                config_path: str = None, gpus: str = None):
-    """Restart orze: stop then start."""
-    _log("restart", f"{time.strftime('%c')} — Restarting orze")
-    do_stop(cfg, timeout=timeout)
-    result = do_start(cfg, foreground=foreground, config_path=config_path,
-                      gpus=gpus)
-    _log("restart", f"{time.strftime('%c')} — Restart complete")
-    return result
+    """Request stop; no restart without a source-qualified closure consumer."""
+    from orze.core.control_outcome import StopOutcome
+    from orze.service.runtime_contract import require_controller_runtime_contract
+
+    outcome = do_stop(cfg, timeout=timeout)
+    # Preserve the independent runtime refusal without invoking do_start,
+    # whose old side effects used to erase the pending stop markers.
+    require_controller_runtime_contract(cfg.get("controller_runtime"))
+    if isinstance(outcome, StopOutcome) and outcome.status in ("requested", "hold"):
+        return outcome
+    # No confirmed-stop consumer exists in this slice. Even a typed label,
+    # legacy True/None or an unexpected caller result cannot authorize start.
+    return StopOutcome("hold", "controller_stop_confirmation_required")

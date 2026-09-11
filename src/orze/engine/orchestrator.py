@@ -950,6 +950,8 @@ class Orze(OrzePhaseMixin):
 
     def run(self):
         """Run only while this controller exclusively owns its GPU scope."""
+        from orze.core.control_outcome import require_controller_start_allowed
+        require_controller_start_allowed(self.results_dir)
         self._write_pid_file()
         cleanup_pid = True
         try:
@@ -1016,12 +1018,11 @@ class Orze(OrzePhaseMixin):
         else:
             self._startup_checks()
             self._kill_orphans()
-        # Clear any stale shutdown sentinels from a previous run
+        # A prior stop/shutdown marker is not proof of closed writers. Recheck
+        # immediately before entering work; never silently clear these markers.
         if not managed_idea:
-            for sentinel_name in [".orze_shutdown", ".orze_stop_all"]:
-                sentinel = self.results_dir / sentinel_name
-                if sentinel.exists():
-                    sentinel.unlink(missing_ok=True)
+            from orze.core.control_outcome import require_controller_start_allowed
+            require_controller_start_allowed(self.results_dir)
         # Clear upgrade sentinel if we're already at the target version
         upgrade_sentinel = self.results_dir / ".orze_upgrade"
         if upgrade_sentinel.exists() and not managed_idea:

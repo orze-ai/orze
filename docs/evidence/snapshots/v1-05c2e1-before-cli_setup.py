@@ -9,7 +9,7 @@ Calling spec:
     )
 
     do_uninstall(cfg)          # full uninstall, preserves research results
-    stop_running_instance(p)   # cooperative request, then explicit closure HOLD
+    stop_running_instance(p)   # SIGTERM a running orze via PID file
     do_upgrade(cfg)            # pip/uv upgrade + optional restart
     find_shared_mounts()       # detect network FS mounts
     resolve_init_path(path)    # resolve init target directory
@@ -394,16 +394,37 @@ def do_uninstall(cfg: dict):
     print(f"  To remove everything: rm -rf {project_dir}")
 
 
-def stop_running_instance(results_dir: Path):
-    """Request stop, then refuse consumers that require proven completion.
-
-    This former boolean helper has no source-qualified controller-closure
-    reader. It never returns a guessed True/False from integer PID liveness.
-    """
-    from orze.core.control_outcome import ControllerStopHOLD
-    from orze.lifecycle import do_stop
-    outcome = do_stop({"results_dir": str(results_dir)})
-    raise ControllerStopHOLD(outcome.reason_code)
+def stop_running_instance(results_dir: Path) -> bool:
+    """Stop a running orze instance via PID file. Returns True if one was stopped."""
+    import time as _time
+    pid_file = results_dir / ".orze.pid"
+    if not pid_file.exists():
+        return False
+    try:
+        old_pid = int(pid_file.read_text(encoding="utf-8").strip())
+    except (ValueError, OSError):
+        return False
+    print(f"Stopping orze (PID {old_pid})...")
+    try:
+        os.kill(old_pid, 15)  # SIGTERM
+    except ProcessLookupError:
+        print("  Process already exited.")
+        return False
+    for _ in range(30):  # 15s
+        try:
+            os.kill(old_pid, 0)
+            _time.sleep(0.5)
+        except ProcessLookupError:
+            break
+    else:
+        print("  Still running after 15s, sending SIGKILL...")
+        try:
+            os.kill(old_pid, 9)
+            _time.sleep(1)
+        except ProcessLookupError:
+            pass
+    print("  Stopped.")
+    return True
 
 
 def do_upgrade(cfg: dict):

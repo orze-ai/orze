@@ -351,7 +351,7 @@ def test_gpu_detection_can_be_restricted_to_explicit_scope(monkeypatch):
     assert "--id=4,7" in observed["command"]
 
 
-def test_stop_orphan_fallback_does_not_probe_or_infer_gpu_ownership(monkeypatch):
+def test_stop_orphan_probe_can_be_restricted_to_explicit_scope(monkeypatch):
     observed = {}
 
     def fake_run(command, **_kwargs):
@@ -360,6 +360,5 @@ def test_stop_orphan_fallback_does_not_probe_or_infer_gpu_ownership(monkeypatch)
 
     monkeypatch.setattr(lifecycle.subprocess, "run", fake_run)
 
-    outcome = lifecycle._cleanup_gpu_orphans("/project", [7, 4])
-    assert observed == {}
-    assert outcome.status == "hold"
+    lifecycle._cleanup_gpu_orphans("/project", [7, 4])
+    assert "--id=4,7" in observed["command"]
