@@ -12,9 +12,9 @@
 ## 固定范围
 
 1. 数据列选择仅保留 reporting.evidence.dataset_metric_keys 的既有实现；rebuild_state._report_dataset_keys 保留兼容别名，不留第二份函数体。Pro 直接使用公共函数。
-2. 原 rebuild_state._eligible_metric 的历史归档数值过滤函数原样移入 reporting.legacy_metrics，公开命名 archived_metric_value；旧私有名保留兼容别名，Core 旧归档查询及 Pro archive-only 分支使用同一函数。
+2. 原 rebuild_state._eligible_metric 的历史归档数值过滤函数原样移入现有 reporting.evidence，公开命名 legacy_archive_metric_value；旧私有名保留兼容别名，Core 旧归档查询及 Pro archive-only 分支使用同一函数。不新增模块。
 3. 此归档函数不是当前产物、生命周期或科学资格证明。Pro 正常 build_context 继续把同一 qualified_entries 传给历史配置统计；明确空集合不得退回旧数据库分数。
-4. 不改列顺序、重复列、WER 兼容选择、缺测回退、bool/non-finite 拒绝、排序、错误传播、配置、数据库 schema、事务、预算、来源或执行授权。旧函数返回与异常行为均为兼容要求。
+4. 不改列顺序、重复列、WER 兼容选择、缺测回退、bool/non-finite 拒绝、排序、错误传播、配置、数据库 schema、事务、预算、来源或执行授权。普通配置 dict 的旧函数返回与异常行为均为兼容要求；不承诺自定义 get 方法有副作用的 Mapping 调用次序不变。
 5. 不把所有旧归档规则改成新资格规则；二者语义不同，不以“统一”名义放宽或收紧。
 
 ## 先验与验收
