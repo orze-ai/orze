@@ -9,7 +9,7 @@ import re
 import sqlite3
 import stat
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Optional
 
 from orze.reporting.lifecycle_stages import (
     completed_stage_sql, completed_stages_agree, stage_projection,
@@ -88,6 +88,40 @@ def efficiency_presentation_is_safe(presentation) -> bool:
         and bool(presentation["evidence_label"].strip())
         and presentation.get("leaderboard_rank_comparable") is False
     )
+
+
+def legacy_archive_metric_value(metrics: dict, primary_metric: str,
+                                min_datasets: int, dataset_keys: list[str]) -> Optional[float]:
+    """Read a legacy archive value, not qualify current research evidence.
+
+    Preserve the historical coverage fallback and input semantics. A value
+    here grants no artifact, lifecycle, benchmark or publication authority;
+    steering must continue to use the current qualified evidence path.
+    """
+    if not isinstance(metrics, dict):
+        return None
+    value = metrics.get(primary_metric)
+    if (not isinstance(value, (int, float)) or isinstance(value, bool)
+            or not math.isfinite(float(value))):
+        return None
+    if min_datasets > 0:
+        count = sum(
+            1 for key in dataset_keys
+            if isinstance(metrics.get(key), (int, float))
+            and not isinstance(metrics.get(key), bool)
+            and math.isfinite(float(metrics[key]))
+        )
+        if count == 0:
+            count = sum(
+                1 for key, item in metrics.items()
+                if key.startswith("wer_")
+                and isinstance(item, (int, float))
+                and not isinstance(item, bool)
+                and math.isfinite(float(item))
+            )
+        if count < min_datasets:
+            return None
+    return float(value)
 
 
 def dataset_metric_keys(report_cfg: Mapping) -> list[str]:
