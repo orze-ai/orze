@@ -89,7 +89,7 @@ def _permit_matches(lake, folder, action, permit):
         raise CPUActionHOLD("cpu_action_permit_execution_mismatch")
 
 
-def _scope(lake, folder, action, domain_run=None, *, cfg):
+def _scope(lake, folder, action, domain_run=None):
     if lake is None:
         raise CPUActionHOLD("cpu_action_catalog_required")
     paths = [row[2] for row in lake.conn.execute("PRAGMA database_list") if row[1] == "main"]
@@ -121,19 +121,8 @@ def _scope(lake, folder, action, domain_run=None, *, cfg):
         require_domain_run(domain_run, raw_config_sha256=hashlib.sha256(row[1].encode()).hexdigest(),
                            action=action)
         require_sources(lake, folder.parent, domain_sources(domain_run), metadata_only=True)
-    source = {"claim_attempt_id": claim["attempt_id"], "claim_sha256": claim_sha,
-              "config_sha256": hashlib.sha256(row[1].encode()).hexdigest(), "database": database}
-    from orze.engine.cpu_replication import authorization
-    replication = authorization(lake, folder.name, folder.parent, cfg,
-                                action=action, domain_run=domain_run)
-    if replication is not None:
-        source["replication_request"] = replication
-    return source
-
-
-def _watch_replication(tx, source):
-    if "replication_request" in source:
-        tx.watch_cpu_replication(source["replication_request"])
+    return {"claim_attempt_id": claim["attempt_id"], "claim_sha256": claim_sha,
+            "config_sha256": hashlib.sha256(row[1].encode()).hexdigest(), "database": database}
 
 
 def _work_identity(path):
@@ -181,7 +170,7 @@ def _owned(owner, lake, cfg, *, states=("RUNNING",)):
     row = require_current(lake.conn, handle.attempt_ref, states=states)
     if not same(row["binding"], owner.binding):
         raise CPUActionHOLD("cpu_action_binding_changed")
-    if not same(_scope(lake, folder, owner.action, owner.domain_run, cfg=cfg), owner.binding["source"]):
+    if not same(_scope(lake, folder, owner.action, owner.domain_run), owner.binding["source"]):
         raise CPUActionHOLD("cpu_action_source_changed")
     if owner.domain_run is not None:
         from orze.core.research_interfaces import domain_run_metadata
@@ -248,7 +237,7 @@ def launch(idea_id, results_dir, cfg, *, lake, action, permit, admission, domain
             raise CPUActionHOLD("cpu_action_admission_required")
         admission()
         require_permit(lake, permit)
-        source = _scope(lake, folder, action, domain_run, cfg=cfg)
+        source = _scope(lake, folder, action, domain_run)
         inputs = _canonical(action["inputs"])
         attempt_id = secrets.token_hex(16)
         work = folder / "_action_attempts" / attempt_id / "work"
@@ -267,7 +256,7 @@ def launch(idea_id, results_dir, cfg, *, lake, action, permit, admission, domain
             if observation is not None:
                 binding["observation_publication"] = observation
         with execution_transaction(lake, folder) as tx:
-            if not same(_scope(lake, folder, action, domain_run, cfg=cfg), source):
+            if not same(_scope(lake, folder, action, domain_run), source):
                 raise CPUActionHOLD("cpu_action_source_changed")
             _closed(tx.conn, idea_id)
             fence = lifecycle_fence(lake, idea_id, "action")
@@ -281,7 +270,6 @@ def launch(idea_id, results_dir, cfg, *, lake, action, permit, admission, domain
             from orze.core.execution_attempts import _update
             _update(tx.conn, ref, require_current(tx.conn, ref), state="LAUNCHING", binding=binding)
             tx.watch_attempt(ref)
-            _watch_replication(tx, source)
         handle = CPUActionHandle(idea_id, attempt_id, ref)
         owner = _Owner(handle, folder, copy.deepcopy(action), permit, admission, copy.deepcopy(binding),
                        domain_run=domain_run)
@@ -323,7 +311,6 @@ def launch(idea_id, results_dir, cfg, *, lake, action, permit, admission, domain
                            "lifecycle": lifecycle_fence(lake, idea_id, "action")}
                 mark_running(tx.conn, ref, running)
                 tx.watch_attempt(ref)
-                _watch_replication(tx, binding["source"])
             owner.binding = copy.deepcopy(running)
             _admit(owner, lake)
             _owned(owner, lake, cfg)
@@ -417,7 +404,6 @@ def harvest(handle, results_dir, cfg, *, lake, permit):
                 tx.watch_observations(handle.attempt_ref, observations)
                 tx.watch_cpu_sources(domain_sources(owner.domain_run))
             tx.watch_attempt(handle.attempt_ref)
-            _watch_replication(tx, owner.binding["source"])
         owner.binding = copy.deepcopy(updated)
         from orze.core.cpu_action_budget import settle
         settle(lake, owner.permit, handle.attempt_ref, terminal)

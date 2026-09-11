@@ -214,25 +214,6 @@ class BoundPolicy:
             if (set(decision) != {"kind", "task_id"}
                     or decision["task_id"] not in {r["idea_id"] for r in captured["queue"]}):
                 _fail("Execute must select a task in this captured queue")
-        elif kind == "Replicate":
-            from orze.core.replication_requests import token
-            if (set(decision) != {"kind", "source_ref", "request_id", "reason"}
-                    or type(decision["reason"]) is not str or not decision["reason"].strip()
-                    or len(decision["reason"].encode()) > 1024):
-                _fail("Replicate requires an explicit source, stable key and bounded reason")
-            ref = decision["source_ref"]
-            if (type(ref) is not dict or set(ref) != {"task_id", "phase", "attempt_id", "generation"}
-                    or ref["phase"] != "action" or type(ref["generation"]) is not int
-                    or not 0 < ref["generation"] < 2**63):
-                _fail("Replicate requires an exact action occurrence")
-            try:
-                for value in (decision["request_id"], ref["task_id"], ref["attempt_id"]):
-                    token(value)
-            except ValueError as exc:
-                raise ResearchInterfaceError("research_interface: invalid replication identity") from exc
-            if not any(item.get("outcome") == "completed" and _same(item.get("ref"), ref)
-                       for item in captured.get("recorded_evidence", {}).get("results", [])):
-                _fail("Replicate must select a completed occurrence in captured evidence")
         elif kind in ("Wait", "Stop"):
             if (set(decision) != {"kind", "reason", "wakeup"}
                     or type(decision["reason"]) is not str or not decision["reason"]

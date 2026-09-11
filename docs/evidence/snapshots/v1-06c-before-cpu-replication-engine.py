@@ -215,15 +215,8 @@ def _queued_snapshot(lake, task_id):
 
 
 def request_replication(source_task_id, results_dir, cfg, lake, *, request_id,
-                        reason="explicit_replication", expected_source_ref=None):
+                        reason="explicit_replication"):
     """Create exactly one persistent queued task per explicit request key."""
-    from orze.core.cpu_execution import cpu_execution
-    if cpu_execution(cfg) is not None:
-        from orze.engine.cpu_replication import request_replication as cpu_request
-        return cpu_request(source_task_id, results_dir, cfg, lake, request_id=request_id,
-                           reason=reason, expected_source_ref=expected_source_ref)
-    if expected_source_ref is not None:
-        raise ReplicationError("replication_expected_ref_cpu_only")
     token(source_task_id)
     token(request_id)
     if type(reason) is not str or not reason.strip() or len(reason.encode("utf-8")) > 1024:
@@ -284,8 +277,6 @@ def replication_authorization(lake, idea_id, idea_dir, cfg, execution_identity, 
         record = request_for_task(lake.conn, idea_id)
         if record is None:
             return None
-        if record["schema"] != 1 or "adapter" in record:
-            raise ReplicationError("replication_training_adapter_required")
         folder = _path(idea_dir)
         results, database = _scope(lake, folder.parent, cfg)
         if folder.name != idea_id or str(results) != record["scope"] or database != record["database"]:

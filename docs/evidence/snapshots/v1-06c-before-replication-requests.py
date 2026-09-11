@@ -4,12 +4,7 @@ CALLING SPEC: get_request / request_for_task are bounded historical reads with
 no DDL or current-execution permission. insert_request requires a caller-owned
 write transaction, never starts/commits/rolls it back. The coordinator verifies
 the adapter-specific source and creates the task in that same transaction.
-Schema 1 retains its generic source phase and original exact field contract.
-Schema 2 records native_cpu_action sources with exact action-phase refs and
-action/domain-run/observation digests in the same table. Digests are metadata,
-not adapter-specific source authority; request IDs remain idempotency keys,
-not capabilities. The domain-run digest uses {"domain_run": metadata_or_None};
-action_sha256 is the action_fingerprint, not a task/path-salted identifier.
+Source phase is generic; request IDs are idempotency keys, not capabilities.
 No configurations, artifact bytes, hardware or scientific verdicts live here.
 """
 from __future__ import annotations
@@ -30,9 +25,6 @@ _FIELDS = {
     "source_terminal_sha256", "artifact_records_sha256", "execution_identity",
     "spec_fingerprint", "artifact_binding_sha256", "reason", "created_at",
     "request_sha256",
-}
-_CPU_FIELDS = (_FIELDS - {"source_file_sha256", "execution_identity"}) | {
-    "adapter", "action_sha256", "domain_run_sha256", "observation_records_sha256",
 }
 _SQL = """CREATE TABLE replication_requests (
     request_id TEXT NOT NULL COLLATE BINARY PRIMARY KEY,
@@ -73,15 +65,9 @@ def seal_record(value):
 
 
 def validate_record(value):
-    if (type(value) is not dict or type(value.get("schema")) is not int
-            or value["schema"] not in (1, 2)):
+    if (type(value) is not dict or set(value) != _FIELDS
+            or type(value["schema"]) is not int or value["schema"] != 1):
         raise ReplicationError("replication_record_invalid")
-    fields = _CPU_FIELDS if value["schema"] == 2 else _FIELDS
-    if set(value) != fields:
-        raise ReplicationError("replication_record_invalid")
-    if value["schema"] == 2 and (
-            type(value["adapter"]) is not str or value["adapter"] != "native_cpu_action"):
-        raise ReplicationError("replication_adapter_invalid")
     token(value["request_id"])
     token(value["task_id"])
     ref = value["source_ref"]
@@ -90,8 +76,6 @@ def validate_record(value):
         raise ReplicationError("replication_source_ref_invalid")
     for key in ("task_id", "phase", "attempt_id"):
         token(ref[key])
-    if value["schema"] == 2 and ref["phase"] != "action":
-        raise ReplicationError("replication_source_ref_invalid")
     if ref["task_id"] == value["task_id"]:
         raise ReplicationError("replication_new_task_required")
     for key in ("scope", "database"):
@@ -100,8 +84,8 @@ def validate_record(value):
                 or not Path(path).is_absolute() or str(Path(path)) != path
                 or ".." in Path(path).parts or any(ord(c) < 32 for c in path)):
             raise ReplicationError("replication_scope_invalid")
-    for key in fields - {"schema", "request_id", "task_id", "source_ref", "scope",
-                         "database", "reason", "created_at", "adapter"}:
+    for key in _FIELDS - {"schema", "request_id", "task_id", "source_ref", "scope",
+                          "database", "reason", "created_at"}:
         if type(value[key]) is not str or _SHA.fullmatch(value[key]) is None:
             raise ReplicationError("replication_digest_invalid")
     for key, limit in (("reason", 1024), ("created_at", 128)):

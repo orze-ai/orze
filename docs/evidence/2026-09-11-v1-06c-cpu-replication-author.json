@@ -1,0 +1,207 @@
+{
+  "schema": 1,
+  "slice": "V1-06C",
+  "owner": "runtime_evidence",
+  "baseline_commit": "5ef7772d7183758f689eead856870017442852b5",
+  "scope": "Explicit native CPU replication coordinator, public adapter routing, and independent native/CLI integration review. Same supplied IdeaLake/results; not cross-database or scientific replication benefit.",
+  "implementation": {
+    "files": [
+      "src/orze/engine/cpu_replication.py",
+      "src/orze/engine/replication.py"
+    ],
+    "api": [
+      "request_replication(source_task_id,results_dir,cfg,lake,*,request_id,reason='explicit_replication',expected_source_ref=None)",
+      "authorization(lake,idea_id,results_dir,cfg,*,action,domain_run=None) -> schema2 record | None",
+      "verify_record(lake,results_dir,record) -> None"
+    ],
+    "constraints": [
+      "Source current action TERMINAL/completed, same scope/catalog, exact row/terminal/artifact+observation sets and confirmed effect receipts.",
+      "Target uses private atomic queued admission with exact unchanged source config and native_cpu_action kind/action FSM; ordinary proposal dedup unchanged.",
+      "Schema2 pins original action, DomainRun metadata or None, artifact binding and observation metadata without large artifact content hashing or Domain callbacks.",
+      "One source effect transaction inserts request and task; same-connection read-only CPU replication watch verifies before and after commit, plus coordinator exit verification.",
+      "Exact request replay preserves target lifecycle, including claimed task. Conflicts and uncertainty do not allocate replacement keys.",
+      "CPU authorization checks supplied actual action/strong DomainRun/artifact binding before claim and native GO. Native owns claim/budget/proof; record alone grants neither GO nor source write permission.",
+      "Training authorization rejects schema2; CPU authorization rejects schema1. Optional expected_source_ref is CPU-only and checked before and inside request transaction."
+    ]
+  },
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-06c-before-cpu-replication-engine.py",
+      "source": "src/orze/engine/replication.py",
+      "sha256": "2cf98322c13444318e8eba5a5b2021d977d9eb799b7750acb4966828f314c6f0",
+      "origin": "Complete git-show baseline source, captured before source edit; bytes equal both original on-disk source and baseline commit."
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06c-cpu-replication-baseline-test.py",
+      "source": "tests/test_cpu_replication.py",
+      "sha256": "022a52056b4ea3ab95de4c445779eae2bbe6d450fd666e0f50dea9880dfe11ed",
+      "origin": "Complete initial new test reconstructed later from the recorded initial apply_patch text. SHA matches the independently recorded pre-run original on-disk SHA (chunk12895f); not claimed as a pre-edit file capture or committed test."
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06c-cpu-replication-first-fixture.py",
+      "source": "tests/test_cpu_replication.py",
+      "sha256": "5cf6ba98c2e684775e26dfec4d13877e0082f6204e9bb93026f43fcd297670bc",
+      "origin": "Complete expanded 12-case draft captured from disk after its first run, before correcting the new dedup control's queued-admission premise."
+    }
+  ],
+  "baseline": {
+    "command": "PYTHONPATH=src:tests pytest -q tests/test_cpu_replication.py tests/test_replication_requests.py::test_explicit_request_creates_exact_config_new_queued_task_atomically",
+    "session_id": 16179,
+    "chunk_id": "cb3e63",
+    "exit_code": 1,
+    "footer": "1 failed, 1 passed in 1.19s",
+    "classification": "One valid new CPU-support requirement exercised through an already-existing public API, with one old training positive control. Not an API-absence test, not a historical safety defect, and not a setup failure.",
+    "failure": "Real CPU source had confirmed completed terminal; old training-only _source lookup raised replication_confirmed_native_source_required.",
+    "first_fixed": {
+      "command": "PYTHONPATH=src:tests pytest -q tests/test_cpu_replication.py tests/test_replication_requests.py::test_explicit_request_creates_exact_config_new_queued_task_atomically",
+      "session_id": 91504,
+      "chunk_id": "42aa28",
+      "exit_code": 0,
+      "footer": "2 passed in 1.31s"
+    },
+    "replay_current_test": {
+      "command": "PYTHONPATH=src:tests python3 -c 'import pathlib,pytest; import orze.engine.replication as m; p=pathlib.Path(\"docs/evidence/snapshots/v1-06c-before-cpu-replication-engine.py\"); exec(compile(p.read_bytes(),str(p),\"exec\"),m.__dict__); raise SystemExit(pytest.main([\"-q\",\"tests/test_cpu_replication.py::test_public_request_copies_completed_cpu_without_config_salt\",\"tests/test_replication_requests.py::test_explicit_request_creates_exact_config_new_queued_task_atomically\"]))'",
+      "session_id": 91426,
+      "chunk_id": "c22be8",
+      "exit_code": 1,
+      "footer": "1 failed, 1 passed in 1.10s"
+    },
+    "exact_full_source_and_test_replay": {
+      "command": "PYTHONPATH=src:tests python3 -c 'import pathlib,pytest; import orze.engine.replication as m; p=pathlib.Path(\"docs/evidence/snapshots/v1-06c-before-cpu-replication-engine.py\"); exec(compile(p.read_bytes(),str(p),\"exec\"),m.__dict__); raise SystemExit(pytest.main([\"-q\",\"docs/evidence/snapshots/v1-06c-cpu-replication-baseline-test.py::test_public_request_copies_completed_cpu_without_config_salt\",\"tests/test_replication_requests.py::test_explicit_request_creates_exact_config_new_queued_task_atomically\"]))'",
+      "session_id": 26173,
+      "chunk_id": "8d97fb",
+      "exit_code": 1,
+      "footer": "1 failed, 1 passed in 1.16s",
+      "output_path": "docs/evidence/snapshots/v1-06c-cpu-replication-old-public-replay.log",
+      "scope": "Only full baseline engine module replaced in memory; current native CPU setup/dependencies retained. Original complete initial test also used. Future CPU-route functions are not consumed by the baseline public request."
+    }
+  },
+  "fixture_correction": {
+    "first_command": "PYTHONPATH=src:tests pytest -q tests/test_cpu_replication.py",
+    "session_id": 67117,
+    "chunk_id": "7dcfce",
+    "exit_code": 1,
+    "footer": "1 failed, 11 passed in 8.17s",
+    "reason": "New ordinary dedup control omitted status='queued'; existing public insert default pending was rejected by proposal_requires_queued before dedup.",
+    "correction": "Added only status='queued' to that new control's insert call; no production change for this failure, no weakening of expected config_duplicate result.",
+    "classification": "Fixture premise error excluded from product/new-requirement reds.",
+    "assert_audit": {
+      "algorithm": "sha256('\\n'.join(ast.dump(node, include_attributes=False) for node in ast.walk(ast.parse(bytes)) if isinstance(node, ast.Assert)).encode())",
+      "baseline_count": 6,
+      "baseline_sha256": "6d35b93d95d5e68f17786838344d603d732d8180466abc35c1662dedf0c7df25",
+      "current_count": 27,
+      "current_sha256": "5863f0c23d672bca8cdb566c3f7a81d8666887ff65dbc44716fb5bd3fb4fb6d9",
+      "all_six_baseline_asserts_preserved": true,
+      "expanded_first_fixture_assert_count": 27,
+      "expanded_fixture_changed_asserts": 1,
+      "changed_assert_explanation": "The new queued keyword is inside the new dedup assert's call AST; the expected comparison is unchanged.",
+      "audit_chunk": "796936"
+    }
+  },
+  "mechanism_cases": {
+    "count": 12,
+    "classification": "1 new-support baseline case + 11 additional mechanisms. Ten additional cases passed their first expanded run; one had the separately disclosed fixture-premise failure before passing. Zero observed production draft-red defects in this author's source.",
+    "groups": [
+      "public completed zero-output source copies exact config to action FSM",
+      "same-key claimed replay unchanged",
+      "two keys preserve same specification and ordinary dedup rejects copy",
+      "two real SQLite connections converge to one task (exact source-lock contention is retried with same key)",
+      "reason conflict / wrong captured fullRef: no mutation (2)",
+      "source raw config / terminal / committed receipt changed: no reauthorization (3)",
+      "actual action, target config, scope and CPU-to-training adapter refusal",
+      "actual request INSERT trigger mutates target and rolls both admissions back",
+      "commit callback performs real rollback: no created acknowledgement; uncertainty retained"
+    ]
+  },
+  "candidate_integration": {
+    "command": "PYTHONPATH=src:tests pytest -q tests/test_cpu_replication.py tests/test_cpu_replication_product.py tests/test_native_cpu_replication.py",
+    "session_id": 59612,
+    "chunk_id": "9f7ece",
+    "exit_code": 0,
+    "footer": "29 passed in 26.58s",
+    "counts": {
+      "own": 12,
+      "root_product": 9,
+      "core_native": 8
+    },
+    "not_a_frozen_full_suite": true
+  },
+  "final_bounded": {
+    "command": "PYTHONPATH=src:tests pytest -q tests/test_cpu_replication.py tests/test_cpu_replication_product.py tests/test_native_cpu_replication.py tests/test_replication_requests.py",
+    "session_id": 50682,
+    "chunk_id": "9cdc9e",
+    "exit_code": 0,
+    "footer": "49 passed in 36.76s",
+    "counts": {
+      "own": 12,
+      "root_product": 9,
+      "core_native": 8,
+      "existing_training": 20
+    },
+    "hash_command": "python3 -c 'import pathlib,hashlib,json; paths=[\"src/orze/engine/cpu_replication.py\",\"src/orze/engine/replication.py\",\"src/orze/core/replication_requests.py\",\"src/orze/engine/native_cpu_action.py\",\"src/orze/engine/execution_authority.py\",\"src/orze/engine/cpu_phase.py\",\"src/orze/cli_replication.py\",\"src/orze/core/research_interfaces.py\",\"src/orze/engine/cpu_action_sources.py\",\"src/orze/engine/cpu_policy_evidence.py\",\"src/orze/core/cpu_action_budget.py\",\"src/orze/core/cpu_action_contract.py\",\"src/orze/core/proposal_admission.py\",\"src/orze/core/execution_attempts.py\",\"src/orze/engine/attempt_effect_receipts.py\",\"tests/test_cpu_replication.py\",\"tests/test_native_cpu_replication.py\",\"tests/test_cpu_replication_product.py\",\"tests/test_replication_requests.py\"]; print(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths},sort_keys=True))'",
+    "pre_chunk": "a858a7",
+    "post_chunk": "67d740",
+    "pre": {
+      "src/orze/cli_replication.py": "a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/cpu_action_contract.py": "cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/proposal_admission.py": "db050229eb8048a907878fb100bcfdf194ce9665e712d8200ce5718a7b5dc16f",
+      "src/orze/core/replication_requests.py": "688c70365ef14bcd1dd7cbcc93a92f6c7288870c2e0c705c63ad5007382e92b9",
+      "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+      "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+      "src/orze/engine/cpu_policy_evidence.py": "b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae",
+      "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+      "src/orze/engine/execution_authority.py": "ed080cabb0a7a7bc48e36fdb1512c2ecf96aa9cde3577e18c22b5622e93da471",
+      "src/orze/engine/native_cpu_action.py": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09",
+      "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+      "tests/test_cpu_replication.py": "828178809d38abf1f04ed1c8cba54fa7e90b008cf37f18058d50249dc218489d",
+      "tests/test_cpu_replication_product.py": "84615a77bad34141f7afa2700d9897335d2a004fccbb799705c7a7d64a6539f0",
+      "tests/test_native_cpu_replication.py": "4681cea584159a1509da1a881acc098dbb80665bd7392b4d501a410c5476526f",
+      "tests/test_replication_requests.py": "1283bebf7385296fd9a969de11af1bc17614a729912bc6443cb368349e7c6198"
+    },
+    "post": {
+      "src/orze/cli_replication.py": "a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/cpu_action_contract.py": "cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/proposal_admission.py": "db050229eb8048a907878fb100bcfdf194ce9665e712d8200ce5718a7b5dc16f",
+      "src/orze/core/replication_requests.py": "688c70365ef14bcd1dd7cbcc93a92f6c7288870c2e0c705c63ad5007382e92b9",
+      "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+      "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+      "src/orze/engine/cpu_policy_evidence.py": "b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae",
+      "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+      "src/orze/engine/execution_authority.py": "ed080cabb0a7a7bc48e36fdb1512c2ecf96aa9cde3577e18c22b5622e93da471",
+      "src/orze/engine/native_cpu_action.py": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09",
+      "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+      "tests/test_cpu_replication.py": "828178809d38abf1f04ed1c8cba54fa7e90b008cf37f18058d50249dc218489d",
+      "tests/test_cpu_replication_product.py": "84615a77bad34141f7afa2700d9897335d2a004fccbb799705c7a7d64a6539f0",
+      "tests/test_native_cpu_replication.py": "4681cea584159a1509da1a881acc098dbb80665bd7392b4d501a410c5476526f",
+      "tests/test_replication_requests.py": "1283bebf7385296fd9a969de11af1bc17614a729912bc6443cb368349e7c6198"
+    },
+    "file_count": 19,
+    "exact": true,
+    "scope": "Source-specific independent bounded validation; not the root whole-repository final epoch. Runs overlap and must not be summed."
+  },
+  "review": {
+    "independent_source_reads": [
+      "native_cpu_action _scope captures full request metadata; intent/READY/terminal writers watch the exact request; actual GO rechecks current action/domain/claim; terminal commit/effect confirmation precedes budget settlement.",
+      "execution_authority watcher is read-only and permits only exact source task or exact target task under same scope; commit-time validation uses actual writer connection, with no cross-task write lease.",
+      "Current ordinary CPU mapping None compatibility and training schema1 path retained; existing 20 training tests unchanged and passed."
+    ],
+    "unresolved_blockers": [],
+    "existing_tracked_tests_modified": false,
+    "limits": [
+      "Bounded metadata/receipt checks do not verify current artifact file bytes; Domain dispatch still uses strong captured sources and sealed worker-only FDs.",
+      "Raw configuration/specification identity does not hermetically pin arbitrary executable dependencies or prove identical scientific conditions.",
+      "Explicit admission does not spend budget or start workers; later dispatch independently reserves and checks stop/admission. A queued replica can remain unaffordable.",
+      "No controller adoption, cross-database dedup/resource namespace, automatic retry of uncertain writes, GPU/provider, holdout access, or scientific improvement claim.",
+      "Concurrent test uses two real SQLite connections plus the existing same-source effect lock; not a cross-host fault campaign."
+    ],
+    "cleanup": "All actual subprocesses came from inherited native context's transparent actual prepare wrapper; teardown polled/stopped only returned owned supervisor handles and asserted closure. All test sessions listed here completed."
+  }
+}

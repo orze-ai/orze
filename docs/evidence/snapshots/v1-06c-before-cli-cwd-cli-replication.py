@@ -54,17 +54,14 @@ def run_replication(args) -> int:
             cfg["_env_ORZE_IDEAS_FILE"] = cfg["ideas_file"]
             db_path = report_lifecycle_db_path(results_dir, cfg).absolute()
             cfg["idea_lake_db"] = str(db_path)
-            # Keep the selected invocation context through admission. CPU's
-            # loaded fingerprint deliberately pins cwd as well as paths; a
-            # caller outside this project must not erase or re-stamp that pin.
-            require_controller_runtime_contract(cfg.get("controller_runtime"))
-            lake = open_existing_lake(db_path)
-            result = request_replication(
-                args.source_task_id, results_dir, cfg, lake,
-                request_id=args.request_id, reason=args.reason,
-            )
         finally:
             os.chdir(caller_cwd)
+        require_controller_runtime_contract(cfg.get("controller_runtime"))
+        lake = open_existing_lake(db_path)
+        result = request_replication(
+            args.source_task_id, results_dir, cfg, lake,
+            request_id=args.request_id, reason=args.reason,
+        )
     except (ValueError, TypeError, OSError, sqlite3.Error, yaml.YAMLError, RuntimeContractError,
             TerminationUnconfirmed) as exc:
         error = str(exc)

@@ -1,0 +1,388 @@
+{
+  "schema": 1,
+  "slice": "V1-06C",
+  "kind": "independent_boundary_and_static_review",
+  "reviewer": "/root/pro_review",
+  "baseline": {
+    "core": "5ef7772d7183758f689eead856870017442852b5",
+    "pro": "95789b5c225e0f349efaddd3cf14a91d00be43e7"
+  },
+  "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "scope": {
+    "independently_reviewed_source_paths": [
+      "src/orze/cli_replication.py",
+      "src/orze/core/research_interfaces.py",
+      "src/orze/engine/cpu_phase.py",
+      "src/orze/engine/cpu_replication.py",
+      "src/orze/engine/replication.py"
+    ],
+    "supporting_read_paths": [
+      "src/orze/core/cpu_execution.py",
+      "src/orze/engine/cpu_policy_evidence.py",
+      "src/orze/engine/native_cpu_action.py",
+      "src/orze/engine/execution_authority.py"
+    ],
+    "independently_authored_test": "tests/test_cpu_replication_interfaces_review.py",
+    "classification": {
+      "independent_candidate_behavior_red": 1,
+      "old_product_behavior_red": 0,
+      "new_file_cases": 1,
+      "new_file_literal_asserts": 13,
+      "existing_tests_modified": 0
+    },
+    "author_separation": "Reviewer authored replication_requests.py schema extension separately. This is not an independent review of that owned record-store implementation. Reviewed CLI/Policy/coordinator/loop production changes and the cwd correction were authored by root/runtime; no edits to those sources by this reviewer.",
+    "execution_boundary": "Actual completed CPU source is produced through existing CLI/Orze/native supervised path. The boundary under test is real data-only CLI admission from another caller cwd, followed by exact-key replay; no second worker is launched by replicate."
+  },
+  "findings": [
+    {
+      "id": "selected_project_cwd_fingerprint",
+      "classification": "C candidate integration defect",
+      "status": "fixed_by_root_and_independently_verified",
+      "symptom": "Exact absolute -c from another cwd returned exit 2/error 'execution: loaded CPU configuration changed', after source was already TERMINAL and its reservation SETTLED.",
+      "cause": "CLI loaded and stamped the CPU configuration within config_path.parent, restored caller cwd, then invoked cpu_execution through the public service. Cwd is intentionally part of the frozen CPU fingerprint.",
+      "correction": "Root kept runtime validation, existing-Lake opening and request service invocation inside the exact project cwd try, restoring caller cwd in finally. Fingerprint was neither erased, weakened nor recomputed to grant a different context.",
+      "original_cli_sha256": "a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e",
+      "fixed_cli_sha256": "1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2"
+    },
+    {
+      "id": "captured_policy_and_budget_boundary",
+      "status": "no_additional_blocker_found_in_read_scope",
+      "result": "BoundPolicy validates exact Replicate fields and the detached original completed full Ref, not a callback-mutated view. Coordinator passes and repeats expected_source_ref inside its owned transaction. Replicate creates a queued mapping then durable Wait, not a worker/claim/reservation; ordinary Execute performs CPU replication authorization before reserve/claim."
+    },
+    {
+      "id": "source_content_and_science_scope",
+      "status": "bounded_contract_confirmed",
+      "result": "Request verification checks current source/target/request rows, exact metadata digests, effect receipts and route witnesses. It does not hash all artifact content or rerun a domain interpreter. B source capture and native GO/publication gates remain separate. Same config/spec and distinct observations do not establish scientific correctness, hermetic execution or statistical independence."
+    }
+  ],
+  "snapshots": [
+    {
+      "baseline_byte_equal": false,
+      "complete": true,
+      "path": "docs/evidence/snapshots/v1-06c-before-cli-cwd-cli-replication.py",
+      "sha256": "a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e",
+      "source": "src/orze/cli_replication.py",
+      "origin": "complete_C_candidate_module",
+      "baseline_commit": null
+    },
+    {
+      "baseline_byte_equal": true,
+      "complete": true,
+      "path": "docs/evidence/snapshots/v1-06c-before-cli-cwd-cpu-execution.py",
+      "sha256": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+      "source": "src/orze/core/cpu_execution.py",
+      "origin": "complete_fixed_baseline_module",
+      "baseline_commit": "5ef7772d7183758f689eead856870017442852b5"
+    },
+    {
+      "baseline_byte_equal": false,
+      "complete": true,
+      "path": "docs/evidence/snapshots/v1-06c-before-cli-cwd-replication.py",
+      "sha256": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+      "source": "src/orze/engine/replication.py",
+      "origin": "complete_C_candidate_module",
+      "baseline_commit": null
+    }
+  ],
+  "source_and_test_point": {
+    "src/orze/cli_replication.py": "1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2",
+    "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+    "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+    "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+    "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+    "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+    "tests/test_cpu_replication_interfaces_review.py": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217",
+    "tests/test_replication_cli_boundary.py": "79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee",
+    "tests/test_replication_cli_config_rejection.py": "f1edc41249ff7f23a677b928f811f21f498561bb8caca1ff6d36eff217253844"
+  },
+  "runs": [
+    {
+      "name": "first_actual_cpu_source_then_foreign_cwd_cli_admission",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess,sys\npaths=['src/orze/cli_replication.py','src/orze/core/cpu_execution.py','src/orze/engine/replication.py','src/orze/engine/cpu_replication.py','src/orze/core/research_interfaces.py','src/orze/engine/cpu_phase.py','tests/test_cpu_replication_interfaces_review.py','tests/test_cpu_product_loop.py']\nfor source,label in [('src/orze/cli_replication.py','cli-replication'),('src/orze/core/cpu_execution.py','cpu-execution'),('src/orze/engine/replication.py','replication')]:\n p=pathlib.Path('docs/evidence/snapshots/v1-06c-before-cli-cwd-'+label+'.py');assert p.read_bytes()==pathlib.Path(source).read_bytes(),str(p)\ndef hashes():return {p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\npre=hashes();print('PRE '+json.dumps(pre,sort_keys=True),flush=True)\nrun=subprocess.run([sys.executable,'-m','pytest','-q','-p','no:cacheprovider','tests/test_cpu_replication_interfaces_review.py','--tb=short'])\npost=hashes();print('POST '+json.dumps(post,sort_keys=True),flush=True);print('EXACT',pre==post,flush=True)\nraise SystemExit(run.returncode)\nPY",
+      "chunk": "f0b234",
+      "exit_code": 1,
+      "footer": "1 failed in 0.77s",
+      "counts": {
+        "failed": 1
+      },
+      "pre": {
+        "src/orze/cli_replication.py": "a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+        "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+        "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+        "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+        "tests/test_cpu_product_loop.py": "81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22",
+        "tests/test_cpu_replication_interfaces_review.py": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217"
+      },
+      "post": {
+        "src/orze/cli_replication.py": "a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+        "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+        "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+        "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+        "tests/test_cpu_product_loop.py": "81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22",
+        "tests/test_cpu_replication_interfaces_review.py": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217"
+      },
+      "output": "PRE {\"src/orze/cli_replication.py\": \"a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103\", \"src/orze/engine/cpu_phase.py\": \"f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9\", \"src/orze/engine/cpu_replication.py\": \"39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4\", \"src/orze/engine/replication.py\": \"7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\", \"tests/test_cpu_product_loop.py\": \"81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22\", \"tests/test_cpu_replication_interfaces_review.py\": \"7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217\"}\nF                                                                        [100%]\n=================================== FAILURES ===================================\n_ test_cpu_replication_cli_uses_selected_project_without_repinning_to_caller_cwd _\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_replication_interfaces_review.py:32: in test_cpu_replication_cli_uses_selected_project_without_repinning_to_caller_cwd\n    assert result == 0, output\nE   AssertionError: {'error': 'execution: loaded CPU configuration changed'}\nE   assert 2 == 0\n---------------------------- Captured stderr setup -----------------------------\n\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\n------------------------------ Captured log setup ------------------------------\nERROR    orze:extensions.py:68 orze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n=========================== short test summary info ============================\nFAILED tests/test_cpu_replication_interfaces_review.py::test_cpu_replication_cli_uses_selected_project_without_repinning_to_caller_cwd\n1 failed in 0.77s\nPOST {\"src/orze/cli_replication.py\": \"a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103\", \"src/orze/engine/cpu_phase.py\": \"f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9\", \"src/orze/engine/cpu_replication.py\": \"39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4\", \"src/orze/engine/replication.py\": \"7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\", \"tests/test_cpu_product_loop.py\": \"81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22\", \"tests/test_cpu_replication_interfaces_review.py\": \"7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217\"}\nEXACT True\n"
+    },
+    {
+      "name": "complete_three_module_candidate_replay_and_old_cli_controls",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,importlib,json,pathlib,sys,types\npaths=['src/orze/cli_replication.py','src/orze/core/cpu_execution.py','src/orze/engine/replication.py','src/orze/engine/cpu_replication.py','src/orze/core/research_interfaces.py','src/orze/engine/cpu_phase.py','tests/test_cpu_replication_interfaces_review.py','tests/test_cpu_product_loop.py','tests/test_replication_cli_boundary.py']\ndef hashes():return {p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\npre=hashes();print('PRE '+json.dumps(pre,sort_keys=True),flush=True)\nfor name,label,expected in [('orze.core.cpu_execution','cpu-execution','321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63'),('orze.engine.replication','replication','7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d'),('orze.cli_replication','cli-replication','a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e')]:\n parent,attr=name.rsplit('.',1);package=importlib.import_module(parent)\n path=pathlib.Path('docs/evidence/snapshots/v1-06c-before-cli-cwd-'+label+'.py');raw=path.read_bytes();assert hashlib.sha256(raw).hexdigest()==expected\n module=types.ModuleType(name);module.__file__=str(path.resolve());module.__package__=parent\n sys.modules[name]=module;setattr(package,attr,module);exec(compile(raw,str(path),'exec'),module.__dict__)\n print('REPLAY_FULL_MODULE '+name+' '+expected,flush=True)\nimport pytest\ncode=pytest.main(['-q','-p','no:cacheprovider','tests/test_cpu_replication_interfaces_review.py','tests/test_replication_cli_boundary.py','--tb=short'])\npost=hashes();print('POST '+json.dumps(post,sort_keys=True),flush=True);print('EXACT',pre==post,flush=True)\nraise SystemExit(code)\nPY",
+      "chunk": "ed032f",
+      "exit_code": 1,
+      "footer": "1 failed, 9 passed in 2.92s",
+      "counts": {
+        "failed": 1,
+        "passed": 9
+      },
+      "pre": {
+        "src/orze/cli_replication.py": "1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+        "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+        "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+        "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+        "tests/test_cpu_product_loop.py": "81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22",
+        "tests/test_cpu_replication_interfaces_review.py": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217",
+        "tests/test_replication_cli_boundary.py": "79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee"
+      },
+      "post": {
+        "src/orze/cli_replication.py": "1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+        "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+        "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+        "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+        "tests/test_cpu_product_loop.py": "81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22",
+        "tests/test_cpu_replication_interfaces_review.py": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217",
+        "tests/test_replication_cli_boundary.py": "79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee"
+      },
+      "output": "PRE {\"src/orze/cli_replication.py\": \"1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103\", \"src/orze/engine/cpu_phase.py\": \"f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9\", \"src/orze/engine/cpu_replication.py\": \"39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4\", \"src/orze/engine/replication.py\": \"7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\", \"tests/test_cpu_product_loop.py\": \"81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22\", \"tests/test_cpu_replication_interfaces_review.py\": \"7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217\", \"tests/test_replication_cli_boundary.py\": \"79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee\"}\nREPLAY_FULL_MODULE orze.core.cpu_execution 321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\nREPLAY_FULL_MODULE orze.engine.replication 7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\nREPLAY_FULL_MODULE orze.cli_replication a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e\nF.........                                                               [100%]\n=================================== FAILURES ===================================\n_ test_cpu_replication_cli_uses_selected_project_without_repinning_to_caller_cwd _\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_replication_interfaces_review.py:32: in test_cpu_replication_cli_uses_selected_project_without_repinning_to_caller_cwd\n    assert result == 0, output\nE   AssertionError: {'error': 'execution: loaded CPU configuration changed'}\nE   assert 2 == 0\n---------------------------- Captured stderr setup -----------------------------\n\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\n------------------------------ Captured log setup ------------------------------\nERROR    orze:extensions.py:68 orze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n=========================== short test summary info ============================\nFAILED tests/test_cpu_replication_interfaces_review.py::test_cpu_replication_cli_uses_selected_project_without_repinning_to_caller_cwd\n1 failed, 9 passed in 2.92s\nPOST {\"src/orze/cli_replication.py\": \"1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103\", \"src/orze/engine/cpu_phase.py\": \"f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9\", \"src/orze/engine/cpu_replication.py\": \"39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4\", \"src/orze/engine/replication.py\": \"7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\", \"tests/test_cpu_product_loop.py\": \"81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22\", \"tests/test_cpu_replication_interfaces_review.py\": \"7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217\", \"tests/test_replication_cli_boundary.py\": \"79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee\"}\nEXACT True\n"
+    },
+    {
+      "name": "fixed_boundary_and_root_product_policy_with_old_cli_controls",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess,sys\npaths=['src/orze/cli_replication.py','src/orze/core/cpu_execution.py','src/orze/engine/replication.py','src/orze/engine/cpu_replication.py','src/orze/core/research_interfaces.py','src/orze/engine/cpu_phase.py','tests/test_cpu_replication_interfaces_review.py','tests/test_cpu_product_loop.py','tests/test_replication_cli_boundary.py','tests/test_cpu_replication_policy.py','tests/test_cpu_replication_product.py']\ndef hashes():return {p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\npre=hashes();print('PRE '+json.dumps(pre,sort_keys=True),flush=True)\nrun=subprocess.run([sys.executable,'-m','pytest','-q','-p','no:cacheprovider','tests/test_cpu_replication_interfaces_review.py','tests/test_replication_cli_boundary.py','tests/test_cpu_replication_policy.py','tests/test_cpu_replication_product.py','--tb=short'])\npost=hashes();print('POST '+json.dumps(post,sort_keys=True),flush=True);print('EXACT',pre==post,flush=True)\nraise SystemExit(run.returncode)\nPY",
+      "session_id": 5805,
+      "chunks": [
+        "223c14",
+        "98928c"
+      ],
+      "exit_code": 0,
+      "footer": "27 passed in 14.31s",
+      "counts": {
+        "passed": 27,
+        "independent_new": 1,
+        "root_new": 17,
+        "existing": 9
+      },
+      "pre": {
+        "src/orze/cli_replication.py": "1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+        "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+        "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+        "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+        "tests/test_cpu_product_loop.py": "81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22",
+        "tests/test_cpu_replication_interfaces_review.py": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217",
+        "tests/test_cpu_replication_policy.py": "1bdeceaa8ff9b5bf6d6f0d022d2d38f51c81dd02750cb76d0905235aa87feba8",
+        "tests/test_cpu_replication_product.py": "84615a77bad34141f7afa2700d9897335d2a004fccbb799705c7a7d64a6539f0",
+        "tests/test_replication_cli_boundary.py": "79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee"
+      },
+      "post": {
+        "src/orze/cli_replication.py": "1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+        "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+        "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+        "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+        "tests/test_cpu_product_loop.py": "81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22",
+        "tests/test_cpu_replication_interfaces_review.py": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217",
+        "tests/test_cpu_replication_policy.py": "1bdeceaa8ff9b5bf6d6f0d022d2d38f51c81dd02750cb76d0905235aa87feba8",
+        "tests/test_cpu_replication_product.py": "84615a77bad34141f7afa2700d9897335d2a004fccbb799705c7a7d64a6539f0",
+        "tests/test_replication_cli_boundary.py": "79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee"
+      },
+      "output": "PRE {\"src/orze/cli_replication.py\": \"1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103\", \"src/orze/engine/cpu_phase.py\": \"f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9\", \"src/orze/engine/cpu_replication.py\": \"39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4\", \"src/orze/engine/replication.py\": \"7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\", \"tests/test_cpu_product_loop.py\": \"81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22\", \"tests/test_cpu_replication_interfaces_review.py\": \"7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217\", \"tests/test_cpu_replication_policy.py\": \"1bdeceaa8ff9b5bf6d6f0d022d2d38f51c81dd02750cb76d0905235aa87feba8\", \"tests/test_cpu_replication_product.py\": \"84615a77bad34141f7afa2700d9897335d2a004fccbb799705c7a7d64a6539f0\", \"tests/test_replication_cli_boundary.py\": \"79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee\"}\n...........................                                              [100%]\n27 passed in 14.31s\nPOST {\"src/orze/cli_replication.py\": \"1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103\", \"src/orze/engine/cpu_phase.py\": \"f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9\", \"src/orze/engine/cpu_replication.py\": \"39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4\", \"src/orze/engine/replication.py\": \"7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\", \"tests/test_cpu_product_loop.py\": \"81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22\", \"tests/test_cpu_replication_interfaces_review.py\": \"7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217\", \"tests/test_cpu_replication_policy.py\": \"1bdeceaa8ff9b5bf6d6f0d022d2d38f51c81dd02750cb76d0905235aa87feba8\", \"tests/test_cpu_replication_product.py\": \"84615a77bad34141f7afa2700d9897335d2a004fccbb799705c7a7d64a6539f0\", \"tests/test_replication_cli_boundary.py\": \"79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee\"}\nEXACT True\n"
+    },
+    {
+      "name": "fixed_independent_case_and_all_thirteen_existing_cli_controls",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess,sys\npaths=['src/orze/cli_replication.py','src/orze/core/cpu_execution.py','src/orze/engine/replication.py','src/orze/engine/cpu_replication.py','src/orze/core/research_interfaces.py','src/orze/engine/cpu_phase.py','tests/test_cpu_replication_interfaces_review.py','tests/test_replication_cli_boundary.py','tests/test_replication_cli_config_rejection.py']\ndef hashes():return {p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\npre=hashes();print('PRE '+json.dumps(pre,sort_keys=True),flush=True)\nrun=subprocess.run([sys.executable,'-m','pytest','-q','-p','no:cacheprovider','tests/test_cpu_replication_interfaces_review.py','tests/test_replication_cli_boundary.py','tests/test_replication_cli_config_rejection.py','--tb=short'])\npost=hashes();print('POST '+json.dumps(post,sort_keys=True),flush=True);print('EXACT',pre==post,flush=True)\nraise SystemExit(run.returncode)\nPY",
+      "chunk": "968f53",
+      "exit_code": 0,
+      "footer": "14 passed in 5.49s",
+      "counts": {
+        "passed": 14,
+        "independent_new": 1,
+        "existing": 13
+      },
+      "pre": {
+        "src/orze/cli_replication.py": "1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+        "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+        "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+        "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+        "tests/test_cpu_replication_interfaces_review.py": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217",
+        "tests/test_replication_cli_boundary.py": "79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee",
+        "tests/test_replication_cli_config_rejection.py": "f1edc41249ff7f23a677b928f811f21f498561bb8caca1ff6d36eff217253844"
+      },
+      "post": {
+        "src/orze/cli_replication.py": "1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103",
+        "src/orze/engine/cpu_phase.py": "f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9",
+        "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+        "src/orze/engine/replication.py": "7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d",
+        "tests/test_cpu_replication_interfaces_review.py": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217",
+        "tests/test_replication_cli_boundary.py": "79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee",
+        "tests/test_replication_cli_config_rejection.py": "f1edc41249ff7f23a677b928f811f21f498561bb8caca1ff6d36eff217253844"
+      },
+      "output": "PRE {\"src/orze/cli_replication.py\": \"1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103\", \"src/orze/engine/cpu_phase.py\": \"f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9\", \"src/orze/engine/cpu_replication.py\": \"39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4\", \"src/orze/engine/replication.py\": \"7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\", \"tests/test_cpu_replication_interfaces_review.py\": \"7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217\", \"tests/test_replication_cli_boundary.py\": \"79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee\", \"tests/test_replication_cli_config_rejection.py\": \"f1edc41249ff7f23a677b928f811f21f498561bb8caca1ff6d36eff217253844\"}\n..............                                                           [100%]\n14 passed in 5.49s\nPOST {\"src/orze/cli_replication.py\": \"1f3a4479b8698f6dc9822191e6b4abcdfa0dc68645aa8f322d6edf0a55b3fbf2\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"ae4f25e9c9953ac833ecd0ade1c1c635b12bf90ef1b382a9be3dd02357ac5103\", \"src/orze/engine/cpu_phase.py\": \"f784f85abf9206c7185cb943f58129ab512cc890bddeb6e798cce4daaea4e0a9\", \"src/orze/engine/cpu_replication.py\": \"39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4\", \"src/orze/engine/replication.py\": \"7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\", \"tests/test_cpu_replication_interfaces_review.py\": \"7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217\", \"tests/test_replication_cli_boundary.py\": \"79ddcd05470b060d78991134f37204785ee950634bc0989305bd57659f5ca6ee\", \"tests/test_replication_cli_config_rejection.py\": \"f1edc41249ff7f23a677b928f811f21f498561bb8caca1ff6d36eff217253844\"}\nEXACT True\n"
+    }
+  ],
+  "static_collection": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom collections import Counter\nimport ast,hashlib,json,pathlib,pytest,subprocess\nbaseline='5ef7772d7183758f689eead856870017442852b5'\ntests=['tests/test_cpu_replication.py','tests/test_cpu_replication_records.py','tests/test_native_cpu_replication.py','tests/test_cpu_replication_watch.py','tests/test_cpu_replication_product.py','tests/test_cpu_replication_policy.py','tests/test_cpu_replication_interfaces_review.py']\nrows={p:{'sha256':hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest(),'literal_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(pathlib.Path(p).read_bytes())))} for p in tests}\nold=subprocess.check_output(['git','ls-tree','-r','--name-only',baseline,'--','tests/']).decode().splitlines()\nchanged=[p for p in old if not pathlib.Path(p).is_file() or pathlib.Path(p).read_bytes()!=subprocess.check_output(['git','show',baseline+':'+p])]\nassert not changed,changed\nsnapshots=[]\nfor source,label in [('src/orze/cli_replication.py','cli-replication'),('src/orze/core/cpu_execution.py','cpu-execution'),('src/orze/engine/replication.py','replication')]:\n p=pathlib.Path('docs/evidence/snapshots/v1-06c-before-cli-cwd-'+label+'.py');raw=p.read_bytes();ast.parse(raw);assert raw.endswith(b'\\n')\n snapshots.append({'path':str(p),'source':source,'sha256':hashlib.sha256(raw).hexdigest(),'complete':True,'baseline_byte_equal':raw==subprocess.check_output(['git','show',baseline+':'+source])})\ndoc=pathlib.Path('docs/cpu-replication.md')\nprint('STATIC '+json.dumps({'old_test_files':len(old),'old_test_changes':changed,'snapshots':snapshots,'contract_sha256':hashlib.sha256(doc.read_bytes()).hexdigest()},sort_keys=True),flush=True)\nclass Counts:\n def pytest_collection_finish(self,session):\n  counts=Counter(i.nodeid.split('::',1)[0] for i in session.items)\n  assert set(counts)==set(tests)\n  for p in tests:rows[p]['cases']=counts[p]\n  print('COLLECTION '+json.dumps(rows,sort_keys=True),flush=True)\n  print('TOTAL '+json.dumps({'files':len(rows),'cases':sum(counts.values()),'literal_asserts':sum(r['literal_asserts'] for r in rows.values())},sort_keys=True),flush=True)\nraise SystemExit(pytest.main(['--collect-only','-q','-p','no:cacheprovider',*tests],plugins=[Counts()]))\nPY",
+    "chunk": "0e516f",
+    "exit_code": 0,
+    "output": "STATIC {\"contract_sha256\": \"0d40b0b9e04f455bd0c5255a37a0e110e8543cbc967a9b02fbb1e4c9710ffe87\", \"old_test_changes\": [], \"old_test_files\": 437, \"snapshots\": [{\"baseline_byte_equal\": false, \"complete\": true, \"path\": \"docs/evidence/snapshots/v1-06c-before-cli-cwd-cli-replication.py\", \"sha256\": \"a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e\", \"source\": \"src/orze/cli_replication.py\"}, {\"baseline_byte_equal\": true, \"complete\": true, \"path\": \"docs/evidence/snapshots/v1-06c-before-cli-cwd-cpu-execution.py\", \"sha256\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"source\": \"src/orze/core/cpu_execution.py\"}, {\"baseline_byte_equal\": false, \"complete\": true, \"path\": \"docs/evidence/snapshots/v1-06c-before-cli-cwd-replication.py\", \"sha256\": \"7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\", \"source\": \"src/orze/engine/replication.py\"}]}\ntests/test_cpu_replication.py::test_public_request_copies_completed_cpu_without_config_salt\ntests/test_cpu_replication.py::test_same_request_claimed_replay_preserves_all_rows\ntests/test_cpu_replication.py::test_distinct_requests_keep_same_spec_and_ordinary_dedup\ntests/test_cpu_replication.py::test_two_real_connections_one_request_one_target\ntests/test_cpu_replication.py::test_same_key_or_captured_source_conflict_has_no_mutation[reason]\ntests/test_cpu_replication.py::test_same_key_or_captured_source_conflict_has_no_mutation[expected_ref]\ntests/test_cpu_replication.py::test_changed_source_cannot_reauthorize_existing_request[config]\ntests/test_cpu_replication.py::test_changed_source_cannot_reauthorize_existing_request[terminal]\ntests/test_cpu_replication.py::test_changed_source_cannot_reauthorize_existing_request[confirmation]\ntests/test_cpu_replication.py::test_action_target_scope_and_train_adapter_cannot_reuse_cpu_grant\ntests/test_cpu_replication.py::test_request_insert_trigger_mutation_rolls_back_task_and_request\ntests/test_cpu_replication.py::test_silent_commit_rollback_never_reports_created\ntests/test_cpu_replication_records.py::test_cpu_schema_two_seal_and_detached_validation\ntests/test_cpu_replication_records.py::test_cpu_schema_two_insert_read_and_duplicate_are_insert_only\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[schema-True]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[schema-2.0]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[schema-2]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[schema-1]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[adapter-training]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[adapter-True]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[source_file_sha256-1111111111111111111111111111111111111111111111111111111111111111]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[execution_identity-2222222222222222222222222222222222222222222222222222222222222222]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[extra-None]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[action_sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[domain_run_sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[observation_records_sha256-True]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[artifact_records_sha256-gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_exact_action_ref[phase-training]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_exact_action_ref[phase-posthoc]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_exact_action_ref[phase-True]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_exact_action_ref[generation-True]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_exact_action_ref[generation-1.0]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_all_fields_and_exact_digest\ntests/test_cpu_replication_records.py::test_cpu_schema_two_bounded_encoded_record\ntests/test_cpu_replication_records.py::test_cpu_schema_two_same_table_accepts_v1_without_restricting_its_phase\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rollback_keeps_schema_and_request_uncommitted\ntests/test_cpu_replication_records.py::test_cpu_schema_two_insert_requires_exact_current_terminal_source[stale]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_insert_requires_exact_current_terminal_source[running]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_insert_requires_exact_current_terminal_source[row_hash]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_insert_requires_exact_current_terminal_source[terminal_hash]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_historical_mapping_is_not_source_authority\ntests/test_cpu_replication_records.py::test_cpu_schema_two_stored_record_must_be_canonical\ntests/test_native_cpu_replication.py::test_cpu_target_never_consumes_training_replication_mapping[False]\ntests/test_native_cpu_replication.py::test_cpu_target_never_consumes_training_replication_mapping[True]\ntests/test_native_cpu_replication.py::test_actual_cpu_replica_captures_authorization_and_keeps_spec_not_occurrence\ntests/test_native_cpu_replication.py::test_real_ready_refuses_changed_or_new_replication_mapping[delete]\ntests/test_native_cpu_replication.py::test_real_ready_refuses_changed_or_new_replication_mapping[replace]\ntests/test_native_cpu_replication.py::test_real_ready_refuses_changed_or_new_replication_mapping[add]\ntests/test_native_cpu_replication.py::test_grant_removed_after_go_cannot_publish_or_settle\ntests/test_native_cpu_replication.py::test_terminal_trigger_request_mutation_rolls_back_actual_publication\ntests/test_cpu_replication_watch.py::test_watch_allows_only_exact_read_roles_and_detaches_expected_record[source]\ntests/test_cpu_replication_watch.py::test_watch_allows_only_exact_read_roles_and_detaches_expected_record[target]\ntests/test_cpu_replication_watch.py::test_unrelated_task_guard_does_not_receive_replication_authority\ntests/test_cpu_replication_watch.py::test_watch_rejects_non_cpu_schema_before_admitting_metadata[True]\ntests/test_cpu_replication_watch.py::test_watch_rejects_non_cpu_schema_before_admitting_metadata[1]\ntests/test_cpu_replication_watch.py::test_watch_rechecks_actual_request_before_commit_and_rolls_back\ntests/test_cpu_replication_watch.py::test_watch_rechecks_actual_request_after_real_commit_and_holds\ntests/test_cpu_replication_product.py::test_same_request_cli_replica_retains_spec_and_creates_new_occurrences[False]\ntests/test_cpu_replication_product.py::test_same_request_cli_replica_retains_spec_and_creates_new_occurrences[True]\ntests/test_cpu_replication_product.py::test_policy_can_request_one_identical_cpu_replica_then_execute_it\ntests/test_cpu_replication_product.py::test_ordinary_identical_proposal_still_stays_unadmitted\ntests/test_cpu_replication_product.py::test_cpu_replication_cli_accepts_explicitly_absent_training_paths\ntests/test_cpu_replication_product.py::test_cpu_replication_dispatch_rechecks_before_claim_and_budget[request_record]\ntests/test_cpu_replication_product.py::test_cpu_replication_dispatch_rechecks_before_claim_and_budget[domain_implementation]\ntests/test_cpu_replication_product.py::test_explicit_cpu_replication_still_requires_its_own_wall_allowance\ntests/test_cpu_replication_product.py::test_cli_same_key_changed_reason_is_conflict_without_another_task\ntests/test_cpu_replication_policy.py::test_policy_can_select_a_captured_completed_occurrence_for_replication\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[request_id]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[extra]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[blank_reason]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[not_completed]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[different_generation]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[bool_generation]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[mutated_view]\ntests/test_cpu_replication_interfaces_review.py::test_cpu_replication_cli_uses_selected_project_without_repinning_to_caller_cwd\nCOLLECTION {\"tests/test_cpu_replication.py\": {\"cases\": 12, \"literal_asserts\": 27, \"sha256\": \"828178809d38abf1f04ed1c8cba54fa7e90b008cf37f18058d50249dc218489d\"}, \"tests/test_cpu_replication_interfaces_review.py\": {\"cases\": 1, \"literal_asserts\": 13, \"sha256\": \"7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217\"}, \"tests/test_cpu_replication_policy.py\": {\"cases\": 8, \"literal_asserts\": 3, \"sha256\": \"1bdeceaa8ff9b5bf6d6f0d022d2d38f51c81dd02750cb76d0905235aa87feba8\"}, \"tests/test_cpu_replication_product.py\": {\"cases\": 9, \"literal_asserts\": 55, \"sha256\": \"84615a77bad34141f7afa2700d9897335d2a004fccbb799705c7a7d64a6539f0\"}, \"tests/test_cpu_replication_records.py\": {\"cases\": 30, \"literal_asserts\": 28, \"sha256\": \"42291da03cbd50a9224b70cb115aec8e94b8f60e62ce5b113988dab8e172490f\"}, \"tests/test_cpu_replication_watch.py\": {\"cases\": 7, \"literal_asserts\": 11, \"sha256\": \"6e884a49db00c5ba5d6ae07e09d02748fb5cdcf75823409e5f414adb391d448d\"}, \"tests/test_native_cpu_replication.py\": {\"cases\": 8, \"literal_asserts\": 29, \"sha256\": \"4681cea584159a1509da1a881acc098dbb80665bd7392b4d501a410c5476526f\"}}\nTOTAL {\"cases\": 75, \"files\": 7, \"literal_asserts\": 166}\n\n75 tests collected in 0.48s\n",
+    "test_files": {
+      "tests/test_cpu_replication.py": {
+        "cases": 12,
+        "literal_asserts": 27,
+        "sha256": "828178809d38abf1f04ed1c8cba54fa7e90b008cf37f18058d50249dc218489d"
+      },
+      "tests/test_cpu_replication_interfaces_review.py": {
+        "cases": 1,
+        "literal_asserts": 13,
+        "sha256": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217"
+      },
+      "tests/test_cpu_replication_policy.py": {
+        "cases": 8,
+        "literal_asserts": 3,
+        "sha256": "1bdeceaa8ff9b5bf6d6f0d022d2d38f51c81dd02750cb76d0905235aa87feba8"
+      },
+      "tests/test_cpu_replication_product.py": {
+        "cases": 9,
+        "literal_asserts": 55,
+        "sha256": "84615a77bad34141f7afa2700d9897335d2a004fccbb799705c7a7d64a6539f0"
+      },
+      "tests/test_cpu_replication_records.py": {
+        "cases": 30,
+        "literal_asserts": 28,
+        "sha256": "42291da03cbd50a9224b70cb115aec8e94b8f60e62ce5b113988dab8e172490f"
+      },
+      "tests/test_cpu_replication_watch.py": {
+        "cases": 7,
+        "literal_asserts": 11,
+        "sha256": "6e884a49db00c5ba5d6ae07e09d02748fb5cdcf75823409e5f414adb391d448d"
+      },
+      "tests/test_native_cpu_replication.py": {
+        "cases": 8,
+        "literal_asserts": 29,
+        "sha256": "4681cea584159a1509da1a881acc098dbb80665bd7392b4d501a410c5476526f"
+      }
+    },
+    "totals": {
+      "cases": 75,
+      "files": 7,
+      "literal_asserts": 166
+    },
+    "old_tracked_test_files_byte_equal": 437,
+    "old_test_changes": [],
+    "scope": "Collection-only and literal AST counts, not execution of all 75 tests; assertions inside arbitrary generated/string programs are not claimed by the 166 literal-Assert count."
+  },
+  "document_review": {
+    "path": "docs/cpu-replication.md",
+    "sha256": "88c3ad7c007823ac3515592d2d7385edf3cdb89416c1eb5503c83e7dafc54e12",
+    "outcome": "No source-blocking discrepancy found. Documentation correctly limits metadata/effect verification, preserves ordinary dedup and request replay, distinguishes queued Replicate from budgeted Execute, and excludes automatic unknown recovery, hermeticity and scientific/statistical guarantees.",
+    "precision_recommendation": "Resolved by root docs-only correction: strategy/execution paths use HOLD; explicit replication CLI admission failures retain existing JSON errors and exit 2, not terminal or rollback proof. The earlier wording concern was observed at first_read_sha256; no production change.",
+    "boundary": "Final contract read matches current source and does not expand the bounded tests into a full-suite or whole-V1 acceptance claim.",
+    "first_read_sha256": "0d40b0b9e04f455bd0c5255a37a0e110e8543cbc967a9b02fbb1e4c9710ffe87",
+    "final_read": {
+      "chunk": "e1a3d5",
+      "exit_code": 0,
+      "output": "    \"reason\": \"复核当前已记录结果\",\n}\n```\n\n这四个字段必须精确匹配合同。fullRef 包含 task/phase/attempt/generation，不能只凭 task ID 偷换来源代际；策略回调修改收到的数据，也不能扩张原捕获集合。协调器在实际准入事务中再次核对这个预期 fullRef。\n\nReplicate 只生成持久排队任务，随后记录带未来 wakeup 的 Wait；下一轮再由 Policy 选择普通 Execute。相同 key 的幂等重放也会等待，不形成无间隔的重复准入循环。`--once` 若本轮只请求复验，就结束该轮，副本需下一次运行执行。策略/执行路径的读取或授权异常进入 HOLD；显式复验 CLI 准入失败保留既有 JSON 错误与退出码 2，不把错误响应当作终态或回滚证明。\n\n来源、key、reason 和目标关系在请求账本中持久保存；这不是记录任意完整 Policy 内存或决策过程。队列准入不扣一次执行额度，实际执行仍逐次预留。可信 Python Policy/Domain 回调与控制元数据操作并未纳入子进程 wall budget，也没有无限队列/全局内存上限或统一信息增益保证。\n\n## 验收边界\n\n验收区分新增 schema/策略/CPU 入口要求、既有跨 adapter 缺口、实施草稿故障以及新测试前提纠正。真实 CLI 复验覆盖 A 零产物和 B 多观察路径，验证原配置不变、新任务/尝试/记录独立；另有普通去重、请求冲突、额度耗尽、来源/目标变化、READY 和终态故障等负例。重叠套件和重放不累加为新增用例或额外缺陷。\n\n机制正确性不等于科研收益提高；本片不优化 ASR，不运行 GPU/付费 provider 或线上实验。两类异构领域以及接口冻结后的独立留出验收仍须单独完成，留出内容在本片尚未读取。\n88c3ad7c007823ac3515592d2d7385edf3cdb89416c1eb5503c83e7dafc54e12  docs/cpu-replication.md\nfa6471211d2047b0d336b60ce74110e21370ab5e6b858aa119be19d9f9a3c1df  docs/evidence/2026-09-11-v1-06c-cpu-replication-records-author.json\n"
+    }
+  },
+  "limitations": [
+    "The one failing case is a C candidate integration defect, not baseline B's missing CPU replication capability or an old product behavior red.",
+    "First test source/body/SHA and all assertions remained unchanged; no fixture correction, missing-API or import failure classification.",
+    "The initial and replay outputs include the existing installed-Pro stub license diagnostic during test setup; actual CPU foreground setup and terminal assertions passed, and the demonstrated failure was the explicit CLI status assertion.",
+    "The 27- and 14-case runs overlap; their union is 31 distinct cases, not 41 new cases.",
+    "No full-suite, fixed-commit, remote-readback or aggregate acceptance claim is made here.",
+    "No source edits outside the separately owned store task, provider/GPU/live research workload, host-wide process scan or holdout access."
+  ],
+  "collection": {
+    "result": {
+      "files": [
+        {
+          "path": "tests/test_cpu_replication.py",
+          "cases": 12,
+          "literal_asserts": 27,
+          "sha256": "828178809d38abf1f04ed1c8cba54fa7e90b008cf37f18058d50249dc218489d"
+        },
+        {
+          "path": "tests/test_cpu_replication_interfaces_review.py",
+          "cases": 1,
+          "literal_asserts": 13,
+          "sha256": "7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217"
+        },
+        {
+          "path": "tests/test_cpu_replication_policy.py",
+          "cases": 8,
+          "literal_asserts": 3,
+          "sha256": "1bdeceaa8ff9b5bf6d6f0d022d2d38f51c81dd02750cb76d0905235aa87feba8"
+        },
+        {
+          "path": "tests/test_cpu_replication_product.py",
+          "cases": 9,
+          "literal_asserts": 55,
+          "sha256": "84615a77bad34141f7afa2700d9897335d2a004fccbb799705c7a7d64a6539f0"
+        },
+        {
+          "path": "tests/test_cpu_replication_records.py",
+          "cases": 30,
+          "literal_asserts": 28,
+          "sha256": "42291da03cbd50a9224b70cb115aec8e94b8f60e62ce5b113988dab8e172490f"
+        },
+        {
+          "path": "tests/test_cpu_replication_watch.py",
+          "cases": 7,
+          "literal_asserts": 11,
+          "sha256": "6e884a49db00c5ba5d6ae07e09d02748fb5cdcf75823409e5f414adb391d448d"
+        },
+        {
+          "path": "tests/test_native_cpu_replication.py",
+          "cases": 8,
+          "literal_asserts": 29,
+          "sha256": "4681cea584159a1509da1a881acc098dbb80665bd7392b4d501a410c5476526f"
+        }
+      ],
+      "file_count": 7,
+      "cases": 75,
+      "literal_asserts": 166
+    },
+    "raw_output": "STATIC {\"contract_sha256\": \"0d40b0b9e04f455bd0c5255a37a0e110e8543cbc967a9b02fbb1e4c9710ffe87\", \"old_test_changes\": [], \"old_test_files\": 437, \"snapshots\": [{\"baseline_byte_equal\": false, \"complete\": true, \"path\": \"docs/evidence/snapshots/v1-06c-before-cli-cwd-cli-replication.py\", \"sha256\": \"a063f2078cd8b6f8a1ce367687e60fad7455f663862c83a1d4fbbbb6bd5dca1e\", \"source\": \"src/orze/cli_replication.py\"}, {\"baseline_byte_equal\": true, \"complete\": true, \"path\": \"docs/evidence/snapshots/v1-06c-before-cli-cwd-cpu-execution.py\", \"sha256\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"source\": \"src/orze/core/cpu_execution.py\"}, {\"baseline_byte_equal\": false, \"complete\": true, \"path\": \"docs/evidence/snapshots/v1-06c-before-cli-cwd-replication.py\", \"sha256\": \"7df5a668256c3c174d1277cdbdf88de00e9fc7882e7dd234e2bb4133b46c4b3d\", \"source\": \"src/orze/engine/replication.py\"}]}\ntests/test_cpu_replication.py::test_public_request_copies_completed_cpu_without_config_salt\ntests/test_cpu_replication.py::test_same_request_claimed_replay_preserves_all_rows\ntests/test_cpu_replication.py::test_distinct_requests_keep_same_spec_and_ordinary_dedup\ntests/test_cpu_replication.py::test_two_real_connections_one_request_one_target\ntests/test_cpu_replication.py::test_same_key_or_captured_source_conflict_has_no_mutation[reason]\ntests/test_cpu_replication.py::test_same_key_or_captured_source_conflict_has_no_mutation[expected_ref]\ntests/test_cpu_replication.py::test_changed_source_cannot_reauthorize_existing_request[config]\ntests/test_cpu_replication.py::test_changed_source_cannot_reauthorize_existing_request[terminal]\ntests/test_cpu_replication.py::test_changed_source_cannot_reauthorize_existing_request[confirmation]\ntests/test_cpu_replication.py::test_action_target_scope_and_train_adapter_cannot_reuse_cpu_grant\ntests/test_cpu_replication.py::test_request_insert_trigger_mutation_rolls_back_task_and_request\ntests/test_cpu_replication.py::test_silent_commit_rollback_never_reports_created\ntests/test_cpu_replication_records.py::test_cpu_schema_two_seal_and_detached_validation\ntests/test_cpu_replication_records.py::test_cpu_schema_two_insert_read_and_duplicate_are_insert_only\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[schema-True]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[schema-2.0]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[schema-2]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[schema-1]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[adapter-training]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[adapter-True]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[source_file_sha256-1111111111111111111111111111111111111111111111111111111111111111]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[execution_identity-2222222222222222222222222222222222222222222222222222222222222222]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[extra-None]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[action_sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[domain_run_sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[observation_records_sha256-True]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rejects_wrong_shape_types_and_hashes[artifact_records_sha256-gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_exact_action_ref[phase-training]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_exact_action_ref[phase-posthoc]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_exact_action_ref[phase-True]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_exact_action_ref[generation-True]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_exact_action_ref[generation-1.0]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_requires_all_fields_and_exact_digest\ntests/test_cpu_replication_records.py::test_cpu_schema_two_bounded_encoded_record\ntests/test_cpu_replication_records.py::test_cpu_schema_two_same_table_accepts_v1_without_restricting_its_phase\ntests/test_cpu_replication_records.py::test_cpu_schema_two_rollback_keeps_schema_and_request_uncommitted\ntests/test_cpu_replication_records.py::test_cpu_schema_two_insert_requires_exact_current_terminal_source[stale]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_insert_requires_exact_current_terminal_source[running]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_insert_requires_exact_current_terminal_source[row_hash]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_insert_requires_exact_current_terminal_source[terminal_hash]\ntests/test_cpu_replication_records.py::test_cpu_schema_two_historical_mapping_is_not_source_authority\ntests/test_cpu_replication_records.py::test_cpu_schema_two_stored_record_must_be_canonical\ntests/test_native_cpu_replication.py::test_cpu_target_never_consumes_training_replication_mapping[False]\ntests/test_native_cpu_replication.py::test_cpu_target_never_consumes_training_replication_mapping[True]\ntests/test_native_cpu_replication.py::test_actual_cpu_replica_captures_authorization_and_keeps_spec_not_occurrence\ntests/test_native_cpu_replication.py::test_real_ready_refuses_changed_or_new_replication_mapping[delete]\ntests/test_native_cpu_replication.py::test_real_ready_refuses_changed_or_new_replication_mapping[replace]\ntests/test_native_cpu_replication.py::test_real_ready_refuses_changed_or_new_replication_mapping[add]\ntests/test_native_cpu_replication.py::test_grant_removed_after_go_cannot_publish_or_settle\ntests/test_native_cpu_replication.py::test_terminal_trigger_request_mutation_rolls_back_actual_publication\ntests/test_cpu_replication_watch.py::test_watch_allows_only_exact_read_roles_and_detaches_expected_record[source]\ntests/test_cpu_replication_watch.py::test_watch_allows_only_exact_read_roles_and_detaches_expected_record[target]\ntests/test_cpu_replication_watch.py::test_unrelated_task_guard_does_not_receive_replication_authority\ntests/test_cpu_replication_watch.py::test_watch_rejects_non_cpu_schema_before_admitting_metadata[True]\ntests/test_cpu_replication_watch.py::test_watch_rejects_non_cpu_schema_before_admitting_metadata[1]\ntests/test_cpu_replication_watch.py::test_watch_rechecks_actual_request_before_commit_and_rolls_back\ntests/test_cpu_replication_watch.py::test_watch_rechecks_actual_request_after_real_commit_and_holds\ntests/test_cpu_replication_product.py::test_same_request_cli_replica_retains_spec_and_creates_new_occurrences[False]\ntests/test_cpu_replication_product.py::test_same_request_cli_replica_retains_spec_and_creates_new_occurrences[True]\ntests/test_cpu_replication_product.py::test_policy_can_request_one_identical_cpu_replica_then_execute_it\ntests/test_cpu_replication_product.py::test_ordinary_identical_proposal_still_stays_unadmitted\ntests/test_cpu_replication_product.py::test_cpu_replication_cli_accepts_explicitly_absent_training_paths\ntests/test_cpu_replication_product.py::test_cpu_replication_dispatch_rechecks_before_claim_and_budget[request_record]\ntests/test_cpu_replication_product.py::test_cpu_replication_dispatch_rechecks_before_claim_and_budget[domain_implementation]\ntests/test_cpu_replication_product.py::test_explicit_cpu_replication_still_requires_its_own_wall_allowance\ntests/test_cpu_replication_product.py::test_cli_same_key_changed_reason_is_conflict_without_another_task\ntests/test_cpu_replication_policy.py::test_policy_can_select_a_captured_completed_occurrence_for_replication\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[request_id]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[extra]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[blank_reason]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[not_completed]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[different_generation]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[bool_generation]\ntests/test_cpu_replication_policy.py::test_replication_decision_cannot_expand_or_relabel_its_captured_source[mutated_view]\ntests/test_cpu_replication_interfaces_review.py::test_cpu_replication_cli_uses_selected_project_without_repinning_to_caller_cwd\nCOLLECTION {\"tests/test_cpu_replication.py\": {\"cases\": 12, \"literal_asserts\": 27, \"sha256\": \"828178809d38abf1f04ed1c8cba54fa7e90b008cf37f18058d50249dc218489d\"}, \"tests/test_cpu_replication_interfaces_review.py\": {\"cases\": 1, \"literal_asserts\": 13, \"sha256\": \"7b36e80070be1a0b4e0c60c063a272161e3239e3e64bb08d555a11056ebb3217\"}, \"tests/test_cpu_replication_policy.py\": {\"cases\": 8, \"literal_asserts\": 3, \"sha256\": \"1bdeceaa8ff9b5bf6d6f0d022d2d38f51c81dd02750cb76d0905235aa87feba8\"}, \"tests/test_cpu_replication_product.py\": {\"cases\": 9, \"literal_asserts\": 55, \"sha256\": \"84615a77bad34141f7afa2700d9897335d2a004fccbb799705c7a7d64a6539f0\"}, \"tests/test_cpu_replication_records.py\": {\"cases\": 30, \"literal_asserts\": 28, \"sha256\": \"42291da03cbd50a9224b70cb115aec8e94b8f60e62ce5b113988dab8e172490f\"}, \"tests/test_cpu_replication_watch.py\": {\"cases\": 7, \"literal_asserts\": 11, \"sha256\": \"6e884a49db00c5ba5d6ae07e09d02748fb5cdcf75823409e5f414adb391d448d\"}, \"tests/test_native_cpu_replication.py\": {\"cases\": 8, \"literal_asserts\": 29, \"sha256\": \"4681cea584159a1509da1a881acc098dbb80665bd7392b4d501a410c5476526f\"}}\nTOTAL {\"cases\": 75, \"files\": 7, \"literal_asserts\": 166}\n\n75 tests collected in 0.48s\n",
+    "command_reference": "static_collection.command",
+    "chunk": "0e516f",
+    "exit_code": 0,
+    "note": "result.files is a normalized projection of the actual COLLECTION JSON; raw_output is the unmodified tool stdout, not synthesized JSON."
+  },
+  "metadata_checker_history": [
+    {
+      "classification": "report construction/tool error; no source or test defect",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib,re,subprocess\npaths=['docs/evidence/2026-09-11-v1-06c-cpu-replication-records-author.json','docs/evidence/2026-09-11-v1-06c-interfaces-independent-review.json']\ncommands=[]\ndef walk(v):\n if isinstance(v,dict):\n  for k,x in v.items():\n   if k=='command': commands.append(x)\n   else: walk(x)\n elif isinstance(v,list):\n  for x in v:walk(x)\nfor name in paths:walk(json.loads(pathlib.Path(name).read_text()))\nfor command in commands:\n subprocess.run(['bash','-n'],input=command,text=True,check=True)\n match=re.search(r\"<<'PY'\\n(.*)\\nPY$\",command,re.S);assert match;ast.parse(match.group(1))\np=pathlib.Path(paths[-1]);doc=json.loads(p.read_text());files=doc['collection']['result']['files']\nassert len(files)==7 and sum(x['cases'] for x in files)==75 and sum(x['literal_asserts'] for x in files)==166\nfor row in files:\n raw=pathlib.Path(row['path']).read_bytes();assert hashlib.sha256(raw).hexdigest()==row['sha256'];assert sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(raw)))==row['literal_asserts']\nfor name,digest in doc['source_and_test_point'].items():assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()==digest,name\nassert hashlib.sha256(pathlib.Path(doc['document_review']['path']).read_bytes()).hexdigest()==doc['document_review']['sha256']\nprint(json.dumps({'commands':len(commands),'bash_syntax':'passed','python_heredocs':len(commands),'reports':{name:hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest() for name in paths},'files':len(files),'cases':75,'literal_asserts':166,'current_hashes_exact':True},sort_keys=True))\nPY",
+      "chunk": "cb49d7",
+      "exit_code": 1,
+      "output": "Traceback (most recent call last):\n  File \"<stdin>\", line 16, in <module>\nTypeError: object of type 'int' has no len()\n",
+      "prior_collection_result": {
+        "files": 7,
+        "cases": 75,
+        "literal_asserts": 166
+      },
+      "cause": "A report object spread reused totals.files=7 and overwrote the intended per-file array. Corrected only the normalized report projection from the already preserved raw COLLECTION output; original counts/hashes/tests unchanged.",
+      "nonmutating_patch_attempt": "One malformed generated apply_patch context was rejected without writing any file; the subsequent full report update restored the intended array."
+    }
+  ]
+}

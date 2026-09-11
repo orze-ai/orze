@@ -37,7 +37,6 @@ class ExecutionTransaction:
     _watched_artifacts: dict = field(default_factory=dict, init=False, repr=False)
     _watched_observations: dict = field(default_factory=dict, init=False, repr=False)
     _watched_cpu_sources: dict = field(default_factory=dict, init=False, repr=False)
-    _watched_cpu_replication: dict = field(default_factory=dict, init=False, repr=False)
 
     @property
     def conn(self):
@@ -87,30 +86,6 @@ class ExecutionTransaction:
         for prepared, expected in self._watched_cpu_sources.values():
             if _cpu_source_snapshot(self, prepared) != expected:
                 raise AttemptAuthorityError("execution_cpu_sources_changed")
-        for record, expected in self._watched_cpu_replication.values():
-            if _cpu_replication_snapshot(self, record) != expected:
-                raise AttemptAuthorityError("execution_cpu_replication_changed")
-
-    def watch_cpu_replication(self, record) -> None:
-        """Read-only request fence for its exact source or target task guard.
-
-        A source task creates the request; its separately owned target later
-        consumes it. Neither role gains a write lease for the other task.
-        Expected schema-2 metadata is detached before immediate and final
-        same-connection verification; no caller callback is accepted.
-        """
-        from orze.core.replication_requests import validate_record
-        if (not self.conn.in_transaction or len(self._watched_cpu_replication) >= 32
-                or type(record) is not dict or type(record.get("schema")) is not int
-                or record["schema"] != 2):
-            raise AttemptAuthorityError("execution_cpu_replication_watch_invalid")
-        require_effect_lease(self.lease, self.idea_dir)
-        detached = validate_record(record)
-        key = detached["request_id"]
-        if key in self._watched_cpu_replication:
-            raise AttemptAuthorityError("execution_cpu_replication_watch_invalid")
-        encoded = _cpu_replication_snapshot(self, detached)
-        self._watched_cpu_replication[key] = (detached, encoded)
 
     def watch_observations(self, ref: AttemptRef, records) -> None:
         """Fence the publisher's exact observation set, including explicit zero."""
@@ -239,18 +214,6 @@ def _cpu_source_snapshot(tx: ExecutionTransaction, prepared) -> str:
     from orze.engine.cpu_action_sources import require_sources, snapshot
     require_sources(tx.lake, tx.idea_dir.parent, prepared, metadata_only=True)
     return _canonical(snapshot(prepared))
-
-
-def _cpu_replication_snapshot(tx: ExecutionTransaction, record) -> str:
-    from orze.core.replication_requests import validate_record
-    from orze.engine.cpu_replication import verify_record
-    record = validate_record(record)
-    if (type(record["schema"]) is not int or record["schema"] != 2
-            or record["scope"] != str(tx.idea_dir.parent)
-            or tx.idea_dir.name not in (record["task_id"], record["source_ref"]["task_id"])):
-        raise AttemptAuthorityError("execution_cpu_replication_scope_invalid")
-    verify_record(tx.lake, tx.idea_dir.parent, record)
-    return _canonical(record)
 
 
 def _lifecycle_phase(payload, ref):

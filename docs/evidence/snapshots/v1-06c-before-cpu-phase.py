@@ -194,25 +194,6 @@ def iteration(engine):
         decision = engine._cpu_policy.decide(snapshot, budget.snapshot(engine.lake, engine._cpu_scope))
     except Exception as exc:
         raise CPUExecutionError("execution: research policy decision rejected") from exc
-    if decision["kind"] == "Replicate":
-        from orze.engine.replication import request_replication
-        try:
-            require_admission(engine)
-            if check_disk_space(engine.results_dir, engine.cfg.get("min_disk_gb", 5)):
-                result = request_replication(decision["source_ref"]["task_id"],
-                    engine.results_dir, engine.cfg, engine.lake,
-                    request_id=decision["request_id"], reason=decision["reason"],
-                    expected_source_ref=decision["source_ref"])
-                reason = "replication_" + result["status"]
-            else:
-                reason = "disk_space"
-        except Exception as exc:
-            raise CPUExecutionError("execution: policy replication request rejected") from exc
-        # The request ledger owns the exact key/source/target/rationale. It
-        # creates only a queued task, never a worker or a free execution permit.
-        # Even an idempotent replay yields before asking the policy again.
-        decision = {"kind": "Wait", "reason": reason,
-                    "wakeup": time.time() + engine._cpu_policy.declaration["wait_seconds"]}
     if decision["kind"] == "Execute":
         idea_id = decision["task_id"]
         action = next(task["action"] for task in queue if task["idea_id"] == idea_id)
@@ -231,12 +212,6 @@ def iteration(engine):
                     action = domain_run.action
                 except Exception as exc:
                     raise CPUExecutionError("execution: domain preparation rejected") from exc
-            from orze.engine.cpu_replication import authorization
-            try:
-                authorization(engine.lake, idea_id, engine.results_dir, engine.cfg,
-                              action=action, domain_run=domain_run)
-            except Exception as exc:
-                raise CPUExecutionError("execution: CPU replication authorization rejected") from exc
             permit = budget.reserve(engine.lake, engine._cpu_scope, idea_id, action["timeout_seconds"])
             if permit is None:
                 decision = {"kind": "Wait", "reason": "cpu_resource_or_budget_unavailable",

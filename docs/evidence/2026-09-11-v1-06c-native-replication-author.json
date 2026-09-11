@@ -1,0 +1,365 @@
+{
+  "schema_version": 1,
+  "slice": "V1-06C",
+  "role": "Native CPU replication and dedicated transaction-watch implementation author",
+  "baseline": {
+    "commit": "5ef7772d7183758f689eead856870017442852b5",
+    "meaning": "Fixed completed V1-06B implementation baseline, not described as a historical public release.",
+    "whole_source_snapshots": [
+      {
+        "baseline_exact": true,
+        "bytes": 22281,
+        "origin": "baseline",
+        "path": "docs/evidence/snapshots/v1-06c-before-native-cpu-action.py",
+        "sha256": "49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906",
+        "source": "src/orze/engine/native_cpu_action.py"
+      },
+      {
+        "baseline_exact": true,
+        "bytes": 20478,
+        "origin": "baseline",
+        "path": "docs/evidence/snapshots/v1-06c-before-execution-authority.py",
+        "sha256": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa",
+        "source": "src/orze/engine/execution_authority.py"
+      }
+    ],
+    "verification_chunk": "f32cf8",
+    "byte_exact_to_git_and_pre_edit_worktree": true
+  },
+  "ownership": {
+    "production": [
+      "src/orze/engine/native_cpu_action.py",
+      "src/orze/engine/execution_authority.py"
+    ],
+    "new_tests": [
+      "tests/test_native_cpu_replication.py",
+      "tests/test_cpu_replication_watch.py"
+    ],
+    "old_tests_modified": [],
+    "other_owners_production_modified": false,
+    "commits": false
+  },
+  "implementation": [
+    "Native _scope re-reads authorization using the actual Lake, task, results scope, cfg, captured action and optional strong DomainRun. Only a non-None result adds replication_request to the captured source; ordinary A/B source layout remains unchanged.",
+    "The captured source is compared at intent, actual READY, before GO and harvest. Deleted, changed or newly added mappings cannot replace the admitted source identity.",
+    "All three native grant-bearing intent/READY/terminal execution transactions register the exact expected request watcher, after the intended SQL writes and before leaving the effect guard.",
+    "watch_cpu_replication is a typed schema-2 metadata reader, not a generic callback. It detaches and validates the supplied record, limits watches to 32, and requires the current task guard to name exactly the request source or target.",
+    "The watcher calls the coordinator's same-Lake, same-SQLite read-only verify_record at registration and before and after SQL commit. It grants no source/target cross-task write or effect-lease authority.",
+    "Actual terminal publication and budget settlement keep their existing ordering; request tampering cannot be hidden by a successful attempt-only watch."
+  ],
+  "tests": {
+    "total_cases": 15,
+    "total_assert_ast_nodes": 40,
+    "classification": {
+      "baseline_wrong_resource_case": 1,
+      "baseline_ordinary_control": 1,
+      "new_mechanism_cases": 13,
+      "missing_api_reds": 0
+    },
+    "files": [
+      {
+        "path": "tests/test_native_cpu_replication.py",
+        "sha256": "4681cea584159a1509da1a881acc098dbb80665bd7392b4d501a410c5476526f",
+        "cases": 8,
+        "assert_ast_count": 29,
+        "assert_ast_sha256": "afbeb9c9f43f2aebcecbd95843987bc98754b3a89a7cf95417c23412ce8b0ba4"
+      },
+      {
+        "path": "tests/test_cpu_replication_watch.py",
+        "sha256": "6e884a49db00c5ba5d6ae07e09d02748fb5cdcf75823409e5f414adb391d448d",
+        "cases": 7,
+        "assert_ast_count": 11,
+        "assert_ast_sha256": "44a7e40de207e7412e8a02af8ba1aa3280f1fb5a6909c71e9e2d5b25fad7f235"
+      }
+    ],
+    "boundaries": [
+      "Real CPU target claim, reservation, supervised worker, TREE_CLOSED, effect and SQLite publication. The schema-1 source is an explicitly synthetic closed training-metadata row, not a claim of actual GPU training or native training source proof.",
+      "Real schema-2 grant from a completed native CPU action; its unchanged action spec/content produces a distinct target AttemptRef and artifact occurrence.",
+      "Actual READY returns a strong owned handle before the fixture deletes, reseals/replaces, or adds the mapping. All three mutations reject GO and close only that blocked worker.",
+      "Removing a grant after actual GO prevents terminal publication and budget release.",
+      "A real terminal SQL AFTER trigger mutates the request only after the native terminal update; the effect transaction rolls back output records/lifecycle and retains the reservation.",
+      "Watch tests cover exact source and target read-only roles, detached caller input, unrelated task refusal, schema True/1 refusal, actual precommit mutation rollback, and actual commit followed by controlled persistent mutation producing HOLD.",
+      "The postcommit test wraps only the existing real connection's commit boundary. It performs both actual commits; it does not fake a successful rollback or replace the verifier."
+    ]
+  },
+  "baseline_runs": {
+    "initial": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_cpu_replication.py --tb=short",
+      "session_id": 46450,
+      "initial_chunk": "327f53",
+      "completion": {
+        "chunk_id": "fba8ac",
+        "wall_time_seconds": 0.000002865,
+        "exit_code": 1,
+        "original_token_count": 405,
+        "output": "F                                                                       [100%]\n=================================== FAILURES ===================================\n______ test_cpu_target_never_consumes_training_replication_mapping[False] ______\ntests/test_native_cpu_replication.py:70: in test_cpu_target_never_consumes_training_replication_mapping\n    assert terminal[\"process_tree\"][\"kind\"] == \"TREE_CLOSED\"\nE   KeyError: 'kind'\n----------------------------- Captured stdout call -----------------------------\n{\"training_mapping\": false, \"worker_marker\": true, \"returned_terminal\": true, \"terminal_outcome\": \"completed\", \"captured_real_processes\": 1, \"held\": false}\n______ test_cpu_target_never_consumes_training_replication_mapping[True] _______\ntests/test_native_cpu_replication.py:62: in test_cpu_target_never_consumes_training_replication_mapping\n    assert error is not None, \"CPU native launch accepted an existing schema-1 training request\"\nE   AssertionError: CPU native launch accepted an existing schema-1 training request\nE   assert None is not None\n----------------------------- Captured stdout call -----------------------------\n{\"training_mapping\": true, \"worker_marker\": true, \"returned_terminal\": true, \"terminal_outcome\": \"completed\", \"captured_real_processes\": 1, \"held\": false}\n=========================== short test summary info ============================\nFAILED tests/test_native_cpu_replication.py::test_cpu_target_never_consumes_training_replication_mapping[False]\nFAILED tests/test_native_cpu_replication.py::test_cpu_target_never_consumes_training_replication_mapping[True]\n2 failed in 1.93s\n"
+      },
+      "classification": "One actual wrong-resource acceptance failure plus one unrelated new-control fixture KeyError. Not two product defects.",
+      "actual_failure": "The schema-1 mapping target wrote its private worker marker, returned a completed terminal and had one captured real process instead of HOLD."
+    },
+    "corrected_fixture": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_cpu_replication.py --tb=short",
+      "initial": {
+        "chunk_id": "5ddae9",
+        "wall_time_seconds": 1.000983515,
+        "session_id": 33368,
+        "original_token_count": 1,
+        "output": "."
+      },
+      "completion": {
+        "chunk_id": "c952fe",
+        "wall_time_seconds": 0.000002892,
+        "exit_code": 1,
+        "original_token_count": 253,
+        "output": "F                                                                       [100%]\n=================================== FAILURES ===================================\n______ test_cpu_target_never_consumes_training_replication_mapping[True] _______\ntests/test_native_cpu_replication.py:62: in test_cpu_target_never_consumes_training_replication_mapping\n    assert error is not None, \"CPU native launch accepted an existing schema-1 training request\"\nE   AssertionError: CPU native launch accepted an existing schema-1 training request\nE   assert None is not None\n----------------------------- Captured stdout call -----------------------------\n{\"training_mapping\": true, \"worker_marker\": true, \"returned_terminal\": true, \"terminal_outcome\": \"completed\", \"captured_real_processes\": 1, \"held\": false}\n=========================== short test summary info ============================\nFAILED tests/test_native_cpu_replication.py::test_cpu_target_never_consumes_training_replication_mapping[True]\n1 failed, 1 passed in 1.16s\n"
+      },
+      "test_sha256": "8a56f198e47122f088a6481966900c3759a5aa4f64142d36154aef0e97905dc9",
+      "pre_hash_chunk": "7e0c5b",
+      "post_hash_chunk": "4eafa4",
+      "prepost_exact": true,
+      "files": {
+        "docs/evidence/snapshots/v1-06c-native-mapping-first-fixture.py": "9313450643184642ac7044b0b47262a3a554ad22307748a156615a3ed2e1c6b1",
+        "src/orze/core/replication_requests.py": "f2f0a1191023d562099ba8bd6917adc2bca84c0d4cc1f7b4f08f81b061c34fc9",
+        "src/orze/engine/execution_authority.py": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa",
+        "src/orze/engine/native_cpu_action.py": "49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906",
+        "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b",
+        "tests/test_native_cpu_replication.py": "8a56f198e47122f088a6481966900c3759a5aa4f64142d36154aef0e97905dc9"
+      },
+      "hash_command": "python3 - <<'PY'\nimport hashlib,json\nfrom pathlib import Path\nfiles=['src/orze/engine/native_cpu_action.py','src/orze/engine/execution_authority.py','src/orze/core/replication_requests.py','tests/test_native_cpu_action.py','tests/test_native_cpu_replication.py','docs/evidence/snapshots/v1-06c-native-mapping-first-fixture.py']\nprint(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+      "classification": "Formal 1 failed, 1 passed baseline run; actual native target acceptance failure and ordinary real CPU control."
+    },
+    "strengthened_cpu_declaration_replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,importlib,importlib.util,json,sys,types\nfrom pathlib import Path\nimport pytest\nname='orze.engine.native_cpu_action'\nparent=importlib.import_module('orze.engine')\noriginal=importlib.import_module(name)\np=Path('docs/evidence/snapshots/v1-06c-before-native-cpu-action.py').resolve()\ndata=p.read_bytes()\nreplacement=types.ModuleType(name)\nreplacement.__file__=str(p);replacement.__package__='orze.engine'\nreplacement.__spec__=importlib.util.spec_from_file_location(name,p)\nsys.modules[name]=replacement;parent.native_cpu_action=replacement\nexec(compile(data,str(p),'exec'),replacement.__dict__)\nassert parent.native_cpu_action is sys.modules[name]\nprint(json.dumps({'whole_baseline_module':str(p),'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'parent_binding_exact':True}),flush=True)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','--tb=short','tests/test_native_cpu_replication.py::test_cpu_target_never_consumes_training_replication_mapping']))\nPY",
+      "initial": {
+        "chunk_id": "17375b",
+        "wall_time_seconds": 1.00133269,
+        "session_id": 92151,
+        "original_token_count": 72,
+        "output": "{\"whole_baseline_module\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/snapshots/v1-06c-before-native-cpu-action.py\", \"sha256\": \"49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906\", \"bytes\": 22281, \"parent_binding_exact\": true}\n."
+      },
+      "completion": {
+        "chunk_id": "f82925",
+        "wall_time_seconds": 0.000002875,
+        "exit_code": 1,
+        "original_token_count": 253,
+        "output": "F                                                                       [100%]\n=================================== FAILURES ===================================\n______ test_cpu_target_never_consumes_training_replication_mapping[True] _______\ntests/test_native_cpu_replication.py:94: in test_cpu_target_never_consumes_training_replication_mapping\n    assert error is not None, \"CPU native launch accepted an existing schema-1 training request\"\nE   AssertionError: CPU native launch accepted an existing schema-1 training request\nE   assert None is not None\n----------------------------- Captured stdout call -----------------------------\n{\"training_mapping\": true, \"worker_marker\": true, \"returned_terminal\": true, \"terminal_outcome\": \"completed\", \"captured_real_processes\": 1, \"held\": false}\n=========================== short test summary info ============================\nFAILED tests/test_native_cpu_replication.py::test_cpu_target_never_consumes_training_replication_mapping[True]\n1 failed, 1 passed in 1.08s\n"
+      },
+      "method": "Import actual parent/current module, bind a new module at sys.modules and parent.native_cpu_action, compile/execute all complete baseline native bytes, then run unchanged selected current test functions. Remaining modules are current C candidates; this is not a whole baseline checkout replay.",
+      "scope": "Same two tests now have an explicit valid CPU execution declaration, so a new missing-declaration gate cannot mask the wrong-resource case. Again 1 failed, 1 passed; not an additional defect."
+    }
+  },
+  "fixture_corrections": [
+    {
+      "snapshot": "docs/evidence/snapshots/v1-06c-native-mapping-first-fixture.py",
+      "classification": "New control-fixture wrong receipt-field name",
+      "change": "closure['kind'] -> actual closure['event']; preserved the TREE_CLOSED assertion and all other assertions. Source unchanged for this correction."
+    },
+    {
+      "snapshot": "docs/evidence/snapshots/v1-06c-before-explicit-cpu-config-native-tests.py",
+      "classification": "New fixture premise strengthening",
+      "change": "Add one valid CPU execution declaration assignment to the old-boundary test; all 29 assertions and the entire remaining eight-case AST are unchanged. Complete baseline native replay reconfirmed 1F1P."
+    },
+    {
+      "snapshot": "docs/evidence/snapshots/v1-06c-watch-first-fixture.py",
+      "classification": "New nested-fixture import error, not a product failure",
+      "first_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_replication_watch.py --tb=short",
+      "first_result": {
+        "chunk_id": "a2ff61",
+        "wall_time_seconds": 0.291792462,
+        "exit_code": 1,
+        "original_token_count": 2332,
+        "output": "EEEEEEE                                                                  [100%]\n==================================== ERRORS ====================================\n_ ERROR at setup of test_watch_allows_only_exact_read_roles_and_detaches_expected_record[source] _\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_replication_watch.py, line 16\n  @pytest.mark.parametrize(\"role\", [\"source\", \"target\"])\n  def test_watch_allows_only_exact_read_roles_and_detaches_expected_record(replica, role):\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py, line 19\n  @pytest.fixture\n  def replica(context):\nE       fixture 'context' not found\n>       available fixtures: _forbid_live_gpu_ownership_queries, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, replica, subtests, tmp_path, tmp_path_factory, tmp_project, tmpdir, tmpdir_factory, write_train_script\n>       use 'pytest --fixtures [testpath]' for help on them.\n\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py:19\n_ ERROR at setup of test_watch_allows_only_exact_read_roles_and_detaches_expected_record[target] _\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_replication_watch.py, line 16\n  @pytest.mark.parametrize(\"role\", [\"source\", \"target\"])\n  def test_watch_allows_only_exact_read_roles_and_detaches_expected_record(replica, role):\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py, line 19\n  @pytest.fixture\n  def replica(context):\nE       fixture 'context' not found\n>       available fixtures: _forbid_live_gpu_ownership_queries, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, replica, subtests, tmp_path, tmp_path_factory, tmp_project, tmpdir, tmpdir_factory, write_train_script\n>       use 'pytest --fixtures [testpath]' for help on them.\n\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py:19\n_ ERROR at setup of test_unrelated_task_guard_does_not_receive_replication_authority _\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_replication_watch.py, line 31\n  def test_unrelated_task_guard_does_not_receive_replication_authority(replica):\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py, line 19\n  @pytest.fixture\n  def replica(context):\nE       fixture 'context' not found\n>       available fixtures: _forbid_live_gpu_ownership_queries, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, replica, subtests, tmp_path, tmp_path_factory, tmp_project, tmpdir, tmpdir_factory, write_train_script\n>       use 'pytest --fixtures [testpath]' for help on them.\n\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py:19\n_ ERROR at setup of test_watch_rejects_non_cpu_schema_before_admitting_metadata[True] _\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_replication_watch.py, line 42\n  @pytest.mark.parametrize(\"schema\", [True, 1])\n  def test_watch_rejects_non_cpu_schema_before_admitting_metadata(replica, schema):\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py, line 19\n  @pytest.fixture\n  def replica(context):\nE       fixture 'context' not found\n>       available fixtures: _forbid_live_gpu_ownership_queries, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, replica, subtests, tmp_path, tmp_path_factory, tmp_project, tmpdir, tmpdir_factory, write_train_script\n>       use 'pytest --fixtures [testpath]' for help on them.\n\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py:19\n_ ERROR at setup of test_watch_rejects_non_cpu_schema_before_admitting_metadata[1] _\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_replication_watch.py, line 42\n  @pytest.mark.parametrize(\"schema\", [True, 1])\n  def test_watch_rejects_non_cpu_schema_before_admitting_metadata(replica, schema):\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py, line 19\n  @pytest.fixture\n  def replica(context):\nE       fixture 'context' not found\n>       available fixtures: _forbid_live_gpu_ownership_queries, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, replica, subtests, tmp_path, tmp_path_factory, tmp_project, tmpdir, tmpdir_factory, write_train_script\n>       use 'pytest --fixtures [testpath]' for help on them.\n\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py:19\n_ ERROR at setup of test_watch_rechecks_actual_request_before_commit_and_rolls_back _\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_replication_watch.py, line 53\n  def test_watch_rechecks_actual_request_before_commit_and_rolls_back(replica):\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py, line 19\n  @pytest.fixture\n  def replica(context):\nE       fixture 'context' not found\n>       available fixtures: _forbid_live_gpu_ownership_queries, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, replica, subtests, tmp_path, tmp_path_factory, tmp_project, tmpdir, tmpdir_factory, write_train_script\n>       use 'pytest --fixtures [testpath]' for help on them.\n\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py:19\n_ ERROR at setup of test_watch_rechecks_actual_request_after_real_commit_and_holds _\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_replication_watch.py, line 63\n  def test_watch_rechecks_actual_request_after_real_commit_and_holds(replica):\nfile /hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py, line 19\n  @pytest.fixture\n  def replica(context):\nE       fixture 'context' not found\n>       available fixtures: _forbid_live_gpu_ownership_queries, anyio_backend, anyio_backend_name, anyio_backend_options, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, replica, subtests, tmp_path, tmp_path_factory, tmp_project, tmpdir, tmpdir_factory, write_train_script\n>       use 'pytest --fixtures [testpath]' for help on them.\n\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_native_cpu_replication.py:19\n=========================== short test summary info ============================\nERROR tests/test_cpu_replication_watch.py::test_watch_allows_only_exact_read_roles_and_detaches_expected_record[source]\nERROR tests/test_cpu_replication_watch.py::test_watch_allows_only_exact_read_roles_and_detaches_expected_record[target]\nERROR tests/test_cpu_replication_watch.py::test_unrelated_task_guard_does_not_receive_replication_authority\nERROR tests/test_cpu_replication_watch.py::test_watch_rejects_non_cpu_schema_before_admitting_metadata[True]\nERROR tests/test_cpu_replication_watch.py::test_watch_rejects_non_cpu_schema_before_admitting_metadata[1]\nERROR tests/test_cpu_replication_watch.py::test_watch_rechecks_actual_request_before_commit_and_rolls_back\nERROR tests/test_cpu_replication_watch.py::test_watch_rechecks_actual_request_after_real_commit_and_holds\n7 errors in 0.15s\n"
+      },
+      "change": "Import the existing nested context fixture alongside replica; all 11 assertions and all remaining test AST are unchanged.",
+      "after_initial": {
+        "chunk_id": "25627f",
+        "wall_time_seconds": 1.000512739,
+        "session_id": 69269,
+        "original_token_count": 1,
+        "output": "."
+      },
+      "after_completion": {
+        "chunk_id": "6e2625",
+        "exit_code": 0,
+        "output": "......                                                                  [100%]\n7 passed in 6.46s\n"
+      }
+    }
+  ],
+  "candidate_runs": {
+    "native_first": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_cpu_replication.py --tb=short",
+      "session_id": 1075,
+      "initial_chunk": "636504",
+      "chunk_id": "50024e",
+      "exit_code": 0,
+      "output": ".......                                                                 [100%]\n8 passed in 8.22s\n",
+      "scope": "Eight-case candidate before explicit CPU declaration strengthening; not the final bounded epoch."
+    },
+    "watch_first_business_execution": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_replication_watch.py --tb=short",
+      "initial": {
+        "chunk_id": "25627f",
+        "wall_time_seconds": 1.000512739,
+        "session_id": 69269,
+        "original_token_count": 1,
+        "output": "."
+      },
+      "completion": {
+        "chunk_id": "6e2625",
+        "exit_code": 0,
+        "output": "......                                                                  [100%]\n7 passed in 6.46s\n"
+      },
+      "scope": "Seven new watcher cases after nested fixture import correction."
+    }
+  },
+  "final_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_cpu_replication.py tests/test_cpu_replication_watch.py tests/test_native_cpu_action.py tests/test_native_cpu_domain_publication.py tests/test_execution_observation_watch.py tests/test_execution_artifact_watch.py tests/test_execution_authority.py tests/test_replication_request_store.py tests/test_replication_requests.py --tb=short",
+    "initial": {
+      "chunk_id": "2f2ee1",
+      "wall_time_seconds": 1.001154748,
+      "session_id": 75638,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "completion": {
+      "chunk_id": "a3227d",
+      "wall_time_seconds": 1.306004389,
+      "exit_code": 0,
+      "original_token_count": 45,
+      "output": "........................................................................ [ 74%]\n.........................                                                [100%]\n97 passed in 37.17s\n"
+    },
+    "hash_command": "python3 - <<'PY'\nimport hashlib,json\nfrom pathlib import Path\npaths=[\"src/orze/engine/native_cpu_action.py\",\"src/orze/engine/execution_authority.py\",\"src/orze/engine/cpu_replication.py\",\"src/orze/core/replication_requests.py\",\"src/orze/engine/cpu_action_sources.py\",\"src/orze/engine/cpu_policy_evidence.py\",\"src/orze/core/cpu_action_budget.py\",\"src/orze/engine/supervised_process.py\",\"tests/test_native_cpu_replication.py\",\"tests/test_cpu_replication_watch.py\",\"tests/test_native_cpu_action.py\",\"tests/test_native_cpu_domain_publication.py\",\"tests/test_execution_observation_watch.py\",\"tests/test_execution_artifact_watch.py\",\"tests/test_execution_authority.py\",\"tests/test_replication_request_store.py\",\"tests/test_replication_requests.py\"]\nprint(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths},sort_keys=True))\nPY",
+    "pre_chunk": "232ef6",
+    "post_chunk": "3710b6",
+    "pre": {
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/replication_requests.py": "688c70365ef14bcd1dd7cbcc93a92f6c7288870c2e0c705c63ad5007382e92b9",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_policy_evidence.py": "b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae",
+      "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+      "src/orze/engine/execution_authority.py": "ed080cabb0a7a7bc48e36fdb1512c2ecf96aa9cde3577e18c22b5622e93da471",
+      "src/orze/engine/native_cpu_action.py": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09",
+      "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "tests/test_cpu_replication_watch.py": "6e884a49db00c5ba5d6ae07e09d02748fb5cdcf75823409e5f414adb391d448d",
+      "tests/test_execution_artifact_watch.py": "dabb030a51f5091eaf3dc68829081696931cd93b34898a1866626bc4e05f71b8",
+      "tests/test_execution_authority.py": "1cae610b1f1b8cb2b59cc28e0d343827854df425024db024147d15cf4b67d783",
+      "tests/test_execution_observation_watch.py": "58ccc26faeda8aea7dd10aa62423d4068a1107e1b86b1efa609aac14aa764dc7",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b",
+      "tests/test_native_cpu_domain_publication.py": "1c3d481c8c168d8a51a0eb8c4d7681bcd95422d43fd9815113a428cb9d2ec466",
+      "tests/test_native_cpu_replication.py": "4681cea584159a1509da1a881acc098dbb80665bd7392b4d501a410c5476526f",
+      "tests/test_replication_request_store.py": "2018db1fee100034a8d3844c8c43ffd0b6ab6e0dc5c1a382af9234d5cdc99eed",
+      "tests/test_replication_requests.py": "1283bebf7385296fd9a969de11af1bc17614a729912bc6443cb368349e7c6198"
+    },
+    "post": {
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/replication_requests.py": "688c70365ef14bcd1dd7cbcc93a92f6c7288870c2e0c705c63ad5007382e92b9",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_policy_evidence.py": "b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae",
+      "src/orze/engine/cpu_replication.py": "39d1f25d12ef3034891671aa79868882c84aa909f68d82553585558a57ca59d4",
+      "src/orze/engine/execution_authority.py": "ed080cabb0a7a7bc48e36fdb1512c2ecf96aa9cde3577e18c22b5622e93da471",
+      "src/orze/engine/native_cpu_action.py": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09",
+      "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "tests/test_cpu_replication_watch.py": "6e884a49db00c5ba5d6ae07e09d02748fb5cdcf75823409e5f414adb391d448d",
+      "tests/test_execution_artifact_watch.py": "dabb030a51f5091eaf3dc68829081696931cd93b34898a1866626bc4e05f71b8",
+      "tests/test_execution_authority.py": "1cae610b1f1b8cb2b59cc28e0d343827854df425024db024147d15cf4b67d783",
+      "tests/test_execution_observation_watch.py": "58ccc26faeda8aea7dd10aa62423d4068a1107e1b86b1efa609aac14aa764dc7",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b",
+      "tests/test_native_cpu_domain_publication.py": "1c3d481c8c168d8a51a0eb8c4d7681bcd95422d43fd9815113a428cb9d2ec466",
+      "tests/test_native_cpu_replication.py": "4681cea584159a1509da1a881acc098dbb80665bd7392b4d501a410c5476526f",
+      "tests/test_replication_request_store.py": "2018db1fee100034a8d3844c8c43ffd0b6ab6e0dc5c1a382af9234d5cdc99eed",
+      "tests/test_replication_requests.py": "1283bebf7385296fd9a969de11af1bc17614a729912bc6443cb368349e7c6198"
+    },
+    "prepost_exact": true,
+    "scope": "Nine test files, 97 passed in 37.17s, including own15 and 82 existing A/B native/publication/transaction/training-replication neighbors. Overlapping earlier runs are not summed.",
+    "whole_slice_validation": "Parent-owned and separate; this bounded result does not claim final full-suite completion."
+  },
+  "static_audit": {
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,subprocess\nfrom pathlib import Path\nroot=Path('docs/evidence/snapshots')\nmapping={'v1-06c-before-native-cpu-action.py':('src/orze/engine/native_cpu_action.py','baseline'),'v1-06c-before-execution-authority.py':('src/orze/engine/execution_authority.py','baseline'),'v1-06c-native-mapping-first-fixture.py':('tests/test_native_cpu_replication.py','new_fixture_wrong_closure_key'),'v1-06c-watch-first-fixture.py':('tests/test_cpu_replication_watch.py','new_fixture_missing_nested_context_import'),'v1-06c-before-explicit-cpu-config-native-tests.py':('tests/test_native_cpu_replication.py','new_fixture_before_explicit_cpu_declaration'),'v1-06c-first-watch-native-cpu-action.py':('src/orze/engine/native_cpu_action.py','candidate_at_watch_fixture_setup_error'),'v1-06c-first-watch-execution-authority.py':('src/orze/engine/execution_authority.py','candidate_at_watch_fixture_setup_error')}\nitems=[]\nfor name,(source,origin) in mapping.items():\n p=root/name;data=p.read_bytes();ast.parse(data)\n x={'path':str(p),'source':source,'origin':origin,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}\n if origin=='baseline':assert data==subprocess.check_output(['git','show','5ef7772d7183758f689eead856870017442852b5:'+source]);x['baseline_exact']=True\n items.append(x)\ndef assertions(tree):return [ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Assert)]\nold=ast.parse((root/'v1-06c-before-explicit-cpu-config-native-tests.py').read_bytes());new=ast.parse(Path('tests/test_native_cpu_replication.py').read_bytes());assert assertions(old)==assertions(new)\nf=next(n for n in new.body if isinstance(n,ast.FunctionDef) and n.name=='test_cpu_target_never_consumes_training_replication_mapping');before=len(f.body)\nf.body=[n for n in f.body if not (isinstance(n,ast.Assign) and any(isinstance(t,ast.Subscript) and isinstance(t.value,ast.Name) and t.value.id=='cfg' for t in n.targets))]\nassert before-len(f.body)==1 and ast.dump(new,include_attributes=False)==ast.dump(old,include_attributes=False)\nold=ast.parse((root/'v1-06c-watch-first-fixture.py').read_bytes());new=ast.parse(Path('tests/test_cpu_replication_watch.py').read_bytes());assert assertions(old)==assertions(new)\nfor n in new.body:\n if isinstance(n,ast.ImportFrom) and n.module=='test_native_cpu_replication':n.names=[x for x in n.names if x.name!='context']\nassert ast.dump(new,include_attributes=False)==ast.dump(old,include_attributes=False)\nfirst=ast.parse((root/'v1-06c-native-mapping-first-fixture.py').read_bytes());current=ast.parse(Path('tests/test_native_cpu_replication.py').read_bytes())\nfor name in ('_training_mapping','test_cpu_target_never_consumes_training_replication_mapping'):\n original=next(n for n in first.body if isinstance(n,ast.FunctionDef) and n.name==name)\n final=next(n for n in current.body if isinstance(n,ast.FunctionDef) and n.name==name)\n if name.startswith('test_'):\n  final.body=[n for n in final.body if not (isinstance(n,ast.Assign) and any(isinstance(t,ast.Subscript) and isinstance(t.value,ast.Name) and t.value.id=='cfg' for t in n.targets))]\n  for n in ast.walk(original):\n   if isinstance(n,ast.Subscript) and isinstance(n.slice,ast.Constant) and n.slice.value=='kind':n.slice.value='event'\n assert ast.dump(final,include_attributes=False)==ast.dump(original,include_attributes=False)\noldchanged=subprocess.check_output(['git','diff','--name-only','5ef7772d7183758f689eead856870017442852b5','--','tests']).decode().splitlines();assert oldchanged==[]\nprint(json.dumps({'snapshots':items,'old_tests_changed':oldchanged,'native_explicit_cfg_only':True,'watch_nested_fixture_import_only':True,'first_native_functions_preserved_except_documented_kind_event_and_cfg':True},sort_keys=True))\nPY",
+    "result": {
+      "chunk_id": "a0f365",
+      "wall_time_seconds": 0.000005183,
+      "exit_code": 0,
+      "original_token_count": 522,
+      "output": "{\"first_native_functions_preserved_except_documented_kind_event_and_cfg\": true, \"native_explicit_cfg_only\": true, \"old_tests_changed\": [], \"snapshots\": [{\"baseline_exact\": true, \"bytes\": 22281, \"origin\": \"baseline\", \"path\": \"docs/evidence/snapshots/v1-06c-before-native-cpu-action.py\", \"sha256\": \"49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906\", \"source\": \"src/orze/engine/native_cpu_action.py\"}, {\"baseline_exact\": true, \"bytes\": 20478, \"origin\": \"baseline\", \"path\": \"docs/evidence/snapshots/v1-06c-before-execution-authority.py\", \"sha256\": \"6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa\", \"source\": \"src/orze/engine/execution_authority.py\"}, {\"bytes\": 3460, \"origin\": \"new_fixture_wrong_closure_key\", \"path\": \"docs/evidence/snapshots/v1-06c-native-mapping-first-fixture.py\", \"sha256\": \"9313450643184642ac7044b0b47262a3a554ad22307748a156615a3ed2e1c6b1\", \"source\": \"tests/test_native_cpu_replication.py\"}, {\"bytes\": 3828, \"origin\": \"new_fixture_missing_nested_context_import\", \"path\": \"docs/evidence/snapshots/v1-06c-watch-first-fixture.py\", \"sha256\": \"bebcf07b566c6c29c0cd1aedee6df815504d5da6b49e42cce69903f25810710e\", \"source\": \"tests/test_cpu_replication_watch.py\"}, {\"bytes\": 9888, \"origin\": \"new_fixture_before_explicit_cpu_declaration\", \"path\": \"docs/evidence/snapshots/v1-06c-before-explicit-cpu-config-native-tests.py\", \"sha256\": \"8707273b6144150833cd01045fd6cf9494680b044f4b82dcfe444e953d9c00d0\", \"source\": \"tests/test_native_cpu_replication.py\"}, {\"bytes\": 22924, \"origin\": \"candidate_at_watch_fixture_setup_error\", \"path\": \"docs/evidence/snapshots/v1-06c-first-watch-native-cpu-action.py\", \"sha256\": \"54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09\", \"source\": \"src/orze/engine/native_cpu_action.py\"}, {\"bytes\": 22599, \"origin\": \"candidate_at_watch_fixture_setup_error\", \"path\": \"docs/evidence/snapshots/v1-06c-first-watch-execution-authority.py\", \"sha256\": \"ed080cabb0a7a7bc48e36fdb1512c2ecf96aa9cde3577e18c22b5622e93da471\", \"source\": \"src/orze/engine/execution_authority.py\"}], \"watch_nested_fixture_import_only\": true}\n"
+    },
+    "summary": {
+      "first_native_functions_preserved_except_documented_kind_event_and_cfg": true,
+      "native_explicit_cfg_only": true,
+      "old_tests_changed": [],
+      "snapshots": [
+        {
+          "baseline_exact": true,
+          "bytes": 22281,
+          "origin": "baseline",
+          "path": "docs/evidence/snapshots/v1-06c-before-native-cpu-action.py",
+          "sha256": "49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906",
+          "source": "src/orze/engine/native_cpu_action.py"
+        },
+        {
+          "baseline_exact": true,
+          "bytes": 20478,
+          "origin": "baseline",
+          "path": "docs/evidence/snapshots/v1-06c-before-execution-authority.py",
+          "sha256": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa",
+          "source": "src/orze/engine/execution_authority.py"
+        },
+        {
+          "bytes": 3460,
+          "origin": "new_fixture_wrong_closure_key",
+          "path": "docs/evidence/snapshots/v1-06c-native-mapping-first-fixture.py",
+          "sha256": "9313450643184642ac7044b0b47262a3a554ad22307748a156615a3ed2e1c6b1",
+          "source": "tests/test_native_cpu_replication.py"
+        },
+        {
+          "bytes": 3828,
+          "origin": "new_fixture_missing_nested_context_import",
+          "path": "docs/evidence/snapshots/v1-06c-watch-first-fixture.py",
+          "sha256": "bebcf07b566c6c29c0cd1aedee6df815504d5da6b49e42cce69903f25810710e",
+          "source": "tests/test_cpu_replication_watch.py"
+        },
+        {
+          "bytes": 9888,
+          "origin": "new_fixture_before_explicit_cpu_declaration",
+          "path": "docs/evidence/snapshots/v1-06c-before-explicit-cpu-config-native-tests.py",
+          "sha256": "8707273b6144150833cd01045fd6cf9494680b044f4b82dcfe444e953d9c00d0",
+          "source": "tests/test_native_cpu_replication.py"
+        },
+        {
+          "bytes": 22924,
+          "origin": "candidate_at_watch_fixture_setup_error",
+          "path": "docs/evidence/snapshots/v1-06c-first-watch-native-cpu-action.py",
+          "sha256": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09",
+          "source": "src/orze/engine/native_cpu_action.py"
+        },
+        {
+          "bytes": 22599,
+          "origin": "candidate_at_watch_fixture_setup_error",
+          "path": "docs/evidence/snapshots/v1-06c-first-watch-execution-authority.py",
+          "sha256": "ed080cabb0a7a7bc48e36fdb1512c2ecf96aa9cde3577e18c22b5622e93da471",
+          "source": "src/orze/engine/execution_authority.py"
+        }
+      ],
+      "watch_nested_fixture_import_only": true
+    }
+  },
+  "independent_read_only_review": {
+    "not_own_code": [
+      "src/orze/core/replication_requests.py",
+      "src/orze/engine/cpu_replication.py"
+    ],
+    "checkpoints": [
+      "Complete CPU coordinator source read: actual source/terminal/sets/effect checks, unchanged raw target config, same-transaction request+target insertion and typed watcher, postcommit readback.",
+      "Complete store source/diff read: schema1 field/ref/DDL/read/insert contract retained; schema2 exact native_cpu_action/action metadata added without treating digest fields as execution authority."
+    ],
+    "conclusion": "No blocker found in this bounded read. Core metadata store is not a native source capability; coordinator and native gates still provide that validation.",
+    "observed_tests_scope": "The real coordinator is exercised by own15 and the old generic store/training request tests in the bounded group. No separate comprehensive claim of validating all peer mechanisms."
+  },
+  "limits": [
+    "No old tests were modified; no full suite, commit, push or provider/GPU workload was performed by this task.",
+    "Faults touch only fixture-owned temporary files/SQLite rows. CPU processes are transparently captured immediately after the real prepare result and closed through those owned handles; no host process census or bare-PID signal.",
+    "One baseline behavior counterexample is distinguished from thirteen new mechanism requirements and fixture errors. There are no new production-candidate failure/fix claims beyond the original admission gate defect.",
+    "Same spec and same content with distinct occurrence IDs do not assert statistical independence, measurement validity, new seeds, environmental isolation or sandboxing.",
+    "Ordinary no-mapping CPU tasks remain ordinary A/B actions; this patch does not make implicit retries or config duplication a replication request.",
+    "This report is an implementation author record, not an independent review of its own two production modules."
+  ]
+}
