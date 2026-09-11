@@ -57,7 +57,6 @@ import signal
 import secrets
 import shutil
 import socket
-import stat
 import subprocess
 import logging
 import sys
@@ -1028,75 +1027,10 @@ def _reap_exact_identities(identities: list[dict], timeout: float) -> bool:
     return not remaining
 
 
-def _legacy_role_receipt_file_identity(info: os.stat_result) -> tuple:
-    return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink,
-            info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-
-
-def _legacy_role_receipt_identity(path: Path) -> tuple:
-    """Capture the named legacy receipt and its unredirected parent chain.
-
-    This is a read/recheck witness, not permission to reap a process or an
-    atomic-unlink primitive. Directory timestamps are deliberately excluded.
-    """
-    path = Path(path).absolute()
-    if ".." in path.parts:
-        raise OSError("role_receipt_path_invalid")
-    identities = []
-    for parent in reversed(path.parents):
-        info = parent.lstat()
-        if not stat.S_ISDIR(info.st_mode):
-            raise OSError("role_receipt_parent_redirected")
-        identities.append((str(parent), True,
-                           (info.st_dev, info.st_ino, info.st_mode)))
-    info = path.lstat()
-    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
-            or not 0 <= info.st_size <= _MAX_ROLE_RECEIPT_BYTES):
-        raise OSError("role_receipt_file_invalid")
-    identities.append((str(path), False, _legacy_role_receipt_file_identity(info)))
-    return tuple(identities)
-
-
-def _read_legacy_role_receipt(path: Path) -> tuple[bytes, tuple]:
-    """Read a complete, stable legacy role receipt within its own 1 MiB cap.
-
-    Initial absence keeps the existing FileNotFoundError contract. A file
-    disappearing after capture is uncertainty, not a clean missing receipt.
-    The generic effect reader and owned-v2 receipt limits are unchanged.
-    """
-    path = Path(path).absolute()
-    captured = _legacy_role_receipt_identity(path)
-    fd = None
-    try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        before = os.fstat(fd)
-        if _legacy_role_receipt_file_identity(before) != captured[-1][2]:
-            raise OSError("role_receipt_changed")
-        chunks, total = [], 0
-        while total <= before.st_size:
-            chunk = os.read(fd, min(65536, before.st_size + 1 - total))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            total += len(chunk)
-        if (total != before.st_size
-                or _legacy_role_receipt_file_identity(os.fstat(fd)) != captured[-1][2]
-                or _legacy_role_receipt_identity(path) != captured):
-            raise OSError("role_receipt_changed")
-        return b"".join(chunks), captured
-    except OSError as exc:
-        raise OSError("role_receipt_read_unconfirmed") from exc
-    finally:
-        if fd is not None:
-            os.close(fd)
-
-
 def _atomic_private_json(path: Path, payload: dict) -> None:
     """Atomically persist a private controller receipt with fsync."""
     encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":"))
                + "\n").encode("utf-8")
-    if len(encoded) > _MAX_ROLE_RECEIPT_BYTES:
-        raise OSError("role_receipt_size_limit")
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.parent.is_symlink() or not path.parent.is_dir():
         raise OSError("role receipt parent is not a real directory")

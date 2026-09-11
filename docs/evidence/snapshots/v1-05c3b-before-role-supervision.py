@@ -511,12 +511,8 @@ def supervised_role_owner(rp):
         except OSError as exc:
             raise RoleSupervisionHOLD("role_supervision_owner_unverifiable") from exc
         try:
-            from orze.engine.process import _read_legacy_role_receipt
-            raw, _ = _read_legacy_role_receipt(path)
-            receipt = json.loads(raw)
-            if (type(receipt) is not dict
-                    or type(receipt.get("schema_version")) is not int
-                    or receipt["schema_version"] != 1):
+            receipt = json.loads(_read(path))
+            if type(receipt) is not dict or receipt.get("schema_version") != 1:
                 raise ValueError("role_supervision_owner_missing")
         except Exception as exc:
             raise RoleSupervisionHOLD("role_supervision_owner_missing") from exc

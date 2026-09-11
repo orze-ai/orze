@@ -43,12 +43,13 @@ def delivery_reference(rp):
 
 
 def _remove_bound_receipt(rp):
-    from orze.engine.process import (
-        _legacy_role_receipt_identity, _read_legacy_role_receipt,
-    )
     path = rp.lock_dir / "role-process.json"
+    if path.is_symlink():
+        return False
     try:
-        raw, captured = _read_legacy_role_receipt(path)
+        if path.stat().st_size > 256 * 1024:
+            return False
+        raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return True
     except (OSError, UnicodeError):
@@ -56,16 +57,9 @@ def _remove_bound_receipt(rp):
     try:
         receipt = json.loads(raw)
         expected = delivery_reference(rp)
-        if (type(receipt) is not dict
-                or type(receipt.get("schema_version")) is not int
-                or receipt["schema_version"] != 1
-                or receipt.get("role_name") != rp.role_name
+        if (receipt.get("role_name") != rp.role_name
                 or receipt.get("nonce_sha256") != expected["nonce_sha256"]
-                or type(receipt.get("trigger_delivery")) is not dict
-                or type(receipt["trigger_delivery"].get("generation")) is not int
                 or receipt.get("trigger_delivery") != expected):
-            return False
-        if _legacy_role_receipt_identity(path) != captured:
             return False
         path.unlink()
         return True

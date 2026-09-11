@@ -1,0 +1,198 @@
+{
+  "schema": 1,
+  "slice": "V1-05C3b",
+  "owner": "runtime_evidence",
+  "date_utc": "2026-09-11",
+  "status": "source_specific_candidate_independent_review_complete",
+  "classification": {
+    "new_mechanism_cases": 10,
+    "observed_draft_reds": 0,
+    "historical_reds": 0,
+    "first_result": "10 passed in 1.96s",
+    "note": "All ten cases first ran against the ready candidate. The separate frozen 2-red/1-control public baseline is not reattributed or counted here."
+  },
+  "scope": "Legacy role receipt publication, classification and matching-file retention, using real temporary SQLite/files plus unchanged explicit OS doubles; no actual role process trees.",
+  "tests": {
+    "path": "tests/test_role_receipt_storage_boundaries.py",
+    "sha256": "9e92dcc1a0253699b3341712899e4f0fced9189cda3fc77fbd8b001034e607b0",
+    "assert_count": 28,
+    "assert_ast_sha256": "161890a82deb1c48449dc96e1d176a77f4c60f29159330d14e68aec846e2096c",
+    "assert_ast_algorithm": "SHA256 of UTF-8 '\\n'.join(ast.dump(node, include_attributes=False) for node in ast.walk(tree) if isinstance(node, ast.Assert)), without a trailing newline.",
+    "fixture": {
+      "path": "tests/test_trigger_role_completion.py",
+      "sha256": "95ea1250d53623f8591b89df99b603370292112c1e63dc28bbdf4a0125bcc625",
+      "unchanged": true,
+      "real": "IdeaLake/SQLite observe, lease, begin, STARTED, terminal transaction, receipt publication and check_active_roles.",
+      "doubles": "Existing fixture replaces Linux identity, descendant discovery, polling and reaping seams. This review introduces no host process discovery or signals."
+    }
+  },
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-05c3b-before-storage-process.py",
+      "origin": "src/orze/engine/process.py",
+      "sha256": "6e1f8365bf94c8cfe01c90e9209f6fe7e2c8092f8fc888c4dd73dc07b263c89a",
+      "kind": "complete_first_candidate_before_independent_storage_run",
+      "capture_chunk_id": "4fd674",
+      "source_byte_equal_verified_at_pre": true
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c3b-before-storage-role-supervision.py",
+      "origin": "src/orze/engine/role_supervision.py",
+      "sha256": "f3993c44b7f1591f44514f614184d0d85b9910cf3061b9fe5ab233c0aff57a9c",
+      "kind": "complete_first_candidate_before_independent_storage_run",
+      "capture_chunk_id": "4fd674",
+      "source_byte_equal_verified_at_pre": true
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c3b-before-storage-role-delivery.py",
+      "origin": "src/orze/engine/role_delivery.py",
+      "sha256": "cec09d423b4cbe5556383bae810a942cea0b0684ac595e932394f2fdf1780445",
+      "kind": "complete_first_candidate_before_independent_storage_run",
+      "capture_chunk_id": "4fd674",
+      "source_byte_equal_verified_at_pre": true
+    }
+  ],
+  "actual_run": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_role_receipt_storage_boundaries.py --tb=short",
+    "session_id": 23800,
+    "initial_chunk_id": "c20a2f",
+    "completion_chunk_id": "e71783",
+    "exit_code": 0,
+    "footer": "10 passed in 1.96s",
+    "pre_command": "python3 - <<'PY'\nfrom pathlib import Path\nimport ast,hashlib,json\nfiles=['src/orze/engine/process.py','src/orze/engine/role_supervision.py','src/orze/engine/role_delivery.py','src/orze/engine/attempt_effect_receipts.py','src/orze/engine/roles.py','tests/test_role_receipt_storage_boundaries.py','tests/test_trigger_role_completion.py','tests/test_role_delivery_receipt_bounds.py']\nvalues={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files}\nfor name,source in [('process',files[0]),('role-supervision',files[1]),('role-delivery',files[2])]:\n snapshot=Path('docs/evidence/snapshots/v1-05c3b-before-storage-'+name+'.py');assert snapshot.read_bytes()==Path(source).read_bytes()\ntree=ast.parse(Path(files[5]).read_bytes());nodes=[ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Assert)]\nprint(json.dumps({'files':values,'assert_count':len(nodes),'assert_ast_sha256':hashlib.sha256('\\n'.join(nodes).encode()).hexdigest()},sort_keys=True))\nPY",
+    "pre_chunk_id": "398099",
+    "post_command": "python3 - <<'PY'\nfrom pathlib import Path\nimport hashlib,json\nfiles=['src/orze/engine/process.py','src/orze/engine/role_supervision.py','src/orze/engine/role_delivery.py','src/orze/engine/attempt_effect_receipts.py','src/orze/engine/roles.py','tests/test_role_receipt_storage_boundaries.py','tests/test_trigger_role_completion.py','tests/test_role_delivery_receipt_bounds.py']\nprint(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+    "post_chunk_id": "a78140",
+    "pre": {
+      "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+      "src/orze/engine/process.py": "6e1f8365bf94c8cfe01c90e9209f6fe7e2c8092f8fc888c4dd73dc07b263c89a",
+      "src/orze/engine/role_delivery.py": "cec09d423b4cbe5556383bae810a942cea0b0684ac595e932394f2fdf1780445",
+      "src/orze/engine/role_supervision.py": "f3993c44b7f1591f44514f614184d0d85b9910cf3061b9fe5ab233c0aff57a9c",
+      "src/orze/engine/roles.py": "b07707b5fe7cdb45476093da2bcf0f812abd199cc77dc0293de748cdd2f21aad",
+      "tests/test_role_delivery_receipt_bounds.py": "ed436cc2e62152031a81ea9ded6431a4314325105ac3573e96f8113dd8b5782c",
+      "tests/test_role_receipt_storage_boundaries.py": "9e92dcc1a0253699b3341712899e4f0fced9189cda3fc77fbd8b001034e607b0",
+      "tests/test_trigger_role_completion.py": "95ea1250d53623f8591b89df99b603370292112c1e63dc28bbdf4a0125bcc625"
+    },
+    "post": {
+      "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+      "src/orze/engine/process.py": "6e1f8365bf94c8cfe01c90e9209f6fe7e2c8092f8fc888c4dd73dc07b263c89a",
+      "src/orze/engine/role_delivery.py": "cec09d423b4cbe5556383bae810a942cea0b0684ac595e932394f2fdf1780445",
+      "src/orze/engine/role_supervision.py": "f3993c44b7f1591f44514f614184d0d85b9910cf3061b9fe5ab233c0aff57a9c",
+      "src/orze/engine/roles.py": "b07707b5fe7cdb45476093da2bcf0f812abd199cc77dc0293de748cdd2f21aad",
+      "tests/test_role_delivery_receipt_bounds.py": "ed436cc2e62152031a81ea9ded6431a4314325105ac3573e96f8113dd8b5782c",
+      "tests/test_role_receipt_storage_boundaries.py": "9e92dcc1a0253699b3341712899e4f0fced9189cda3fc77fbd8b001034e607b0",
+      "tests/test_trigger_role_completion.py": "95ea1250d53623f8591b89df99b603370292112c1e63dc28bbdf4a0125bcc625"
+    },
+    "all_eight_pre_post_exact": true,
+    "limitation": "Bounded source-specific independent run, not a whole-suite or final aggregate claim."
+  },
+  "cases": [
+    {
+      "function": "test_oversized_serialized_unicode_writer_keeps_existing_receipt",
+      "count": 1,
+      "boundary": "A Unicode scope metadata field has UTF-8 input below 1 MiB, while its JSON escaped representation exceeds the existing 1 MiB receipt byte cap. The actual public writer returns False and leaves the prior receipt bytes and directory entries unchanged.",
+      "limitation": "An explicit API metadata-size test, not a claim that a real host or task uses such a scope name; no large process tree."
+    },
+    {
+      "function": "test_nonlegacy_schema_never_downgrades_to_legacy_completion",
+      "count": 2,
+      "parameters": [
+        true,
+        2
+      ],
+      "boundary": "Public check_active_roles refuses before polling, leaves SQLite STARTED and keeps the active role/receipt. No v2 owner authority is inferred from a schema label."
+    },
+    {
+      "function": "test_redirected_receipt_cannot_be_classified_or_removed",
+      "count": 2,
+      "parameters": [
+        "symlink",
+        "hardlink"
+      ],
+      "boundary": "Actual local links to a retained file cannot reach polling/terminal/cleanup; both named paths preserve their bytes."
+    },
+    {
+      "function": "test_incomplete_or_replaced_receipt_read_holds_before_poll",
+      "count": 2,
+      "parameters": [
+        "early_eof",
+        "same_bytes_replacement"
+      ],
+      "boundary": "The exact receipt FD returns a faulted early EOF, or a real read is followed by a same-bytes new-inode path replacement. Both remain STARTED/HOLD before polling, and the displaced/retained objects are preserved."
+    },
+    {
+      "function": "test_large_foreign_receipt_is_kept_after_own_terminal",
+      "count": 3,
+      "parameters": [
+        "nonce",
+        "attempt_id",
+        "boolean_generation"
+      ],
+      "boundary": "Each case changes exactly one independent reference gate in a >64 KiB legacy schema1 receipt. Actual own SQLite terminal publication succeeds, but the foreign/malformed receipt and lock remain and the public consumer returns operational ERROR.",
+      "limitation": "1200 ordinary-width identity records are simulated metadata. Unlike the earlier frozen baseline failures, these new cases explicitly reach the real terminal then cleanup comparison; they are not historical cleanup reds."
+    }
+  ],
+  "static_review": {
+    "no_remaining_slice_blocker_observed": true,
+    "sources_reviewed": "Complete three-module candidate snapshots retained; relevant full diff inspected at fc705a, source/control excerpts at 2b0d84.",
+    "conclusions": [
+      "Only the no-strong-owner existing-receipt classification uses the dedicated legacy reader; existing RoleLaunch _current/_write and the generic attempt-effect 64 KiB reader remain unchanged.",
+      "The legacy reader enforces regular single-link files, unredirected parent identities, nonblocking no-follow opens, full observed-length/EOF and post-read path/FD identity checks. It is not a process-closure or atomic-unlink primitive.",
+      "Encoded payload admission precedes mkdir/temp-file/write/replace, preserving previous bytes on an oversized new payload.",
+      "Cleanup retains role/nonce/full seven-field reference matching, exact integer generation and a final captured-path identity check.",
+      "Missing-before-read legacy behavior is retained; disappearance or replacement after capture is not an empty receipt or successful cleanup.",
+      "Existing legacy orphan recovery and unconditional later _fs_unlock are not upgraded to strong tree proof by this slice."
+    ],
+    "references": [
+      {
+        "path": "src/orze/engine/process.py",
+        "lines": [
+          1036,
+          1127
+        ]
+      },
+      {
+        "path": "src/orze/engine/role_supervision.py",
+        "lines": [
+          483,
+          524
+        ]
+      },
+      {
+        "path": "src/orze/engine/role_delivery.py",
+        "lines": [
+          45,
+          73
+        ]
+      },
+      {
+        "path": "src/orze/engine/attempt_effect_receipts.py",
+        "lines": [
+          128,
+          153
+        ]
+      }
+    ]
+  },
+  "document_review": {
+    "path": "docs/role-tree-supervision.md",
+    "sha256": "ddeb032b854b2b1d7b4c137214350e6be21c2c45d20f0c3e2ea4c011524d5587",
+    "timing": "Entire 37-line document read after the test run; not included in the eight-file test pre/post manifest.",
+    "reader_chunk_id": "42d496",
+    "hash_and_diff_check_chunk_id": "ba0fd5",
+    "result": "C3b section accurately limits its claim to legacy receipt storage compatibility, strict classification and matching receipt retention; it does not claim whole legacy process safety, atomic directory release or real 1200/4096-process tests.",
+    "diff_check_exit_code": 0
+  },
+  "safety": {
+    "production_edits": [],
+    "old_test_edits": [],
+    "new_test_file_only": true,
+    "host_scans": false,
+    "signals": false,
+    "real_large_process_tree": false,
+    "gpu_or_provider_calls": false,
+    "holdout_plaintext_reads": false,
+    "running_sessions": []
+  }
+}
