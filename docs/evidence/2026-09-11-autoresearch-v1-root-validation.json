@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "review": "original V1 aggregate acceptance verification",
+  "canonical": {
+    "path": "docs/evidence/2026-09-11-autoresearch-v1-acceptance.json",
+    "sha256": "b5e2cb12ac096359ba2e630372c94eedcc7528781619295bedae29eab1af6efd"
+  },
+  "root_check": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/checks/v1-acceptance-check.py",
+    "chunks": [
+      {
+        "chunk_id": "3aec42",
+        "wall_time_seconds": 1.000895993,
+        "session_id": 66806,
+        "original_token_count": 0,
+        "output": ""
+      },
+      {
+        "chunk_id": "c34710",
+        "wall_time_seconds": 0.000003296,
+        "exit_code": 0,
+        "original_token_count": 166,
+        "output": "{\"after\": 0, \"cpu_private_training_reader_imports_before\": 2, \"fixed_commits_checked\": true, \"new_cases\": 37, \"old_test_files_unchanged\": {\"core\": 472, \"pro\": 134}, \"other_claim_authority_AST_exact\": true, \"other_cpu_AST_exact\": true, \"record_consistency_not_execution_attestation\": true, \"research_benefit_proven\": false, \"result\": \"verified\", \"source_files\": {\"core\": 764, \"pro\": 224}}\n{\"fixed_source_and_s2_records_checked\": true, \"history_references\": 23, \"matched_passed_cases\": 81, \"original_rows\": 8, \"record_consistency_not_semantic_or_execution_attestation\": true, \"representative_selectors\": 41, \"research_benefit_proven\": false, \"result\": \"verified\"}\n"
+      }
+    ]
+  },
+  "independent_check": {
+    "provenance": "complete actual raw tool results relayed by pro_review, not a second root execution",
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/checks/v1-acceptance-check.py",
+    "chunks": [
+      {
+        "chunk_id": "a6c933",
+        "wall_time_seconds": 1.000814616,
+        "session_id": 57231,
+        "original_token_count": 0,
+        "output": ""
+      },
+      {
+        "chunk_id": "f9d1ee",
+        "wall_time_seconds": 0.00000288,
+        "exit_code": 0,
+        "original_token_count": 166,
+        "output": "{\"after\": 0, \"cpu_private_training_reader_imports_before\": 2, \"fixed_commits_checked\": true, \"new_cases\": 37, \"old_test_files_unchanged\": {\"core\": 472, \"pro\": 134}, \"other_claim_authority_AST_exact\": true, \"other_cpu_AST_exact\": true, \"record_consistency_not_execution_attestation\": true, \"research_benefit_proven\": false, \"result\": \"verified\", \"source_files\": {\"core\": 764, \"pro\": 224}}\n{\"fixed_source_and_s2_records_checked\": true, \"history_references\": 23, \"matched_passed_cases\": 81, \"original_rows\": 8, \"record_consistency_not_semantic_or_execution_attestation\": true, \"representative_selectors\": 41, \"research_benefit_proven\": false, \"result\": \"verified\"}\n"
+      }
+    ]
+  },
+  "additional_bindings": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport json,re,hashlib,subprocess\nfrom pathlib import Path\nroot=Path.cwd();d=json.loads((root/'docs/evidence/2026-09-11-autoresearch-v1-acceptance.json').read_bytes()); checked=[]\nfor key in ('root_validation','independent_junit_review'):\n r=d['s2'][key];raw=(root/r['path']).read_bytes();assert hashlib.sha256(raw).hexdigest()==r['sha256'];assert subprocess.check_output(['git','show',d['s2']['evidence_commit']+':'+r['path']])==raw;checked.append(r['path'])\np=root/'docs/plans/2026-09-11-autoresearch-v1-acceptance.zh-CN.md';links=re.findall(r'\\]\\(([^)]+)\\)',p.read_text());local=[q for q in links if not q.startswith(('https://','http://'))];assert all((p.parent/q).is_file() for q in local)\npro=root.parent/'orze-pro';r=json.loads((pro/'docs/evidence/2026-09-11-s2-claim-reader.json').read_bytes());assert r['core_canonical_sha256']==d['s2']['sha256'] and r['core_evidence_commit']==d['s2']['evidence_commit'];assert subprocess.check_output(['git','-C',str(pro),'show',d['s2']['pro_reference_commit']+':docs/evidence/2026-09-11-s2-claim-reader.json'])==(pro/'docs/evidence/2026-09-11-s2-claim-reader.json').read_bytes()\nprint(json.dumps({'local_links':len(local),'fixed_extra_evidence':checked,'pro_fixed_reference_matches':True,'files_written':0},sort_keys=True))\nPY",
+    "actual_tool_result": {
+      "chunk_id": "c4040e",
+      "wall_time_seconds": 0.00000391,
+      "exit_code": 0,
+      "original_token_count": 54,
+      "output": "{\"files_written\": 0, \"fixed_extra_evidence\": [\"docs/evidence/2026-09-11-s2-root-validation.json\", \"docs/evidence/2026-09-11-s2-junit-independent-review.json\"], \"local_links\": 31, \"pro_fixed_reference_matches\": true}\n"
+    }
+  },
+  "negative_controls": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport copy,json,runpy\nfrom pathlib import Path\nfrom unittest.mock import patch\nroot=Path.cwd();p=root/'docs/evidence/2026-09-11-autoresearch-v1-acceptance.json';original=p.read_bytes();d=json.loads(original);m=runpy.run_path(str(root/'docs/evidence/checks/v1-acceptance-check.py'),run_name='index_negative_check');read=Path.read_bytes;checks={}\nfor name in ('overclaim','different_s2_sha','duplicate_selector'):\n v=copy.deepcopy(d)\n if name=='overclaim':v['research_benefit_proven']=True\n elif name=='different_s2_sha':v['s2']['sha256']='0'*64\n else:v['rows'][1]['nodes'][1]=copy.deepcopy(v['rows'][1]['nodes'][0])\n changed=json.dumps(v).encode()\n def hypothetical(path):return changed if path==p else read(path)\n with patch.object(Path,'read_bytes',hypothetical):\n  try:m['main']()\n  except AssertionError:checks[name]='rejected'\n  else:raise AssertionError('negative accepted: '+name)\n assert p.read_bytes()==original\nprint(json.dumps({'negative_controls':checks,'files_written':0,'scope':'hypothetical in-memory record substitutions; no product tests or workers'},sort_keys=True))\nPY",
+    "chunks": [
+      {
+        "chunk_id": "5629af",
+        "wall_time_seconds": 1.001300851,
+        "session_id": 72451,
+        "original_token_count": 0,
+        "output": ""
+      },
+      {
+        "chunk_id": "69a6b0",
+        "wall_time_seconds": 0.000002768,
+        "exit_code": 0,
+        "original_token_count": 152,
+        "output": "{\"after\": 0, \"cpu_private_training_reader_imports_before\": 2, \"fixed_commits_checked\": true, \"new_cases\": 37, \"old_test_files_unchanged\": {\"core\": 472, \"pro\": 134}, \"other_claim_authority_AST_exact\": true, \"other_cpu_AST_exact\": true, \"record_consistency_not_execution_attestation\": true, \"research_benefit_proven\": false, \"result\": \"verified\", \"source_files\": {\"core\": 764, \"pro\": 224}}\n{\"files_written\": 0, \"negative_controls\": {\"different_s2_sha\": \"rejected\", \"duplicate_selector\": \"rejected\", \"overclaim\": \"rejected\"}, \"scope\": \"hypothetical in-memory record substitutions; no product tests or workers\"}\n"
+      }
+    ],
+    "scope": "three in-memory hypothetical evidence substitutions; no file, product test or worker mutation"
+  },
+  "reviewer_findings": {
+    "type": "reviewer_reported_summary",
+    "pro_review": "Final index/doc/checker have no scope, count or link blocker; 23 history occurrences represent 21 unique files; accepted=True is a recorded scoped judgment, not automatically derived scientific/semantic proof. Independently checked 31 links and fixed supporting records.",
+    "core_review": "Read complete original plan and aggregate draft, original Pro baseline Git blob, actual READY-time inode/timeout/supervisor-loss tests and archived JUnit. No high-confidence unfulfilled original mechanism criterion. Universal recovery and scientific benefits excluded.",
+    "runtime_evidence": "Original V1-05..07, dynamic admission, real timeout/worker loss and verified terminal recovery covered; raw independent JUnit audit separately archived."
+  },
+  "documentation_corrections": [
+    "Draft Pro tests/conftest.py citation removed because file does not exist; actual original license patch/PYTHONPATH commands cited instead.",
+    "Current aggregate ledger rows supersede dated incomplete statements only for original requirements now evidenced; historical individual slice artifacts remain unchanged."
+  ],
+  "scope": "Original V1 minimal mechanisms accepted within declared supported offline/local CPU scope. Evidence consistency checks do not establish absence of all bugs, statistical independence, scientific benefit, live provider/GPU integration, deployment or universal recovery."
+}
