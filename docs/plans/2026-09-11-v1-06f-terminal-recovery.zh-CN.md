@@ -8,13 +8,21 @@
 
 上述是静态定位，不是已运行红测。必须先以完整基线真实 CLI 故障复现，观察恢复要求的行为断言失败；不能把新增 API 不存在或导入错误当成产品红测。
 
+实施前补充：冻结产品源码的真实 CLI 基线现已执行（`ea62af`，exit 1，2 failed）。成功与失败 worker 均在真实终态落库后、settle 首次入口让 controller 退出 86；新解释器正常退出 0，但第二任务仍为 queued。两参数案例共同证明一个重启消费者缺口，不是两个独立缺陷。原始运行报告和四份完整基线源码/测试快照已保留，尚未修改产品源码。
+
 ## 最小实现边界
 
 在既有 budget 模块新增有界的已确认终态续结算入口，并接到 CPU 启动的正常预算初始化之后、任何新 reserve/GO 之前。只枚举本作用域至多 slots 个活预约（显式检测超界）；不把原有 _totals 全历史扫描冒称总开销有界。
 
 仅考虑 BOUND、完整当前 AttemptRef、phase=action、kind/origin=native_cpu_action、原 scope/database/permit/attempt 绑定完全一致的 TERMINAL。实际结算必须复用现有 settle 的每任务 effect guard、已确认 effect 和真实 closure 元数据校验、同库事务及提交后核实。不造旧执行句柄，不根据旧 PID/年龄取权，不再解释 Domain、不新发 observation、不重复 GO、不退款、不重置 task/generation 或已有 Stop。
 
-RESERVED、LAUNCHING/RUNNING/未知状态、NOT_STARTED 和不确定结果不由本片接管；健康对端的活预约继续保守占槽等待。坏/丢失/替换的 effect、树证明、Ref、scope、持久停止不确定性或残留未知 owner 均不能释放槽位。budget_storage_unconfirmed 的持久 HOLD 不作为自动重试权限；普通已记录 Stop 可以继续保留，续结算不得使它恢复执行。
+RESERVED、LAUNCHING/RUNNING/未知状态、NOT_STARTED 和不确定结果不由本片接管；健康对端的活预约继续保守占槽等待。坏/丢失/替换的 effect、树证明、Ref、scope、持久停止不确定性或残留未知 owner 均不能释放槽位。所有预存 Stop 均禁止自动续结算：普通 Stop 保留原义，budget_storage_unconfirmed 为 HOLD。底层公开 settle 的既有 NOT_STARTED 与显式 Stop 兼容语义不变。这是实施前保守收窄，不放宽真实基线红测。
+
+自动恢复资格必须在实际结算 writer 及提交后核实中重新检查，不只在初始枚举时过滤；需核对完整 native binding/source/lifecycle 及 prepared.plan 与原 terminal 的关系。诊断结果仅有界返回 schema/examined/settled/already_settled/retained 标识和原因，不返回旧句柄或新增执行权限。
+
+独立只读审查指出：SourceLock 的退出会先删除目录再同步父目录，单独一个 recovery gate 不能持久证明未知退出。最小补充是在原 budget 数据库内增加每 scope 至多一行、有 nonce 的 IN_PROGRESS/COMPLETE 恢复状态。取得 recovery gate 后，先持久提交并独立读回 IN_PROGRESS；逐项严格结算且确认内层 effect guard 退出，再确认外层 gate 退出，最后以精确 nonce CAS 提交并读回 COMPLETE。中途未知不自动清除；新控制器包括零 BOUND 的路径也必须检查 barrier。已经运行的对端 reserve/require_permit 同样拒绝 IN_PROGRESS，不能在已释放预算行与 guard 退出确认之间发新 GO。正常完成后可再次有界检查，不采用旧 owner 的 nonce。
+
+新增表仅由正常 initialize 在既有同库事务内幂等创建，既有历史记录不改写；未初始化的新只读调用不偷偷迁移旧 schema。保留现有公开 API 的正常语义和短事务核实；明确区别 COMPLETE 的精确已提交证据与未确认 IN_PROGRESS，不能把最终 ACK 丢失等同于重跑未知工作。本片产品文件限于 cpu_action_budget.py 与 cpu_phase.py，若安全实现需超出边界先记录原因。
 
 ## 真实红绿验收
 
