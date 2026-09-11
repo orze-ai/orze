@@ -1,0 +1,877 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e1",
+  "status": "final_epoch_passed",
+  "whole_v1_complete": false,
+  "baseline_core": "25e331c9aa06b415603a69fc299b435a51398891",
+  "baseline_pro": "b434dc9d4f7f2adba59b4391c0d471ae925f686c",
+  "role": "root implementation, integration and evidence audit, not independent review of root production",
+  "classification": {
+    "new_cases_total": 63,
+    "core_new_cases": 47,
+    "pro_new_cases": 16,
+    "previous_commit_behavior_red": 14,
+    "previous_commit_controls": 2,
+    "new_requirements_and_mechanisms": 42,
+    "draft_behavior_red": 5,
+    "existing_contract_cases_explicitly_revised": 9,
+    "overlap_rule": "New, targeted, independent, paired and full-suite groups overlap and are not additive.",
+    "assert_nodes": 140,
+    "test_files": 10,
+    "existing_fixture_cases_add_results_dir_only": 2
+  },
+  "static_audit_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, pathlib, subprocess\nroot = pathlib.Path(\".\").resolve()\npro = root.parent / \"orze-pro\"\nsha = lambda raw: hashlib.sha256(raw).hexdigest()\nsnapshots = {\n\"docs/evidence/snapshots/v1-05c2e1-before-cli.py\": \"src/orze/cli.py\",\n\"docs/evidence/snapshots/v1-05c2e1-before-cli_setup.py\": \"src/orze/cli_setup.py\",\n\"docs/evidence/snapshots/v1-05c2e1-before-cluster.py\": \"src/orze/engine/cluster.py\",\n\"docs/evidence/snapshots/v1-05c2e1-before-lifecycle.py\": \"src/orze/lifecycle.py\",\n\"docs/evidence/snapshots/v1-05c2e1-before-gpu-lease-tests.py\": \"tests/test_gpu_lease.py\",\n\"docs/evidence/snapshots/v1-05c2e1-before-managed-run-results-fixture.py\": \"tests/test_managed_run.py\",\n}\nout = {\"baseline_snapshots\": [], \"draft_snapshots\": [], \"new_tests\": []}\nfor path, source in snapshots.items():\n    raw = (root / path).read_bytes()\n    assert raw == subprocess.check_output([\"git\", \"show\", \"25e331c9aa06b415603a69fc299b435a51398891:\" + source]), path\n    assert raw.endswith(b\"\\n\")\n    ast.parse(raw)\n    out[\"baseline_snapshots\"].append({\"repo\": \"core\", \"path\": path, \"source\": source, \"sha256\": sha(raw)})\npro_snapshots = {\n\"docs/evidence/snapshots/v1-05c2e1-before-director.py\": \"src/orze_pro/agents/director.py\",\n\"docs/evidence/snapshots/v1-05c2e1-original-test_director_control_paths.py\": \"tests/test_director_control_paths.py\",\n\"docs/evidence/snapshots/v1-05c2e1-original-test_director_dispatch_receipts.py\": \"tests/test_director_dispatch_receipts.py\",\n\"docs/evidence/snapshots/v1-05c2e1-original-test_director_target_actions.py\": \"tests/test_director_target_actions.py\",\n}\nfor path, source in pro_snapshots.items():\n    raw = (pro / path).read_bytes()\n    assert raw == subprocess.check_output([\"git\", \"-C\", str(pro), \"show\", \"b434dc9d4f7f2adba59b4391c0d471ae925f686c:\" + source]), path\n    assert raw.endswith(b\"\\n\")\n    ast.parse(raw)\n    out[\"baseline_snapshots\"].append({\"repo\": \"pro\", \"path\": path, \"source\": source, \"sha256\": sha(raw)})\nfor repo, path in [\n(\"core\", \"docs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py\"),\n(\"core\", \"docs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py\"),\n(\"pro\", \"docs/evidence/snapshots/v1-05c2e1-before-reallocation-ack-director.py\")]:\n    raw = ((root if repo == \"core\" else pro) / path).read_bytes()\n    ast.parse(raw)\n    assert raw.endswith(b\"\\n\")\n    out[\"draft_snapshots\"].append({\"repo\": repo, \"path\": path, \"sha256\": sha(raw)})\nfor repo, directory, paths in [\n(\"core\", root, [\"tests/test_cli_stop_authority.py\",\"tests/test_cluster_orphan_authority.py\",\"tests/test_control_outcome.py\",\"tests/test_controller_enable_stop_hold.py\",\"tests/test_controller_start_stop_admission.py\",\"tests/test_stop_request_publication.py\",\"tests/test_cli_upgrade_stop_authority.py\"]),\n(\"pro\", pro, [\"tests/test_director_stop_ownership.py\",\"tests/test_director_stop_contract.py\",\"tests/test_director_reallocation_ack.py\"])]:\n    for path in paths:\n        raw = (directory / path).read_bytes()\n        out[\"new_tests\"].append({\"repo\": repo, \"path\": path, \"sha256\": sha(raw),\n            \"assert_nodes\": sum(isinstance(n, ast.Assert) for n in ast.walk(ast.parse(raw)))})\nbefore = ast.parse((root / \"docs/evidence/snapshots/v1-05c2e1-before-gpu-lease-tests.py\").read_bytes())\nafter = ast.parse((root / \"tests/test_gpu_lease.py\").read_bytes())\nbefore_function = next(n for n in before.body if isinstance(n, ast.FunctionDef) and n.name == \"test_stop_orphan_probe_can_be_restricted_to_explicit_scope\")\nafter_function = next(n for n in after.body if isinstance(n, ast.FunctionDef) and n.name == \"test_stop_orphan_fallback_does_not_probe_or_infer_gpu_ownership\")\nout[\"gpu_fixture_versioning\"] = {\n\"old_case\": before_function.name, \"new_case\": after_function.name,\n\"old_asserts\": sum(isinstance(n, ast.Assert) for n in ast.walk(before_function)),\n\"new_asserts\": sum(isinstance(n, ast.Assert) for n in ast.walk(after_function)),\n\"old_function_ast\": ast.dump(before_function, include_attributes=False),\n\"new_function_ast\": ast.dump(after_function, include_attributes=False)}\nbefore.body.remove(before_function)\nafter.body.remove(after_function)\nassert ast.dump(before, include_attributes=False) == ast.dump(after, include_attributes=False)\nout[\"gpu_fixture_versioning\"][\"all_other_module_ast_equal\"] = True\nout[\"assert_nodes_total\"] = sum(entry[\"assert_nodes\"] for entry in out[\"new_tests\"])\nprint(json.dumps(out, sort_keys=True))\nPY",
+  "static_audit_exit_code": 0,
+  "static_audit": {
+    "assert_nodes_total": 140,
+    "baseline_snapshots": [
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-before-cli.py",
+        "repo": "core",
+        "sha256": "386c92f936531cffb22838be0655e48e725e3df15a87b08dc1dfaa024343f13f",
+        "source": "src/orze/cli.py"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-before-cli_setup.py",
+        "repo": "core",
+        "sha256": "a710bbd84680df2716d08c557ebfbfc099e37bfbd6201e039d93d73a15d57adf",
+        "source": "src/orze/cli_setup.py"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-before-cluster.py",
+        "repo": "core",
+        "sha256": "c743eef2364bef2f8b1a6ed43c87716564fa99ae4a19fcd4f5549dbf110e3192",
+        "source": "src/orze/engine/cluster.py"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-before-lifecycle.py",
+        "repo": "core",
+        "sha256": "1ae95b563f860d154865c0f48ac4cc9c6e5a12b8971064c18a0f0de05f02875d",
+        "source": "src/orze/lifecycle.py"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-before-gpu-lease-tests.py",
+        "repo": "core",
+        "sha256": "c46492a32c059e94f70cc964335e8e9ff5f15318d4f686215213fbeac1759561",
+        "source": "tests/test_gpu_lease.py"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-before-managed-run-results-fixture.py",
+        "repo": "core",
+        "sha256": "fe0ee3aa76bf4a252f59334e1c20355b6b5a7afc27da7a6592a01c2ebfdca57b",
+        "source": "tests/test_managed_run.py"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-before-director.py",
+        "repo": "pro",
+        "sha256": "02388aa4eeaa2e230ba44c8183f3eead6e02a29340872bf50b24c70dbe602fbe",
+        "source": "src/orze_pro/agents/director.py"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-original-test_director_control_paths.py",
+        "repo": "pro",
+        "sha256": "c9067afd729479b8b5a80bf62491da5862daf244daefed6a84c166c8a20fd6d4",
+        "source": "tests/test_director_control_paths.py"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-original-test_director_dispatch_receipts.py",
+        "repo": "pro",
+        "sha256": "9ad4d12bd0cc04545238c640368bf27b31cf4ba509d4b9f12c6c1748416598b5",
+        "source": "tests/test_director_dispatch_receipts.py"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-original-test_director_target_actions.py",
+        "repo": "pro",
+        "sha256": "4522f9e318116246bd1c3344317fc423ad7615a1cc773c92906fd1c714be6a54",
+        "source": "tests/test_director_target_actions.py"
+      }
+    ],
+    "draft_snapshots": [
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py",
+        "repo": "core",
+        "sha256": "2c71ad0783a18915cb5f061a55a957ff9c288075c8d97dd23fbe6b9c6e79fdc3"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py",
+        "repo": "core",
+        "sha256": "b73b56bb2ae03bd2bec500e04ca954f67d96ab153d4ea80feaaf2779090806cf"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e1-before-reallocation-ack-director.py",
+        "repo": "pro",
+        "sha256": "76d5b9679f4ea4423f6f5c71880870897de141a881c4f1851aa2a541846dce9c"
+      }
+    ],
+    "gpu_fixture_versioning": {
+      "all_other_module_ast_equal": true,
+      "new_asserts": 2,
+      "new_case": "test_stop_orphan_fallback_does_not_probe_or_infer_gpu_ownership",
+      "new_function_ast": "FunctionDef(name='test_stop_orphan_fallback_does_not_probe_or_infer_gpu_ownership', args=arguments(posonlyargs=[], args=[arg(arg='monkeypatch')], kwonlyargs=[], kw_defaults=[], defaults=[]), body=[Assign(targets=[Name(id='observed', ctx=Store())], value=Dict(keys=[], values=[])), FunctionDef(name='fake_run', args=arguments(posonlyargs=[], args=[arg(arg='command')], kwonlyargs=[], kw_defaults=[], kwarg=arg(arg='_kwargs'), defaults=[]), body=[Assign(targets=[Subscript(value=Name(id='observed', ctx=Load()), slice=Constant(value='command'), ctx=Store())], value=Name(id='command', ctx=Load())), Return(value=Call(func=Attribute(value=Name(id='subprocess', ctx=Load()), attr='CompletedProcess', ctx=Load()), args=[Name(id='command', ctx=Load()), Constant(value=0)], keywords=[keyword(arg='stdout', value=Constant(value=''))]))], decorator_list=[]), Expr(value=Call(func=Attribute(value=Name(id='monkeypatch', ctx=Load()), attr='setattr', ctx=Load()), args=[Attribute(value=Name(id='lifecycle', ctx=Load()), attr='subprocess', ctx=Load()), Constant(value='run'), Name(id='fake_run', ctx=Load())], keywords=[])), Assign(targets=[Name(id='outcome', ctx=Store())], value=Call(func=Attribute(value=Name(id='lifecycle', ctx=Load()), attr='_cleanup_gpu_orphans', ctx=Load()), args=[Constant(value='/project'), List(elts=[Constant(value=7), Constant(value=4)], ctx=Load())], keywords=[])), Assert(test=Compare(left=Name(id='observed', ctx=Load()), ops=[Eq()], comparators=[Dict(keys=[], values=[])])), Assert(test=Compare(left=Attribute(value=Name(id='outcome', ctx=Load()), attr='status', ctx=Load()), ops=[Eq()], comparators=[Constant(value='hold')]))], decorator_list=[])",
+      "old_asserts": 1,
+      "old_case": "test_stop_orphan_probe_can_be_restricted_to_explicit_scope",
+      "old_function_ast": "FunctionDef(name='test_stop_orphan_probe_can_be_restricted_to_explicit_scope', args=arguments(posonlyargs=[], args=[arg(arg='monkeypatch')], kwonlyargs=[], kw_defaults=[], defaults=[]), body=[Assign(targets=[Name(id='observed', ctx=Store())], value=Dict(keys=[], values=[])), FunctionDef(name='fake_run', args=arguments(posonlyargs=[], args=[arg(arg='command')], kwonlyargs=[], kw_defaults=[], kwarg=arg(arg='_kwargs'), defaults=[]), body=[Assign(targets=[Subscript(value=Name(id='observed', ctx=Load()), slice=Constant(value='command'), ctx=Store())], value=Name(id='command', ctx=Load())), Return(value=Call(func=Attribute(value=Name(id='subprocess', ctx=Load()), attr='CompletedProcess', ctx=Load()), args=[Name(id='command', ctx=Load()), Constant(value=0)], keywords=[keyword(arg='stdout', value=Constant(value=''))]))], decorator_list=[]), Expr(value=Call(func=Attribute(value=Name(id='monkeypatch', ctx=Load()), attr='setattr', ctx=Load()), args=[Attribute(value=Name(id='lifecycle', ctx=Load()), attr='subprocess', ctx=Load()), Constant(value='run'), Name(id='fake_run', ctx=Load())], keywords=[])), Expr(value=Call(func=Attribute(value=Name(id='lifecycle', ctx=Load()), attr='_cleanup_gpu_orphans', ctx=Load()), args=[Constant(value='/project'), List(elts=[Constant(value=7), Constant(value=4)], ctx=Load())], keywords=[])), Assert(test=Compare(left=Constant(value='--id=4,7'), ops=[In()], comparators=[Subscript(value=Name(id='observed', ctx=Load()), slice=Constant(value='command'), ctx=Load())]))], decorator_list=[])"
+    },
+    "new_tests": [
+      {
+        "assert_nodes": 22,
+        "path": "tests/test_cli_stop_authority.py",
+        "repo": "core",
+        "sha256": "895ee24a621fffb6754de40eaaf3d79850daa9374590da6b2fccd55309df3992"
+      },
+      {
+        "assert_nodes": 10,
+        "path": "tests/test_cluster_orphan_authority.py",
+        "repo": "core",
+        "sha256": "dcf7fdb13eacba0e937200cc17b9c217aa6d7899b1128f2738c91df90285f2cf"
+      },
+      {
+        "assert_nodes": 11,
+        "path": "tests/test_control_outcome.py",
+        "repo": "core",
+        "sha256": "7fd25c1339eb8f8a6f1305c8793b67d45346e91b181d5421c24fe228e4bf61c7"
+      },
+      {
+        "assert_nodes": 7,
+        "path": "tests/test_controller_enable_stop_hold.py",
+        "repo": "core",
+        "sha256": "144a1f5f60e41b62754f4e42313caf3f89485c294782c0a62ea9a28abf51460a"
+      },
+      {
+        "assert_nodes": 23,
+        "path": "tests/test_controller_start_stop_admission.py",
+        "repo": "core",
+        "sha256": "c58b5136c8d90d1f7b100304da703b406c4255a93571ba40db1b7f61e40f8ffc"
+      },
+      {
+        "assert_nodes": 24,
+        "path": "tests/test_stop_request_publication.py",
+        "repo": "core",
+        "sha256": "61da75a5ac2e58b803e821b34a06279fe714ff4b690975e3425c7624650f8745"
+      },
+      {
+        "assert_nodes": 10,
+        "path": "tests/test_cli_upgrade_stop_authority.py",
+        "repo": "core",
+        "sha256": "e5d551a0068bd2fdd7c15408474217c7d45c2308003294b9d7300c8b60b63053"
+      },
+      {
+        "assert_nodes": 15,
+        "path": "tests/test_director_stop_ownership.py",
+        "repo": "pro",
+        "sha256": "abc9fee373dad74990de26ad4819aad721747b8fcd505fc13f4d2ed0c4660708"
+      },
+      {
+        "assert_nodes": 14,
+        "path": "tests/test_director_stop_contract.py",
+        "repo": "pro",
+        "sha256": "b42ddf5a7e67b755334d5bb559410d2c6ef45170ce23188a974f7b253e44abf4"
+      },
+      {
+        "assert_nodes": 4,
+        "path": "tests/test_director_reallocation_ack.py",
+        "repo": "pro",
+        "sha256": "d9b7a1feddb59470393a34a89f67a3bb12b2807e0998fcdc9214cb0d1a2d2bf5"
+      }
+    ]
+  },
+  "candidate_runs": [
+    {
+      "label": "root_compat",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cli_stop_authority.py tests/test_cluster_orphan_authority.py tests/test_controller_runtime_cli.py tests/test_lifecycle_process_match.py --tb=short",
+      "initial": {
+        "chunk_id": "1786f1",
+        "wall_time_seconds": 0.664525446,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "...................                                                      [100%]\n19 passed in 0.51s\n"
+      },
+      "not_final_epoch": true,
+      "scope": "No pre/post manifest captured for these preliminary root runs; final frozen epochs provide exact inventory."
+    },
+    {
+      "label": "enable_fixed",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_enable_stop_hold.py tests/test_controller_runtime_cli.py --tb=short",
+      "initial": {
+        "chunk_id": "e817b0",
+        "wall_time_seconds": 0.417315984,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": ".........                                                                [100%]\n9 passed in 0.27s\n"
+      },
+      "not_final_epoch": true,
+      "scope": "No pre/post manifest captured for these preliminary root runs; final frozen epochs provide exact inventory."
+    },
+    {
+      "label": "root_new",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_start_stop_admission.py --tb=short",
+      "initial": {
+        "chunk_id": "84146b",
+        "wall_time_seconds": 0.518858182,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "..................                                                       [100%]\n18 passed in 0.37s\n"
+      },
+      "not_final_epoch": true,
+      "scope": "No pre/post manifest captured for these preliminary root runs; final frozen epochs provide exact inventory."
+    },
+    {
+      "label": "gpu_old_contract",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_gpu_lease.py::test_stop_orphan_probe_can_be_restricted_to_explicit_scope --tb=short",
+      "initial": {
+        "chunk_id": "1b331e",
+        "wall_time_seconds": 0.283801406,
+        "exit_code": 1,
+        "original_token_count": 148,
+        "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n__________ test_stop_orphan_probe_can_be_restricted_to_explicit_scope __________\ntests/test_gpu_lease.py:364: in test_stop_orphan_probe_can_be_restricted_to_explicit_scope\n    assert \"--id=4,7\" in observed[\"command\"]\nE   KeyError: 'command'\n=========================== short test summary info ============================\nFAILED tests/test_gpu_lease.py::test_stop_orphan_probe_can_be_restricted_to_explicit_scope\n1 failed in 0.14s\n"
+      },
+      "not_final_epoch": true,
+      "scope": "No pre/post manifest captured for these preliminary root runs; final frozen epochs provide exact inventory."
+    },
+    {
+      "label": "gpu_versioned",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_gpu_lease.py --tb=short",
+      "initial": {
+        "chunk_id": "a24cea",
+        "wall_time_seconds": 1.000484322,
+        "session_id": 10952,
+        "original_token_count": 2,
+        "output": "......"
+      },
+      "completion": {
+        "exit_code": 0,
+        "footer": "18 passed in 2.91s",
+        "session_id": 10952
+      },
+      "not_final_epoch": true,
+      "scope": "No pre/post manifest captured for these preliminary root runs; final frozen epochs provide exact inventory."
+    }
+  ],
+  "epoch1": {
+    "label": "failed first full epoch; not final acceptance",
+    "freeze": {
+      "current_time": "2026-09-11 02:42:49 UTC"
+    },
+    "commands": {
+      "core": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "pro": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "paired": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "new_core": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cli_stop_authority.py tests/test_cluster_orphan_authority.py tests/test_control_outcome.py tests/test_controller_enable_stop_hold.py tests/test_controller_start_stop_admission.py tests/test_stop_request_publication.py --tb=short",
+      "new_pro": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_director_stop_ownership.py\",\"tests/test_director_stop_contract.py\",\"tests/test_director_reallocation_ack.py\",\"--tb=short\"]))'"
+    },
+    "groups": {
+      "core": {
+        "initial": {
+          "chunk_id": "e4a666",
+          "wall_time_seconds": 1.000909277,
+          "session_id": 64397,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "68f11e",
+            "wall_time_seconds": 5.001592898,
+            "session_id": 64397,
+            "original_token_count": 194,
+            "output": "........................................................................ [  2%]\n........................................................................ [  4%]\n........................................................................ [  6%]\n........................................................................ [  8%]\n........................................................................ [ 10%]\n........................................................................ [ 12%]\n........................................................................ [ 15%]\n........................................................................ [ 17%]\n........................................................................ [ 19%]\n......................................................"
+          },
+          {
+            "chunk_id": "c5f755",
+            "wall_time_seconds": 0.000002096,
+            "exit_code": 1,
+            "original_token_count": 1240,
+            "output": ".................. [ 21%]\n........................................................................ [ 23%]\n........................................................................ [ 25%]\n........................................................................ [ 27%]\n........................................................................ [ 30%]\n.....................sss................................................ [ 32%]\n........................................................................ [ 34%]\n........................................................................ [ 36%]\n........................................................................ [ 38%]\n...............s........................................................ [ 40%]\n........................................................................ [ 43%]\n........................................................................ [ 45%]\n........................................................................ [ 47%]\n........................................................................ [ 49%]\n......................................................FF................ [ 51%]\n........................................................................ [ 53%]\n........................................................................ [ 55%]\n........................................................................ [ 58%]\n........................................................................ [ 60%]\n........................................................................ [ 62%]\n........................................................................ [ 64%]\n........................................................................ [ 66%]\n........................................................................ [ 68%]\n........................................................................ [ 70%]\n........................................................................ [ 73%]\n........................................................................ [ 75%]\n........................................................................ [ 77%]\n........................................................................ [ 79%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 86%]\n........................................................................ [ 88%]\n...............................................................ss....... [ 90%]\n........................................................................ [ 92%]\n........................................................................ [ 94%]\n........................................................................ [ 96%]\n........................................................................ [ 98%]\n...................................                                      [100%]\n=================================== FAILURES ===================================\n_________ test_disabled_orchestrator_exits_before_gpu_lease_or_startup _________\ntests/test_managed_run.py:228: in test_disabled_orchestrator_exits_before_gpu_lease_or_startup\n    runner.run()\nsrc/orze/engine/orchestrator.py:954: in run\n    require_controller_start_allowed(self.results_dir)\nE   AttributeError: 'Orze' object has no attribute 'results_dir'\n________ test_orchestrator_rejects_external_gpu_compute_before_startup _________\ntests/test_managed_run.py:261: in test_orchestrator_rejects_external_gpu_compute_before_startup\n    runner.run()\nsrc/orze/engine/orchestrator.py:954: in run\n    require_controller_start_allowed(self.results_dir)\nE   AttributeError: 'Orze' object has no attribute 'results_dir'\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n2 failed, 3339 passed, 7 skipped in 513.10s (0:08:33)\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "c5f755",
+          "wall_time_seconds": 0.000002096,
+          "exit_code": 1,
+          "original_token_count": 1240,
+          "output": ".................. [ 21%]\n........................................................................ [ 23%]\n........................................................................ [ 25%]\n........................................................................ [ 27%]\n........................................................................ [ 30%]\n.....................sss................................................ [ 32%]\n........................................................................ [ 34%]\n........................................................................ [ 36%]\n........................................................................ [ 38%]\n...............s........................................................ [ 40%]\n........................................................................ [ 43%]\n........................................................................ [ 45%]\n........................................................................ [ 47%]\n........................................................................ [ 49%]\n......................................................FF................ [ 51%]\n........................................................................ [ 53%]\n........................................................................ [ 55%]\n........................................................................ [ 58%]\n........................................................................ [ 60%]\n........................................................................ [ 62%]\n........................................................................ [ 64%]\n........................................................................ [ 66%]\n........................................................................ [ 68%]\n........................................................................ [ 70%]\n........................................................................ [ 73%]\n........................................................................ [ 75%]\n........................................................................ [ 77%]\n........................................................................ [ 79%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 86%]\n........................................................................ [ 88%]\n...............................................................ss....... [ 90%]\n........................................................................ [ 92%]\n........................................................................ [ 94%]\n........................................................................ [ 96%]\n........................................................................ [ 98%]\n...................................                                      [100%]\n=================================== FAILURES ===================================\n_________ test_disabled_orchestrator_exits_before_gpu_lease_or_startup _________\ntests/test_managed_run.py:228: in test_disabled_orchestrator_exits_before_gpu_lease_or_startup\n    runner.run()\nsrc/orze/engine/orchestrator.py:954: in run\n    require_controller_start_allowed(self.results_dir)\nE   AttributeError: 'Orze' object has no attribute 'results_dir'\n________ test_orchestrator_rejects_external_gpu_compute_before_startup _________\ntests/test_managed_run.py:261: in test_orchestrator_rejects_external_gpu_compute_before_startup\n    runner.run()\nsrc/orze/engine/orchestrator.py:954: in run\n    require_controller_start_allowed(self.results_dir)\nE   AttributeError: 'Orze' object has no attribute 'results_dir'\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n2 failed, 3339 passed, 7 skipped in 513.10s (0:08:33)\n"
+        }
+      },
+      "pro": {
+        "initial": {
+          "chunk_id": "36bb56",
+          "wall_time_seconds": 1.001156203,
+          "session_id": 4039,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "f5fa25",
+            "wall_time_seconds": 5.000417504,
+            "session_id": 4039,
+            "original_token_count": 242,
+            "output": "........................................................................ [  7%]\n........................................................................ [ 15%]\n........................................................................ [ 22%]\n........................................................................ [ 30%]\n........................................................................ [ 37%]\n........................................................................ [ 45%]\n........................................................................ [ 52%]\n........................................................................ [ 60%]\n........................................................................ [ 67%]\n........................................................................ [ 75%]\n........................................................................ [ 82%]\n........................................................................ [ 90%]\n....."
+          },
+          {
+            "chunk_id": "eca007",
+            "wall_time_seconds": 0.000002005,
+            "exit_code": 0,
+            "original_token_count": 47,
+            "output": "................................................................... [ 97%]\n........................                                                 [100%]\n960 passed in 159.55s (0:02:39)\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "eca007",
+          "wall_time_seconds": 0.000002005,
+          "exit_code": 0,
+          "original_token_count": 47,
+          "output": "................................................................... [ 97%]\n........................                                                 [100%]\n960 passed in 159.55s (0:02:39)\n"
+        }
+      },
+      "paired": {
+        "initial": {
+          "chunk_id": "b45e51",
+          "wall_time_seconds": 1.000873962,
+          "session_id": 36526,
+          "original_token_count": 14,
+          "output": "......................................................"
+        },
+        "chunks": [
+          {
+            "chunk_id": "ef1802",
+            "wall_time_seconds": 7.45e-7,
+            "exit_code": 0,
+            "original_token_count": 12,
+            "output": "......             [100%]\n60 passed in 0.93s\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "ef1802",
+          "wall_time_seconds": 7.45e-7,
+          "exit_code": 0,
+          "original_token_count": 12,
+          "output": "......             [100%]\n60 passed in 0.93s\n"
+        }
+      },
+      "new_core": {
+        "initial": {
+          "chunk_id": "b85b00",
+          "wall_time_seconds": 1.001505318,
+          "session_id": 89402,
+          "original_token_count": 9,
+          "output": ".................................."
+        },
+        "chunks": [
+          {
+            "chunk_id": "4e6d59",
+            "wall_time_seconds": 0.000002271,
+            "exit_code": 0,
+            "original_token_count": 17,
+            "output": "..........                             [100%]\n44 passed in 1.17s\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "4e6d59",
+          "wall_time_seconds": 0.000002271,
+          "exit_code": 0,
+          "original_token_count": 17,
+          "output": "..........                             [100%]\n44 passed in 1.17s\n"
+        }
+      },
+      "new_pro": {
+        "initial": {
+          "chunk_id": "2d311e",
+          "wall_time_seconds": 1.000891358,
+          "session_id": 98160,
+          "original_token_count": 1,
+          "output": "..."
+        },
+        "chunks": [
+          {
+            "chunk_id": "2138f8",
+            "wall_time_seconds": 0.000001165,
+            "exit_code": 0,
+            "original_token_count": 24,
+            "output": ".............                                                         [100%]\n16 passed in 3.96s\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "2138f8",
+          "wall_time_seconds": 0.000001165,
+          "exit_code": 0,
+          "original_token_count": 24,
+          "output": ".............                                                         [100%]\n16 passed in 3.96s\n"
+        }
+      }
+    },
+    "manifest_counts": {
+      "core": 629,
+      "pro": 217
+    },
+    "pre_post_exact": {
+      "core": true,
+      "pro": true
+    },
+    "disposition": "2 Core setup errors from incomplete __new__ fixtures; no production change required for those two errors",
+    "inventory_reconstruction": "Use the final inventory plus the exact per-epoch path overrides; no unrecorded files changed."
+  },
+  "limits": [
+    "Refusal only: no source-qualified controller ACK or positive restart/resume/reallocation yet.",
+    "New focused acceptance uses real filesystem/API/SQLite routing and explicit process/GPU/provider spies; not real controller execution or research efficacy.",
+    "Existing native owned-handle CPU neighborhood tests are distinct supporting evidence, not new controller lifecycle proof.",
+    "Nine existing safety-contract cases deliberately revised; two old __new__ fixture cases separately gain mandatory results_dir with assertions preserved.",
+    "Whole-module replay uses fixed complete old/draft modules with current dependencies, not the full historical environment.",
+    "No GPU/model/dataset/provider deployment, main merge, live campaign, historical adoption or holdout read."
+  ],
+  "epoch2": {
+    "label": "all green second epoch before independently discovered upgrade alias fix; superseded, not final acceptance",
+    "freeze": {
+      "current_time": "2026-09-11 02:54:10 UTC"
+    },
+    "commands": {
+      "core": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "pro": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "paired": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "new_core": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cli_stop_authority.py tests/test_cluster_orphan_authority.py tests/test_control_outcome.py tests/test_controller_enable_stop_hold.py tests/test_controller_start_stop_admission.py tests/test_stop_request_publication.py --tb=short",
+      "new_pro": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_director_stop_ownership.py\",\"tests/test_director_stop_contract.py\",\"tests/test_director_reallocation_ack.py\",\"--tb=short\"]))'"
+    },
+    "groups": {
+      "core": {
+        "initial": {
+          "chunk_id": "29c7f7",
+          "wall_time_seconds": 1.001361639,
+          "session_id": 50113,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "220773",
+            "wall_time_seconds": 5.000599627,
+            "session_id": 50113,
+            "original_token_count": 245,
+            "output": "........................................................................ [  2%]\n........................................................................ [  4%]\n........................................................................ [  6%]\n........................................................................ [  8%]\n........................................................................ [ 10%]\n........................................................................ [ 12%]\n........................................................................ [ 15%]\n........................................................................ [ 17%]\n........................................................................ [ 19%]\n........................................................................ [ 21%]\n........................................................................ [ 23%]\n........................................................................ [ 25%]\n...................."
+          },
+          {
+            "chunk_id": "b959a0",
+            "wall_time_seconds": 5.000470531,
+            "session_id": 50113,
+            "original_token_count": 269,
+            "output": ".................................................... [ 27%]\n........................................................................ [ 30%]\n.....................sss................................................ [ 32%]\n........................................................................ [ 34%]\n........................................................................ [ 36%]\n........................................................................ [ 38%]\n...............s........................................................ [ 40%]\n........................................................................ [ 43%]\n........................................................................ [ 45%]\n........................................................................ [ 47%]\n........................................................................ [ 49%]\n........................................................................ [ 51%]\n........................................................................ [ 53%]\n........................................................"
+          },
+          {
+            "chunk_id": "d709f9",
+            "wall_time_seconds": 5.001657586,
+            "session_id": 50113,
+            "original_token_count": 87,
+            "output": "................ [ 55%]\n........................................................................ [ 58%]\n........................................................................ [ 60%]\n........................................................................ [ 62%]\n........................................................................ [ 64%]\n.."
+          },
+          {
+            "chunk_id": "276506",
+            "wall_time_seconds": 5.001161169,
+            "session_id": 50113,
+            "original_token_count": 76,
+            "output": "...................................................................... [ 66%]\n........................................................................ [ 68%]\n........................................................................ [ 70%]\n................................................................"
+          },
+          {
+            "chunk_id": "4a815d",
+            "wall_time_seconds": 5.001398563,
+            "session_id": 50113,
+            "original_token_count": 92,
+            "output": "........ [ 73%]\n........................................................................ [ 75%]\n........................................................................ [ 77%]\n........................................................................ [ 79%]\n........................................................................ [ 81%]\n..............................."
+          },
+          {
+            "chunk_id": "e3d894",
+            "wall_time_seconds": 5.00144756,
+            "session_id": 50113,
+            "original_token_count": 134,
+            "output": "......................................... [ 83%]\n........................................................................ [ 86%]\n........................................................................ [ 88%]\n...............................................................ss....... [ 90%]\n........................................................................ [ 92%]\n........................................................................ [ 94%]\n........................................................................ [ 96%]\n...."
+          },
+          {
+            "chunk_id": "bb5830",
+            "wall_time_seconds": 0.000003492,
+            "exit_code": 0,
+            "original_token_count": 331,
+            "output": ".................................................................... [ 98%]\n...................................                                      [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n3341 passed, 7 skipped in 512.61s (0:08:32)\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "bb5830",
+          "wall_time_seconds": 0.000003492,
+          "exit_code": 0,
+          "original_token_count": 331,
+          "output": ".................................................................... [ 98%]\n...................................                                      [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n3341 passed, 7 skipped in 512.61s (0:08:32)\n"
+        }
+      },
+      "pro": {
+        "initial": {
+          "chunk_id": "bf1126",
+          "wall_time_seconds": 1.001003065,
+          "session_id": 5575,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "1287ad",
+            "wall_time_seconds": 0.000002798,
+            "exit_code": 0,
+            "original_token_count": 288,
+            "output": "........................................................................ [  7%]\n........................................................................ [ 15%]\n........................................................................ [ 22%]\n........................................................................ [ 30%]\n........................................................................ [ 37%]\n........................................................................ [ 45%]\n........................................................................ [ 52%]\n........................................................................ [ 60%]\n........................................................................ [ 67%]\n........................................................................ [ 75%]\n........................................................................ [ 82%]\n........................................................................ [ 90%]\n........................................................................ [ 97%]\n........................                                                 [100%]\n960 passed in 159.70s (0:02:39)\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "1287ad",
+          "wall_time_seconds": 0.000002798,
+          "exit_code": 0,
+          "original_token_count": 288,
+          "output": "........................................................................ [  7%]\n........................................................................ [ 15%]\n........................................................................ [ 22%]\n........................................................................ [ 30%]\n........................................................................ [ 37%]\n........................................................................ [ 45%]\n........................................................................ [ 52%]\n........................................................................ [ 60%]\n........................................................................ [ 67%]\n........................................................................ [ 75%]\n........................................................................ [ 82%]\n........................................................................ [ 90%]\n........................................................................ [ 97%]\n........................                                                 [100%]\n960 passed in 159.70s (0:02:39)\n"
+        }
+      },
+      "new_core": {
+        "initial": {
+          "chunk_id": "96b241",
+          "wall_time_seconds": 1.001277366,
+          "session_id": 89807,
+          "original_token_count": 9,
+          "output": ".................................."
+        },
+        "chunks": [],
+        "completion": {
+          "chunk_id": "bc67d2",
+          "wall_time_seconds": 0.000002338,
+          "exit_code": 0,
+          "original_token_count": 17,
+          "output": "..........                             [100%]\n44 passed in 1.16s\n"
+        }
+      },
+      "new_pro": {
+        "initial": {
+          "chunk_id": "6b1ddd",
+          "wall_time_seconds": 1.000979043,
+          "session_id": 95772,
+          "original_token_count": 1,
+          "output": "..."
+        },
+        "chunks": [],
+        "completion": {
+          "chunk_id": "3f62ae",
+          "wall_time_seconds": 0.000001504,
+          "exit_code": 0,
+          "original_token_count": 24,
+          "output": ".............                                                         [100%]\n16 passed in 4.06s\n"
+        }
+      },
+      "paired": {
+        "initial": {
+          "chunk_id": "61ac93",
+          "wall_time_seconds": 1.000532739,
+          "session_id": 83197,
+          "original_token_count": 10,
+          "output": "......................................"
+        },
+        "chunks": [],
+        "completion": {
+          "chunk_id": "52a0e7",
+          "wall_time_seconds": 8.86e-7,
+          "exit_code": 0,
+          "original_token_count": 16,
+          "output": "......................             [100%]\n60 passed in 0.96s\n"
+        }
+      }
+    },
+    "manifest_counts": {
+      "core": 629,
+      "pro": 217
+    },
+    "pre_post_exact": {
+      "core": true,
+      "pro": true
+    },
+    "all_exit_zero": true
+  },
+  "root_pro_versioning_audit": {
+    "command": "python3 - <<'PY'\nimport ast, collections, hashlib, json, shlex, subprocess\nfrom pathlib import Path\nauthor_path = Path('docs/evidence/2026-09-10-v1-05c2e1-director-stop-refusal-author.json')\nauthor = json.loads(author_path.read_text())\ncommands=[]\ndef walk(node):\n if isinstance(node,dict):\n  for key,value in node.items():\n   if key=='command':\n    commands.append(value)\n   walk(value)\n elif isinstance(node,list):\n  for value in node:walk(value)\nwalk(author)\npython_bodies=0\nfor command in commands:\n subprocess.run(['bash','-n'],input=command,text=True,check=True,capture_output=True)\n if \"<<'PY'\" in command:\n  body=command.split(\"<<'PY'\",1)[1].split('\\n',1)[1].rsplit('\\nPY',1)[0]\n  ast.parse(body);python_bodies+=1\n else:\n  words=shlex.split(command)\n  if '-c' in words:\n   ast.parse(words[words.index('-c')+1]);python_bodies+=1\nfor path,record in author['final_artifacts'].items():\n assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==record['sha256'],path\nfor path,record in author['snapshots'].items():\n raw=Path(path).read_bytes()\n ast.parse(raw)\n assert raw.endswith(b'\\n')\n assert hashlib.sha256(raw).hexdigest()==record['sha256']\n if 'fixed_commit' in record:\n  assert raw==subprocess.check_output(['git','show',record['fixed_commit']+':'+record['original']])\nchanged=0\nasserts_before=asserts_after=mocks_before=mocks_after=0\ndef asserts(tree):\n return [ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Assert)]\ndef mocks(tree):\n return [ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr.startswith('assert_')]\nfor name,record in author['versioning']['files'].items():\n old=ast.parse(Path(record['snapshot']).read_bytes())\n new=ast.parse(Path('tests',name).read_bytes())\n old_funcs={n.name:n for n in old.body if isinstance(n,ast.FunctionDef)}\n new_funcs={n.name:n for n in new.body if isinstance(n,ast.FunctionDef)}\n changes={n['before_name']:n for n in record['changed_functions']}\n for name_before,old_func in old_funcs.items():\n  if name_before not in changes:\n   assert ast.dump(old_func,include_attributes=False)==ast.dump(new_funcs[name_before],include_attributes=False)\n  else:\n   delta=changes[name_before];new_func=new_funcs[delta['after_name']]\n   assert asserts(old_func)==delta['old_assert_ast']\n   assert asserts(new_func)==delta['new_assert_ast']\n   assert mocks(old_func)==delta['old_mock_assert_ast']\n   assert mocks(new_func)==delta['new_mock_assert_ast']\n   assert ast.dump(old_func,include_attributes=False)!=ast.dump(new_func,include_attributes=False)\n   changed+=1\n a,b,ma,mb=asserts(old),asserts(new),mocks(old),mocks(new)\n assert (len(a),len(b),len(ma),len(mb))==(record['old_assert_count'],record['new_assert_count'],record['old_mock_assert_count'],record['new_mock_assert_count'])\n assert sum((collections.Counter(a)&collections.Counter(b)).values())==record['unchanged_assert_multiset_count']\n assert sum((collections.Counter(ma)&collections.Counter(mb)).values())==record['unchanged_mock_assert_multiset_count']\n asserts_before+=len(a);asserts_after+=len(b);mocks_before+=len(ma);mocks_after+=len(mb)\nassert changed==8\nassert (asserts_before,asserts_after,mocks_before,mocks_after)==(45,49,25,29)\nassert author['classification']['distinct_new_cases']==7+8+1\nassert sum(author['final_artifacts'][p]['assert_count'] for p in author['ownership']['authored_new_tests'])==33\nprint(json.dumps({'author_sha256':hashlib.sha256(author_path.read_bytes()).hexdigest(),'commands_bash_valid':len(commands),'python_bodies_valid':python_bodies,'artifact_hashes_current':len(author['final_artifacts']),'complete_snapshots':len(author['snapshots']),'fixed_baseline_snapshots':4,'changed_existing_test_functions':changed,'old_new_asserts':[asserts_before,asserts_after],'old_new_mock_asserts':[mocks_before,mocks_after],'new_cases':16,'new_asserts':33},sort_keys=True))\nPY",
+    "run": {
+      "chunk_id": "4afa64",
+      "wall_time_seconds": 0.000004119,
+      "exit_code": 0,
+      "original_token_count": 91,
+      "output": "{\"artifact_hashes_current\": 16, \"author_sha256\": \"1b97a2918aede6331304dab4cf02656c54bc820f75039bab10b3c114d1838891\", \"changed_existing_test_functions\": 8, \"commands_bash_valid\": 11, \"complete_snapshots\": 5, \"fixed_baseline_snapshots\": 4, \"new_asserts\": 33, \"new_cases\": 16, \"old_new_asserts\": [45, 49], \"old_new_mock_asserts\": [25, 29], \"python_bodies_valid\": 11}\n"
+    }
+  },
+  "patch_diagnostic": {
+    "error": "apply_patch verification failed: Failed to find expected lines: help=\"Gracefully stop a running orze instance\"",
+    "classification": "Patch context construction error (missing leading indentation), no file change; not a product regression."
+  },
+  "upgrade_alias_fix": {
+    "discovery": "Independent reviewer identified public upgrade distinct from previously reviewed --upgrade flag after the first full epoch. The second all-green epoch is superseded, not accepted as covering this path.",
+    "draft_snapshot": "docs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py",
+    "sha256_before": "b73b56bb2ae03bd2bec500e04ca954f67d96ab153d4ea80feaaf2779090806cf",
+    "sha256_after": "d963afaeadba4c64daa9266735162be2895572412b339531c4424b1a27f92b4a",
+    "new_cases": 3,
+    "classification": "Working-draft behavior failures, one branch root cause; no historical-product-reproduction claim for these three.",
+    "root_fixed_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cli_stop_authority.py tests/test_cluster_orphan_authority.py tests/test_control_outcome.py tests/test_controller_enable_stop_hold.py tests/test_controller_start_stop_admission.py tests/test_stop_request_publication.py tests/test_cli_upgrade_stop_authority.py --tb=short",
+      "initial": {
+        "chunk_id": "adfaf2",
+        "wall_time_seconds": 1.000632976,
+        "session_id": 31555,
+        "original_token_count": 10,
+        "output": "........................................"
+      },
+      "completion": {
+        "chunk_id": "22fb4e",
+        "wall_time_seconds": 0.00000332,
+        "exit_code": 0,
+        "original_token_count": 15,
+        "output": ".......                          [100%]\n47 passed in 1.31s\n"
+      },
+      "pre_post_not_captured": true
+    },
+    "behavior": "Complete old public upgrade package/daemon branch removed; load config, actual cooperative request, exit 75. Compatibility flags do not bypass stop admission. Scoped CLI help updated to request/HOLD semantics."
+  },
+  "cached_diff_disclosure": {
+    "original_command": "git diff --cached --check",
+    "original_run": {
+      "chunk_id": "26e6cb",
+      "wall_time_seconds": 0.000003865,
+      "exit_code": 2,
+      "original_token_count": 1886,
+      "output": "docs/evidence/snapshots/v1-05c2e1-before-cli.py:482: trailing whitespace.\n+    \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:743: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:748: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:757: trailing whitespace.\n+                        \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:760: trailing whitespace.\n+                        \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:777: trailing whitespace.\n+                        \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:785: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:803: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:815: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:817: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:824: trailing whitespace.\n+                \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1040: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1074: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1080: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1098: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1104: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1107: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1113: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1119: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1132: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1138: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1144: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1152: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1156: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-cli.py:1166: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:482: trailing whitespace.\n+    \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:743: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:748: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:757: trailing whitespace.\n+                        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:760: trailing whitespace.\n+                        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:777: trailing whitespace.\n+                        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:785: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:803: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:815: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:817: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:824: trailing whitespace.\n+                \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1045: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1079: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1085: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1103: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1109: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1112: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1118: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1124: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1137: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1143: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1149: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1157: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1161: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-enable-stop-hold-cli.py:1171: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:482: trailing whitespace.\n+    \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:743: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:748: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:757: trailing whitespace.\n+                        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:760: trailing whitespace.\n+                        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:777: trailing whitespace.\n+                        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:785: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:803: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:815: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:817: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:824: trailing whitespace.\n+                \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1045: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1079: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1085: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1103: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1109: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1112: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1118: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1124: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1137: trailing whitespace.\n+        \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1143: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1149: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1157: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1161: trailing whitespace.\n+            \ndocs/evidence/snapshots/v1-05c2e1-before-subcommand-upgrade-cli.py:1171: trailing whitespace.\n+        \n"
+    },
+    "disposition": "75 historical trailing-whitespace warnings only in three complete CLI snapshots. Raw snapshots intentionally retain exact original bytes. No production/test or authored documentation warning was suppressed.",
+    "core_non_snapshot": {
+      "command": "git diff --cached --check -- src/orze/cli.py src/orze/cli_setup.py src/orze/engine/cluster.py src/orze/engine/orchestrator.py src/orze/lifecycle.py src/orze/core/control_outcome.py tests/test_gpu_lease.py tests/test_managed_run.py tests/test_cli_stop_authority.py tests/test_cluster_orphan_authority.py tests/test_control_outcome.py tests/test_controller_enable_stop_hold.py tests/test_controller_start_stop_admission.py tests/test_stop_request_publication.py tests/test_cli_upgrade_stop_authority.py docs/controller-stop-refusal.md docs/evidence/2026-09-10-v1-05c2e1-control-outcome-author.json docs/evidence/2026-09-10-v1-05c2e1-managed-run-fixture-migration.json docs/evidence/2026-09-11-v1-05c2e1-core-stop-authority-review.json",
+      "chunk_id": "efb0c8",
+      "wall_time_seconds": 0.000002852,
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "pro_non_snapshot": {
+      "command": "git diff --cached --check -- src/orze_pro/agents/director.py tests/test_director_control_paths.py tests/test_director_dispatch_receipts.py tests/test_director_target_actions.py tests/test_director_stop_ownership.py tests/test_director_stop_contract.py tests/test_director_reallocation_ack.py docs/evidence/2026-09-10-v1-05c2e1-director-stop-refusal-author.json docs/evidence/2026-09-11-v1-05c2e1-independent-review.json",
+      "chunk_id": "b6f7d9",
+      "wall_time_seconds": 0.000002157,
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": ""
+    }
+  },
+  "code_commits": {
+    "core": "02ae52445c97781664742b5120dcc53cc1a04aac",
+    "pro": "58841a96990fdfb945f74f487a8a63adb4157e27"
+  },
+  "final_epoch": {
+    "label": "final third frozen epoch",
+    "freeze": {
+      "current_time": "2026-09-11 03:06:02 UTC"
+    },
+    "checked": {
+      "current_time": "2026-09-11 03:15:15 UTC"
+    },
+    "commands": {
+      "core": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "pro": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "paired": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "new_core": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cli_stop_authority.py tests/test_cluster_orphan_authority.py tests/test_control_outcome.py tests/test_controller_enable_stop_hold.py tests/test_controller_start_stop_admission.py tests/test_stop_request_publication.py tests/test_cli_upgrade_stop_authority.py --tb=short",
+      "new_pro": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_director_stop_ownership.py\",\"tests/test_director_stop_contract.py\",\"tests/test_director_reallocation_ack.py\",\"--tb=short\"]))'"
+    },
+    "groups": {
+      "core": {
+        "initial": {
+          "chunk_id": "2fe543",
+          "wall_time_seconds": 1.0014881,
+          "session_id": 63770,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "c6d8ab",
+            "wall_time_seconds": 5.001020312,
+            "session_id": 63770,
+            "original_token_count": 456,
+            "output": "........................................................................ [  2%]\n........................................................................ [  4%]\n........................................................................ [  6%]\n........................................................................ [  8%]\n........................................................................ [ 10%]\n........................................................................ [ 12%]\n........................................................................ [ 15%]\n........................................................................ [ 17%]\n........................................................................ [ 19%]\n........................................................................ [ 21%]\n........................................................................ [ 23%]\n........................................................................ [ 25%]\n........................................................................ [ 27%]\n........................................................................ [ 30%]\n........................sss............................................. [ 32%]\n........................................................................ [ 34%]\n........................................................................ [ 36%]\n........................................................................ [ 38%]\n..................s..................................................... [ 40%]\n........................................................................ [ 42%]\n........................................................................ [ 45%]\n........................................................................ [ 47%]\n................................................................"
+          },
+          {
+            "chunk_id": "d44a94",
+            "wall_time_seconds": 5.001176841,
+            "session_id": 63770,
+            "original_token_count": 128,
+            "output": "........ [ 49%]\n........................................................................ [ 51%]\n........................................................................ [ 53%]\n........................................................................ [ 55%]\n........................................................................ [ 58%]\n........................................................................ [ 60%]\n........................................................................ [ 62%]\n................"
+          },
+          {
+            "chunk_id": "b49483",
+            "wall_time_seconds": 5.001221687,
+            "session_id": 63770,
+            "original_token_count": 108,
+            "output": "........................................................ [ 64%]\n........................................................................ [ 66%]\n........................................................................ [ 68%]\n........................................................................ [ 70%]\n........................................................................ [ 73%]\n..............................................."
+          },
+          {
+            "chunk_id": "b22cfd",
+            "wall_time_seconds": 0.00000236,
+            "exit_code": 0,
+            "original_token_count": 541,
+            "output": "......................... [ 75%]\n........................................................................ [ 77%]\n........................................................................ [ 79%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 85%]\n........................................................................ [ 88%]\n..................................................................ss.... [ 90%]\n........................................................................ [ 92%]\n........................................................................ [ 94%]\n........................................................................ [ 96%]\n........................................................................ [ 98%]\n......................................                                   [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n3344 passed, 7 skipped in 515.96s (0:08:35)\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "b22cfd",
+          "wall_time_seconds": 0.00000236,
+          "exit_code": 0,
+          "original_token_count": 541,
+          "output": "......................... [ 75%]\n........................................................................ [ 77%]\n........................................................................ [ 79%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 85%]\n........................................................................ [ 88%]\n..................................................................ss.... [ 90%]\n........................................................................ [ 92%]\n........................................................................ [ 94%]\n........................................................................ [ 96%]\n........................................................................ [ 98%]\n......................................                                   [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n3344 passed, 7 skipped in 515.96s (0:08:35)\n"
+        }
+      },
+      "pro": {
+        "initial": {
+          "chunk_id": "9fc0f9",
+          "wall_time_seconds": 1.000894119,
+          "session_id": 6342,
+          "original_token_count": 4,
+          "output": ".............."
+        },
+        "chunks": [
+          {
+            "chunk_id": "0bba11",
+            "wall_time_seconds": 5.001521854,
+            "session_id": 6342,
+            "original_token_count": 185,
+            "output": ".......................................................... [  7%]\n........................................................................ [ 15%]\n........................................................................ [ 22%]\n........................................................................ [ 30%]\n........................................................................ [ 37%]\n........................................................................ [ 45%]\n........................................................................ [ 52%]\n........................................................................ [ 60%]\n........................................................................ [ 67%]\n.................................."
+          },
+          {
+            "chunk_id": "6e1d0b",
+            "wall_time_seconds": 0.582067156,
+            "exit_code": 0,
+            "original_token_count": 100,
+            "output": "...................................... [ 75%]\n........................................................................ [ 82%]\n........................................................................ [ 90%]\n........................................................................ [ 97%]\n........................                                                 [100%]\n960 passed in 165.67s (0:02:45)\n"
+          }
+        ],
+        "completion": {
+          "chunk_id": "6e1d0b",
+          "wall_time_seconds": 0.582067156,
+          "exit_code": 0,
+          "original_token_count": 100,
+          "output": "...................................... [ 75%]\n........................................................................ [ 82%]\n........................................................................ [ 90%]\n........................................................................ [ 97%]\n........................                                                 [100%]\n960 passed in 165.67s (0:02:45)\n"
+        }
+      },
+      "paired": {
+        "initial": {
+          "chunk_id": "0eeeb8",
+          "wall_time_seconds": 1.00013237,
+          "session_id": 67178,
+          "original_token_count": 12,
+          "output": "................................................"
+        },
+        "chunks": [],
+        "completion": {
+          "chunk_id": "e336c2",
+          "wall_time_seconds": 0.000002413,
+          "exit_code": 0,
+          "original_token_count": 13,
+          "output": "............             [100%]\n60 passed in 1.64s\n"
+        }
+      },
+      "new_core": {
+        "initial": {
+          "chunk_id": "6b1a6d",
+          "wall_time_seconds": 1.000096443,
+          "session_id": 30609,
+          "original_token_count": 9,
+          "output": "................................."
+        },
+        "chunks": [],
+        "completion": {
+          "chunk_id": "89cbc4",
+          "wall_time_seconds": 0.000001474,
+          "exit_code": 0,
+          "original_token_count": 17,
+          "output": "..............                          [100%]\n47 passed in 1.60s\n"
+        }
+      },
+      "new_pro": {
+        "initial": {
+          "chunk_id": "c475f5",
+          "wall_time_seconds": 1.001293256,
+          "session_id": 67586,
+          "original_token_count": 1,
+          "output": "..."
+        },
+        "chunks": [],
+        "completion": {
+          "chunk_id": "25222a",
+          "wall_time_seconds": 0.00000134,
+          "exit_code": 0,
+          "original_token_count": 24,
+          "output": ".............                                                         [100%]\n16 passed in 4.06s\n"
+        }
+      }
+    },
+    "manifest_counts": {
+      "core": 630,
+      "pro": 217
+    },
+    "pre_post_exact": {
+      "core": true,
+      "pro": true
+    },
+    "all_exit_zero": true
+  },
+  "source_test_build_count": 847,
+  "aggregate_audit_observed": {
+    "command_location": "Canonical record audit.command",
+    "run": {
+      "chunk_id": "0973d4",
+      "wall_time_seconds": 0.000002331,
+      "exit_code": 0,
+      "original_token_count": 33,
+      "output": "{\"command_occurrences\": 94, \"files\": {\"core\": 630, \"pro\": 217}, \"python_heredocs\": 13, \"references\": 8, \"static_audit_exact\": true}\n"
+    },
+    "scope": "Actual pre-evidence-commit audit: 847 worktree/fixed code blobs, 8 document references, 94 command occurrences, 13 Python heredoc bodies. Counts are occurrences, not unique executions."
+  },
+  "remote_code_readback": {
+    "core": {
+      "chunk_id": "ece50f",
+      "wall_time_seconds": 0.069934324,
+      "exit_code": 0,
+      "original_token_count": 33,
+      "output": "02ae52445c97781664742b5120dcc53cc1a04aac\trefs/heads/feat/autoresearch-v1\n5ca2680dbd0139e63cd35a4f83da438b5b47ab99\trefs/heads/main\n"
+    },
+    "pro": {
+      "chunk_id": "ba7d02",
+      "wall_time_seconds": 0.41414856,
+      "exit_code": 0,
+      "original_token_count": 33,
+      "output": "58841a96990fdfb945f74f487a8a63adb4157e27\trefs/heads/feat/autoresearch-v1\n57feb6e0af19dcf62a80b1e447f0771936d39afe\trefs/heads/main\n"
+    }
+  },
+  "safety_readback": {
+    "original_workspace_status_lines": "281",
+    "status_count_is_not_content_hash": true,
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+    "holdout_plaintext_read": false
+  },
+  "independent_aggregate_review": {
+    "reviewer": "pro_review",
+    "command_location": "Canonical record audit.command",
+    "exit_code": 0,
+    "session_id": 91611,
+    "completion_chunk": "048643",
+    "result": {
+      "files": {
+        "core": 630,
+        "pro": 217
+      },
+      "references": 8,
+      "command_occurrences": 94,
+      "python_heredocs": 13,
+      "static_audit_exact": true
+    },
+    "additional_readonly_review": "Per-document syntax review and exact baseline delta, earlier-epoch reconstruction, classifications and five final footers cross-checked; no source change or additional pytest claimed.",
+    "additional_review_chunk": "b40254",
+    "additional_review_exit_code": 0,
+    "checked_anchors": {
+      "canonical": "79d55d77",
+      "root_validation": "54f982a5",
+      "inventory": "8c800a39"
+    },
+    "documentation_update_note": "Subsequent additions record these observed results, code-remote readback, safety readback and the already completed staged-audit reference; source/test/build inventories and test results are unchanged."
+  }
+}
