@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2b",
+  "whole_v1_complete": false,
+  "controller_positive_stop_complete": false,
+  "scope": "Internal opt-in controller registration/member/probe foundation only. Not yet called by Orze.run/CLI/Director; no public ACK, release, adoption or restart authority.",
+  "code_commits": {
+    "core": "e96317b21284d574d838d4e5c3e52261c80689d2",
+    "pro": "43d11c8418f52d8ef687b8a8ae7c25565f26a24d"
+  },
+  "classification": {
+    "cases": 57,
+    "files": 9,
+    "first_green_new_mechanisms": 41,
+    "draft_regressions": 15,
+    "draft_controls": 1,
+    "historical_behavior_reds": 0,
+    "distinct_root_cause_count_claim": false,
+    "overlapping_runs_not_additive": true,
+    "groups": {
+      "root_registration": 12,
+      "independent_registration": 5,
+      "member_author": 15,
+      "independent_native_commit": 1,
+      "probe_author": 24
+    },
+    "classification_notes": [
+      "All mechanisms are new internal APIs; API absence never counted as a historical product red.",
+      "Fresh-import cases share an import-cycle family; separate native/standalone commit cases share a commit-readback family.",
+      "57 = 41 new mechanisms + 15 observed implementation-draft regressions + 1 draft control. Failed fixture premises and the superseded full epoch are excluded."
+    ]
+  },
+  "final_tests": {
+    "core": {
+      "passed": 3422,
+      "skipped": 7,
+      "seconds": 539.06
+    },
+    "pro": {
+      "passed": 971,
+      "seconds": 180.16
+    },
+    "paired": {
+      "passed": 60,
+      "seconds": 1.01
+    },
+    "new_core": {
+      "passed": 57,
+      "seconds": 23.61
+    }
+  },
+  "inventory_path": "docs/evidence/2026-09-11-v1-05c2e2b-verification-inventory.json",
+  "root_validation_path": "docs/evidence/2026-09-11-v1-05c2e2b-root-validation.json",
+  "evidence_references": [
+    {
+      "repo": "core",
+      "sha256": "9f6101e2b1549bde7efd7be0f09666b22d189d3a2606f9197f4193eef8791b85",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2b-controller-registration-review.json"
+    },
+    {
+      "repo": "core",
+      "sha256": "74cf1baf3bfcc9856ddbd46a5599ec24569b17dbeafc63e0261fe0bf89e7fc6d",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2b-controller-member-review.json"
+    },
+    {
+      "repo": "core",
+      "sha256": "895bc3be14acb9d678ae08fc4988cfa707b0102bfeb0cab168d41ebec4d9f2bf",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json"
+    },
+    {
+      "repo": "core",
+      "sha256": "b8c150dc85f38522aefeb18edfec6eb10849803c62fb392e85b0bb60927ed62a",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json"
+    },
+    {
+      "repo": "core",
+      "sha256": "df342bebcec69cf9badaf59218de7e9b4e17e6a42d00b35174387039ef03051d",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2b-root-validation.json"
+    },
+    {
+      "repo": "core",
+      "sha256": "8d6a3aa766d3359b45f84094abfe47db381b3fb765db49f066b435fed87a74f2",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2b-verification-inventory.json"
+    },
+    {
+      "repo": "core",
+      "sha256": "d7873f4550931b48064e508897563ed2c778ae45a1d1279c0248e88eeac3f48e",
+      "path": "docs/controller-membership.md"
+    }
+  ],
+  "evidence_epoch_note": "Author/reviewer reports preserve their exact bounded source epochs. Two new exec-fixture files were subsequently changed only to bind the current absolute Core source in child processes; the canonical final inventory and rerun override those earlier fixture hashes without rewriting the earlier results.",
+  "contract": "docs/controller-membership.md",
+  "verification_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, pathlib, re, shlex, subprocess\ncore=pathlib.Path('.').resolve(); repos={'core':core,'pro':core.parent/'orze-pro'}\npath=core/'docs/evidence/2026-09-11-v1-05c2e2b-controller-membership.json'\nc=json.loads(path.read_bytes())\nassert c['whole_v1_complete'] is False and c['controller_positive_stop_complete'] is False\ndocs=[c]\nfor ref in c['evidence_references']:\n raw=(repos[ref['repo']]/ref['path']).read_bytes()\n assert hashlib.sha256(raw).hexdigest()==ref['sha256'],ref\n if ref['path'].endswith('.json'): docs.append(json.loads(raw))\ni=json.loads((core/c['inventory_path']).read_bytes())\nr=json.loads((core/c['root_validation_path']).read_bytes())\nassert r['code_commits']==c['code_commits']\nassert r['new_tests']['cases']==57==41+15+1\nassert r['old_tracked_tests_modified']=={'core':0,'pro':0}\nassert r['final_counts']==c['final_tests']\nassert r['final_epoch']['pre_post_exact'] is True and i['pre_post_exact'] is True\nfor key,base in repos.items():\n items=[x for x in i['final_files'] if x['repo']==key]\n expected={x['path'] for x in items}\n current=set(subprocess.check_output(['git','ls-files','-c','-o','--exclude-standard','--','src','tests','pyproject.toml'],cwd=base,text=True).splitlines())\n committed=set(subprocess.check_output(['git','ls-tree','-r','--name-only',c['code_commits'][key],'--','src','tests','pyproject.toml'],cwd=base,text=True).splitlines())\n assert expected==current==committed,(key,'file set')\n assert len(items)==i['counts'][key]\n for item in items:\n  assert hashlib.sha256((base/item['path']).read_bytes()).hexdigest()==item['sha256'],item\n  raw=subprocess.check_output(['git','show',c['code_commits'][key]+':'+item['path']],cwd=base)\n  assert hashlib.sha256(raw).hexdigest()==item['sha256'],('commit',item)\nstatic=json.loads(subprocess.check_output(['bash','-c',i['static_audit']['command']],cwd=core,text=True))\nassert static==i['static_audit']['result']\nassert (static['new_test_files'],static['file_assert_nodes'],static['embedded_programs'],static['embedded_assert_nodes'])==(9,59,33,155)\nassert len(static['snapshots'])==33 and static['baseline_snapshot_files']==10\ncommands=[]; bodies=[]\ndef walk(value,loc,key='',command_map=False):\n if isinstance(value,dict):\n  for k,v in value.items(): walk(v,loc+'.'+k,k,command_map or key=='commands')\n elif isinstance(value,list):\n  for n,v in enumerate(value): walk(v,loc+'['+str(n)+']',key,command_map)\n elif isinstance(value,str) and (key=='command' or key.endswith('_command') or command_map):\n  subprocess.run(['bash','-n'],input=value,text=True,check=True)\n  shlex.split(value); commands.append(loc)\n  for m in re.finditer(r\"<<'PY'\\n(.*?)\\nPY(?=\\n|$)\",value,re.S):\n   ast.parse(m.group(1)); bodies.append(loc)\nfor n,doc in enumerate(docs): walk(doc,str(n))\nprint(json.dumps({'references':len(c['evidence_references']),'manifest_and_fixed_commit_files':len(i['final_files']),'static_exact':True,'command_occurrences':len(commands),'python_heredocs':len(bodies),'whole_v1_complete':False,'controller_positive_stop_complete':False},sort_keys=True))\nPY",
+  "limits": [
+    "No public controller stop ACK or restart consumer; existing C2e1 request/HOLD policy remains unchanged.",
+    "Single process context, persistent no-age owner, at most 4096 lifetime members including settled; no eviction, public unbind/release, adoption, recovery or endless-run claim.",
+    "Six native OS phases and three source-qualified report kinds enrolled; static known-no-exec producers and source-bound new cleanup reports after quiesce are not yet enabled.",
+    "Bounded executor identity cwd must match controller scope; native repair remains refused by the existing admission policy.",
+    "Bot, housekeeper, custom cleanup, internal upgrade, admin, raw legacy/remote paths and hot reload need the next supported product-profile gates; current context API is internal only.",
+    "No arbitrary Python/hostile same-UID sandbox, GPU/paid-provider run, CPU product scheduler or research-efficiency improvement claim."
+  ],
+  "next": "C2e2c: integrate the actual foreground local product controller with request polling, complete membership/resource drain and exact ACK. One-shot restart/handoff remains separately unimplemented."
+}

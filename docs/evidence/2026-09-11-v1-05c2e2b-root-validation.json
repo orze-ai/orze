@@ -1,0 +1,674 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2b",
+  "whole_v1_complete": false,
+  "controller_positive_stop_complete": false,
+  "scope": "Internal opt-in controller registration/member/probe foundation only. Not yet called by Orze.run/CLI/Director; no public ACK, release, adoption or restart authority.",
+  "baselines": {
+    "core": "f1acd4c25dc3bdd6650c2c200c1eec5371679c00",
+    "pro": "43d11c8418f52d8ef687b8a8ae7c25565f26a24d"
+  },
+  "new_tests": {
+    "cases": 57,
+    "files": 9,
+    "first_green_new_mechanisms": 41,
+    "draft_regressions": 15,
+    "draft_controls": 1,
+    "historical_behavior_reds": 0,
+    "distinct_root_cause_count_claim": false,
+    "overlapping_runs_not_additive": true,
+    "groups": {
+      "root_registration": 12,
+      "independent_registration": 5,
+      "member_author": 15,
+      "independent_native_commit": 1,
+      "probe_author": 24
+    },
+    "classification_notes": [
+      "All mechanisms are new internal APIs; API absence never counted as a historical product red.",
+      "Fresh-import cases share an import-cycle family; separate native/standalone commit cases share a commit-readback family.",
+      "57 = 41 new mechanisms + 15 observed implementation-draft regressions + 1 draft control. Failed fixture premises and the superseded full epoch are excluded."
+    ]
+  },
+  "old_tracked_tests_modified": {
+    "core": 0,
+    "pro": 0
+  },
+  "test_only_refinements": [
+    {
+      "scope": "root registration draft",
+      "change": "First memory fixture tried IdeaLake(':memory:') and failed its existing DELETE-journal constructor policy before target. Full first test saved; current case replaces a real Lake's closed connection with actual memory SQLite to test registration refusal. No claimed product red."
+    },
+    {
+      "scope": "new subprocess cleanup",
+      "change": "New test harnesses use immediately captured owned pidfds for any necessary bounded cleanup; no production reset or raw-PID/host-scan cleanup API added."
+    },
+    {
+      "scope": "probe draft",
+      "change": "Initial 14 first-green new adapter tests preserved in full. Three parameter cases refine raises TypeError/ValueError to explicit ControllerProbeHOLD and add one HOLD assertion; all prior 35 file Assert nodes retained."
+    },
+    {
+      "scope": "member draft",
+      "change": "Unknown READY was already refused as SupervisionUncertain; one overly narrow new-test helper accepted only ControllerHOLD. Original complete test preserved; failure is a fixture premise, not production red."
+    },
+    {
+      "scope": "independent native commit draft",
+      "change": "Initial reader used require_current default active states at an actual TERMINAL row; full initial test preserved, explicitly requests TERMINAL before asserting native commit rollback gap."
+    },
+    {
+      "scope": "full-epoch source routing",
+      "change": "Only two newly authored exec fixtures omitted absolute source PYTHONPATH, importing installed old Orze under the pre-existing Core full command. First full 14 failures preserved; only environment routing corrected, all file Assert nodes and embedded program strings unchanged.",
+      "files": [
+        {
+          "path": "tests/test_controller_control.py",
+          "before_sha256": "81148072975ca9a09b404f55e1f4be49524a3ea6f7059baa7e30ee7fedca46e3",
+          "sha256": "b339f1de7456f2b2077b5bdf4a3ba4d91266b6de957939234e9c603fd77affd3"
+        },
+        {
+          "path": "tests/test_controller_probe_registered.py",
+          "before_sha256": "d1cd46702635916707b23bf9a0e984cc669bdab0ff35347a9fec30f133349f2e",
+          "sha256": "b6de5365b1825fca69b97c28f3eec763e2c47b2cfdf17b3c1d0913f103a0aee9"
+        }
+      ]
+    }
+  ],
+  "root_diagnostics": {
+    "initial": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_control.py --tb=short",
+      "session": 25973,
+      "chunk": "0cab4f",
+      "exit_code": 1,
+      "result": "1 failed, 10 passed, 1 error in 4.02s",
+      "classification": {
+        "failed": "invalid memory fixture rejected in IdeaLake constructor before target",
+        "error": "probe draft import cycle at conftest setup, actual new defect"
+      }
+    },
+    "repeat_during_import_fix": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_control.py --tb=short",
+      "session": 64059,
+      "chunk": "2a60ab",
+      "exit_code": 1,
+      "result": "11 passed, 1 error in 3.57s",
+      "classification": "same import cycle during concurrent fix, memory fixture corrected, not final"
+    },
+    "hardware_import": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'import orze.hardware.gpu'",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "exit_code": 1,
+      "chunk": "c7fbf5",
+      "classification": "draft import cycle, second public import route; same root cause as gpu_lease, agent will preserve complete snapshot and fixed replay"
+    },
+    "first_import_sweep": {
+      "chunk_id": "07aba9",
+      "wall_time_seconds": 0.00000315,
+      "exit_code": 1,
+      "original_token_count": 1041,
+      "output": "orze.core.execution_attempts 0\norze.engine.controller_control 0\norze.engine.controller_members 0\norze.engine.controller_probe 0\norze.engine.supervised_process 0\norze.engine.execution_authority 0\norze.engine.role_supervision 0\norze.engine.gpu_slots 0\norze.reporting.state 1\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/reporting/__init__.py\", line 1, in <module>\n    from .leaderboard import update_report, write_admin_cache\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/reporting/leaderboard.py\", line 51, in <module>\n    from orze.reporting.state import _read_all_heartbeats\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/reporting/state.py\", line 49, in <module>\n    from orze.hardware.gpu import _query_gpu_details\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/hardware/__init__.py\", line 1, in <module>\n    from .gpu import get_gpu_memory_used, detect_all_gpus, get_free_gpus\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/hardware/gpu.py\", line 21, in <module>\n    from orze.engine.controller_probe import ControllerProbeHOLD, run_probe\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/engine/__init__.py\", line 3, in <module>\n    from .launcher import launch, check_active\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/engine/launcher.py\", line 82, in <module>\n    from orze.reporting.notifications import notify\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/reporting/notifications.py\", line 54, in <module>\n    from orze.reporting.leaderboard import _format_report_text\nImportError: cannot import name '_format_report_text' from partially initialized module 'orze.reporting.leaderboard' (most likely due to a circular import) (/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/reporting/leaderboard.py)\n\norze.idea_lake 0\norze.lifecycle 0\norze.cli 1\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/cli.py\", line 40, in <module>\n    from orze.hardware.gpu import detect_all_gpus\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/hardware/__init__.py\", line 1, in <module>\n    from .gpu import get_gpu_memory_used, detect_all_gpus, get_free_gpus\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/hardware/gpu.py\", line 21, in <module>\n    from orze.engine.controller_probe import ControllerProbeHOLD, run_probe\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/engine/__init__.py\", line 3, in <module>\n    from .launcher import launch, check_active\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/engine/launcher.py\", line 82, in <module>\n    from orze.reporting.notifications import notify\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/reporting/__init__.py\", line 1, in <module>\n    from .leaderboard import update_report, write_admin_cache\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/reporting/leaderboard.py\", line 51, in <module>\n    from orze.reporting.state import _read_all_heartbeats\n  File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/reporting/state.py\", line 49, in <module>\n    from orze.hardware.gpu import _query_gpu_details\nImportError: cannot import name '_query_gpu_details' from partially initialized module 'orze.hardware.gpu' (most likely due to a circular import) (/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/hardware/gpu.py)\n\nTraceback (most recent call last):\n  File \"<stdin>\", line 18, in <module>\nAssertionError: ['orze.reporting.state', 'orze.cli']\n"
+    },
+    "fixed_import_sweep": {
+      "session": 53639,
+      "chunk": "7d6f0e",
+      "exit_code": 0,
+      "module_count": 14,
+      "classification": "read-only fresh interpreter smoke, not extra pytest cases; after both low-level lazy import fixes"
+    },
+    "source_route": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_control.py tests/test_controller_probe_registered.py --tb=short -x",
+      "start": {
+        "chunk_id": "2a3ca1",
+        "wall_time_seconds": 0.732832738,
+        "exit_code": 1,
+        "original_token_count": 260,
+        "output": "F\n=================================== FAILURES ===================================\n____________ test_exact_durable_identity_is_detached_and_idempotent ____________\ntests/test_controller_control.py:61: in test_exact_durable_identity_is_detached_and_idempotent\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n=========================== short test summary info ============================\nFAILED tests/test_controller_control.py::test_exact_durable_identity_is_detached_and_idempotent\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed in 0.59s\n"
+      },
+      "chunks": [
+        {
+          "chunk_id": "2a3ca1",
+          "wall_time_seconds": 0.732832738,
+          "exit_code": 1,
+          "original_token_count": 260,
+          "output": "F\n=================================== FAILURES ===================================\n____________ test_exact_durable_identity_is_detached_and_idempotent ____________\ntests/test_controller_control.py:61: in test_exact_durable_identity_is_detached_and_idempotent\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n=========================== short test summary info ============================\nFAILED tests/test_controller_control.py::test_exact_durable_identity_is_detached_and_idempotent\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed in 0.59s\n"
+        }
+      ]
+    },
+    "broad_static_prefix": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, pathlib, subprocess\nroot=pathlib.Path('.').resolve(); pro=root.parent/'orze-pro'\nbaseline='f1acd4c25dc3bdd6650c2c200c1eec5371679c00'\nfiles=['test_controller_control.py','test_controller_registration_boundaries.py','test_controller_members.py','test_controller_member_boundaries.py','test_controller_probe.py','test_controller_probe_registered.py','test_controller_probe_import.py','test_controller_probe_input_refusal.py','test_controller_probe_callers.py']\nresult={'new_tests':[], 'snapshots':[], 'old_test_changes':{}, 'source_changes':[]}\nsha=lambda b:hashlib.sha256(b).hexdigest()\nfor name in files:\n path=root/'tests'/name; raw=path.read_bytes(); tree=ast.parse(raw)\n asserts=[ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Assert)]\n embedded=[]\n for n in ast.walk(tree):\n  if not isinstance(n,ast.Constant) or type(n.value) is not str: continue\n  try: program=ast.parse(n.value)\n  except (SyntaxError,ValueError): continue\n  items=[ast.dump(a,include_attributes=False) for a in ast.walk(program) if isinstance(a,ast.Assert)]\n  if items: embedded.append({'line':n.lineno,'sha256':sha(n.value.encode()),'assert_nodes':len(items)})\n result['new_tests'].append({'path':str(path.relative_to(root)),'sha256':sha(raw),'file_assert_nodes':len(asserts),'assert_ast_sha256':sha(json.dumps(asserts,separators=(',',':')).encode()),'embedded_programs':embedded})\nfor repo,base,ref in [('core',root,baseline),('pro',pro,'43d11c8418f52d8ef687b8a8ae7c25565f26a24d')]:\n changed=subprocess.check_output(['git','diff','--name-only',ref,'--','tests'],cwd=base,text=True).splitlines()\n result['old_test_changes'][repo]=changed\n assert not changed, changed\nfor path in sorted((root/'docs/evidence/snapshots').glob('v1-05c2e2*.py')):\n raw=path.read_bytes(); ast.parse(raw)\n assert raw.endswith(b'\\n'),path\n result['snapshots'].append({'path':str(path.relative_to(root)),'sha256':sha(raw),'bytes':len(raw)})\nmapping={'v1-05c2e2-before-probe-core-gpu_lease.py':'src/orze/core/gpu_lease.py','v1-05c2e2-before-probe-engine-gpu_slots.py':'src/orze/engine/gpu_slots.py','v1-05c2e2-before-probe-engine-launcher.py':'src/orze/engine/launcher.py','v1-05c2e2-before-probe-hardware-gpu.py':'src/orze/hardware/gpu.py'}\nfor key in ['core-execution_attempts','engine-bounded_executor','engine-execution_authority','engine-launcher','engine-role_supervision','engine-supervised_process']:\n mapping['v1-05c2e2b-before-'+key+'.py']='src/orze/'+key.replace('-','/',1)+'.py'\nfor name,source in mapping.items():\n actual=(root/'docs/evidence/snapshots'/name).read_bytes()\n expected=subprocess.check_output(['git','show',baseline+':'+source],cwd=root)\n assert actual==expected,(name,source)\nresult['baseline_snapshot_files']=len(mapping)\nchanged=subprocess.check_output(['git','diff','--name-only',baseline,'--','src'],cwd=root,text=True).splitlines()\nfor name in changed:\n raw=(root/name).read_bytes(); ast.parse(raw)\n result['source_changes'].append({'path':name,'before_sha256':sha(subprocess.check_output(['git','show',baseline+':'+name],cwd=root)),'sha256':sha(raw)})\nresult['new_test_files']=len(result['new_tests'])\nresult['file_assert_nodes']=sum(x['file_assert_nodes'] for x in result['new_tests'])\nresult['embedded_programs']=sum(len(x['embedded_programs']) for x in result['new_tests'])\nresult['embedded_assert_nodes']=sum(y['assert_nodes'] for x in result['new_tests'] for y in x['embedded_programs'])\nprint(json.dumps(result,sort_keys=True))\nPY",
+      "snapshots": 40,
+      "exit_code": 0,
+      "note": "First static inventory also matched prior C2e2a snapshot filenames; bounded prefix corrected before final evidence. No source/test change."
+    },
+    "read_only_path_errors": "A few exploratory rg reads used absent guessed paths / one Core evidence path under Pro; corrected read-only lookups. No source mutation or test result inferred from these diagnostics."
+  },
+  "bounded_root": {
+    "registration": {
+      "start": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_control.py --tb=short",
+        "chunk_id": "c942fc",
+        "wall_time_seconds": 1.000800141,
+        "session_id": 14863,
+        "original_token_count": 1,
+        "output": ".."
+      },
+      "result": {
+        "chunk_id": "5c52a3",
+        "wall_time_seconds": 0.000002839,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "..........                                                             [100%]\n12 passed in 3.64s\n"
+      },
+      "pre": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85  src/orze/engine/controller_control.py\n81148072975ca9a09b404f55e1f4be49524a3ea6f7059baa7e30ee7fedca46e3  tests/test_controller_control.py\n3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263  src/orze/core/gpu_lease.py\n",
+      "post": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85  src/orze/engine/controller_control.py\n81148072975ca9a09b404f55e1f4be49524a3ea6f7059baa7e30ee7fedca46e3  tests/test_controller_control.py\n3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263  src/orze/core/gpu_lease.py\n"
+    },
+    "source_routing": {
+      "start": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_control.py tests/test_controller_probe_registered.py --tb=short",
+        "start": {
+          "chunk_id": "250715",
+          "wall_time_seconds": 1.000922186,
+          "session_id": 27722,
+          "original_token_count": 1,
+          "output": ".."
+        }
+      },
+      "result": {
+        "chunk_id": "808f26",
+        "wall_time_seconds": 0.000002463,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "............                                                           [100%]\n14 passed in 6.31s\n"
+      },
+      "assertion_verification": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, pathlib\nroot=pathlib.Path('.')\npairs=[('docs/evidence/snapshots/v1-05c2e2b-before-full-root-source-route.py','tests/test_controller_control.py'),('docs/evidence/snapshots/v1-05c2e2b-before-full-registered-source-route.py','tests/test_controller_probe_registered.py')]\nfor old,new in pairs:\n a=ast.parse((root/old).read_bytes()); b=ast.parse((root/new).read_bytes())\n asserts=lambda t:[ast.dump(n,include_attributes=False) for n in ast.walk(t) if isinstance(n,ast.Assert)]\n programs=lambda t:[n.value for n in ast.walk(t) if isinstance(n,ast.Constant) and type(n.value) is str and '\\n' in n.value]\n assert asserts(a)==asserts(b),(old,'business assert changed')\n assert programs(a)==programs(b),(old,'embedded program changed')\n print(new,'file_asserts',len(asserts(b)),'multiline_programs',len(programs(b)),'unchanged')\nPY",
+        "result": {
+          "chunk_id": "eadf02",
+          "wall_time_seconds": 0.00000294,
+          "exit_code": 0,
+          "original_token_count": 42,
+          "output": "tests/test_controller_control.py file_asserts 2 multiline_programs 11 unchanged\ntests/test_controller_probe_registered.py file_asserts 1 multiline_programs 2 unchanged\n"
+        }
+      }
+    }
+  },
+  "limits": [
+    "No public controller stop ACK or restart consumer; existing C2e1 request/HOLD policy remains unchanged.",
+    "Single process context, persistent no-age owner, at most 4096 lifetime members including settled; no eviction, public unbind/release, adoption, recovery or endless-run claim.",
+    "Six native OS phases and three source-qualified report kinds enrolled; static known-no-exec producers and source-bound new cleanup reports after quiesce are not yet enabled.",
+    "Bounded executor identity cwd must match controller scope; native repair remains refused by the existing admission policy.",
+    "Bot, housekeeper, custom cleanup, internal upgrade, admin, raw legacy/remote paths and hot reload need the next supported product-profile gates; current context API is internal only.",
+    "No arbitrary Python/hostile same-UID sandbox, GPU/paid-provider run, CPU product scheduler or research-efficiency improvement claim."
+  ],
+  "evidence_epoch_note": "Author/reviewer reports preserve their exact bounded source epochs. Two new exec-fixture files were subsequently changed only to bind the current absolute Core source in child processes; the canonical final inventory and rerun override those earlier fixture hashes without rewriting the earlier results.",
+  "final_counts": {
+    "core": {
+      "passed": 3422,
+      "skipped": 7,
+      "seconds": 539.06
+    },
+    "pro": {
+      "passed": 971,
+      "seconds": 180.16
+    },
+    "paired": {
+      "passed": 60,
+      "seconds": 1.01
+    },
+    "new_core": {
+      "passed": 57,
+      "seconds": 23.61
+    }
+  },
+  "full_epoch_1": {
+    "freeze": {
+      "current_time": "2026-09-11 05:08:05 UTC"
+    },
+    "postcheck": {
+      "current_time": "2026-09-11 05:18:04 UTC"
+    },
+    "pre_post_exact": true,
+    "counts": {
+      "core": 649,
+      "pro": 221
+    },
+    "groups": {
+      "core": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+        "start": {
+          "chunk_id": "9ee9bc",
+          "wall_time_seconds": 1.001987324,
+          "session_id": 32611,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "9ee9bc",
+            "wall_time_seconds": 1.001987324,
+            "session_id": 32611,
+            "original_token_count": 0,
+            "output": ""
+          },
+          {
+            "chunk_id": "3f31bf",
+            "wall_time_seconds": 5.001500433,
+            "session_id": 32611,
+            "original_token_count": 88,
+            "output": "........................................................................ [  2%]\n........................................................................ [  4%]\n........................................................................ [  6%]\n........................................................................ [  8%]\n..............................."
+          },
+          {
+            "chunk_id": "3c4556",
+            "wall_time_seconds": 5.000460387,
+            "session_id": 32611,
+            "original_token_count": 187,
+            "output": "......................................... [ 10%]\n........................................................................ [ 12%]\n........................................................................ [ 14%]\n...........................................................FFFFFFFFFFFF. [ 16%]\n......................................FF................................ [ 18%]\n........................................................................ [ 21%]\n........................................................................ [ 23%]\n........................................................................ [ 25%]\n........................................................................ [ 27%]\n.........................................................."
+          },
+          {
+            "chunk_id": "a299dd",
+            "wall_time_seconds": 5.000877688,
+            "session_id": 32611,
+            "original_token_count": 630,
+            "output": ".............. [ 29%]\n........................................................................ [ 31%]\n.........sss............................................................ [ 33%]\n........................................................................ [ 35%]\n........................................................................ [ 37%]\n........................................................................ [ 39%]\n...s.................................................................... [ 42%]\n........................................................................ [ 44%]\n........................................................................ [ 46%]\n........................................................................ [ 48%]\n........................................................................ [ 50%]\n........................................................................ [ 52%]\n........................................................................ [ 54%]\n........................................................................ [ 56%]\n........................................................................ [ 58%]\n........................................................................ [ 60%]\n........................................................................ [ 63%]\n........................................................................ [ 65%]\n........................................................................ [ 67%]\n........................................................................ [ 69%]\n........................................................................ [ 71%]\n........................................................................ [ 73%]\n........................................................................ [ 75%]\n........................................................................ [ 77%]\n........................................................................ [ 79%]\n........................................................................ [ 81%]\n........................................................................ [ 84%]\n........................................................................ [ 86%]\n........................................................................ [ 88%]\n........................................................................ [ 90%]\nss...................................................................... [ 92%]\n........................................................................ [ 94%]\n..............."
+          },
+          {
+            "chunk_id": "edbdd5",
+            "wall_time_seconds": 0.000001819,
+            "exit_code": 1,
+            "original_token_count": 2742,
+            "output": "......................................................... [ 96%]\n........................................................................ [ 98%]\n............................................                             [100%]\n=================================== FAILURES ===================================\n____________ test_exact_durable_identity_is_detached_and_idempotent ____________\ntests/test_controller_control.py:61: in test_exact_durable_identity_is_detached_and_idempotent\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n______________ test_quiesce_is_exact_and_does_not_supply_closure _______________\ntests/test_controller_control.py:83: in test_quiesce_is_exact_and_does_not_supply_closure\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n________________ test_replacing_accepted_request_is_sticky_hold ________________\ntests/test_controller_control.py:98: in test_replacing_accepted_request_is_sticky_hold\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n____________ test_registration_does_not_commit_callers_transaction _____________\ntests/test_controller_control.py:110: in test_registration_does_not_commit_callers_transaction\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n___ test_native_admission_reads_exact_callers_transaction_without_ending_it ____\ntests/test_controller_control.py:123: in test_native_admission_reads_exact_callers_transaction_without_ending_it\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n____ test_registration_refuses_unqualified_storage_before_reserving[memory] ____\ntests/test_controller_control.py:137: in test_registration_refuses_unqualified_storage_before_reserving\n    _run(tmp_path, 'kind = ' + repr(kind) + '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n__ test_registration_refuses_unqualified_storage_before_reserving[scope_link] __\ntests/test_controller_control.py:137: in test_registration_refuses_unqualified_storage_before_reserving\n    _run(tmp_path, 'kind = ' + repr(kind) + '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n_ test_registration_refuses_unqualified_storage_before_reserving[database_link] _\ntests/test_controller_control.py:137: in test_registration_refuses_unqualified_storage_before_reserving\n    _run(tmp_path, 'kind = ' + repr(kind) + '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n_ test_registration_refuses_unqualified_storage_before_reserving[database_hardlink] _\ntests/test_controller_control.py:137: in test_registration_refuses_unqualified_storage_before_reserving\n    _run(tmp_path, 'kind = ' + repr(kind) + '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n_______ test_commit_response_loss_preserves_registration_and_strong_hold _______\ntests/test_controller_control.py:162: in test_commit_response_loss_preserves_registration_and_strong_hold\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n_________ test_unexpected_schema_is_not_implicitly_migrated_or_retried _________\ntests/test_controller_control.py:190: in test_unexpected_schema_is_not_implicitly_migrated_or_retried\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n________ test_foreign_trigger_revokes_admission_without_running_trigger ________\ntests/test_controller_control.py:205: in test_foreign_trigger_revokes_admission_without_running_trigger\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n_ test_registered_probe_settles_same_database_only_after_actual_tree_closure[normal] _\ntests/test_controller_probe_registered.py:110: in test_registered_probe_settles_same_database_only_after_actual_tree_closure\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 11, in <module>\nE     ModuleNotFoundError: No module named 'orze.engine.controller_control'\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport hashlib\\nim...>.returncode\n_ test_registered_probe_settles_same_database_only_after_actual_tree_closure[quiesce] _\ntests/test_controller_probe_registered.py:110: in test_registered_probe_settles_same_database_only_after_actual_tree_closure\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 11, in <module>\nE     ModuleNotFoundError: No module named 'orze.engine.controller_control'\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport hashlib\\nim...>.returncode\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n14 failed, 3408 passed, 7 skipped in 537.85s (0:08:57)\n"
+          }
+        ],
+        "result": {
+          "chunk_id": "edbdd5",
+          "wall_time_seconds": 0.000001819,
+          "exit_code": 1,
+          "original_token_count": 2742,
+          "output": "......................................................... [ 96%]\n........................................................................ [ 98%]\n............................................                             [100%]\n=================================== FAILURES ===================================\n____________ test_exact_durable_identity_is_detached_and_idempotent ____________\ntests/test_controller_control.py:61: in test_exact_durable_identity_is_detached_and_idempotent\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n______________ test_quiesce_is_exact_and_does_not_supply_closure _______________\ntests/test_controller_control.py:83: in test_quiesce_is_exact_and_does_not_supply_closure\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n________________ test_replacing_accepted_request_is_sticky_hold ________________\ntests/test_controller_control.py:98: in test_replacing_accepted_request_is_sticky_hold\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n____________ test_registration_does_not_commit_callers_transaction _____________\ntests/test_controller_control.py:110: in test_registration_does_not_commit_callers_transaction\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n___ test_native_admission_reads_exact_callers_transaction_without_ending_it ____\ntests/test_controller_control.py:123: in test_native_admission_reads_exact_callers_transaction_without_ending_it\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n____ test_registration_refuses_unqualified_storage_before_reserving[memory] ____\ntests/test_controller_control.py:137: in test_registration_refuses_unqualified_storage_before_reserving\n    _run(tmp_path, 'kind = ' + repr(kind) + '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n__ test_registration_refuses_unqualified_storage_before_reserving[scope_link] __\ntests/test_controller_control.py:137: in test_registration_refuses_unqualified_storage_before_reserving\n    _run(tmp_path, 'kind = ' + repr(kind) + '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n_ test_registration_refuses_unqualified_storage_before_reserving[database_link] _\ntests/test_controller_control.py:137: in test_registration_refuses_unqualified_storage_before_reserving\n    _run(tmp_path, 'kind = ' + repr(kind) + '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n_ test_registration_refuses_unqualified_storage_before_reserving[database_hardlink] _\ntests/test_controller_control.py:137: in test_registration_refuses_unqualified_storage_before_reserving\n    _run(tmp_path, 'kind = ' + repr(kind) + '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n_______ test_commit_response_loss_preserves_registration_and_strong_hold _______\ntests/test_controller_control.py:162: in test_commit_response_loss_preserves_registration_and_strong_hold\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n_________ test_unexpected_schema_is_not_implicitly_migrated_or_retried _________\ntests/test_controller_control.py:190: in test_unexpected_schema_is_not_implicitly_migrated_or_retried\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n________ test_foreign_trigger_revokes_admission_without_running_trigger ________\ntests/test_controller_control.py:205: in test_foreign_trigger_revokes_admission_without_running_trigger\n    _run(tmp_path, '''\ntests/test_controller_control.py:52: in _run\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 8, in <module>\nE     ImportError: cannot import name 'controller_control' from 'orze.engine' (/home/erik/.local/lib/python3.10/site-packages/orze/engine/__init__.py)\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json\\nimpor...>.returncode\n_ test_registered_probe_settles_same_database_only_after_actual_tree_closure[normal] _\ntests/test_controller_probe_registered.py:110: in test_registered_probe_settles_same_database_only_after_actual_tree_closure\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 11, in <module>\nE     ModuleNotFoundError: No module named 'orze.engine.controller_control'\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport hashlib\\nim...>.returncode\n_ test_registered_probe_settles_same_database_only_after_actual_tree_closure[quiesce] _\ntests/test_controller_probe_registered.py:110: in test_registered_probe_settles_same_database_only_after_actual_tree_closure\n    assert child.returncode == 0, stdout + stderr\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 11, in <module>\nE     ModuleNotFoundError: No module named 'orze.engine.controller_control'\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport hashlib\\nim...>.returncode\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n14 failed, 3408 passed, 7 skipped in 537.85s (0:08:57)\n"
+        }
+      },
+      "pro": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+        "start": {
+          "chunk_id": "21c7c9",
+          "wall_time_seconds": 1.00120109,
+          "session_id": 49793,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "21c7c9",
+            "wall_time_seconds": 1.00120109,
+            "session_id": 49793,
+            "original_token_count": 0,
+            "output": ""
+          },
+          {
+            "chunk_id": "8588f8",
+            "wall_time_seconds": 5.001162443,
+            "session_id": 49793,
+            "original_token_count": 93,
+            "output": "........................................................................ [  7%]\n........................................................................ [ 14%]\n........................................................................ [ 22%]\n........................................................................ [ 29%]\n................................................."
+          },
+          {
+            "chunk_id": "cfaba4",
+            "wall_time_seconds": 0.000002909,
+            "exit_code": 0,
+            "original_token_count": 196,
+            "output": "....................... [ 37%]\n........................................................................ [ 44%]\n........................................................................ [ 51%]\n........................................................................ [ 59%]\n........................................................................ [ 66%]\n........................................................................ [ 74%]\n........................................................................ [ 81%]\n........................................................................ [ 88%]\n........................................................................ [ 96%]\n...................................                                      [100%]\n971 passed in 181.48s (0:03:01)\n"
+          }
+        ],
+        "result": {
+          "chunk_id": "cfaba4",
+          "wall_time_seconds": 0.000002909,
+          "exit_code": 0,
+          "original_token_count": 196,
+          "output": "....................... [ 37%]\n........................................................................ [ 44%]\n........................................................................ [ 51%]\n........................................................................ [ 59%]\n........................................................................ [ 66%]\n........................................................................ [ 74%]\n........................................................................ [ 81%]\n........................................................................ [ 88%]\n........................................................................ [ 96%]\n...................................                                      [100%]\n971 passed in 181.48s (0:03:01)\n"
+        }
+      },
+      "new_core": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_control.py tests/test_controller_registration_boundaries.py tests/test_controller_members.py tests/test_controller_member_boundaries.py tests/test_controller_probe.py tests/test_controller_probe_registered.py tests/test_controller_probe_import.py tests/test_controller_probe_input_refusal.py tests/test_controller_probe_callers.py --tb=short -rs",
+        "start": {
+          "chunk_id": "a1756a",
+          "wall_time_seconds": 1.001264354,
+          "session_id": 97596,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "a1756a",
+            "wall_time_seconds": 1.001264354,
+            "session_id": 97596,
+            "original_token_count": 0,
+            "output": ""
+          },
+          {
+            "chunk_id": "a2ce06",
+            "wall_time_seconds": 0.000003478,
+            "exit_code": 0,
+            "original_token_count": 25,
+            "output": ".........................................................                [100%]\n57 passed in 24.21s\n"
+          }
+        ],
+        "result": {
+          "chunk_id": "a2ce06",
+          "wall_time_seconds": 0.000003478,
+          "exit_code": 0,
+          "original_token_count": 25,
+          "output": ".........................................................                [100%]\n57 passed in 24.21s\n"
+        }
+      },
+      "paired": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+        "start": {
+          "chunk_id": "e90b57",
+          "wall_time_seconds": 1.000913422,
+          "session_id": 97196,
+          "original_token_count": 8,
+          "output": "..............................."
+        },
+        "chunks": [
+          {
+            "chunk_id": "e90b57",
+            "wall_time_seconds": 1.000913422,
+            "session_id": 97196,
+            "original_token_count": 8,
+            "output": "..............................."
+          },
+          {
+            "chunk_id": "f8f7c4",
+            "wall_time_seconds": 0.000001283,
+            "exit_code": 0,
+            "original_token_count": 17,
+            "output": ".............................             [100%]\n60 passed in 0.99s\n"
+          }
+        ],
+        "result": {
+          "chunk_id": "f8f7c4",
+          "wall_time_seconds": 0.000001283,
+          "exit_code": 0,
+          "original_token_count": 17,
+          "output": ".............................             [100%]\n60 passed in 0.99s\n"
+        }
+      }
+    },
+    "classification": "Superseded first complete epoch: only 14 new exec-fixture import routing failures; not product reds or final acceptance",
+    "correction": [
+      {
+        "path": "tests/test_controller_control.py",
+        "before_sha256": "81148072975ca9a09b404f55e1f4be49524a3ea6f7059baa7e30ee7fedca46e3",
+        "sha256": "b339f1de7456f2b2077b5bdf4a3ba4d91266b6de957939234e9c603fd77affd3"
+      },
+      {
+        "path": "tests/test_controller_probe_registered.py",
+        "before_sha256": "d1cd46702635916707b23bf9a0e984cc669bdab0ff35347a9fec30f133349f2e",
+        "sha256": "b6de5365b1825fca69b97c28f3eec763e2c47b2cfdf17b3c1d0913f103a0aee9"
+      }
+    ]
+  },
+  "final_epoch": {
+    "freeze": {
+      "current_time": "2026-09-11 05:19:28 UTC"
+    },
+    "postcheck": {
+      "current_time": "2026-09-11 05:29:11 UTC"
+    },
+    "pre_post_exact": true,
+    "counts": {
+      "core": 649,
+      "pro": 221
+    },
+    "groups": {
+      "core": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+        "start": {
+          "chunk_id": "920111",
+          "wall_time_seconds": 1.000328818,
+          "session_id": 31555,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "920111",
+            "wall_time_seconds": 1.000328818,
+            "session_id": 31555,
+            "original_token_count": 0,
+            "output": ""
+          },
+          {
+            "chunk_id": "7418c3",
+            "wall_time_seconds": 5.00083721,
+            "session_id": 31555,
+            "original_token_count": 250,
+            "output": "........................................................................ [  2%]\n........................................................................ [  4%]\n........................................................................ [  6%]\n........................................................................ [  8%]\n........................................................................ [ 10%]\n........................................................................ [ 12%]\n........................................................................ [ 14%]\n........................................................................ [ 16%]\n........................................................................ [ 18%]\n........................................................................ [ 21%]\n........................................................................ [ 23%]\n........................................................................ [ 25%]\n......................................."
+          },
+          {
+            "chunk_id": "373baa",
+            "wall_time_seconds": 5.00129108,
+            "session_id": 31555,
+            "original_token_count": 300,
+            "output": "................................. [ 27%]\n........................................................................ [ 29%]\n........................................................................ [ 31%]\n.........sss............................................................ [ 33%]\n........................................................................ [ 35%]\n........................................................................ [ 37%]\n........................................................................ [ 39%]\n...s.................................................................... [ 42%]\n........................................................................ [ 44%]\n........................................................................ [ 46%]\n........................................................................ [ 48%]\n........................................................................ [ 50%]\n........................................................................ [ 52%]\n........................................................................ [ 54%]\n........................................................................ [ 56%]\n....................................."
+          },
+          {
+            "chunk_id": "1fa5f3",
+            "wall_time_seconds": 5.001404309,
+            "session_id": 31555,
+            "original_token_count": 317,
+            "output": "................................... [ 58%]\n........................................................................ [ 60%]\n........................................................................ [ 63%]\n........................................................................ [ 65%]\n........................................................................ [ 67%]\n........................................................................ [ 69%]\n........................................................................ [ 71%]\n........................................................................ [ 73%]\n........................................................................ [ 75%]\n........................................................................ [ 77%]\n........................................................................ [ 79%]\n........................................................................ [ 81%]\n........................................................................ [ 84%]\n........................................................................ [ 86%]\n........................................................................ [ 88%]\n........................................................................ [ 90%]\nss...................."
+          },
+          {
+            "chunk_id": "0c6cc1",
+            "wall_time_seconds": 0.000003312,
+            "exit_code": 0,
+            "original_token_count": 387,
+            "output": ".................................................. [ 92%]\n........................................................................ [ 94%]\n........................................................................ [ 96%]\n........................................................................ [ 98%]\n............................................                             [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n3422 passed, 7 skipped in 539.06s (0:08:59)\n"
+          }
+        ],
+        "result": {
+          "chunk_id": "0c6cc1",
+          "wall_time_seconds": 0.000003312,
+          "exit_code": 0,
+          "original_token_count": 387,
+          "output": ".................................................. [ 92%]\n........................................................................ [ 94%]\n........................................................................ [ 96%]\n........................................................................ [ 98%]\n............................................                             [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n3422 passed, 7 skipped in 539.06s (0:08:59)\n"
+        }
+      },
+      "pro": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+        "start": {
+          "chunk_id": "765505",
+          "wall_time_seconds": 1.000607804,
+          "session_id": 92793,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "765505",
+            "wall_time_seconds": 1.000607804,
+            "session_id": 92793,
+            "original_token_count": 0,
+            "output": ""
+          },
+          {
+            "chunk_id": "eeefd8",
+            "wall_time_seconds": 0.000002767,
+            "exit_code": 0,
+            "original_token_count": 288,
+            "output": "........................................................................ [  7%]\n........................................................................ [ 14%]\n........................................................................ [ 22%]\n........................................................................ [ 29%]\n........................................................................ [ 37%]\n........................................................................ [ 44%]\n........................................................................ [ 51%]\n........................................................................ [ 59%]\n........................................................................ [ 66%]\n........................................................................ [ 74%]\n........................................................................ [ 81%]\n........................................................................ [ 88%]\n........................................................................ [ 96%]\n...................................                                      [100%]\n971 passed in 180.16s (0:03:00)\n"
+          }
+        ],
+        "result": {
+          "chunk_id": "eeefd8",
+          "wall_time_seconds": 0.000002767,
+          "exit_code": 0,
+          "original_token_count": 288,
+          "output": "........................................................................ [  7%]\n........................................................................ [ 14%]\n........................................................................ [ 22%]\n........................................................................ [ 29%]\n........................................................................ [ 37%]\n........................................................................ [ 44%]\n........................................................................ [ 51%]\n........................................................................ [ 59%]\n........................................................................ [ 66%]\n........................................................................ [ 74%]\n........................................................................ [ 81%]\n........................................................................ [ 88%]\n........................................................................ [ 96%]\n...................................                                      [100%]\n971 passed in 180.16s (0:03:00)\n"
+        }
+      },
+      "new_core": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_control.py tests/test_controller_registration_boundaries.py tests/test_controller_members.py tests/test_controller_member_boundaries.py tests/test_controller_probe.py tests/test_controller_probe_registered.py tests/test_controller_probe_import.py tests/test_controller_probe_input_refusal.py tests/test_controller_probe_callers.py --tb=short -rs",
+        "start": {
+          "chunk_id": "e470fe",
+          "wall_time_seconds": 1.000946951,
+          "session_id": 37845,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "chunks": [
+          {
+            "chunk_id": "e470fe",
+            "wall_time_seconds": 1.000946951,
+            "session_id": 37845,
+            "original_token_count": 0,
+            "output": ""
+          },
+          {
+            "chunk_id": "2d89ed",
+            "wall_time_seconds": 0.000001256,
+            "exit_code": 0,
+            "original_token_count": 25,
+            "output": ".........................................................                [100%]\n57 passed in 23.61s\n"
+          }
+        ],
+        "result": {
+          "chunk_id": "2d89ed",
+          "wall_time_seconds": 0.000001256,
+          "exit_code": 0,
+          "original_token_count": 25,
+          "output": ".........................................................                [100%]\n57 passed in 23.61s\n"
+        }
+      },
+      "paired": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+        "start": {
+          "chunk_id": "95b44c",
+          "wall_time_seconds": 1.000965318,
+          "session_id": 98374,
+          "original_token_count": 8,
+          "output": ".............................."
+        },
+        "chunks": [
+          {
+            "chunk_id": "95b44c",
+            "wall_time_seconds": 1.000965318,
+            "session_id": 98374,
+            "original_token_count": 8,
+            "output": ".............................."
+          },
+          {
+            "chunk_id": "48375e",
+            "wall_time_seconds": 0.000001206,
+            "exit_code": 0,
+            "original_token_count": 18,
+            "output": "..............................             [100%]\n60 passed in 1.01s\n"
+          }
+        ],
+        "result": {
+          "chunk_id": "48375e",
+          "wall_time_seconds": 0.000001206,
+          "exit_code": 0,
+          "original_token_count": 18,
+          "output": "..............................             [100%]\n60 passed in 1.01s\n"
+        }
+      }
+    }
+  },
+  "static_assert_audit": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, pathlib, subprocess\nroot=pathlib.Path('.').resolve(); pro=root.parent/'orze-pro'\nbaseline='f1acd4c25dc3bdd6650c2c200c1eec5371679c00'\nfiles=['test_controller_control.py','test_controller_registration_boundaries.py','test_controller_members.py','test_controller_member_boundaries.py','test_controller_probe.py','test_controller_probe_registered.py','test_controller_probe_import.py','test_controller_probe_input_refusal.py','test_controller_probe_callers.py']\nresult={'new_tests':[], 'snapshots':[], 'old_test_changes':{}, 'source_changes':[]}\nsha=lambda b:hashlib.sha256(b).hexdigest()\nfor name in files:\n path=root/'tests'/name; raw=path.read_bytes(); tree=ast.parse(raw)\n asserts=[ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Assert)]\n embedded=[]\n for n in ast.walk(tree):\n  if not isinstance(n,ast.Constant) or type(n.value) is not str: continue\n  try: program=ast.parse(n.value)\n  except (SyntaxError,ValueError): continue\n  items=[ast.dump(a,include_attributes=False) for a in ast.walk(program) if isinstance(a,ast.Assert)]\n  if items: embedded.append({'line':n.lineno,'sha256':sha(n.value.encode()),'assert_nodes':len(items)})\n result['new_tests'].append({'path':str(path.relative_to(root)),'sha256':sha(raw),'file_assert_nodes':len(asserts),'assert_ast_sha256':sha(json.dumps(asserts,separators=(',',':')).encode()),'embedded_programs':embedded})\nfor repo,base,ref in [('core',root,baseline),('pro',pro,'43d11c8418f52d8ef687b8a8ae7c25565f26a24d')]:\n changed=subprocess.check_output(['git','diff','--diff-filter=MDTR','--name-only',ref,'--','tests'],cwd=base,text=True).splitlines()\n result['old_test_changes'][repo]=changed\n assert not changed, changed\nfor path in sorted((root/'docs/evidence/snapshots').glob('v1-05c2e2*.py')):\n if not path.name.startswith(('v1-05c2e2b-','v1-05c2e2-before-')): continue\n raw=path.read_bytes(); ast.parse(raw)\n assert raw.endswith(b'\\n'),path\n result['snapshots'].append({'path':str(path.relative_to(root)),'sha256':sha(raw),'bytes':len(raw)})\nmapping={'v1-05c2e2-before-probe-core-gpu_lease.py':'src/orze/core/gpu_lease.py','v1-05c2e2-before-probe-engine-gpu_slots.py':'src/orze/engine/gpu_slots.py','v1-05c2e2-before-probe-engine-launcher.py':'src/orze/engine/launcher.py','v1-05c2e2-before-probe-hardware-gpu.py':'src/orze/hardware/gpu.py'}\nfor key in ['core-execution_attempts','engine-bounded_executor','engine-execution_authority','engine-launcher','engine-role_supervision','engine-supervised_process']:\n mapping['v1-05c2e2b-before-'+key+'.py']='src/orze/'+key.replace('-','/',1)+'.py'\nfor name,source in mapping.items():\n actual=(root/'docs/evidence/snapshots'/name).read_bytes()\n expected=subprocess.check_output(['git','show',baseline+':'+source],cwd=root)\n assert actual==expected,(name,source)\nresult['baseline_snapshot_files']=len(mapping)\nchanged=subprocess.check_output(['git','diff','--diff-filter=MDTR','--name-only',baseline,'--','src'],cwd=root,text=True).splitlines()\nfor name in changed:\n raw=(root/name).read_bytes(); ast.parse(raw)\n result['source_changes'].append({'path':name,'before_sha256':sha(subprocess.check_output(['git','show',baseline+':'+name],cwd=root)),'sha256':sha(raw)})\nresult['new_source_files']=[]\nfor name in ['controller_control.py','controller_members.py','controller_probe.py']:\n path=root/'src/orze/engine'/name; raw=path.read_bytes(); ast.parse(raw)\n result['new_source_files'].append({'path':str(path.relative_to(root)),'sha256':sha(raw)})\nresult['new_test_files']=len(result['new_tests'])\nresult['file_assert_nodes']=sum(x['file_assert_nodes'] for x in result['new_tests'])\nresult['embedded_programs']=sum(len(x['embedded_programs']) for x in result['new_tests'])\nresult['embedded_assert_nodes']=sum(y['assert_nodes'] for x in result['new_tests'] for y in x['embedded_programs'])\nprint(json.dumps(result,sort_keys=True))\nPY",
+    "exit_code": 0,
+    "file_assert_nodes": 59,
+    "embedded_assert_nodes": 155,
+    "embedded_programs": 33,
+    "snapshots": 33,
+    "baseline_snapshots": 10
+  },
+  "author_command_syntax_audit": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, json, pathlib, re, shlex, subprocess\npaths=sorted(pathlib.Path('docs/evidence').glob('2026-09-11-v1-05c2e2b-controller-*.json'))\ncommands=[]; bodies=[]\ndef walk(value, location, key='', command_map=False):\n if isinstance(value,dict):\n  for k,v in value.items(): walk(v,location+'.'+k,k,command_map or key=='commands')\n elif isinstance(value,list):\n  for i,v in enumerate(value): walk(v,location+'['+str(i)+']',key,command_map)\n elif isinstance(value,str) and (key=='command' or key.endswith('_command') or command_map):\n  subprocess.run(['bash','-n'],input=value,text=True,check=True)\n  shlex.split(value)\n  commands.append(location)\n  for match in re.finditer(r\"<<'PY'\\n(.*?)\\nPY(?=\\n|$)\",value,re.S):\n   ast.parse(match.group(1)); bodies.append(location)\nfor path in paths: walk(json.loads(path.read_bytes()),str(path))\nprint(json.dumps({'reports':len(paths),'command_occurrences':len(commands),'python_heredocs':len(bodies),'command_paths':commands,'body_paths':bodies},sort_keys=True))\nPY",
+    "result": {
+      "chunk_id": "42f1b6",
+      "wall_time_seconds": 0.000004606,
+      "exit_code": 0,
+      "original_token_count": 1325,
+      "output": "{\"body_paths\": [\"docs/evidence/2026-09-11-v1-05c2e2b-controller-member-review.json.complete_snapshot_replay.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-member-review.json.complete_snapshot_replay.dependency_audit_command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-member-review.json.final_bounded.hash_audit_command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.snapshots.audit.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.complete_module_replays[0].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.complete_module_replays[1].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[10].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[11].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[12].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[15].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[16].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[17].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.static_verification.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-registration-review.json.candidate_bounded.audit_command\"], \"command_occurrences\": 42, \"command_paths\": [\"docs/evidence/2026-09-11-v1-05c2e2b-controller-member-review.json.excluded_initial_probe.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-member-review.json.draft_red.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-member-review.json.complete_snapshot_replay.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-member-review.json.complete_snapshot_replay.dependency_audit_command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-member-review.json.final_bounded.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-member-review.json.final_bounded.hash_audit_command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.snapshots.audit.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.actual_runs[0].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.actual_runs[1].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.actual_runs[2].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.actual_runs[3].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.actual_runs[4].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.actual_runs[5].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.actual_runs[6].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.actual_runs[7].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.actual_runs[8].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.complete_module_replays[0].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.complete_module_replays[1].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-members-author.json.tool_diagnostics[0].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[0].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[1].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[2].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[3].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[4].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[5].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[6].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[7].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[8].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[9].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[10].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[11].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[12].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[13].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[14].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[15].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[16].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.runs[17].command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-probe-author.json.static_verification.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-registration-review.json.snapshot.comparison_command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-registration-review.json.first_run.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-registration-review.json.candidate_bounded.command\", \"docs/evidence/2026-09-11-v1-05c2e2b-controller-registration-review.json.candidate_bounded.audit_command\"], \"python_heredocs\": 14, \"reports\": 4}\n"
+    },
+    "note": "Actual audit occurred when the four author/reviewer reports existed; later canonical/root documents are checked separately by the final aggregate."
+  },
+  "precommit_safety": {
+    "orze": {
+      "chunk_id": "8093b1",
+      "wall_time_seconds": 0.12200618,
+      "exit_code": 0,
+      "original_token_count": 38,
+      "output": "feat/autoresearch-v1\nf1acd4c25dc3bdd6650c2c200c1eec5371679c00\trefs/heads/feat/autoresearch-v1\n5ca2680dbd0139e63cd35a4f83da438b5b47ab99\trefs/heads/main\n"
+    },
+    "orze-pro": {
+      "chunk_id": "ca2d3f",
+      "wall_time_seconds": 0.378906295,
+      "exit_code": 0,
+      "original_token_count": 38,
+      "output": "feat/autoresearch-v1\n43d11c8418f52d8ef687b8a8ae7c25565f26a24d\trefs/heads/feat/autoresearch-v1\n57feb6e0af19dcf62a80b1e447f0771936d39afe\trefs/heads/main\n"
+    },
+    "original": {
+      "chunk_id": "0b8ed8",
+      "wall_time_seconds": 0.000003999,
+      "exit_code": 0,
+      "original_token_count": 1,
+      "output": "281\n"
+    },
+    "holdout": {
+      "chunk_id": "31ed75",
+      "wall_time_seconds": 0.000003935,
+      "exit_code": 0,
+      "original_token_count": 22,
+      "output": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245  holdout-challenge.md\n"
+    },
+    "time": {
+      "current_time": "2026-09-11 05:17:19 UTC"
+    }
+  },
+  "staged_code_check": {
+    "chunk_id": "40f6a0",
+    "wall_time_seconds": 0.000003263,
+    "exit_code": 0,
+    "original_token_count": 945,
+    "output": " docs/controller-membership.md                      |   81 +\n ...-09-11-v1-05c2e2b-controller-member-review.json |  292 +++\n ...09-11-v1-05c2e2b-controller-members-author.json |  296 +++\n ...6-09-11-v1-05c2e2b-controller-probe-author.json |  403 +++\n ...-v1-05c2e2b-controller-registration-review.json |  139 +\n .../v1-05c2e2-before-probe-core-gpu_lease.py       |  317 +++\n .../v1-05c2e2-before-probe-engine-gpu_slots.py     |  593 +++++\n .../v1-05c2e2-before-probe-engine-launcher.py      | 2658 +++++++++++++++++++\n .../v1-05c2e2-before-probe-hardware-gpu.py         |  127 +\n .../v1-05c2e2b-before-core-execution_attempts.py   |  373 +++\n .../v1-05c2e2b-before-engine-bounded_executor.py   |  368 +++\n ...v1-05c2e2b-before-engine-execution_authority.py |  292 +++\n .../snapshots/v1-05c2e2b-before-engine-launcher.py | 2658 +++++++++++++++++++\n .../v1-05c2e2b-before-engine-role_supervision.py   |  507 ++++\n .../v1-05c2e2b-before-engine-supervised_process.py |  316 +++\n ...-05c2e2b-before-full-registered-source-route.py |  115 +\n .../v1-05c2e2b-before-full-root-source-route.py    |  216 ++\n .../v1-05c2e2b-before-hardware-probe-import.py     |  137 +\n ...fore-native-member-commit-controller-members.py |  486 ++++\n ...ore-native-member-commit-execution-authority.py |  308 +++\n ...e2b-before-probe-import-cycle-core-gpu_lease.py |  321 +++\n ...2b-before-probe-import-cycle-engine-__init__.py |   15 +\n ...e-probe-import-cycle-engine-controller_probe.py |  267 ++\n ...2b-before-probe-import-cycle-engine-launcher.py | 2662 ++++++++++++++++++++\n .../v1-05c2e2b-before-probe-quiesce-and-inputs.py  |  267 ++\n ...e-registration-boundaries-controller-control.py |  387 +++\n .../v1-05c2e2b-before-role-intent-hold.py          |  513 ++++\n .../snapshots/v1-05c2e2b-first-members-members.py  |  468 ++++\n .../v1-05c2e2b-first-members-primitive.py          |  337 +++\n .../snapshots/v1-05c2e2b-first-members-tests.py    |  242 ++\n ...5c2e2b-native-member-test-initial-read-state.py |   99 +\n ...05c2e2b-probe-callers-before-fixture-binding.py |   46 +\n ...1-05c2e2b-probe-callers-before-lazy-hardware.py |   46 +\n .../v1-05c2e2b-probe-import-tests-first-green.py   |   16 +\n .../v1-05c2e2b-probe-tests-first-green.py          |  208 ++\n .../v1-05c2e2b-root-tests-first-fixture.py         |  202 ++\n .../v1-05c2e2b-second-controller_members.py        |  486 ++++\n .../v1-05c2e2b-second-supervised_process.py        |  341 +++\n src/orze/core/execution_attempts.py                |    6 +\n src/orze/core/gpu_lease.py                         |    8 +-\n src/orze/engine/bounded_executor.py                |    7 +-\n src/orze/engine/controller_control.py              |  386 +++\n src/orze/engine/controller_members.py              |  504 ++++\n src/orze/engine/controller_probe.py                |  279 ++\n src/orze/engine/execution_authority.py             |   16 +\n src/orze/engine/gpu_slots.py                       |   13 +-\n src/orze/engine/launcher.py                        |   18 +-\n src/orze/engine/role_supervision.py                |   14 +-\n src/orze/engine/supervised_process.py              |   35 +-\n src/orze/hardware/gpu.py                           |   24 +-\n tests/test_controller_control.py                   |  219 ++\n tests/test_controller_member_boundaries.py         |   99 +\n tests/test_controller_members.py                   |  331 +++\n tests/test_controller_probe.py                     |  209 ++\n tests/test_controller_probe_callers.py             |   46 +\n tests/test_controller_probe_import.py              |   30 +\n tests/test_controller_probe_input_refusal.py       |   17 +\n tests/test_controller_probe_registered.py          |  117 +\n tests/test_controller_registration_boundaries.py   |  259 ++\n 59 files changed, 20222 insertions(+), 20 deletions(-)\n"
+  },
+  "independent_staged_audit": {
+    "agent": "runtime_evidence",
+    "file_audit": {
+      "chunk_id": "7486c4",
+      "exit_code": 0,
+      "manifest_files": 870,
+      "staged_files": 59,
+      "snapshots": 33,
+      "baseline_snapshots": 10,
+      "result": "Static audit JSON exact; manifest/index/worktree and fixed baseline snapshot bytes exact; source/test/status unchanged."
+    },
+    "command_audit": {
+      "chunk_id": "132f61",
+      "exit_code": 0,
+      "reports": 4,
+      "commands": 42,
+      "python_payloads": 14,
+      "result": "bash -n, shlex and AST checks passed; both full-epoch fixture source-route refinements preserve original asserts and embedded programs."
+    }
+  },
+  "code_commits": {
+    "core": "e96317b21284d574d838d4e5c3e52261c80689d2",
+    "pro": "43d11c8418f52d8ef687b8a8ae7c25565f26a24d"
+  },
+  "code_push": {
+    "core": {
+      "chunk_id": "595200",
+      "wall_time_seconds": 0.000003497,
+      "exit_code": 0,
+      "original_token_count": 45,
+      "output": "To https://github.com/orze-ai/orze.git\n   f1acd4c..e96317b  feat/autoresearch-v1 -> feat/autoresearch-v1\ne96317b21284d574d838d4e5c3e52261c80689d2\trefs/heads/feat/autoresearch-v1\n"
+    },
+    "pro": "No Pro code/source/test/build changes; paired baseline remains the existing remote feature HEAD."
+  },
+  "written_at": {
+    "current_time": "2026-09-11 05:39:06 UTC"
+  }
+}
