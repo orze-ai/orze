@@ -4,6 +4,7 @@
 
 | 项目 | 状态 | 证据与剩余工作 |
 |---|---|---|
+| S2：CPU claim reader 收敛 | 已收敛、兼容已验证 | Core `92e388b` / Pro 固定源码 `1384c12` 已推送并读回；CPU 对 training 私有 reader 的直接依赖 2→0，三个生产文件净增 25 行，无新模块、依赖或持久协议。旧 472/134 测试文件零改，764/224 源码/测试/示例/构建文件全量前后及固定提交一致。最终 Core 4297 passed / 7 optional Pro skips / 2 既有 warning、Pro 978 passed、配对 60 passed，目标 115 passed；37 新例中 11 个旧行为控制、3 个架构要求及 23 个新机制分开记录。首候选 35 passed/1 failed 的 unlink 测试预期经真实旧 reader 对照修正，生产代码未为此改动，原测试及失败原样保留。[证据](../evidence/2026-09-11-s2-claim-reader.json)、[固定提交复核](../evidence/2026-09-11-s2-root-validation.json)与[契约](../claim-reader-consolidation.md)绑定完整日志和原始 JUnit；独立复核通过。旧 read_claim 保留 InDoubt 而 CPU 保留 Busy/OSError；新增有界哈希成本，不声称全栈减行、全部 training 解耦或研究提速。原 V1 总体状态另由汇总验收核定 |
 | V1-00 | 基线已核实 | core 起点 1279 passed / 6 optional Pro skips；Pro 离线 304 passed，授权边界使用测试替身 |
 | V1-01A：champion 恢复 | 已修复、机制已验证 | 修复 `c9f01bf`；11 个目标红测转绿；真实启动回归；最终 core 1302 passed / 6 optional Pro skips；另以两仓源码运行相关跨仓测试 30 passed |
 | V1-01B：研究上下文资格 | 已修复、机制已验证 | Pro `1477bf8`；48 排名、4 统计、15 独立复核红测转绿；最终 Pro 371 passed；core 跨仓相关 30 passed。手工记录不混排，完整项目配置优先 |
