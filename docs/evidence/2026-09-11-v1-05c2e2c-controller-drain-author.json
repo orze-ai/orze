@@ -1,0 +1,459 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2c",
+  "author": "core_review",
+  "status": "own_source_and_tests_frozen_bounded_verification_complete",
+  "recorded_at_utc": "2026-09-11 06:25:02 UTC",
+  "scope": "Finite foreground controller member drain and actual Orze lifecycle wiring; independent read-only review of root session/observer",
+  "ownership": {
+    "authored_sources": [
+      "src/orze/engine/controller_members.py",
+      "src/orze/engine/orchestrator.py",
+      "src/orze/engine/lifecycle.py",
+      "src/orze/engine/phases.py",
+      "src/orze/engine/native_artifact_preflight.py",
+      "src/orze/engine/supervised_process.py"
+    ],
+    "source_qualifications": [
+      "native_artifact_preflight: only explicit static-rejection member hook",
+      "supervised_process: only receive-before-control in poll, after real late-stop draft red; specific send recovery is in controller_members"
+    ],
+    "authored_new_tests": [
+      "tests/test_controller_drain.py",
+      "tests/test_controller_profile_shutdown.py",
+      "tests/test_controller_profile_boot.py",
+      "tests/test_controller_profile_optional_probes.py",
+      "tests/test_controller_profile_downgrade.py",
+      "tests/test_controller_late_stop.py"
+    ],
+    "old_test_exception": "tests/test_managed_run.py: exactly two approved runner.cfg={} assignments",
+    "not_authored": [
+      "controller_session.py",
+      "controller_control.py",
+      "controller_probe.py",
+      "controller_profile.py",
+      "core/config.py",
+      "cli.py",
+      "Pro role runner",
+      "real product boundary tests"
+    ],
+    "self_review_is_not_independent_of_authored_sources": true,
+    "no_commits_or_pushes": true
+  },
+  "baseline": {
+    "Core": "99632588f5ed09248897a7b24719e8359b5115dc",
+    "description": "Preceding implementation/evidence commit, not a released-version claim"
+  },
+  "distinct_tests": {
+    "total": 21,
+    "new_mechanisms": 12,
+    "candidate_regression_cases": 9,
+    "preceding_commit_public_behavior_reds": 0,
+    "breakdown": {
+      "drain": 8,
+      "shutdown_consumer": 4,
+      "boot_routing": 3,
+      "optional_probe_paths": 2,
+      "profile_downgrade": 2,
+      "late_stop_timing": 2
+    },
+    "late_stop_same_root_cause": true,
+    "assert_sites": [
+      {
+        "path": "tests/test_controller_drain.py",
+        "sha256": "6655794d391d4ca74c7abe2f2c2460e6a5a084411d86f85396afc35fc23c1c34",
+        "direct_assert_sites": 0,
+        "literal_child_assert_sites": 19
+      },
+      {
+        "path": "tests/test_controller_profile_shutdown.py",
+        "sha256": "5012b9d85e5424f53970875c826ebfe4d4866a82543150f3c1e0b7c36a553873",
+        "direct_assert_sites": 0,
+        "literal_child_assert_sites": 11
+      },
+      {
+        "path": "tests/test_controller_profile_boot.py",
+        "sha256": "99b6ed91e8767a412a42efef4ad918183d335bba82e9a56e217981c2ddc15d43",
+        "direct_assert_sites": 7,
+        "literal_child_assert_sites": 0
+      },
+      {
+        "path": "tests/test_controller_profile_optional_probes.py",
+        "sha256": "de893748657d314f35a8ebe16b181a3e931aa8697ee22702004863c4e05c57ea",
+        "direct_assert_sites": 2,
+        "literal_child_assert_sites": 0
+      },
+      {
+        "path": "tests/test_controller_profile_downgrade.py",
+        "sha256": "4f2b858bf667684ce78cfd34a830f31b461bf9effd35b08814ae04b3fec0f70a",
+        "direct_assert_sites": 1,
+        "literal_child_assert_sites": 0
+      },
+      {
+        "path": "tests/test_controller_late_stop.py",
+        "sha256": "ae0f7cada388e9e0c8c7f7458fe93010e4d5580817140af2fad2cd13047a6182",
+        "direct_assert_sites": 0,
+        "literal_child_assert_sites": 12
+      }
+    ],
+    "counting_note": "10 direct Python Assert sites plus 42 Assert sites inside literal child scripts. Parametrization expands cases, not AST sites. Imported fixture assertions are not counted. Runs overlap and must not be summed."
+  },
+  "snapshots": {
+    "files": [
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-controller-members.py",
+        "sha256": "99112d1655cdc4b8a2db332098d6fcab36500168b65bd792cf9ee407a6627ff9"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-orchestrator.py",
+        "sha256": "cfb3731d1d5b6a82d632510c9d18ee9071f9bb71d08e98afe15dd6b6d2541275"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-lifecycle.py",
+        "sha256": "fe1db6140b117e892becc16502bbec0e05570e933d2ccff6e7bf48c7bb8319c9"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-phases.py",
+        "sha256": "cb6e99ebff57c85a2b7393e4f955d18444aca6c98e0bb04906ee115e87899cb8"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-native-artifact-preflight.py",
+        "sha256": "13f3e97ab9f434a7d13b403526acdd52933644acc08eb92ece545d9ab0e8d86a"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-managed-run-fixture.py",
+        "sha256": "ad5346326960172370b875f82a5476b8c7f8788de30eb4375a8e36d11b6d1e3c"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-profile-boot-routing-orchestrator.py",
+        "sha256": "b66cd4a1a97bdbe2cac6829e3f04755953bd8f1f4e6a0a192a865a825a1cc032"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-profile-optional-probes-orchestrator.py",
+        "sha256": "9494bcc7f1e2f182e2d0204228bd0ceb6290d9c46c4305d0f6131946c3a81fd4"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-profile-optional-probes-phases.py",
+        "sha256": "e619f6fcf200616831969be916984789ddb10edcf5e58b111f0ee6443fc96b5b"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-profile-downgrade-orchestrator.py",
+        "sha256": "cb1e298bdb8345c9c4493888e0a9402ff53fa5e8fa6c3621502d7d1882cb382e"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-late-stop-controller-members.py",
+        "sha256": "06461fd1bc77dedda78b10a9dbaa375d73179f5cb11daea68c32b9094f02268a"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-late-stop-supervised-process.py",
+        "sha256": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-late-send-race-controller-members.py",
+        "sha256": "25ac711c9b8d79798697c970b7f397eb375bd84d03bb9322e6bfef2e4b486e7b"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-late-send-race-supervised-process.py",
+        "sha256": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6"
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-late-stop-one-case-test.py",
+        "sha256": "e127a21b4ffd47d0ac791e0a6701ad51228520c1baa78499cfddf87562d19206"
+      }
+    ],
+    "fixed_baseline_files": 6,
+    "complete_candidate_modules": 8,
+    "original_one_case_test": 1,
+    "all_python_AST_parse": true,
+    "baseline_byte_exact_verified": true,
+    "validation_exit_code": 0,
+    "validation_chunk": "a16cd4"
+  },
+  "draft_regressions": [
+    {
+      "selector": "tests/test_controller_profile_boot.py",
+      "first": {
+        "failed": 3,
+        "passed": 0,
+        "seconds": 0.23,
+        "exit_code": 1,
+        "chunk": "e66080"
+      },
+      "complete_module_replay": {
+        "failed": 3,
+        "seconds": 0.12,
+        "exit_code": 1,
+        "chunk": "9ab57c"
+      },
+      "causes": [
+        "Direct profile run reached Session before rejecting existing stop marker",
+        "Old catalog was copied before profile initialization refusal",
+        "Profile Lake error was swallowed by legacy degraded-mode handling"
+      ],
+      "limits": "Third case injects an explicit reporter sink returning None: the later AttributeError exposes swallowed original OSError; not a separate reporter bug or real reporting E2E."
+    },
+    {
+      "selector": "tests/test_controller_profile_optional_probes.py",
+      "first": {
+        "failed": 2,
+        "seconds": 0.26,
+        "exit_code": 1,
+        "chunk": "9e6769"
+      },
+      "complete_two_module_replay": {
+        "failed": 2,
+        "seconds": 0.16,
+        "exit_code": 1,
+        "chunk": "65ca55"
+      },
+      "causes": [
+        "has_pro default auto_install reached raw pip dispatch",
+        "Legacy SOP enrichment could execute training --help outside membership"
+      ],
+      "limits": "First uses actual has_pro/_auto_install_pro but subprocess.run is an OS spy with a dummy key; no pip/network executes. Second is actual phase pipeline plus explicit old harness/admission boundary and SOP body tripwire, not actual registered-profile process proof."
+    },
+    {
+      "selector": "tests/test_controller_profile_downgrade.py",
+      "first": {
+        "failed": 2,
+        "seconds": 0.33,
+        "exit_code": 1,
+        "chunk": "dba721"
+      },
+      "complete_module_replay": {
+        "failed": 2,
+        "seconds": 0.25,
+        "exit_code": 1,
+        "chunk": "581519"
+      },
+      "causes": [
+        "Loaded stamp with erased declaration entered Lake boundary",
+        "Declaration erased after real constructor entered unregistered GPU lease boundary"
+      ],
+      "limits": "Explicit DB/OS boundary spies; second constructor uses a real SQLite Lake. No GPU call executes."
+    },
+    {
+      "selector": "tests/test_controller_late_stop.py::test_quiesce_after_owned_supervisor_exit_accepts_queued_tree_closure",
+      "first": {
+        "failed": 1,
+        "seconds": 0.64,
+        "exit_code": 1,
+        "chunk": "fe0724"
+      },
+      "complete_two_module_replay": {
+        "failed": 1,
+        "deselected": 1,
+        "seconds": 0.66,
+        "exit_code": 1,
+        "chunk": "4d3d79"
+      },
+      "cause": "Late quiesce sent STOP before receiving actual queued TREE_CLOSED; real closed peer raised BrokenPipe."
+    },
+    {
+      "selector": "tests/test_controller_late_stop.py::test_real_tree_closes_between_initial_receive_and_actual_stop_send",
+      "first": {
+        "failed": 1,
+        "passed": 1,
+        "seconds": 1.14,
+        "exit_code": 1,
+        "chunk": "754095"
+      },
+      "complete_post_first_fix_two_module_replay": {
+        "failed": 1,
+        "passed": 1,
+        "seconds": 1.16,
+        "exit_code": 1,
+        "chunk": "27074d"
+      },
+      "cause": "Real worker release barrier closes supervisor between initial receive and actual STOP send; real EPIPE still occurred after first fix.",
+      "limits": "Both cases use actual CPU subprocesses, actual owned supervisor.wait(), real IPC and bound closure. Deterministic STOP send hook is timing control, not a closure substitute. Complete original one-case test retained before appending second; no first-case assertion was changed."
+    }
+  ],
+  "replay_scope": "Complete listed modules are compiled into their imported module dictionaries; late-stop pair is replayed inside real isolated child controller before prepare. These are complete-module replays against current neighboring modules, not whole baseline checkout replays.",
+  "replay_commands": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.engine import orchestrator\np=Path('docs/evidence/snapshots/v1-05c2e2c-before-profile-downgrade-orchestrator.py').resolve()\nexec(compile(p.read_text(),str(p),'exec'),orchestrator.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_controller_profile_downgrade.py\",\"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "footer": "2 failed in 0.25s",
+      "chunk": "581519"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport sys,pytest\nsys.path.insert(0,str(Path('tests').resolve()))\nimport test_controller_members as fixture\nfor mod,suffix in [('members','controller-members'),('primitive','supervised-process')]:\n p=Path('docs/evidence/snapshots/v1-05c2e2c-before-late-stop-'+suffix+'.py').resolve()\n fixture.COMMON += '\\nexec(compile(pathlib.Path('+repr(str(p))+').read_text(),'+repr(str(p))+',\"exec\"),'+mod+'.__dict__)\\n'\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_controller_late_stop.py\",\"-k\",\"quiesce_after_owned\",\"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "footer": "1 failed, 1 deselected in 0.66s",
+      "chunk": "4d3d79"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport sys,pytest\nsys.path.insert(0,str(Path('tests').resolve()))\nimport test_controller_members as fixture\nfor mod,suffix in [('members','controller-members'),('primitive','supervised-process')]:\n p=Path('docs/evidence/snapshots/v1-05c2e2c-before-late-send-race-'+suffix+'.py').resolve()\n fixture.COMMON += '\\nexec(compile(pathlib.Path('+repr(str(p))+').read_text(),'+repr(str(p))+',\"exec\"),'+mod+'.__dict__)\\n'\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_controller_late_stop.py\",\"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "footer": "1 failed, 1 passed in 1.16s",
+      "chunk": "27074d"
+    }
+  ],
+  "historical_bounded_runs": [
+    {
+      "scope": "New drain 8",
+      "exit_code": 0,
+      "passed": 8,
+      "seconds": 4.82
+    },
+    {
+      "scope": "New drain8 plus explicit shutdown-consumer4",
+      "exit_code": 0,
+      "passed": 12,
+      "seconds": 7.78
+    },
+    {
+      "scope": "Own first17 before downgrade/late-stop additions",
+      "exit_code": 0,
+      "passed": 17,
+      "seconds": 7.25,
+      "chunk": "2930f5"
+    },
+    {
+      "scope": "Own19 plus managed45 before late-stop additions",
+      "exit_code": 0,
+      "passed": 64,
+      "seconds": 9.4,
+      "chunk": "dcb148"
+    },
+    {
+      "scope": "First late-stop fix plus old member/primitive/drain neighborhood",
+      "exit_code": 0,
+      "passed": 47,
+      "seconds": 13.39,
+      "chunk": "f373ab"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_late_stop.py tests/test_controller_drain.py tests/test_controller_profile_shutdown.py tests/test_controller_profile_boot.py tests/test_controller_profile_optional_probes.py tests/test_controller_profile_downgrade.py tests/test_managed_run.py --tb=short",
+      "exit_code": 0,
+      "passed": 66,
+      "seconds": 10.5,
+      "chunk": "5c98c9",
+      "note": "After final send-race repair. Separate final manifest below; do not invent a pre/post manifest for this earlier run."
+    }
+  ],
+  "final_bounded_run": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_drain.py tests/test_controller_profile_shutdown.py tests/test_controller_profile_boot.py tests/test_controller_profile_optional_probes.py tests/test_controller_profile_downgrade.py tests/test_controller_late_stop.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py --tb=short",
+    "exit_code": 0,
+    "passed": 44,
+    "seconds": 9.82,
+    "chunk": "ed5f08",
+    "composition": "Own21 plus preceding primitive23; no whole-Core/Pro or actual GPU run claimed",
+    "pre": {
+      "src/orze/engine/controller_control.py": "2743a75d05d5f64d84f9a1ca8c6ce474d0bf8d5f528520ce79985f1fd84d39dc",
+      "src/orze/engine/controller_members.py": "0eaecc855f27bede4b70b9cf3b72b4019fcd3aa2054619ed7c81f94f53c4f656",
+      "src/orze/engine/controller_probe.py": "347c6f8f9f0b06b68abea91ac61d9f6aa9b1b74fddb46b635db6d22b0757fabb",
+      "src/orze/engine/controller_session.py": "de35f35e49f331d5b285910e35c344c1dc31e99be65c59810d85d32ea63ed752",
+      "src/orze/engine/lifecycle.py": "6f314441c8a73ceb20c9e0a2aae5dff71e2bb43c5a67d3c22037e2b42c55cb5d",
+      "src/orze/engine/native_artifact_preflight.py": "5e026b287f37cea28312f7cef22a530a4c2c347ab8971801777e8be0522aaf41",
+      "src/orze/engine/orchestrator.py": "6db0fdfef6929ae4d7d92ea71548a2531a1491839bf6f1b18a7792a36a219788",
+      "src/orze/engine/phases.py": "5a71fb7bcbbcbe5e36837673aeb28d4659869e5477e4d29e8e922a730e8a108b",
+      "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "tests/test_controller_drain.py": "6655794d391d4ca74c7abe2f2c2460e6a5a084411d86f85396afc35fc23c1c34",
+      "tests/test_controller_late_stop.py": "ae0f7cada388e9e0c8c7f7458fe93010e4d5580817140af2fad2cd13047a6182",
+      "tests/test_controller_profile_boot.py": "99b6ed91e8767a412a42efef4ad918183d335bba82e9a56e217981c2ddc15d43",
+      "tests/test_controller_profile_downgrade.py": "4f2b858bf667684ce78cfd34a830f31b461bf9effd35b08814ae04b3fec0f70a",
+      "tests/test_controller_profile_optional_probes.py": "de893748657d314f35a8ebe16b181a3e931aa8697ee22702004863c4e05c57ea",
+      "tests/test_controller_profile_shutdown.py": "5012b9d85e5424f53970875c826ebfe4d4866a82543150f3c1e0b7c36a553873",
+      "tests/test_managed_run.py": "8dbb40c9f08f31cb084ab301434a0c8ca1c8298b0ca1d5e4ea6048a6ef7a73b7",
+      "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+      "tests/test_supervised_worker_fds.py": "3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7",
+      "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77"
+    },
+    "post": {
+      "src/orze/engine/controller_control.py": "2743a75d05d5f64d84f9a1ca8c6ce474d0bf8d5f528520ce79985f1fd84d39dc",
+      "src/orze/engine/controller_members.py": "0eaecc855f27bede4b70b9cf3b72b4019fcd3aa2054619ed7c81f94f53c4f656",
+      "src/orze/engine/controller_probe.py": "347c6f8f9f0b06b68abea91ac61d9f6aa9b1b74fddb46b635db6d22b0757fabb",
+      "src/orze/engine/controller_session.py": "de35f35e49f331d5b285910e35c344c1dc31e99be65c59810d85d32ea63ed752",
+      "src/orze/engine/lifecycle.py": "6f314441c8a73ceb20c9e0a2aae5dff71e2bb43c5a67d3c22037e2b42c55cb5d",
+      "src/orze/engine/native_artifact_preflight.py": "5e026b287f37cea28312f7cef22a530a4c2c347ab8971801777e8be0522aaf41",
+      "src/orze/engine/orchestrator.py": "6db0fdfef6929ae4d7d92ea71548a2531a1491839bf6f1b18a7792a36a219788",
+      "src/orze/engine/phases.py": "5a71fb7bcbbcbe5e36837673aeb28d4659869e5477e4d29e8e922a730e8a108b",
+      "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "tests/test_controller_drain.py": "6655794d391d4ca74c7abe2f2c2460e6a5a084411d86f85396afc35fc23c1c34",
+      "tests/test_controller_late_stop.py": "ae0f7cada388e9e0c8c7f7458fe93010e4d5580817140af2fad2cd13047a6182",
+      "tests/test_controller_profile_boot.py": "99b6ed91e8767a412a42efef4ad918183d335bba82e9a56e217981c2ddc15d43",
+      "tests/test_controller_profile_downgrade.py": "4f2b858bf667684ce78cfd34a830f31b461bf9effd35b08814ae04b3fec0f70a",
+      "tests/test_controller_profile_optional_probes.py": "de893748657d314f35a8ebe16b181a3e931aa8697ee22702004863c4e05c57ea",
+      "tests/test_controller_profile_shutdown.py": "5012b9d85e5424f53970875c826ebfe4d4866a82543150f3c1e0b7c36a553873",
+      "tests/test_managed_run.py": "8dbb40c9f08f31cb084ab301434a0c8ca1c8298b0ca1d5e4ea6048a6ef7a73b7",
+      "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+      "tests/test_supervised_worker_fds.py": "3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7",
+      "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77"
+    },
+    "files": 19,
+    "all_pre_post_equal": true,
+    "inventory_command": "python3 - <<'PY'\nimport pathlib,hashlib,json\npaths=['src/orze/engine/'+n+'.py' for n in ['controller_members','supervised_process','orchestrator','lifecycle','phases','native_artifact_preflight','controller_session','controller_probe','controller_control']]+['tests/'+n+'.py' for n in ['test_controller_drain','test_controller_profile_shutdown','test_controller_profile_boot','test_controller_profile_optional_probes','test_controller_profile_downgrade','test_controller_late_stop','test_supervised_process','test_supervisor_preparation_handoff','test_supervised_worker_fds','test_managed_run']]\nprint(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths},sort_keys=True))\nPY"
+  },
+  "old_fixture_exception": {
+    "path": "tests/test_managed_run.py",
+    "before_sha256": "ad5346326960172370b875f82a5476b8c7f8788de30eb4375a8e36d11b6d1e3c",
+    "after_sha256": "8dbb40c9f08f31cb084ab301434a0c8ca1c8298b0ca1d5e4ea6048a6ef7a73b7",
+    "functions": [
+      "test_disabled_orchestrator_exits_before_gpu_lease_or_startup",
+      "test_orchestrator_rejects_external_gpu_compute_before_startup"
+    ],
+    "actual_unmodified_failure": {
+      "failed": 2,
+      "passed": 101,
+      "seconds": 29.75,
+      "exit_code": 1,
+      "chunk": "1b8bcf",
+      "reason": "Two Orze.__new__ fixtures omitted cfg, which the real constructor always sets."
+    },
+    "change": "Only add runner.cfg={} in each function; root explicitly approved. Do not add missing-cfg production fallback.",
+    "original_assert_sites": 54,
+    "whole_AST_identical_after_exact_two_new_assignments_removed": true,
+    "AST_validation_exit_code": 0,
+    "AST_validation_chunk": "a16cd4",
+    "whole_file_validation": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_managed_run.py --tb=short",
+      "exit_code": 0,
+      "passed": 45,
+      "seconds": 2.09,
+      "chunk": "5e224b"
+    },
+    "classification": "Explicit fixture construction contract refinement, not product behavior red or weakened assertion."
+  },
+  "tool_error": {
+    "exit_code": 4,
+    "chunk": "122e75",
+    "footer": "no tests ran in 0.00s",
+    "reason": "A targeted command used nonexistent tests/test_supervised_preparation_handoff.py; corrected to tests/test_supervisor_preparation_handoff.py. No test executed; not a product failure."
+  },
+  "independent_read_review": {
+    "source": "src/orze/engine/controller_session.py",
+    "sha256": "de35f35e49f331d5b285910e35c344c1dc31e99be65c59810d85d32ea63ed752",
+    "not_author": true,
+    "scope": [
+      "Session constructor/registration, request-only pump, exact runtime/config route checks",
+      "Owned GPU lease object/list/FD witness close, Lake close proof, exact PID witness cleanup",
+      "Main-thread finalizer proves private/durable membership then resources then committed ACK",
+      "Observer binds live pidfd before request and requires same pidfd exit plus final request/ACK/native-effect readback"
+    ],
+    "conclusion": "No remaining blocker identified in the reviewed finite foreground local_stop_v1 scope. This is read-only source review, not independent execution of root's session/product tests.",
+    "resolved_findings": [
+      "Signal-triggered stop pump wiring and initial inventory constraints were discussed with root; root owns their implementation/evidence.",
+      "Actual escaped-writer product shutdown failure was traced by runtime to repeated pinned-stop writer contention in root session, not a missing member closure permission; member safeguards were not relaxed.",
+      "Optional Pro installation and SOP execution paths were independently flagged by Pro and patched only after our fixed draft tests/snapshots.",
+      "Root-suggested late STOP queued/final-send race was independently reproduced here and narrowly fixed."
+    ],
+    "limitations": [
+      "No claim that three empty public maps prove drain; private/durable registry and native terminal/effect rows remain required.",
+      "No all-host writer exclusion, cold-controller adoption, restart permission, registration reuse, remote/multiprocess coordinator guarantee, or process-content sandbox.",
+      "Role/legacy unsupported ownership and unknown preparation remain HOLD. Prepare-inner quiesce window in the frozen probe wrapper remains conservatively HOLD; this report does not claim every cancellation timing produces positive ACK.",
+      "Finite lifetime admission: soft limit2048 requests orderly stop, hard4096 refuses; no owner eviction or indefinite-running claim.",
+      "Read-only resource checks do not establish safety against malicious same-UID memory/FD mutation.",
+      "Full Core, Pro, paired and actual product CPU tests are owned/reported by root/runtime, not counted here."
+    ]
+  },
+  "write_and_safety": {
+    "only_owned_source_tests_and_docs": true,
+    "no_original_test_assertion_changes": true,
+    "no_real_provider_GPU_or_host_process_scans": true,
+    "no_source_or_test_edits_after_global_freeze": true,
+    "git_diff_check_exit_code": 0,
+    "git_diff_check_chunk": "b0b9a3"
+  }
+}

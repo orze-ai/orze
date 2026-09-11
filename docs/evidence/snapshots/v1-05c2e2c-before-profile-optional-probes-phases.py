@@ -1218,8 +1218,6 @@ class OrzePhaseMixin:
             max_launches = len(free) * getattr(getattr(self, 'slot_mgr', None), 'slots_per_gpu', 1)
             launch_count = 0
             while unclaimed and launch_count < max_launches:
-                if not _controller_admission_ready(self):
-                    return free
                 # Re-check free GPUs each iteration (slots fill up)
                 if hasattr(self, 'slot_mgr'):
                     if (force_pack_target is not None
@@ -1233,8 +1231,6 @@ class OrzePhaseMixin:
                 gpu = free[0]  # least-loaded GPU (sorted by most free slots)
                 launched = False
                 while unclaimed:
-                    if not _controller_admission_ready(self):
-                        return free
                     idea_id = unclaimed.pop(0)
                     if (force_pack_target is not None
                             and idea_id != force_pack_target[0]):
@@ -1541,8 +1537,7 @@ class OrzePhaseMixin:
                     # collapsed keys like "epochs: 40" → {"epochs": 40}.
                     try:
                         from orze.extensions import get_extension
-                        _sops = (None if getattr(self, "_controller_session", None) is not None
-                                 else get_extension("sops"))
+                        _sops = get_extension("sops")
                         if _sops:
                             idea_cfg = flat_cfg if flat_cfg else ideas.get(idea_id, {}).get("config", {})
                             ts = idea_cfg.get("train_script", cfg.get("train_script", ""))

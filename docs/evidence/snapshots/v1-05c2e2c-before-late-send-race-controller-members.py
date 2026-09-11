@@ -10,7 +10,6 @@ from __future__ import annotations
 from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass, field
 import copy
-import errno
 import hashlib
 import json
 from pathlib import Path
@@ -499,14 +498,7 @@ def _stop_once(process):
         try:
             process._channel.setblocking(False)
             send_frame(process._channel, {"command": "STOP", "nonce": process._nonce})
-        except BaseException as exc:
-            if isinstance(exc, OSError) and exc.errno in (errno.EPIPE, errno.ECONNRESET, errno.ENOTCONN):
-                # The tree can finish after poll's first receive and before
-                # this send. Only the same reader's validated bound receipt
-                # plus the supervisor's real normal exit resolves that race.
-                process._receive()
-                if process._closed is not None and process._supervisor.poll() == 0:
-                    return
+        except BaseException:
             process._fail("controller_stop_send_uncertain")
 
 

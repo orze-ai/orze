@@ -67,16 +67,6 @@ from orze.engine.sealed import load_sealed_manifest, verify_sealed_files
 from orze.engine.termination_hold import (
     TerminationUnconfirmed, require_no_unconfirmed_stop, terminate_execution,
 )
-from orze.engine.controller_control import ControllerHOLD
-
-
-def _controller_admission_ready(owner):
-    if getattr(owner, "_controller_session", None) is None:
-        return True
-    from orze.engine.controller_control import current_controller
-    ctx = current_controller()
-    ctx.poll_control()
-    return not ctx.quiescing
 
 
 # Canonical approach-family labels used when constructing IdeaProposals for the
@@ -554,14 +544,13 @@ class OrzePhaseMixin:
 
     def _sync_ideas(self, cfg):
         """Phase: sync ideas from ideas.md to lake, expand sweeps, build unclaimed queue."""
-        profile = getattr(self, "_controller_session", None) is not None
         if self.lake:
             from orze.engine.idea_ingress import ingest_ideas_source
             raw_ideas, ingested_ids = ingest_ideas_source(self, cfg)
             # Optional enrichment runs only for committed admissions, after
             # the source lock is released. An ACK publication failure leaves
             # source retryable; enrichment may append work for a later tick.
-            if ingested_ids and not profile:
+            if ingested_ids:
                 substrate_cfg = cfg.get("substrate", {}) or {}
                 try:
                     if substrate_cfg.get("elo_ranking_enabled"):
@@ -582,7 +571,7 @@ class OrzePhaseMixin:
         # 5a-pre. Inline Tier 1 filter (orze-pro): skip garbage before it's claimed
         try:
             from orze.extensions import get_extension
-            idea_filter = None if profile else get_extension("idea_filter")
+            idea_filter = get_extension("idea_filter")
             if idea_filter:
                 idea_filter.filter_queued_ideas(self.results_dir)
         except Exception:
@@ -593,7 +582,7 @@ class OrzePhaseMixin:
         # If validation fails, triggers thinker/professor to implement.
         try:
             from orze.extensions import get_extension
-            _sop_t2 = None if profile else get_extension("sop_tier2")
+            _sop_t2 = get_extension("sop_tier2")
             if _sop_t2 and self.lake:
                 load_portfolios = _sop_t2.load_portfolios
                 load_method_specs = _sop_t2.load_method_specs
@@ -682,7 +671,7 @@ class OrzePhaseMixin:
 
         # On-demand reconcile: if queue returned ideas but none are
         # unclaimed, stale DB rows are blocking — reconcile and retry.
-        if not profile and not unclaimed and queue_ideas and self.lake:
+        if not unclaimed and queue_ideas and self.lake:
             n = self.lake.reconcile_statuses(
                 str(self.results_dir),
                 evaluation_required=bool(cfg.get("eval_script")),
@@ -712,7 +701,7 @@ class OrzePhaseMixin:
         # with no Elo entry default to 1500 so they aren't penalized.
         try:
             substrate_cfg = cfg.get("substrate", {}) or {}
-            if not profile and substrate_cfg.get("elo_ranking_enabled") and unclaimed:
+            if substrate_cfg.get("elo_ranking_enabled") and unclaimed:
                 from orze_substrate.elo_ranking import select_for_launch
                 pre = list(unclaimed[:10])
                 unclaimed = select_for_launch(unclaimed, n=len(unclaimed))
@@ -741,8 +730,6 @@ class OrzePhaseMixin:
         real evaluation/global terminal states agree. Other outcomes remain
         pending for a later tick. Only training-only projects may skip eval.
         """
-        if not _controller_admission_ready(self):
-            return eval_finished, []
         from orze.core.execution_attempts import current_attempt
         from orze.engine.completion_events import (
             completion_is_current, filter_completions, training_source,
@@ -1035,8 +1022,6 @@ class OrzePhaseMixin:
 
     def _launch_training(self, unclaimed, disk_ok, ideas):
         """Phase: launch training on free GPUs, enforce sweep limits, circuit breaker."""
-        if not _controller_admission_ready(self):
-            return []
         cfg = self.cfg
         managed_idea = cfg.get("_managed_idea_id")
 
@@ -1142,8 +1127,7 @@ class OrzePhaseMixin:
                 total_sweep_running += 1
 
         # Emergency GC: if disk is low and GC is configured, try to free space now
-        if (not disk_ok and not managed_idea
-                and getattr(self, "_controller_session", None) is None):
+        if not disk_ok and not managed_idea:
             gc_cfg = cfg.get("gc", {})
             if gc_cfg.get("enabled"):
                 try:
@@ -1218,8 +1202,6 @@ class OrzePhaseMixin:
             max_launches = len(free) * getattr(getattr(self, 'slot_mgr', None), 'slots_per_gpu', 1)
             launch_count = 0
             while unclaimed and launch_count < max_launches:
-                if not _controller_admission_ready(self):
-                    return free
                 # Re-check free GPUs each iteration (slots fill up)
                 if hasattr(self, 'slot_mgr'):
                     if (force_pack_target is not None
@@ -1233,8 +1215,6 @@ class OrzePhaseMixin:
                 gpu = free[0]  # least-loaded GPU (sorted by most free slots)
                 launched = False
                 while unclaimed:
-                    if not _controller_admission_ready(self):
-                        return free
                     idea_id = unclaimed.pop(0)
                     if (force_pack_target is not None
                             and idea_id != force_pack_target[0]):
@@ -1541,8 +1521,7 @@ class OrzePhaseMixin:
                     # collapsed keys like "epochs: 40" → {"epochs": 40}.
                     try:
                         from orze.extensions import get_extension
-                        _sops = (None if getattr(self, "_controller_session", None) is not None
-                                 else get_extension("sops"))
+                        _sops = get_extension("sops")
                         if _sops:
                             idea_cfg = flat_cfg if flat_cfg else ideas.get(idea_id, {}).get("config", {})
                             ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
@@ -1639,8 +1618,6 @@ class OrzePhaseMixin:
                                 "rejected", "artifact_preflight_failed")
                         return free
                     self._artifact_preflight_blocked_until = 0.0
-                    if not _controller_admission_ready(self):
-                        return free
 
                     # Project setup runs only after every static validator and
                     # the zero-GPU artifact resolver have passed. This avoids
@@ -1654,8 +1631,6 @@ class OrzePhaseMixin:
                             report_pre_script_failure(
                                 self.lake, self.results_dir / idea_id,
                                 pre_result.attempt_ref, self.failure_counts, cfg)
-                            if not _controller_admission_ready(self):
-                                return free
                             # The existing fixer is not a supervised native
                             # repair action. Keep repair explicitly pending.
                             continue
@@ -1691,15 +1666,11 @@ class OrzePhaseMixin:
                                 "rejected", "pre_script_failed")
                             continue
 
-                    if not _controller_admission_ready(self):
-                        return free
                     logger.info("Launching %s on GPU %s: %s",
                                 idea_id, gpu,
                                 ideas[idea_id]["title"][:50])
                     try:
                         tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)
-                    except ControllerHOLD:
-                        raise
                     except TerminationUnconfirmed:
                         # A child may exist even though launch never returned
                         # a process object. Do not repair/reset/relaunch it.
@@ -2128,8 +2099,7 @@ class OrzePhaseMixin:
         try:
             _hk_interval = 1800  # 30 min
             _hk_now = time.time()
-            if (getattr(self, "_controller_session", None) is None
-                    and _hk_now - self._last_housekeep >= _hk_interval):
+            if _hk_now - self._last_housekeep >= _hk_interval:
                 from orze_substrate import housekeeper as _hk
                 _prof_cyc = ((self.role_states or {}).get("professor")
                              or {}).get("cycles", 0) or 0

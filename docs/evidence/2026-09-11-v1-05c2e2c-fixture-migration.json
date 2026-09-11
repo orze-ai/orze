@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2c",
+  "author": "core_review",
+  "status": "two_old_fixture_migrations_frozen_for_epoch2",
+  "ownership": {
+    "edited_tests": [
+      "tests/test_controller_start_stop_admission.py",
+      "tests/test_control_outcome.py"
+    ],
+    "edited_production": [],
+    "edited_other_tests": [],
+    "new_test_cases": 0,
+    "no_commits_or_pushes": true
+  },
+  "baseline": "99632588f5ed09248897a7b24719e8359b5115dc",
+  "classification": "Compatibility fixture construction/access contract updates, not historical product defects or new API absence reds",
+  "full_epoch1": {
+    "provenance": "Reported by root; not executed by this author",
+    "failed": 4,
+    "passed": 3508,
+    "skipped": 7,
+    "seconds": 561.85,
+    "core_files": 664,
+    "pro_files": 223,
+    "total_files": 887,
+    "pre_post_exact": true,
+    "retained_as_failed_epoch": true
+  },
+  "independent_before": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_start_stop_admission.py::test_direct_orze_run_preserves_pid_and_never_acquires_resources tests/test_control_outcome.py::test_unreadable_marker_probe_refuses_without_treating_it_as_absent --tb=short",
+    "exit_code": 1,
+    "failed": 4,
+    "seconds": 0.96,
+    "chunk": "6a3b57",
+    "failures": [
+      {
+        "cases": 3,
+        "cause": "Legacy SimpleNamespace test holder lacks cfg, set by the real Orze constructor; AttributeError occurs before sentinel gate."
+      },
+      {
+        "cases": 1,
+        "cause": "Read-only gate now lstat-checks the registered ownership namespace before old sentinels; PermissionError still refuses correctly but exact old access list omits the additional namespace."
+      }
+    ],
+    "not_a_production_cleanup_failure": true
+  },
+  "snapshots": {
+    "files": [
+      {
+        "path": "tests/test_controller_start_stop_admission.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2c-before-start-stop-admission-fixture.py",
+        "sha256": "c58b5136c8d90d1f7b100304da703b406c4255a93571ba40db1b7f61e40f8ffc",
+        "bytes": 5625
+      },
+      {
+        "path": "tests/test_control_outcome.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2c-before-control-outcome-access-fixture.py",
+        "sha256": "7fd25c1339eb8f8a6f1305c8793b67d45346e91b181d5421c24fe228e4bf61c7",
+        "bytes": 3747
+      }
+    ],
+    "complete_file_byte_exact_to_git_and_preedit_worktree": true,
+    "created_via": "apply_patch from complete git show output",
+    "validation_command": "python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess\npairs=[('tests/test_controller_start_stop_admission.py','docs/evidence/snapshots/v1-05c2e2c-before-start-stop-admission-fixture.py'),('tests/test_control_outcome.py','docs/evidence/snapshots/v1-05c2e2c-before-control-outcome-access-fixture.py')]\noutput=[]\nfor src,snapshot in pairs:\n old=subprocess.check_output(['git','show','99632588f5ed09248897a7b24719e8359b5115dc:'+src]);current=pathlib.Path(src).read_bytes();saved=pathlib.Path(snapshot).read_bytes()\n assert old==current==saved\n output.append({'path':src,'snapshot':snapshot,'sha256':hashlib.sha256(old).hexdigest(),'bytes':len(old)})\nprint(json.dumps(output))\nPY",
+    "exit_code": 0,
+    "chunk": "84258d"
+  },
+  "approved_changes": [
+    {
+      "path": "tests/test_controller_start_stop_admission.py",
+      "change": "Add cfg=p.cfg to existing SimpleNamespace runner. All 23 original Assert nodes unchanged."
+    },
+    {
+      "path": "tests/test_control_outcome.py",
+      "change": "Add exact _controller_registration.lock.source-lock as first item in the final expected calls list. The original .orze_disabled then .orze_stop_all order and all other assertions/raises/mocks remain unchanged."
+    }
+  ],
+  "AST": {
+    "files": [
+      {
+        "path": "tests/test_controller_start_stop_admission.py",
+        "before_sha256": "c58b5136c8d90d1f7b100304da703b406c4255a93571ba40db1b7f61e40f8ffc",
+        "after_sha256": "ea6c491a3a90478bdd9e4cc23e9658d50a065a9111b676db82aaee5476c6c045",
+        "before_assert_sites": 23,
+        "after_assert_sites": 23,
+        "approved_change": "one cfg=p.cfg keyword",
+        "whole_AST_identical_after_only_approved_change_removed": true
+      },
+      {
+        "path": "tests/test_control_outcome.py",
+        "before_sha256": "7fd25c1339eb8f8a6f1305c8793b67d45346e91b181d5421c24fe228e4bf61c7",
+        "after_sha256": "8a9618ec75d6ec0193287fe407a3e4f49c3dc893f979e1c570a7fb7443235d07",
+        "before_assert_sites": 11,
+        "after_assert_sites": 11,
+        "approved_change": "one exact access-list item before unchanged sentinel sequence",
+        "whole_AST_identical_after_only_approved_change_removed": true
+      }
+    ],
+    "before_total_assert_sites": 34,
+    "after_total_assert_sites": 34,
+    "assert_nodes_identical_except_one_approved_list_item": true,
+    "all_other_whole_file_AST_identical": true,
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,pathlib\npairs=[('tests/test_controller_start_stop_admission.py','docs/evidence/snapshots/v1-05c2e2c-before-start-stop-admission-fixture.py'),('tests/test_control_outcome.py','docs/evidence/snapshots/v1-05c2e2c-before-control-outcome-access-fixture.py')]\nout=[]\nfor path,snapshot in pairs:\n old=ast.parse(pathlib.Path(snapshot).read_text());new=ast.parse(pathlib.Path(path).read_text())\n oldassert=[ast.dump(n) for n in ast.walk(old) if isinstance(n,ast.Assert)]\n newassert=[ast.dump(n) for n in ast.walk(new) if isinstance(n,ast.Assert)]\n if path.endswith('start_stop_admission.py'):\n  assert oldassert==newassert\n  fn=next(n for n in new.body if isinstance(n,ast.FunctionDef) and n.name=='test_direct_orze_run_preserves_pid_and_never_acquires_resources')\n  call=next(n.value for n in fn.body if isinstance(n,ast.Assign) and any(isinstance(x,ast.Name) and x.id=='runner' for x in n.targets))\n  added=[x for x in call.keywords if x.arg=='cfg'];assert len(added)==1\n  assert ast.dump(added[0].value)==ast.dump(ast.parse('p.cfg',mode='eval').body)\n  call.keywords.remove(added[0]);kind='one cfg=p.cfg keyword'\n else:\n  changed=[(a,b) for a,b in zip(oldassert,newassert) if a!=b];assert len(changed)==1\n  fn=next(n for n in new.body if isinstance(n,ast.FunctionDef) and n.name=='test_unreadable_marker_probe_refuses_without_treating_it_as_absent')\n  assertion=fn.body[-1];assert isinstance(assertion,ast.Assert)\n  values=assertion.test.comparators[0].elts\n  assert values[0].value=='_controller_registration.lock.source-lock'\n  values.pop(0);kind='one exact access-list item before unchanged sentinel sequence'\n assert ast.dump(old)==ast.dump(new)\n out.append({'path':path,'before_sha256':hashlib.sha256(pathlib.Path(snapshot).read_bytes()).hexdigest(),'after_sha256':hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest(),'before_assert_sites':len(oldassert),'after_assert_sites':len(newassert),'approved_change':kind,'whole_AST_identical_after_only_approved_change_removed':True})\nprint(json.dumps(out))\nPY",
+    "exit_code": 0,
+    "chunk": "db7ccc"
+  },
+  "after": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_start_stop_admission.py tests/test_control_outcome.py tests/test_managed_run.py --tb=short",
+    "exit_code": 0,
+    "passed": 73,
+    "seconds": 2.44,
+    "chunk": "877a3f",
+    "scope": "Two modified files 18+10 cases and unchanged managed_run45. Not a whole-Core/Pro run."
+  },
+  "unchanged_other_scope": {
+    "previous_author_inventory_files": 19,
+    "all_current_hashes_equal_to_previous_final_inventory": true,
+    "previous_author_report": "docs/evidence/2026-09-11-v1-05c2e2c-controller-drain-author.json",
+    "previous_author_report_sha256": "53cac8b551ebfa3f8c6b243c4a0ce03e84a303f38d2acd95ec919113cdd388bb",
+    "managed_run_sha256": "8dbb40c9f08f31cb084ab301434a0c8ca1c8298b0ca1d5e4ea6048a6ef7a73b7",
+    "note": "Root performs whole 887-file epoch comparison; this author does not replace it with this bounded check."
+  },
+  "diff_check": {
+    "exit_code": 0,
+    "chunk": "14a457",
+    "line_changes_per_file": "one old line replaced by one minimally extended line"
+  },
+  "safety": {
+    "real_GPU_or_provider_execution": false,
+    "host_process_scans": false,
+    "all_OS_launch_boundaries_explicit_spies": true,
+    "source_changed_to_accept_invalid_fixture": false
+  }
+}

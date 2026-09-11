@@ -919,8 +919,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                       iteration: int, state_dict: dict, lake,
                       hostname: str, instance_uuid: str,
                       kill_all: bool = False, *, managed: bool = False,
-                      pid_file_path: Path | None = None,
-                      controller_session=None) -> None:
+                      pid_file_path: Path | None = None) -> None:
     """Terminate roles, detach or kill training/eval, save state, clean up.
 
     Args:
@@ -937,9 +936,6 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
         kill_all: If True, kill training and eval processes too (not just
                   detach them). Used by `orze --stop` to fully stop everything.
     """
-    if controller_session is not None:
-        return _profile_shutdown(results_dir, cfg, active, active_evals,
-                                 active_roles, state_dict, lake, controller_session)
     logger.info("Shutting down gracefully (kill_all=%s)...", kill_all)
     training_count = len(active)
     eval_count = len(active_evals)
@@ -1137,57 +1133,6 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     active.update(held_training)
     active_evals.clear()
     active_evals.update(held_evals)
-
-
-def _profile_shutdown(results_dir, cfg, active, active_evals, active_roles,
-                      state_dict, lake, session):
-    """Consume captured native/role actions; resources belong to the session.
-
-    A stale delivery's True is not closure, nor is an empty map. Any unknown
-    or changed slot remains held; no legacy PID fallback or resource close.
-    """
-    from orze.engine.controller_control import ControllerHOLD
-    from orze.engine.controller_members import require_settled_process
-    from orze.engine.shutdown_publication import handle_shutdown
-    from orze.engine.role_delivery import stop_owned_role
-    from orze.engine.role_supervision import supervised_role_owner
-    captured = [(active, dict(active), "training"),
-                (active_evals, dict(active_evals), "evaluation"),
-                (active_roles, dict(active_roles), "role")]
-    failures = []
-    for mapping, snapshot, kind in captured:
-        for key, tracked in snapshot.items():
-            try:
-                if mapping.get(key) is not tracked:
-                    raise ControllerHOLD("controller_shutdown_slot_changed")
-                if kind == "role":
-                    owner = supervised_role_owner(tracked)
-                    if owner is None or stop_owned_role(tracked) is not True:
-                        raise ControllerHOLD("controller_shutdown_role_unsettled")
-                    # Known no-exec role rollback normally removes its slot at
-                    # the launch consumer. A pending holder here stays HOLD.
-                    require_settled_process(owner.process)
-                else:
-                    ref = getattr(tracked, "attempt_ref", None)
-                    phase = getattr(ref, "phase", None)
-                    if phase not in ({"training", "posthoc"} if kind == "training" else {"evaluation"}):
-                        raise ControllerHOLD("controller_shutdown_native_reference_required")
-                    if handle_shutdown(tracked, results_dir, phase, _stop_for_shutdown,
-                                       lake=lake, cfg=cfg) is not True:
-                        raise ControllerHOLD("controller_shutdown_action_unsettled")
-                    require_settled_process(tracked.process)
-                if mapping.get(key) is not tracked:
-                    raise ControllerHOLD("controller_shutdown_slot_changed")
-                del mapping[key]
-            except BaseException as exc:
-                failures.append(exc)
-    # An object installed after capture is never silently cleared.
-    if any(mapping for mapping, _, _ in captured):
-        failures.append(ControllerHOLD("controller_shutdown_slots_remaining"))
-    if failures:
-        session.fail(failures[0])
-        raise ControllerHOLD("controller_shutdown_incomplete") from failures[0]
-    save_state(results_dir, state_dict)
 
 
 def atexit_cleanup(active: dict, active_evals: dict,

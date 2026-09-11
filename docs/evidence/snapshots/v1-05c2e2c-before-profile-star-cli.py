@@ -602,6 +602,9 @@ Examples:
         from orze.reporting.report_cli import run_report_only
         return run_report_only(args)
 
+    if not _find_pro_key():
+        maybe_star()
+
     # --- subcommand dispatch ---
     command = getattr(args, "command", None)
 
@@ -1338,12 +1341,6 @@ Examples:
     # --research-only is an alias for --role-only research
     if args.research_only:
         args.role_only = "research"
-
-    # First-run social prompting is confined to the ordinary legacy launch.
-    # Registered controllers and control/read-only commands must not spawn
-    # untracked gh processes before their profile or observer is established.
-    if not local_stop_profile and not _find_pro_key():
-        maybe_star()
 
     # Exact controller identity is checked before GPU discovery and before
     # any admin thread or orchestrator state can be created.  Stop/disable

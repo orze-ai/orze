@@ -408,8 +408,6 @@ def run_native_artifact_preflight(idea_id, results_dir, cfg, lake):
             "started_at": datetime.fromtimestamp(started, timezone.utc).isoformat(),
             "gpu_visibility": "hidden", **captured.identity}
         if captured.rejection is not None:
-            from orze.engine.controller_members import record_static_preflight_rejection
-            record_static_preflight_rejection(ref, binding, captured)
             receipt.update(status="configuration_error", **captured.rejection)
             ret, closure, outcome, reason = None, None, "configuration_error", "artifact_preflight_configuration_error"
         else:

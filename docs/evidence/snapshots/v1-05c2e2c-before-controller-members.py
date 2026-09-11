@@ -10,7 +10,6 @@ from __future__ import annotations
 from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass, field
 import copy
-import errno
 import hashlib
 import json
 from pathlib import Path
@@ -18,7 +17,7 @@ import re
 import secrets
 import sqlite3
 
-from orze.engine.controller_control import ControllerHOLD, ControllerQuiescing, current_controller
+from orze.engine.controller_control import ControllerHOLD, current_controller
 from orze.engine.supervisor_worker import canonical
 
 
@@ -152,11 +151,7 @@ def _current(member, conn):
 
 
 def _new(ctx, kind, identity, *, source=None, command_sha256=None, conn=None, no_os=False):
-    ctx.poll_control(conn=conn)
-    if ctx.quiescing:
-        _qualified_report(ctx, conn, kind, source)
-    else:
-        ctx.check_admission(conn=conn)
+    ctx.check_admission(conn=conn)
     if sum(m.ctx is ctx for m in _OWNERS.values()) >= MAX_MEMBERS:
         raise ControllerHOLD("controller_membership_limit")
     member = _Member(ctx, {"schema": 1, "member_id": secrets.token_hex(24),
@@ -232,8 +227,8 @@ def attempt_created(conn, ref, binding):
         no_os = ref.phase in _REPORTS
         if ref.phase not in _NATIVE and not no_os:
             raise ControllerHOLD("controller_attempt_phase_unsupported")
-        # Only the three existing source-bound no-OS publishers may finish
-        # admitted work after quiesce. This is not a generic cleanup flag.
+        # No blanket cleanup exception: new reports currently obey admission.
+        # Source-qualified post-quiesce report admission is a later extension.
         source = copy.deepcopy(binding.get("source_attempt")) if no_os else None
         if no_os:
             from orze.core.execution_attempts import AttemptRef, require_current
@@ -251,134 +246,6 @@ def _for_ref(ctx, ref):
     if len(found) != 1:
         raise ControllerHOLD("controller_attempt_membership_missing")
     return found[0]
-
-
-def _qualified_report(ctx, conn, kind, source):
-    from orze.core.execution_attempts import AttemptRef, require_current
-    allowed = {"launch_failure_report": {"training", "evaluation", "posthoc"},
-               "pre_script_failure_report": {"pre_script"},
-               "artifact_preflight_failure_report": {"artifact_preflight"}}
-    if kind not in allowed:
-        raise ControllerQuiescing("controller_quiescing")
-    if (conn is None or kind not in allowed or type(source) is not dict
-            or set(source) != {"task_id", "phase", "attempt_id", "generation"}):
-        raise ControllerHOLD("controller_quiesce_report_source_required")
-    ref = AttemptRef(**source)
-    if ref.phase not in allowed[kind]:
-        raise ControllerHOLD("controller_quiesce_report_phase_invalid")
-    member = _for_ref(ctx, ref)
-    _current(member, conn)
-    row = require_current(conn, ref, states=("TERMINAL", "NOT_STARTED"))
-    if (member.payload["action_state"] != "SETTLED"
-            or member.payload["os_state"] not in {"CLOSED", "NO_EXECUTION"}
-            or hashlib.sha256(_encoded(row).encode()).hexdigest() != member.payload["terminal_sha256"]):
-        raise ControllerHOLD("controller_quiesce_report_source_unsettled")
-
-
-def record_static_preflight_rejection(ref, binding, captured):
-    """Explicit producer proof on its known rejection branch, before prepare.
-
-    A missing handle is never sufficient. The producer supplies its captured
-    rejection and admitted inputs; any PREPARING transition invalidates this
-    narrowly scoped no-execution authority. Native effect settlement is later.
-    """
-    ctx = current_controller()
-    if ctx is None:
-        return
-    from orze.core.execution_attempts import require_current
-    reasons = {"network_policy_invalid", "script_missing", "config_missing",
-               "train_extra_env_not_mapping", "offline_flags_conflict_with_required_network"}
-    with ctx.guard(), _connection(ctx) as conn:
-        member = _for_ref(ctx, ref)
-        _current(member, conn)
-        row = require_current(conn, ref, states=("LAUNCHING",))
-        rejection = captured.rejection
-        if (ref.phase != "artifact_preflight" or type(rejection) is not dict
-                or rejection.get("reason") not in reasons
-                or member.process is not None or member.payload["os_state"] != "INTENT"
-                or _encoded(row["binding"]) != _encoded(binding)
-                or _encoded(captured.identity) != _encoded(binding["preflight_identity"])
-                or hashlib.sha256(canonical(captured.command)).hexdigest() != binding["command_sha256"]):
-            raise ControllerHOLD("controller_static_no_execution_unconfirmed")
-        _write(member, conn=conn, os_state="NO_EXECUTION")
-    _verify_committed(member, member.encoded)
-
-
-def member_limit_reached(ctx=None):
-    """Finite-profile soft limit; retain half the hard cap for drain reports."""
-    ctx = current_controller() if ctx is None else ctx
-    if ctx is None:
-        return False
-    with ctx.guard():
-        ctx.poll_control()
-        return sum(m.ctx is ctx for m in _OWNERS.values()) >= MAX_MEMBERS // 2
-
-
-def prove_drained(ctx):
-    """Prove a bounded member inventory, never controller exit or resource ACK."""
-    from orze.core import execution_attempts as attempts
-    from orze.engine.attempt_effect_receipts import _scan
-    from orze.engine.supervised_process import SupervisedProcess
-    with ctx.guard():
-        ctx.poll_control()
-        if not ctx.quiescing or any(tx.ctx is ctx for tx in _TRANSACTIONS.values()):
-            raise ControllerHOLD("controller_drain_not_quiescent")
-        members = sorted((m for m in _OWNERS.values() if m.ctx is ctx), key=lambda m: m.key)
-        if len(members) > MAX_MEMBERS:
-            raise ControllerHOLD("controller_drain_inventory_limit")
-        digest = hashlib.sha256()
-        checked_folders = {}
-        with _connection(ctx) as conn:
-            keys = [r[0] for r in conn.execute(
-                "SELECT member_id FROM controller_members WHERE controller_id=? LIMIT ?",
-                (ctx.controller_id, MAX_MEMBERS + 1))]
-            if set(keys) != {m.key for m in members} or len(keys) != len(members):
-                raise ControllerHOLD("controller_membership_inventory_changed")
-            for member in members:
-                _current(member, conn)
-                value = member.payload
-                if (value["action_state"] != "SETTLED" or value["hold_reason"] is not None
-                        or value["os_state"] not in {"CLOSED", "NO_EXECUTION", "NOT_REQUIRED"}):
-                    raise ControllerHOLD("controller_member_not_drained")
-                if value["os_state"] == "CLOSED":
-                    process = member.process
-                    if (type(process) is not SupervisedProcess or _lookup(process) is not member
-                            or type(process.returncode) is not int or process._uncertainty
-                            or process._supervisor.poll() != 0
-                            or _encoded(process.closure_receipt()) != _encoded(value["closure"])
-                            or _encoded(value["closure"]["binding"]) != _encoded(value["ready"])):
-                        raise ControllerHOLD("controller_member_tree_changed")
-                if value["kind"] in _NATIVE | _REPORTS:
-                    ref = attempts.AttemptRef(**value["identity"]["attempt_ref"])
-                    if not attempts._schema(conn):
-                        raise ControllerHOLD("controller_member_attempt_missing")
-                    row = attempts._row(conn.execute(attempts._SELECT +
-                        " WHERE attempt_id=? COLLATE BINARY", (ref.attempt_id,)).fetchone())
-                    if (row is None or {k: row[k] for k in ("task_id", "phase", "attempt_id", "generation")} != asdict(ref)
-                            or row["state"] not in {"TERMINAL", "NOT_STARTED"}
-                            or hashlib.sha256(_encoded(row).encode()).hexdigest() != value["terminal_sha256"]):
-                        raise ControllerHOLD("controller_member_terminal_changed")
-                    folder = ctx.scope / ref.task_id
-                    if folder not in checked_folders:
-                        checked_folders[folder] = _scan(folder)
-                    if checked_folders[folder].get(ref.attempt_id) != (
-                            row["terminal"].get("effect_receipt_sha256"), True):
-                        raise ControllerHOLD("controller_member_effect_changed")
-                digest.update(canonical([member.key, hashlib.sha256(member.encoded.encode()).hexdigest()]))
-        ctx.poll_control()
-        return {"schema": 1, "controller_id": ctx.controller_id,
-                "member_count": len(members), "members_sha256": digest.hexdigest()}
-
-
-def require_settled_process(process):
-    """Private membership gate for exact captured shutdown slots, not bool ACK."""
-    member = _lookup(process)
-    if member is None:
-        raise ControllerHOLD("controller_shutdown_member_missing")
-    with member.ctx.guard(), _connection(member.ctx) as conn:
-        _current(member, conn)
-        if member.payload["action_state"] != "SETTLED" or member.payload["os_state"] != "CLOSED":
-            raise ControllerHOLD("controller_shutdown_member_unsettled")
 
 
 def attempt_finished(conn, ref):
@@ -487,10 +354,6 @@ def prepare_failed(member, *, no_execution=False):
 
 
 def _stop_once(process):
-    if process._closed is not None:
-        # _accept validated this bound TREE_CLOSED. No writers remain to
-        # stop; ordinary poll still requires the supervisor's normal exit.
-        return
     if not process._stop_sent and process.returncode is None:
         # One small nonblocking local socket frame. No recursive poll/wait and
         # no background receiver competing for private protocol messages.
@@ -499,14 +362,7 @@ def _stop_once(process):
         try:
             process._channel.setblocking(False)
             send_frame(process._channel, {"command": "STOP", "nonce": process._nonce})
-        except BaseException as exc:
-            if isinstance(exc, OSError) and exc.errno in (errno.EPIPE, errno.ECONNRESET, errno.ENOTCONN):
-                # The tree can finish after poll's first receive and before
-                # this send. Only the same reader's validated bound receipt
-                # plus the supervisor's real normal exit resolves that race.
-                process._receive()
-                if process._closed is not None and process._supervisor.poll() == 0:
-                    return
+        except BaseException:
             process._fail("controller_stop_send_uncertain")
 
 

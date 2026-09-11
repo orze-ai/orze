@@ -104,14 +104,6 @@ _roles_unavailable_warned = False
 
 class Orze(OrzePhaseMixin):
     def __init__(self, gpu_ids: List[int], cfg: dict, once: bool = False):
-        from orze.core.controller_profile import controller_profile, profile_fingerprint
-        profile = controller_profile(cfg) is not None
-        if not profile and cfg.get("_controller_profile_fingerprint") is not None:
-            from orze.engine.controller_control import ControllerHOLD
-            raise ControllerHOLD("controller_loaded_profile_erased")
-        if profile:
-            profile_fingerprint(cfg, gpu_ids)
-        self._controller_profile_enabled = profile
         if (not isinstance(gpu_ids, list)
                 or any(isinstance(gpu, bool) or not isinstance(gpu, int)
                        or gpu < 0 for gpu in gpu_ids)
@@ -217,9 +209,6 @@ class Orze(OrzePhaseMixin):
             # Migrate old location (next to ideas.md) to new location (results_dir)
             old_lake = Path(cfg.get("ideas_file", "ideas.md")).parent / "idea_lake.db"
             if old_lake != lake_path and old_lake.exists() and not lake_path.exists():
-                if profile:
-                    from orze.engine.controller_control import ControllerHOLD
-                    raise ControllerHOLD("controller_legacy_catalog_migration_refused")
                 lake_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(str(old_lake), str(lake_path))
                 logger.info("Migrated idea_lake.db: %s -> %s", old_lake, lake_path)
@@ -259,8 +248,6 @@ class Orze(OrzePhaseMixin):
                             logger.error("Disabling notifications to prevent report corruption.")
                             cfg["notifications"]["enabled"] = False
         except Exception as exc:
-            if profile:
-                raise  # No pre-registration fallback to unbound native work.
             self.lake = None
             # Check if results already exist — if so, this is a serious
             # degradation (not a first run), so escalate to ERROR + notify.
@@ -309,8 +296,7 @@ class Orze(OrzePhaseMixin):
         atexit.register(self._atexit_cleanup)
 
     def _atexit_cleanup(self):
-        if (getattr(self, "_controller_session", None) is not None
-                or getattr(self, "_controller_profile_enabled", False)):
+        if getattr(self, "_controller_session", None) is not None:
             # Session failure is sticky. Interpreter exit cannot manufacture
             # action settlement or retry an uncertain resource close.
             return
@@ -994,9 +980,7 @@ class Orze(OrzePhaseMixin):
     def run(self):
         """Run only while this controller exclusively owns its GPU scope."""
         from orze.core.controller_profile import controller_profile
-        if (controller_profile(self.cfg) is not None
-                or getattr(self, "_controller_profile_enabled", False)
-                or self.cfg.get("_controller_profile_fingerprint") is not None):
+        if controller_profile(self.cfg) is not None:
             return self._run_controller_profile()
         from orze.core.control_outcome import require_controller_start_allowed
         require_controller_start_allowed(self.results_dir)
@@ -1027,10 +1011,8 @@ class Orze(OrzePhaseMixin):
                 self._remove_pid_file()
 
     def _run_controller_profile(self):
-        from orze.core.control_outcome import require_controller_start_allowed
         from orze.engine.controller_control import ControllerQuiescing, current_controller
         from orze.engine.controller_session import ControllerSession
-        require_controller_start_allowed(self.results_dir)
         session = ControllerSession(self)
         self._controller_session = session
         try:
@@ -1079,10 +1061,9 @@ class Orze(OrzePhaseMixin):
 
         # Log pro status
         from orze.extensions import has_pro, pro_version
-        pro_available = has_pro(auto_install=False) if profile else has_pro()
-        if pro_available and _run_all_roles_impl is not None:
+        if has_pro() and _run_all_roles_impl is not None:
             logger.info("orze-pro %s detected — autopilot features enabled", pro_version())
-        elif pro_available and _run_all_roles_impl is None:
+        elif has_pro() and _run_all_roles_impl is None:
             logger.error(
                 "orze-pro licensed but role_runner failed to import — "
                 "version mismatch? Try: pip install --upgrade orze orze-pro"

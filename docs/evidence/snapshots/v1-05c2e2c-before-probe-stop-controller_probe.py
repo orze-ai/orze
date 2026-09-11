@@ -28,7 +28,6 @@ import subprocess
 import time
 
 from orze.engine.bounded_executor import _Streams, _closed, _executable, _ready
-from orze.engine.controller_control import ControllerQuiescing
 from orze.engine.supervised_process import (
     SupervisionUnavailable, SupervisionUncertain, prepare_supervised,
 )
@@ -43,10 +42,6 @@ EOF_TIMEOUT = 1.0
 
 class ControllerProbeHOLD(TerminationUnconfirmed):
     """A probe must not become a permissive None/empty inventory on HOLD."""
-
-
-class ControllerProbeCancelled(ControllerProbeHOLD, ControllerQuiescing):
-    """Known controller cancellation; never usable diagnostic output."""
 
 
 def _current_controller():
@@ -176,9 +171,6 @@ def run_probe(*popenargs, **kwargs):
         return subprocess.run(*popenargs, **kwargs)
     try:
         ctx.check_admission()
-    except ControllerQuiescing as exc:
-        # No streams, member intent or OS preparation have been entered.
-        raise ControllerProbeCancelled("controller_probe_admission_rejected") from exc
     except Exception as exc:
         raise ControllerProbeHOLD("controller_probe_admission_rejected") from exc
     try:
@@ -190,7 +182,6 @@ def run_probe(*popenargs, **kwargs):
                 "invocation_id": secrets.token_hex(16), "scope": str(ctx.scope)}
     process = streams = binding = tree = None
     entered = stop_attempted = closed = timed_out = overflow = settled = False
-    quiescing = False
     try:
         streams = _ProbeStreams()
         entered = True
@@ -219,7 +210,6 @@ def run_probe(*popenargs, **kwargs):
         eof_deadline = None
         while True:
             phase = ctx.poll_control()
-            quiescing = quiescing or phase == "QUIESCING"
             if phase == "QUIESCING" and not stop_attempted:
                 # poll() sends the owned nonblocking STOP. Continue draining;
                 # sending STOP is not evidence that the tree has closed.
@@ -262,11 +252,6 @@ def run_probe(*popenargs, **kwargs):
             raise error
         if overflow:
             raise ControllerProbeHOLD("controller_probe_output_limit")
-        if quiescing:
-            # Unlike an uncertain tree or truncated output, this operation
-            # has already closed every pipe and durably settled its member.
-            raise ControllerProbeCancelled(
-                "controller_probe_stopped" if stopped else "controller_probe_cancelled")
         if stopped:
             raise ControllerProbeHOLD("controller_probe_stopped")
         result = subprocess.CompletedProcess(spec["original"], ret, output["stdout"], output["stderr"])

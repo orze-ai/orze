@@ -83,4 +83,4 @@ def test_unreadable_marker_probe_refuses_without_treating_it_as_absent(tmp_path,
     monkeypatch.setattr(Path, "lstat", unreadable)
     with pytest.raises(ControllerStopHOLD, match="controller_stop_state_unverifiable"):
         require_controller_start_allowed(tmp_path)
-    assert calls == ["_controller_registration.lock.source-lock", ".orze_disabled", ".orze_stop_all"]
+    assert calls == [".orze_disabled", ".orze_stop_all"]

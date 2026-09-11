@@ -37,35 +37,9 @@ from orze.cli_setup import (
 )
 from orze.cli_star import maybe_star
 from orze.core.config import load_project_config
-from orze.core.controller_profile import (
-    ControllerProfileError, controller_profile, validate_profile_cli,
-)
 from orze.hardware.gpu import detect_all_gpus
 
 logger = logging.getLogger("orze")
-
-
-def _load_controller_config(args):
-    cfg = load_project_config(args.config_file)
-    validate_profile_cli(cfg, args)
-    return cfg
-
-
-def _stop_controller_command(cfg, timeout):
-    if controller_profile(cfg) is None:
-        from orze.lifecycle import do_stop
-        do_stop(cfg, timeout=timeout)
-        return 75
-    try:
-        from orze.engine.controller_session import CompletedControllerStop, stop_controller
-        outcome = stop_controller(cfg, timeout=timeout)
-    except Exception:
-        print("HOLD: registered controller stop is unconfirmed")
-        return 75
-    if type(outcome) is CompletedControllerStop:
-        return 0
-    print("HOLD: registered controller stop is unconfirmed")
-    return 75
 
 
 def _require_controller_runtime(cfg: dict) -> None:
@@ -602,6 +576,9 @@ Examples:
         from orze.reporting.report_cli import run_report_only
         return run_report_only(args)
 
+    if not _find_pro_key():
+        maybe_star()
+
     # --- subcommand dispatch ---
     command = getattr(args, "command", None)
 
@@ -779,11 +756,7 @@ Examples:
             prepare_managed_idea_run,
             verify_managed_idea_outcome,
         )
-        try:
-            cfg = _load_controller_config(args)
-        except ControllerProfileError as exc:
-            print(f"ERROR: {exc}")
-            return 2
+        cfg = load_project_config(args.config_file)
         if args.timeout is not None:
             cfg["timeout"] = args.timeout
         try:
@@ -876,22 +849,17 @@ Examples:
             return 75
 
     if command == "stop":
-        try:
-            cfg = _load_controller_config(args)
-        except ControllerProfileError as exc:
-            print(f"ERROR: {exc}")
-            return 2
-        return _stop_controller_command(cfg, args.timeout)
+        from orze.lifecycle import do_stop
+        cfg = load_project_config(args.config_file)
+        do_stop(cfg, timeout=args.timeout)
+        # A delivered request is not confirmed process-tree closure.
+        return 75
 
     if command == "start":
         from orze.lifecycle import do_start
         from orze.core.control_outcome import ControllerStopHOLD
         from orze.service.runtime_contract import RuntimeContractError
-        try:
-            cfg = _load_controller_config(args)
-        except ControllerProfileError as exc:
-            print(f"ERROR: {exc}")
-            return 2
+        cfg = load_project_config(args.config_file)
         if args.timeout is not None:
             cfg["timeout"] = args.timeout
         config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
@@ -909,11 +877,7 @@ Examples:
     if command == "restart":
         from orze.lifecycle import do_restart
         from orze.service.runtime_contract import RuntimeContractError
-        try:
-            cfg = _load_controller_config(args)
-        except ControllerProfileError as exc:
-            print(f"ERROR: {exc}")
-            return 2
+        cfg = load_project_config(args.config_file)
         config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
         try:
             do_restart(cfg, timeout=args.timeout, foreground=args.foreground,
@@ -1218,12 +1182,7 @@ Examples:
         return
 
     # Load project config, then apply CLI overrides
-    try:
-        cfg = _load_controller_config(args)
-    except ControllerProfileError as exc:
-        print(f"ERROR: {exc}")
-        return 2
-    local_stop_profile = controller_profile(cfg) is not None
+    cfg = load_project_config(args.config_file)
     cfg["_config_path"] = args.config_file or "orze.yaml"  # stored for mode: research
 
     # Auto-migrate layout if needed (fast path via version check)
@@ -1281,7 +1240,7 @@ Examples:
         return
 
     # Apply CLI overrides
-    if args.timeout is not None and not (local_stop_profile and (args.stop or args.restart)):
+    if args.timeout is not None:
         cfg["timeout"] = args.timeout
     if args.poll is not None:
         cfg["poll"] = args.poll
@@ -1296,7 +1255,9 @@ Examples:
 
     # --stop
     if args.stop:
-        return _stop_controller_command(cfg, args.timeout)
+        from orze.lifecycle import do_stop
+        do_stop(cfg, timeout=args.timeout)
+        return 75
 
     # --restart cannot proceed past an unconfirmed cooperative request.
     if args.restart:
@@ -1339,12 +1300,6 @@ Examples:
     if args.research_only:
         args.role_only = "research"
 
-    # First-run social prompting is confined to the ordinary legacy launch.
-    # Registered controllers and control/read-only commands must not spawn
-    # untracked gh processes before their profile or observer is established.
-    if not local_stop_profile and not _find_pro_key():
-        maybe_star()
-
     # Exact controller identity is checked before GPU discovery and before
     # any admin thread or orchestrator state can be created.  Stop/disable
     # controls above intentionally remain reachable during runtime drift.
@@ -1374,7 +1329,7 @@ Examples:
         sys.exit(1)
 
     # Start admin panel in background thread (unless --role-only or --admin-off)
-    if not local_stop_profile and not args.role_only and not getattr(args, 'no_admin', False):
+    if not args.role_only and not getattr(args, 'no_admin', False):
         try:
             import threading
             from orze.admin.server import run_admin as _run_admin_server

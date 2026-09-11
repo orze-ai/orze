@@ -37,7 +37,6 @@ from orze.core.research_policy import validate_research_policy_config
 from orze.core.prompt_limits import DEFAULT_PROMPT_BYTES, prompt_byte_limit
 from orze.core.artifact_contract import get_artifact_contract
 from orze.core.observation_contract import get_observation_contract
-from orze.core.controller_profile import controller_profile, profile_fingerprint
 from orze.core.role_presets import configured_role_presets, apply_environment_research
 
 logger = logging.getLogger("orze")
@@ -233,7 +232,6 @@ DEFAULT_CONFIG = {
     # Managed systemd launches additionally use an independent ExecStartPre
     # contract, which is required for downgrade-resistant enforcement.
     "controller_runtime": None,
-    "controller_control": None,
     # Optional evidence requirements for ``orze run-idea``. Projects making
     # public or benchmark-comparable claims should enable every requirement;
     # ordinary local experiments retain backward-compatible defaults.
@@ -423,7 +421,6 @@ def load_project_config(path: Optional[str] = None) -> dict:
     prompt_byte_limit(cfg)
     get_artifact_contract(cfg)
     get_observation_contract(cfg)
-    controller_profile(cfg)
 
     # Loud-warn on unresolved ${VAR} placeholders. Calls relying on these
     # (notifications, webhooks) will silently fail at runtime — make the
@@ -553,10 +550,6 @@ def load_project_config(path: Optional[str] = None) -> dict:
         if sealed:
             cfg["sealed_files"] = sealed
 
-    if controller_profile(cfg) is not None:
-        cfg["_config_path"] = str(Path(path or "orze.yaml").absolute())
-        cfg["_controller_workdir"] = str(Path.cwd())
-        cfg["_controller_profile_fingerprint"] = profile_fingerprint(cfg)
     return cfg
 
 
@@ -564,10 +557,6 @@ def _validate_config(cfg: dict) -> tuple:
     """Validate orze config on startup. Returns (errors, warnings) tuple."""
     errors = []
     warnings = []
-    try:
-        controller_profile(cfg)
-    except ValueError as exc:
-        errors.append(str(exc))
     try:
         configured_role_presets(cfg)
     except ValueError as exc:

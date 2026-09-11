@@ -106,9 +106,6 @@ class Orze(OrzePhaseMixin):
     def __init__(self, gpu_ids: List[int], cfg: dict, once: bool = False):
         from orze.core.controller_profile import controller_profile, profile_fingerprint
         profile = controller_profile(cfg) is not None
-        if not profile and cfg.get("_controller_profile_fingerprint") is not None:
-            from orze.engine.controller_control import ControllerHOLD
-            raise ControllerHOLD("controller_loaded_profile_erased")
         if profile:
             profile_fingerprint(cfg, gpu_ids)
         self._controller_profile_enabled = profile
@@ -994,9 +991,7 @@ class Orze(OrzePhaseMixin):
     def run(self):
         """Run only while this controller exclusively owns its GPU scope."""
         from orze.core.controller_profile import controller_profile
-        if (controller_profile(self.cfg) is not None
-                or getattr(self, "_controller_profile_enabled", False)
-                or self.cfg.get("_controller_profile_fingerprint") is not None):
+        if controller_profile(self.cfg) is not None:
             return self._run_controller_profile()
         from orze.core.control_outcome import require_controller_start_allowed
         require_controller_start_allowed(self.results_dir)
@@ -1079,10 +1074,9 @@ class Orze(OrzePhaseMixin):
 
         # Log pro status
         from orze.extensions import has_pro, pro_version
-        pro_available = has_pro(auto_install=False) if profile else has_pro()
-        if pro_available and _run_all_roles_impl is not None:
+        if has_pro() and _run_all_roles_impl is not None:
             logger.info("orze-pro %s detected — autopilot features enabled", pro_version())
-        elif pro_available and _run_all_roles_impl is None:
+        elif has_pro() and _run_all_roles_impl is None:
             logger.error(
                 "orze-pro licensed but role_runner failed to import — "
                 "version mismatch? Try: pip install --upgrade orze orze-pro"

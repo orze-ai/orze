@@ -104,14 +104,6 @@ _roles_unavailable_warned = False
 
 class Orze(OrzePhaseMixin):
     def __init__(self, gpu_ids: List[int], cfg: dict, once: bool = False):
-        from orze.core.controller_profile import controller_profile, profile_fingerprint
-        profile = controller_profile(cfg) is not None
-        if not profile and cfg.get("_controller_profile_fingerprint") is not None:
-            from orze.engine.controller_control import ControllerHOLD
-            raise ControllerHOLD("controller_loaded_profile_erased")
-        if profile:
-            profile_fingerprint(cfg, gpu_ids)
-        self._controller_profile_enabled = profile
         if (not isinstance(gpu_ids, list)
                 or any(isinstance(gpu, bool) or not isinstance(gpu, int)
                        or gpu < 0 for gpu in gpu_ids)
@@ -217,9 +209,6 @@ class Orze(OrzePhaseMixin):
             # Migrate old location (next to ideas.md) to new location (results_dir)
             old_lake = Path(cfg.get("ideas_file", "ideas.md")).parent / "idea_lake.db"
             if old_lake != lake_path and old_lake.exists() and not lake_path.exists():
-                if profile:
-                    from orze.engine.controller_control import ControllerHOLD
-                    raise ControllerHOLD("controller_legacy_catalog_migration_refused")
                 lake_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(str(old_lake), str(lake_path))
                 logger.info("Migrated idea_lake.db: %s -> %s", old_lake, lake_path)
@@ -259,8 +248,6 @@ class Orze(OrzePhaseMixin):
                             logger.error("Disabling notifications to prevent report corruption.")
                             cfg["notifications"]["enabled"] = False
         except Exception as exc:
-            if profile:
-                raise  # No pre-registration fallback to unbound native work.
             self.lake = None
             # Check if results already exist — if so, this is a serious
             # degradation (not a first run), so escalate to ERROR + notify.
@@ -309,11 +296,6 @@ class Orze(OrzePhaseMixin):
         atexit.register(self._atexit_cleanup)
 
     def _atexit_cleanup(self):
-        if (getattr(self, "_controller_session", None) is not None
-                or getattr(self, "_controller_profile_enabled", False)):
-            # Session failure is sticky. Interpreter exit cannot manufacture
-            # action settlement or retry an uncertain resource close.
-            return
         try:
             atexit_cleanup(
                 self.active, self.active_evals, self.active_roles,
@@ -591,13 +573,12 @@ class Orze(OrzePhaseMixin):
 
     def _graceful_shutdown(self, kill_all=False):
         managed = bool(self.cfg.get("_managed_idea_id"))
-        return graceful_shutdown(
+        graceful_shutdown(
             self.results_dir, self.cfg, self.active, self.active_evals,
             self.active_roles, self.iteration, self._build_state_dict(),
             self.lake, self._hostname, self._instance_uuid,
             kill_all=(True if managed else kill_all), managed=managed,
-            pid_file_path=getattr(self, "_pid_file", None),
-            controller_session=getattr(self, "_controller_session", None))
+            pid_file_path=getattr(self, "_pid_file", None))
 
     def _write_shutdown_heartbeat(self):
         write_shutdown_heartbeat(self.results_dir, self._hostname,
@@ -643,11 +624,6 @@ class Orze(OrzePhaseMixin):
         this follower becomes the new leader automatically. If we were
         already leader, just refresh the heartbeat.
         """
-        session = getattr(self, "_controller_session", None)
-        if session is not None:
-            from orze.engine.controller_control import current_controller
-            current_controller().check_admission()
-            return  # Exact local registration replaces legacy age takeover.
         if self._leader_handle is not None:
             self._leader_handle.heartbeat()
             return
@@ -658,10 +634,6 @@ class Orze(OrzePhaseMixin):
                         handle.host, handle.pid)
 
     def _is_leader(self) -> bool:
-        if getattr(self, "_controller_session", None) is not None:
-            from orze.engine.controller_control import current_controller
-            current_controller().poll_control()
-            return not current_controller().quiescing
         return self._leader_handle is not None
 
     def _log_follower_status_rate_limited(self, role_name: str) -> None:
@@ -877,8 +849,6 @@ class Orze(OrzePhaseMixin):
             self._pid_file = write_pid_file(self.results_dir)
 
     def _remove_pid_file(self):
-        if getattr(self, "_controller_session", None) is not None:
-            return  # Exact captured PID-file release belongs to finish().
         if self.cfg.get("_managed_idea_id"):
             try:
                 pid_file = getattr(self, "_pid_file", None)
@@ -993,11 +963,6 @@ class Orze(OrzePhaseMixin):
 
     def run(self):
         """Run only while this controller exclusively owns its GPU scope."""
-        from orze.core.controller_profile import controller_profile
-        if (controller_profile(self.cfg) is not None
-                or getattr(self, "_controller_profile_enabled", False)
-                or self.cfg.get("_controller_profile_fingerprint") is not None):
-            return self._run_controller_profile()
         from orze.core.control_outcome import require_controller_start_allowed
         require_controller_start_allowed(self.results_dir)
         self._write_pid_file()
@@ -1026,50 +991,12 @@ class Orze(OrzePhaseMixin):
             if cleanup_pid:
                 self._remove_pid_file()
 
-    def _run_controller_profile(self):
-        from orze.core.control_outcome import require_controller_start_allowed
-        from orze.engine.controller_control import ControllerQuiescing, current_controller
-        from orze.engine.controller_session import ControllerSession
-        require_controller_start_allowed(self.results_dir)
-        session = ControllerSession(self)
-        self._controller_session = session
-        try:
-            session.start()
-            current_controller().check_admission()
-            self._write_pid_file()
-            session.bind_pid_file(self._pid_file)
-            current_controller().check_admission()
-            leases = acquire_gpu_leases(self.gpu_ids)
-            session.bind_gpu_leases(leases)
-            self._gpu_leases = leases
-            current_controller().check_admission()
-            assert_gpu_scope_idle(self.gpu_ids)
-            self._run_leased()
-        except ControllerQuiescing:
-            # Known refusal before new intent is not a missing-tree proof.
-            # Finalization still verifies every already-admitted member.
-            try:
-                self._graceful_shutdown(kill_all=True)
-            except BaseException as exc:
-                session.fail(exc)
-                raise
-        except BaseException as exc:
-            session.fail(exc)
-            raise
-        return session.finish()
-
     def _run_leased(self):
         from orze.engine.completion_events import completion_is_current, filter_completions
         cfg = self.cfg
         managed_idea = cfg.get("_managed_idea_id")
-        profile = getattr(self, "_controller_session", None) is not None
 
         def post_for_event(event):
-            if profile:
-                from orze.engine.controller_control import current_controller
-                current_controller().poll_control()
-                if current_controller().quiescing:
-                    return
             if not completion_is_current(event, self.lake, self.results_dir):
                 return
             kwargs = {"lake": self.lake}
@@ -1079,10 +1006,9 @@ class Orze(OrzePhaseMixin):
 
         # Log pro status
         from orze.extensions import has_pro, pro_version
-        pro_available = has_pro(auto_install=False) if profile else has_pro()
-        if pro_available and _run_all_roles_impl is not None:
+        if has_pro() and _run_all_roles_impl is not None:
             logger.info("orze-pro %s detected — autopilot features enabled", pro_version())
-        elif pro_available and _run_all_roles_impl is None:
+        elif has_pro() and _run_all_roles_impl is None:
             logger.error(
                 "orze-pro licensed but role_runner failed to import — "
                 "version mismatch? Try: pip install --upgrade orze orze-pro"
@@ -1097,7 +1023,7 @@ class Orze(OrzePhaseMixin):
                     "Install orze-pro for autonomous research agents.",
                     ", ".join(roles.keys()))
 
-        if managed_idea or profile:
+        if managed_idea:
             # A one-idea run must not perform daemon-wide recovery, stale-lock
             # cleanup, symlink normalization, or upgrade cleanup.
             from orze.engine.health import HealthMonitor
@@ -1107,12 +1033,12 @@ class Orze(OrzePhaseMixin):
             self._kill_orphans()
         # A prior stop/shutdown marker is not proof of closed writers. Recheck
         # immediately before entering work; never silently clear these markers.
-        if not managed_idea and not profile:
+        if not managed_idea:
             from orze.core.control_outcome import require_controller_start_allowed
             require_controller_start_allowed(self.results_dir)
         # Clear upgrade sentinel if we're already at the target version
         upgrade_sentinel = self.results_dir / ".orze_upgrade"
-        if upgrade_sentinel.exists() and not managed_idea and not profile:
+        if upgrade_sentinel.exists() and not managed_idea:
             try:
                 target = upgrade_sentinel.read_text(encoding="utf-8").strip()
                 def _ver(s):
@@ -1200,7 +1126,7 @@ class Orze(OrzePhaseMixin):
                 pass
 
         # Full reconcile at startup: clear ALL stale queued ideas at once
-        if self.lake and not managed_idea and not profile:
+        if self.lake and not managed_idea:
             try:
                 n = self.lake.reconcile_statuses(
                     str(self.results_dir),
@@ -1236,20 +1162,12 @@ class Orze(OrzePhaseMixin):
             write_sealed_manifest(self.results_dir, hashes)
 
         while self.running:
-            if profile:
-                from orze.engine.controller_control import current_controller
-                from orze.engine.controller_members import member_limit_reached
-                if member_limit_reached():
-                    self._controller_session.request_local_stop("member_limit")
-                current_controller().poll_control()
-                if current_controller().quiescing:
-                    break
             self.iteration += 1
             ts = datetime.datetime.now().strftime("%H:%M:%S")
             logger.info("--- Iteration %d [%s] ---", self.iteration, ts)
 
             # Hot-reload config every 10 iterations (~5 min)
-            if not managed_idea and not profile and self.iteration % 10 == 0:
+            if not managed_idea and self.iteration % 10 == 0:
                 self._hot_reload_config()
 
             # 0a. Early heartbeat — keeps nodes UI alive even when
@@ -1266,12 +1184,12 @@ class Orze(OrzePhaseMixin):
                     pass
 
             # 0b. Auto-upgrade check (rate-limited PyPI + sentinel from other nodes)
-            if not managed_idea and not profile:
+            if not managed_idea:
                 self._check_auto_upgrade()
                 self._check_upgrade_sentinel()
 
             # 0c. Version compatibility check (updates _incompatible_hosts)
-            if not managed_idea and not profile:
+            if not managed_idea:
                 try:
                     self._check_cluster_versions()
                 except Exception:
@@ -1290,7 +1208,7 @@ class Orze(OrzePhaseMixin):
             # `orze admin reset-role-state --all-hosts`. Each host clears
             # its own per-host state file once per marker; the marker
             # self-deletes after every host has claimed it.
-            if not managed_idea and not profile:
+            if not managed_idea:
                 try:
                     from orze.admin.reset_role_state import consume_marker_on_this_host
                     consume_marker_on_this_host(self.results_dir)
@@ -1308,7 +1226,7 @@ class Orze(OrzePhaseMixin):
             # 2. Periodic maintenance (orphans + GC, locked for multi-machine)
             cleanup_cfg = cfg.get("cleanup") or {}
             cleanup_interval = cleanup_cfg.get("interval", 100)
-            if (not managed_idea and not profile and cleanup_interval > 0
+            if (not managed_idea and cleanup_interval > 0
                     and self.iteration % cleanup_interval == 0):
                 cleanup_lock = self.results_dir / "_cleanup_lock"
                 if _fs_lock(cleanup_lock, stale_seconds=300):
@@ -1328,14 +1246,14 @@ class Orze(OrzePhaseMixin):
                     logger.debug("Cleanup lock held by another host, skipping")
 
             # 2b. Periodic orphan cleanup (every 10 iterations ≈ 5 min)
-            if not managed_idea and not profile and self.iteration % 10 == 0:
+            if not managed_idea and self.iteration % 10 == 0:
                 try:
                     self._kill_orphans()
                 except Exception:
                     pass
 
             # 2b''. FSM dead-PID reaper (every 10 iterations ≈ 5 min, v4.5)
-            if (not managed_idea and not profile and self.lake
+            if (not managed_idea and self.lake
                     and self.iteration % 10 == 0):
                 try:
                     self.lake.reap_dead_claims(max_age_minutes=15)
@@ -1343,7 +1261,7 @@ class Orze(OrzePhaseMixin):
                     logger.debug("FSM dead-PID reaper failed: %s", e)
 
             # 2b'''. FSM catch-up for missing terminal transitions (every 20 iterations ≈ 10 min)
-            if (not managed_idea and not profile and self.lake
+            if (not managed_idea and self.lake
                     and self.iteration % 20 == 0):
                 try:
                     self.lake.catch_up_missing_terminals(
@@ -1355,7 +1273,7 @@ class Orze(OrzePhaseMixin):
 
             # 2b'. F7: every 30 min, mark 'running' rows whose training
             # process has died as 'failed' with reason orphaned_pid.
-            if not managed_idea and not profile and self.iteration % 60 == 0:
+            if not managed_idea and self.iteration % 60 == 0:
                 try:
                     reconcile_running_dead_pids(cfg)
                 except Exception as e:
@@ -1380,7 +1298,7 @@ class Orze(OrzePhaseMixin):
                         extra = mh_cfg.get("patterns") or []
                         maximize = mh_cfg.get("maximize", True)
                         inferrer = None
-                        if not profile and mh_cfg.get("llm_fallback", True):
+                        if mh_cfg.get("llm_fallback", True):
                             try:
                                 from orze_pro.agents.pattern_inference import (
                                     infer_metric_patterns,
@@ -1501,11 +1419,6 @@ class Orze(OrzePhaseMixin):
             for event in eval_finished:
                 post_for_event(event)
 
-            if profile:
-                from orze.engine.controller_control import current_controller
-                current_controller().poll_control()
-                if current_controller().quiescing:
-                    break
             if not self.running:
                 break
 
@@ -1518,8 +1431,6 @@ class Orze(OrzePhaseMixin):
                 try:
                     self._run_all_roles()
                 except Exception as e:
-                    if profile:
-                        raise
                     logger.error("Error in _run_all_roles: %s — continuing", e)
                     notify("role_management_error", {"error": str(e)}, cfg)
 
@@ -1551,11 +1462,6 @@ class Orze(OrzePhaseMixin):
 
             # 7. Launch training on free GPUs + circuit breaker
             free = self._launch_training(unclaimed, disk_ok, ideas)
-            if profile:
-                from orze.engine.controller_control import current_controller
-                current_controller().poll_control()
-                if current_controller().quiescing:
-                    break
 
             # 7b. Persist one local, privacy-safe scheduler/GPU observation.
             # The sampler queries exactly this controller's physical scope;
@@ -1713,11 +1619,6 @@ class Orze(OrzePhaseMixin):
                 break
 
         # Main loop exited (signal received or --once finished)
-        if profile:
-            # Always route through owned consumers, including an empty public
-            # map. Only the session can certify the separate member inventory.
-            self._graceful_shutdown(kill_all=True)
-            return
         if self.active or self.active_evals or self.active_roles:
             self._graceful_shutdown(
                 kill_all=(True if managed_idea else getattr(

@@ -1,0 +1,620 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2c",
+  "scope": "Strict local_stop_v1 configuration/CLI boundary and Pro no-GO activation refusal",
+  "status": "owned_final_freeze_product_aggregate_owned_by_root",
+  "recorded_at_utc": "2026-09-11 05:59:51 UTC",
+  "ownership": {
+    "author": "pro_review",
+    "authored": [
+      "Core src/orze/core/controller_profile.py",
+      "Core src/orze/core/config.py",
+      "Core src/orze/cli.py",
+      "Pro src/orze_pro/engine/role_runner.py",
+      "Core tests/test_controller_profile.py",
+      "Pro tests/test_role_controller_quiesce.py",
+      "Core src/orze/engine/controller_probe.py (known cancellation only)"
+    ],
+    "not_independent_of_own_source": true,
+    "not_owned": [
+      "controller_session observer/request/ACK",
+      "orchestrator/lifecycle/member drain",
+      "real product registration/stop boundary tests"
+    ],
+    "old_tracked_tests_changed_by_this_author": 0
+  },
+  "baseline": {
+    "Core": "99632588f5ed09248897a7b24719e8359b5115dc",
+    "Pro": "527891ade2bed622f098a51bc3a5f947c6e6a2c5"
+  },
+  "snapshot_validation": {
+    "actual_exit_code": 0,
+    "checks": [
+      "git show fixed source byte equality",
+      "complete Python AST parse",
+      "terminal LF"
+    ],
+    "snapshots": [
+      {
+        "repository": "Core",
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-controller-profile-config.py",
+        "source": "src/orze/core/config.py",
+        "sha256": "2d0a48e172b261389ce0096f2288594dfaf04ac1d39a32f71cffdc42f45281a7"
+      },
+      {
+        "repository": "Core",
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-controller-profile-cli.py",
+        "source": "src/orze/cli.py",
+        "sha256": "d963afaeadba4c64daa9266735162be2895572412b339531c4424b1a27f92b4a"
+      },
+      {
+        "repository": "Pro",
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-role-quiesce-runner.py",
+        "source": "src/orze_pro/engine/role_runner.py",
+        "sha256": "ecb994953daeff43ed0f60a1a88303f05c532ec39167edfc18bd3cbb29c73a51"
+      }
+    ]
+  },
+  "tests": {
+    "distinct": 33,
+    "Core": 32,
+    "Pro": 1,
+    "classification": {
+      "new_profile_and_cli_requirements": 30,
+      "disabled_profile_compatibility_controls": 2,
+      "deferred_role_false_integration_requirement": 1
+    },
+    "assert_sites": {
+      "Core": 19,
+      "Pro": 8
+    },
+    "limits": [
+      "Core stop acceptance uses an explicit typed transport double, not genuine ACK or pidfd-exit proof.",
+      "Pro uses a real READY worker and actual STOP/closure, with an explicit synchronous start(False) seam. It isolates the caller branch, not real nonblocking controller request timing.",
+      "The Pro requirement was first green after author implementation; complete fixed baseline module replay then genuinely failed its activation assertion. This is a previously deferred profile integration requirement, not an old publicly enabled controller feature bug.",
+      "New API absence is not counted as a historical red. Repeated runs overlap and are not added to distinct counts."
+    ]
+  },
+  "first_test_fixture_diagnostic": {
+    "repository": "Core",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile.py --tb=short",
+    "exit_code": 1,
+    "failed": 6,
+    "passed": 26,
+    "seconds": 0.68,
+    "classification": "new_test_fixture_premise_error_not_product_failure",
+    "reason": "Manually copied DEFAULT_CONFIG retained ideas_file=None. Six strict declaration cases passed the parser rejection, then the unrelated existing _validate_config warning path attempted Path(None).",
+    "snapshot": "docs/evidence/snapshots/v1-05c2e2c-profile-tests-before-resolved-fixture.py",
+    "snapshot_sha256": "8017c046e91348b2ed385db81efb4e2600020aff99e21b76d44df9d687eaf918",
+    "change": "Add only the fixture's resolved temporary ideas_file path; production unchanged for this correction.",
+    "original_assert_ast_sites": 19,
+    "current_assert_ast_sites": 19,
+    "all_assert_ast_unchanged": true
+  },
+  "runs": [
+    {
+      "repository": "Core",
+      "purpose": "First corrected new requirements",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile.py --tb=short",
+      "exit_code": 0,
+      "passed": 32,
+      "seconds": 0.98
+    },
+    {
+      "repository": "Pro",
+      "purpose": "First actual READY/no-GO caller requirement",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_role_controller_quiesce.py\",\"--tb=short\"]))'",
+      "exit_code": 0,
+      "passed": 1,
+      "seconds": 0.47
+    },
+    {
+      "repository": "Pro",
+      "purpose": "Complete fixed baseline role_runner module replay",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nfrom unittest.mock import patch\nimport pytest\nguard = patch(\"orze_pro._gate.require_license\")\nguard.start()\nfrom orze_pro.engine import role_runner\npath = Path(\"docs/evidence/snapshots/v1-05c2e2c-before-role-quiesce-runner.py\")\nexec(compile(path.read_bytes(), str(path), \"exec\"), role_runner.__dict__)\nraise SystemExit(pytest.main([\"-q\", \"tests/test_role_controller_quiesce.py\", \"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "failed": 1,
+      "seconds": 0.57,
+      "failure": "Original caller continued after start(False) and set _trigger_reason, violating _no_activation; actual STOP/closure already held."
+    },
+    {
+      "repository": "Core",
+      "purpose": "Bounded candidate CLI/config compatibility",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile.py tests/test_cli_stop_authority.py tests/test_cli_upgrade_stop_authority.py tests/test_optional_role_config.py tests/test_prompt_limit_config.py --tb=short",
+      "exit_code": 0,
+      "passed": 63,
+      "seconds": 0.86,
+      "new": 32,
+      "existing": 31,
+      "inventory_note": "No pre/post full inventory was captured for this candidate run; do not substitute later hashes for a measured epoch."
+    },
+    {
+      "repository": "Pro",
+      "purpose": "Bounded actual READY/admission/tree compatibility",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_role_controller_quiesce.py\",\"tests/test_role_launch_admission.py\",\"tests/test_role_owned_tree_closure.py\",\"--tb=short\"]))'",
+      "exit_code": 0,
+      "passed": 10,
+      "seconds": 3.42,
+      "new": 1,
+      "existing": 9,
+      "inventory_note": "Candidate run, not a full repository freeze."
+    },
+    {
+      "repository": "Core",
+      "purpose": "Owned source/test freeze verification",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile.py --tb=short",
+      "exit_code": 0,
+      "passed": 32,
+      "seconds": 0.33
+    },
+    {
+      "repository": "Pro",
+      "purpose": "Owned source/test freeze verification",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_role_controller_quiesce.py\",\"--tb=short\"]))'",
+      "exit_code": 0,
+      "passed": 1,
+      "seconds": 0.45
+    }
+  ],
+  "owned_freeze": {
+    "pre": {
+      "orze-pro/src/orze_pro/engine/role_runner.py": "5871ec0a103fa6803b929ba39573e950c2dc72103e560f1bd20f87dbfc046a03",
+      "orze-pro/tests/test_role_controller_quiesce.py": "03187f573a994fabec4095a58ff7b4edb1f437e0022fb6d955d5ef6f7e8bb19a",
+      "orze/src/orze/cli.py": "4f5b4dd49198e35d2ac8bacd1951f06dde66bf15ed78ce703bf29b20c58d196a",
+      "orze/src/orze/core/config.py": "edcc512b50bc5f6852d57284ef0c18d021569e8fc64c0ee04ef62c290d01fb3e",
+      "orze/src/orze/core/controller_profile.py": "e185f333bdb50c32d938dc0567253b856a4042882caa383dcee38a850768a45f",
+      "orze/tests/test_controller_profile.py": "7a66058c01a5ed489df56c3f7e0746770f1c31501fc799495d47adfdc53e8676"
+    },
+    "post": {
+      "orze-pro/src/orze_pro/engine/role_runner.py": "5871ec0a103fa6803b929ba39573e950c2dc72103e560f1bd20f87dbfc046a03",
+      "orze-pro/tests/test_role_controller_quiesce.py": "03187f573a994fabec4095a58ff7b4edb1f437e0022fb6d955d5ef6f7e8bb19a",
+      "orze/src/orze/cli.py": "4f5b4dd49198e35d2ac8bacd1951f06dde66bf15ed78ce703bf29b20c58d196a",
+      "orze/src/orze/core/config.py": "edcc512b50bc5f6852d57284ef0c18d021569e8fc64c0ee04ef62c290d01fb3e",
+      "orze/src/orze/core/controller_profile.py": "e185f333bdb50c32d938dc0567253b856a4042882caa383dcee38a850768a45f",
+      "orze/tests/test_controller_profile.py": "7a66058c01a5ed489df56c3f7e0746770f1c31501fc799495d47adfdc53e8676"
+    },
+    "exact": true,
+    "files": 6,
+    "hash_command": "python3 - <<'PY'\nimport hashlib,json\nfrom pathlib import Path\nc=Path.cwd(); p=c.parent/'orze-pro'\nprint(json.dumps({str(root.name+'/'+name):hashlib.sha256((root/name).read_bytes()).hexdigest() for root,names in [(c,['src/orze/core/controller_profile.py','src/orze/core/config.py','src/orze/cli.py','tests/test_controller_profile.py']),(p,['src/orze_pro/engine/role_runner.py','tests/test_role_controller_quiesce.py'])] for name in names},sort_keys=True))\nPY",
+    "scope": "Only the six owned source/test files across the last two runs; root integration files were concurrently under development."
+  },
+  "contract_limits": [
+    "Default off; unrelated legacy configuration remains permissive.",
+    "Strict parsed full public JSON fingerprint, selected fixed path bindings and exactly configured physical GPU set; private runtime additions and untrusted stamp are not authority.",
+    "Same launch/observer working directory; all start subcommand modes, role-only and run-idea unsupported. Enabled foreground controller skips default admin and raw GPU discovery.",
+    "Telemetry/bot/notifications/retrospection/custom cleanup/metric LLM/remote/fleet/implicit fixer/ELO disabled or rejected as specified by parser; no policy silently disabled by this parser.",
+    "Stop waits do not change training timeout configuration. Only exact CompletedControllerStop type permits enabled CLI exit zero; true confirmation validation is delegated to root's observer implementation.",
+    "No restart, enable, SourceLock transfer, multi-controller/multi-host recovery, or Director positive ACK is implemented by these changes.",
+    "No paid provider, live GPU workload, host scan, holdout, or unmanaged signal test."
+  ],
+  "review_feedback_to_root": [
+    {
+      "scope": "Independent read of root-owned Session integration",
+      "finding": "At observed candidate source, Session captured post-constructor fingerprint without comparing loader stamp. Reported need for registration-time validation of the load-time configuration binding.",
+      "status": "root independently reproduced candidate behavior and implemented Session/Observer stamp gate; not authored here",
+      "not_a_frozen_behavior_red": true
+    },
+    {
+      "scope": "Read-only default extension and profile support review",
+      "findings": [
+        "Root/Core author notified of _run_leased has_pro(auto_install=True) raw pip route.",
+        "Root/Core author notified of phases SOP validate_idea raw train --help route.",
+        "Runtime strategy_team role injection mutates frozen public configuration and can write a trigger; proposed unsupported-profile restriction, distinct from loader-time environment_research expansion."
+      ],
+      "classification": "read-only findings; no independent behavior red claimed by this author"
+    }
+  ],
+  "first_owned_freeze_source_test_sha256": {
+    "orze-pro/src/orze_pro/engine/role_runner.py": "5871ec0a103fa6803b929ba39573e950c2dc72103e560f1bd20f87dbfc046a03",
+    "orze-pro/tests/test_role_controller_quiesce.py": "03187f573a994fabec4095a58ff7b4edb1f437e0022fb6d955d5ef6f7e8bb19a",
+    "orze/src/orze/cli.py": "4f5b4dd49198e35d2ac8bacd1951f06dde66bf15ed78ce703bf29b20c58d196a",
+    "orze/src/orze/core/config.py": "edcc512b50bc5f6852d57284ef0c18d021569e8fc64c0ee04ef62c290d01fb3e",
+    "orze/src/orze/core/controller_profile.py": "e185f333bdb50c32d938dc0567253b856a4042882caa383dcee38a850768a45f",
+    "orze/tests/test_controller_profile.py": "7a66058c01a5ed489df56c3f7e0746770f1c31501fc799495d47adfdc53e8676"
+  },
+  "entry_gate_addendum": {
+    "ownership": "Author correction to own candidate profile/CLI files; not independent self-review.",
+    "distinct_new_cases": 4,
+    "classification": {
+      "metadata_key_presence_draft_contract_failures": 2,
+      "actual_cli_star_call_draft_failures": 2
+    },
+    "snapshot_sources": [
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-managed-profile-gate.py",
+        "source": "src/orze/core/controller_profile.py",
+        "sha256": "e185f333bdb50c32d938dc0567253b856a4042882caa383dcee38a850768a45f",
+        "complete": true
+      },
+      {
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-profile-star-cli.py",
+        "source": "src/orze/cli.py",
+        "sha256": "4f5b4dd49198e35d2ac8bacd1951f06dde66bf15ed78ce703bf29b20c58d196a",
+        "complete": true
+      }
+    ],
+    "frozen_test": {
+      "path": "tests/test_controller_profile_entry_gates.py",
+      "sha256": "ef79fe231abdbf848b283c36f2cd5e8090ec06c73b5f9261c36725c83fc4adf8",
+      "cases": 4,
+      "assert_sites": 0,
+      "mock_assertion_sites": 3
+    },
+    "runs": [
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile_entry_gates.py --tb=short",
+        "exit_code": 1,
+        "failed": 4,
+        "seconds": 0.29,
+        "epoch": "complete saved candidate before correction"
+      },
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile_entry_gates.py tests/test_controller_profile.py tests/test_cli_stop_authority.py tests/test_cli_upgrade_stop_authority.py tests/test_cli_check.py --tb=short",
+        "exit_code": 0,
+        "passed": 56,
+        "seconds": 0.9
+      },
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.core import controller_profile\nfrom orze import cli\nfor module, name in ((controller_profile, \"v1-05c2e2c-before-managed-profile-gate.py\"), (cli, \"v1-05c2e2c-before-profile-star-cli.py\")):\n    path = Path(\"docs/evidence/snapshots\") / name\n    exec(compile(path.read_bytes(), str(path), \"exec\"), module.__dict__)\nraise SystemExit(pytest.main([\"-q\", \"tests/test_controller_profile_entry_gates.py\", \"--tb=short\"]))\nPY",
+        "exit_code": 1,
+        "failed": 4,
+        "seconds": 0.25,
+        "epoch": "complete two-module candidate snapshot replay"
+      }
+    ],
+    "changes": [
+      "Reject presence of _managed_idea_id/_managed_idea_gpu in enabled profile, including explicit None; do not reject ordinary runtime _managed_gpu_ids.",
+      "Move optional first-run social prompt from pre-config global dispatch to ordinary disabled-profile foreground launch after control/read-only early returns. Profile stop and launch never call this raw gh path; configuration is loaded once."
+    ],
+    "limits": [
+      "Managed-key tests exercise parser refusal and explicit None aliases, not a live managed task or actual managed-mode execution.",
+      "The two CLI tests call actual parser/main with explicit maybe_star/process boundary spies; no real gh/network or host marker operation.",
+      "Earlier 33-case epochs and their six actual pre/post hashes remain intact; these four cases add to, not replace, that evidence."
+    ],
+    "source_sha256_after_fix": {
+      "src/orze/core/controller_profile.py": "a716cf9958bb25e589dec06722cb09ff871d5baf1b60b1bbe42e5d05ad52a340",
+      "src/orze/cli.py": "b87647198dab3eee6a163261a4d32584cdad7429ad75ac5fec09c57835f3d780"
+    },
+    "aggregate_distinct_owned_cases": 37
+  },
+  "bootstrap_addendum": {
+    "ownership": "Author changes to own profile and Pro runner; actual product-fixture migration issue independently found by root/runtime, not reattributed here.",
+    "new_cases": 3,
+    "classification": {
+      "strategy_preset_new_draft_restriction": 1,
+      "real_temporary_layout_draft_failure": 1,
+      "disabled_legacy_bootstrap_control": 1
+    },
+    "snapshots": [
+      {
+        "repository": "Core",
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-dynamic-profile-gate.py",
+        "sha256": "a716cf9958bb25e589dec06722cb09ff871d5baf1b60b1bbe42e5d05ad52a340",
+        "source": "src/orze/core/controller_profile.py",
+        "complete": true
+      },
+      {
+        "repository": "Pro",
+        "path": "docs/evidence/snapshots/v1-05c2e2c-before-profile-role-bootstrap.py",
+        "sha256": "5871ec0a103fa6803b929ba39573e950c2dc72103e560f1bd20f87dbfc046a03",
+        "source": "src/orze_pro/engine/role_runner.py",
+        "complete": true
+      }
+    ],
+    "tests": [
+      {
+        "repository": "Core",
+        "path": "tests/test_controller_profile_presets.py",
+        "sha256": "de583f4f0d7f504e775c01855ed4f118afa49f673a3016696353cd4e264a112e",
+        "cases": 1,
+        "assert_sites": 0
+      },
+      {
+        "repository": "Pro",
+        "path": "tests/test_role_profile_bootstrap.py",
+        "sha256": "377d20b34dfb9c7ace4d2d29d0fb61ceaacf50dd02a5bef9ca524e8ebee1b3b9",
+        "cases": 2,
+        "assert_sites": 6
+      }
+    ],
+    "first_fixture_diagnostic": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_role_profile_bootstrap.py\",\"--tb=short\"]))'",
+      "exit_code": 1,
+      "failed": 2,
+      "seconds": 0.2,
+      "classification": "new_fixture_setup_error_not_product_failure",
+      "reason": "Minimal manually built cfg omitted loader-derived _env_ORZE_RESULTS_DIR used by actual orze_path.",
+      "snapshot": "Pro docs/evidence/snapshots/v1-05c2e2c-before-role-bootstrap-fixture-env.py",
+      "snapshot_sha256": "a6d3cd3890ac79214132bf7d94e30fc2f4cc99c08a0811630f245a379143b37e",
+      "correction": "Add only actual loader-derived _env_ORZE_RESULTS_DIR=str(results); no fake layout-version file.",
+      "original_assert_sites": 6,
+      "current_assert_sites": 6,
+      "assert_ast_unchanged": true
+    },
+    "runs": [
+      {
+        "repository": "Core",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile_presets.py --tb=short",
+        "exit_code": 1,
+        "failed": 1,
+        "seconds": 0.18
+      },
+      {
+        "repository": "Pro",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_role_profile_bootstrap.py\",\"--tb=short\"]))'",
+        "exit_code": 1,
+        "failed": 1,
+        "passed": 1,
+        "seconds": 0.2
+      },
+      {
+        "repository": "Core",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile.py tests/test_controller_profile_entry_gates.py tests/test_controller_profile_presets.py tests/test_optional_role_config.py --tb=short",
+        "exit_code": 0,
+        "passed": 42,
+        "seconds": 0.52
+      },
+      {
+        "repository": "Pro",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_role_profile_bootstrap.py\",\"tests/test_role_controller_quiesce.py\",\"tests/test_role_launch_admission.py\",\"tests/test_role_owned_tree_closure.py\",\"--tb=short\"]))'",
+        "exit_code": 0,
+        "passed": 12,
+        "seconds": 3.54
+      },
+      {
+        "repository": "Core",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.core import controller_profile\npath=Path(\"docs/evidence/snapshots/v1-05c2e2c-before-dynamic-profile-gate.py\")\nexec(compile(path.read_bytes(),str(path),\"exec\"),controller_profile.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"tests/test_controller_profile_presets.py\",\"--tb=short\"]))\nPY",
+        "exit_code": 1,
+        "failed": 1,
+        "seconds": 0.15,
+        "purpose": "Complete candidate profile module replay"
+      },
+      {
+        "repository": "Pro",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nfrom unittest.mock import patch\nimport pytest\nguard=patch(\"orze_pro._gate.require_license\");guard.start()\nfrom orze_pro.engine import role_runner\npath=Path(\"docs/evidence/snapshots/v1-05c2e2c-before-profile-role-bootstrap.py\")\nexec(compile(path.read_bytes(),str(path),\"exec\"),role_runner.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"tests/test_role_profile_bootstrap.py\",\"--tb=short\"]))\nPY",
+        "exit_code": 1,
+        "failed": 1,
+        "passed": 1,
+        "seconds": 0.1,
+        "purpose": "Complete candidate runner module replay"
+      }
+    ],
+    "changes": [
+      "Configured strategy_team is unsupported in local_stop_v1; actual configured_role_presets strict parser is reused. Loader-time environment_research remains a separate supported parsed-config expansion.",
+      "Enabled-profile run_all_roles does not call legacy layout migration, dynamic role injectors, bot or telemetry bootstrap. Existing disabled branch retains these calls.",
+      "Temporary modern orze_path trigger remains same inode and bytes; no version.json workaround. The disabled control executes actual migration and verifies the moved destination."
+    ],
+    "limits": [
+      "No actual controller/worker is created by bootstrap2: real temporary filesystem and helper dispatch spies isolate this public entry.",
+      "This does not migrate legacy controller ownership, repair a prior layout, or authorize recovery/start."
+    ],
+    "corrected_source_sha256": {
+      "Core src/orze/core/controller_profile.py": "bd8da2a65ba830ea287c7cc8cdeff48a3c2fb250c9f1350e76c2ed9e83d50380",
+      "Pro src/orze_pro/engine/role_runner.py": "827fec144e8bd7dce8564027bd4c4edcb93c9871c709b8ae75ea03fb4e160b31"
+    },
+    "aggregate_distinct_owned_cases": 40,
+    "aggregate_classification": {
+      "new_profile_requirements": 30,
+      "explicit_compatibility_controls": 3,
+      "deferred_role_false_integration_requirement": 1,
+      "author_candidate_draft_failures": 6
+    }
+  },
+  "derived_route_addendum": {
+    "ownership": "Author correction to own fingerprint implementation, approved new frozen-path requirement.",
+    "test": {
+      "path": "tests/test_controller_profile_routes.py",
+      "sha256": "b27ad3a13d555a01d2ebd2293afed867e12b469101191c027a4fe2b57dc68438",
+      "cases": 1,
+      "assert_sites": 5
+    },
+    "snapshot": {
+      "path": "docs/evidence/snapshots/v1-05c2e2c-before-profile-derived-routes.py",
+      "sha256": "bd8da2a65ba830ea287c7cc8cdeff48a3c2fb250c9f1350e76c2ed9e83d50380",
+      "source": "src/orze/core/controller_profile.py",
+      "complete": true
+    },
+    "first_failure": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile_routes.py --tb=short",
+      "exit_code": 1,
+      "failed": 1,
+      "seconds": 0.2,
+      "reason": "After real load_project_config, changing _env_ORZE_DIR did not change the fingerprint."
+    },
+    "replay_instrument_diagnostic": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.core import controller_profile\npath=Path(\"docs/evidence/snapshots/v1-05c2e2c-before-profile-derived-routes.py\")\nexec(compile(path.read_bytes(),str(path),\"exec\"),controller_profile.__dict__)\nraise SystemExit(pytest.main([\"-q\",\"tests/test_controller_profile_routes.py\",\"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "failed": 1,
+      "seconds": 0.18,
+      "classification": "snapshot_replay_import_binding_error_not_product_red",
+      "reason": "Loader retained the corrected profile_fingerprint from-import while the test used the replayed whole module. This mismatched instrumentation failed the initial unchanged-stamp control, not the intended mutation assertion."
+    },
+    "corrected_replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.core import controller_profile\npath=Path(\"docs/evidence/snapshots/v1-05c2e2c-before-profile-derived-routes.py\")\nexec(compile(path.read_bytes(),str(path),\"exec\"),controller_profile.__dict__)\nfrom orze.core import config\n# Rebind the loader\\'s existing from-imports to the complete replayed module.\nconfig.profile_fingerprint=controller_profile.profile_fingerprint\nconfig.controller_profile=controller_profile.controller_profile\nraise SystemExit(pytest.main([\"-q\",\"tests/test_controller_profile_routes.py\",\"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "failed": 1,
+      "seconds": 0.18,
+      "reason": "Rebind the loader's two existing from-import references to the complete replayed module; actual hash-after-mutation failure matches first candidate."
+    },
+    "correction": "Bind all seven loader-derived _env_ORZE_* path values in the canonical fingerprint; missing keys remain distinct from supplied paths. Private runtime notes and _managed_gpu_ids remain excluded.",
+    "boundary": "Real config loader and temporary orze_path route comparison; no role execution, no claim that this hash test alone establishes runtime enforcement. Parent Session owns actual cwd/load-stamp validation.",
+    "source_sha256_after_fix": "bc842956549156762c8cbfbca081b4f97dfb352aededf0e2280d19d551a4ecb1"
+  },
+  "final_owned_verification": {
+    "recorded_at_utc": "2026-09-11 06:13:27 UTC",
+    "distinct_tests": 41,
+    "Core": 38,
+    "Pro": 3,
+    "classification": {
+      "new_profile_requirements": 30,
+      "explicit_compatibility_controls": 3,
+      "deferred_role_false_integration_requirement": 1,
+      "author_candidate_draft_failures": 7
+    },
+    "scope": "Author's 10-file stable boundary, not root's entire product integration or full suites.",
+    "files": 10,
+    "pre": {
+      "orze-pro/src/orze_pro/engine/role_runner.py": "827fec144e8bd7dce8564027bd4c4edcb93c9871c709b8ae75ea03fb4e160b31",
+      "orze-pro/tests/test_role_controller_quiesce.py": "03187f573a994fabec4095a58ff7b4edb1f437e0022fb6d955d5ef6f7e8bb19a",
+      "orze-pro/tests/test_role_profile_bootstrap.py": "377d20b34dfb9c7ace4d2d29d0fb61ceaacf50dd02a5bef9ca524e8ebee1b3b9",
+      "orze/src/orze/cli.py": "b87647198dab3eee6a163261a4d32584cdad7429ad75ac5fec09c57835f3d780",
+      "orze/src/orze/core/config.py": "edcc512b50bc5f6852d57284ef0c18d021569e8fc64c0ee04ef62c290d01fb3e",
+      "orze/src/orze/core/controller_profile.py": "bc842956549156762c8cbfbca081b4f97dfb352aededf0e2280d19d551a4ecb1",
+      "orze/tests/test_controller_profile.py": "7a66058c01a5ed489df56c3f7e0746770f1c31501fc799495d47adfdc53e8676",
+      "orze/tests/test_controller_profile_entry_gates.py": "ef79fe231abdbf848b283c36f2cd5e8090ec06c73b5f9261c36725c83fc4adf8",
+      "orze/tests/test_controller_profile_presets.py": "de583f4f0d7f504e775c01855ed4f118afa49f673a3016696353cd4e264a112e",
+      "orze/tests/test_controller_profile_routes.py": "b27ad3a13d555a01d2ebd2293afed867e12b469101191c027a4fe2b57dc68438"
+    },
+    "post": {
+      "orze-pro/src/orze_pro/engine/role_runner.py": "827fec144e8bd7dce8564027bd4c4edcb93c9871c709b8ae75ea03fb4e160b31",
+      "orze-pro/tests/test_role_controller_quiesce.py": "03187f573a994fabec4095a58ff7b4edb1f437e0022fb6d955d5ef6f7e8bb19a",
+      "orze-pro/tests/test_role_profile_bootstrap.py": "377d20b34dfb9c7ace4d2d29d0fb61ceaacf50dd02a5bef9ca524e8ebee1b3b9",
+      "orze/src/orze/cli.py": "b87647198dab3eee6a163261a4d32584cdad7429ad75ac5fec09c57835f3d780",
+      "orze/src/orze/core/config.py": "edcc512b50bc5f6852d57284ef0c18d021569e8fc64c0ee04ef62c290d01fb3e",
+      "orze/src/orze/core/controller_profile.py": "bc842956549156762c8cbfbca081b4f97dfb352aededf0e2280d19d551a4ecb1",
+      "orze/tests/test_controller_profile.py": "7a66058c01a5ed489df56c3f7e0746770f1c31501fc799495d47adfdc53e8676",
+      "orze/tests/test_controller_profile_entry_gates.py": "ef79fe231abdbf848b283c36f2cd5e8090ec06c73b5f9261c36725c83fc4adf8",
+      "orze/tests/test_controller_profile_presets.py": "de583f4f0d7f504e775c01855ed4f118afa49f673a3016696353cd4e264a112e",
+      "orze/tests/test_controller_profile_routes.py": "b27ad3a13d555a01d2ebd2293afed867e12b469101191c027a4fe2b57dc68438"
+    },
+    "exact": true,
+    "hash_command": "python3 - <<'PY'\nimport hashlib,json\nfrom pathlib import Path\nc=Path.cwd();p=c.parent/'orze-pro'\nfiles={c:['src/orze/core/controller_profile.py','src/orze/core/config.py','src/orze/cli.py','tests/test_controller_profile.py','tests/test_controller_profile_entry_gates.py','tests/test_controller_profile_presets.py','tests/test_controller_profile_routes.py'],p:['src/orze_pro/engine/role_runner.py','tests/test_role_controller_quiesce.py','tests/test_role_profile_bootstrap.py']}\nprint(json.dumps({root.name+'/'+name:hashlib.sha256((root/name).read_bytes()).hexdigest() for root,names in files.items() for name in names},sort_keys=True))\nPY",
+    "runs": [
+      {
+        "repository": "Core",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile.py tests/test_controller_profile_entry_gates.py tests/test_controller_profile_presets.py tests/test_controller_profile_routes.py --tb=short",
+        "exit_code": 0,
+        "passed": 38,
+        "seconds": 0.54
+      },
+      {
+        "repository": "Pro",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_role_controller_quiesce.py\",\"tests/test_role_profile_bootstrap.py\",\"--tb=short\"]))'",
+        "exit_code": 0,
+        "passed": 3,
+        "seconds": 0.48
+      }
+    ],
+    "old_tracked_test_edits_by_this_author": 0,
+    "snapshot_count": 10,
+    "statement": "All earlier measured source points and failed run classifications remain recorded; repeated test runs are not additive."
+  },
+  "probe_cancellation_addendum": {
+    "ownership": "Narrow author adapter change; two genuine cancellation regression tests and complete old probe/session replay are runtime_evidence-owned, not added to this author's 41 tests.",
+    "before": {
+      "path": "docs/evidence/snapshots/v1-05c2e2c-before-known-cancel-controller-probe.py",
+      "source": "src/orze/engine/controller_probe.py",
+      "sha256": "ded811ad12520757399b6fa0efac93be37cd611bb3b99c653a096f86fe3b345d",
+      "complete": true
+    },
+    "after_sha256": "347c6f8f9f0b06b68abea91ac61d9f6aa9b1b74fddb46b635db6d22b0757fabb",
+    "runtime_owned_test": {
+      "path": "tests/test_controller_probe_stop_boundary.py",
+      "sha256": "d03e7319a338bbc198e1c3dbec089c3318794dac7cfe29f5a1115ac70b6f6973",
+      "cases": 2,
+      "first_red_and_replay_evidence_owner": "runtime_evidence",
+      "counted_in_own_41": false
+    },
+    "semantics": [
+      "ControllerProbeCancelled inherits ControllerProbeHOLD and ControllerQuiescing: old probe callers still cannot turn it into usable inventory, and the product controller can finalize a known cancellation.",
+      "Only explicit initial admission Quiescing before streams/intent or actual closed tree + complete EOF + local FD close + successful member settlement after observed quiescence selects cancellation.",
+      "Timeout, overflow, uncertain supervision, output/close failure remain their prior non-success paths.",
+      "No arbitrary direct exception from the inner prepare call is reclassified. That conservative window may still HOLD; this is not an all-timings positive-ACK claim."
+    ],
+    "initial_fixed_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe_stop_boundary.py tests/test_controller_probe.py tests/test_controller_probe_registered.py tests/test_controller_probe_callers.py tests/test_controller_probe_import.py --tb=short",
+      "exit_code": 0,
+      "passed": 23,
+      "seconds": 4.24,
+      "new_runtime_owned": 2,
+      "existing": 21
+    },
+    "final_bounded_verification": {
+      "recorded_at_utc": "2026-09-11 06:22:22 UTC",
+      "files": 11,
+      "pre": {
+        "orze-pro/src/orze_pro/engine/role_runner.py": "827fec144e8bd7dce8564027bd4c4edcb93c9871c709b8ae75ea03fb4e160b31",
+        "orze-pro/tests/test_role_controller_quiesce.py": "03187f573a994fabec4095a58ff7b4edb1f437e0022fb6d955d5ef6f7e8bb19a",
+        "orze-pro/tests/test_role_profile_bootstrap.py": "377d20b34dfb9c7ace4d2d29d0fb61ceaacf50dd02a5bef9ca524e8ebee1b3b9",
+        "orze/src/orze/cli.py": "b87647198dab3eee6a163261a4d32584cdad7429ad75ac5fec09c57835f3d780",
+        "orze/src/orze/core/config.py": "edcc512b50bc5f6852d57284ef0c18d021569e8fc64c0ee04ef62c290d01fb3e",
+        "orze/src/orze/core/controller_profile.py": "bc842956549156762c8cbfbca081b4f97dfb352aededf0e2280d19d551a4ecb1",
+        "orze/src/orze/engine/controller_probe.py": "347c6f8f9f0b06b68abea91ac61d9f6aa9b1b74fddb46b635db6d22b0757fabb",
+        "orze/tests/test_controller_profile.py": "7a66058c01a5ed489df56c3f7e0746770f1c31501fc799495d47adfdc53e8676",
+        "orze/tests/test_controller_profile_entry_gates.py": "ef79fe231abdbf848b283c36f2cd5e8090ec06c73b5f9261c36725c83fc4adf8",
+        "orze/tests/test_controller_profile_presets.py": "de583f4f0d7f504e775c01855ed4f118afa49f673a3016696353cd4e264a112e",
+        "orze/tests/test_controller_profile_routes.py": "b27ad3a13d555a01d2ebd2293afed867e12b469101191c027a4fe2b57dc68438"
+      },
+      "post": {
+        "orze-pro/src/orze_pro/engine/role_runner.py": "827fec144e8bd7dce8564027bd4c4edcb93c9871c709b8ae75ea03fb4e160b31",
+        "orze-pro/tests/test_role_controller_quiesce.py": "03187f573a994fabec4095a58ff7b4edb1f437e0022fb6d955d5ef6f7e8bb19a",
+        "orze-pro/tests/test_role_profile_bootstrap.py": "377d20b34dfb9c7ace4d2d29d0fb61ceaacf50dd02a5bef9ca524e8ebee1b3b9",
+        "orze/src/orze/cli.py": "b87647198dab3eee6a163261a4d32584cdad7429ad75ac5fec09c57835f3d780",
+        "orze/src/orze/core/config.py": "edcc512b50bc5f6852d57284ef0c18d021569e8fc64c0ee04ef62c290d01fb3e",
+        "orze/src/orze/core/controller_profile.py": "bc842956549156762c8cbfbca081b4f97dfb352aededf0e2280d19d551a4ecb1",
+        "orze/src/orze/engine/controller_probe.py": "347c6f8f9f0b06b68abea91ac61d9f6aa9b1b74fddb46b635db6d22b0757fabb",
+        "orze/tests/test_controller_profile.py": "7a66058c01a5ed489df56c3f7e0746770f1c31501fc799495d47adfdc53e8676",
+        "orze/tests/test_controller_profile_entry_gates.py": "ef79fe231abdbf848b283c36f2cd5e8090ec06c73b5f9261c36725c83fc4adf8",
+        "orze/tests/test_controller_profile_presets.py": "de583f4f0d7f504e775c01855ed4f118afa49f673a3016696353cd4e264a112e",
+        "orze/tests/test_controller_profile_routes.py": "b27ad3a13d555a01d2ebd2293afed867e12b469101191c027a4fe2b57dc68438"
+      },
+      "exact": true,
+      "hash_command": "python3 - <<'PY'\nimport hashlib,json\nfrom pathlib import Path\nc=Path.cwd();p=c.parent/'orze-pro'\nfiles={c:['src/orze/core/controller_profile.py','src/orze/engine/controller_probe.py','src/orze/core/config.py','src/orze/cli.py','tests/test_controller_profile.py','tests/test_controller_profile_entry_gates.py','tests/test_controller_profile_presets.py','tests/test_controller_profile_routes.py'],p:['src/orze_pro/engine/role_runner.py','tests/test_role_controller_quiesce.py','tests/test_role_profile_bootstrap.py']}\nprint(json.dumps({root.name+'/'+name:hashlib.sha256((root/name).read_bytes()).hexdigest() for root,names in files.items() for name in names},sort_keys=True))\nPY",
+      "runs": [
+        {
+          "repository": "Core",
+          "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_profile.py tests/test_controller_profile_entry_gates.py tests/test_controller_profile_presets.py tests/test_controller_profile_routes.py tests/test_controller_probe.py tests/test_controller_probe_registered.py tests/test_controller_probe_callers.py tests/test_controller_probe_import.py --tb=short",
+          "exit_code": 0,
+          "passed": 59,
+          "seconds": 3.3,
+          "own_new": 38,
+          "existing": 21
+        },
+        {
+          "repository": "Pro",
+          "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_role_controller_quiesce.py\",\"tests/test_role_profile_bootstrap.py\",\"--tb=short\"]))'",
+          "exit_code": 0,
+          "passed": 3,
+          "seconds": 0.48,
+          "own_new": 3
+        }
+      ],
+      "counting": "59+3 bounded outcomes overlap earlier runs; author's distinct tests remain 41, not 62."
+    },
+    "fresh_imports": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport json,os,select,signal,subprocess,sys\nfrom pathlib import Path\nroot=Path.cwd();modules=['orze.core.gpu_lease','orze.hardware.gpu','orze.reporting.state','orze.cli','orze.core.execution_attempts','orze.engine.controller_control','orze.engine.controller_members','orze.engine.supervised_process','orze.engine.execution_authority','orze.engine.role_supervision','orze.engine.gpu_slots','orze.idea_lake','orze.core.controller_profile','orze.engine.controller_session','orze.engine.lifecycle']\nprogram=\"from unittest.mock import patch; patch('orze_pro._gate.require_license').start(); import importlib,sys; from pathlib import Path; module=importlib.import_module(sys.argv[1]); assert Path(module.__file__).resolve().is_relative_to(Path(sys.argv[2]).resolve())\"\nenv={**os.environ,'PYTHONDONTWRITEBYTECODE':'1','CUDA_VISIBLE_DEVICES':'','PYTHONPATH':str(root/'src')+os.pathsep+str(root.parent/'orze-pro'/'src')}\nresults=[]\nfor name in modules:\n    child=subprocess.Popen([sys.executable,'-c',program,name,str(root/'src')],stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env)\n    descriptor=os.pidfd_open(child.pid)\n    try:\n        stdout,stderr=child.communicate(timeout=15)\n        assert child.returncode==0,(name,child.returncode,stderr[-3000:])\n        results.append({'module':name,'exit_code':child.returncode})\n    finally:\n        if not select.select([descriptor],[],[],0)[0]:\n            signal.pidfd_send_signal(descriptor,signal.SIGKILL)\n            child.wait(timeout=5)\n        os.close(descriptor)\nprint(json.dumps({'fresh_exec_public_imports':results,'count':len(results),'source_bound':True,'license':'explicit test-only gate patch','no_gpu_processes':True}))\nPY",
+      "exit_code": 0,
+      "count": 15,
+      "all_child_exit_codes": 0,
+      "scope": "Core public imports in individually owned fresh exec children, current repository module path asserted; explicit Pro license gate test seam. Includes lifecycle plus the original fourteen routes (including low-level GPU lease). No GPU query/real nvidia subprocess.",
+      "not_pytest_cases": true
+    },
+    "source_test_changes_during_final_bounded_run": false
+  },
+  "profile_static_audit": {
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,shlex,subprocess\nfrom pathlib import Path\nc=Path.cwd();p=c.parent/'orze-pro'\nr=json.loads((c/'docs/evidence/2026-09-11-v1-05c2e2c-controller-profile-author.json').read_text())\ncommands=[]\ndef visit(value):\n    if isinstance(value,dict):\n        for key,item in value.items():\n            if key.endswith('command') and isinstance(item,str):commands.append(item)\n            else:visit(item)\n    elif isinstance(value,list):\n        for item in value:visit(item)\nvisit(r);heredocs=0\nfor cmd in commands:\n    subprocess.run(['bash','-n'],input=cmd,text=True,capture_output=True,check=True)\n    if \"<<'PY'\" in cmd:\n        ast.parse(cmd.split(\"<<'PY'\",1)[1].split('\\n',1)[1].rsplit('\\nPY',1)[0]);heredocs+=1\n    else:\n        tokens=shlex.split(cmd)\n        if '-c' in tokens:ast.parse(tokens[tokens.index('-c')+1])\nfor name,sha in r['final_owned_verification']['post'].items():\n    repo,rel=name.split('/',1);root=c if repo=='orze' else p\n    assert hashlib.sha256((root/rel).read_bytes()).hexdigest()==sha\nsnapshots=[]\nfor item in r['snapshot_validation']['snapshots']:\n    root=c if item['repository']=='Core' else p\n    raw=(root/item['path']).read_bytes()\n    assert raw==subprocess.check_output(['git','show',r['baseline'][item['repository']]+':'+item['source']],cwd=root)\n    snapshots.append((root,item['path'],item['sha256']))\nfor item in r['entry_gate_addendum']['snapshot_sources']:snapshots.append((c,item['path'],item['sha256']))\nfor item in r['bootstrap_addendum']['snapshots']:snapshots.append((c if item['repository']=='Core' else p,item['path'],item['sha256']))\nitem=r['derived_route_addendum']['snapshot'];snapshots.append((c,item['path'],item['sha256']))\nf=r['first_test_fixture_diagnostic'];snapshots.append((c,f['snapshot'],f['snapshot_sha256']))\nf=r['bootstrap_addendum']['first_fixture_diagnostic'];snapshots.append((p,f['snapshot'].removeprefix('Pro '),f['snapshot_sha256']))\nassert len(snapshots)==10\nfor root,name,sha in snapshots:\n    raw=(root/name).read_bytes();assert hashlib.sha256(raw).hexdigest()==sha;ast.parse(raw);assert raw.endswith(b'\\n')\nfor root,before,after in [(c,r['first_test_fixture_diagnostic']['snapshot'],'tests/test_controller_profile.py'),(p,r['bootstrap_addendum']['first_fixture_diagnostic']['snapshot'].removeprefix('Pro '),'tests/test_role_profile_bootstrap.py')]:\n    asserts=lambda name:[ast.dump(node) for node in ast.walk(ast.parse((root/name).read_bytes())) if isinstance(node,ast.Assert)]\n    assert asserts(before)==asserts(after)\nprint(json.dumps({'exit_code':0,'command_occurrences':len(commands),'heredocs':heredocs,'current_owned_source_test_files':10,'complete_snapshots':10,'git_baseline_byte_equal':3,'new_fixture_assert_groups_unchanged':2}))\nPY",
+    "result": {
+      "exit_code": 0,
+      "command_occurrences": 26,
+      "heredocs": 9,
+      "current_owned_source_test_files": 10,
+      "complete_snapshots": 10,
+      "git_baseline_byte_equal": 3,
+      "new_fixture_assert_groups_unchanged": 2
+    },
+    "scope": "Read-only bash syntax, Python heredoc/-c AST, fixed/current hashes, complete snapshots and two new-fixture assertion preservation checks; no pytest rerun. This was executed before the later probe cancellation addendum; its measured command counts are retained as history."
+  },
+  "static_audit": {
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,shlex,subprocess\nfrom pathlib import Path\nc=Path.cwd();p=c.parent/'orze-pro'\nr=json.loads((c/'docs/evidence/2026-09-11-v1-05c2e2c-controller-profile-author.json').read_text())\ncommands=[]\ndef visit(value):\n    if isinstance(value,dict):\n        for key,item in value.items():\n            if key.endswith('command') and isinstance(item,str):commands.append(item)\n            else:visit(item)\n    elif isinstance(value,list):\n        for item in value:visit(item)\nvisit(r);heredocs=0\nfor cmd in commands:\n    subprocess.run(['bash','-n'],input=cmd,text=True,capture_output=True,check=True)\n    if \"<<'PY'\" in cmd:\n        ast.parse(cmd.split(\"<<'PY'\",1)[1].split('\\n',1)[1].rsplit('\\nPY',1)[0]);heredocs+=1\n    else:\n        tokens=shlex.split(cmd)\n        if '-c' in tokens:ast.parse(tokens[tokens.index('-c')+1])\nfor name,sha in r['probe_cancellation_addendum']['final_bounded_verification']['post'].items():\n    repo,rel=name.split('/',1);root=c if repo=='orze' else p\n    assert hashlib.sha256((root/rel).read_bytes()).hexdigest()==sha\nsnapshots=[]\nfor item in r['snapshot_validation']['snapshots']:\n    root=c if item['repository']=='Core' else p\n    raw=(root/item['path']).read_bytes()\n    assert raw==subprocess.check_output(['git','show',r['baseline'][item['repository']]+':'+item['source']],cwd=root)\n    snapshots.append((root,item['path'],item['sha256']))\nfor item in r['entry_gate_addendum']['snapshot_sources']:snapshots.append((c,item['path'],item['sha256']))\nfor item in r['bootstrap_addendum']['snapshots']:snapshots.append((c if item['repository']=='Core' else p,item['path'],item['sha256']))\nitem=r['derived_route_addendum']['snapshot'];snapshots.append((c,item['path'],item['sha256']))\nf=r['first_test_fixture_diagnostic'];snapshots.append((c,f['snapshot'],f['snapshot_sha256']))\nf=r['bootstrap_addendum']['first_fixture_diagnostic'];snapshots.append((p,f['snapshot'].removeprefix('Pro '),f['snapshot_sha256']))\nitem=r['probe_cancellation_addendum']['before'];snapshots.append((c,item['path'],item['sha256']))\nassert (c/item['path']).read_bytes()==subprocess.check_output(['git','show',r['baseline']['Core']+':'+item['source']],cwd=c)\nassert len(snapshots)==11\nfor root,name,sha in snapshots:\n    raw=(root/name).read_bytes();assert hashlib.sha256(raw).hexdigest()==sha;ast.parse(raw);assert raw.endswith(b'\\n')\nfor root,before,after in [(c,r['first_test_fixture_diagnostic']['snapshot'],'tests/test_controller_profile.py'),(p,r['bootstrap_addendum']['first_fixture_diagnostic']['snapshot'].removeprefix('Pro '),'tests/test_role_profile_bootstrap.py')]:\n    asserts=lambda name:[ast.dump(node) for node in ast.walk(ast.parse((root/name).read_bytes())) if isinstance(node,ast.Assert)]\n    assert asserts(before)==asserts(after)\nprint(json.dumps({'exit_code':0,'command_occurrences':len(commands),'heredocs':heredocs,'current_owned_source_test_files':11,'complete_snapshots':11,'git_baseline_byte_equal':4,'new_fixture_assert_groups_unchanged':2}))\nPY",
+    "result": {
+      "exit_code": 0,
+      "command_occurrences": 32,
+      "heredocs": 12,
+      "current_owned_source_test_files": 11,
+      "complete_snapshots": 11,
+      "git_baseline_byte_equal": 4,
+      "new_fixture_assert_groups_unchanged": 2
+    },
+    "scope": "Final author report syntax and hashes including the probe addendum; no pytest or product ACK is performed by this static checker."
+  }
+}

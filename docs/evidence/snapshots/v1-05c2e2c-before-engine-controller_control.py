@@ -146,7 +146,6 @@ class ControllerContext:
         self._lease = None
         self._identity = None
         self._identity_json = None
-        self._runtime_validator = None
 
     @property
     def scope(self):
@@ -227,8 +226,6 @@ class ControllerContext:
             if self._hold_reason is not None:
                 raise ControllerHOLD(self._hold_reason)
             try:
-                if self._runtime_validator is not None:
-                    self._runtime_validator()
                 with self._connection(conn) as actual:
                     row = self._row(actual)
                 if row[3:] != (self._phase, self._request_id, None):

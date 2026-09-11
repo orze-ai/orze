@@ -76,7 +76,7 @@ def test_direct_orze_run_preserves_pid_and_never_acquires_resources(project, nam
     (p.results / name).write_bytes(b"pending")
     pid = p.results / ".orze.pid"
     pid.write_bytes(b"prior-unverified-controller")
-    runner = SimpleNamespace(results_dir=p.results, cfg=p.cfg,
+    runner = SimpleNamespace(results_dir=p.results,
         _write_pid_file=lambda: pytest.fail("must not overwrite prior controller PID"))
     with pytest.raises(ControllerStopHOLD):
         Orze.run(runner)

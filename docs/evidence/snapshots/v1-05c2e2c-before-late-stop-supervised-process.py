@@ -175,9 +175,6 @@ class SupervisedProcess:
 
     def poll(self):
         from orze.engine.controller_members import poll_process, record_closed
-        # Consume any already-issued closure before a late quiesce asks this
-        # same (single-reader) owner to send STOP to a finished supervisor.
-        self._receive()
         poll_process(self)
         self._receive()
         supervisor_code = self._supervisor.poll()
