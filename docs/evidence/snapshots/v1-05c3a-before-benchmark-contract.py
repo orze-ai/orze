@@ -17,15 +17,11 @@ import os
 import re
 import secrets
 import socket
-import stat
 import time
 from pathlib import Path
 from typing import Mapping, Optional
 
-from orze.core.fs import atomic_write, deep_get
-from orze.core.idea_source_lock import (
-    SourceLockInDoubt, idea_source_lock, idea_source_lock_owned,
-)
+from orze.core.fs import _fs_lock, _fs_unlock, atomic_write, deep_get
 from orze.core.evaluation_bundle import (
     EvaluationBundleError,
     get_evaluation_bundle_config,
@@ -345,65 +341,20 @@ def benchmark_exposure_evidence_paths(
     ]
 
 
-def _exposure_file_identity(info: os.stat_result) -> tuple:
-    return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink,
-            info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-
-
-def _read_exposure_snapshot(path: Path) -> tuple[bytes, os.stat_result] | None:
-    """Read a complete regular ledger, rejecting changed or redirected files.
-
-    This verifies the observed file, not an atomic snapshot of the entire
-    project. It does not introduce a total-history byte limit.
-    """
+def _read_exposure_ledger_path(path: Path) -> list[dict]:
     if path.is_symlink():
         raise BenchmarkContractError(
             "benchmark_exposure_ledger_symlink_forbidden"
         )
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    if not path.exists():
+        return []
+    records = []
     try:
-        fd = os.open(path, flags)
-    except FileNotFoundError:
-        return None
-    except OSError as exc:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
         raise BenchmarkContractError(
             "benchmark_exposure_ledger_unreadable"
         ) from exc
-    try:
-        before = os.fstat(fd)
-        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
-            raise BenchmarkContractError("benchmark_exposure_ledger_not_regular")
-        chunks, size = [], 0
-        while size <= before.st_size:
-            chunk = os.read(fd, min(1024 * 1024, before.st_size + 1 - size))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            size += len(chunk)
-        after = os.fstat(fd)
-        named = path.stat(follow_symlinks=False)
-        if (size != before.st_size
-                or _exposure_file_identity(before) != _exposure_file_identity(after)
-                or _exposure_file_identity(after) != _exposure_file_identity(named)):
-            raise BenchmarkContractError("benchmark_exposure_ledger_changed")
-        return b"".join(chunks), after
-    except OSError as exc:
-        raise BenchmarkContractError("benchmark_exposure_ledger_unreadable") from exc
-    finally:
-        os.close(fd)
-
-
-def _read_exposure_ledger_path(path: Path) -> list[dict]:
-    snapshot = _read_exposure_snapshot(path)
-    return [] if snapshot is None else _parse_exposure_ledger(snapshot[0])
-
-
-def _parse_exposure_ledger(raw: bytes) -> list[dict]:
-    records = []
-    try:
-        lines = raw.decode("utf-8").splitlines()
-    except UnicodeDecodeError as exc:
-        raise BenchmarkContractError("benchmark_exposure_ledger_unreadable") from exc
     for line_number, line in enumerate(lines, 1):
         if not line.strip():
             raise BenchmarkContractError(
@@ -510,12 +461,12 @@ def _read_exposure_records(
             "benchmark_exposure_legacy_ledger_conflict"
         )
     if migrate:
-        snapshot = _read_exposure_snapshot(nonempty[0][0])
-        if snapshot is None or _parse_exposure_ledger(snapshot[0]) != nonempty[0][1]:
+        try:
+            content = nonempty[0][0].read_bytes()
+        except OSError as exc:
             raise BenchmarkContractError(
-                "benchmark_exposure_legacy_migration_mismatch"
-            )
-        content = snapshot[0]
+                "benchmark_exposure_ledger_unreadable"
+            ) from exc
         _write_initial_project_ledger(project_path, content)
         migrated = _read_exposure_ledger_path(project_path)
         if ([record["record_sha256"] for record in migrated]
@@ -635,98 +586,65 @@ def _reserve_benchmark_exposure(
         raise BenchmarkContractError(
             "benchmark_exposure_lock_symlink_forbidden"
         )
+    if not _fs_lock(lock_dir, stale_seconds=300):
+        raise BenchmarkContractError("benchmark_exposure_ledger_locked")
     try:
-        with idea_source_lock(lock_dir) as lease:
-            if lease is None:
-                raise BenchmarkContractError("benchmark_exposure_ledger_locked")
-            uncertain = False
-            try:
-                # Read first: corrupt history is never "repaired" by an append.
-                records = _read_exposure_records(results_dir, cfg)
-                matching = _validated_matching_exposures(records, contract)
-                _audit_exposure_provenance_links(results_dir, records, contract)
-                if not idea_source_lock_owned(lease):
-                    raise SourceLockInDoubt("benchmark_exposure_owner_lost")
-                # Preserve the existing migration-before-budget-refusal policy.
-                # An interrupted migration is not authority to try again.
-                uncertain = True
-                migrated = _read_exposure_records(results_dir, cfg, migrate=True)
-                before = _read_exposure_snapshot(ledger_path)
-                if (migrated != records
-                        or ([] if before is None else _parse_exposure_ledger(before[0])) != records):
-                    raise SourceLockInDoubt("benchmark_exposure_ledger_changed")
-                uncertain = False
-                prior = int(contract["prior_exposures"])
-                ordinal = prior + len(matching) + 1
-                maximum = int(contract["max_evaluations"])
-                if ordinal > maximum:
+        records = _read_exposure_records(results_dir, cfg, migrate=True)
+        matching = _validated_matching_exposures(records, contract)
+        _audit_exposure_provenance_links(results_dir, records, contract)
+        prior = int(contract["prior_exposures"])
+        ordinal = prior + len(matching) + 1
+        maximum = int(contract["max_evaluations"])
+        if ordinal > maximum:
+            raise BenchmarkContractError(
+                f"benchmark_exposure_budget_exhausted:{ordinal - 1}/{maximum}"
+            )
+        nonce_sha256 = hashlib.sha256(nonce.encode("utf-8")).hexdigest()
+        record = {
+            "schema_version": 1,
+            **_exposure_identity(contract),
+            "exposure_ordinal": ordinal,
+            "idea_id": Path(idea_dir).name,
+            "evaluation_nonce_sha256": nonce_sha256,
+            "evaluator_sha256": evaluator_sha256,
+            "host": socket.gethostname(),
+            "pid": os.getpid(),
+            "reserved_at_unix_ns": time.time_ns(),
+        }
+        canonical = json.dumps(record, sort_keys=True, separators=(",", ":"))
+        record_sha256 = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        record["record_sha256"] = record_sha256
+        existed = ledger_path.exists()
+        flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(str(ledger_path), flags, 0o600)
+        except OSError as exc:
+            raise BenchmarkContractError(
+                "benchmark_exposure_ledger_unwritable"
+            ) from exc
+        try:
+            line = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
+            written = 0
+            while written < len(line):
+                count = os.write(fd, line[written:])
+                if count <= 0:
                     raise BenchmarkContractError(
-                        f"benchmark_exposure_budget_exhausted:{ordinal - 1}/{maximum}"
+                        "benchmark_exposure_ledger_short_write"
                     )
-                record = {
-                    "schema_version": 1,
-                    **_exposure_identity(contract),
-                    "exposure_ordinal": ordinal,
-                    "idea_id": Path(idea_dir).name,
-                    "evaluation_nonce_sha256": hashlib.sha256(nonce.encode("utf-8")).hexdigest(),
-                    "evaluator_sha256": evaluator_sha256,
-                    "host": socket.gethostname(),
-                    "pid": os.getpid(),
-                    "reserved_at_unix_ns": time.time_ns(),
-                }
-                canonical = json.dumps(record, sort_keys=True, separators=(",", ":"))
-                record_sha256 = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-                record["record_sha256"] = record_sha256
-                line = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
-                flags = os.O_WRONLY | os.O_APPEND
-                flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
-                if before is None:
-                    flags |= os.O_CREAT | os.O_EXCL
-                if not idea_source_lock_owned(lease):
-                    raise SourceLockInDoubt("benchmark_exposure_owner_lost")
-                uncertain = True
-                fd = os.open(str(ledger_path), flags, 0o600)
-                try:
-                    opened = os.fstat(fd)
-                    if (not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1
-                            or (before is not None and _exposure_file_identity(opened)
-                                != _exposure_file_identity(before[1]))):
-                        raise SourceLockInDoubt("benchmark_exposure_ledger_changed")
-                    if not idea_source_lock_owned(lease):
-                        raise SourceLockInDoubt("benchmark_exposure_owner_lost")
-                    written = 0
-                    while written < len(line):
-                        count = os.write(fd, line[written:])
-                        if count <= 0 or count > len(line) - written:
-                            raise SourceLockInDoubt("benchmark_exposure_ledger_short_write")
-                        written += count
-                    os.fsync(fd)
-                    appended = os.fstat(fd)
-                finally:
-                    os.close(fd)
-                parent_fd = os.open(str(ledger_path.parent), os.O_RDONLY)
-                try:
-                    os.fsync(parent_fd)
-                finally:
-                    os.close(parent_fd)
-                after = _read_exposure_snapshot(ledger_path)
-                expected = (b"" if before is None else before[0]) + line
-                if (after is None or after[0] != expected
-                        or _exposure_file_identity(after[1]) != _exposure_file_identity(appended)
-                        or _read_exposure_records(results_dir, cfg) != records + [record]
-                        or not idea_source_lock_owned(lease)):
-                    raise SourceLockInDoubt("benchmark_exposure_reservation_unconfirmed")
-                uncertain = False
-                # Context exit must confirm release before a nonce is returned.
-                return ordinal, record_sha256
-            except BaseException as exc:
-                if uncertain and not isinstance(exc, SourceLockInDoubt):
-                    raise SourceLockInDoubt("benchmark_exposure_reservation_unconfirmed") from exc
-                raise
-    except OSError as exc:
-        # Convert only outside the context: SourceLockInDoubt retains ownership
-        # for explicit recovery. Never truncate or refund uncertain exposure.
-        raise BenchmarkContractError("benchmark_exposure_reservation_unconfirmed") from exc
+                written += count
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        if not existed:
+            parent_fd = os.open(str(ledger_path.parent), os.O_RDONLY)
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
+        return ordinal, record_sha256
+    finally:
+        _fs_unlock(lock_dir)
 
 
 def benchmark_exposure_summary(results_dir: Path, cfg: Mapping) -> dict:

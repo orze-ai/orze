@@ -1,0 +1,166 @@
+{
+  "schema": 1,
+  "slice": "V1-05C3a",
+  "owner": "runtime_evidence",
+  "date_utc": "2026-09-11",
+  "status": "source_specific_candidate_independent_review_complete",
+  "scope": "Public benchmark exposure reservation storage; no evaluator execution.",
+  "classification": {
+    "new_mechanisms": 7,
+    "observed_draft_regressions": 0,
+    "historical_regressions": 0,
+    "controls_counted_separately": 0,
+    "first_run": "7 passed in 0.43s",
+    "note": "These cases were authored against the ready candidate, not replayed as historical bugs. The separate author's existing-public four cases are not counted here."
+  },
+  "provenance": {
+    "preceding_implementation_commit": "fda35db2b47111ae4a1d00b262facbe9f88df4a6",
+    "snapshot": {
+      "path": "docs/evidence/snapshots/v1-05c3a-before-storage-mechanisms-benchmark-contract.py",
+      "source": "src/orze/core/benchmark_contract.py",
+      "sha256": "1a0b316c3833a5aeac185c7a7d59ab729694522dcfb53f736fa0caa2fefd51d3",
+      "origin": "Complete on-disk first candidate, saved before the independent seven-case run; not the preceding commit's old source.",
+      "capture_chunk_id": "ef037f",
+      "exact_byte_verification_chunk_id": "efd3c5"
+    },
+    "tests": {
+      "path": "tests/test_benchmark_reservation_storage.py",
+      "sha256": "61039e4953170ada9d024e4e5ec34ad553a9943e9f4c33d303740cb9cd483550",
+      "file_assert_count": 37,
+      "assert_ast_sha256": "506904dda490d7aae0997e9d3254672448c4508fce708c539c79d45c9f0dfaef",
+      "assert_ast_algorithm": "SHA256 of UTF-8 '\\n'.join(ast.dump(node, include_attributes=False) for node in ast.walk(tree) if isinstance(node, ast.Assert)); no trailing newline.",
+      "fixture": "Explicit import of reservation from the unchanged test_benchmark_reservation_fencing.py; real temporary paths/ledger/lock and public prepare_benchmark_evaluation."
+    }
+  },
+  "actual_run": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_benchmark_reservation_storage.py --tb=short",
+    "exit_code": 0,
+    "tool_chunk_id": "71e54e",
+    "session_id": null,
+    "footer": "7 passed in 0.43s",
+    "pre_command": "python3 - <<'PY'\nfrom pathlib import Path\nimport ast,hashlib,json\nfiles=['src/orze/core/benchmark_contract.py','src/orze/core/idea_source_lock.py','src/orze/core/fs.py','tests/test_benchmark_reservation_storage.py','tests/test_benchmark_reservation_fencing.py']\nout={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files}\ns=Path('docs/evidence/snapshots/v1-05c3a-before-storage-mechanisms-benchmark-contract.py')\nassert s.read_bytes()==Path(files[0]).read_bytes()\nt=ast.parse(Path(files[3]).read_text());nodes=[ast.dump(n,include_attributes=False) for n in ast.walk(t) if isinstance(n,ast.Assert)]\nprint(json.dumps({'files':out,'snapshot_sha256':hashlib.sha256(s.read_bytes()).hexdigest(),'assert_count':len(nodes),'assert_ast_sha256':hashlib.sha256('\\n'.join(nodes).encode()).hexdigest()},sort_keys=True))\nPY",
+    "pre_chunk_id": "efd3c5",
+    "post_command": "python3 - <<'PY'\nfrom pathlib import Path\nimport hashlib,json\nfiles=['src/orze/core/benchmark_contract.py','src/orze/core/idea_source_lock.py','src/orze/core/fs.py','tests/test_benchmark_reservation_storage.py','tests/test_benchmark_reservation_fencing.py']\nprint(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+    "post_chunk_id": "27e0da",
+    "pre": {
+      "src/orze/core/benchmark_contract.py": "1a0b316c3833a5aeac185c7a7d59ab729694522dcfb53f736fa0caa2fefd51d3",
+      "src/orze/core/fs.py": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+      "src/orze/core/idea_source_lock.py": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+      "tests/test_benchmark_reservation_fencing.py": "da243ddd4d7c184daeb2eb7af9ed8d7a2230b2e0c443e50c3597f68ec96dda4e",
+      "tests/test_benchmark_reservation_storage.py": "61039e4953170ada9d024e4e5ec34ad553a9943e9f4c33d303740cb9cd483550"
+    },
+    "post": {
+      "src/orze/core/benchmark_contract.py": "1a0b316c3833a5aeac185c7a7d59ab729694522dcfb53f736fa0caa2fefd51d3",
+      "src/orze/core/fs.py": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+      "src/orze/core/idea_source_lock.py": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+      "tests/test_benchmark_reservation_fencing.py": "da243ddd4d7c184daeb2eb7af9ed8d7a2230b2e0c443e50c3597f68ec96dda4e",
+      "tests/test_benchmark_reservation_storage.py": "61039e4953170ada9d024e4e5ec34ad553a9943e9f4c33d303740cb9cd483550"
+    },
+    "all_five_pre_post_exact": true,
+    "not_whole_suite": "This is the independently observed bounded candidate run, not a substitute for the parent's final frozen aggregate/full suites."
+  },
+  "mechanisms": [
+    {
+      "name": "ledger I/O uncertainty",
+      "cases": 4,
+      "parameters": [
+        "half_write",
+        "fsync",
+        "close",
+        "readback"
+      ],
+      "faults": "Exact ledger device/inode only. Partial append performs a real half write then ENOSPC; fsync and close perform their real operation then raise acknowledgement EIO; readback injects an early EOF after the real append.",
+      "assertions": "No environment/provenance returned; persisted nonempty bytes are not truncated; owner metadata/directory remain; subsequent public reservation is locked and leaves bytes unchanged. Complete-record faults preserve ordinal 1."
+    },
+    {
+      "name": "late lock release acknowledgement failure",
+      "cases": 1,
+      "faults": "Actual SourceLock release removes its own metadata/directory and syncs the parent; the scoped test then raises EIO from that sync acknowledgement.",
+      "assertions": "No environment/provenance; actual ledger still contains ordinal 1; persistent namespace marker remains. The owner directory is already absent, so the next actual public reservation must enforce budget_exhausted:1/1 rather than refund the look."
+    },
+    {
+      "name": "same-bytes replacement owner",
+      "cases": 1,
+      "faults": "After actual ledger append, rename the test's owner directory aside and create a different-inode directory with identical owner metadata bytes.",
+      "assertions": "No environment/provenance; neither displaced owner nor replacement is deleted; replacement inode remains unchanged; subsequent reservation refuses and does not truncate the actual record."
+    },
+    {
+      "name": "partial legacy migration",
+      "cases": 1,
+      "faults": "Create a real initial exposure, move its complete project ledger to the legacy results path, then inject a real half write/ENOSPC on the newly created project ledger only.",
+      "assertions": "Legacy bytes remain exact; partial destination is preserved and never overwritten by the next public reservation; retained owner prevents blind retry. Migration failure is not an authorization to clear prior exposure history."
+    }
+  ],
+  "static_review": {
+    "no_remaining_slice_blocker_observed": true,
+    "references": [
+      {
+        "path": "src/orze/core/benchmark_contract.py",
+        "lines": [
+          353,
+          394
+        ],
+        "finding": "Reader uses NOFOLLOW/NONBLOCK, regular single-link validation, complete observed-length/EOF read and before/after/path identity matching."
+      },
+      {
+        "path": "src/orze/core/benchmark_contract.py",
+        "lines": [
+          443,
+          479
+        ],
+        "finding": "Legacy project publication remains create-only; it does not replace an existing winner."
+      },
+      {
+        "path": "src/orze/core/benchmark_contract.py",
+        "lines": [
+          622,
+          729
+        ],
+        "finding": "Reserve holds SourceLock; migration/append uncertainty is converted to SourceLockInDoubt inside the context, then to the public BenchmarkContractError outside. Fresh expected raw-prefix-plus-line, full records and owner checks precede return; context release must also succeed."
+      },
+      {
+        "path": "src/orze/core/idea_source_lock.py",
+        "lines": [
+          177,
+          215
+        ],
+        "finding": "Exact owner identity gates nonrecursive release. SourceLockInDoubt retains the owner, while late release failure can occur after directory removal and must not be described as universal physical owner retention."
+      },
+      {
+        "path": "src/orze/core/fs.py",
+        "lines": [
+          264,
+          326
+        ],
+        "finding": "Generic locked_append performs rollback/truncation on failure and was correctly not reused for a nonrefundable exposure reservation."
+      }
+    ],
+    "limits": [
+      "No new total-ledger byte cap; the history reader still allocates the complete observed history. Per-read bounded chunks are not a total-memory bound.",
+      "File observations and local fault injection do not prove an atomic snapshot of the whole project or cross-host exactly-once execution.",
+      "No automatic owner recovery or deletion/refund of uncertain exposure bytes was added.",
+      "The release test explicitly demonstrates why an absent owner directory after a late sync error is not an unused benchmark budget."
+    ]
+  },
+  "safety": {
+    "only_owned_temporary_files": true,
+    "evaluator_script_executed": false,
+    "application_training_or_gpu": false,
+    "provider_calls": false,
+    "host_process_census_or_signals": false,
+    "holdout_plaintext_read": false,
+    "production_or_old_test_edits": false,
+    "new_files": [
+      "tests/test_benchmark_reservation_storage.py",
+      "docs/evidence/snapshots/v1-05c3a-before-storage-mechanisms-benchmark-contract.py",
+      "docs/evidence/2026-09-11-v1-05c3a-benchmark-reservation-storage-review.json"
+    ],
+    "running_test_sessions": []
+  },
+  "diff_check": {
+    "command": "git diff --check -- src/orze/core/benchmark_contract.py tests/test_benchmark_reservation_storage.py docs/evidence/snapshots/v1-05c3a-before-storage-mechanisms-benchmark-contract.py",
+    "tool_chunk_id": "36b48b",
+    "exit_code": 0
+  }
+}

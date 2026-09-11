@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "slice": "V1-05C3a",
+  "kind": "independent_preceding_commit_public_behavior_evidence",
+  "status": "baseline_and_frozen_test_complete; production implementation owned by root",
+  "author": "/root/core_review",
+  "baseline_commit": "fda35db2b47111ae4a1d00b262facbe9f88df4a6",
+  "source_ownership": {
+    "production_edits": [],
+    "new_tests": [
+      "tests/test_benchmark_reservation_fencing.py"
+    ],
+    "old_test_edits": [],
+    "snapshots": [
+      {
+        "path": "src/orze/core/benchmark_contract.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c3a-before-benchmark-contract.py",
+        "sha256": "efc9d0d3348161905db88ee3dc1bac99193ea7ec09f31ce42ff2044f7ea01864",
+        "complete_file": true,
+        "origin": "git show fixed baseline; exact SHA equals pre-run and post-run live source"
+      },
+      {
+        "path": "src/orze/core/fs.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c3a-before-fs.py",
+        "sha256": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+        "complete_file": true,
+        "origin": "git show fixed baseline; exact SHA equals pre-run and post-run live source"
+      },
+      {
+        "path": "src/orze/core/idea_source_lock.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c3a-before-idea-source-lock.py",
+        "sha256": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+        "complete_file": true,
+        "origin": "git show fixed baseline; exact SHA equals pre-run and post-run live source"
+      }
+    ]
+  },
+  "frozen_tests": {
+    "path": "tests/test_benchmark_reservation_fencing.py",
+    "sha256": "da243ddd4d7c184daeb2eb7af9ed8d7a2230b2e0c443e50c3597f68ec96dda4e",
+    "pytest_cases": 4,
+    "assert_statements": 21,
+    "classification": {
+      "preceding_commit_public_behavior_reds": 2,
+      "positive_controls": 2,
+      "missing_api_reds": 0,
+      "setup_errors": 0
+    },
+    "hash_observation": "Captured immediately after the first run; test has not been edited since that run."
+  },
+  "boundary": {
+    "real": "Both target tests invoke the existing prepare_benchmark_evaluation and actual project-scoped file-ledger/provenance code. Thread test uses two joined controller threads in one pytest process.",
+    "not_executed": [
+      "No evaluator script or training worker",
+      "No GPU or provider",
+      "No SQLite fixture or new ledger API",
+      "No host process census or kill",
+      "No old test or production edits"
+    ],
+    "thread_fault": "First invocation pauses only immediately before the actual ledger O_APPEND open, after its real read/validation. With that real thread still alive and host/PID unchanged, its own lock.json time and directory mtime are reduced by 301 seconds. This is a controlled lock-age/metadata fault, not a 301-second wait or proof of naturally elapsed time. All paths belong to pytest tmp_path.",
+    "thread_assertion": "At most one returned child environment for max_evaluations=1. An owner-fenced implementation may refuse both after metadata damage; a separate fresh-lock control requires exactly one.",
+    "silent_write_fault": "Actual os.write is intercepted only when fd fstat device/inode equals the task-private ledger named stat. Fault returns len(data) without writing bytes; all other descriptor writes use the real os.write.",
+    "silent_write_assertion": "A zero-byte ledger must not authorize a returned nonce environment or new provenance. Durable-write control requires one exact ledger hash and refuses a second look.",
+    "cleanup": "finally releases the private thread barrier and joins both own threads; no Popen/process cleanup is used."
+  },
+  "first_actual_run": {
+    "cmd": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_benchmark_reservation_fencing.py --tb=short",
+    "chunk_id": "95dbc1",
+    "wall_time_seconds": 0.438274869,
+    "exit_code": 1,
+    "original_token_count": 558,
+    "output": ".F.F                                                                     [100%]\n=================================== FAILURES ===================================\n_______ test_live_reservation_owner_cannot_be_displaced[live-owner-aged] _______\ntests/test_benchmark_reservation_fencing.py:117: in test_live_reservation_owner_cannot_be_displaced\n    assert len(granted) <= 1, {\nE   AssertionError: {'returned_environments': 2, 'ordinals': [1, 1], 'outcomes': {1: {'env': {'ORZE_BENCHMARK_EVALUATION_NONCE': 'b52db88d...ENCHMARK_EXPOSURE_RECORD_SHA256': '27dfacd9a8ae799770693d8a86f0f13f3f00989c89403e168b5e0095bcad6ad5'}, 'error': None}}}\nE   assert 2 <= 1\nE    +  where 2 = len([{'ORZE_BENCHMARK_EVALUATION_NONCE': 'b52db88d50026e7a6707cec55316f14c44f3d6cfbeb68f98e2dd338e93928dc8', 'ORZE_BENCHMA...AL': '1', 'ORZE_BENCHMARK_EXPOSURE_RECORD_SHA256': '27dfacd9a8ae799770693d8a86f0f13f3f00989c89403e168b5e0095bcad6ad5'}])\n------------------------------ Captured log call -------------------------------\nWARNING  orze:fs.py:122 Breaking stale lock: /tmp/pytest-of-erik/pytest-4810/test_live_reservation_owner_ca1/.orze/.benchmark_exposure.lock (age 301s)\n______ test_nonce_requires_a_durable_exposure_record[silent-ledger-write] ______\ntests/test_benchmark_reservation_fencing.py:150: in test_nonce_requires_a_durable_exposure_record\n    assert result[\"env\"] is None, {\nE   AssertionError: {'returned_environment': {'ORZE_BENCHMARK_EVALUATION_NONCE': '8cb746a102c09538be65139688f351910648f94f822cc1cc0cd3ad1b...XPOSURE_RECORD_SHA256': '8023e532f646fb149fe1639bfac7bb630e86a4abaa5e676c356e78f12d674ba7'}, 'durable_ledger_bytes': 0}\nE   assert {'ORZE_BENCHMARK_EVALUATION_NONCE': '8cb746a102c09538be65139688f351910648f94f822cc1cc0cd3ad1b23272f97', 'ORZE_BENCHMAR...NAL': '1', 'ORZE_BENCHMARK_EXPOSURE_RECORD_SHA256': '8023e532f646fb149fe1639bfac7bb630e86a4abaa5e676c356e78f12d674ba7'} is None\n=========================== short test summary info ============================\nFAILED tests/test_benchmark_reservation_fencing.py::test_live_reservation_owner_cannot_be_displaced[live-owner-aged]\nFAILED tests/test_benchmark_reservation_fencing.py::test_nonce_requires_a_durable_exposure_record[silent-ledger-write]\n2 failed, 2 passed in 0.29s\n"
+  },
+  "source_post_run_check": {
+    "chunk_id": "9c2947",
+    "wall_time_seconds": 0.000003773,
+    "exit_code": 0,
+    "original_token_count": 105,
+    "output": "da243ddd4d7c184daeb2eb7af9ed8d7a2230b2e0c443e50c3597f68ec96dda4e  tests/test_benchmark_reservation_fencing.py\nefc9d0d3348161905db88ee3dc1bac99193ea7ec09f31ce42ff2044f7ea01864  src/orze/core/benchmark_contract.py\na811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c  src/orze/core/fs.py\ncb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc  src/orze/core/idea_source_lock.py\nassert_statements 21\n"
+  },
+  "complete_snapshot_replay": {
+    "cmd": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib\nfrom pathlib import Path\nimport sys\nimport types\nimport pytest\n\nbase = Path('docs/evidence/snapshots')\nfor short in ('idea_source_lock', 'fs', 'benchmark_contract'):\n    name = 'orze.core.' + short\n    parent = importlib.import_module('orze.core')\n    snapshot = base / ('v1-05c3a-before-' + short.replace('_', '-') + '.py')\n    module = types.ModuleType(name)\n    module.__file__ = str(snapshot.absolute())\n    module.__package__ = 'orze.core'\n    sys.modules[name] = module\n    setattr(parent, short, module)\n    exec(compile(snapshot.read_bytes(), str(snapshot), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider',\n    'tests/test_benchmark_reservation_fencing.py', '--tb=short']))\nPY",
+    "chunk_id": "207c47",
+    "wall_time_seconds": 0.419416263,
+    "exit_code": 1,
+    "original_token_count": 562,
+    "output": ".F.F                                                                     [100%]\n=================================== FAILURES ===================================\n_______ test_live_reservation_owner_cannot_be_displaced[live-owner-aged] _______\ntests/test_benchmark_reservation_fencing.py:117: in test_live_reservation_owner_cannot_be_displaced\n    assert len(granted) <= 1, {\nE   AssertionError: {'returned_environments': 2, 'ordinals': [1, 1], 'outcomes': {1: {'env': {'ORZE_BENCHMARK_EVALUATION_NONCE': 'f8c2d38c...ENCHMARK_EXPOSURE_RECORD_SHA256': 'f9a0689c2e1a9010186898be678a84f097df4f4101f92bba748320e4feb98ca3'}, 'error': None}}}\nE   assert 2 <= 1\nE    +  where 2 = len([{'ORZE_BENCHMARK_EVALUATION_NONCE': 'f8c2d38cf33e202eadb2e11c04778a04fe60e5747eede0a5cb90fa10e79c4479', 'ORZE_BENCHMA...AL': '1', 'ORZE_BENCHMARK_EXPOSURE_RECORD_SHA256': 'f9a0689c2e1a9010186898be678a84f097df4f4101f92bba748320e4feb98ca3'}])\n------------------------------ Captured log call -------------------------------\nWARNING  orze:v1-05c3a-before-fs.py:122 Breaking stale lock: /tmp/pytest-of-erik/pytest-4811/test_live_reservation_owner_ca1/.orze/.benchmark_exposure.lock (age 301s)\n______ test_nonce_requires_a_durable_exposure_record[silent-ledger-write] ______\ntests/test_benchmark_reservation_fencing.py:150: in test_nonce_requires_a_durable_exposure_record\n    assert result[\"env\"] is None, {\nE   AssertionError: {'returned_environment': {'ORZE_BENCHMARK_EVALUATION_NONCE': '1f653b6ccdbe4430ab88bb622699b8c4975a7a7c432e684c35e48ce3...XPOSURE_RECORD_SHA256': '16bfbde78bb3c293c146a38902cefb5f30924a926133cf3cfb17a8377bffec77'}, 'durable_ledger_bytes': 0}\nE   assert {'ORZE_BENCHMARK_EVALUATION_NONCE': '1f653b6ccdbe4430ab88bb622699b8c4975a7a7c432e684c35e48ce38f3f45ed', 'ORZE_BENCHMAR...NAL': '1', 'ORZE_BENCHMARK_EXPOSURE_RECORD_SHA256': '16bfbde78bb3c293c146a38902cefb5f30924a926133cf3cfb17a8377bffec77'} is None\n=========================== short test summary info ============================\nFAILED tests/test_benchmark_reservation_fencing.py::test_live_reservation_owner_cannot_be_displaced[live-owner-aged]\nFAILED tests/test_benchmark_reservation_fencing.py::test_nonce_requires_a_durable_exposure_record[silent-ledger-write]\n2 failed, 2 passed in 0.25s\n",
+    "scope": "Three complete fixed-baseline modules (idea_source_lock, fs, benchmark_contract) installed in a fresh Python process before pytest imports the frozen test. No live source writes. This is not a whole baseline checkout replay.",
+    "result": "Same two target safety assertions fail; both controls pass."
+  },
+  "findings": [
+    {
+      "id": "live_owner_age_takeover",
+      "observed": "Two actual reservation calls both returned launch environments with exposure ordinal 1; durable ledger contained ordinals [1,1]. Legacy _fs_lock logged age 301s takeover while original own thread remained alive.",
+      "location": "core/benchmark_contract.py:_reserve_benchmark_exposure and core/fs.py:_fs_lock/_fs_unlock",
+      "counts_as": "preceding-commit behavior defect"
+    },
+    {
+      "id": "silent_ledger_append",
+      "observed": "Actual public prepare returned a nonce-bearing environment despite actual ledger length zero after the scoped write fault.",
+      "location": "core/benchmark_contract.py:_reserve_benchmark_exposure",
+      "counts_as": "preceding-commit behavior defect"
+    }
+  ],
+  "limitations": [
+    "No claim that GPU work was launched by these tests; launch authority is the returned environment.",
+    "No automatic refund requirement is introduced; the existing conservative burned-exposure policy is unchanged.",
+    "No claim of complete process, filesystem, or cross-host fault coverage.",
+    "Results are not additive with replay and later overlapping parent suites."
+  ],
+  "reproducible_commands_note": "Commands and complete observed tool outputs/exit codes/chunk IDs above are retained, including expected failing exits. All four cases reached the intended boundary on the first actual run."
+}

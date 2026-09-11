@@ -194,6 +194,29 @@ renaming the benchmark or changing its scope, view, or selection mode cannot
 reset recorded exposure. Corrupt or missing ledger evidence fails receipt
 validation.
 
+Reservation ownership is now the existing no-age source-lock protocol, not a
+300-second lease. The persistent `.benchmark_exposure.lock.source-lock` marker
+prevents generic legacy lock takeover; an existing, partial, dead, remote, or
+otherwise unknown owner is not automatically reclaimed. Only the exact owned
+directory and metadata can be released. Resolve uncertain history explicitly;
+deleting a lock is not proof that a benchmark look did not occur.
+
+Before returning a nonce-bearing environment, reservation checks the original
+ledger prefix, the exact appended line, the regular single-link file identity,
+fresh complete readback, ownership, and successful lock release. Migration
+preserves legacy bytes and uses create-only publication. An uncertain
+append/migration is never truncated or refunded and retains its owner when the
+failure occurs inside that critical section. A late release-directory fsync
+failure still refuses launch but may occur after the owner directory was
+removed; it does not refund the recorded look. Provenance publication failure
+after a confirmed reservation also continues to consume that look.
+
+This is an evaluation-count budget, not a CPU/GPU-time or provider-token
+budget. The readback checks do not impose a total-history memory/byte limit,
+prove power-loss durability of the filesystem, or provide one atomic snapshot
+against arbitrary external writers. They do not enable automatic recovery or
+establish the scientific independence of evaluations.
+
 This is fail-closed local accounting, not an externally anchored audit log. A
 user with write access can replace the ledger and all linked provenance, and
 Orze cannot discover unrecorded historical access or overlap hidden behind a

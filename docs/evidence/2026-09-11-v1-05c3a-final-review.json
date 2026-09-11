@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "slice": "V1-05C3a",
+  "kind": "independent_production_diff_and_bounded_test_review",
+  "reviewer": "/root/core_review",
+  "ownership": {
+    "production_author": "/root",
+    "reviewer_production_edits": [],
+    "reviewer_authored_tests": [
+      "tests/test_benchmark_reservation_fencing.py"
+    ],
+    "independence_note": "Production diff reviewed by a non-author. The four fencing tests are reviewer's own baseline tests, not an independently authored test oracle. Existing three test files remain unchanged."
+  },
+  "baseline_commit": "fda35db2b47111ae4a1d00b262facbe9f88df4a6",
+  "candidate_files_sha256": {
+    "src/orze/core/benchmark_contract.py": "1a0b316c3833a5aeac185c7a7d59ab729694522dcfb53f736fa0caa2fefd51d3",
+    "src/orze/core/fs.py": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+    "src/orze/core/idea_source_lock.py": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+    "tests/test_benchmark_reservation_fencing.py": "da243ddd4d7c184daeb2eb7af9ed8d7a2230b2e0c443e50c3597f68ec96dda4e",
+    "tests/test_benchmark_contract.py": "5f09640cc629b113ca17134a93a33cb2bacd1cb9762d23e41cb0efbf061ea188",
+    "tests/test_eval_retry_benchmark.py": "1a52e97f5e2491d26b1e867cbdd98d70d08752d674ce469c61ac0e763e0cefb8",
+    "tests/test_benchmark_exposure_reset.py": "584f2efd397931e2994731a5d69b25fbbb0a8f2c02af747287c596566037fdc3"
+  },
+  "read_scope": [
+    {
+      "path": "src/orze/core/benchmark_contract.py",
+      "scope": "Complete tracked production diff; current snapshot reader/parser/migration/reservation functions; prior fixed-baseline public prepare, receipt validation, budget policy and consumers inspected in preceding read-only analysis."
+    },
+    {
+      "path": "src/orze/core/idea_source_lock.py",
+      "scope": "Namespace marker, acquire, exact owner witness, release and complete context-manager exception handling."
+    },
+    {
+      "path": "src/orze/core/fs.py",
+      "scope": "Fixed baseline legacy lock age takeover and blind unlock; no changes made by this patch."
+    },
+    {
+      "path": "tests/test_benchmark_reservation_fencing.py",
+      "scope": "Complete four-case test and fixture; actual public entry/descriptor reachability and no false-positive all-refused control."
+    }
+  ],
+  "checks": [
+    {
+      "area": "source_read",
+      "result": "O_NOFOLLOW/O_NONBLOCK, regular single-link descriptor, observed-size plus extra-byte read, before/after fstat and named lstat-equivalent identity comparison prevent accepting a changed or redirected observed ledger. Missing initial ledger remains a supported state; no new total-history size cap is claimed."
+    },
+    {
+      "area": "append_identity",
+      "result": "Existing prefix has a stable snapshot; actual append-open identity must equal that witness. Missing ledger uses O_CREAT|O_EXCL. Appended descriptor state is compared to fresh named readback, and read bytes must equal exact previous raw prefix plus exact newly encoded line."
+    },
+    {
+      "area": "append_content",
+      "result": "The final logical read also must equal preceding records plus the proposed record; owner is rechecked. Short, overreported, empty/no-op, or uncertain write/fsync/close/readback cannot return an environment."
+    },
+    {
+      "area": "migration_and_refund",
+      "result": "The existing legacy project migration remains create-only and preserves prior records. Read-only validation precedes migration. Uncertain migration/append is converted to SourceLockInDoubt inside the ownership context; no truncate, retry replacement, or refund is introduced. Existing pre-Popen provenance publication failure still retains its reserved exposure."
+    },
+    {
+      "area": "lock_exit",
+      "result": "Return from the with body still executes context release before returning to public prepare. A release error cannot grant a nonce. SourceLockInDoubt is converted to BenchmarkContractError only outside the context so in-doubt writes retain the owner where that context protocol permits."
+    },
+    {
+      "area": "release_limit",
+      "result": "Do not infer that every release error leaves the owner directory present: the existing release can fail on parent fsync after unlink/rmdir. This review claims no returned launch authority on such failure, not universal directory retention."
+    },
+    {
+      "area": "test_authenticity",
+      "result": "Old red test reaches actual append-open with a live owner thread; only its private time metadata+mtime are changed, preserving actual host/PID. It is a controlled metadata/age fault, not natural aging. Fix may refuse both after damage; independent fresh-lock case requires a real successful reservation. Silent test positively requires the actual ledger descriptor be intercepted and its bytes remain zero. These are not missing-API tests."
+    },
+    {
+      "area": "unchanged_contracts",
+      "result": "Max-evaluation policy, no-refund retry behavior, project-scoped ledger placement, ordinal/hash/provenance consumers and legacy exposure-reset refusal remain unchanged in scope. No generic fs lock modification or new compute/resource-budget ledger."
+    }
+  ],
+  "verification": {
+    "prehash_command": "sha256sum src/orze/core/benchmark_contract.py src/orze/core/fs.py src/orze/core/idea_source_lock.py tests/test_benchmark_reservation_fencing.py tests/test_benchmark_contract.py tests/test_eval_retry_benchmark.py tests/test_benchmark_exposure_reset.py",
+    "prehash": {
+      "chunk_id": "3558d7",
+      "wall_time_seconds": 0.000003443,
+      "exit_code": 0,
+      "original_token_count": 176,
+      "output": "1a0b316c3833a5aeac185c7a7d59ab729694522dcfb53f736fa0caa2fefd51d3  src/orze/core/benchmark_contract.py\na811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c  src/orze/core/fs.py\ncb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc  src/orze/core/idea_source_lock.py\nda243ddd4d7c184daeb2eb7af9ed8d7a2230b2e0c443e50c3597f68ec96dda4e  tests/test_benchmark_reservation_fencing.py\n5f09640cc629b113ca17134a93a33cb2bacd1cb9762d23e41cb0efbf061ea188  tests/test_benchmark_contract.py\n1a52e97f5e2491d26b1e867cbdd98d70d08752d674ce469c61ac0e763e0cefb8  tests/test_eval_retry_benchmark.py\n584f2efd397931e2994731a5d69b25fbbb0a8f2c02af747287c596566037fdc3  tests/test_benchmark_exposure_reset.py\n"
+    },
+    "test_run": {
+      "cmd": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_benchmark_reservation_fencing.py tests/test_benchmark_contract.py tests/test_eval_retry_benchmark.py tests/test_benchmark_exposure_reset.py --tb=short",
+      "chunk_id": "21d0a5",
+      "wall_time_seconds": 4.820025565,
+      "exit_code": 0,
+      "original_token_count": 25,
+      "output": "..................................................................       [100%]\n66 passed in 4.67s\n"
+    },
+    "posthash_and_old_test_diff_command": "sha256sum src/orze/core/benchmark_contract.py src/orze/core/fs.py src/orze/core/idea_source_lock.py tests/test_benchmark_reservation_fencing.py tests/test_benchmark_contract.py tests/test_eval_retry_benchmark.py tests/test_benchmark_exposure_reset.py\ngit diff --name-only -- tests",
+    "posthash": {
+      "chunk_id": "06546f",
+      "wall_time_seconds": 0.00000456,
+      "exit_code": 0,
+      "original_token_count": 176,
+      "output": "1a0b316c3833a5aeac185c7a7d59ab729694522dcfb53f736fa0caa2fefd51d3  src/orze/core/benchmark_contract.py\na811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c  src/orze/core/fs.py\ncb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc  src/orze/core/idea_source_lock.py\nda243ddd4d7c184daeb2eb7af9ed8d7a2230b2e0c443e50c3597f68ec96dda4e  tests/test_benchmark_reservation_fencing.py\n5f09640cc629b113ca17134a93a33cb2bacd1cb9762d23e41cb0efbf061ea188  tests/test_benchmark_contract.py\n1a52e97f5e2491d26b1e867cbdd98d70d08752d674ce469c61ac0e763e0cefb8  tests/test_eval_retry_benchmark.py\n584f2efd397931e2994731a5d69b25fbbb0a8f2c02af747287c596566037fdc3  tests/test_benchmark_exposure_reset.py\n"
+    },
+    "file_hashes_pre_post_exact": true,
+    "file_count": 7,
+    "result": {
+      "passed": 66,
+      "failed": 0,
+      "seconds": 4.67,
+      "exit_code": 0,
+      "chunk_id": "21d0a5"
+    },
+    "old_tracked_test_diff_empty": true,
+    "scope": "Frozen new 4 plus existing benchmark/retry/reset tests only. Not a whole-Core/Pro/full product test. No C3b or runtime-owned new storage tests run."
+  },
+  "conclusion": "No blocking defect found in the reviewed candidate for the bounded reservation-fencing/readback contract.",
+  "limitations": [
+    "Fault injection uses task-private files and two joined CPU threads; no evaluator, real GPU, provider, or child workload is run.",
+    "Observed-file identity checks are not an atomic snapshot of the whole project, a cross-host sandbox, or proof against arbitrary external deletion of all evidence.",
+    "No automatic refund, CPU/GPU-second allocation budget, fairness policy, historical cleanup, or total-ledger memory limit is introduced.",
+    "Existing SourceLock implementation was reused unchanged; this review does not certify all filesystem failure modes.",
+    "66-test run overlaps parent and later suites and must not be added as unique cases."
+  ],
+  "related_baseline_evidence": {
+    "path": "docs/evidence/2026-09-11-v1-05c3a-benchmark-reservation-author.json",
+    "sha256": "976809f39d5df6be2e78d61f9b3d499ded50ebee207b653d830273bd0fe954b4",
+    "first_run": "2 failed, 2 passed in 0.29s",
+    "fixed_three_module_replay": "2 failed, 2 passed in 0.25s"
+  }
+}
