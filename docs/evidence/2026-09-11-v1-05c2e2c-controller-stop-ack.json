@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2c",
+  "whole_v1_complete": false,
+  "supported_stop_only_complete": true,
+  "restart_handoff_complete": false,
+  "scope": "Explicit local_stop_v1 foreground Orze product integration: bound request, strong member/action/resource drain ACK, and an observer that captured the exact controller pidfd before request and confirms its exit. No restart/adoption/CPU autoresearch or general research-benefit completion.",
+  "code_commits": {
+    "core": "b7d2de1e30c711e392efc245c0edc62379779d23",
+    "pro": "3aeaecacba82ca6328ce50e71a055f2d75723c7c"
+  },
+  "classification": {
+    "cases": 93,
+    "files": 15,
+    "first_green_new_mechanisms": 65,
+    "draft_regression_cases": 24,
+    "compatibility_controls": 3,
+    "deferred_role_false_integration_requirement": 1,
+    "historical_public_behavior_reds": 0,
+    "distinct_root_cause_count_claim": false,
+    "overlapping_runs_not_additive": true,
+    "groups": {
+      "root_session": 23,
+      "core_drain_lifecycle": 21,
+      "profile_cli_pro": 41,
+      "independent_product_probe": 8
+    },
+    "notes": [
+      "Deferred role False integration was first green after implementation; exact preceding Pro runner replay fails, but preceding profile was not a publicly enabled product capability.",
+      "Pump writer and escaped product cases share one cause; probe cancellation and lifecycle timing cases are not independent defect-count claims.",
+      "Original invalid fixture premises, metadata-isolation limitation, full epoch 1 fixture failures and subsequent explicit three-file old-test migration are preserved, not counted as historical product defects."
+    ]
+  },
+  "final_tests": {
+    "core": {
+      "passed": 3512,
+      "skipped": 7,
+      "seconds": 561.76
+    },
+    "pro": {
+      "passed": 974,
+      "seconds": 175.42
+    },
+    "paired": {
+      "passed": 60,
+      "seconds": 0.78
+    },
+    "new_core": {
+      "passed": 90,
+      "seconds": 39.3
+    },
+    "new_pro": {
+      "passed": 3,
+      "seconds": 0.72
+    }
+  },
+  "inventory_path": "docs/evidence/2026-09-11-v1-05c2e2c-verification-inventory.json",
+  "root_validation_path": "docs/evidence/2026-09-11-v1-05c2e2c-root-validation.json",
+  "evidence_references": [
+    {
+      "repo": "core",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2c-controller-drain-author.json",
+      "sha256": "53cac8b551ebfa3f8c6b243c4a0ce03e84a303f38d2acd95ec919113cdd388bb"
+    },
+    {
+      "repo": "core",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2c-controller-profile-author.json",
+      "sha256": "d2ef8022fff745963cfa26fe8ae2c3e3efe0d1b9491c4039ce2e91147fd6f486"
+    },
+    {
+      "repo": "core",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2c-controller-product-review.json",
+      "sha256": "e9f3fc7ebddeac951ddda8a254e0d1e8f0f7dc2a141b31fa435fe7a62b5af3dc"
+    },
+    {
+      "repo": "core",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2c-controller-probe-stop-review.json",
+      "sha256": "387e3ec45e0c5a3325d7c466ca6ee9c5148881d064681a7dc2d963de1ffed723"
+    },
+    {
+      "repo": "core",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2c-fixture-migration.json",
+      "sha256": "d67a17600a696a120706c33a82ea93783b9649ec39bff645f2456ba9984a6dac"
+    },
+    {
+      "repo": "core",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2c-root-validation.json",
+      "sha256": "1b0fdbe82a81046fc9d4d1388edf49c38730e26d6c1afd9ba342c8ab27fbb18e"
+    },
+    {
+      "repo": "core",
+      "path": "docs/evidence/2026-09-11-v1-05c2e2c-verification-inventory.json",
+      "sha256": "66533a52eb7d5143620d5c224a5dc267504d4b08cef721ca5ab9f2ca1ef6516e"
+    },
+    {
+      "repo": "core",
+      "path": "docs/controller-stop-ack.md",
+      "sha256": "f8d09c34c5dd25c1ddeabb44a38eb58770825fdf5599e6e9ee9a966d2922ff83"
+    }
+  ],
+  "contract": "docs/controller-stop-ack.md",
+  "verification_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib,re,shlex,subprocess\ncore=pathlib.Path('.').resolve();repos={'core':core,'pro':core.parent/'orze-pro'}\npath=core/'docs/evidence/2026-09-11-v1-05c2e2c-controller-stop-ack.json'\nc=json.loads(path.read_bytes());assert c['whole_v1_complete'] is False\nassert c['supported_stop_only_complete'] is True and c['restart_handoff_complete'] is False\ndocs=[c]\nfor item in c['evidence_references']:\n raw=(repos[item['repo']]/item['path']).read_bytes()\n assert hashlib.sha256(raw).hexdigest()==item['sha256'],item\n if item['path'].endswith('.json'):docs.append(json.loads(raw))\ni=json.loads((core/c['inventory_path']).read_bytes());r=json.loads((core/c['root_validation_path']).read_bytes())\nassert r['code_commits']==c['code_commits'] and r['final_counts']==c['final_tests']\nassert r['new_tests']==c['classification']\nassert r['new_tests']['cases']==93==65+24+3+1\nassert r['old_tracked_tests_modified']=={'core':3,'pro':0}\nassert r['final_epoch']['pre_post_exact'] is True and i['pre_post_exact'] is True\nfor key,base in repos.items():\n items=[x for x in i['final_files'] if x['repo']==key];expected={x['path'] for x in items}\n current=set(subprocess.check_output(['git','ls-files','-c','-o','--exclude-standard','--','src','tests','pyproject.toml'],cwd=base,text=True).splitlines())\n committed=set(subprocess.check_output(['git','ls-tree','-r','--name-only',c['code_commits'][key],'--','src','tests','pyproject.toml'],cwd=base,text=True).splitlines())\n assert expected==current==committed,(key,'file set')\n assert len(items)==i['counts'][key]\n for item in items:\n  assert hashlib.sha256((base/item['path']).read_bytes()).hexdigest()==item['sha256'],item\n  raw=subprocess.check_output(['git','show',c['code_commits'][key]+':'+item['path']],cwd=base)\n  assert hashlib.sha256(raw).hexdigest()==item['sha256'],('commit',item)\nstatic=json.loads(subprocess.check_output(['bash','-c',i['static_audit']['command']],cwd=core,text=True))\nassert static==i['static_audit']['result']\nassert (static['new_test_files'],static['file_assert_nodes'],static['embedded_programs'],static['embedded_assert_nodes'])==(15,116,22,65)\nassert len(static['snapshots'])==48 and static['baseline_snapshot_files']==17\ncommands=[];bodies=[];inline=[]\ndef walk(value,loc,key=''):\n if isinstance(value,dict):\n  for k,v in value.items():walk(v,loc+'.'+k,k)\n elif isinstance(value,list):\n  for n,v in enumerate(value):walk(v,loc+'['+str(n)+']',key)\n elif isinstance(value,str) and (key=='command' or key.endswith('_command')):\n  subprocess.run(['bash','-n'],input=value,text=True,capture_output=True,check=True)\n  tokens=shlex.split(value);commands.append(loc)\n  for m in re.finditer(r\"<<'PY'\\n(.*?)\\nPY(?=\\n|$)\",value,re.S):ast.parse(m.group(1));bodies.append(loc)\n  if \"<<'PY'\" not in value and '-c' in tokens and any(t in {'python','python3','/usr/bin/python3'} for t in tokens[:tokens.index('-c')]):\n   ast.parse(tokens[tokens.index('-c')+1]);inline.append(loc)\nfor n,doc in enumerate(docs):walk(doc,str(n))\nprint(json.dumps({'references':len(c['evidence_references']),'manifest_and_fixed_commit_files':len(i['final_files']),'static_exact':True,'command_occurrences':len(commands),'python_heredocs':len(bodies),'python_inline':len(inline),'supported_stop_only_complete':True,'restart_handoff_complete':False,'whole_v1_complete':False},sort_keys=True))\nPY",
+  "evidence_epoch_note": "Author/reviewer bounded epochs remain as observed. Final full epoch1 had four old-fixture/access-contract failures; after preserving complete originals, two fixtures were minimally migrated and both full suites rerun under final 887-file freeze. Earlier managed fixtures had two explicit cfg assignments. Current inventory and final epoch are authoritative for acceptance; older exact hashes/results are not rewritten.",
+  "limits": [
+    "Only explicit strict profile, fresh local finite registered instance, same cwd and exact parsed config/GPU set. Legacy configurations retain request/HOLD behavior; mixed-version arbitrary host writers are outside certificate.",
+    "Both stop CLI forms share actual observer and return0 only after verified ACK plus captured pidfd exit. Public object, PID/name/GPU match or prior disk ACK is not authority.",
+    "Resource closure is actual captured Lake connection, GPU lease object/list/fd ownership and own PID file; member inventory requires exact durable/private sets and historical native terminal/effect confirmation.",
+    "Actual product CPU integration includes escaped children, pre-script/role uncertainty, READY cancellation, probe cancellation, and CLI stop; GPU discovery/capacity/metadata and offline license are explicit test boundaries, not validated live GPU/provider execution.",
+    "Known first admission refusal and known closed/settled matched probe stop cancel cleanly; arbitrary unknown timing, output overflow, unconfirmed writes or lost supervision remain HOLD. The earlier untraced metadata-probe uncertainty is preserved without claiming the later isolated test fixed it.",
+    "4096 lifetime members, soft stop at2048; no history eviction, unlimited running, restart, reallocation, no-age-owner release or adoption.",
+    "15 new test files have116 file Assert sites;22 standalone parseable string fragments add65 Assert sites. These AST counts are not comprehensive generated-program counts or test-case totals.",
+    "Three old Core tests explicitly migrated:88 prior Assert nodes retained,87 exact andone access-list extension. Normalized whole AST exact after the three declared fixture changes; no old Pro test changed.",
+    "48 snapshots/logs (45 Python+3logs),17 byte-matching preceding fixed source/test snapshots including duplicated source evidence. Original whitespace in3source snapshots deliberately preserved.",
+    "No production rollout, model/data/paid provider, holdout content access, whole V1 or research-efficiency percentage claim."
+  ],
+  "next": "Continue same-config/scope single-use controller handoff with exact old-stop/exit authority and actual successor admission; keep offline resume, unknown adoption and GPU reallocation refused until separately qualified."
+}
