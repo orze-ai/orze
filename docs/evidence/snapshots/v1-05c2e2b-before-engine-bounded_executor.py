@@ -286,7 +286,8 @@ def run_bounded_executor(cmd, *, timeout, env, cwd, prepare=None, before_start=N
                 raise
         if _witness(scope) != witness or canonical(_ready(process, identity, command)) != canonical(binding):
             raise BoundedExecutorHOLD("bounded_executor_launch_identity_changed")
-        started = process.start() is not False
+        process.start()
+        started = True
         deadline, eof_deadline = time.monotonic() + budget, None
         while True:
             ret = process.poll()
@@ -365,7 +366,3 @@ def run_bounded_executor(cmd, *, timeout, env, cwd, prepare=None, before_start=N
             if prepare_entered:
                 raise BoundedExecutorHOLD("bounded_executor_pipe_close_unconfirmed") from None
             raise close_error
-        if process is not None and closed and not held:
-            from orze.engine.controller_members import settle_process
-            receipt = process.closure_receipt()
-            settle_process(process, outcome="interrupted" if receipt["stop_requested"] else "completed")

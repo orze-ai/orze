@@ -192,17 +192,13 @@ def assert_gpu_scope_idle(gpu_ids: Sequence[int]) -> dict:
     no existing compute process.  Queries are issued one GPU at a time and the
     result deliberately contains counts only, never PIDs or process names.
     """
-    # The engine package eagerly imports launcher, which itself imports this
-    # lease module. Delay the diagnostic adapter until lease definitions exist.
-    from orze.engine.controller_probe import ControllerProbeHOLD, run_probe
-
     if (isinstance(gpu_ids, (str, bytes))
             or len(gpu_ids) != len(set(gpu_ids))):
         raise GpuLeaseError("gpu_lease_scope_invalid")
     ordered = sorted(_validate_gpu(gpu) for gpu in gpu_ids)
     for gpu in ordered:
         try:
-            completed = run_probe(
+            completed = subprocess.run(
                 [
                     "nvidia-smi", "-i", str(gpu),
                     "--query-compute-apps=pid",
@@ -213,8 +209,6 @@ def assert_gpu_scope_idle(gpu_ids: Sequence[int]) -> dict:
                 text=True,
                 timeout=10,
             )
-        except ControllerProbeHOLD:
-            raise
         except (OSError, subprocess.SubprocessError) as exc:
             raise GpuLeaseError(
                 f"gpu_lease_compute_inventory_unavailable: physical_gpu={gpu}"

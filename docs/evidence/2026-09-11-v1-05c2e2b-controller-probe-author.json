@@ -1,0 +1,403 @@
+{
+  "schema": 1,
+  "milestone": "V1-05C2e2b",
+  "scope": "Internal registered-controller bounded local probe adapter and eleven explicit probe call sites; no public stop ACK integration.",
+  "author": "/root/pro_review",
+  "review_independence": "Author evidence for owned probe adapter/call sites/tests. Shared controller registration and membership are authored by /root and /root/core_review; this report does not claim independent review of its own implementation.",
+  "baseline_commit": "f1acd4c25dc3bdd6650c2c200c1eec5371679c00",
+  "owned_production": [
+    "src/orze/engine/controller_probe.py",
+    "src/orze/core/gpu_lease.py",
+    "src/orze/hardware/gpu.py",
+    "src/orze/engine/gpu_slots.py",
+    "src/orze/engine/launcher.py (only four probe calls, import and typed HOLD catch; native launch changes belong to Core author)"
+  ],
+  "contract": {
+    "no_controller": "Delegate the exact original positional/keyword arguments and return/exception unchanged to the current subprocess.run.",
+    "registered": "Explicit noninteractive argv/env/cwd/finite-positive-timeout subset. Unsupported inputs and lossy decode modes are sticky ControllerProbeHOLD before preparation. Known missing executable preserves ordinary FileNotFoundError diagnosis, with no fallback process.",
+    "output": "Full stdout plus stderr <=65536 bytes; actual byte counts and per-stream SHA framed with canonical JSON, then one aggregate SHA. Both EOF and local pipe close precede action settlement. Metadata contains no bodies or raw argv/env.",
+    "completion": "Automatic primitive membership hooks own pending/READY/GO/closure. Adapter requires actual TREE_CLOSED plus normal supervisor exit. Nonblocking quiesce STOP waits for closure with bounded deadline; STOP0, truncation and uncertainty never become normal CompletedProcess.",
+    "stopped": "Known closed interruption settles outcome interrupted without converting QUIESCING to uncertain HOLD. Timeout preserves actual worker code and output bytes in TimeoutExpired. Protocol loss retains sticky HOLD and does not issue a second STOP.",
+    "remote": "Registered context refuses _run_ssh before subprocess and latches HOLD; no-controller legacy SSH path unchanged.",
+    "limitations": [
+      "Internal opt-in register_controller only; no Orze.run, public CLI/controller ACK, restart, adoption or cross-host closure proof.",
+      "The 14 adapter tests use explicit context and settlement spies with real CPU supervisors; only the separate registered two-case group proves same-SQLite membership settlement.",
+      "The adapter's synchronous start-refusal seam in the initial 14 is not evidence for the nonblocking controller hook; the separate registered quiesce test uses actual ctx.quiesce and actual primitive start/STOP.",
+      "Eleven call-site propagation checks use explicit OS-free spies, not GPU inventory execution.",
+      "No old repo tests changed; no GPU, provider, workload, host process scan or holdout content."
+    ]
+  },
+  "classification": {
+    "distinct_new_tests": 24,
+    "first_green_mechanisms": 15,
+    "draft_regression_cases": 8,
+    "draft_control_cases": 1,
+    "legacy_behavior_red_cases": 0,
+    "old_compatibility_controls_run": 10,
+    "note": "24 = original 14 adapter mechanisms + 1 eleven-call propagation mechanism + 1 real registered normal control + 1 real registered quiesce draft regression + 3 input/decode draft regressions + 4 fresh-import draft regressions. Multiple fresh-import routes share an import-cycle root-cause family; counts are test cases, not independent defect counts. Repeated/replay/overlapping target runs are not summed."
+  },
+  "runs": [
+    {
+      "label": "first_probe_adapter_mechanisms",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe.py --tb=short",
+      "exit_code": 0,
+      "footer": "14 passed in 1.19s",
+      "test_sha256": "fc6e50b4ad18fffb34563a4a4d3ebdf37abc544c7e306740ecd5e6e51b5be90a",
+      "probe_sha256": "5c8b4e1b6e9591d81d925053334b721ccef718f699f88694bc427c724fe0e652",
+      "scope": "Candidate; no complete multi-file pre/post inventory was captured for this first run."
+    },
+    {
+      "label": "import_cycle_initial_collection_diagnostic",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe_import.py --tb=short",
+      "exit_code": 1,
+      "footer": "1 error in 0.18s",
+      "classification": "Real draft import cycle encountered in existing autouse conftest; not missing API and not a legacy release defect."
+    },
+    {
+      "label": "import_cycle_first_test_body_red",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest --noconftest -q tests/test_controller_probe_import.py --tb=short",
+      "exit_code": 1,
+      "footer": "1 failed in 0.22s",
+      "test_sha256": "dae4047089fa92211dd5b6c03c214e50230fafc8e53abb541bacd23685124ecf",
+      "scope": "--noconftest used only to reach the fixture-free fresh-interpreter test body; conftest was not modified."
+    },
+    {
+      "label": "import_cycle_first_fix",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe_import.py --tb=short",
+      "exit_code": 0,
+      "footer": "1 passed in 0.27s"
+    },
+    {
+      "label": "registered_normal_and_quiesce_first",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe_registered.py --tb=short",
+      "exit_code": 1,
+      "footer": "1 failed, 1 passed in 1.04s",
+      "probe_sha256": "5c8b4e1b6e9591d81d925053334b721ccef718f699f88694bc427c724fe0e652",
+      "classification": "Actual registered SQLite + READY quiesce; no synchronous STOP substitute. Immediate poll(None) was treated as closure uncertainty."
+    },
+    {
+      "label": "strict_input_first",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe_input_refusal.py --tb=short",
+      "exit_code": 1,
+      "footer": "3 failed in 0.35s",
+      "classification": "Bare unsupported-option TypeError escaped HOLD boundary; errors ignore/replace silently returned decoded normal results."
+    },
+    {
+      "label": "first_probe_fixes",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe.py tests/test_controller_probe_registered.py tests/test_controller_probe_input_refusal.py tests/test_controller_probe_import.py --tb=short",
+      "exit_code": 0,
+      "footer": "20 passed in 2.43s"
+    },
+    {
+      "label": "old_no_context_compatibility",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_gpu_lease.py::test_idle_attestation_queries_only_explicit_physical_scope tests/test_gpu_lease.py::test_idle_attestation_rejects_external_compute_without_detail_leak tests/test_gpu_lease.py::test_process_watchdog_telemetry_is_restricted_to_assigned_gpu tests/test_gpu_lease.py::test_zombie_telemetry_is_restricted_to_assigned_gpu tests/test_gpu_lease.py::test_gpu_detection_can_be_restricted_to_explicit_scope tests/test_managed_run.py::test_vram_query_restricts_nvidia_smi_to_requested_gpu tests/test_managed_run.py::test_detailed_telemetry_restricts_nvidia_smi_to_requested_gpus tests/test_data_boundaries.py::test_kernel_probe_is_zero_gpu_and_checks_requested_namespaces tests/test_watchdog.py::test_zombie_elapsed_floor_is_invariant_to_fast_poll tests/test_watchdog.py::test_zombie_activity_resets_elapsed_floor --tb=short",
+      "exit_code": 0,
+      "footer": "10 passed in 0.25s",
+      "classification": "Existing frozen tests with explicit OS spies, no fixture changes."
+    },
+    {
+      "label": "caller_test_initial_fixture_error",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe_callers.py --tb=short",
+      "exit_code": 1,
+      "footer": "1 failed in 0.16s",
+      "classification": "Test used module attribute replaced by existing autouse idle-attestation stub, so first call never reached real function. Not a production defect. Full test preserved; bind actual function at collection like existing tests."
+    },
+    {
+      "label": "caller_test_corrected_fixture",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe_callers.py --tb=short",
+      "exit_code": 0,
+      "footer": "1 passed in 0.14s"
+    },
+    {
+      "label": "complete_probe_draft_replay",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport pathlib\nimport pytest\nfrom orze.engine import controller_probe as probe\nsnapshot = pathlib.Path(\"docs/evidence/snapshots/v1-05c2e2b-before-probe-quiesce-and-inputs.py\").resolve()\nexec(compile(snapshot.read_bytes(), str(snapshot), \"exec\"), probe.__dict__)\nclass Replay:\n    def pytest_collection_modifyitems(self, items):\n        for item in items:\n            module = item.module\n            if module.__name__ == \"test_controller_probe_registered\" and not getattr(module, \"_snapshot_loaded\", False):\n                prefix = \"from pathlib import Path\\nfrom orze.engine import controller_probe as probe\\nexec(compile(Path(\" + repr(str(snapshot)) + \").read_bytes(),\" + repr(str(snapshot)) + \",'exec'),probe.__dict__)\\n\"\n                module._PROGRAM = prefix + module._PROGRAM\n                module._snapshot_loaded = True\nraise SystemExit(pytest.main([\"-q\", \"tests/test_controller_probe_registered.py\", \"tests/test_controller_probe_input_refusal.py\", \"--tb=short\"], plugins=[Replay()]))\nPY",
+      "exit_code": 1,
+      "footer": "4 failed, 1 passed in 1.23s",
+      "scope": "Whole frozen probe module executed in memory in parent tests and fresh registered child. Active source/test files unchanged."
+    },
+    {
+      "label": "initial_import_four_module_replay",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib.abc\nimport importlib.util\nimport pathlib\nimport subprocess\nimport sys\nimport pytest\nprefix = pathlib.Path(\"docs/evidence/snapshots/v1-05c2e2b-before-probe-import-cycle-\").resolve()\nsources = {name: str(prefix) + suffix for name, suffix in {\n    \"orze.core.gpu_lease\": \"core-gpu_lease.py\",\n    \"orze.engine.controller_probe\": \"engine-controller_probe.py\",\n    \"orze.engine\": \"engine-__init__.py\",\n    \"orze.engine.launcher\": \"engine-launcher.py\",\n}.items()}\nbootstrap = \"\"\"\nimport importlib.abc, importlib.util, pathlib, sys\nsources = \"\"\" + repr(sources) + \"\"\"\nclass OldSources(importlib.abc.MetaPathFinder, importlib.abc.Loader):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname in sources:\n            return importlib.util.spec_from_loader(fullname, self, is_package=fullname == \"orze.engine\")\n    def create_module(self, spec):\n        return None\n    def exec_module(self, module):\n        if module.__name__ == \"orze.engine\":\n            module.__path__ = [str(pathlib.Path(\"src/orze/engine\").resolve())]\n        module.__file__ = sources[module.__name__]\n        exec(compile(pathlib.Path(module.__file__).read_bytes(), module.__file__, \"exec\"), module.__dict__)\nsys.meta_path.insert(0, OldSources())\n\"\"\"\noriginal = subprocess.run\ndef replay_run(args, *a, **k):\n    if type(args) is list and len(args) >= 3 and args[1] == \"-c\":\n        args = list(args)\n        args[2] = bootstrap + args[2]\n    return original(args, *a, **k)\nclass Replay:\n    def pytest_sessionstart(self, session):\n        subprocess.run = replay_run\nraise SystemExit(pytest.main([\"--noconftest\", \"-q\", \"tests/test_controller_probe_import.py\", \"--tb=short\"], plugins=[Replay()]))\nPY",
+      "exit_code": 1,
+      "footer": "1 failed in 0.22s",
+      "test_sha256": "dae4047089fa92211dd5b6c03c214e50230fafc8e53abb541bacd23685124ecf",
+      "scope": "Historical command for pre-versioned subprocess.run test. Current active test uses Popen; final replay below is the reproducible current-test command."
+    },
+    {
+      "label": "superseded_hardware_import_candidate",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib\nimport json\nfrom pathlib import Path\nimport pytest\npaths = [\"src/orze/engine/controller_probe.py\",\"src/orze/core/gpu_lease.py\",\"src/orze/hardware/gpu.py\",\"src/orze/engine/gpu_slots.py\",\"src/orze/engine/launcher.py\",\"src/orze/engine/controller_control.py\",\"src/orze/engine/controller_members.py\",\"src/orze/engine/supervised_process.py\",\"src/orze/engine/supervisor_worker.py\",\"src/orze/engine/bounded_executor.py\",\"tests/test_controller_probe.py\",\"tests/test_controller_probe_registered.py\",\"tests/test_controller_probe_input_refusal.py\",\"tests/test_controller_probe_import.py\",\"tests/test_controller_probe_callers.py\",\"tests/test_gpu_lease.py\",\"tests/test_managed_run.py\",\"tests/test_data_boundaries.py\",\"tests/test_watchdog.py\"]\ndef inventory():\n    return {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}\npre = inventory()\ncode = pytest.main([\"-q\",\"tests/test_controller_probe.py\",\"tests/test_controller_probe_registered.py\",\"tests/test_controller_probe_input_refusal.py\",\"tests/test_controller_probe_import.py\",\"tests/test_controller_probe_callers.py\",\"tests/test_gpu_lease.py::test_idle_attestation_queries_only_explicit_physical_scope\",\"tests/test_gpu_lease.py::test_idle_attestation_rejects_external_compute_without_detail_leak\",\"tests/test_gpu_lease.py::test_process_watchdog_telemetry_is_restricted_to_assigned_gpu\",\"tests/test_gpu_lease.py::test_zombie_telemetry_is_restricted_to_assigned_gpu\",\"tests/test_gpu_lease.py::test_gpu_detection_can_be_restricted_to_explicit_scope\",\"tests/test_managed_run.py::test_vram_query_restricts_nvidia_smi_to_requested_gpu\",\"tests/test_managed_run.py::test_detailed_telemetry_restricts_nvidia_smi_to_requested_gpus\",\"tests/test_data_boundaries.py::test_kernel_probe_is_zero_gpu_and_checks_requested_namespaces\",\"tests/test_watchdog.py::test_zombie_elapsed_floor_is_invariant_to_fast_poll\",\"tests/test_watchdog.py::test_zombie_activity_resets_elapsed_floor\",\"--tb=short\"])\npost = inventory()\nprint(\"PROBE_VERIFICATION=\" + json.dumps({\"pre\": pre, \"post\": post, \"exact\": pre == post, \"pytest_exit_code\": code}, sort_keys=True))\nraise SystemExit(code if pre == post else 97)\nPY",
+      "exit_code": 0,
+      "footer": "31 passed in 2.56s",
+      "inventory": {
+        "exact": true,
+        "post": {
+          "src/orze/core/gpu_lease.py": "3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263",
+          "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+          "src/orze/engine/controller_control.py": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+          "src/orze/engine/controller_members.py": "ae3f380c36e7b58812d737ce2bf8688b4b90a87d594ce5a8e9469e1548f8e892",
+          "src/orze/engine/controller_probe.py": "ded811ad12520757399b6fa0efac93be37cd611bb3b99c653a096f86fe3b345d",
+          "src/orze/engine/gpu_slots.py": "3a519d4357d54c4ad16d6a5351f82b1c017dc0c6b8c003c299b0c79a241692fe",
+          "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+          "src/orze/engine/supervised_process.py": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da",
+          "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+          "src/orze/hardware/gpu.py": "825d5bd04a991fec56cc19da72e0e3c48325eccb14554bae448b72abee740908",
+          "tests/test_controller_probe.py": "b67d3fe5209ed9e5199a5112fcc12e6e5cd971efc41d92cd27b3b9d3936a4c38",
+          "tests/test_controller_probe_callers.py": "8a56a62ff3d9bfcbfc45b2a891918e167c7f3783f5f73270225f4cdbd0ede34c",
+          "tests/test_controller_probe_import.py": "dae4047089fa92211dd5b6c03c214e50230fafc8e53abb541bacd23685124ecf",
+          "tests/test_controller_probe_input_refusal.py": "d87e83e4aa243f7ca9bc7392fdf6036a28d47bbb680e3dd3353adac9ad44bc30",
+          "tests/test_controller_probe_registered.py": "d1cd46702635916707b23bf9a0e984cc669bdab0ff35347a9fec30f133349f2e",
+          "tests/test_data_boundaries.py": "aeae04c3230563586585c73ee7d65101d8329f3797ec643accd8e82bc9f69b81",
+          "tests/test_gpu_lease.py": "06ef885723f1b03aa47dbe18e929971eb5d23a6d00d4869486099aaf250ffe71",
+          "tests/test_managed_run.py": "ad5346326960172370b875f82a5476b8c7f8788de30eb4375a8e36d11b6d1e3c",
+          "tests/test_watchdog.py": "7bc0639f6cc137286221c3fb2767ffc6435c485eed3ed343161390192909df9a"
+        },
+        "pre": {
+          "src/orze/core/gpu_lease.py": "3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263",
+          "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+          "src/orze/engine/controller_control.py": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+          "src/orze/engine/controller_members.py": "ae3f380c36e7b58812d737ce2bf8688b4b90a87d594ce5a8e9469e1548f8e892",
+          "src/orze/engine/controller_probe.py": "ded811ad12520757399b6fa0efac93be37cd611bb3b99c653a096f86fe3b345d",
+          "src/orze/engine/gpu_slots.py": "3a519d4357d54c4ad16d6a5351f82b1c017dc0c6b8c003c299b0c79a241692fe",
+          "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+          "src/orze/engine/supervised_process.py": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da",
+          "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+          "src/orze/hardware/gpu.py": "825d5bd04a991fec56cc19da72e0e3c48325eccb14554bae448b72abee740908",
+          "tests/test_controller_probe.py": "b67d3fe5209ed9e5199a5112fcc12e6e5cd971efc41d92cd27b3b9d3936a4c38",
+          "tests/test_controller_probe_callers.py": "8a56a62ff3d9bfcbfc45b2a891918e167c7f3783f5f73270225f4cdbd0ede34c",
+          "tests/test_controller_probe_import.py": "dae4047089fa92211dd5b6c03c214e50230fafc8e53abb541bacd23685124ecf",
+          "tests/test_controller_probe_input_refusal.py": "d87e83e4aa243f7ca9bc7392fdf6036a28d47bbb680e3dd3353adac9ad44bc30",
+          "tests/test_controller_probe_registered.py": "d1cd46702635916707b23bf9a0e984cc669bdab0ff35347a9fec30f133349f2e",
+          "tests/test_data_boundaries.py": "aeae04c3230563586585c73ee7d65101d8329f3797ec643accd8e82bc9f69b81",
+          "tests/test_gpu_lease.py": "06ef885723f1b03aa47dbe18e929971eb5d23a6d00d4869486099aaf250ffe71",
+          "tests/test_managed_run.py": "ad5346326960172370b875f82a5476b8c7f8788de30eb4375a8e36d11b6d1e3c",
+          "tests/test_watchdog.py": "7bc0639f6cc137286221c3fb2767ffc6435c485eed3ed343161390192909df9a"
+        },
+        "pytest_exit_code": 0
+      },
+      "scope": "19 files exact, but before public hardware-first import coverage. Not final acceptance."
+    },
+    {
+      "label": "hardware_first_public_import_red",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe_import.py --tb=short",
+      "exit_code": 1,
+      "footer": "1 failed, 1 passed in 0.44s",
+      "scope": "Two-parameter test at this epoch: lease/hardware; real Popen/pidfd cleanup already installed. Hardware full source snapshot 825d5bd... preserved before fix."
+    },
+    {
+      "label": "hardware_fix_two_imports_and_callers",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_controller_probe_import.py tests/test_controller_probe_callers.py --tb=short",
+      "exit_code": 0,
+      "footer": "3 passed in 0.48s",
+      "scope": "Two import parameters at this epoch, plus one eleven-call mechanism."
+    },
+    {
+      "label": "hardware_full_module_final_routes_replay",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport pathlib\nimport subprocess\nimport pytest\nsource = str(pathlib.Path(\"docs/evidence/snapshots/v1-05c2e2b-before-hardware-probe-import.py\").resolve())\nbootstrap = \"\"\"\nimport importlib.abc, importlib.util, pathlib, sys\nsource = \"\"\" + repr(source) + \"\"\"\nclass OldHardware(importlib.abc.MetaPathFinder, importlib.abc.Loader):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname == \"orze.hardware.gpu\":\n            return importlib.util.spec_from_loader(fullname, self)\n    def create_module(self, spec):\n        return None\n    def exec_module(self, module):\n        module.__file__ = source\n        exec(compile(pathlib.Path(source).read_bytes(), source, \"exec\"), module.__dict__)\nsys.meta_path.insert(0, OldHardware())\n\"\"\"\noriginal = subprocess.Popen\ndef replay_popen(args, *a, **k):\n    if type(args) is list and len(args) >= 3 and args[1] == \"-c\":\n        args = list(args)\n        args[2] = bootstrap + args[2]\n    return original(args, *a, **k)\nclass Replay:\n    def pytest_sessionstart(self, session):\n        subprocess.Popen = replay_popen\nraise SystemExit(pytest.main([\"-q\", \"tests/test_controller_probe_import.py\", \"--tb=short\"], plugins=[Replay()]))\nPY",
+      "exit_code": 1,
+      "footer": "3 failed, 1 passed in 0.76s",
+      "scope": "Frozen whole hardware module; final four public import routes. hardware/reporting.state/cli fail from the same cycle family; lease remains control."
+    },
+    {
+      "label": "lease_four_full_modules_final_case_replay",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib.abc\nimport importlib.util\nimport pathlib\nimport subprocess\nimport sys\nimport pytest\nprefix = pathlib.Path(\"docs/evidence/snapshots/v1-05c2e2b-before-probe-import-cycle-\").resolve()\nsources = {name: str(prefix) + suffix for name, suffix in {\n    \"orze.core.gpu_lease\": \"core-gpu_lease.py\",\n    \"orze.engine.controller_probe\": \"engine-controller_probe.py\",\n    \"orze.engine\": \"engine-__init__.py\",\n    \"orze.engine.launcher\": \"engine-launcher.py\",\n}.items()}\nbootstrap = \"\"\"\nimport importlib.abc, importlib.util, pathlib, sys\nsources = \"\"\" + repr(sources) + \"\"\"\nclass OldSources(importlib.abc.MetaPathFinder, importlib.abc.Loader):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname in sources:\n            return importlib.util.spec_from_loader(fullname, self, is_package=fullname == \"orze.engine\")\n    def create_module(self, spec):\n        return None\n    def exec_module(self, module):\n        if module.__name__ == \"orze.engine\":\n            module.__path__ = [str(pathlib.Path(\"src/orze/engine\").resolve())]\n        module.__file__ = sources[module.__name__]\n        exec(compile(pathlib.Path(module.__file__).read_bytes(), module.__file__, \"exec\"), module.__dict__)\nsys.meta_path.insert(0, OldSources())\n\"\"\"\noriginal = subprocess.Popen\ndef replay_popen(args, *a, **k):\n    if type(args) is list and len(args) >= 3 and args[1] == \"-c\":\n        args = list(args)\n        args[2] = bootstrap + args[2]\n    return original(args, *a, **k)\nclass Replay:\n    def pytest_sessionstart(self, session):\n        subprocess.Popen = replay_popen\nraise SystemExit(pytest.main([\"--noconftest\", \"-q\", \"tests/test_controller_probe_import.py\", \"-k\", \"gpu_lease]\", \"--tb=short\"], plugins=[Replay()]))\nPY",
+      "exit_code": 1,
+      "footer": "1 failed, 3 deselected in 0.22s",
+      "scope": "Four whole frozen draft modules; final Popen/pidfd test. Active source/test files unchanged."
+    },
+    {
+      "label": "final_bounded_author_target",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib\nimport json\nfrom pathlib import Path\nimport pytest\npaths = [\"src/orze/engine/controller_probe.py\",\"src/orze/core/gpu_lease.py\",\"src/orze/hardware/gpu.py\",\"src/orze/engine/gpu_slots.py\",\"src/orze/engine/launcher.py\",\"src/orze/engine/controller_control.py\",\"src/orze/engine/controller_members.py\",\"src/orze/engine/supervised_process.py\",\"src/orze/engine/supervisor_worker.py\",\"src/orze/engine/bounded_executor.py\",\"tests/test_controller_probe.py\",\"tests/test_controller_probe_registered.py\",\"tests/test_controller_probe_input_refusal.py\",\"tests/test_controller_probe_import.py\",\"tests/test_controller_probe_callers.py\",\"tests/test_gpu_lease.py\",\"tests/test_managed_run.py\",\"tests/test_data_boundaries.py\",\"tests/test_watchdog.py\"]\ndef inventory():\n    return {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}\npre = inventory()\ncode = pytest.main([\"-q\",\"tests/test_controller_probe.py\",\"tests/test_controller_probe_registered.py\",\"tests/test_controller_probe_input_refusal.py\",\"tests/test_controller_probe_import.py\",\"tests/test_controller_probe_callers.py\",\"tests/test_gpu_lease.py::test_idle_attestation_queries_only_explicit_physical_scope\",\"tests/test_gpu_lease.py::test_idle_attestation_rejects_external_compute_without_detail_leak\",\"tests/test_gpu_lease.py::test_process_watchdog_telemetry_is_restricted_to_assigned_gpu\",\"tests/test_gpu_lease.py::test_zombie_telemetry_is_restricted_to_assigned_gpu\",\"tests/test_gpu_lease.py::test_gpu_detection_can_be_restricted_to_explicit_scope\",\"tests/test_managed_run.py::test_vram_query_restricts_nvidia_smi_to_requested_gpu\",\"tests/test_managed_run.py::test_detailed_telemetry_restricts_nvidia_smi_to_requested_gpus\",\"tests/test_data_boundaries.py::test_kernel_probe_is_zero_gpu_and_checks_requested_namespaces\",\"tests/test_watchdog.py::test_zombie_elapsed_floor_is_invariant_to_fast_poll\",\"tests/test_watchdog.py::test_zombie_activity_resets_elapsed_floor\",\"--tb=short\"])\npost = inventory()\nprint(\"PROBE_VERIFICATION=\" + json.dumps({\"pre\": pre, \"post\": post, \"exact\": pre == post, \"pytest_exit_code\": code}, sort_keys=True))\nraise SystemExit(code if pre == post else 97)\nPY",
+      "exit_code": 0,
+      "footer": "34 passed in 2.96s",
+      "inventory": {
+        "exact": true,
+        "post": {
+          "src/orze/core/gpu_lease.py": "3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263",
+          "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+          "src/orze/engine/controller_control.py": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+          "src/orze/engine/controller_members.py": "ae3f380c36e7b58812d737ce2bf8688b4b90a87d594ce5a8e9469e1548f8e892",
+          "src/orze/engine/controller_probe.py": "ded811ad12520757399b6fa0efac93be37cd611bb3b99c653a096f86fe3b345d",
+          "src/orze/engine/gpu_slots.py": "3a519d4357d54c4ad16d6a5351f82b1c017dc0c6b8c003c299b0c79a241692fe",
+          "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+          "src/orze/engine/supervised_process.py": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da",
+          "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+          "src/orze/hardware/gpu.py": "83fbbe24f7a5a673cf469fe564269c3cc3d24cb4ef829fb3f76462ad5dd8c33c",
+          "tests/test_controller_probe.py": "b67d3fe5209ed9e5199a5112fcc12e6e5cd971efc41d92cd27b3b9d3936a4c38",
+          "tests/test_controller_probe_callers.py": "3759279767a2102b1e6c4f2962a416d191c6eba2ec61e29df5463c6393649a8e",
+          "tests/test_controller_probe_import.py": "b4506e570921815fa6c7a1dcbb1dfec7c293a6190327869c2591ea1f1b135f7a",
+          "tests/test_controller_probe_input_refusal.py": "d87e83e4aa243f7ca9bc7392fdf6036a28d47bbb680e3dd3353adac9ad44bc30",
+          "tests/test_controller_probe_registered.py": "d1cd46702635916707b23bf9a0e984cc669bdab0ff35347a9fec30f133349f2e",
+          "tests/test_data_boundaries.py": "aeae04c3230563586585c73ee7d65101d8329f3797ec643accd8e82bc9f69b81",
+          "tests/test_gpu_lease.py": "06ef885723f1b03aa47dbe18e929971eb5d23a6d00d4869486099aaf250ffe71",
+          "tests/test_managed_run.py": "ad5346326960172370b875f82a5476b8c7f8788de30eb4375a8e36d11b6d1e3c",
+          "tests/test_watchdog.py": "7bc0639f6cc137286221c3fb2767ffc6435c485eed3ed343161390192909df9a"
+        },
+        "pre": {
+          "src/orze/core/gpu_lease.py": "3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263",
+          "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+          "src/orze/engine/controller_control.py": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+          "src/orze/engine/controller_members.py": "ae3f380c36e7b58812d737ce2bf8688b4b90a87d594ce5a8e9469e1548f8e892",
+          "src/orze/engine/controller_probe.py": "ded811ad12520757399b6fa0efac93be37cd611bb3b99c653a096f86fe3b345d",
+          "src/orze/engine/gpu_slots.py": "3a519d4357d54c4ad16d6a5351f82b1c017dc0c6b8c003c299b0c79a241692fe",
+          "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+          "src/orze/engine/supervised_process.py": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da",
+          "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+          "src/orze/hardware/gpu.py": "83fbbe24f7a5a673cf469fe564269c3cc3d24cb4ef829fb3f76462ad5dd8c33c",
+          "tests/test_controller_probe.py": "b67d3fe5209ed9e5199a5112fcc12e6e5cd971efc41d92cd27b3b9d3936a4c38",
+          "tests/test_controller_probe_callers.py": "3759279767a2102b1e6c4f2962a416d191c6eba2ec61e29df5463c6393649a8e",
+          "tests/test_controller_probe_import.py": "b4506e570921815fa6c7a1dcbb1dfec7c293a6190327869c2591ea1f1b135f7a",
+          "tests/test_controller_probe_input_refusal.py": "d87e83e4aa243f7ca9bc7392fdf6036a28d47bbb680e3dd3353adac9ad44bc30",
+          "tests/test_controller_probe_registered.py": "d1cd46702635916707b23bf9a0e984cc669bdab0ff35347a9fec30f133349f2e",
+          "tests/test_data_boundaries.py": "aeae04c3230563586585c73ee7d65101d8329f3797ec643accd8e82bc9f69b81",
+          "tests/test_gpu_lease.py": "06ef885723f1b03aa47dbe18e929971eb5d23a6d00d4869486099aaf250ffe71",
+          "tests/test_managed_run.py": "ad5346326960172370b875f82a5476b8c7f8788de30eb4375a8e36d11b6d1e3c",
+          "tests/test_watchdog.py": "7bc0639f6cc137286221c3fb2767ffc6435c485eed3ed343161390192909df9a"
+        },
+        "pytest_exit_code": 0
+      },
+      "scope": "24 new + 10 old; 19 files pre/post exact. Bounded author run, not root full-suite epoch."
+    }
+  ],
+  "test_refinements": {
+    "legacy_tests_changed": 0,
+    "initial_fourteen": "Complete first-green new test file retained. One raises AST site, three parameters, changes TypeError/ValueError to ControllerProbeHOLD with input_invalid; all original 35 Assert AST retained, one new hold assertion added. Explicit new draft contract refinement, not migration of legacy tests.",
+    "fresh_import": "Complete first-green single-case file retained. Expanded to four public import orders. Explicit subprocess.run -> owned Popen/pidfd cleanup refinement at root request; original result assertion now reads child.returncode/stdout/stderr. Do not claim the new test file remained byte-identical.",
+    "caller_probe": "Complete initial failing test retained; direct function import restores intended real idle-attestation function despite global autouse stub. Complete later test retained before removing gpu module run_probe patch after production lazy import. All caller Assert AST business checks retained."
+  },
+  "static_verification": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast\nfrom collections import Counter\nimport hashlib\nimport json\nfrom pathlib import Path\nimport subprocess\nbaseline = \"f1acd4c25dc3bdd6650c2c200c1eec5371679c00\"\npairs = {\n\"src/orze/core/gpu_lease.py\":\"docs/evidence/snapshots/v1-05c2e2-before-probe-core-gpu_lease.py\",\n\"src/orze/hardware/gpu.py\":\"docs/evidence/snapshots/v1-05c2e2-before-probe-hardware-gpu.py\",\n\"src/orze/engine/gpu_slots.py\":\"docs/evidence/snapshots/v1-05c2e2-before-probe-engine-gpu_slots.py\",\n\"src/orze/engine/launcher.py\":\"docs/evidence/snapshots/v1-05c2e2-before-probe-engine-launcher.py\"}\nsnapshots = sorted(p for p in Path(\"docs/evidence/snapshots\").glob(\"v1-05c2e2*probe*\") if p.is_file())\nrecords = {}\nfor path in snapshots:\n    raw = path.read_bytes()\n    ast.parse(raw)\n    records[str(path)] = {\"sha256\": hashlib.sha256(raw).hexdigest(), \"bytes\": len(raw), \"ends_with_newline\": raw.endswith(b\"\\n\"), \"complete_module_parses\": True}\nfor source, snapshot in pairs.items():\n    assert subprocess.check_output([\"git\",\"show\",baseline+\":\"+source]) == Path(snapshot).read_bytes()\ndef asserts(path):\n    return Counter(ast.dump(n, include_attributes=False) for n in ast.walk(ast.parse(Path(path).read_bytes())) if isinstance(n, ast.Assert))\nbefore = asserts(\"docs/evidence/snapshots/v1-05c2e2b-probe-tests-first-green.py\")\nafter = asserts(\"tests/test_controller_probe.py\")\nassert not before-after\nassert sum((after-before).values()) == 1\nnew_tests = [\"tests/test_controller_probe.py\",\"tests/test_controller_probe_registered.py\",\"tests/test_controller_probe_input_refusal.py\",\"tests/test_controller_probe_import.py\",\"tests/test_controller_probe_callers.py\"]\nold_tests = [\"tests/test_gpu_lease.py\",\"tests/test_managed_run.py\",\"tests/test_data_boundaries.py\",\"tests/test_watchdog.py\"]\nfor path in old_tests:\n    assert subprocess.check_output([\"git\",\"show\",baseline+\":\"+path]) == Path(path).read_bytes()\nresult = {\"baseline\":baseline, \"baseline_snapshots_byte_equal\":pairs, \"snapshots\":records,\n\"new_tests\":{p:{\"sha256\":hashlib.sha256(Path(p).read_bytes()).hexdigest(),\"assert_ast_count\":sum(asserts(p).values())} for p in new_tests},\n\"initial_fourteen_refinement\":{\"original_assert_ast\":sum(before.values()),\"retained\":sum((before&after).values()),\"added\":sum((after-before).values()),\"removed\":0,\"raises_site_changed\":1,\"parameter_cases\":3},\n\"old_test_files_byte_equal_to_baseline\":old_tests}\nprint(json.dumps(result, sort_keys=True))\nPY",
+    "exit_code": 0,
+    "result": {
+      "baseline": "f1acd4c25dc3bdd6650c2c200c1eec5371679c00",
+      "baseline_snapshots_byte_equal": {
+        "src/orze/core/gpu_lease.py": "docs/evidence/snapshots/v1-05c2e2-before-probe-core-gpu_lease.py",
+        "src/orze/engine/gpu_slots.py": "docs/evidence/snapshots/v1-05c2e2-before-probe-engine-gpu_slots.py",
+        "src/orze/engine/launcher.py": "docs/evidence/snapshots/v1-05c2e2-before-probe-engine-launcher.py",
+        "src/orze/hardware/gpu.py": "docs/evidence/snapshots/v1-05c2e2-before-probe-hardware-gpu.py"
+      },
+      "initial_fourteen_refinement": {
+        "added": 1,
+        "original_assert_ast": 35,
+        "parameter_cases": 3,
+        "raises_site_changed": 1,
+        "removed": 0,
+        "retained": 35
+      },
+      "new_tests": {
+        "tests/test_controller_probe.py": {
+          "assert_ast_count": 36,
+          "sha256": "b67d3fe5209ed9e5199a5112fcc12e6e5cd971efc41d92cd27b3b9d3936a4c38"
+        },
+        "tests/test_controller_probe_callers.py": {
+          "assert_ast_count": 3,
+          "sha256": "3759279767a2102b1e6c4f2962a416d191c6eba2ec61e29df5463c6393649a8e"
+        },
+        "tests/test_controller_probe_import.py": {
+          "assert_ast_count": 1,
+          "sha256": "b4506e570921815fa6c7a1dcbb1dfec7c293a6190327869c2591ea1f1b135f7a"
+        },
+        "tests/test_controller_probe_input_refusal.py": {
+          "assert_ast_count": 2,
+          "sha256": "d87e83e4aa243f7ca9bc7392fdf6036a28d47bbb680e3dd3353adac9ad44bc30"
+        },
+        "tests/test_controller_probe_registered.py": {
+          "assert_ast_count": 1,
+          "sha256": "d1cd46702635916707b23bf9a0e984cc669bdab0ff35347a9fec30f133349f2e"
+        }
+      },
+      "old_test_files_byte_equal_to_baseline": [
+        "tests/test_gpu_lease.py",
+        "tests/test_managed_run.py",
+        "tests/test_data_boundaries.py",
+        "tests/test_watchdog.py"
+      ],
+      "snapshots": {
+        "docs/evidence/snapshots/v1-05c2e2-before-probe-core-gpu_lease.py": {
+          "bytes": 10943,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "a5241d9ece928f56a2a20ec4c93f8847597d7c1031f5c8e77c21f8ef9b63d558"
+        },
+        "docs/evidence/snapshots/v1-05c2e2-before-probe-engine-gpu_slots.py": {
+          "bytes": 22390,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "e944ca8033c2560dae59a1d5f924c92e76a6920c5d571d24fd56051e42f9799f"
+        },
+        "docs/evidence/snapshots/v1-05c2e2-before-probe-engine-launcher.py": {
+          "bytes": 119507,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142"
+        },
+        "docs/evidence/snapshots/v1-05c2e2-before-probe-hardware-gpu.py": {
+          "bytes": 4458,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "d6559a65b199b6b8521eec5a02eac47467aac3930a21225983f9434fb7385434"
+        },
+        "docs/evidence/snapshots/v1-05c2e2b-before-hardware-probe-import.py": {
+          "bytes": 4695,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "825d5bd04a991fec56cc19da72e0e3c48325eccb14554bae448b72abee740908"
+        },
+        "docs/evidence/snapshots/v1-05c2e2b-before-probe-import-cycle-core-gpu_lease.py": {
+          "bytes": 11065,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "5bf40070ed8306dcfe7fbaee9549246a63cd3e9552810490c23e223688357f0f"
+        },
+        "docs/evidence/snapshots/v1-05c2e2b-before-probe-import-cycle-engine-__init__.py": {
+          "bytes": 700,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "c7403d7cf291a28e7a04639ecc74819ebf2bb6a2c5e31143ff52f8cdb9d9df89"
+        },
+        "docs/evidence/snapshots/v1-05c2e2b-before-probe-import-cycle-engine-controller_probe.py": {
+          "bytes": 11884,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "5c8b4e1b6e9591d81d925053334b721ccef718f699f88694bc427c724fe0e652"
+        },
+        "docs/evidence/snapshots/v1-05c2e2b-before-probe-import-cycle-engine-launcher.py": {
+          "bytes": 119606,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "30b66bafd5a20eb5a84646bda4051182bfc8e6c83505a54464d8dd1404f32e53"
+        },
+        "docs/evidence/snapshots/v1-05c2e2b-before-probe-quiesce-and-inputs.py": {
+          "bytes": 11884,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "5c8b4e1b6e9591d81d925053334b721ccef718f699f88694bc427c724fe0e652"
+        },
+        "docs/evidence/snapshots/v1-05c2e2b-probe-callers-before-fixture-binding.py": {
+          "bytes": 2027,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "fe983c9a5495b949cf0e320b6c0648c5c46517224f698229014bdc6d5626349e"
+        },
+        "docs/evidence/snapshots/v1-05c2e2b-probe-callers-before-lazy-hardware.py": {
+          "bytes": 2039,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "8a56a62ff3d9bfcbfc45b2a891918e167c7f3783f5f73270225f4cdbd0ede34c"
+        },
+        "docs/evidence/snapshots/v1-05c2e2b-probe-import-tests-first-green.py": {
+          "bytes": 683,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "dae4047089fa92211dd5b6c03c214e50230fafc8e53abb541bacd23685124ecf"
+        },
+        "docs/evidence/snapshots/v1-05c2e2b-probe-tests-first-green.py": {
+          "bytes": 9455,
+          "complete_module_parses": true,
+          "ends_with_newline": true,
+          "sha256": "fc6e50b4ad18fffb34563a4a4d3ebdf37abc544c7e306740ecd5e6e51b5be90a"
+        }
+      }
+    }
+  },
+  "status": "owned_source_and_tests_frozen; author evidence complete, pending shared root final aggregate"
+}

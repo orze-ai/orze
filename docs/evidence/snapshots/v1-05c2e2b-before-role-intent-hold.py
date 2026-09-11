@@ -163,12 +163,6 @@ class RoleLaunch:
     def _hold(self, reason, *, protocol=False):
         self._held_reason = self._held_reason or reason
         self._protocol_uncertain = self._protocol_uncertain or protocol
-        from orze.engine.controller_control import current_controller
-        ctx = current_controller()
-        if ctx is not None:
-            # INTENT publication can fail before a member is registered. The
-            # controller must retain that obligation even without an active RP.
-            ctx.hold("controller_role_unconfirmed")
         return RoleSupervisionHOLD(self._held_reason, owner=self)
 
     def _current(self):

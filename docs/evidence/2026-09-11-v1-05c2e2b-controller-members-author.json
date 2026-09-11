@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "milestone": "V1-05C2e2b",
+  "author": "core_review",
+  "objective": "Opt-in internal controller membership and exact OS/action settlement; not product controller ACK.",
+  "preceding_implementation_commit": "f1acd4c25dc3bdd6650c2c200c1eec5371679c00",
+  "ownership": {
+    "new_production": [
+      "src/orze/engine/controller_members.py"
+    ],
+    "edited_production": [
+      "src/orze/core/execution_attempts.py",
+      "src/orze/engine/execution_authority.py",
+      "src/orze/engine/supervised_process.py",
+      "src/orze/engine/role_supervision.py",
+      "src/orze/engine/bounded_executor.py"
+    ],
+    "shared_file": {
+      "path": "src/orze/engine/launcher.py",
+      "owned_region": "Native training proc.start() False: close lineage attestation and retain actual TrainingProcess; probe imports/calls owned by pro_review."
+    },
+    "own_tests": [
+      "tests/test_controller_members.py"
+    ],
+    "old_tests_edited": [],
+    "non_author_sources_read": [
+      "src/orze/engine/controller_control.py",
+      "src/orze/engine/controller_probe.py",
+      "src/orze/core/gpu_lease.py",
+      "src/orze/engine/gpu_slots.py",
+      "src/orze/hardware/gpu.py"
+    ],
+    "other_author_draft_fix": "runtime_evidence froze native member-commit rollback test; core_review implemented the caller-owned settlement transaction fresh readback."
+  },
+  "classification": {
+    "own_cases": 15,
+    "new_mechanisms_without_observed_product_failure": 9,
+    "own_candidate_regression_cases": 6,
+    "preceding_commit_behavior_reds": 0,
+    "note": "All 15 introduce internal API mechanisms. Six expose observed implementation-draft defects, not bugs in the preceding commit or a released product. API absence was never counted as a red.",
+    "candidate_cases": [
+      {
+        "test": "test_foreign_scope_is_not_admitted_as_local_controller_work",
+        "cause": "standalone identity scope not tied to actual registration"
+      },
+      {
+        "test": "test_commit_that_rolls_back_cannot_return_ready_or_settled_member",
+        "cause": "standalone member commit returning after actual rollback accepted"
+      },
+      {
+        "test": "test_member_limit_is_explicit_and_does_not_drop_pending_owners",
+        "cause": "unbounded per-controller registry admission"
+      },
+      {
+        "test": "test_popen_creates_owned_supervisor_then_raises_is_not_no_execution",
+        "cause": "Popen entered/created supervisor then raised, misclassified NO_EXECUTION"
+      },
+      {
+        "test": "test_native_stop_zero_settles_as_interrupted_not_completed",
+        "cause": "closed STOP0 native action incorrectly labeled completed"
+      },
+      {
+        "test": "test_role_intent_unknown_holds_controller_before_member_was_registered",
+        "cause": "role INTENT publication response loss before member registration did not HOLD controller"
+      }
+    ],
+    "initial_fixture_diagnostic": "First 12: unknown READY refusal was already SupervisionUncertain, but test helper only accepted ControllerHOLD. Preserved full original e743 test; expanded that single exception acceptance to both uncertainty classes without deleting business assertions. This fourth initial failure is not a product red.",
+    "fixture_cleanup_refinement": "After initial 13 mechanisms, run_case changed from subprocess.run to captured Popen+pidfd+communicate/finally; injected Popen response-loss supervisor also captured pidfd. Test-only cleanup refinement, not production change or old fixture migration.",
+    "overlapping_independent_case": "tests/test_controller_member_boundaries.py is runtime_evidence's additional native transaction route of the same commit-readback root cause, not another independent root cause; included in final 16 and 69 runs, never added twice."
+  },
+  "implementation": {
+    "native_creation": "Complete AttemptRef membership is inserted using the same caller SQLite connection; source folder must be ctx.scope/task. Unsupported phases are refused.",
+    "native_settlement": "finish_attempt records a candidate only. Full execution transaction/effect/timeout/guard exit precedes terminal recheck and a separate member SETTLED transaction; its committed row is checked freshly too.",
+    "quiesce": "Persistent control phase polled under context guard. Before GO, False means one nonblocking owned STOP, no GO. poll sends STOP once without recursive stop/wait or concurrent receive. Actual TREE_CLOSED is still required.",
+    "roles": "Role INTENT is enrolled before return/prepare; INTENT ambiguity before enrollment marks context HOLD. Exact trigger settlement and lock release precede role member settlement.",
+    "process_ownership": "Strong private members/handles retained on unknown preparation or changed public maps. Closure and action settlement are separate. STOP0 keeps actual worker returncode and interrupted outcome.",
+    "data": "Bounded metadata only: identities, full refs, hashes/counts, READY and closure; no argv/environment/output body persistence.",
+    "resource_bounds": "4096 total members per instance, including settled history, no unknown eviction; pending intents and held owners retained. Not an unlimited-run lifecycle policy."
+  },
+  "snapshots": {
+    "provenance": "Six complete preceding-commit files saved through git show before our edits; launcher already had peer-owned probe edits, so snapshot intentionally uses exact f1acd bytes rather than dirty worktree. Draft snapshots are complete byte captures before the respective fixes, not reconstructed functions.",
+    "records": [
+      {
+        "source": "src/orze/core/execution_attempts.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-before-core-execution_attempts.py",
+        "sha256": "22f35720dd68398dddf4b439fa6a085e4805303080c7152c67f04548055751b4",
+        "baseline_byte_equal": true
+      },
+      {
+        "source": "src/orze/engine/execution_authority.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-before-engine-execution_authority.py",
+        "sha256": "20f5dc0bc802db87d868d0662209c6a6e414ae2fa3e6c882feb2d9e3e1864ad8",
+        "baseline_byte_equal": true
+      },
+      {
+        "source": "src/orze/engine/supervised_process.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-before-engine-supervised_process.py",
+        "sha256": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+        "baseline_byte_equal": true
+      },
+      {
+        "source": "src/orze/engine/role_supervision.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-before-engine-role_supervision.py",
+        "sha256": "9c9e424a0187c543a35fb414a933f275faed847278ea1afdfceffe7b010f9835",
+        "baseline_byte_equal": true
+      },
+      {
+        "source": "src/orze/engine/bounded_executor.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-before-engine-bounded_executor.py",
+        "sha256": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+        "baseline_byte_equal": true
+      },
+      {
+        "source": "src/orze/engine/launcher.py",
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-before-engine-launcher.py",
+        "sha256": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142",
+        "baseline_byte_equal": true
+      },
+      {
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-first-members-members.py",
+        "sha256": "ba7bb1742c2bd407cf41ae5c2d3621779947bcc37a77fd167ccc2d62c265696d"
+      },
+      {
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-first-members-primitive.py",
+        "sha256": "ee7b0704f8f2f77a51b674a30b2f40da7902888dbe72f664a2caf3196d407c2d"
+      },
+      {
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-first-members-tests.py",
+        "sha256": "e743efb464bc552d9f6b6e1eceb3ccc58104eb4c05db5f4d3ee812af0e6c3241"
+      },
+      {
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-second-controller_members.py",
+        "sha256": "ae3f380c36e7b58812d737ce2bf8688b4b90a87d594ce5a8e9469e1548f8e892"
+      },
+      {
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-second-supervised_process.py",
+        "sha256": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da"
+      },
+      {
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-before-role-intent-hold.py",
+        "sha256": "978f148ddd9fdedf3d434422a48a1dfe77485aed955e082b220243eeaf02cd8a"
+      },
+      {
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-before-native-member-commit-controller-members.py",
+        "sha256": "ae3f380c36e7b58812d737ce2bf8688b4b90a87d594ce5a8e9469e1548f8e892"
+      },
+      {
+        "snapshot": "docs/evidence/snapshots/v1-05c2e2b-before-native-member-commit-execution-authority.py",
+        "sha256": "5f85c231b631da6ad182719e354875078939485ba1a31d0eed07e299b99987b6"
+      }
+    ],
+    "audit": {
+      "command": "python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess\nbase='f1acd4c25dc3bdd6650c2c200c1eec5371679c00'\npaths=['core/execution_attempts.py','engine/execution_authority.py','engine/supervised_process.py','engine/role_supervision.py','engine/bounded_executor.py','engine/launcher.py']\nrecords=[]\nfor path in paths:\n    snapshot=pathlib.Path('docs/evidence/snapshots/v1-05c2e2b-before-'+path.replace('/','-'))\n    raw=snapshot.read_bytes()\n    old=subprocess.run(['git','show',base+':src/orze/'+path],check=True,stdout=subprocess.PIPE).stdout\n    assert raw==old, path\n    records.append({'source':'src/orze/'+path,'snapshot':str(snapshot),'sha256':hashlib.sha256(raw).hexdigest(),'baseline_byte_equal':True})\nextra=['first-members-members','first-members-primitive','first-members-tests','second-controller_members','second-supervised_process','before-role-intent-hold','before-native-member-commit-controller-members','before-native-member-commit-execution-authority']\nfor name in extra:\n    path=pathlib.Path('docs/evidence/snapshots/v1-05c2e2b-'+name+'.py')\n    records.append({'snapshot':str(path),'sha256':hashlib.sha256(path.read_bytes()).hexdigest()})\nprint(json.dumps(records,indent=2))\nPY",
+      "exit_code": 0,
+      "result": "6 baseline snapshots byte-equal; 8 referenced draft/test snapshots hashed (includes 2 runtime-owned snapshots)."
+    }
+  },
+  "actual_runs": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_members.py --tb=short",
+      "exit_code": 1,
+      "result": "4 failed, 8 passed in 5.49s",
+      "epoch": "first 12; 3 candidate failures + 1 exception-premise diagnostic",
+      "session_id": 86281
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_members.py -k popen_creates --tb=short",
+      "exit_code": 1,
+      "result": "1 failed, 12 deselected in 0.55s",
+      "epoch": "actual supervisor Popen response-loss draft",
+      "chunk_id": "d5ed85"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_members.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py --tb=short",
+      "exit_code": 0,
+      "result": "36 passed in 7.08s",
+      "epoch": "13-member-case candidate; before final STOP0/role/native-route fixes",
+      "session_id": 35822
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_members.py -k native_stop_zero --tb=short",
+      "exit_code": 1,
+      "result": "1 failed, 13 deselected in 0.90s",
+      "epoch": "second draft",
+      "session_id": 62327
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_members.py -k role_intent_unknown --tb=short",
+      "exit_code": 1,
+      "result": "1 failed, 14 deselected in 0.51s",
+      "epoch": "actual role INTENT write then injected lost response",
+      "chunk_id": "ce1cd8"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_role_supervision.py tests/test_execution_authority.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py --tb=short",
+      "exit_code": 0,
+      "result": "53 passed in 5.91s",
+      "epoch": "candidate no-context compatibility neighborhood",
+      "session_id": 6634
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_probe.py tests/test_controller_probe_registered.py tests/test_controller_registration_boundaries.py --tb=short",
+      "exit_code": 0,
+      "result": "21 passed in 4.25s",
+      "epoch": "independent bounded candidate registration/probe review",
+      "session_id": 73844
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_members.py tests/test_controller_member_boundaries.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py tests/test_role_supervision.py tests/test_execution_authority.py --tb=short",
+      "exit_code": 0,
+      "result": "69 passed in 13.06s",
+      "epoch": "final bounded source; 15 own + 1 independent + 53 existing",
+      "session_id": 15108,
+      "note": "Hash command was issued just after this process started; do not describe it as a prelaunch inventory. Final16 below has exact pre/post inventory."
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_members.py tests/test_controller_member_boundaries.py --tb=short",
+      "exit_code": 0,
+      "result": "16 passed in 12.04s",
+      "epoch": "final bounded source/tests, exact 10-file pre/post below",
+      "session_id": 73078,
+      "output": "................                                                         [100%]\n16 passed in 12.04s\n"
+    }
+  ],
+  "complete_module_replays": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport pathlib, pytest\nimport test_controller_members as suite\nsnapshots = [\n    (\"orze.engine.controller_members\", \"docs/evidence/snapshots/v1-05c2e2b-first-members-members.py\"),\n    (\"orze.engine.supervised_process\", \"docs/evidence/snapshots/v1-05c2e2b-first-members-primitive.py\"),\n    (\"orze.engine.execution_authority\", \"docs/evidence/snapshots/v1-05c2e2b-before-native-member-commit-execution-authority.py\"),\n]\nbootstrap = \"import importlib\\n\"\nfor name, path in snapshots:\n    source = pathlib.Path(path).read_text()\n    bootstrap += \"exec(compile(\" + repr(source) + \",\" + repr(path) + \",'exec'),importlib.import_module(\" + repr(name) + \").__dict__)\\n\"\nsuite.COMMON = bootstrap + suite.COMMON\nraise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_controller_members.py\", \"-k\",\n    \"foreign_scope or commit_that_rolls or member_limit or popen_creates\", \"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "result": "4 failed, 11 deselected in 3.13s",
+      "session_id": 7539,
+      "output": "FFF                                                                     [100%]\n=================================== FAILURES ===================================\n_________ test_foreign_scope_is_not_admitted_as_local_controller_work __________\ntests/test_controller_members.py:225: in test_foreign_scope_is_not_admitted_as_local_controller_work\n    run_case(tmp_path, r'''\ntests/test_controller_members.py:79: in run_case\n    assert child.returncode == 0, stderr.decode()[-16000:]\nE   AssertionError: Traceback (most recent call last):\nE     File \"<string>\", line 47, in <module>\nE     File \"<string>\", line 30, in refused\nE   AssertionError: unexpected admission\n______ test_commit_that_rolls_back_cannot_return_ready_or_settled_member _______\ntests/test_controller_members.py:234: in test_commit_that_rolls_back_cannot_return_ready_or_settled_member\n    run_case(tmp_path, r'''\ntests/test_controller_members.py:79: in run_case\n    assert child.returncode == 0, stderr.decode()[-16000:]\nE   AssertionError: Traceback (most recent call last):\nE     File \"<string>\", line 52, in <module>\nE     File \"<string>\", line 30, in refused\nE   AssertionError: unexpected admission\n________ test_member_limit_is_explicit_and_does_not_drop_pending_owners ________\ntests/test_controller_members.py:248: in test_member_limit_is_explicit_and_does_not_drop_pending_owners\n    run_case(tmp_path, r'''\ntests/test_controller_members.py:79: in run_case\n    assert child.returncode == 0, stderr.decode()[-16000:]\nE   AssertionError: Traceback (most recent call last):\nE     File \"<string>\", line 48, in <module>\nE     File \"<string>\", line 30, in refused\nE   AssertionError: unexpected admission\n_____ test_popen_creates_owned_supervisor_then_raises_is_not_no_execution ______\ntests/test_controller_members.py:259: in test_popen_creates_owned_supervisor_then_raises_is_not_no_execution\n    run_case(tmp_path, r'''\ntests/test_controller_members.py:79: in run_case\n    assert child.returncode == 0, stderr.decode()[-16000:]\nE   AssertionError: Traceback (most recent call last):\nE     File \"<string>\", line 56, in <module>\nE   AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_controller_members.py::test_foreign_scope_is_not_admitted_as_local_controller_work\nFAILED tests/test_controller_members.py::test_commit_that_rolls_back_cannot_return_ready_or_settled_member\nFAILED tests/test_controller_members.py::test_member_limit_is_explicit_and_does_not_drop_pending_owners\nFAILED tests/test_controller_members.py::test_popen_creates_owned_supervisor_then_raises_is_not_no_execution\n4 failed, 11 deselected in 3.13s\n"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport pathlib, pytest\nimport test_controller_members as suite\nsnapshots = [\n    (\"orze.engine.controller_members\", \"docs/evidence/snapshots/v1-05c2e2b-second-controller_members.py\"),\n    (\"orze.engine.supervised_process\", \"docs/evidence/snapshots/v1-05c2e2b-second-supervised_process.py\"),\n    (\"orze.engine.execution_authority\", \"docs/evidence/snapshots/v1-05c2e2b-before-native-member-commit-execution-authority.py\"),\n    (\"orze.engine.role_supervision\", \"docs/evidence/snapshots/v1-05c2e2b-before-role-intent-hold.py\"),\n]\nbootstrap = \"import importlib\\n\"\nfor name, path in snapshots:\n    source = pathlib.Path(path).read_text()\n    bootstrap += \"exec(compile(\" + repr(source) + \",\" + repr(path) + \",'exec'),importlib.import_module(\" + repr(name) + \").__dict__)\\n\"\nsuite.COMMON = bootstrap + suite.COMMON\nraise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\", \"tests/test_controller_members.py\", \"-k\",\n    \"native_stop_zero or role_intent_unknown\", \"--tb=short\"]))\nPY",
+      "exit_code": 1,
+      "result": "2 failed, 13 deselected in 1.91s",
+      "session_id": 90371,
+      "output": "FF                                                                       [100%]\n=================================== FAILURES ===================================\n__________ test_native_stop_zero_settles_as_interrupted_not_completed __________\ntests/test_controller_members.py:288: in test_native_stop_zero_settles_as_interrupted_not_completed\n    run_case(tmp_path, r'''\ntests/test_controller_members.py:79: in run_case\n    assert child.returncode == 0, stderr.decode()[-16000:]\nE   AssertionError: Traceback (most recent call last):\nE     File \"<string>\", line 64, in <module>\nE   AssertionError\n____ test_role_intent_unknown_holds_controller_before_member_was_registered ____\ntests/test_controller_members.py:312: in test_role_intent_unknown_holds_controller_before_member_was_registered\n    run_case(tmp_path, r'''\ntests/test_controller_members.py:79: in run_case\n    assert child.returncode == 0, stderr.decode()[-16000:]\nE   AssertionError: Traceback (most recent call last):\nE     File \"<string>\", line 63, in <module>\nE     File \"<string>\", line 31, in refused\nE   AssertionError: unexpected admission\n=========================== short test summary info ============================\nFAILED tests/test_controller_members.py::test_native_stop_zero_settles_as_interrupted_not_completed\nFAILED tests/test_controller_members.py::test_role_intent_unknown_holds_controller_before_member_was_registered\n2 failed, 13 deselected in 1.91s\n"
+    }
+  ],
+  "replay_boundary": "Complete captured source modules are installed in each isolated controller child, against the final frozen test file and current other modules. No whole baseline checkout replay is claimed. All six selected tests reach their behavior assertions; no missing API/import failure. An earlier same first-draft replay before the 15th case was added produced 4F10deselected/2.04s; final replay above supersedes only its current test-inventory label.",
+  "final_inventory": {
+    "pre_chunk": "3c8d20",
+    "post_chunk": "57897a",
+    "files": {
+      "src/orze/engine/controller_members.py": "99112d1655cdc4b8a2db332098d6fcab36500168b65bd792cf9ee407a6627ff9",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/engine/execution_authority.py": "9a4225c60cc0a5e478b85c66d2c45c2d5ec8090b3c7a8dbb0e4ac758486f5b2e",
+      "src/orze/engine/supervised_process.py": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da",
+      "src/orze/engine/role_supervision.py": "45e29b4c35f5bc39dd13a2a00b46aa7813244c5cd40fcb3079414886deb2c4a2",
+      "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+      "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+      "tests/test_controller_members.py": "8d18ce58b7c4967b62df638a49f328d0e6e1fa5f619fc22729f6444d59facc56",
+      "tests/test_controller_member_boundaries.py": "63de80ab3ed2b4883ecdce91fea147f5305a834b7fcc50c6af8c6b93872be927",
+      "docs/controller-membership.md": "d7873f4550931b48064e508897563ed2c778ae45a1d1279c0248e88eeac3f48e"
+    },
+    "exact_equal": true,
+    "source_files": 7,
+    "test_files": 2,
+    "contract_files": 1
+  },
+  "independent_read_review": {
+    "conclusion": "No blocking discrepancy found within the declared opt-in internal foundation. This is not independent self-review of own membership code.",
+    "control_sha256": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+    "probe_sha256": "ded811ad12520757399b6fa0efac93be37cd611bb3b99c653a096f86fe3b345d",
+    "controls": "Read complete final controller_control and controller_probe, plus all 11 migrated caller diffs. Registration pins path/inode/process identity and refuses inherited/unknown authority; probe drains real pipes and closure, denies incomplete/lossy output and preserves HOLD through callers. No-context delegation remains the compatibility path.",
+    "contract": "Read complete docs/controller-membership.md at d7873f4550931b48064e508897563ed2c778ae45a1d1279c0248e88eeac3f48e. Scope limits match implementation. No fullCore/fullPro claim from this agent."
+  },
+  "limits": [
+    "No Orze.run/CLI/Director activation, request pump, stop ACK, controller exit/lease-release proof, restart consumption or adoption in this slice.",
+    "Three source-bound no-OS report kinds still obey new-admission gate; quiesce-derived report cleanup is not enabled.",
+    "Native static NOT_STARTED without an explicit preprepare no-OS proof remains pending/HOLD, never guessed from no handle.",
+    "Role.start False is propagated internally; Pro activation consumer change is explicitly deferred to product lifecycle integration.",
+    "Unsupported raw/legacy/remote/plugin jobs are not globally fenced yet; future product profile must reject or migrate them before any positive ACK.",
+    "4096-member bound is explicit; persistent history compaction and unrestricted long-running controller profile are not implemented.",
+    "CPU/SQLite tests and selected protocol/SQL fault injections; no real GPU/provider, host process scan, holdout, science artifact evaluation, efficiency claim, commit or push."
+  ],
+  "tool_diagnostics": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_supervised_process.py tests/test_supervised_preparation_handoff.py tests/test_supervised_worker_fds.py --tb=short",
+      "exit_code": 4,
+      "result": "file not found: tests/test_supervised_preparation_handoff.py; no tests ran",
+      "classification": "author command filename typo, corrected to test_supervisor_preparation_handoff.py; not product red"
+    },
+    {
+      "tool": "apply_patch",
+      "result": "One multi-file patch failed final launcher context; atomic application left all intended source edits unapplied. Reissued with actual context.",
+      "classification": "mechanical patch error"
+    },
+    {
+      "tool": "apply_patch",
+      "result": "One later patch rejected an unprefixed time.sleep(.1) addition line; no files changed, reissued correctly.",
+      "classification": "mechanical patch syntax error"
+    }
+  ]
+}

@@ -76,8 +76,6 @@ class SupervisedProcess:
 
     def _fail(self, reason):
         self._uncertainty = self._uncertainty or reason
-        from orze.engine.controller_members import hold_process
-        hold_process(self, "controller_supervision_uncertain")
         raise SupervisionUncertain(self._uncertainty, process=self)
 
     def _accept(self, message):
@@ -158,12 +156,8 @@ class SupervisedProcess:
     def start(self):
         if self._uncertainty or self._binding is None or self._started or self._stop_sent:
             self._fail("supervisor_start_not_authorized")
-        from orze.engine.controller_members import start_guard
-        with start_guard(self) as admitted:
-            if not admitted:
-                return False
-            self._send("GO")
-            self._started = True
+        self._send("GO")
+        self._started = True
 
     def _send(self, command):
         try:
@@ -174,8 +168,6 @@ class SupervisedProcess:
             self._fail("supervisor_control_uncertain")
 
     def poll(self):
-        from orze.engine.controller_members import poll_process, record_closed
-        poll_process(self)
         self._receive()
         supervisor_code = self._supervisor.poll()
         if supervisor_code is not None:
@@ -185,7 +177,6 @@ class SupervisedProcess:
                 self._fail("supervisor_exit_unconfirmed")
             self.returncode = self._closed["worker_returncode"]
             self._close_descriptors()
-            record_closed(self)
         return self.returncode
 
     def wait(self, timeout=None):
@@ -271,24 +262,16 @@ def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
             os.close(probe)
     except Exception as exc:
         raise SupervisionUnavailable("supervisor_setup_unavailable") from exc
-    from orze.engine.controller_members import before_prepare, bind_prepared, prepare_failed
-    command_hash = hashlib.sha256(canonical(list(cmd))).hexdigest()
-    member = before_prepare(identity, command_hash)
-    try:
-        parent, child = socket.socketpair()
-    except BaseException:
-        prepare_failed(member, no_execution=True)
-        raise
+    parent, child = socket.socketpair()
     # Prepare a reliable failure owner before any process is created. Normal
     # handle construction is still inside the post-spawn uncertainty boundary.
     try:
         fallback = object.__new__(SupervisedProcess)
+        command_hash = hashlib.sha256(canonical(list(cmd))).hexdigest()
         SupervisedProcess._initialize(fallback, None, parent, identity, nonce, command_hash)
-        bind_prepared(member, fallback)
     except BaseException:
         parent.close()
         child.close()
-        prepare_failed(member, no_execution=True)
         raise
     try:
         supervisor = subprocess.Popen(
@@ -297,21 +280,15 @@ def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
             stdout=stdout, stderr=stderr, pass_fds=(*fds, child.fileno()),
             start_new_session=True,
         )
-    except BaseException:
+    except Exception:
         parent.close()
         child.close()
-        # Popen may have created an OS process before a constructor/response
-        # failure. Only the earlier, pre-Popen setup can prove no execution.
-        prepare_failed(member)
-        if member is not None:
-            raise SupervisionUncertain("supervisor_popen_uncertain", process=fallback) from None
         raise
     handle = fallback
     fallback._supervisor = supervisor
     try:
         child.close()
         handle = SupervisedProcess(supervisor, parent, identity, nonce, command_hash)
-        bind_prepared(member, handle)
         handle._supervisor_pidfd = os.pidfd_open(supervisor.pid, 0)
         parent.settimeout(ready_timeout)
         send_frame(parent, config)
@@ -324,7 +301,6 @@ def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
             if time.monotonic() >= deadline:
                 handle._fail("supervisor_ready_timeout")
             select.select([parent], [], [], 0.01)
-        bind_prepared(member, handle, ready=True)
         return handle
     except BaseException as exc:
         # Closing the channel asks the supervisor to drain; it is NOT proof of
@@ -335,7 +311,6 @@ def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
                 channel.close()
             except BaseException:
                 pass
-        prepare_failed(member)
         if isinstance(exc, SupervisionUncertain):
             raise
         raise SupervisionUncertain("supervisor_prepare_uncertain", process=handle) from None

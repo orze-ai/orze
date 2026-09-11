@@ -156,22 +156,6 @@ def _bound_terminal(tx: ExecutionTransaction) -> str:
 
 @contextmanager
 def execution_transaction(lake, idea_dir: Path, *, lease=None):
-    # Membership is outside SQL commit, file confirmation, timeout restoration
-    # AND effect-guard exit. finish_attempt alone never marks it SETTLED.
-    from orze.engine.controller_members import begin_transaction, end_transaction
-    ticket = begin_transaction(lake, idea_dir)
-    try:
-        with _execution_transaction(lake, idea_dir, lease=lease) as tx:
-            yield tx
-    except BaseException:
-        end_transaction(ticket, success=False)
-        raise
-    else:
-        end_transaction(ticket, success=True)
-
-
-@contextmanager
-def _execution_transaction(lake, idea_dir: Path, *, lease=None):
     """Yield a short writer, committing only its own complete transaction.
 
     When prepare() was used, the same SQLite transaction must close that

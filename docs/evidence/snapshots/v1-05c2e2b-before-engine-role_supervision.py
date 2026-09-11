@@ -163,12 +163,6 @@ class RoleLaunch:
     def _hold(self, reason, *, protocol=False):
         self._held_reason = self._held_reason or reason
         self._protocol_uncertain = self._protocol_uncertain or protocol
-        from orze.engine.controller_control import current_controller
-        ctx = current_controller()
-        if ctx is not None:
-            # INTENT publication can fail before a member is registered. The
-            # controller must retain that obligation even without an active RP.
-            ctx.hold("controller_role_unconfirmed")
         return RoleSupervisionHOLD(self._held_reason, owner=self)
 
     def _current(self):
@@ -316,9 +310,7 @@ class RoleLaunch:
                     raise ValueError("role_delivery_not_started")
             self._go_attempted = True  # Any uncertain GO attempt forbids PENDING.
             self._write("GO_REQUESTED")
-            if process.start() is False:
-                self._write("STOP_REQUESTED")
-                return False
+            process.start()
             self._write("STARTED")
         except SupervisionUncertain as exc:
             raise self._hold("role_go_uncertain", protocol=True) from exc
@@ -424,8 +416,6 @@ class RoleLaunch:
             _sync(quarantine)
             reclaim(tree, quarantine)
             self._released = True
-            from orze.engine.controller_members import role_released
-            role_released(self)
             with _GUARD:
                 _OWNERS.pop(id(self), None)
                 if self._bound_role is not None:
@@ -469,8 +459,6 @@ def begin_role_launch(metadata):
             owner = RoleLaunch(meta, lock_identity, lock_bytes, trigger_token)
             _OWNERS[id(owner)] = owner
         owner._write("INTENT")
-        from orze.engine.controller_members import role_intent
-        owner._controller_member = role_intent(owner)
         return owner
     except BaseException as exc:
         if isinstance(exc, RoleSupervisionHOLD):

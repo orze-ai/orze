@@ -1,0 +1,292 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2b",
+  "owner": "runtime_evidence",
+  "status": "independent_final_bounded_passed_source_specific",
+  "scope": "Independent native-attempt/effect-transaction member settlement. Real SQLite and a tiny pass CPU worker under the real supervisor; no Orze.run/CLI, real training workload, GPU, provider, ACK, release or restart claim.",
+  "classification": {
+    "cases": 1,
+    "newly_authored_draft_regression": 1,
+    "historical_product_reds": 0,
+    "distinct_new_root_cause_claim": false,
+    "known_failure_family": "Parent-identified commit/readback gap; separate native caller-owned settlement transaction from the author's standalone _write(conn=None) regression.",
+    "excluded_fixture_premise_failures": 1
+  },
+  "test": {
+    "path": "tests/test_controller_member_boundaries.py",
+    "sha256": "63de80ab3ed2b4883ecdce91fea147f5305a834b7fcc50c6af8c6b93872be927",
+    "frozen_after_intended_red": true,
+    "file_assert_nodes": 1,
+    "embedded_exec_program_assert_nodes": 13,
+    "embedded_exec_program_sha256": "7c241a02ad1fa063177d09f638a905c4fda778c4d0274ec7d2ed44d72cbab704",
+    "assert_accounting": "The 13 embedded Python Assert nodes are counted separately from the normal file AST's one Assert. The fixed child body executes under the unchanged owned-pidfd helper from test_controller_registration_boundaries.py.",
+    "support_test_sha256": "817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12"
+  },
+  "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-05c2e2b-before-native-member-commit-controller-members.py",
+      "sha256": "ae3f380c36e7b58812d737ce2bf8688b4b90a87d594ce5a8e9469e1548f8e892",
+      "source": "src/orze/engine/controller_members.py"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c2e2b-before-native-member-commit-execution-authority.py",
+      "sha256": "5f85c231b631da6ad182719e354875078939485ba1a31d0eed07e299b99987b6",
+      "source": "src/orze/engine/execution_authority.py"
+    }
+  ],
+  "snapshot_provenance": "Complete on-disk candidate modules copied through apply_patch before first test run; SHA exact with both executed modules. These are newly authored implementation drafts, not historical released source.",
+  "excluded_initial_probe": {
+    "test_snapshot": "docs/evidence/snapshots/v1-05c2e2b-native-member-test-initial-read-state.py",
+    "test_sha256": "f3ad62ef2d8f8924c4f6f52dd99ae3528fa6a2673e55193859b7caaf507f4247",
+    "command": "sha256sum src/orze/engine/controller_members.py src/orze/engine/execution_authority.py tests/test_controller_member_boundaries.py; PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_member_boundaries.py --tb=short",
+    "result": {
+      "chunk_id": "e572f5",
+      "wall_time_seconds": 0.892196585,
+      "exit_code": 1,
+      "original_token_count": 411,
+      "output": "ae3f380c36e7b58812d737ce2bf8688b4b90a87d594ce5a8e9469e1548f8e892  src/orze/engine/controller_members.py\n5f85c231b631da6ad182719e354875078939485ba1a31d0eed07e299b99987b6  src/orze/engine/execution_authority.py\nf3ad62ef2d8f8924c4f6f52dd99ae3528fa6a2673e55193859b7caaf507f4247  tests/test_controller_member_boundaries.py\nF                                                                        [100%]\n=================================== FAILURES ===================================\n__ test_native_settlement_rollback_cannot_return_success_with_memory_settled ___\ntests/test_controller_member_boundaries.py:12: in test_native_settlement_rollback_cannot_return_success_with_memory_settled\n    result = _run_owned(project, r'''\ntests/test_controller_registration_boundaries.py:60: in _run_owned\n    assert child.returncode == 0, stderr.decode(\"utf-8\", errors=\"replace\")[-12000:]\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 78, in <module>\nE       File \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/core/execution_attempts.py\", line 278, in require_current\nE         raise AttemptAuthorityError(\"attempt_state_not_authorized\")\nE     orze.core.execution_attempts.AttemptAuthorityError: attempt_state_not_authorized\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json, os, p...>.returncode\n=========================== short test summary info ============================\nFAILED tests/test_controller_member_boundaries.py::test_native_settlement_rollback_cannot_return_success_with_memory_settled\n1 failed in 0.75s\n"
+    },
+    "classification": "1 failed in 0.75s at a test premise: require_current defaults to LAUNCHING/RUNNING, so reading a genuinely terminal attempt raised AttemptAuthorityError before the target assertion. Excluded from product/draft-red counting.",
+    "correction": "Only the terminal read call gained states=('TERMINAL',). Complete initial test is retained; no pre-existing or frozen business assertions were revised. The corrected test was then frozen on the intended red."
+  },
+  "draft_red": {
+    "command": "sha256sum src/orze/engine/controller_members.py src/orze/engine/execution_authority.py tests/test_controller_member_boundaries.py; PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_member_boundaries.py --tb=short",
+    "result": {
+      "chunk_id": "9e7b89",
+      "wall_time_seconds": 0.887310423,
+      "exit_code": 1,
+      "original_token_count": 372,
+      "output": "ae3f380c36e7b58812d737ce2bf8688b4b90a87d594ce5a8e9469e1548f8e892  src/orze/engine/controller_members.py\n5f85c231b631da6ad182719e354875078939485ba1a31d0eed07e299b99987b6  src/orze/engine/execution_authority.py\n63de80ab3ed2b4883ecdce91fea147f5305a834b7fcc50c6af8c6b93872be927  tests/test_controller_member_boundaries.py\nF                                                                        [100%]\n=================================== FAILURES ===================================\n__ test_native_settlement_rollback_cannot_return_success_with_memory_settled ___\ntests/test_controller_member_boundaries.py:12: in test_native_settlement_rollback_cannot_return_success_with_memory_settled\n    result = _run_owned(project, r'''\ntests/test_controller_registration_boundaries.py:60: in _run_owned\n    assert child.returncode == 0, stderr.decode(\"utf-8\", errors=\"replace\")[-12000:]\nE   AssertionError: Traceback (most recent call last):\nE       File \"<string>\", line 82, in <module>\nE     AssertionError: {'native_terminal': 'TERMINAL', 'member_database': 'PENDING', 'member_memory': ['SETTLED'], 'publication_returned_success': True}\nE     \nE   assert 1 == 0\nE    +  where 1 = <Popen: returncode: 1 args: ['/usr/bin/python3', '-c', '\\nimport json, os, p...>.returncode\n=========================== short test summary info ============================\nFAILED tests/test_controller_member_boundaries.py::test_native_settlement_rollback_cannot_return_success_with_memory_settled\n1 failed in 0.75s\n"
+    },
+    "exit_code": 1,
+    "failed": 1,
+    "seconds": 0.75,
+    "actual_assertion": {
+      "native_terminal": "TERMINAL",
+      "member_database": "PENDING",
+      "member_memory": [
+        "SETTLED"
+      ],
+      "publication_returned_success": true
+    },
+    "causal_boundary": [
+      "A real native training AttemptRef is created with execution_transaction, then the real supervised tiny CPU worker reaches READY/GO/TREE_CLOSED.",
+      "Before the fault, the member is OS CLOSED and action PENDING, with its exact actual closure receipt.",
+      "The original IdeaLake connection's native terminal/effect transaction commits normally and confirms its filesystem effect receipt.",
+      "A conditional sqlite3 connection factory only rolls back the later transaction whose member payload is SETTLED. It does not fake SQL reads, worker exits, closure or the preceding native terminal commit.",
+      "The draft returns success and sets its local member payload to SETTLED while actual durable member payload remains PENDING."
+    ]
+  },
+  "limits": [
+    "This independently executed bounded group is source-specific; root owns the final aggregate source freeze and Core/Pro/full/paired verification.",
+    "No native static NOT_STARTED/no-handle to NO_EXECUTION extension was implemented or tested; parent explicitly defers that source-qualified compatibility.",
+    "Owned-process cleanup does not certify controller action settlement and was not used as such in assertions.",
+    "No host process scan or numeric PID/PGID signal. No production source or existing test/fixture modified.",
+    "The new native member regression reproduces a parent-identified commit/readback failure family through a distinct real native transaction; it is not counted as an additional historical product root cause.",
+    "No positive public controller stop ACK, Orze lifecycle registration, release/restart/adoption, paid provider, GPU workload, or scientific evidence claim."
+  ],
+  "complete_snapshot_replay": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport pathlib,sys,pytest\nroot=pathlib.Path('.').resolve()\nsys.path.insert(0,str(root/'tests'))\nimport test_controller_registration_boundaries as support\npairs=[('orze.engine.controller_members',str(root/'docs/evidence/snapshots/v1-05c2e2b-before-native-member-commit-controller-members.py')),('orze.engine.execution_authority',str(root/'docs/evidence/snapshots/v1-05c2e2b-before-native-member-commit-execution-authority.py'))]\nsupport._COMMON += '\\nimport importlib\\nfor name, source in '+repr(pairs)+':\\n module=importlib.import_module(name)\\n exec(compile(pathlib.Path(source).read_bytes(),source,\"exec\"),module.__dict__)\\n'\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_controller_member_boundaries.py','--tb=short']))\nPY",
+    "start": {
+      "chunk_id": "f74e71",
+      "wall_time_seconds": 1.001016603,
+      "session_id": 75270,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "result": {
+      "chunk_id": "df3e97",
+      "wall_time_seconds": 0.000003162,
+      "exit_code": 1,
+      "original_token_count": 257,
+      "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n__ test_native_settlement_rollback_cannot_return_success_with_memory_settled ___\ntests/test_controller_member_boundaries.py:12: in test_native_settlement_rollback_cannot_return_success_with_memory_settled\n    result = _run_owned(project, r'''\ntests/test_controller_registration_boundaries.py:60: in _run_owned\n    assert child.returncode == 0, stderr.decode(\"utf-8\", errors=\"replace\")[-12000:]\nE   AssertionError: Traceback (most recent call last):\nE     File \"<string>\", line 87, in <module>\nE   AssertionError: {'native_terminal': 'TERMINAL', 'member_database': 'PENDING', 'member_memory': ['SETTLED'], 'publication_returned_success': True}\n=========================== short test summary info ============================\nFAILED tests/test_controller_member_boundaries.py::test_native_settlement_rollback_cannot_return_success_with_memory_settled\n1 failed in 1.03s\n"
+    },
+    "failed": 1,
+    "exit_code": 1,
+    "seconds": 1.03,
+    "classification": "Expected draft regression reproduction, not a new independent defect or historical released-code failure.",
+    "mechanism": "The unchanged registration helper's child-program prefix is extended in memory before pytest runs. Each real exec child imports then executes the complete captured controller_members and execution_authority module bytes in the corresponding module namespaces before its fixed test body. No source/test files or business assertions are edited; current dependencies remain unchanged.",
+    "expected_assertion": {
+      "native_terminal": "TERMINAL",
+      "member_database": "PENDING",
+      "member_memory": [
+        "SETTLED"
+      ],
+      "publication_returned_success": true
+    },
+    "dependency_audit_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,pathlib\npaths=[\"src/orze/engine/controller_control.py\",\"src/orze/core/idea_source_lock.py\",\"src/orze/core/sqlite_policy.py\",\"src/orze/engine/supervisor_worker.py\",\"src/orze/engine/supervised_process.py\",\"src/orze/idea_lake.py\",\"src/orze/engine/__init__.py\",\"src/orze/core/gpu_lease.py\",\"src/orze/engine/controller_probe.py\",\"src/orze/engine/launcher.py\",\"src/orze/engine/bounded_executor.py\",\"src/orze/engine/termination_hold.py\",\"src/orze/core/fs.py\",\"tests/conftest.py\",\"tests/test_controller_registration_boundaries.py\",\"src/orze/engine/controller_members.py\",\"src/orze/engine/execution_authority.py\",\"src/orze/core/execution_attempts.py\",\"src/orze/engine/role_supervision.py\",\"tests/test_controller_member_boundaries.py\",\"tests/test_controller_members.py\"]\nprint(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths},sort_keys=True))\nPY",
+    "current_dependencies_pre_sha256": {
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/fs.py": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+      "src/orze/core/gpu_lease.py": "3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263",
+      "src/orze/core/idea_source_lock.py": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+      "src/orze/core/sqlite_policy.py": "11d19ec9b49c0d8da23b8b09450197e92d9c33fcdfc8c3976564469be0940bff",
+      "src/orze/engine/__init__.py": "c7403d7cf291a28e7a04639ecc74819ebf2bb6a2c5e31143ff52f8cdb9d9df89",
+      "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+      "src/orze/engine/controller_control.py": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+      "src/orze/engine/controller_members.py": "99112d1655cdc4b8a2db332098d6fcab36500168b65bd792cf9ee407a6627ff9",
+      "src/orze/engine/controller_probe.py": "ded811ad12520757399b6fa0efac93be37cd611bb3b99c653a096f86fe3b345d",
+      "src/orze/engine/execution_authority.py": "9a4225c60cc0a5e478b85c66d2c45c2d5ec8090b3c7a8dbb0e4ac758486f5b2e",
+      "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+      "src/orze/engine/role_supervision.py": "45e29b4c35f5bc39dd13a2a00b46aa7813244c5cd40fcb3079414886deb2c4a2",
+      "src/orze/engine/supervised_process.py": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95",
+      "src/orze/idea_lake.py": "5a7b45d6a53f0cf7f06842753abdccf64c8c138fb6d3cbfd54d68a28b6c2e205",
+      "tests/conftest.py": "22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641",
+      "tests/test_controller_member_boundaries.py": "63de80ab3ed2b4883ecdce91fea147f5305a834b7fcc50c6af8c6b93872be927",
+      "tests/test_controller_members.py": "8d18ce58b7c4967b62df638a49f328d0e6e1fa5f619fc22729f6444d59facc56",
+      "tests/test_controller_registration_boundaries.py": "817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12"
+    },
+    "current_dependencies_post_sha256": {
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/fs.py": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+      "src/orze/core/gpu_lease.py": "3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263",
+      "src/orze/core/idea_source_lock.py": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+      "src/orze/core/sqlite_policy.py": "11d19ec9b49c0d8da23b8b09450197e92d9c33fcdfc8c3976564469be0940bff",
+      "src/orze/engine/__init__.py": "c7403d7cf291a28e7a04639ecc74819ebf2bb6a2c5e31143ff52f8cdb9d9df89",
+      "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+      "src/orze/engine/controller_control.py": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+      "src/orze/engine/controller_members.py": "99112d1655cdc4b8a2db332098d6fcab36500168b65bd792cf9ee407a6627ff9",
+      "src/orze/engine/controller_probe.py": "ded811ad12520757399b6fa0efac93be37cd611bb3b99c653a096f86fe3b345d",
+      "src/orze/engine/execution_authority.py": "9a4225c60cc0a5e478b85c66d2c45c2d5ec8090b3c7a8dbb0e4ac758486f5b2e",
+      "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+      "src/orze/engine/role_supervision.py": "45e29b4c35f5bc39dd13a2a00b46aa7813244c5cd40fcb3079414886deb2c4a2",
+      "src/orze/engine/supervised_process.py": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95",
+      "src/orze/idea_lake.py": "5a7b45d6a53f0cf7f06842753abdccf64c8c138fb6d3cbfd54d68a28b6c2e205",
+      "tests/conftest.py": "22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641",
+      "tests/test_controller_member_boundaries.py": "63de80ab3ed2b4883ecdce91fea147f5305a834b7fcc50c6af8c6b93872be927",
+      "tests/test_controller_members.py": "8d18ce58b7c4967b62df638a49f328d0e6e1fa5f619fc22729f6444d59facc56",
+      "tests/test_controller_registration_boundaries.py": "817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12"
+    },
+    "current_dependency_pre_post_equal": true
+  },
+  "final_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_member_boundaries.py tests/test_controller_registration_boundaries.py tests/test_controller_members.py --tb=short",
+    "start": {
+      "chunk_id": "723f2c",
+      "wall_time_seconds": 1.000269616,
+      "session_id": 41248,
+      "original_token_count": 1,
+      "output": "."
+    },
+    "result": {
+      "chunk_id": "e79293",
+      "wall_time_seconds": 0.000002644,
+      "exit_code": 0,
+      "original_token_count": 25,
+      "output": "....................                                                    [100%]\n21 passed in 9.49s\n"
+    },
+    "exit_code": 0,
+    "passed": 21,
+    "seconds": 9.49,
+    "case_accounting": {
+      "independent_native_member_commit": 1,
+      "independent_registration": 5,
+      "author_member_tests_independently_executed": 15
+    },
+    "overlaps": "These 21 include the earlier registration-layer five. They are one bounded execution, not 21 additional cases to add to the author's or root's overlapping runs.",
+    "hash_audit_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,pathlib\npaths=[\"src/orze/engine/controller_control.py\",\"src/orze/core/idea_source_lock.py\",\"src/orze/core/sqlite_policy.py\",\"src/orze/engine/supervisor_worker.py\",\"src/orze/engine/supervised_process.py\",\"src/orze/idea_lake.py\",\"src/orze/engine/__init__.py\",\"src/orze/core/gpu_lease.py\",\"src/orze/engine/controller_probe.py\",\"src/orze/engine/launcher.py\",\"src/orze/engine/bounded_executor.py\",\"src/orze/engine/termination_hold.py\",\"src/orze/core/fs.py\",\"tests/conftest.py\",\"tests/test_controller_registration_boundaries.py\",\"src/orze/engine/controller_members.py\",\"src/orze/engine/execution_authority.py\",\"src/orze/core/execution_attempts.py\",\"src/orze/engine/role_supervision.py\",\"tests/test_controller_member_boundaries.py\",\"tests/test_controller_members.py\"]\nprint(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths},sort_keys=True))\nPY",
+    "inventory": {
+      "production_files": 17,
+      "conftest": 1,
+      "target_test_files": 3,
+      "total_files": 21
+    },
+    "pre_sha256": {
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/fs.py": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+      "src/orze/core/gpu_lease.py": "3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263",
+      "src/orze/core/idea_source_lock.py": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+      "src/orze/core/sqlite_policy.py": "11d19ec9b49c0d8da23b8b09450197e92d9c33fcdfc8c3976564469be0940bff",
+      "src/orze/engine/__init__.py": "c7403d7cf291a28e7a04639ecc74819ebf2bb6a2c5e31143ff52f8cdb9d9df89",
+      "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+      "src/orze/engine/controller_control.py": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+      "src/orze/engine/controller_members.py": "99112d1655cdc4b8a2db332098d6fcab36500168b65bd792cf9ee407a6627ff9",
+      "src/orze/engine/controller_probe.py": "ded811ad12520757399b6fa0efac93be37cd611bb3b99c653a096f86fe3b345d",
+      "src/orze/engine/execution_authority.py": "9a4225c60cc0a5e478b85c66d2c45c2d5ec8090b3c7a8dbb0e4ac758486f5b2e",
+      "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+      "src/orze/engine/role_supervision.py": "45e29b4c35f5bc39dd13a2a00b46aa7813244c5cd40fcb3079414886deb2c4a2",
+      "src/orze/engine/supervised_process.py": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95",
+      "src/orze/idea_lake.py": "5a7b45d6a53f0cf7f06842753abdccf64c8c138fb6d3cbfd54d68a28b6c2e205",
+      "tests/conftest.py": "22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641",
+      "tests/test_controller_member_boundaries.py": "63de80ab3ed2b4883ecdce91fea147f5305a834b7fcc50c6af8c6b93872be927",
+      "tests/test_controller_members.py": "8d18ce58b7c4967b62df638a49f328d0e6e1fa5f619fc22729f6444d59facc56",
+      "tests/test_controller_registration_boundaries.py": "817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12"
+    },
+    "post_sha256": {
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/fs.py": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+      "src/orze/core/gpu_lease.py": "3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263",
+      "src/orze/core/idea_source_lock.py": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+      "src/orze/core/sqlite_policy.py": "11d19ec9b49c0d8da23b8b09450197e92d9c33fcdfc8c3976564469be0940bff",
+      "src/orze/engine/__init__.py": "c7403d7cf291a28e7a04639ecc74819ebf2bb6a2c5e31143ff52f8cdb9d9df89",
+      "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+      "src/orze/engine/controller_control.py": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+      "src/orze/engine/controller_members.py": "99112d1655cdc4b8a2db332098d6fcab36500168b65bd792cf9ee407a6627ff9",
+      "src/orze/engine/controller_probe.py": "ded811ad12520757399b6fa0efac93be37cd611bb3b99c653a096f86fe3b345d",
+      "src/orze/engine/execution_authority.py": "9a4225c60cc0a5e478b85c66d2c45c2d5ec8090b3c7a8dbb0e4ac758486f5b2e",
+      "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+      "src/orze/engine/role_supervision.py": "45e29b4c35f5bc39dd13a2a00b46aa7813244c5cd40fcb3079414886deb2c4a2",
+      "src/orze/engine/supervised_process.py": "3a6b5aa35f1cb671797359a6a69f261a053891c3920cbec38f3b1e0c8b9f61da",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95",
+      "src/orze/idea_lake.py": "5a7b45d6a53f0cf7f06842753abdccf64c8c138fb6d3cbfd54d68a28b6c2e205",
+      "tests/conftest.py": "22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641",
+      "tests/test_controller_member_boundaries.py": "63de80ab3ed2b4883ecdce91fea147f5305a834b7fcc50c6af8c6b93872be927",
+      "tests/test_controller_members.py": "8d18ce58b7c4967b62df638a49f328d0e6e1fa5f619fc22729f6444d59facc56",
+      "tests/test_controller_registration_boundaries.py": "817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12"
+    },
+    "pre_post_equal": true,
+    "claim": "Internal registration, native generic AttemptRef/effect settlement, member/primitive boundaries only. Not a full suite, public Orze loop, controller ACK, real model training, or scientific outcome.",
+    "session_state": "Session 41248 completed with exit 0. Snapshot replay session 75270 completed with expected exit 1. Independent owned exec/fork/worker/supervisor processes follow bounded wait/reap and captured-pidfd-only cleanup; no running independent test session remains."
+  },
+  "independent_read_review": {
+    "source_epoch": "Exact production hashes are in final_bounded; review performed against this candidate, with no production/test edits.",
+    "result": "No remaining blocking false-SETTLED or owner-loss gap found in the inspected internal paths.",
+    "inspected_changes": [
+      {
+        "path": "src/orze/engine/controller_members.py",
+        "boundary": "end_transaction exits its short writer connection before a fresh read-only exact member-row verification. A silently rolled-back member SETTLED commit raises ControllerHOLD and preserves local hold diagnostics; the earlier native terminal/effect may legitimately already be closed."
+      },
+      {
+        "path": "src/orze/engine/execution_authority.py",
+        "boundary": "Member transaction begins with the real idea_dir scope and finishes after native SQLite commit and effect-guard exit. finish_attempt alone does not authorize settlement."
+      },
+      {
+        "path": "src/orze/engine/supervised_process.py",
+        "boundary": "Registered ownership is reserved before process creation. Popen-entered exceptions retain an uncertain owner rather than NO_EXECUTION. READY/GO and actual TREE_CLOSED hooks remain distinct; blocked admission does not send GO."
+      },
+      {
+        "path": "src/orze/engine/role_supervision.py",
+        "boundary": "Early role INTENT publication uncertainty holds the global controller even before a public RoleProcess/member exists. A refused primitive start is not promoted to STARTED; role release is separate from physical closure."
+      },
+      {
+        "path": "src/orze/engine/controller_members.py",
+        "boundary": "Bounded fresh reader connections explicitly close. Native folder/registered scope and typed proof checks remain required. Actual STOP closure maps operationally to interrupted rather than completed."
+      }
+    ],
+    "caveats": [
+      "NOT_STARTED without any handle is explicitly unsupported in this slice; no source-qualified NO_EXECUTION inference was added.",
+      "A terminal effect can already be committed when later member settlement fails. The safe result is global/local HOLD, not rollback of that prior terminal or guessed SETTLED.",
+      "The conditional connection fault is a real SQLite rollback on the isolated member SETTLED commit; it is not a claim about ordinary sqlite3.commit silently rolling back in normal operation.",
+      "Strong members have a finite cap including settled entries; no infinite-run pruning/release or restart/adoption policy is claimed."
+    ]
+  },
+  "final_document_review": {
+    "path": "docs/controller-membership.md",
+    "sha256": "d7873f4550931b48064e508897563ed2c778ae45a1d1279c0248e88eeac3f48e",
+    "read": "Complete final document read after key source diff review; hash captured separately from the 21-file test inventory.",
+    "result": "Scope is truthful: internal opt-in foundation, not Orze.run/CLI/Director ACK; separate OS closure/action settlement, unsupported raw/background paths and static no-handle action compatibility are explicitly deferred. No release, adoption, scientific validity, GPU work or full autoresearch loop is claimed."
+  },
+  "registration_history": {
+    "path": "docs/evidence/2026-09-11-v1-05c2e2b-controller-registration-review.json",
+    "sha256": "9f6101e2b1549bde7efd7be0f09666b22d189d3a2606f9197f4193eef8791b85",
+    "preservation": "Earlier 4P/1 setup-error import-cycle diagnostic and post-fix 5P/2.18s registration candidate remain unchanged. The final 21-case member review does not relabel those historical hashes as the latest epoch."
+  }
+}

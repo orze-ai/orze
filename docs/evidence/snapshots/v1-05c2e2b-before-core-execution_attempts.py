@@ -305,8 +305,6 @@ def create_attempt(conn, task_id: str, phase: str, attempt_id: str, binding: dic
                 "binding": _decode(encoded), "terminal": None, "hold_reason": None}
     if changed != 1 or not _exact_row(require_current(conn, ref), expected):
         raise AttemptAuthorityError("attempt_insert_not_confirmed")
-    from orze.engine.controller_members import attempt_created
-    attempt_created(conn, ref, binding)
     return ref
 
 
@@ -350,16 +348,12 @@ def finish_attempt(conn, ref: AttemptRef, terminal: dict, not_started=False):
     target = "NOT_STARTED" if not_started else "TERMINAL"
     if before["state"] in _CLOSED:
         if before["state"] == target and _json(before["terminal"]) == _json(terminal):
-            from orze.engine.controller_members import attempt_finished
-            attempt_finished(conn, ref)
             return "duplicate"
         raise AttemptAuthorityError("attempt_terminal_conflict")
     source = "LAUNCHING" if not_started else "RUNNING"
     if before["state"] != source:
         raise AttemptAuthorityError("attempt_finish_not_authorized")
     _update(conn, ref, before, state=target, terminal=terminal)
-    from orze.engine.controller_members import attempt_finished
-    attempt_finished(conn, ref)
     return "committed"
 
 

@@ -297,14 +297,10 @@ def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
             stdout=stdout, stderr=stderr, pass_fds=(*fds, child.fileno()),
             start_new_session=True,
         )
-    except BaseException:
+    except Exception:
         parent.close()
         child.close()
-        # Popen may have created an OS process before a constructor/response
-        # failure. Only the earlier, pre-Popen setup can prove no execution.
-        prepare_failed(member)
-        if member is not None:
-            raise SupervisionUncertain("supervisor_popen_uncertain", process=fallback) from None
+        prepare_failed(member, no_execution=True)
         raise
     handle = fallback
     fallback._supervisor = supervisor

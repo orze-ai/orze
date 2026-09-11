@@ -56,8 +56,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, Optional
 
-from orze.engine.controller_probe import ControllerProbeHOLD, run_probe
-
 from orze.engine.process import (
     TrainingProcess, _new_process_group, _terminate_and_reap,
     capture_process_identity, verify_artifact_preflight_receipt,
@@ -232,7 +230,7 @@ def _probe_kernel_boundary(*, deny_network: bool) -> None:
     try:
         with tempfile.TemporaryDirectory(
                 prefix="orze-boundary-probe-") as target:
-            completed = run_probe(
+            completed = subprocess.run(
                 args + [
                     bash, "-ceu",
                     f"{mount} --make-rprivate /; "
@@ -395,7 +393,7 @@ def _detect_zombie(tp) -> bool:
 
     # 2. Check GPU memory (nvidia-smi for this PID and children)
     try:
-        result = run_probe(
+        result = subprocess.run(
             ["nvidia-smi", f"--id={tp.gpu}",
              "--query-compute-apps=pid,used_gpu_memory",
              "--format=csv,noheader,nounits"],
@@ -424,8 +422,6 @@ def _detect_zombie(tp) -> bool:
                         return False  # child has GPU memory
         except (FileNotFoundError, ValueError, OSError):
             pass  # can't read children, continue with other checks
-    except ControllerProbeHOLD:
-        raise
     except Exception:
         pass  # nvidia-smi failed, check other signals
 
@@ -510,7 +506,7 @@ def _gpu_util_for_pid(pid: int, gpu: int) -> Optional[int]:
     ``--query-gpu=utilization.gpu,uuid`` for per-GPU util.
     """
     try:
-        a = run_probe(
+        a = subprocess.run(
             ["nvidia-smi", f"--id={gpu}",
              "--query-compute-apps=pid,gpu_uuid",
              "--format=csv,noheader,nounits"],
@@ -531,7 +527,7 @@ def _gpu_util_for_pid(pid: int, gpu: int) -> Optional[int]:
     if gpu_uuid is None:
         return None
     try:
-        b = run_probe(
+        b = subprocess.run(
             ["nvidia-smi", f"--id={gpu}",
              "--query-gpu=uuid,utilization.gpu",
              "--format=csv,noheader,nounits"],
@@ -1987,11 +1983,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             _assert_gpu_authorized(gpu, cfg)
             _assert_campaign_evidence_authorized(cfg, lake)
             require_no_unconfirmed_stop(results_dir / idea_id)
-            if proc.start() is False:
-                # No GO means no post-mount nonce. Keep the real native handle
-                # for normal closed-tree publication; do not block on lineage.
-                close_model_lineage_attestation(lineage_context)
-                return tp
+            proc.start()
             # The worker emits its nonce only AFTER GO and kernel setup.
             receive_model_lineage_attestation(lineage_context, process_pid=proc.pid)
             return tp

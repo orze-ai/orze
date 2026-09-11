@@ -23,25 +23,19 @@ logger = logging.getLogger("orze")
 
 def get_gpu_memory_used(gpu_id: int) -> Optional[int]:
     """Get GPU memory used in MiB. Returns None on failure."""
-    from orze.engine.controller_probe import ControllerProbeHOLD, run_probe
-
     try:
-        result = run_probe(
+        result = subprocess.run(
             ["nvidia-smi", "--query-gpu=memory.used",
              "--format=csv,noheader,nounits", f"--id={gpu_id}"],
             capture_output=True, text=True, timeout=10,
         )
         return int(result.stdout.strip())
-    except ControllerProbeHOLD:
-        raise
     except Exception:
         return None
 
 
 def _eval_already_running(idea_id: str, cfg: dict = None) -> bool:
     """Check if an eval process is already running for this idea."""
-    from orze.engine.controller_probe import ControllerProbeHOLD, run_probe
-
     eval_script = "eval"
     if cfg:
         script_path = cfg.get("eval_script", "")
@@ -49,21 +43,17 @@ def _eval_already_running(idea_id: str, cfg: dict = None) -> bool:
             from pathlib import Path
             eval_script = Path(script_path).stem
     try:
-        result = run_probe(
+        result = subprocess.run(
             ["pgrep", "-f", f"{eval_script}.*{idea_id}"],
             capture_output=True, text=True, timeout=5,
         )
         return result.returncode == 0
-    except ControllerProbeHOLD:
-        raise
     except Exception:
         return False
 
 
 def detect_all_gpus(gpu_ids: Optional[List[int]] = None) -> List[int]:
     """Detect available GPU indices, optionally within an exact scope."""
-    from orze.engine.controller_probe import ControllerProbeHOLD, run_probe
-
     try:
         command = [
             "nvidia-smi", "--query-gpu=index", "--format=csv,noheader",
@@ -73,7 +63,7 @@ def detect_all_gpus(gpu_ids: Optional[List[int]] = None) -> List[int]:
             if not scoped:
                 return []
             command.append("--id=" + ",".join(str(gpu) for gpu in scoped))
-        result = run_probe(
+        result = subprocess.run(
             command,
             capture_output=True, text=True, timeout=10,
         )
@@ -83,8 +73,6 @@ def detect_all_gpus(gpu_ids: Optional[List[int]] = None) -> List[int]:
             if value.strip()
             and (allowed is None or int(value.strip()) in allowed)
         ]
-    except ControllerProbeHOLD:
-        raise
     except Exception:
         return []
 
@@ -105,8 +93,6 @@ def get_free_gpus(gpu_ids: List[int], active: dict,
 
 def _query_gpu_details(gpu_ids: Optional[List[int]] = None) -> List[dict]:
     """Query per-GPU stats, restricted to ``gpu_ids`` when supplied."""
-    from orze.engine.controller_probe import ControllerProbeHOLD, run_probe
-
     try:
         command = [
             "nvidia-smi",
@@ -118,7 +104,7 @@ def _query_gpu_details(gpu_ids: Optional[List[int]] = None) -> List[dict]:
             if not scoped:
                 return []
             command.append("--id=" + ",".join(str(gpu) for gpu in scoped))
-        result = run_probe(
+        result = subprocess.run(
             command,
             capture_output=True, text=True, timeout=10,
         )
@@ -137,7 +123,5 @@ def _query_gpu_details(gpu_ids: Optional[List[int]] = None) -> List[dict]:
                     "temperature_c": int(parts[5]),
                 })
         return gpus
-    except ControllerProbeHOLD:
-        raise
     except Exception:
         return []

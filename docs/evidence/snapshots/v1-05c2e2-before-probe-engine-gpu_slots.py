@@ -23,10 +23,6 @@ import subprocess
 import time
 from typing import Dict, List, Optional, Set, Tuple
 
-from orze.engine.controller_probe import (
-    ControllerProbeHOLD, require_remote_probe_disabled, run_probe,
-)
-
 logger = logging.getLogger("orze")
 
 # ---------------------------------------------------------------------------
@@ -51,7 +47,7 @@ def _query_all_gpu_usage(
             if not scoped:
                 return {}
             command.append("--id=" + ",".join(str(gpu) for gpu in scoped))
-        result = run_probe(
+        result = subprocess.run(
             command,
             capture_output=True, text=True, timeout=5,
         )
@@ -64,8 +60,6 @@ def _query_all_gpu_usage(
                 if allowed is None or gpu in allowed:
                     out[gpu] = (int(parts[1]), int(parts[2]))
         return out
-    except ControllerProbeHOLD:
-        raise
     except Exception:
         return {}
 
@@ -505,7 +499,6 @@ def _parse_nvidia_smi_stdout(stdout: str) -> Dict[int, Dict[str, int]]:
 
 def _run_ssh(host: str, cmd: List[str], *, timeout: int = 10) -> str:
     """Run a remote command via ssh. Returns stdout (empty on failure)."""
-    require_remote_probe_disabled()
     full = [
         "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
         "-o", "StrictHostKeyChecking=accept-new",
@@ -540,12 +533,10 @@ def poll_fleet(
     for host in hosts:
         if host in local_names:
             try:
-                r = run_probe(smi_cmd, capture_output=True,
+                r = subprocess.run(smi_cmd, capture_output=True,
                                     text=True, timeout=5)
                 if r.returncode == 0:
                     out[host] = _parse_nvidia_smi_stdout(r.stdout)
-            except ControllerProbeHOLD:
-                raise
             except Exception as e:  # pragma: no cover
                 logger.debug("local nvidia-smi failed: %s", e)
         else:

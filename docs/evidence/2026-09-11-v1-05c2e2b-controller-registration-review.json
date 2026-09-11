@@ -1,0 +1,139 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2e2b",
+  "owner": "runtime_evidence",
+  "status": "independent_registration_layer_candidate_passed",
+  "scope": "Internal controller registration only; actual exec/fork/thread/SQLite boundaries. Not an Orze.run, CLI, owned-workload, drain, release, restart or ACK acceptance.",
+  "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "classification": {
+    "new_mechanism_cases": 5,
+    "historical_behavior_reds": 0,
+    "registration_draft_behavior_reds": 0,
+    "initial_integration_setup_errors": 1,
+    "overlapping_runs_not_additive": true
+  },
+  "test": {
+    "path": "tests/test_controller_registration_boundaries.py",
+    "sha256": "817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12",
+    "frozen_after_first_run": true,
+    "modified_after_first_run": false,
+    "file_assert_nodes": 11,
+    "assert_ast_sha256": "d26f1a34048b4ad832aca0a3fc8e0bb93f1ce235a4619cddede64a5343a1003e",
+    "assert_ast_algorithm": "sha256(json.dumps([ast.dump(n, include_attributes=False) for n in ast.walk(ast.parse(file_bytes)) if isinstance(n, ast.Assert)], separators=(',', ':')).encode()); default ensure_ascii=True.",
+    "additional_exec_programs": 6,
+    "additional_exec_program_assert_nodes": 34,
+    "embedded_program_accounting": "These 34 Assert nodes are inside six fixed Python program string literals passed to actual exec subprocesses. They are reported separately, never silently added to the normal file ast.walk count. The final refusal program executes twice against same and different DB paths.",
+    "cases": [
+      "Real same-process exact reentry and detached identity; another real thread sees the same strong context and independently reads admission from actual existing SQLite.",
+      "Actual fork while another thread owns both process-global/context RLocks rejects inherited current/register/admission/guard/hold before touching those locks; parent remains ACTIVE with unchanged rows.",
+      "Different IdeaLake objects, including the same DB and another DB, cannot take over the context; replacing the original lake.conn is sticky HOLD and never registers in the foreign database.",
+      "A real peer SQLite connection changes stored process start_ticks; poll/admission/re-registration refuse, preserve the strong owner and do not overwrite the changed record.",
+      "After a successful registering exec process really exits, same-scope registration from fresh exec processes is denied for both the original and another DB; exact owner bytes/inode and original row persist."
+    ]
+  },
+  "snapshot": {
+    "path": "docs/evidence/snapshots/v1-05c2e2b-before-registration-boundaries-controller-control.py",
+    "sha256": "b3d456be6deab76ec4bf206981d25fc2328761f8dfefff07bdada4c79ebd46d5",
+    "provenance": "Complete newly authored draft module captured via apply_patch before this group's first run; not a preceding committed product module or historical baseline.",
+    "difference_from_executed_control": "Author removed only the unused 'import hashlib' line after snapshot capture. First and passing executions used 2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85; snapshot hash is intentionally different.",
+    "comparison_command": "git diff --no-index docs/evidence/snapshots/v1-05c2e2b-before-registration-boundaries-controller-control.py src/orze/engine/controller_control.py",
+    "comparison_exit_code": 1,
+    "comparison_output": "@@ -14,7 +14,6 @@ from __future__ import annotations\n from contextlib import contextmanager\n import copy\n-import hashlib\n import os"
+  },
+  "first_run": {
+    "command": "sha256sum src/orze/engine/controller_control.py docs/evidence/snapshots/v1-05c2e2b-before-registration-boundaries-controller-control.py tests/test_controller_registration_boundaries.py; PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_registration_boundaries.py --tb=short",
+    "start": {
+      "chunk_id": "a1adfe",
+      "wall_time_seconds": 1.000840012,
+      "session_id": 1735,
+      "original_token_count": 94,
+      "output": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85  src/orze/engine/controller_control.py\nb3d456be6deab76ec4bf206981d25fc2328761f8dfefff07bdada4c79ebd46d5  docs/evidence/snapshots/v1-05c2e2b-before-registration-boundaries-controller-control.py\n817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12  tests/test_controller_registration_boundaries.py\nE."
+    },
+    "completion": {
+      "chunk_id": "edca64",
+      "wall_time_seconds": 0.000002437,
+      "exit_code": 1,
+      "original_token_count": 295,
+      "output": "...                                                                    [100%]\n==================================== ERRORS ====================================\n_ ERROR at setup of test_registered_context_is_shared_with_real_thread_and_exact_reentry _\ntests/conftest.py:14: in _forbid_live_gpu_ownership_queries\n    from orze.core.gpu_lease import gpu_execution_lease as real_gpu_lease\nsrc/orze/core/gpu_lease.py:24: in <module>\n    from orze.engine.controller_probe import ControllerProbeHOLD, run_probe\nsrc/orze/engine/__init__.py:3: in <module>\n    from .launcher import launch, check_active\nsrc/orze/engine/launcher.py:80: in <module>\n    from orze.core.gpu_lease import gpu_execution_lease\nE   ImportError: cannot import name 'gpu_execution_lease' from partially initialized module 'orze.core.gpu_lease' (most likely due to a circular import) (/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/src/orze/core/gpu_lease.py)\n=========================== short test summary info ============================\nERROR tests/test_controller_registration_boundaries.py::test_registered_context_is_shared_with_real_thread_and_exact_reentry\n4 passed, 1 error in 1.92s\n"
+    },
+    "classification": "4 passed, 1 setup error in 1.92s. The first case never reached its registration assertions because conftest imported gpu_lease first. Its new top-level controller_probe import entered engine.__init__ -> launcher -> partially initialized gpu_lease. This is the independently confirmed shared integration/import defect owned and snapshotted by Pro, not five registration failures, a missing registration API, or a fixture premise change.",
+    "fix": "Pro moved controller_probe import inside the actual gpu_lease query function. This test file and assertions were unchanged. Parent/Pro own that defect's full source snapshots and independent fresh-import regression."
+  },
+  "candidate_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_controller_registration_boundaries.py --tb=short",
+    "audit_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,pathlib\npaths=['src/orze/engine/controller_control.py','src/orze/core/idea_source_lock.py','src/orze/core/sqlite_policy.py','src/orze/engine/supervisor_worker.py','src/orze/engine/supervised_process.py','src/orze/idea_lake.py','src/orze/engine/__init__.py','src/orze/core/gpu_lease.py','src/orze/engine/controller_probe.py','src/orze/engine/launcher.py','src/orze/engine/bounded_executor.py','src/orze/engine/termination_hold.py','src/orze/core/fs.py','tests/conftest.py','tests/test_controller_registration_boundaries.py']\nprint(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths},sort_keys=True))\nPY",
+    "pre": {
+      "src/orze/core/fs.py": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+      "src/orze/core/gpu_lease.py": "3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263",
+      "src/orze/core/idea_source_lock.py": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+      "src/orze/core/sqlite_policy.py": "11d19ec9b49c0d8da23b8b09450197e92d9c33fcdfc8c3976564469be0940bff",
+      "src/orze/engine/__init__.py": "c7403d7cf291a28e7a04639ecc74819ebf2bb6a2c5e31143ff52f8cdb9d9df89",
+      "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+      "src/orze/engine/controller_control.py": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+      "src/orze/engine/controller_probe.py": "5c8b4e1b6e9591d81d925053334b721ccef718f699f88694bc427c724fe0e652",
+      "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+      "src/orze/engine/supervised_process.py": "ee7b0704f8f2f77a51b674a30b2f40da7902888dbe72f664a2caf3196d407c2d",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95",
+      "src/orze/idea_lake.py": "5a7b45d6a53f0cf7f06842753abdccf64c8c138fb6d3cbfd54d68a28b6c2e205",
+      "tests/conftest.py": "22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641",
+      "tests/test_controller_registration_boundaries.py": "817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12"
+    },
+    "post": {
+      "src/orze/core/fs.py": "a811db467c79a287240e57d18864e8951e9d4405cb99749d830e01d713c2765c",
+      "src/orze/core/gpu_lease.py": "3a4d5d94ab0e381de12131fa04c314e48488a8da061d5131817f163cd4716263",
+      "src/orze/core/idea_source_lock.py": "cb38cf6f1558e6dd635c2f7b69417b013544a960b1e1a50a0b7237449d6e94bc",
+      "src/orze/core/sqlite_policy.py": "11d19ec9b49c0d8da23b8b09450197e92d9c33fcdfc8c3976564469be0940bff",
+      "src/orze/engine/__init__.py": "c7403d7cf291a28e7a04639ecc74819ebf2bb6a2c5e31143ff52f8cdb9d9df89",
+      "src/orze/engine/bounded_executor.py": "d89775c5f2deaee7fef6dbef8e61a478404e768aacad616eea37f8a17a66892e",
+      "src/orze/engine/controller_control.py": "2c73a2719f5da7bc96a9df3bb1e6ac9784d9af2a91f7d6a3b0be67efc780de85",
+      "src/orze/engine/controller_probe.py": "5c8b4e1b6e9591d81d925053334b721ccef718f699f88694bc427c724fe0e652",
+      "src/orze/engine/launcher.py": "75cc625360d0bb51799a3e0c20da1d0bcdd0b8301800f74a7dc678601b5d7c1a",
+      "src/orze/engine/supervised_process.py": "ee7b0704f8f2f77a51b674a30b2f40da7902888dbe72f664a2caf3196d407c2d",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95",
+      "src/orze/idea_lake.py": "5a7b45d6a53f0cf7f06842753abdccf64c8c138fb6d3cbfd54d68a28b6c2e205",
+      "tests/conftest.py": "22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641",
+      "tests/test_controller_registration_boundaries.py": "817a91842e4cf645412fbdeafba5e66af35a122efbff35a4af1299fae15a8d12"
+    },
+    "pre_post_exact": true,
+    "audited_paths": 15,
+    "start": {
+      "chunk_id": "c849c3",
+      "wall_time_seconds": 1.001712948,
+      "session_id": 36365,
+      "original_token_count": 1,
+      "output": ".."
+    },
+    "completion": {
+      "chunk_id": "cbbf06",
+      "wall_time_seconds": 0.000003202,
+      "exit_code": 0,
+      "original_token_count": 24,
+      "output": "...                                                                    [100%]\n5 passed in 2.18s\n"
+    },
+    "passed": 5,
+    "seconds": 2.18,
+    "exit_code": 0,
+    "epoch_limit": "This exact source-specific registration-layer candidate is not a final whole-slice/source freeze. Other member/probe wiring is still being authored. Parent will perform final new-case and full-suite verification."
+  },
+  "review": {
+    "module_read_completely": true,
+    "no_remaining_registration_layer_blocker_found": true,
+    "conclusions": [
+      "PID checks precede inherited locks; another thread uses the same strong context without borrowing the thread-affine IdeaLake connection.",
+      "Actual main DB routing, SQLite policy, original Lake/connection object and scope/database inode witnesses are rechecked; table/row identity is canonical and exact.",
+      "Durable no-age source-lock ownership blocks the same scope even when a new process points at another real DB.",
+      "Registration reserves a strong pending context before uncertain writes. Failure does not erase authority or create a fallback opportunity.",
+      "Identity copies are detached; peer record mutation causes sticky local HOLD and does not falsely claim successful HOLD persistence.",
+      "No release, ACK or positive restart is implemented or tested. Process exit leaves its registration unresolved."
+    ],
+    "limitations": [
+      "No production source or existing fixture was changed by this agent.",
+      "No host process discovery, numeric PID/PGID signals, provider, real GPU, model, dataset or holdout plaintext.",
+      "Seven fresh exec test children plus one explicitly owned fork child in the passing run; all were bounded and accurately reaped, with pidfd-only cleanup signals.",
+      "The strong production global is never reset for tests. Successful registrations exist only in fresh exec processes; retained scope locks/rows are intentional test evidence, not leaked running processes.",
+      "Assertions in subprocess bodies are real Python assertions against actual APIs and SQLite; process completion is not mocked. They do not prove a supervised workload tree or controller product lifecycle."
+    ]
+  }
+}

@@ -1987,11 +1987,7 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
             _assert_gpu_authorized(gpu, cfg)
             _assert_campaign_evidence_authorized(cfg, lake)
             require_no_unconfirmed_stop(results_dir / idea_id)
-            if proc.start() is False:
-                # No GO means no post-mount nonce. Keep the real native handle
-                # for normal closed-tree publication; do not block on lineage.
-                close_model_lineage_attestation(lineage_context)
-                return tp
+            proc.start()
             # The worker emits its nonce only AFTER GO and kernel setup.
             receive_model_lineage_attestation(lineage_context, process_pid=proc.pid)
             return tp

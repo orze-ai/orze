@@ -159,7 +159,7 @@ def execution_transaction(lake, idea_dir: Path, *, lease=None):
     # Membership is outside SQL commit, file confirmation, timeout restoration
     # AND effect-guard exit. finish_attempt alone never marks it SETTLED.
     from orze.engine.controller_members import begin_transaction, end_transaction
-    ticket = begin_transaction(lake, idea_dir)
+    ticket = begin_transaction(lake)
     try:
         with _execution_transaction(lake, idea_dir, lease=lease) as tx:
             yield tx
