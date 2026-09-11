@@ -404,13 +404,10 @@ so the experiment can succeed on retry.
             # Do not call the active-scope gate here: this invocation owns it.
             require_legacy_executor_scope(idea_dir, admission_cfg)
             require_legacy_executor_scope(idea_dir, cfg)
-            current_policy = cfg.get("agent_tool_policy", {"enabled": True})
-            if (not isinstance(current_policy, dict)
-                    or current_policy.get("enabled", True) is not True
-                    or Path(cfg.get("_project_root") or results_dir.parent).resolve()
+            if (Path(cfg.get("_project_root") or results_dir.parent).resolve()
                     != project_root
                     or cfg.get("executor_fix", {}) != fix_cfg
-                    or current_policy != policy_cfg
+                    or cfg.get("agent_tool_policy", {"enabled": True}) != policy_cfg
                     or cfg.get("max_fix_attempts", 0) != max_fix
                     or fix_counts.get(idea_id, 0) != attempts):
                 raise TerminationUnconfirmed("executor_fix_admission_changed")

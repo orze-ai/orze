@@ -1,0 +1,266 @@
+{
+  "schema": 1,
+  "milestone": "V1-05C2d4",
+  "title": "Legacy executor admission author evidence and independent caller review",
+  "status": "bounded_final_passed_not_full_suite_acceptance",
+  "ownership": {
+    "authored_production": [
+      "src/orze/engine/executor_fix_admission.py"
+    ],
+    "authored_new_tests": [
+      "tests/test_executor_fix_caller_authority.py",
+      "tests/test_executor_fix_default_route.py",
+      "tests/test_executor_fix_policy_type.py"
+    ],
+    "independently_reviewed_other_authors_production": [
+      "src/orze/engine/failure.py",
+      "src/orze/engine/launcher.py",
+      "src/orze/engine/bounded_executor.py"
+    ],
+    "unchanged_readonly_caller": "src/orze/engine/phases.py",
+    "qualification": "The gate author does not claim independent review of their own admission implementation. The other three production modules were independently read, including their final narrow diffs."
+  },
+  "scope": {
+    "behavior": [
+      "Legacy tokenless repair is rejected for any task catalog declaration, a claim lifecycle_db key, or any execution_attempts row for that exact task, including legacy_import.",
+      "Configured database reads use mode=ro and no IdeaLake constructor, DDL, migration, or implicit database creation. Explicit missing/corrupt/redirected authority does not downgrade to legacy.",
+      "A missing default database, a genuine pre-native database without execution_attempts, and a compatible table containing only other tasks remain allowed.",
+      "Fixer TerminationUnconfirmed propagates; all six successful-fix/relaunch branches now propagate a new launch HOLD before subsequent failure publication or active removal.",
+      "READY callback rechecks both originally captured and current routing keys, and requires the current tool-policy enabled flag to remain exact True.",
+      "Native training/posthoc/pre-script/artifact-preflight implicit repair remains disabled; no explicit repair action, native enrollment, durable budget, or restart adoption is added."
+    ],
+    "limitations": [
+      "The executor supervisor identity and scope HOLD are process-local, not persistent native AttemptRef or cross-restart recovery proof.",
+      "Controller run finally still releases its own GPU lease and removes its PID file; it does not delete claims or reset tasks. Atexit tracks training/evaluation/roles, not a new durable repair action.",
+      "Some legacy branches already account the original known-closed training execution before the fixer. Tests require no subsequent repair acceptance/failure/reset effects after uncertainty, not an empty history of all original training accounting.",
+      "The configured DB query and GO recheck are read-only snapshots, not a database lock across process launch or a project-wide immutable-source reservation.",
+      "A FIX_APPLIED marker plus closed execution is a compatibility attestation, not scientific validity, sandbox proof, or assurance that arbitrary project changes are correct."
+    ]
+  },
+  "classification": {
+    "distinct_new_tests_in_this_report": 18,
+    "original_file_cases": 16,
+    "old_public_hold_propagation_failures": 7,
+    "new_scope_requirements": 6,
+    "old_controls": 3,
+    "working_draft_regressions": 2,
+    "assert_nodes_in_three_new_files": 34,
+    "case_details": {
+      "old_public": "Wrapper broad except swallowed one unknown-tree exception; six real check_active branches swallowed relaunch TerminationUnconfirmed. These are public behavior regressions with explicit OS/runner/relaunch seams, not seven real CPU tree tests.",
+      "new_scope": "Four native-routing/current-database rejections plus explicit missing and corrupt configured database rejections. No absent new API was invoked to manufacture a baseline red.",
+      "old_controls": "Phase legacy-pre False plus fixer HOLD already propagated without reset/publication; pre-native database and unrelated-task database remained compatible.",
+      "draft_route": "Real Linux READY, then controlled cfg._orze_dir change and actual registration in the old database. Old draft incorrectly reached a tiny local CPU fixer. This is an injected READY/config mutation boundary, not an observed concurrent pathname race or old-release native-repair test.",
+      "draft_policy": "The actual fixer-generated before_start callback was consumed by an explicit runner/OS double after enabled True changed to integer 1. This proves the callback authorization error only, not CPU supervision or cleanup."
+    },
+    "counting": "36 final bounded tests include these 18 plus 18 unchanged neighbors. Do not sum 34 candidate, 36 final, root targets, helper tests, or full-suite counts as distinct cases."
+  },
+  "tests": [
+    {
+      "path": "tests/test_executor_fix_caller_authority.py",
+      "sha256": "556c2c0cadd5bed77fe3d77d35036c2b98c7d9b2868f84526377ddc10002eaf2",
+      "cases": 16,
+      "assert_nodes": 24,
+      "fixture_changes": "none; frozen before production edits; no initial fixture/setup errors"
+    },
+    {
+      "path": "tests/test_executor_fix_default_route.py",
+      "sha256": "e55b3eb4e6e4f8dcf2fff45dc271725e49334d15136768b3dc3ef45ec20a335b",
+      "cases": 1,
+      "assert_nodes": 7
+    },
+    {
+      "path": "tests/test_executor_fix_policy_type.py",
+      "sha256": "c73e4ae898698e138358705b5535dcd966cf079e5bcfeb643e05fff433e82ce0",
+      "cases": 1,
+      "assert_nodes": 3
+    }
+  ],
+  "baseline": {
+    "test": "tests/test_executor_fix_caller_authority.py",
+    "sha256": "556c2c0cadd5bed77fe3d77d35036c2b98c7d9b2868f84526377ddc10002eaf2",
+    "baseline_commit": "f6b3d14e609dbdc784983f4b435adfe47a362c7b",
+    "runs": [
+      {
+        "command": "PYTHONPATH=src pytest -q tests/test_executor_fix_caller_authority.py",
+        "exit_code": 1,
+        "footer": "13 failed, 3 passed in 0.67s"
+      },
+      {
+        "command": "PYTHONPATH=src pytest -q --tb=no tests/test_executor_fix_caller_authority.py",
+        "exit_code": 1,
+        "footer": "13 failed, 3 passed in 0.44s"
+      }
+    ],
+    "classification": {
+      "old_public_hold_propagation_failures": 7,
+      "new_native_scope_requirements_failures": 6,
+      "old_controls": 3
+    },
+    "snapshot_sources": {
+      "failure.py": "3c569bf1f498c36c0eaf640a86ab5ec4276ddd7347a257ba2b9404748d698154",
+      "launcher.py": "713680eddb3990e8b94ae0486ad5b242ad5d098b5c4d0af00db6b7aff6730118",
+      "phases.py": "cb6e99ebff57c85a2b7393e4f955d18444aca6c98e0bb04906ee115e87899cb8"
+    },
+    "replay": {
+      "command": "PYTHONPATH=src python3 - <<'PY'\nimport importlib\nfrom pathlib import Path\nimport pytest\nfor stem in ('failure', 'launcher', 'phases'):\n    module = importlib.import_module('orze.engine.' + stem)\n    source = Path('docs/evidence/snapshots') / ('v1-05c2d4-before-caller-authority-' + stem + '.py')\n    exec(compile(source.read_bytes(), str(source), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q', '--tb=no', 'tests/test_executor_fix_caller_authority.py']))\nPY",
+      "exit_code": 1,
+      "footer": "13 failed, 3 passed in 0.47s",
+      "replacement": "Complete saved failure/launcher/phases modules executed in their existing module dictionaries before collection; no production files were edited. All other dependencies remained current."
+    }
+  },
+  "candidate_history": [
+    {
+      "command": "PYTHONPATH=src pytest -q tests/test_executor_fix_caller_authority.py tests/test_schema_invalid_skip.py tests/test_native_training_repair_status.py",
+      "exit_code": 0,
+      "footer": "34 passed in 2.77s",
+      "pre_post_identical": true,
+      "source_sha256": {
+        "failure.py": "95af10624400636b40f393e02a2b2752d4b598dcd01c6d28d00870c1bba72b5e",
+        "launcher.py": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142",
+        "phases.py": "cb6e99ebff57c85a2b7393e4f955d18444aca6c98e0bb04906ee115e87899cb8",
+        "executor_fix_admission.py": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76",
+        "bounded_executor.py": "ae332e0ae2f63d31f02831048f77adbd428f11c3ff483b601db2699a06cb5798"
+      }
+    },
+    {
+      "name": "default-route-capture",
+      "source_sha256": "95af10624400636b40f393e02a2b2752d4b598dcd01c6d28d00870c1bba72b5e",
+      "first_command": "PYTHONPATH=src pytest -q tests/test_executor_fix_default_route.py",
+      "first_footer": "1 failed in 0.29s",
+      "test_exit_note": "The first tool shell ran posthash after pytest, so the enclosing shell exited 0 despite the printed failing pytest footer. A separate pytest-only command confirms exit 1 below.",
+      "standalone_command": "PYTHONPATH=src pytest -q --tb=short tests/test_executor_fix_default_route.py",
+      "standalone_exit_code": 1,
+      "standalone_footer": "1 failed in 0.25s",
+      "source_pre_post_identical": true,
+      "replay": {
+        "command": "PYTHONPATH=src python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.engine import failure\nsource = Path('docs/evidence/snapshots/v1-05c2d4-before-default-route-capture-failure.py')\nexec(compile(source.read_bytes(), str(source), 'exec'), failure.__dict__)\nraise SystemExit(pytest.main(['-q', '--tb=short', 'tests/test_executor_fix_default_route.py']))\nPY",
+        "exit_code": 1,
+        "footer": "1 failed in 0.21s"
+      }
+    },
+    {
+      "name": "current-policy-type",
+      "source_sha256": "1238bd0df1d9c0f30111e9188847d69d2d45342580f062f3ace7927dd2b4a747",
+      "command": "PYTHONPATH=src pytest -q --tb=short tests/test_executor_fix_policy_type.py",
+      "exit_code": 1,
+      "footer": "1 failed in 0.15s",
+      "source_pre_post_identical": true,
+      "replay": {
+        "command": "PYTHONPATH=src python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nfrom orze.engine import failure\nsource = Path('docs/evidence/snapshots/v1-05c2d4-before-policy-type-check-failure.py')\nexec(compile(source.read_bytes(), str(source), 'exec'), failure.__dict__)\nraise SystemExit(pytest.main(['-q', '--tb=short', 'tests/test_executor_fix_policy_type.py']))\nPY",
+        "exit_code": 1,
+        "footer": "1 failed in 0.09s"
+      }
+    }
+  ],
+  "final_bounded_validation": {
+    "command": "PYTHONPATH=src python3 - <<'PY'\nimport hashlib, json\nfrom pathlib import Path\nimport pytest\nfiles = ['src/orze/engine/' + name + '.py' for name in ('failure', 'launcher', 'phases', 'executor_fix_admission', 'bounded_executor')]\ntests = ['tests/test_executor_fix_caller_authority.py', 'tests/test_executor_fix_default_route.py', 'tests/test_executor_fix_policy_type.py', 'tests/test_schema_invalid_skip.py', 'tests/test_native_training_repair_status.py']\nfiles += tests\nsnapshot = lambda: {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files}\nbefore = snapshot()\nprint('SOURCE_TEST_PRE=' + json.dumps(before, sort_keys=True), flush=True)\ncode = pytest.main(['-q', *tests])\nafter = snapshot()\nprint('SOURCE_TEST_POST=' + json.dumps(after, sort_keys=True), flush=True)\nassert before == after\nraise SystemExit(code)\nPY",
+    "exit_code": 0,
+    "footer": "36 passed in 2.89s",
+    "source_test_pre_sha256": {
+      "src/orze/engine/bounded_executor.py": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+      "src/orze/engine/executor_fix_admission.py": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76",
+      "src/orze/engine/failure.py": "c292ae61b43e2d32215788ae897c1bd9ad865b24a6d8f467c1bc968180e6f09a",
+      "src/orze/engine/launcher.py": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142",
+      "src/orze/engine/phases.py": "cb6e99ebff57c85a2b7393e4f955d18444aca6c98e0bb04906ee115e87899cb8",
+      "tests/test_executor_fix_caller_authority.py": "556c2c0cadd5bed77fe3d77d35036c2b98c7d9b2868f84526377ddc10002eaf2",
+      "tests/test_executor_fix_default_route.py": "e55b3eb4e6e4f8dcf2fff45dc271725e49334d15136768b3dc3ef45ec20a335b",
+      "tests/test_executor_fix_policy_type.py": "c73e4ae898698e138358705b5535dcd966cf079e5bcfeb643e05fff433e82ce0",
+      "tests/test_native_training_repair_status.py": "7b8392e7efe383d6caec63dd8fa08c7f2d70338fcd3ff1e38fd972e00012fc9d",
+      "tests/test_schema_invalid_skip.py": "9d17c9a37d68a11cbe701c3140efa6de2ac659273167f13e6b8c345b49222ba2"
+    },
+    "source_test_post_sha256": {
+      "src/orze/engine/bounded_executor.py": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+      "src/orze/engine/executor_fix_admission.py": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76",
+      "src/orze/engine/failure.py": "c292ae61b43e2d32215788ae897c1bd9ad865b24a6d8f467c1bc968180e6f09a",
+      "src/orze/engine/launcher.py": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142",
+      "src/orze/engine/phases.py": "cb6e99ebff57c85a2b7393e4f955d18444aca6c98e0bb04906ee115e87899cb8",
+      "tests/test_executor_fix_caller_authority.py": "556c2c0cadd5bed77fe3d77d35036c2b98c7d9b2868f84526377ddc10002eaf2",
+      "tests/test_executor_fix_default_route.py": "e55b3eb4e6e4f8dcf2fff45dc271725e49334d15136768b3dc3ef45ec20a335b",
+      "tests/test_executor_fix_policy_type.py": "c73e4ae898698e138358705b5535dcd966cf079e5bcfeb643e05fff433e82ce0",
+      "tests/test_native_training_repair_status.py": "7b8392e7efe383d6caec63dd8fa08c7f2d70338fcd3ff1e38fd972e00012fc9d",
+      "tests/test_schema_invalid_skip.py": "9d17c9a37d68a11cbe701c3140efa6de2ac659273167f13e6b8c345b49222ba2"
+    },
+    "scope": "Own three files (18), unchanged test_schema_invalid_skip.py (16), unchanged test_native_training_repair_status.py (2). Not a full-suite acceptance."
+  },
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-05c2d4-before-caller-authority-failure.py",
+      "sha256": "3c569bf1f498c36c0eaf640a86ab5ec4276ddd7347a257ba2b9404748d698154",
+      "kind": "complete baseline module",
+      "baseline_commit": "f6b3d14e609dbdc784983f4b435adfe47a362c7b",
+      "baseline_path": "src/orze/engine/failure.py",
+      "byte_identical_to_fixed_gitshow": true
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c2d4-before-caller-authority-launcher.py",
+      "sha256": "713680eddb3990e8b94ae0486ad5b242ad5d098b5c4d0af00db6b7aff6730118",
+      "kind": "complete baseline module",
+      "baseline_commit": "f6b3d14e609dbdc784983f4b435adfe47a362c7b",
+      "baseline_path": "src/orze/engine/launcher.py",
+      "byte_identical_to_fixed_gitshow": true
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c2d4-before-caller-authority-phases.py",
+      "sha256": "cb6e99ebff57c85a2b7393e4f955d18444aca6c98e0bb04906ee115e87899cb8",
+      "kind": "complete baseline module",
+      "baseline_commit": "f6b3d14e609dbdc784983f4b435adfe47a362c7b",
+      "baseline_path": "src/orze/engine/phases.py",
+      "byte_identical_to_fixed_gitshow": true
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c2d4-before-default-route-capture-failure.py",
+      "sha256": "95af10624400636b40f393e02a2b2752d4b598dcd01c6d28d00870c1bba72b5e",
+      "kind": "complete working-draft module",
+      "baseline_commit": null
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-05c2d4-before-policy-type-check-failure.py",
+      "sha256": "1238bd0df1d9c0f30111e9188847d69d2d45342580f062f3ace7927dd2b4a747",
+      "kind": "complete route-fixed working-draft module",
+      "baseline_commit": null
+    }
+  ],
+  "independent_findings": {
+    "resolved": [
+      "Six launcher legacy retry catches explicitly preserve TerminationUnconfirmed.",
+      "failure wrapper preserves HOLD instead of returning False; true known timeout still follows the legacy counted-False path only after helper-confirmed tree closure.",
+      "Original implicit DB routing now retains _project_root, _config_path, _orze_dir and idea_lake_db key presence and detached values; current configuration is also checked.",
+      "Current enabled policy flag is explicitly checked with is True before GO.",
+      "Helper code independently reviewed after its author fixes: bounded scope table also checks dev/inode witnesses on clear/reserve; only its own confirmed timeout object bypasses owned STOP cleanup."
+    ],
+    "normal_native_route_precision": "Existing native pre/preflight producers bind _execution_catalog.json before intent. report_launch_failure already rejects a missing training Ref when that declaration exists; no claim is made that the normal intact native catalog path previously bypassed all native gates.",
+    "unresolved_in_scope_blockers": []
+  },
+  "tool_errors": [
+    {
+      "command": "PYTHONPATH=src python -c 'from orze.engine.executor_fix_admission import require_legacy_executor_scope; print(\"executor_fix_admission API import ready\")'",
+      "exit_code": 127,
+      "classification": "Local python command is unavailable; no test or product code ran."
+    },
+    {
+      "command": "PYTHONPATH=src python3 -c 'from orze.engine.executor_fix_admission import require_legacy_executor_scope; print(\"executor_fix_admission API import ready\")'",
+      "exit_code": 0,
+      "classification": "Corrected import-only smoke check, not a behavior regression."
+    }
+  ],
+  "static_audit": {
+    "command": "python3 - <<'PY'\nimport ast, hashlib, json, re, shlex, subprocess\nfrom pathlib import Path\np=Path('docs/evidence/2026-09-10-v1-05c2d4-executor-fix-admission-review.json')\nr=json.loads(p.read_text())\ncommands=[]\ndef walk(value):\n    if isinstance(value, dict):\n        for key, child in value.items():\n            if (key == 'command' or key.endswith('_command')) and isinstance(child,str):\n                commands.append(child)\n            elif key != 'static_audit':\n                walk(child)\n    elif isinstance(value,list):\n        for child in value: walk(child)\nwalk(r)\npython_bodies=0\nfor command in commands:\n    subprocess.run(['bash','-n'], input=command, text=True, check=True, capture_output=True)\n    if \"<<'PY'\" in command:\n        lines=command.splitlines()\n        start=next(i for i,line in enumerate(lines) if \"<<'PY'\" in line)\n        end=next(i for i in range(start+1,len(lines)) if lines[i]=='PY')\n        shlex.split(lines[start].split('<<',1)[0])\n        ast.parse('\\n'.join(lines[start+1:end]))\n        python_bodies+=1\n    else:\n        words=shlex.split(command)\n        if '-c' in words and any(re.fullmatch(r'python[0-9.]*',word) for word in words):\n            ast.parse(words[words.index('-c')+1]); python_bodies+=1\nfor entry in r['snapshots']:\n    raw=Path(entry['path']).read_bytes()\n    assert hashlib.sha256(raw).hexdigest()==entry['sha256']\n    assert raw.endswith(b'\\n'); ast.parse(raw)\n    if entry.get('byte_identical_to_fixed_gitshow'):\n        assert raw==subprocess.check_output(['git','show',entry['baseline_commit']+':'+entry['baseline_path']])\nfor path, expected in r['final_bounded_validation']['source_test_post_sha256'].items():\n    assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==expected\nassert r['final_bounded_validation']['source_test_pre_sha256']==r['final_bounded_validation']['source_test_post_sha256']\nfor entry in r['tests']:\n    raw=Path(entry['path']).read_bytes()\n    assert hashlib.sha256(raw).hexdigest()==entry['sha256']\n    assert sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(raw)))==entry['assert_nodes']\nprint(json.dumps({'commands':len(commands),'python_bodies':python_bodies,'snapshots':len(r['snapshots']),'fixed_baseline_byte_equal':3,'source_test_hashes':10,'own_asserts':sum(e['assert_nodes'] for e in r['tests']),'status':'passed'},sort_keys=True))\nPY",
+    "exit_code": 0,
+    "result": {
+      "commands": 12,
+      "fixed_baseline_byte_equal": 3,
+      "own_asserts": 34,
+      "python_bodies": 6,
+      "snapshots": 5,
+      "source_test_hashes": 10,
+      "status": "passed"
+    },
+    "qualification": "Read-only syntax and artifact audit, no pytest or workload execution. Its own command is excluded from the command-occurrence count to keep the checker reproducible."
+  },
+  "prohibitions_observed": [
+    "No existing tests or shared fixtures changed.",
+    "No GPU/model/provider/holdout/real project workload.",
+    "Real CPU test cleanup used retained pidfds for exactly owned worker/supervisor processes.",
+    "No commit or unrelated production edits."
+  ]
+}

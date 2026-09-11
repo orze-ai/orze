@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "slice": "V1-05C2d4",
+  "review": "Independent existing bounded fixer tree-completion behavior",
+  "status": "final_independent_bounded_passed_root_full_suite_separate",
+  "scope": {
+    "entry": "failure._try_executor_fix -> actual _build_executor_fix_cmd -> actual _run_bounded_executor -> real subprocess.Popen",
+    "fixture": "cfg.executor_fix.claude_bin points to an executable temporary Python shebang program. The program ignores the production CLI arguments, writes one fixture project file, and emits either FIX_APPLIED or NO_CHANGE. No provider is contacted.",
+    "explicit_nonclaims": [
+      "This is the existing legacy bool executor boundary, not a native Lake/AttemptRef or durable fixer-source protocol.",
+      "There is no claim, fabricated native lifecycle, GPU/model/real training or scientific validation.",
+      "No subprocess.Popen substitution, actual CLI executable lookup bypass, host scan or holdout read is used."
+    ],
+    "observation_seams": [
+      "Actual reaper is transparently wrapped to retain its return and authenticated writer liveness; it is never replaced with a successful constant.",
+      "The frozen fixture reserves a failure.prepare_supervised hook, but both the old baseline and final wrapper ignore it. The original five cases authenticate actual worker/daemon ownership through SO_PEERCRED and owned pidfds; the separate six new mechanisms capture real worker/supervisor pidfds through bounded_executor.prepare_supervised. No baseline assertion requires a new wrapper/API."
+    ]
+  },
+  "baseline": {
+    "core_commit": "f6b3d14e609dbdc784983f4b435adfe47a362c7b",
+    "pro_commit": "a58236d535e7d35d4bef97b7a584dcf37879dba9",
+    "snapshot_provenance": "Complete preceding committed implementation-branch failure.py captured before implementation and compared byte-for-byte with git show at the recorded commit and on-disk source.",
+    "snapshot": {
+      "path": "docs/evidence/snapshots/v1-05c2d4-before-failure.py",
+      "source": "src/orze/engine/failure.py",
+      "bytes": 25523,
+      "sha256": "3c569bf1f498c36c0eaf640a86ab5ec4276ddd7347a257ba2b9404748d698154",
+      "git_current_snapshot_exact": true
+    },
+    "supporting_source": {
+      "path": "src/orze/engine/process.py",
+      "sha256": "08bbd7ae0352708b815089b4183f69dbb89488fc510fac1d142c1702d6af4d6e"
+    },
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_executor_fix_tree_completion.py --tb=short",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "session_id": 10122,
+    "exit_code": 1,
+    "footer": "2 failed, 3 passed in 1.88s",
+    "failure_source_pre_post_exact": true,
+    "classification": "Two existing public bool-behavior failures sharing insufficient owned-tree closure, not two unrelated root causes. No import/setup/API-absence failure.",
+    "failures": [
+      {
+        "test": "test_fix_applied_is_not_accepted_while_escaped_writer_remains",
+        "assertion_line": 240,
+        "observed": "The actual CLI leader printed FIX_APPLIED and exited 0. A double-fork, setsid, empty-environment descendant with closed standard streams remained alive and wrote through the inherited output FD. _try_executor_fix had already returned True, which its caller treats as permission to retry.",
+        "assertion": "accepted_while_live must be false"
+      },
+      {
+        "test": "test_fixer_timeout_does_not_downgrade_live_writer_to_ordinary_false",
+        "assertion_line": 252,
+        "observed": "The configured one-second timeout invoked the actual legacy reaper, which returned True while the authenticated escaped writer remained alive. _try_executor_fix caught TimeoutExpired, incremented its ordinary fix count and returned False.",
+        "actual_reaper": {
+          "return": true,
+          "writer_alive_after_return": true
+        },
+        "assertion": "ordinary_false_while_live must be false"
+      }
+    ],
+    "controls": [
+      {
+        "parameters": [
+          0,
+          true,
+          true
+        ],
+        "observed": "Actual normal CPU CLI exit 0 plus FIX_APPLIED returns True; counts one attempt and persists response log."
+      },
+      {
+        "parameters": [
+          7,
+          true,
+          false
+        ],
+        "observed": "Actual normal exit 7 plus FIX_APPLIED returns False; marker cannot override a nonzero exit."
+      },
+      {
+        "parameters": [
+          0,
+          false,
+          false
+        ],
+        "observed": "Actual normal exit 0 with NO_CHANGE returns False; exit success alone cannot attest a fix."
+      }
+    ],
+    "fixture_errors": [],
+    "replay": {
+      "method": "Execute the entire saved failure.py into its real module namespace before pytest collection. The same frozen tests still invoke the real command builder, Popen and unchanged process reaper. No new module is required to manufacture a red.",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'from pathlib import Path; import pytest; from orze.engine import failure; path=\"docs/evidence/snapshots/v1-05c2d4-before-failure.py\"; exec(compile(Path(path).read_bytes(),path,\"exec\"),failure.__dict__); raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_executor_fix_tree_completion.py\",\"--tb=short\"]))'",
+      "session_id": 99042,
+      "exit_code": 1,
+      "footer": "2 failed, 3 passed in 2.36s",
+      "same_behavior_assertions": true,
+      "no_additional_defect_count": true,
+      "source_unchanged_after_replay": true
+    },
+    "replay_after_final": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -c 'from pathlib import Path; import pytest; from orze.engine import failure; path=\"docs/evidence/snapshots/v1-05c2d4-before-failure.py\"; exec(compile(Path(path).read_bytes(),path,\"exec\"),failure.__dict__); raise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\"tests/test_executor_fix_tree_completion.py\",\"--tb=short\"]))'",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "session_id": 96281,
+      "exit_code": 1,
+      "footer": "2 failed, 3 passed in 1.71s",
+      "method": "After the final current-source run, exec the COMPLETE saved failure.py into its real module namespace before collecting the unchanged five tests. No source file is overwritten.",
+      "same_failure_assertions": true,
+      "no_extra_defect_count": true,
+      "future_prepare_seam": "The frozen original fixture's failure.prepare_supervised hook is unused by both the old module and the final wrapper. This replay still invokes actual raw Popen; current production invokes the real helper supervisor. No fixture assertion or Popen implementation was replaced."
+    }
+  },
+  "frozen_test": {
+    "path": "tests/test_executor_fix_tree_completion.py",
+    "sha256": "4fc145b8fc01728b0c9c8a79be7cabfb8bfd44c3595a9af3db920e36638d6653",
+    "collected_cases": 5,
+    "assert_count": 34,
+    "assert_ast_sha256": "2831c2a17c04d22433787490c80a7f1c33765f52a44dd523b70a53e6baaf91fb",
+    "assert_ast_digest_algorithm": "SHA256 of UTF-8 json.dumps([ast.dump(n, include_attributes=False) for n in ast.walk(ast.parse(file_bytes)) if isinstance(n, ast.Assert)], separators=(',', ':')); default ensure_ascii=True. Assertions inside child-script string literals are not AST Assert nodes.",
+    "unchanged_reused_support": {
+      "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f",
+      "tests/test_native_training_tree_completion.py": "3ce22b8d37c29e918b7da69c02f973cfe993b943304f9b312232bf4c019138eb"
+    }
+  },
+  "cleanup": {
+    "completed_sessions": [
+      10122,
+      99042,
+      69380,
+      73982,
+      40765,
+      96281
+    ],
+    "status": "All six recorded pytest sessions completed with no teardown errors; owned CPU children, captured descriptors and controller threads closed. Intentional scope HOLDs persisted only within the terminated pytest process and were not cleared to make assertions pass.",
+    "ownership": "Worker authenticates over private AF_UNIX SO_PEERCRED before it is allowed to fork; parent opens its pidfd before sending L. Detached descendant independently authenticates and is captured before releasing the waiting leader. Finally sends private Q, signals only retained own pidfds if still alive, waits/reaps only captured own children, closes descriptors and restores the test process's prior subreaper state.",
+    "popen_replaced": false,
+    "host_scanned": false,
+    "current_supervised_capture": "The new six-case fixture captures real worker and supervisor pidfds through bounded_executor.prepare_supervised. This does not modify the unchanged five-case fixture or replace Popen."
+  },
+  "limits": [
+    "The CPU CLI stand-in proves process and boolean admission behavior; it does not test a real Claude installation, model response, provider quota or tool-policy enforcement.",
+    "Old escaped descendants close stdout/stderr. The historical group does not separately reproduce retained-pipe hangs or unbounded captured-output memory.",
+    "No cross-restart HOLD or native durable fixer action is asserted; those would be separate new contracts.",
+    "Frozen timeout behavior permits a confirmed closed-tree ordinary failure, but not ordinary False while a writer remains live. Unknown termination may propagate only the existing TerminationUnconfirmed family.",
+    "Only independently executed targeted baseline/replay/candidate/final-bounded runs are reported; no full-suite or completed repository-wide implementation claim.",
+    "The six mechanisms add retained-pipe/output-cap/current-process HOLD checks, but not durable cross-restart repair or native fixer authorization. The earlier source-drift candidate remains preserved separately from the final 12-file exact epoch."
+  ],
+  "final_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_executor_fix_tree_completion.py tests/test_executor_fix_supervision.py --tb=short",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "session_id": 40765,
+    "exit_code": 0,
+    "footer": "11 passed in 6.17s",
+    "unique_cases": 11,
+    "composition": {
+      "unchanged_historical_cases": 5,
+      "separate_new_mechanisms": 6
+    },
+    "pre_hashes": {
+      "src/orze/engine/failure.py": "c292ae61b43e2d32215788ae897c1bd9ad865b24a6d8f467c1bc968180e6f09a",
+      "src/orze/engine/launcher.py": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142",
+      "src/orze/engine/bounded_executor.py": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+      "src/orze/engine/executor_fix_admission.py": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76",
+      "src/orze/engine/process.py": "08bbd7ae0352708b815089b4183f69dbb89488fc510fac1d142c1702d6af4d6e",
+      "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95",
+      "tests/test_executor_fix_tree_completion.py": "4fc145b8fc01728b0c9c8a79be7cabfb8bfd44c3595a9af3db920e36638d6653",
+      "tests/test_executor_fix_supervision.py": "d06d20bcb1a6060e896cafb6e4b7b26f6095a6995cbdf71b7180fa2e994bab04",
+      "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f",
+      "tests/test_native_training_tree_completion.py": "3ce22b8d37c29e918b7da69c02f973cfe993b943304f9b312232bf4c019138eb"
+    },
+    "post_hashes": {
+      "src/orze/engine/failure.py": "c292ae61b43e2d32215788ae897c1bd9ad865b24a6d8f467c1bc968180e6f09a",
+      "src/orze/engine/launcher.py": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142",
+      "src/orze/engine/bounded_executor.py": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+      "src/orze/engine/executor_fix_admission.py": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76",
+      "src/orze/engine/process.py": "08bbd7ae0352708b815089b4183f69dbb89488fc510fac1d142c1702d6af4d6e",
+      "src/orze/engine/supervised_process.py": "679b42986d8efff505aa9ee0cf516e5b30d927e9ead3c4b821395774d8cac1e2",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "60a61a54d088700bab6fec4b4af14606f07d45b31837072e0c2b0437eec22e95",
+      "tests/test_executor_fix_tree_completion.py": "4fc145b8fc01728b0c9c8a79be7cabfb8bfd44c3595a9af3db920e36638d6653",
+      "tests/test_executor_fix_supervision.py": "d06d20bcb1a6060e896cafb6e4b7b26f6095a6995cbdf71b7180fa2e994bab04",
+      "tests/test_native_posthoc_tree_completion.py": "8f2c228f7176f18b8b5c0e79a84ce5fddd9da0a66ee46faab866379bd779db5f",
+      "tests/test_native_training_tree_completion.py": "3ce22b8d37c29e918b7da69c02f973cfe993b943304f9b312232bf4c019138eb"
+    },
+    "file_count": 12,
+    "production_files": 8,
+    "test_and_support_files": 4,
+    "pre_post_exact": true,
+    "scope": "Independent current-source bounded verification only; repository-wide Core/Pro/paired acceptance is owned by root.",
+    "seam_note": "Final _run_bounded_executor does not pass through the old test fixture's reserved failure.prepare_supervised seam. The new mechanism fixture explicitly forwards the actual bounded_executor.prepare_supervised and captures its real worker/supervisor pidfds. Neither group patches Popen or supplies synthetic closure.",
+    "conclusions": [
+      "The unchanged historical bool tests now wait for true process-tree closure or receive a confirmed timeout/typed HOLD; their old-source failure assertions remain reproducible.",
+      "The separate six-case group reaches real retained-stream, incomplete-output consumer, STOP-zero, supervisor-loss and READY-policy-veto assertions.",
+      "The output qualification is not proof that a model actually repaired code. This slice leaves native repair authorization and cross-restart adoption out of scope."
+    ]
+  },
+  "candidate_runs": [
+    {
+      "label": "Unchanged five historical cases, first fixed candidate",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_executor_fix_tree_completion.py --tb=short",
+      "session_id": 69380,
+      "exit_code": 0,
+      "footer": "5 passed in 3.65s",
+      "pre_hashes": {
+        "src/orze/engine/failure.py": "95af10624400636b40f393e02a2b2752d4b598dcd01c6d28d00870c1bba72b5e",
+        "src/orze/engine/bounded_executor.py": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+        "src/orze/engine/executor_fix_admission.py": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76",
+        "src/orze/engine/launcher.py": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142",
+        "tests/test_executor_fix_tree_completion.py": "4fc145b8fc01728b0c9c8a79be7cabfb8bfd44c3595a9af3db920e36638d6653"
+      },
+      "post_hashes": {
+        "src/orze/engine/failure.py": "95af10624400636b40f393e02a2b2752d4b598dcd01c6d28d00870c1bba72b5e",
+        "src/orze/engine/bounded_executor.py": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+        "src/orze/engine/executor_fix_admission.py": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76",
+        "src/orze/engine/launcher.py": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142",
+        "tests/test_executor_fix_tree_completion.py": "4fc145b8fc01728b0c9c8a79be7cabfb8bfd44c3595a9af3db920e36638d6653"
+      },
+      "pre_post_exact": true,
+      "note": "Only the recorded five files were pre/post captured for this first candidate. The production wrapper uses the helper prepare seam, so the original fixture's future failure.prepare_supervised hook remains unused; subprocess and tree behavior are still real."
+    },
+    {
+      "label": "New six real-CPU consumer mechanisms, first run",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_executor_fix_supervision.py --tb=short",
+      "session_id": 73982,
+      "exit_code": 0,
+      "footer": "6 passed in 2.65s",
+      "pre_hashes": {
+        "src/orze/engine/bounded_executor.py": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+        "src/orze/engine/failure.py": "95af10624400636b40f393e02a2b2752d4b598dcd01c6d28d00870c1bba72b5e",
+        "src/orze/engine/executor_fix_admission.py": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76",
+        "tests/test_executor_fix_supervision.py": "d06d20bcb1a6060e896cafb6e4b7b26f6095a6995cbdf71b7180fa2e994bab04"
+      },
+      "post_hashes": {
+        "src/orze/engine/bounded_executor.py": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+        "src/orze/engine/failure.py": "1238bd0df1d9c0f30111e9188847d69d2d45342580f062f3ace7927dd2b4a747",
+        "src/orze/engine/executor_fix_admission.py": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76",
+        "tests/test_executor_fix_supervision.py": "d06d20bcb1a6060e896cafb6e4b7b26f6095a6995cbdf71b7180fa2e994bab04"
+      },
+      "pre_post_exact": false,
+      "note": "failure.py changed concurrently from 95af1062 to 1238bd0d between disk hash captures. This first green is candidate-only, not a frozen final import/source-epoch claim. The helper, admission module and new test bytes stayed identical."
+    }
+  ],
+  "new_mechanisms": {
+    "path": "tests/test_executor_fix_supervision.py",
+    "sha256": "d06d20bcb1a6060e896cafb6e4b7b26f6095a6995cbdf71b7180fa2e994bab04",
+    "collected_cases": 6,
+    "assert_count": 60,
+    "assert_ast_sha256": "f5b39bd1d09d6cc4aa6c186a90977c0524b95ebd19cc2deb6b61c1c5d2aaaf1f",
+    "assert_ast_digest_algorithm": "SHA256 of UTF-8 json.dumps([ast.dump(n, include_attributes=False) for n in ast.walk(ast.parse(file_bytes)) if isinstance(n, ast.Assert)], separators=(',', ':')); default ensure_ascii=True. Assertions inside child-script string literals are not AST Assert nodes.",
+    "classification": "First-green new supervised-wrapper and consumer requirements. No historical red or API-absence failure is claimed.",
+    "real_seams": "The new fixture wraps bounded_executor.prepare_supervised, calls its real implementation, and captures actual returned worker/supervisor pidfds before mutation. Instance STOP and failure._run_bounded_executor wrappers record actual calls/results/errors then return/rethrow unchanged; no process-tree proof or output is faked.",
+    "cases": [
+      {
+        "test": "test_retained_stdout_is_drained_with_a_live_deadline",
+        "actual": "Leader exits 0 with FIX_APPLIED while escaped writer retains stdout. Real deadline STOP closes writer and raises a confirmed TimeoutExpired through actual _try, which returns False; captured timeout contains marker bytes and actual worker code 0."
+      },
+      {
+        "test": "test_output_flood_cannot_authorize_fix_from_an_incomplete_tail",
+        "parameters": [
+          false,
+          true
+        ],
+        "actual": "Finite real output exceeds 64KiB and ends FIX_APPLIED with exit 0; helper reports incomplete bounded tail and _try refuses it. Continuous real output remains bounded and still reaches timeout/STOP; its incomplete tail cannot authorize success."
+      },
+      {
+        "test": "test_timeout_sigterm_zero_is_not_an_accepted_fix",
+        "actual": "Actual leader handles SIGTERM by exiting 0; stopped tree/error retains code 0 but _try returns False and counts the confirmed attempt."
+      },
+      {
+        "test": "test_supervisor_loss_is_hold_even_if_retry_configuration_is_disabled",
+        "actual": "Only captured own supervisor pidfd is killed. Escaped writer remains alive, _try raises BoundedExecutorHOLD with no ordinary result/count, no second STOP; max_fix_attempts=0 cannot bypass the same-controller HOLD on re-entry."
+      },
+      {
+        "test": "test_ready_policy_change_refuses_go_with_real_blocked_worker_cleanup",
+        "actual": "After real blocked READY, agent_tool_policy changes. Actual _try callback refuses GO; known blocked worker is stopped/closed, user-code marker stays absent, count/output stays absent. Confirmed refused admission releases its transient active scope."
+      }
+    ],
+    "new_test_edits_after_first_run": false
+  }
+}

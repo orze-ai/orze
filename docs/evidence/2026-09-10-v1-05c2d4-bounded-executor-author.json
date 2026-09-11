@@ -1,0 +1,130 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2d4",
+  "role": "bounded-executor author; independent read review of caller and admission changes",
+  "baseline_core_commit": "f6b3d14e609dbdc784983f4b435adfe47a362c7b",
+  "scope": "Legacy synchronous executor completion only; no native repair authority or durable recovery",
+  "ownership": {
+    "production_authored": ["src/orze/engine/bounded_executor.py"],
+    "tests_authored": [
+      "tests/test_bounded_executor.py",
+      "tests/test_bounded_executor_callback_timeout.py",
+      "tests/test_bounded_executor_scope_identity.py"
+    ],
+    "other_production_read_only": [
+      "src/orze/engine/failure.py",
+      "src/orze/engine/launcher.py",
+      "src/orze/engine/executor_fix_admission.py"
+    ],
+    "existing_source_or_tests_modified_by_this_author": [],
+    "commits_or_pushes_by_this_author": false
+  },
+  "classification": {
+    "distinct_owned_cases": 13,
+    "first_green_new_mechanisms": 11,
+    "draft_behavior_regression": 1,
+    "additional_new_scope_identity_requirement": 1,
+    "preceding_commit_public_behavior_reds_owned": 0,
+    "note": "The callback TimeoutExpired case is a real defect in the first new helper candidate. Renamed-inode refusal was separately specified during implementation and is classified as a new requirement, not a preceding-commit defect. The original 11 mechanisms had no API-absence red run. Overlapping runs below are not added as distinct tests."
+  },
+  "frozen_files": {
+    "production": {
+      "src/orze/engine/bounded_executor.py": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+      "src/orze/engine/failure.py": "c292ae61b43e2d32215788ae897c1bd9ad865b24a6d8f467c1bc968180e6f09a",
+      "src/orze/engine/launcher.py": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142",
+      "src/orze/engine/executor_fix_admission.py": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76"
+    },
+    "owned_tests": {
+      "tests/test_bounded_executor.py": "d06170acfcd22bb85e09cea7fbbd7cdd44159c17077f6f313e5507cd6a98d18f",
+      "tests/test_bounded_executor_callback_timeout.py": "fd4c8fd0633bb8192acfb855604aaaccd2dba35a7985223e03f79e4974be0308",
+      "tests/test_bounded_executor_scope_identity.py": "780ff8fcc4c18490d21df43846cb9b33606cef0c7913c853aba354b94895201f"
+    },
+    "additional_bounded_tests_post_run_inventory_only": {
+      "tests/test_supervised_process.py": "dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0",
+      "tests/test_supervisor_preparation_handoff.py": "20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77",
+      "tests/test_supervised_worker_fds.py": "3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7",
+      "tests/test_schema_invalid_skip.py": "9d17c9a37d68a11cbe701c3140efa6de2ac659273167f13e6b8c345b49222ba2"
+    }
+  },
+  "draft_snapshot": {
+    "path": "docs/evidence/snapshots/v1-05c2d4-before-callback-timeout.py",
+    "sha256": "ae332e0ae2f63d31f02831048f77adbd428f11c3ff483b601db2699a06cb5798",
+    "provenance": "Complete 357-line first helper source captured before the two narrow changes; source and snapshot SHA-256 were observed identical before the failing runs.",
+    "failing_assertions": [
+      "Actual READY callback raises TimeoutExpired; observed owned STOP calls were () rather than (True,). The real blocked worker is cleaned by test finally after the failed assertion.",
+      "Synthetic unknown prepare holds a directory; renaming the same inode allowed a second prepare call, so calls were [True, True] rather than [True]. This second case is the newly specified scope-identity requirement."
+    ],
+    "minimal_changes": [
+      "Only the exact locally-created, fully-closed timeout exception bypasses generic cleanup. Callback TimeoutExpired now follows owned blocked-worker STOP and closure confirmation before HOLD.",
+      "Scope-clear and reserve check the bounded table's device/inode witnesses as well as canonical path keys. Existing same-path sticky HOLD behavior is retained."
+    ]
+  },
+  "actual_runs": [
+    {
+      "label": "initial_new_mechanisms_first_green",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_bounded_executor.py --tb=short",
+      "helper_sha256": "ae332e0ae2f63d31f02831048f77adbd428f11c3ff483b601db2699a06cb5798",
+      "passed": 11, "failed": 0, "seconds": 0.99, "exit_code": 0
+    },
+    {
+      "label": "frozen_callback_draft_and_new_rename_requirement_before_fix",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_bounded_executor_callback_timeout.py tests/test_bounded_executor_scope_identity.py --tb=short",
+      "helper_sha256": "ae332e0ae2f63d31f02831048f77adbd428f11c3ff483b601db2699a06cb5798",
+      "passed": 0, "failed": 2, "seconds": 0.26, "exit_code": 1,
+      "setup_or_missing_api_failures": 0
+    },
+    {
+      "label": "first_fixed_owned_thirteen",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_bounded_executor.py tests/test_bounded_executor_callback_timeout.py tests/test_bounded_executor_scope_identity.py --tb=short",
+      "helper_sha256": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1",
+      "passed": 13, "failed": 0, "seconds": 1.14, "exit_code": 0
+    },
+    {
+      "label": "complete_helper_snapshot_replay",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -c \"import pathlib, pytest; import orze.engine.bounded_executor as module; path=pathlib.Path('docs/evidence/snapshots/v1-05c2d4-before-callback-timeout.py'); exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__); raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_bounded_executor_callback_timeout.py', 'tests/test_bounded_executor_scope_identity.py', '--tb=short']))\"",
+      "passed": 0, "failed": 2, "seconds": 0.19, "exit_code": 1,
+      "scope_note": "Complete helper replay against current dependencies, not a whole baseline checkout replay. Both exact frozen assertions failed again."
+    },
+    {
+      "label": "historical_bounded_candidate_not_final_epoch",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_bounded_executor.py tests/test_bounded_executor_callback_timeout.py tests/test_bounded_executor_scope_identity.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py tests/test_schema_invalid_skip.py --tb=short",
+      "session_id": 14561, "passed": 52, "failed": 0, "seconds": 4.0, "exit_code": 0,
+      "scope_note": "Helper and owned tests stayed frozen; failure.py was concurrently edited between its captured 95af10624400636b40f393e02a2b2752d4b598dcd01c6d28d00870c1bba72b5e prehash and the later c292ae61 post-observation. This run is retained only as candidate history."
+    },
+    {
+      "label": "final_frozen_bounded_run",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' python3 -m pytest -q -p no:cacheprovider tests/test_bounded_executor.py tests/test_bounded_executor_callback_timeout.py tests/test_bounded_executor_scope_identity.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py tests/test_schema_invalid_skip.py --tb=short",
+      "session_id": 44288, "passed": 52, "failed": 0, "seconds": 4.85, "exit_code": 0,
+      "verified_pre_post_equal": "Four production files and three owned tests listed in frozen_files; the additional four existing test hashes were captured only after this run.",
+      "scope_note": "13 owned mechanisms plus 23 existing supervisor mechanisms and 16 existing schema/executor tests. This author did not run whole Core, Pro, or paired suites."
+    }
+  ],
+  "independent_read_review": {
+    "conclusion": "No remaining blocker identified in the reviewed bounded scope.",
+    "files": ["src/orze/engine/failure.py", "src/orze/engine/launcher.py", "src/orze/engine/executor_fix_admission.py"],
+    "checks": [
+      "Entry HOLD/native gates precede ordinary max-fix/schema returns; READY repeats old and current authority route checks.",
+      "Captured routes include idea_lake_db, _project_root, _config_path, and _orze_dir; typed policy enabled check remains is True at READY.",
+      "Read-only existing database checks reject declared routes, native attempt history, and unverifiable authority without schema bootstrap.",
+      "Incomplete output and stopped return-code-zero results cannot qualify FIX_APPLIED; complete stdout is used for marker and UNFIXABLE checks.",
+      "TerminationUnconfirmed propagates through _try and six existing successful-fixer relaunch exception boundaries."
+    ],
+    "authorship_limit": "The bounded helper itself is author-reviewed here; independent helper review belongs to the other reviewers."
+  },
+  "external_baseline_context": {
+    "owner": "runtime_evidence",
+    "test": "tests/test_executor_fix_tree_completion.py",
+    "sha256": "4fc145b8fc01728b0c9c8a79be7cabfb8bfd44c3595a9af3db920e36638d6653",
+    "reported_preceding_commit_result": "2 failed, 3 passed in 1.88s",
+    "independent_run_by_this_author": false,
+    "seam_note": "The original five tests contain an unused future failure.prepare_supervised seam. It is not claimed as the source of supervisor capture or closure proof. Those CPU fixtures authenticate their worker/daemon ownership via SO_PEERCRED and owned pidfds; current new mechanisms inject through bounded_executor.prepare_supervised. No failure-module preparation seam was added."
+  },
+  "limits": [
+    "Legacy synchronous invocation identity only; no native AttemptRef, durable repair journal, restart/adoption authority, or provider-budget guarantee.",
+    "Process-local canonical-path and inode HOLD table has a 128-entry bound, no age eviction, and no cross-controller or restart persistence.",
+    "Execution deadline begins after GO; preparation/admission callback and STOP/EOF allowances are separate.",
+    "At most 65536 tail bytes per stream are retained; truncated or invalid UTF-8 output is diagnostic only.",
+    "No primitive implementation, existing test assertion, live provider, GPU training, host process sweep, or holdout access was changed or used by this author.",
+    "FIX_APPLIED is textual attestation, not verified patch correctness, filesystem sandboxing, immutable patch publication, or scientific evidence."
+  ]
+}

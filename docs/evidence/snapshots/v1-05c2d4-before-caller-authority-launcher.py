@@ -2253,8 +2253,6 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                         logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
                         continue
-                    except TerminationUnconfirmed:
-                        raise
                     except Exception as e:
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
@@ -2282,8 +2280,6 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                         logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
                         continue
-                    except TerminationUnconfirmed:
-                        raise
                     except Exception as e:
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
@@ -2314,8 +2310,6 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                             logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                          tp.idea_id, gpu)
                             continue
-                        except TerminationUnconfirmed:
-                            raise
                         except Exception as e:
                             logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                           tp.idea_id, e)
@@ -2373,8 +2367,6 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                         logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
                         continue
-                    except TerminationUnconfirmed:
-                        raise
                     except Exception as e:
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
@@ -2510,8 +2502,6 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                         logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                      tp.idea_id, gpu)
                         continue
-                    except TerminationUnconfirmed:
-                        raise
                     except Exception as e:
                         logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                       tp.idea_id, e)
@@ -2617,8 +2607,6 @@ def check_active(active: Dict[int, TrainingProcess], results_dir: Path,
                     logger.info("[FIX-RETRY] %s relaunched on GPU %s",
                                  tp.idea_id, gpu)
                     continue
-                except TerminationUnconfirmed:
-                    raise
                 except Exception as e:
                     logger.error("[FIX-RETRY] %s relaunch failed: %s",
                                   tp.idea_id, e)

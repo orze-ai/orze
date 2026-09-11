@@ -20,10 +20,8 @@ CALLING SPEC:
         executor_fix.{claude_bin, model, timeout, max_turns}.
 """
 import datetime
-import copy
 import json
 import logging
-import math
 import os
 import secrets
 import subprocess
@@ -32,7 +30,6 @@ from pathlib import Path
 
 from orze.core.fs import atomic_write, tail_file
 from orze.core.ideas import parse_ideas
-from orze.engine.termination_hold import TerminationUnconfirmed
 
 logger = logging.getLogger("orze")
 
@@ -215,11 +212,34 @@ def _build_executor_fix_cmd(claude_bin: str, prompt: str, model: str,
 
 
 def _run_bounded_executor(cmd: list[str], *, timeout: float, env: dict,
-                          cwd: Path, before_start=None) -> subprocess.CompletedProcess:
-    """Run a legacy fixer with confirmed tree closure and bounded output."""
-    from orze.engine.bounded_executor import run_bounded_executor
-    return run_bounded_executor(
-        cmd, timeout=timeout, env=env, cwd=cwd, before_start=before_start)
+                          cwd: Path) -> subprocess.CompletedProcess:
+    """Run one fixer and reap its entire descendant tree on timeout."""
+    if timeout <= 0:
+        raise ValueError("executor_fix.timeout must be positive")
+    from orze.engine.process import _terminate_and_reap
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        cwd=str(cwd),
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _terminate_and_reap(
+            proc, "executor fix", timeout=min(3.0, max(0.2, timeout)),
+            pgid=proc.pid,
+        )
+        raise
+    finally:
+        if proc.poll() is None:
+            _terminate_and_reap(
+                proc, "executor fix", timeout=1.0, pgid=proc.pid)
+    return subprocess.CompletedProcess(
+        cmd, proc.returncode, stdout=stdout, stderr=stderr)
 
 
 def _try_executor_fix(idea_id: str, error_text: str, results_dir: Path,
@@ -231,22 +251,8 @@ def _try_executor_fix(idea_id: str, error_text: str, results_dir: Path,
     files needed to make the idea succeed. It does NOT touch orze framework
     code.
 
-    True requires closed execution and a complete, non-stopped attestation.
-    This tokenless legacy API cannot authorize native repair. Unknown execution
-    raises TerminationUnconfirmed and must not permit failure/reset/retry.
+    Returns True if the LLM reports a fix was applied (idea should be retried).
     """
-    from orze.engine.bounded_executor import require_executor_scope_clear
-    from orze.engine.executor_fix_admission import require_legacy_executor_scope
-    idea_dir = results_dir / idea_id
-    project_root = Path(
-        cfg.get("_project_root") or results_dir.parent).resolve()
-    require_executor_scope_clear(project_root)
-    require_legacy_executor_scope(idea_dir, cfg)
-    # Keep the original route even if shared configuration is edited while
-    # preparing the prompt or the blocked worker. No native authority is held.
-    admission_cfg = {key: copy.deepcopy(cfg[key])
-                     for key in ("idea_lake_db", "_project_root",
-                                 "_config_path", "_orze_dir") if key in cfg}
     # F2: short-circuit argparse schema errors. These are never fixable by
     # patching the idea's own files — the engineer SOP handles schema gaps.
     log_tail_text = ""
@@ -285,6 +291,7 @@ def _try_executor_fix(idea_id: str, error_text: str, results_dir: Path,
 
     attempt_num = attempts + 1
 
+    idea_dir = results_dir / idea_id
     log_tail = tail_file(idea_dir / "train_output.log", 16384)
 
     # Read the idea config from ideas.md
@@ -379,8 +386,8 @@ so the experiment can succeed on retry.
         env.pop("CLAUDECODE", None)
         env.pop("CLAUDE_CODE_ENTRYPOINT", None)
 
-        fix_cfg = copy.deepcopy(cfg.get("executor_fix", {}))
-        policy_cfg = copy.deepcopy(cfg.get("agent_tool_policy", {"enabled": True}))
+        fix_cfg = cfg.get("executor_fix", {})
+        policy_cfg = cfg.get("agent_tool_policy", {"enabled": True})
         if (not isinstance(policy_cfg, dict)
                 or policy_cfg.get("enabled", True) is not True):
             logger.error(
@@ -388,10 +395,9 @@ so the experiment can succeed on retry.
             return False
         claude_bin = fix_cfg.get("claude_bin") or "claude"
         model = fix_cfg.get("model") or "sonnet"
-        fix_timeout = fix_cfg.get("timeout", 300)
-        if (type(fix_timeout) not in (int, float)
-                or not math.isfinite(fix_timeout) or fix_timeout <= 0):
-            raise ValueError("executor_fix.timeout must be finite and positive")
+        fix_timeout = float(fix_cfg.get("timeout", 300))
+        project_root = Path(
+            cfg.get("_project_root") or results_dir.parent).resolve()
         audit_log = results_dir / "_executor_tool_policy.jsonl"
 
         cmd = _build_executor_fix_cmd(
@@ -399,25 +405,8 @@ so the experiment can succeed on retry.
             project_root=project_root, audit_log=audit_log,
         )
 
-        def before_start():
-            # Runs after real READY and before GO, outside any database writer.
-            # Do not call the active-scope gate here: this invocation owns it.
-            require_legacy_executor_scope(idea_dir, admission_cfg)
-            require_legacy_executor_scope(idea_dir, cfg)
-            current_policy = cfg.get("agent_tool_policy", {"enabled": True})
-            if (not isinstance(current_policy, dict)
-                    or current_policy.get("enabled", True) is not True
-                    or Path(cfg.get("_project_root") or results_dir.parent).resolve()
-                    != project_root
-                    or cfg.get("executor_fix", {}) != fix_cfg
-                    or current_policy != policy_cfg
-                    or cfg.get("max_fix_attempts", 0) != max_fix
-                    or fix_counts.get(idea_id, 0) != attempts):
-                raise TerminationUnconfirmed("executor_fix_admission_changed")
-
         result = _run_bounded_executor(
             cmd, timeout=fix_timeout, env=env, cwd=project_root,
-            before_start=before_start,
         )
 
         # LLM actually ran — count this attempt
@@ -431,26 +420,19 @@ so the experiment can succeed on retry.
             encoding="utf-8",
         )
 
-        if (not getattr(result, "output_complete", True)
-                or getattr(result, "stopped", False)):
-            logger.warning("[FIX] %s — stopped or incomplete output; rejecting fix",
-                           idea_id)
-            return False
-
         if result.returncode != 0:
             logger.warning(
                 "[FIX] %s — Claude exited %d without an accepted fix",
                 idea_id, result.returncode)
             return False
 
-        full_response = result.stdout or ""
-        if "UNFIXABLE" in full_response.upper():
+        if "UNFIXABLE" in response.upper():
             logger.info("[FIX] %s — LLM says unfixable: %s",
                          idea_id, response[:200])
             return False
 
         if not any(line.strip() == "FIX_APPLIED"
-                   for line in full_response.splitlines()):
+                   for line in response.splitlines()):
             logger.warning(
                 "[FIX] %s — response did not attest an applied fix", idea_id)
             return False
@@ -470,9 +452,6 @@ so the experiment can succeed on retry.
                      idea_id, attempt_num)
         return True
 
-    except TerminationUnconfirmed:
-        # No attempt-count/failure/reset publication on an unconfirmed scope.
-        raise
     except subprocess.TimeoutExpired:
         # Timed out — still count it (LLM may have made partial changes)
         fix_counts[idea_id] = attempts + 1

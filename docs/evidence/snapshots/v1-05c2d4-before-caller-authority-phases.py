@@ -1,0 +1,2210 @@
+"""Main loop phase methods for the Orze orchestrator.
+
+CALLING SPEC:
+    class OrzePhaseMixin:
+        _sync_ideas(cfg) -> (ideas, unclaimed, skipped, raw_ideas)
+        _launch_evals(finished, eval_finished, ideas) -> (eval_finished, backlog)
+        _launch_training(unclaimed, disk_ok, ideas) -> free
+        _report_and_notify(completed_rows, ideas, counts, eval_finished,
+                           free, unclaimed, skipped, disk_ok, backlog) -> None
+
+    Mixed into the Orze class to keep orchestrator.py under 800 LOC.
+    Each method accesses orchestrator state via self.
+"""
+
+import copy
+import hashlib
+import json
+import logging
+import math
+import os
+import re
+import shutil
+import socket
+import sqlite3
+import stat as stat_module
+import sys
+import time
+from pathlib import Path
+from typing import Dict
+
+import yaml
+
+from orze.core.fs import _fs_lock, _fs_unlock, atomic_write
+from orze.core.ideas import parse_ideas, expand_sweeps
+from orze.engine.config_dedup import hash_config, load_hashes, save_hash
+from orze.engine.evaluator import (
+    check_active_evals, is_training_complete_for_downstream, launch_eval,
+    run_eval, run_post_scripts,
+)
+from orze.engine.failure import (
+    _record_failure, get_skipped_ideas, _try_executor_fix, _reset_idea_for_retry,
+)
+from orze.engine.launcher import (
+    launch, _get_checkpoint_dir, _write_failure, _is_launcher_paused,
+    _resolve_train_script, find_forbidden_launch_override,
+    DuplicateLaunchError, GpuUnavailableError,
+)
+from orze.engine.process import run_artifact_preflight, run_pre_script
+from orze.engine.accounting import (
+    ComputeAccountingError,
+    finalize_failed_launch_accounting,
+    record_compute_terminal,
+    record_zero_gpu_outcome,
+)
+from orze.engine.campaign_efficiency import (
+    capture_campaign_progress_update,
+    derive_campaign_progress_blocker,
+)
+from orze.engine.scheduler import claim, get_unclaimed, _count_statuses
+from orze.hardware.gpu import get_gpu_memory_used, _eval_already_running
+from orze.reporting.leaderboard import update_report, write_admin_cache
+from orze.reporting.notifications import notify
+from orze.reporting.state import (
+    save_state, write_host_heartbeat, write_status_json,
+)
+from orze.engine.sealed import load_sealed_manifest, verify_sealed_files
+from orze.engine.termination_hold import (
+    TerminationUnconfirmed, require_no_unconfirmed_stop, terminate_execution,
+)
+
+
+# Canonical approach-family labels used when constructing IdeaProposals for the
+# judge prompt. Non-canonical families are mapped to "other". Kept as a single
+# module-level constant so the two consumers below stay in sync.
+_VALID_APPROACH_FAMILIES = {
+    "data_mix", "architecture", "decode",
+    "regularization", "distillation",
+    "infrastructure", "other",
+}
+
+
+def _load_verified(results_dir: Path, report_cfg: dict):
+    """Load verified full-scale results from config.
+
+    Round-2 F2: ``verified_results`` is now polymorphic.
+
+      * legacy form: a path string pointing at a JSON file (the
+        ``results/verified_best.json`` shape that pre-round-2 projects
+        wrote). Loaded and returned verbatim.
+      * new form: a list of idea IDs. For each ID, we load
+        ``<results_dir>/<idea_id>/full_scale_metrics.json`` (the
+        canonical "verified full-scale" marker) and merge into a single
+        dict keyed by idea ID. ``_champion_config.json`` is no longer
+        required.
+
+    Format detection: ``isinstance(value, list)`` for the new form.
+    """
+    vval = report_cfg.get("verified_results")
+    if not vval:
+        return None
+
+    if isinstance(vval, list):
+        # New form (round-2 F2): list of idea_ids → merge their
+        # full_scale_metrics.json into a single mapping.
+        out: dict = {}
+        for idea_id in vval:
+            if not isinstance(idea_id, str):
+                continue
+            p = results_dir / idea_id / "full_scale_metrics.json"
+            if not p.exists():
+                # Legacy fallback: some projects still write
+                # _champion_config.json sidecars; keep reading them so
+                # the migration is non-destructive.
+                p_alt = results_dir / idea_id / "_champion_config.json"
+                if p_alt.exists():
+                    p = p_alt
+                else:
+                    continue
+            try:
+                out[idea_id] = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+        return out or None
+
+    # Legacy form: path string → JSON object on disk.
+    vpath = vval
+    p = results_dir / vpath if not Path(vpath).is_absolute() else Path(vpath)
+    if not p.exists():
+        p = Path(vpath)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+logger = logging.getLogger("orze")
+
+
+def _evidence_relative_paths(report: dict) -> tuple[Path, ...]:
+    """Return safe, declared per-idea files that affect score qualification."""
+    paths = {Path("metrics.json")}
+    for column in report.get("columns") or []:
+        if not isinstance(column, dict):
+            continue
+        source = str(column.get("source") or "")
+        if ":" not in source:
+            continue
+        filename = source.split(":", 1)[0]
+        relative = Path(filename)
+        if (relative.is_absolute() or relative == Path(".")
+                or ".." in relative.parts):
+            continue
+        paths.add(relative)
+    contract = report.get("benchmark_contract")
+    if isinstance(contract, dict):
+        from orze.core.benchmark_contract import PROVENANCE_FILE
+        paths.add(Path(PROVENANCE_FILE))
+        receipt = Path(str(contract.get("receipt") or ""))
+        if (not receipt.is_absolute() and receipt != Path(".")
+                and ".." not in receipt.parts):
+            paths.add(receipt)
+    return tuple(sorted(paths, key=str))
+
+
+def _update_path_evidence(digest, label: str, path: Path) -> None:
+    """Hash path identity and regular-file bytes without following symlinks."""
+    digest.update(label.encode("utf-8", errors="surrogateescape"))
+    digest.update(b"\0")
+    try:
+        file_stat = path.lstat()
+    except FileNotFoundError:
+        digest.update(b"missing\0")
+    except OSError as exc:
+        digest.update(f"error:{type(exc).__name__}\0".encode("ascii"))
+    else:
+        digest.update(
+            (f"{file_stat.st_mode}:{file_stat.st_ino}:{file_stat.st_size}:"
+             f"{file_stat.st_mtime_ns}:{file_stat.st_ctime_ns}\0").encode(
+                 "ascii")
+        )
+        if stat_module.S_ISREG(file_stat.st_mode):
+            try:
+                flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                descriptor = os.open(path, flags)
+                with os.fdopen(descriptor, "rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                digest.update(b"\0")
+            except OSError as exc:
+                digest.update(
+                    f"content-error:{type(exc).__name__}\0".encode("ascii"))
+
+
+def _evo_evidence_signature(lake_db: Path, cfg: dict) -> str:
+    """Digest every current artifact that can qualify a score.
+
+    Content is streamed into SHA-256 and is never retained or logged. This
+    catches same-size rewrites even on filesystems whose timestamps do not tick
+    between writes. The digest is constant-memory and scans completed ideas
+    only.
+    """
+    digest = hashlib.sha256()
+    report = cfg.get("report", {}) or {}
+    try:
+        from orze.reporting.search_path import _configured_results_dir
+        results_dir = _configured_results_dir(str(lake_db), cfg)
+    except Exception as exc:
+        results_dir = None
+        digest.update(f"results-error:{type(exc).__name__}\0".encode("ascii"))
+    if results_dir is None:
+        digest.update(b"results-missing\0")
+        return digest.hexdigest()
+    digest.update(str(results_dir).encode("utf-8", errors="surrogateescape"))
+    digest.update(b"\0")
+
+    relative_paths = _evidence_relative_paths(report)
+    try:
+        uri = Path(lake_db).resolve().as_uri() + "?mode=ro"
+        conn = sqlite3.connect(uri, uri=True)
+        try:
+            rows = conn.execute(
+                "SELECT idea_id FROM ideas "
+                "WHERE status = 'completed' ORDER BY idea_id"
+            )
+            for (raw_idea_id,) in rows:
+                idea_id = str(raw_idea_id or "")
+                digest.update(idea_id.encode(
+                    "utf-8", errors="surrogateescape"))
+                digest.update(b"\0")
+                if (not idea_id or Path(idea_id).parts != (idea_id,)
+                        or idea_id in (".", "..")):
+                    digest.update(b"invalid-idea-id\0")
+                    continue
+                idea_dir = results_dir / idea_id
+                _update_path_evidence(digest, f"{idea_id}/", idea_dir)
+                for relative in relative_paths:
+                    current = idea_dir
+                    for part in relative.parts:
+                        current = current / part
+                        _update_path_evidence(
+                            digest, f"{idea_id}/{current.relative_to(idea_dir)}",
+                            current,
+                        )
+        finally:
+            conn.close()
+    except Exception as exc:
+        digest.update(f"lake-error:{type(exc).__name__}\0".encode("ascii"))
+
+    if isinstance(report.get("benchmark_contract"), dict):
+        try:
+            from orze.core.benchmark_contract import (
+                benchmark_exposure_evidence_paths,
+            )
+            ledger_paths = benchmark_exposure_evidence_paths(results_dir, cfg)
+        except Exception as exc:
+            digest.update(
+                f"ledger-error:{type(exc).__name__}\0".encode("ascii"))
+        else:
+            for path in ledger_paths:
+                _update_path_evidence(digest, f"ledger:{path}", path)
+    return digest.hexdigest()
+
+
+def _evo_score_signature(lake_db: Path, cfg: dict):
+    """Return the inputs that can change the Evo Score.
+
+    The supported rollback journal and any policy-violating WAL drift are
+    change inputs alongside the main database. Current result/provenance
+    artifacts and qualification configuration also affect scoreability.
+    """
+    files = []
+    # DELETE is the supported shared-filesystem mode. Include its transient
+    # rollback journal so a scan taken during a transaction is invalidated
+    # after commit/rollback. Retain the WAL sidecar only as a drift signal: a
+    # policy-violating WAL database must never preserve a cached score.
+    for path in (
+            lake_db, Path(f"{lake_db}-journal"), Path(f"{lake_db}-wal")):
+        try:
+            st = path.stat()
+            files.append((st.st_mtime_ns, st.st_size))
+        except OSError:
+            files.append(None)
+    qualification_cfg_sig = json.dumps({
+        "report": cfg.get("report", {}) or {},
+        "metric_validation": cfg.get("metric_validation", {}) or {},
+        "results_dir": cfg.get("results_dir"),
+        "_env_ORZE_RESULTS_DIR": cfg.get("_env_ORZE_RESULTS_DIR"),
+        "_project_root": cfg.get("_project_root"),
+        "_orze_dir": cfg.get("_orze_dir"),
+    }, sort_keys=True, default=str, separators=(",", ":"))
+    evidence_sig = _evo_evidence_signature(lake_db, cfg)
+    return tuple(files), qualification_cfg_sig, evidence_sig
+
+
+def _log_evo_score_if_changed(owner, lake_db: Path, cfg: dict) -> bool:
+    """Build and log the expensive search graph only when its inputs change."""
+    signature = _evo_score_signature(lake_db, cfg)
+    if getattr(owner, "_evo_score_signature", None) == signature:
+        return False
+
+    from orze.reporting.search_path import build_from_lake
+    re_block = build_from_lake(str(lake_db), cfg).get("research_efficiency")
+    owner._evo_score_signature = signature
+    if re_block:
+        presentation = re_block.get("presentation") or {}
+        qualification = re_block.get("evidence_qualification")
+        score = re_block.get("score")
+        from orze.reporting.evidence import (
+            efficiency_presentation_is_safe, qualification_is_presentable,
+        )
+        if (not efficiency_presentation_is_safe(presentation)
+                or not qualification_is_presentable(qualification)
+                or isinstance(score, bool)
+                or not isinstance(score, (int, float))
+                or not math.isfinite(float(score))):
+            logger.warning(
+                "Internal Evo Score unavailable: evidence qualification missing")
+        else:
+            rejected = qualification.get("rejected") or {}
+            rejected_total = sum(rejected.values())
+            logger.info(
+                "Internal Evo Score: %.1f grade %s; evidence=%s; "
+                "accepted=%d rejected=%d; leaderboard_rank_comparable=false",
+                score, re_block.get("grade", "?"),
+                presentation.get("evidence_label", "qualified evidence"),
+                qualification.get("accepted", 0), rejected_total)
+    return True
+
+
+def _run_elo_tournament_for_ingested(lake, ingested_ids, substrate_cfg):
+    """Run one Elo tournament round on freshly ingested ideas.
+
+    Pulled out as a module-level function so the phases mixin stays thin and
+    so the import of orze_substrate is lazy (so old environments without the
+    substrate installed don't break ingestion).
+    """
+    if not lake or not ingested_ids:
+        return
+    import yaml as _yaml
+    from orze_substrate.elo_ranking import run_tournament_round
+    from orze_substrate.role_outputs import IdeaProposal
+
+    proposals = []
+    rows = []
+    try:
+        rows = lake.get_by_ids(list(ingested_ids))  # type: ignore[attr-defined]
+    except AttributeError:
+        # Fallback: query each id (lake API drift).
+        rows = []
+        for iid in ingested_ids:
+            try:
+                r = lake.get(iid)  # type: ignore[attr-defined]
+                if r:
+                    rows.append(r)
+            except Exception:
+                continue
+    except Exception:
+        rows = []
+    for r in rows or []:
+        try:
+            cfg_parsed = _yaml.safe_load(r.get("config") or "") or {}
+        except Exception:
+            cfg_parsed = {}
+        if not isinstance(cfg_parsed, dict):
+            cfg_parsed = {"raw": str(cfg_parsed)}
+        fam = r.get("approach_family") or "other"
+        # Map non-canonical families to "other" so validator-free
+        # IdeaProposal construction is still useful for the judge prompt.
+        if fam not in _VALID_APPROACH_FAMILIES:
+            fam = "other"
+        proposals.append(IdeaProposal(
+            idea_id=r["idea_id"],
+            title=(r.get("title") or "")[:80],
+            approach_family=fam,
+            hypothesis=(r.get("hypothesis") or "")[:600],
+            kill_criterion="auto (judged pre-launch)",
+            config=cfg_parsed,
+            predicted_metric_gain_pp=0.0,
+            estimated_cost_gpu_hours=1.0,
+        ))
+    if len(proposals) < 2:
+        return
+    max_matches = int(substrate_cfg.get("elo_max_matches_per_cycle", 10))
+    judge_model = substrate_cfg.get("elo_judge_model", "claude-sonnet-4-6")
+    judge_bin = substrate_cfg.get("elo_judge_bin", "orze-claude")
+    res = run_tournament_round(
+        proposals,
+        judge_model=judge_model,
+        judge_bin=judge_bin,
+        max_matches=max_matches,
+    )
+    logger.info(
+        "Elo tournament round: matches=%d errors=%d top_3=%s",
+        res["n_matches"], res["n_errors"],
+        [(e["idea_id"], round(e["elo"], 1)) for e in res["top_3"]],
+    )
+
+
+def _run_reflection_for_ingested(lake, ingested_ids, substrate_cfg, results_dir):
+    """Run the Reflection critic on freshly ingested ideas.
+
+    Item 2 of docs/superpowers/specs/2026-05-23-co-scientist-comparison.md:
+    pre-launch devil's-advocate that flags wiring-gap / false-positive /
+    trivial-result risks. Writes results/_reflections/_reflection_<id>.md.
+
+    Pulled out as a module-level function so the phases mixin stays thin and
+    so the import of orze_substrate is lazy (old environments without the
+    substrate installed don't break ingestion).
+    """
+    if not lake or not ingested_ids:
+        return
+    import yaml as _yaml
+    from orze_substrate.reflection import critique_batch
+    from orze_substrate.role_outputs import IdeaProposal
+
+    rows = []
+    try:
+        rows = lake.get_by_ids(list(ingested_ids))  # type: ignore[attr-defined]
+    except AttributeError:
+        rows = []
+        for iid in ingested_ids:
+            try:
+                r = lake.get(iid)  # type: ignore[attr-defined]
+                if r:
+                    rows.append(r)
+            except Exception:
+                continue
+    except Exception:
+        rows = []
+
+    proposals = []
+    for r in rows or []:
+        try:
+            cfg_parsed = _yaml.safe_load(r.get("config") or "") or {}
+        except Exception:
+            cfg_parsed = {}
+        if not isinstance(cfg_parsed, dict):
+            cfg_parsed = {"raw": str(cfg_parsed)}
+        fam = r.get("approach_family") or "other"
+        if fam not in _VALID_APPROACH_FAMILIES:
+            fam = "other"
+        title = (r.get("title") or "")[:80]
+        hyp = (r.get("hypothesis") or title)
+        proposals.append(IdeaProposal(
+            idea_id=r["idea_id"],
+            title=title,
+            approach_family=fam,
+            hypothesis=hyp[:600],
+            kill_criterion="auto (critiqued pre-launch)",
+            config=cfg_parsed,
+            predicted_metric_gain_pp=0.0,
+            estimated_cost_gpu_hours=1.0,
+        ))
+    if not proposals:
+        return
+    max_critiques = int(substrate_cfg.get("reflection_max_per_cycle", 5))
+    critic_model = substrate_cfg.get("reflection_critic_model",
+                                     "claude-sonnet-4-6")
+    critic_bin = substrate_cfg.get("reflection_critic_bin", "orze-claude")
+    timeout_s = int(substrate_cfg.get("reflection_timeout_seconds", 90))
+    verdicts = critique_batch(
+        proposals, Path(results_dir),
+        max_critiques=max_critiques,
+        critic_model=critic_model,
+        critic_bin=critic_bin,
+        timeout_seconds=timeout_s,
+    )
+    block = sum(1 for v in verdicts if v.severity == "block")
+    warn = sum(1 for v in verdicts if v.severity == "warn")
+    passed = sum(1 for v in verdicts if v.severity == "pass")
+    logger.info(
+        "Reflection round: critiqued=%d block=%d warn=%d pass=%d",
+        len(verdicts), block, warn, passed,
+    )
+
+
+class OrzePhaseMixin:
+    """Phase methods for the main orchestration loop."""
+
+    def _parse_lake_queue_config(self, idea_id: str, config_yaml: str) -> dict:
+        """Parse one queued config once per exact source value.
+
+        Queue rows are revisited every poll. Returning a deep copy prevents a
+        downstream sweep/normalizer from mutating the cached source of truth.
+        """
+        cache = getattr(self, "_queue_config_parse_cache", None)
+        if cache is None:
+            cache = {}
+            self._queue_config_parse_cache = cache
+        cached = cache.get(idea_id)
+        if cached is not None and cached[0] == config_yaml:
+            return copy.deepcopy(cached[1])
+        try:
+            parsed = yaml.safe_load(config_yaml) or {}
+        except yaml.YAMLError:
+            parsed = {}
+        if not isinstance(parsed, dict):
+            parsed = {}
+        cache[idea_id] = (config_yaml, parsed)
+        return copy.deepcopy(parsed)
+
+    def _prune_lake_queue_config_cache(self, active_ids) -> None:
+        cache = getattr(self, "_queue_config_parse_cache", None)
+        if not cache:
+            return
+        active = set(active_ids)
+        for idea_id in tuple(cache):
+            if idea_id not in active:
+                del cache[idea_id]
+
+    def _sync_managed_idea(self, cfg, idea_id):
+        """Load one already-admitted queue row without touching other ideas."""
+        from orze.core.managed_run import prepare_managed_idea_run
+
+        gpu = cfg.get("_managed_idea_gpu")
+        prepare_managed_idea_run(cfg, idea_id, gpu)
+        if self.lake is None:
+            raise RuntimeError("managed_run_idea_lake_authority_required")
+        row = self.lake.get(idea_id)
+        if not isinstance(row, dict):
+            raise RuntimeError("managed_run_authoritative_lifecycle_rows_missing")
+        try:
+            idea_cfg = yaml.safe_load(row.get("config") or "{}") or {}
+        except yaml.YAMLError as exc:
+            raise RuntimeError("managed_run_idea_config_invalid") from exc
+        if not isinstance(idea_cfg, dict):
+            raise RuntimeError("managed_run_idea_config_invalid")
+        idea = {
+            "title": str(row.get("title") or idea_id),
+            "priority": str(row.get("priority") or "medium"),
+            "config": idea_cfg,
+            "raw": "",
+        }
+        ideas = {idea_id: idea}
+        skipped = get_skipped_ideas(
+            self.failure_counts, cfg.get("max_idea_failures", 0))
+        unclaimed = get_unclaimed(
+            ideas, self.results_dir, skipped, lake=self.lake)
+        if unclaimed != [idea_id]:
+            raise RuntimeError("managed_run_idea_not_launchable")
+        logger.info("Managed one-idea queue: %s", idea_id)
+        return ideas, unclaimed, skipped, {}
+
+    def _sync_ideas(self, cfg):
+        """Phase: sync ideas from ideas.md to lake, expand sweeps, build unclaimed queue."""
+        if self.lake:
+            from orze.engine.idea_ingress import ingest_ideas_source
+            raw_ideas, ingested_ids = ingest_ideas_source(self, cfg)
+            # Optional enrichment runs only for committed admissions, after
+            # the source lock is released. An ACK publication failure leaves
+            # source retryable; enrichment may append work for a later tick.
+            if ingested_ids:
+                substrate_cfg = cfg.get("substrate", {}) or {}
+                try:
+                    if substrate_cfg.get("elo_ranking_enabled"):
+                        _run_elo_tournament_for_ingested(
+                            self.lake, ingested_ids, substrate_cfg)
+                except Exception as exc:
+                    logger.warning("Elo tournament round skipped: %s", exc)
+                try:
+                    if substrate_cfg.get("reflection_enabled"):
+                        _run_reflection_for_ingested(
+                            self.lake, ingested_ids, substrate_cfg, self.results_dir)
+                except Exception as exc:
+                    logger.warning("Reflection round skipped: %s", exc)
+        else:
+            # Legacy no-lake mode does not acknowledge or mutate its source.
+            raw_ideas = parse_ideas(cfg["ideas_file"])
+
+        # 5a-pre. Inline Tier 1 filter (orze-pro): skip garbage before it's claimed
+        try:
+            from orze.extensions import get_extension
+            idea_filter = get_extension("idea_filter")
+            if idea_filter:
+                idea_filter.filter_queued_ideas(self.results_dir)
+        except Exception:
+            pass  # pro not installed or filter failed — continue normally
+
+        # 5a-pre2. Tier 2 SOP: auto-generate ideas from portfolios (orze-pro)
+        # Validates each backbone's train_script BEFORE generating ideas.
+        # If validation fails, triggers thinker/professor to implement.
+        try:
+            from orze.extensions import get_extension
+            _sop_t2 = get_extension("sop_tier2")
+            if _sop_t2 and self.lake:
+                load_portfolios = _sop_t2.load_portfolios
+                load_method_specs = _sop_t2.load_method_specs
+                generate_portfolio_ideas = _sop_t2.generate_portfolio_ideas
+
+                portfolios = load_portfolios(self.results_dir)
+                methods = load_method_specs(self.results_dir)
+
+                for portfolio in portfolios:
+                    new_ideas = generate_portfolio_ideas(
+                        portfolio, self.results_dir, methods)
+                    for idea in new_ideas:
+                        self.lake.insert(
+                            idea["idea_id"], idea["title"],
+                            yaml.dump(idea["config"]),
+                            "", status="queued",
+                            priority=idea.get("priority", "high"),
+                            approach_family=idea.get("approach_family", "portfolio"),
+                        )
+                    if new_ideas:
+                        # Track generated IDs in portfolio file
+                        pf = portfolio.get("_file")
+                        if pf:
+                            portfolio.setdefault("generated_ideas", [])
+                            portfolio["generated_ideas"].extend(
+                                [i["idea_id"] for i in new_ideas])
+                            try:
+                                Path(pf).write_text(
+                                    yaml.dump({k: v for k, v in portfolio.items()
+                                               if k != "_file"},
+                                              default_flow_style=False),
+                                    encoding="utf-8")
+                            except OSError:
+                                pass
+                        logger.info("Portfolio '%s': generated %d ideas",
+                                    portfolio.get("name", "?"), len(new_ideas))
+                    # Launch-time validate_idea catches bad configs — no need
+                    # for pre-generation validation here.
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug("Portfolio generation skipped: %s", e)
+
+        # 5a. Expand sweeps and find unclaimed work
+        sweep_max = cfg.get("sweep", {}).get("max_combos", 20)
+        queue_ideas = {}
+
+        if self.lake:
+            queue_rows = self.lake.get_queue(limit=2000)
+            queue_ids = []
+            for r in queue_rows:
+                queue_ids.append(r["idea_id"])
+                cfg_parsed = self._parse_lake_queue_config(
+                    r["idea_id"], r["config"] or "")
+                # Pre-filter: skip ideas with missing strategy files BEFORE
+                # sweep expansion. This prevents expanding a broken idea into
+                # N sub-runs that all get skipped individually every iteration.
+                strategy_name = cfg_parsed.get("strategy")
+                if strategy_name:
+                    strategy_path = Path("strategies") / f"{strategy_name}.py"
+                    if not strategy_path.exists():
+                        try:
+                            self.lake.set_status(r["idea_id"], "skipped")
+                            logger.warning("Pre-filter: skipped %s (missing %s)",
+                                           r["idea_id"], strategy_path)
+                        except Exception:
+                            pass
+                        continue
+                queue_ideas[r["idea_id"]] = {
+                    "title": r["title"],
+                    "priority": r["priority"],
+                    "config": cfg_parsed,
+                    "raw": "",
+                }
+            self._prune_lake_queue_config_cache(queue_ids)
+            # Expand any sweeps in the queue
+            ideas = expand_sweeps(queue_ideas, max_combos=sweep_max)
+        else:
+            # Legacy fallback
+            ideas = expand_sweeps(raw_ideas, max_combos=sweep_max)
+
+        skipped = get_skipped_ideas(
+            self.failure_counts,
+            cfg.get("max_idea_failures", 0))
+        unclaimed = get_unclaimed(ideas, self.results_dir, skipped, lake=self.lake)
+
+        # On-demand reconcile: if queue returned ideas but none are
+        # unclaimed, stale DB rows are blocking — reconcile and retry.
+        if not unclaimed and queue_ideas and self.lake:
+            n = self.lake.reconcile_statuses(
+                str(self.results_dir),
+                evaluation_required=bool(cfg.get("eval_script")),
+            )
+            if n:
+                logger.info("On-demand reconcile: cleared %d stale ideas", n)
+                queue_ideas = {}
+                queue_rows = self.lake.get_queue(limit=2000)
+                queue_ids = []
+                for r in queue_rows:
+                    queue_ids.append(r["idea_id"])
+                    cfg_parsed = self._parse_lake_queue_config(
+                        r["idea_id"], r["config"] or "")
+                    queue_ideas[r["idea_id"]] = {
+                        "title": r["title"],
+                        "priority": r["priority"],
+                        "config": cfg_parsed,
+                        "raw": "",
+                    }
+                self._prune_lake_queue_config_cache(queue_ids)
+                ideas = expand_sweeps(queue_ideas, max_combos=sweep_max)
+                unclaimed = get_unclaimed(ideas, self.results_dir, skipped, lake=self.lake)
+
+        # Co-Scientist-style Elo reordering of the unclaimed launch queue.
+        # Behind feature flag substrate.elo_ranking_enabled (default off).
+        # Stable: ties preserve original (priority/recency) order; ideas
+        # with no Elo entry default to 1500 so they aren't penalized.
+        try:
+            substrate_cfg = cfg.get("substrate", {}) or {}
+            if substrate_cfg.get("elo_ranking_enabled") and unclaimed:
+                from orze_substrate.elo_ranking import select_for_launch
+                pre = list(unclaimed[:10])
+                unclaimed = select_for_launch(unclaimed, n=len(unclaimed))
+                if pre != unclaimed[:10]:
+                    # Dedup: same (pre, after) transformation as last tick →
+                    # no new information, don't re-log. Stops the every-tick
+                    # noise when queue is stable.
+                    _reorder_sig = (tuple(pre), tuple(unclaimed[:10]))
+                    if getattr(self, "_last_elo_reorder_sig", None) != _reorder_sig:
+                        logger.info(
+                            "Elo reordered unclaimed top 10: before=%s after=%s",
+                            pre, unclaimed[:10])
+                        self._last_elo_reorder_sig = _reorder_sig
+        except Exception as e:  # pragma: no cover — never block launch
+            logger.warning("Elo reorder skipped: %s", e)
+
+        if unclaimed:
+            logger.info("Unclaimed queue (top 5): %s", unclaimed[:5])
+
+        return ideas, unclaimed, skipped, raw_ideas
+
+    def _launch_evals(self, finished, eval_finished, ideas):
+        """Dispatch each idea at most once per tick; None is not a success.
+
+        A configured evaluator's no-process result is delivered only after its
+        real evaluation/global terminal states agree. Other outcomes remain
+        pending for a later tick. Only training-only projects may skip eval.
+        """
+        from orze.core.execution_attempts import current_attempt
+        from orze.engine.completion_events import (
+            completion_is_current, filter_completions, training_source,
+        )
+        cfg = self.cfg
+        finished = filter_completions(finished, self.lake, self.results_dir)
+        eval_finished = filter_completions(eval_finished, self.lake, self.results_dir)
+        managed_idea = cfg.get("_managed_idea_id")
+        if managed_idea:
+            finished = [item for item in finished if item[0] == managed_idea]
+            eval_finished = [
+                item for item in eval_finished if item[0] == managed_idea]
+        max_evals = cfg.get("max_concurrent_evals",
+                             len(self.gpu_ids))
+        delivered_ids = {idea_id for idea_id, _ in eval_finished}
+        attempted_ids = set(delivered_ids)
+        attempted_ids.update(ep.idea_id for ep in self.active_evals.values())
+
+        def defer(idea_id, gpu, source_event=None):
+            if idea_id not in {iid for iid, _ in self.pending_evals}:
+                self.pending_evals.append(source_event or (idea_id, gpu))
+
+        # Explicit retry admissions are durable evaluation work, not QUEUED
+        # training ideas. Recover them even with an empty inbox after restart.
+        if self.lake is not None and cfg.get("eval_script") and self.gpu_ids:
+            from orze.engine.evaluation_retry import pending_evaluation_retries
+            for idea_id in pending_evaluation_retries(self.lake):
+                if not managed_idea or idea_id == managed_idea:
+                    defer(idea_id, self.gpu_ids[0])
+
+        def deliver(idea_id, gpu, source_event=None):
+            require_no_unconfirmed_stop(self.results_dir / idea_id)
+            event = source_event or (idea_id, gpu)
+            if idea_id not in delivered_ids and completion_is_current(event, self.lake, self.results_dir):
+                eval_finished.append(event)
+                delivered_ids.add(idea_id)
+
+        def finish_without_process(idea_id, gpu, source_event=None):
+            # Neither missing eval configuration nor existing output can
+            # resolve a persisted, unconfirmed execution stop.
+            require_no_unconfirmed_stop(self.results_dir / idea_id)
+            if self.lake is not None:
+                native_eval = current_attempt(self.lake.conn, idea_id, "evaluation")
+                if native_eval is not None:
+                    # Closed native execution was already accepted elsewhere.
+                    # None can retire this scheduling item, never mint delivery.
+                    return (native_eval["state"] in ("TERMINAL", "NOT_STARTED")
+                            and self.lake.get_stage_state(idea_id, "evaluation") != "PENDING")
+                if getattr(source_event, "attempt_ref", None) is not None and not cfg.get("eval_script"):
+                    if completion_is_current(source_event, self.lake, self.results_dir):
+                        deliver(idea_id, gpu, source_event)
+                        return True
+                    return False
+            if not cfg.get("eval_script"):
+                if self.lake:
+                    state = self.lake.get_fsm_state(idea_id)
+                    if state == "IN_PROGRESS":
+                        if not self.lake.record_state_transition(
+                                idea_id, from_state="IN_PROGRESS",
+                                to_state="COMPLETE",
+                                reason="training_completed_no_eval",
+                                host=socket.gethostname(), pid=os.getpid(),
+                                sop_type=cfg.get("sop", "training")):
+                            return False
+                    elif state != "COMPLETE":
+                        return False
+            elif self.lake:
+                state = self.lake.get_fsm_state(idea_id)
+                evaluation = self.lake.get_stage_state(idea_id, "evaluation")
+                if (state, evaluation) not in (
+                        ("COMPLETE", "COMPLETE"), ("FAILED", "FAILED")):
+                    return False
+            else:
+                # A None return cannot establish an evaluated lifecycle when
+                # no authoritative state is available to this controller.
+                return False
+            deliver(idea_id, gpu, source_event)
+            return True
+
+        def dispatch(idea_id, gpu, source_event=None):
+            source = source_event or training_source(idea_id, gpu, self.lake, self.results_dir)
+            kwargs = {"lake": self.lake}
+            if getattr(source, "attempt_ref", None) is not None:
+                kwargs["source_event"] = source
+            return launch_eval(idea_id, gpu, self.results_dir, cfg, **kwargs)
+
+        for event in finished:
+            idea_id, gpu = event
+            if not completion_is_current(event, self.lake, self.results_dir):
+                continue
+            if idea_id in attempted_ids:
+                continue
+            if getattr(getattr(event, "attempt_ref", None), "phase", None) == "posthoc":
+                # This inference adapter already completed its action. It is
+                # not a training source and grants no extra evaluation work.
+                attempted_ids.add(idea_id)
+                deliver(idea_id, gpu, event)
+                continue
+            metrics_path = self.results_dir / idea_id / "metrics.json"
+            if metrics_path.exists():
+                try:
+                    metrics = json.loads(
+                        metrics_path.read_text(encoding="utf-8"))
+                    if (isinstance(metrics, dict)
+                            and metrics.get("status") == "COMPLETED"):
+                        if not cfg.get("eval_script"):
+                            attempted_ids.add(idea_id)
+                            if not finish_without_process(idea_id, gpu, event):
+                                defer(idea_id, gpu, event)
+                            continue
+                        if len(self.active_evals) < max_evals:
+                            if hasattr(self, 'slot_mgr'):
+                                eval_busy = (self.slot_mgr.gpu_ids_in_use()
+                                             | set(self.active_evals.keys()))
+                            else:
+                                eval_busy = (set(self.active.keys())
+                                             | set(self.active_evals.keys()))
+                            free_for_eval = [g for g in self.gpu_ids
+                                             if g not in eval_busy]
+                            if free_for_eval:
+                                use_gpu = free_for_eval[0]
+                                attempted_ids.add(idea_id)
+                                ep = dispatch(idea_id, use_gpu, event)
+                                if ep is not None:
+                                    self.active_evals[use_gpu] = ep
+                                elif not finish_without_process(idea_id, use_gpu, event):
+                                    defer(idea_id, use_gpu, event)
+                            else:
+                                defer(idea_id, gpu, event)
+                                logger.info(
+                                    "Eval deferred for %s (no free GPU)",
+                                    idea_id)
+                        else:
+                            defer(idea_id, gpu, event)
+                            logger.info(
+                                "Eval deferred for %s (limit %d)",
+                                idea_id, max_evals)
+                    else:
+                        deliver(idea_id, gpu, event)
+                except TerminationUnconfirmed:
+                    raise
+                except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                    if idea_id in attempted_ids:
+                        # Dispatch/lifecycle I/O failures are not evidence that
+                        # evaluation completed. Keep the attempted work.
+                        defer(idea_id, gpu, event)
+                    else:
+                        deliver(idea_id, gpu, event)
+            else:
+                deliver(idea_id, gpu, event)
+
+        # 6a. Launch pending evals from previous iterations
+        still_pending = []
+        active_eval_ids = {ep.idea_id for ep in self.active_evals.values()}
+        seen_pending = set()
+        for pending in self.pending_evals:
+            p_idea, p_gpu = pending
+            if p_idea in seen_pending:
+                continue
+            seen_pending.add(p_idea)
+            source_event = pending if getattr(pending, "attempt_ref", None) is not None else None
+            if source_event is not None and not completion_is_current(source_event, self.lake, self.results_dir):
+                continue
+            if p_idea in delivered_ids or p_idea in active_eval_ids:
+                continue
+            if managed_idea and p_idea != managed_idea:
+                still_pending.append(pending)
+                continue
+            if p_idea in attempted_ids:
+                still_pending.append(pending)
+                continue
+            if getattr(getattr(source_event, "attempt_ref", None), "phase", None) == "posthoc":
+                attempted_ids.add(p_idea)
+                deliver(p_idea, p_gpu, source_event)
+                continue
+            if not cfg.get("eval_script"):
+                attempted_ids.add(p_idea)
+                eligible, _ = is_training_complete_for_downstream(
+                    self.results_dir / p_idea, cfg)
+                if not eligible or not finish_without_process(p_idea, p_gpu, source_event):
+                    still_pending.append(pending)
+                continue
+            if len(self.active_evals) >= max_evals:
+                still_pending.append(pending)
+                continue
+            if hasattr(self, 'slot_mgr'):
+                eval_busy = (self.slot_mgr.gpu_ids_in_use()
+                             | set(self.active_evals.keys()))
+            else:
+                eval_busy = (set(self.active.keys())
+                             | set(self.active_evals.keys()))
+            free_for_eval = [g for g in self.gpu_ids
+                             if g not in eval_busy]
+            if free_for_eval:
+                use_gpu = free_for_eval[0]
+                attempted_ids.add(p_idea)
+                ep = dispatch(p_idea, use_gpu, source_event)
+                if ep is not None:
+                    self.active_evals[use_gpu] = ep
+                elif not finish_without_process(p_idea, use_gpu, source_event):
+                    still_pending.append(pending)
+            else:
+                still_pending.append(pending)
+        self.pending_evals = still_pending
+
+        # 6b. Backlog scan: fill remaining eval slots with
+        #     completed-but-unevaluated ideas (newest first)
+        backlog = []
+        if cfg.get("eval_script") and len(self.active_evals) < max_evals:
+            eval_output = cfg.get("eval_output") or "eval_report.json"
+            pending_ids = {pi for pi, _ in self.pending_evals}
+            active_eval_ids = {ep.idea_id
+                               for ep in self.active_evals.values()}
+            ckpt_dir = _get_checkpoint_dir(cfg)
+            known_ideas = set(ideas.keys())
+            backlog = []
+            for d in self.results_dir.iterdir():
+                if not d.is_dir() or not d.name.startswith("idea-"):
+                    continue
+                iid = d.name
+                if managed_idea and iid != managed_idea:
+                    continue
+                if (iid in pending_ids or iid in active_eval_ids
+                        or iid in attempted_ids or iid in delivered_ids):
+                    continue
+                # Only evaluate ideas for which this controller has a config.
+                if iid not in known_ideas:
+                    continue
+                mpath = d / "metrics.json"
+                rpath = d / eval_output
+                if self.lake:
+                    # An existing output may still need real reconciliation;
+                    # metrics.json can be training output awaiting evaluation.
+                    needs_evaluation = self.lake.get_fsm_state(iid) == "IN_PROGRESS"
+                else:
+                    needs_evaluation = (
+                        not rpath.exists()
+                        or Path(eval_output) == Path("metrics.json"))
+                if mpath.exists() and needs_evaluation:
+                    # Skip ideas without checkpoints
+                    ckpt_name = cfg.get("eval_checkpoint", "best_model.pt")
+                    has_ckpt = (d / ckpt_name).exists()
+                    if ckpt_dir and not (
+                            ckpt_dir / iid / "best.pt").exists() and not has_ckpt:
+                        continue
+                    eligible, _ = is_training_complete_for_downstream(d, cfg)
+                    if eligible:
+                        try:
+                            num = int(iid.split("-", 1)[1])
+                        except (IndexError, ValueError):
+                            num = 0
+                        backlog.append((num, iid))
+            if backlog:
+                backlog.sort(reverse=True)
+                if hasattr(self, 'slot_mgr'):
+                    eval_busy = (self.slot_mgr.gpu_ids_in_use()
+                                 | set(self.active_evals.keys()))
+                else:
+                    eval_busy = (set(self.active.keys())
+                                 | set(self.active_evals.keys()))
+                mem_thresh = cfg.get("gpu_mem_threshold", 2000)
+                free_for_eval = [
+                    g for g in self.gpu_ids
+                    if g not in eval_busy
+                    and (get_gpu_memory_used(g) or 0) <= mem_thresh
+                ]
+                launched_backlog = 0
+                for _, iid in backlog:
+                    if (len(self.active_evals) >= max_evals
+                            or not free_for_eval):
+                        break
+                    # Skip if an orphaned eval is already running
+                    if _eval_already_running(iid, cfg):
+                        continue
+                    use_gpu = free_for_eval.pop(0)
+                    attempted_ids.add(iid)
+                    ep = dispatch(iid, use_gpu)
+                    if ep is not None:
+                        self.active_evals[use_gpu] = ep
+                        launched_backlog += 1
+                    elif not finish_without_process(iid, use_gpu):
+                        defer(iid, use_gpu)
+                if launched_backlog:
+                    logger.info(
+                        "Launched %d backlog evals (%d remaining)",
+                        launched_backlog,
+                        len(backlog) - launched_backlog)
+
+        return eval_finished, backlog
+
+    def _launch_training(self, unclaimed, disk_ok, ideas):
+        """Phase: launch training on free GPUs, enforce sweep limits, circuit breaker."""
+        cfg = self.cfg
+        managed_idea = cfg.get("_managed_idea_id")
+
+        # Verify sealed file integrity before launching any training.
+        # The training loop runs this phase every iteration (~30s); if a
+        # sealed file is genuinely modified, we'd otherwise emit ERROR
+        # and a Telegram notification on every tick. Dedupe: only log +
+        # notify when the changed-set (or its content hashes) differs
+        # from the last alert. Re-alerts on further changes; resets when
+        # files revert to manifest.
+        sealed_files = cfg.get("sealed_files", [])
+        sealed_blocked = False
+        if sealed_files:
+            manifest = load_sealed_manifest(self.results_dir)
+            # Explicit config pins are authoritative even when a managed
+            # one-idea runner intentionally skips the daemon-wide manifest
+            # initialization. This keeps direct managed runs fail-closed on
+            # content while avoiding a shared-manifest write race between
+            # concurrently scoped GPU workers.
+            manifest.update({
+                str(path): str(digest).lower()
+                for path, digest in (cfg.get("sealed_hashes") or {}).items()
+            })
+            changed = verify_sealed_files(sealed_files, manifest)
+            if changed:
+                sealed_blocked = True
+                # Build a stable signature: (filename, current-hash)
+                # tuples sorted, so we re-alert if the file changes
+                # again but stay silent on identical state.
+                try:
+                    from orze.core.integrity import compute_sealed_hashes
+                    cur_hashes = compute_sealed_hashes(changed)
+                    sig = tuple(sorted((path, cur_hashes.get(path, "MISSING"))
+                                       for path in changed))
+                except Exception:
+                    sig = tuple(sorted(changed))
+                last_sig = getattr(self, "_sealed_alert_sig", None)
+                if sig != last_sig:
+                    logger.error(
+                        "Sealed file integrity check FAILED: %d file(s) changed: %s",
+                        len(changed), ", ".join(changed))
+                    if not managed_idea:
+                        notify("sealed_file_changed", {
+                            "changed_files": changed,
+                            "message": (
+                                f"{len(changed)} sealed file(s) failed "
+                                "integrity verification. New training "
+                                "dispatch is blocked."),
+                        }, cfg)
+                    self._sealed_alert_sig = sig
+            else:
+                # Files reverted — clear so future drift re-alerts.
+                self._sealed_alert_sig = None
+
+        eval_gpus = set(self.active_evals.keys())
+        if hasattr(self, 'slot_mgr'):
+            free = self.slot_mgr.free_gpu_ids(exclude=eval_gpus)
+        else:
+            busy_gpus = set(self.active.keys()) | eval_gpus
+            free = [g for g in self.gpu_ids if g not in busy_gpus
+                    and (get_gpu_memory_used(g) or 0)
+                    <= cfg.get("gpu_mem_threshold", 2000)]
+
+        if sealed_blocked:
+            logger.warning("training dispatch blocked by sealed-file violation")
+            return free
+
+        preflight_cfg = cfg.get("artifact_preflight") or {}
+        if preflight_cfg.get("enabled", False):
+            blocked_until = getattr(
+                self, "_artifact_preflight_blocked_until", 0.0)
+            if blocked_until > time.time():
+                remaining = max(0, int(blocked_until - time.time()))
+                logger.info(
+                    "artifact preflight backoff active — dispatch paused for "
+                    "%d more second(s)", remaining)
+                return free
+
+        # Limit concurrent sweep variants per base idea
+        max_sweep_concurrent = cfg.get("sweep", {}).get(
+            "max_concurrent", 3)
+        # AGGREGATE (cross-base) sweep fan-out cap — engineer cyc-3148
+        # (prof cyc-2783/2784 ASK). The per-base max_concurrent above does
+        # NOT bound the CROSS-BASE total, so ~12 base ideas each fanning
+        # into 2-8 sub-runs produced the recurring micro-sweep flood
+        # (4830 queued, 517>512 process throttle, idle GPUs). This caps the
+        # TOTAL concurrent sweep SUB-RUNS across ALL base ideas.
+        # 0 / absent == DISABLED (behavior unchanged) so any project whose
+        # orze.yaml omits the key — e.g. the sibling scheduler that shares
+        # this module — is completely unaffected. Set sweep.max_total_concurrent
+        # in orze.yaml to enable; takes effect on scheduler restart.
+        max_total_sweep = cfg.get("sweep", {}).get("max_total_concurrent", 0)
+        sweep_counts: Dict[str, int] = {}
+        total_sweep_running = 0
+        for tp in self.active.values():
+            base = tp.idea_id
+            if "-ht-" in base:
+                base = base.split("-ht-", 1)[0]
+            elif "~" in base:
+                base = base.split("~", 1)[0]
+            sweep_counts[base] = sweep_counts.get(base, 0) + 1
+            if base != tp.idea_id:
+                total_sweep_running += 1
+
+        # Emergency GC: if disk is low and GC is configured, try to free space now
+        if not disk_ok and not managed_idea:
+            gc_cfg = cfg.get("gc", {})
+            if gc_cfg.get("enabled"):
+                try:
+                    from orze.agents.orze_gc import run_gc
+                    report_cfg = cfg.get("report") or {}
+                    lake_path = Path(cfg.get("idea_lake_db") or Path(cfg.get("results_dir", "orze_results")) / "idea_lake.db")
+                    # Collect idea IDs from all currently running training
+                    # and eval processes so GC never deletes their checkpoints.
+                    running_ids = set()
+                    for tp in self.active.values():
+                        running_ids.add(tp.idea_id)
+                    for ep in self.active_evals.values():
+                        running_ids.add(ep.idea_id)
+                    logger.warning("Emergency GC: disk low, running checkpoint cleanup "
+                                   "(protecting %d running experiments)", len(running_ids))
+                    run_gc(
+                        results_dir=self.results_dir,
+                        cfg=cfg, lake=self.lake,
+                        checkpoints_dir=Path(gc_cfg["checkpoints_dir"]) if gc_cfg.get("checkpoints_dir") else None,
+                        primary_metric=report_cfg.get("primary_metric", ""),
+                        sort_order=report_cfg.get("sort", "descending"),
+                        lake_db_path=lake_path if lake_path.exists() else None,
+                        keep_top=gc_cfg.get("keep_top", 50),
+                        keep_recent=gc_cfg.get("keep_recent", 20),
+                        min_free_gb=0,  # force run, disk is already low
+                        extra_keep_ids=running_ids,
+                    )
+                except Exception as e:
+                    logger.warning("Emergency GC failed: %s", e)
+
+        if _is_launcher_paused(cfg, self.results_dir):
+            logger.info("launcher paused — skipping dispatch this cycle")
+            return free
+
+        # Opportunistic co-tenancy must enter through the same admission path
+        # as an exclusively free GPU. The former alternate force-pack branch
+        # claimed and launched directly, bypassing schema/SOP validation,
+        # artifact preflight, project setup, and zero-GPU accounting.
+        force_pack_target = None
+        if (not free and unclaimed and disk_ok and hasattr(self, "slot_mgr")
+                and self.slot_mgr.mode == "exclusive"):
+            from orze.engine.scheduler import get_critical_force_pack_eligible
+            eligible = set(get_critical_force_pack_eligible(
+                ideas, self.results_dir))
+            for candidate in unclaimed:
+                if candidate not in eligible:
+                    continue
+                candidate_cfg = (ideas.get(candidate) or {}).get("config") or {}
+                vram_floor = candidate_cfg.get(
+                    "min_free_vram_mib_for_eval", 12000)
+                try:
+                    force_gpus = self.slot_mgr.free_gpu_ids_force_pack(
+                        vram_floor, exclude=eval_gpus)
+                except (TypeError, ValueError) as exc:
+                    logger.warning(
+                        "force-pack policy invalid for %s: %s",
+                        candidate, type(exc).__name__)
+                    continue
+                if not force_gpus:
+                    continue
+                force_pack_target = (candidate, force_gpus[0])
+                unclaimed.remove(candidate)
+                unclaimed.insert(0, candidate)
+                free = [force_gpus[0]]
+                logger.info(
+                    "force-pack candidate %s on GPU %d will use the normal "
+                    "admission pipeline", candidate, force_gpus[0])
+                break
+
+        if unclaimed and free and disk_ok:
+            # With multi-slot scheduling, keep launching until all slots are full
+            max_launches = len(free) * getattr(getattr(self, 'slot_mgr', None), 'slots_per_gpu', 1)
+            launch_count = 0
+            while unclaimed and launch_count < max_launches:
+                # Re-check free GPUs each iteration (slots fill up)
+                if hasattr(self, 'slot_mgr'):
+                    if (force_pack_target is not None
+                            and force_pack_target[0] in unclaimed):
+                        free = [force_pack_target[1]]
+                    else:
+                        free = self.slot_mgr.free_gpu_ids(
+                            exclude=set(self.active_evals.keys()))
+                if not free:
+                    break
+                gpu = free[0]  # least-loaded GPU (sorted by most free slots)
+                launched = False
+                while unclaimed:
+                    idea_id = unclaimed.pop(0)
+                    if (force_pack_target is not None
+                            and idea_id != force_pack_target[0]):
+                        # Only the explicitly eligible critical idea may use
+                        # capacity that bypasses the exclusive job-count cap.
+                        unclaimed.insert(0, idea_id)
+                        break
+                    # Enforce per-idea sweep concurrency limit
+                    base_id = idea_id
+                    if "-ht-" in base_id:
+                        base_id = base_id.split("-ht-", 1)[0]
+                    elif "~" in base_id:
+                        base_id = base_id.split("~", 1)[0]
+
+                    if base_id != idea_id:
+                        if sweep_counts.get(base_id, 0) >= max_sweep_concurrent:
+                            continue
+                        # Aggregate cross-base cap: when the global concurrent
+                        # sweep-subrun count is at the cap, skip further
+                        # sweep-expanded ideas and prefer non-sweep / eval
+                        # queue entries (engineer cyc-3148).
+                        if max_total_sweep and total_sweep_running >= max_total_sweep:
+                            continue
+                    if not claim(idea_id, self.results_dir, gpu,
+                                 lake=self.lake):
+                        continue
+
+                    def account_zero_gpu(outcome: str, reason_code: str) -> None:
+                        record_zero_gpu_outcome(
+                            idea_id,
+                            self.results_dir / idea_id,
+                            int(gpu),
+                            outcome,
+                            reason_code,
+                            phase="admission",
+                        )
+                    # Write idea config so train scripts can read it.
+                    # The only sanitization needed here is the LLM-generated
+                    # "collapsed" key pattern: {"epochs: 40": None}, which
+                    # research agents occasionally emit when their response
+                    # parser eats the ": " between key and value.
+                    #
+                    # Do NOT strip dict/list values — research agents often
+                    # use structured config intentionally, e.g.
+                    #   picks:
+                    #     SmolTalk: 1.0
+                    # which is a config-driven script's main knob. An earlier
+                    # version of this code dropped those silently; every
+                    # first-user idea that nested a dict under a key lost that
+                    # key and had to be debugged at the train-script level.
+                    idea_cfg = ideas.get(idea_id, {}).get("config", {})
+                    # Re-read latest config at dispatch time to pick up any
+                    # backfills that landed between tick-start and now (e.g.
+                    # training_proposal key added by engineer mid-tick).
+                    if self.lake is not None:
+                        try:
+                            _fresh = self.lake.get(idea_id)
+                            if _fresh is not None and _fresh.get("config"):
+                                _fresh_cfg = yaml.safe_load(_fresh["config"]) or {}
+                                if _fresh_cfg:
+                                    idea_cfg = _fresh_cfg
+                        except Exception:
+                            pass  # fall back to tick-cached idea_cfg
+
+                    forbidden_path = find_forbidden_launch_override(idea_cfg)
+                    if forbidden_path:
+                        reason = (
+                            "forbidden_launch_override:"
+                            f"{forbidden_path}")
+                        logger.warning(
+                            "[SKIP-INTEGRITY] %s — %s", idea_id, reason)
+                        try:
+                            from orze.engine.launcher import (
+                                log_validator_rejection,
+                            )
+                            log_validator_rejection(
+                                self.results_dir, idea_id,
+                                "forbidden_launch_override", reason,
+                                idea_cfg if isinstance(idea_cfg, dict) else {},
+                            )
+                        except Exception:
+                            pass
+                        _write_failure(
+                            self.results_dir / idea_id, reason,
+                            lake=self.lake, idea_id=idea_id, cfg=cfg)
+                        if self.lake:
+                            try:
+                                self.lake.set_status(idea_id, "skipped")
+                            except Exception:
+                                pass
+                        _record_failure(self.failure_counts, idea_id)
+                        account_zero_gpu("rejected", "forbidden_launch_override")
+                        continue
+
+                    # orze_substrate v2: exec-hash pre-launch dedup.
+                    # Skip launches whose proposed config matches a hash
+                    # already produced by a prior completed idea.
+                    try:
+                        from orze_substrate.exec_hash import check as _exec_check
+                        _eh, _first, _wer = _exec_check(idea_cfg)
+                        if _first and _first != idea_id:
+                            logger.info(
+                                "[exec-dedup] skipping %s — exec_hash=%s "
+                                "already produced by %s (avg_wer=%s)",
+                                idea_id, _eh, _first, _wer)
+                            _dup_metrics = {
+                                "status": "SKIPPED_DUPLICATE",
+                                "duplicate_of": _first,
+                                "exec_hash": _eh,
+                                "duplicate_avg_wer": _wer,
+                                "skip_reason": "exec_hash matches prior completed idea",
+                            }
+                            try:
+                                (self.results_dir / idea_id / "metrics.json"
+                                 ).write_text(json.dumps(_dup_metrics, indent=2))
+                            except Exception:
+                                pass
+                            if self.lake is not None:
+                                try:
+                                    self.lake.set_status(idea_id, "skipped")
+                                except Exception:
+                                    pass
+                            account_zero_gpu("rejected", "duplicate_exec_hash")
+                            continue
+                    except ComputeAccountingError:
+                        raise
+                    except Exception as _eh_err:
+                        logger.debug("exec_hash pre-check failed: %r", _eh_err)
+                    flat_cfg = {}
+                    if idea_cfg:
+                        for k, v in idea_cfg.items():
+                            if v is None and ": " in str(k):
+                                parts = str(k).split(": ", 1)
+                                try:
+                                    flat_cfg[parts[0]] = yaml.safe_load(parts[1])
+                                except Exception:
+                                    flat_cfg[parts[0]] = parts[1]
+                                logger.warning(
+                                    "Fixed malformed config key %r -> %s: %s",
+                                    k, parts[0], flat_cfg[parts[0]])
+                            elif v is None:
+                                pass
+                            else:
+                                flat_cfg[k] = v
+                        from orze.engine.launcher import normalize_nested_config
+                        flat_cfg, normalization_changes = normalize_nested_config(
+                            flat_cfg, cfg.get("nested_config_normalize"))
+                        if normalization_changes:
+                            logger.info(
+                                "Normalized config for %s: %s",
+                                idea_id, "; ".join(normalization_changes),
+                            )
+                        atomic_write(
+                            self.results_dir / idea_id / "idea_config.yaml",
+                            yaml.dump(flat_cfg,
+                                      default_flow_style=False))
+                    # Write sweep config for sub-runs (legacy compat)
+                    if ideas.get(idea_id, {}).get("_sweep_parent"):
+                        atomic_write(
+                            self.results_dir / idea_id / "sweep_config.yaml",
+                            yaml.dump(idea_cfg,
+                                      default_flow_style=False))
+                    # F5: launch-time nested-config validator. Reject
+                    # YAML-nested configs (backbone: {...}, data: {...})
+                    # because train scripts only accept argparse-style
+                    # scalar kwargs. Mark SKIPPED (not failed) since no
+                    # compute is spent.
+                    try:
+                        from orze.engine.launcher import (
+                            validate_idea_config_no_nested,
+                        )
+                        _idea_cfg_for_validate = (
+                            flat_cfg if flat_cfg
+                            else ideas.get(idea_id, {}).get("config", {}))
+                        if isinstance(_idea_cfg_for_validate, dict):
+                            _wl = (cfg.get("nested_config_whitelist") or [])
+                            _err = validate_idea_config_no_nested(
+                                _idea_cfg_for_validate, extra_whitelist=_wl)
+                            if _err:
+                                logger.warning(
+                                    "[SKIP-VALIDATE] %s — %s", idea_id, _err)
+                                try:
+                                    from orze.engine.launcher import (
+                                        log_validator_rejection,
+                                    )
+                                    log_validator_rejection(
+                                        self.results_dir, idea_id,
+                                        "nested_config_not_allowed", _err,
+                                        _idea_cfg_for_validate)
+                                except Exception:
+                                    pass
+                                _write_failure(
+                                    self.results_dir / idea_id,
+                                    f"schema_invalid: {_err}",
+                                    lake=self.lake, idea_id=idea_id, cfg=cfg)
+                                if self.lake:
+                                    try:
+                                        self.lake.set_status(idea_id, "skipped")
+                                    except Exception:
+                                        pass
+                                    try:
+                                        from orze.engine.failure import (
+                                            _mark_lake_failure,
+                                        )
+                                        # status stays 'skipped' below — but
+                                        # also stamp failure_reason for audit.
+                                        import sqlite3 as _sql
+                                        import json as _json
+                                        db_path = (cfg.get("idea_lake_db")
+                                                   or str(self.results_dir
+                                                          / "idea_lake.db"))
+                                        if Path(db_path).exists():
+                                            c = _sql.connect(db_path, timeout=5)
+                                            try:
+                                                row = c.execute(
+                                                    "SELECT eval_metrics FROM "
+                                                    "ideas WHERE idea_id=?",
+                                                    (idea_id,)).fetchone()
+                                                em = {}
+                                                if row and row[0]:
+                                                    try:
+                                                        em = _json.loads(row[0])
+                                                        if not isinstance(em, dict):
+                                                            em = {}
+                                                    except Exception:
+                                                        em = {}
+                                                em["failure_reason"] = (
+                                                    "schema_invalid:"
+                                                    "nested_config_not_allowed")
+                                                c.execute(
+                                                    "UPDATE ideas SET "
+                                                    "eval_metrics=? "
+                                                    "WHERE idea_id=?",
+                                                    (_json.dumps(em), idea_id))
+                                                c.commit()
+                                            finally:
+                                                c.close()
+                                    except Exception:
+                                        pass
+                                account_zero_gpu(
+                                    "rejected", "nested_config_invalid")
+                                continue
+                    except ComputeAccountingError:
+                        raise
+                    except Exception:
+                        pass
+
+                    # F5b (cycle-116): method-validator enforcement.
+                    # Reads results/_validators/*.yaml and rejects any
+                    # idea that violates a severity=error rule (e.g.
+                    # require_nontrivial_training_op_101 — blocks no-op
+                    # LoRAs that train against the base model and report
+                    # bit-identical baseline WERs). 8 cycles of escalation
+                    # to engineer pending; professor lands directly per
+                    # cycle-095 commitment.
+                    _method_cfg = (
+                        flat_cfg if flat_cfg
+                        else ideas.get(idea_id, {}).get("config", {}))
+                    if isinstance(_method_cfg, dict):
+                        try:
+                            from orze.engine.launcher import (
+                                validate_idea_against_method_validators,
+                            )
+                            _idea_cfg_for_mv = _method_cfg
+                            _vdir = (self.results_dir / "_validators")
+                            _mv_err = validate_idea_against_method_validators(
+                                _idea_cfg_for_mv, _vdir)
+                            if _mv_err:
+                                logger.warning(
+                                    "[SKIP-METHOD-VALIDATOR] %s — %s",
+                                    idea_id, _mv_err)
+                                try:
+                                    from orze.engine.launcher import (
+                                        log_validator_rejection,
+                                    )
+                                    log_validator_rejection(
+                                        self.results_dir, idea_id,
+                                        "method_validator", _mv_err,
+                                        _idea_cfg_for_mv)
+                                except Exception:
+                                    pass
+                                _write_failure(
+                                    self.results_dir / idea_id,
+                                    f"method_validator_rejected: {_mv_err}",
+                                    lake=self.lake, idea_id=idea_id, cfg=cfg)
+                                if self.lake:
+                                    try:
+                                        self.lake.set_status(idea_id, "skipped")
+                                    except Exception:
+                                        pass
+                                _record_failure(
+                                    self.failure_counts, idea_id)
+                                account_zero_gpu(
+                                    "rejected", "method_validator_rejected")
+                                continue
+                        except ComputeAccountingError:
+                            raise
+                        except Exception:
+                            pass
+
+                    # SOP: validate idea config right before launch (catches all sources)
+                    # Use flat_cfg (malformed-key-cleaned) if available, else raw config.
+                    # flat_cfg is built at lines 518-535 above, which fixes LLM-generated
+                    # collapsed keys like "epochs: 40" → {"epochs": 40}.
+                    try:
+                        from orze.extensions import get_extension
+                        _sops = get_extension("sops")
+                        if _sops:
+                            idea_cfg = flat_cfg if flat_cfg else ideas.get(idea_id, {}).get("config", {})
+                            ts = idea_cfg.get("train_script", cfg.get("train_script", ""))
+                            ts = _resolve_train_script(ts, cfg)
+                            if ts and idea_cfg:
+                                is_valid, err_msg = _sops.validate_idea(
+                                    ts, idea_cfg, cfg.get("python", sys.executable))
+                                if not is_valid:
+                                    logger.warning("Skipping %s at launch: %s",
+                                                   idea_id, err_msg)
+                                    _write_failure(
+                                        self.results_dir / idea_id,
+                                        f"Config validation failed: {err_msg}",
+                                        lake=self.lake, idea_id=idea_id, cfg=cfg)
+                                    if self.lake:
+                                        self.lake.set_status(idea_id, "skipped")
+                                    # Trigger engineer once per (script, missing_key_set).
+                                    # Previously keyed only by script: once fired for
+                                    # train.py, no further unrecognized-arg rejection
+                                    # could re-trigger it even with a brand-new missing
+                                    # key, so research proposed 251 ideas across 3+
+                                    # new config keys and only 2 engineer triggers
+                                    # fired. Parse the missing keys out of err_msg
+                                    # so each novel schema gap gets one attempt.
+                                    if not hasattr(self, '_impl_triggered'):
+                                        self._impl_triggered = set()
+                                    import re as _re
+                                    _keys = _re.findall(
+                                        r'unrecognized args[^:]*:\s*(.*)$',
+                                        err_msg)
+                                    if _keys:
+                                        _key_set = frozenset(
+                                            k.strip() for k in _keys[0].split(",")
+                                            if k.strip())
+                                    else:
+                                        _key_set = frozenset()
+                                    _sig = (ts, _key_set)
+                                    if _sig not in self._impl_triggered:
+                                        self._impl_triggered.add(_sig)
+                                        _sop_t2 = get_extension("sop_tier2")
+                                        if (not managed_idea and _sop_t2
+                                                and hasattr(
+                                                    _sop_t2,
+                                                    'trigger_implementation')):
+                                            methods = _sop_t2.load_method_specs(self.results_dir)
+                                            _sop_t2.trigger_implementation(
+                                                {"train_script": ts, "name": ts},
+                                                next(iter(methods.values()), {}),
+                                                err_msg, self.results_dir)
+                                    account_zero_gpu(
+                                        "rejected", "sop_validation_rejected")
+                                    continue
+                    except ComputeAccountingError:
+                        raise
+                    except Exception:
+                        pass
+
+                    # Resolve and verify dataset/model artifacts before the
+                    # training launcher can allocate GPU memory. This runs
+                    # after all zero-compute idea validators so invalid ideas
+                    # cannot trigger downloads. A failure stops this entire
+                    # dispatch tick and activates a global backoff, preventing
+                    # one unavailable dependency from burning through every
+                    # queued idea.
+                    preflight_result = run_artifact_preflight(
+                        idea_id, self.results_dir, cfg, lake=self.lake)
+                    if not preflight_result:
+                        from orze.engine.native_artifact_preflight import ArtifactPreflightResult
+                        native_preflight = isinstance(preflight_result, ArtifactPreflightResult)
+                        if native_preflight:
+                            from orze.engine.artifact_preflight_failure_report import report_artifact_preflight_failure
+                            reported = report_artifact_preflight_failure(
+                                self.lake, self.results_dir / idea_id,
+                                preflight_result.attempt_ref, self.failure_counts, cfg)
+                            if reported["status"] == "stale":
+                                return free
+                        retry_interval = float(
+                            preflight_cfg.get("retry_interval", 300))
+                        self._artifact_preflight_blocked_until = (
+                            time.time() + retry_interval)
+                        reason = (
+                            "Artifact preflight failed; training was not "
+                            "launched"
+                        )
+                        logger.warning(
+                            "%s for %s — dispatch paused for %.1f second(s)",
+                            reason, idea_id, retry_interval)
+                        if not native_preflight:
+                            _write_failure(
+                                self.results_dir / idea_id, reason,
+                                lake=self.lake, idea_id=idea_id, cfg=cfg)
+                            _record_failure(self.failure_counts, idea_id)
+                            account_zero_gpu(
+                                "rejected", "artifact_preflight_failed")
+                        return free
+                    self._artifact_preflight_blocked_until = 0.0
+
+                    # Project setup runs only after every static validator and
+                    # the zero-GPU artifact resolver have passed. This avoids
+                    # spending setup work on rejected or unlaunchable ideas.
+                    pre_result = run_pre_script(
+                        idea_id, gpu, cfg, self.results_dir, lake=self.lake)
+                    if not pre_result:
+                        from orze.engine.native_pre_script import PreScriptResult
+                        if isinstance(pre_result, PreScriptResult):
+                            from orze.engine.pre_script_failure_report import report_pre_script_failure
+                            report_pre_script_failure(
+                                self.lake, self.results_dir / idea_id,
+                                pre_result.attempt_ref, self.failure_counts, cfg)
+                            # The existing fixer is not a supervised native
+                            # repair action. Keep repair explicitly pending.
+                            continue
+                        logger.warning(
+                            "Pre-script failed for %s, marking FAILED",
+                            idea_id)
+                        error_msg = "Pre-script failed"
+                        if _try_executor_fix(idea_id, error_msg,
+                                             self.results_dir, cfg,
+                                             self.fix_counts):
+                            _reset_idea_for_retry(
+                                self.results_dir / idea_id)
+                            if run_pre_script(
+                                    idea_id, gpu, cfg, self.results_dir, lake=self.lake):
+                                pass  # fixed — fall through to launch
+                            else:
+                                _write_failure(
+                                    self.results_dir / idea_id,
+                                    "Pre-script failed after fix",
+                                    lake=self.lake, idea_id=idea_id, cfg=cfg)
+                                _record_failure(
+                                    self.failure_counts, idea_id)
+                                account_zero_gpu(
+                                    "rejected", "pre_script_failed_after_fix")
+                                continue
+                        else:
+                            _write_failure(
+                                self.results_dir / idea_id, error_msg,
+                                lake=self.lake, idea_id=idea_id, cfg=cfg)
+                            _record_failure(
+                                self.failure_counts, idea_id)
+                            account_zero_gpu(
+                                "rejected", "pre_script_failed")
+                            continue
+
+                    logger.info("Launching %s on GPU %s: %s",
+                                idea_id, gpu,
+                                ideas[idea_id]["title"][:50])
+                    try:
+                        tp = launch(idea_id, gpu, self.results_dir, cfg, lake=self.lake)
+                    except TerminationUnconfirmed:
+                        # A child may exist even though launch never returned
+                        # a process object. Do not repair/reset/relaunch it.
+                        raise
+                    except DuplicateLaunchError as e:
+                        logger.info(
+                            "[EXECUTION-DEDUP] %s rejected before GPU: %s",
+                            idea_id, e)
+                        account_zero_gpu(
+                            "rejected", "duplicate_execution_identity")
+                        atomic_write(
+                            self.results_dir / idea_id / "metrics.json",
+                            json.dumps({
+                                "status": "SKIPPED_DUPLICATE",
+                                "skip_reason": str(e),
+                            }, indent=2),
+                        )
+                        if self.lake is not None:
+                            self.lake.set_status(idea_id, "skipped")
+                        continue
+                    except GpuUnavailableError as e:
+                        # Resource issue, not a code bug: do NOT invoke
+                        # the executor-fix path and do NOT count this
+                        # against the idea's failure budget. Reset
+                        # artifacts so a future cycle can relaunch.
+                        logger.warning(
+                            "[GPU_VALIDATION_FAIL] idea=%s gpu=%s reason=%s "
+                            "— requeueing (no failure recorded)",
+                            idea_id, gpu, e)
+                        account_zero_gpu(
+                            "requeued", "gpu_unavailable_before_launch")
+                        _reset_idea_for_retry(
+                            self.results_dir / idea_id,
+                            release_claim=True,
+                        )
+                        if self.lake is not None:
+                            if not self.lake.set_status(idea_id, "queued"):
+                                raise RuntimeError(
+                                    "Could not persist GPU-unavailable requeue "
+                                    f"for {idea_id}"
+                                )
+                        continue
+                    except Exception as e:
+                        logger.error("Failed to launch %s on GPU %s: %s",
+                                     idea_id, gpu, e)
+                        error_msg = f"Launch error: {e}"
+                        from orze.engine.launch_failure_report import report_launch_failure
+                        if report_launch_failure(
+                                self.lake, self.results_dir / idea_id, e,
+                                self.failure_counts, cfg) is not None:
+                            continue
+                        if _try_executor_fix(idea_id, error_msg,
+                                             self.results_dir, cfg,
+                                             self.fix_counts):
+                            _reset_idea_for_retry(
+                                self.results_dir / idea_id)
+                            try:
+                                tp = launch(idea_id, gpu,
+                                            self.results_dir, cfg, lake=self.lake)
+                            except TerminationUnconfirmed:
+                                raise
+                            except Exception as e2:
+                                logger.error(
+                                    "[FIX-RETRY] %s relaunch failed: %s",
+                                    idea_id, e2)
+                                if report_launch_failure(
+                                        self.lake, self.results_dir / idea_id, e2,
+                                        self.failure_counts, cfg) is not None:
+                                    continue
+                                finalize_failed_launch_accounting(
+                                    idea_id,
+                                    self.results_dir / idea_id,
+                                    int(gpu),
+                                    "launch_failed_after_fix",
+                                )
+                                _write_failure(
+                                    self.results_dir / idea_id,
+                                    f"Launch error after fix: {e2}",
+                                    lake=self.lake, idea_id=idea_id, cfg=cfg)
+                                _record_failure(
+                                    self.failure_counts, idea_id)
+                                continue
+                        else:
+                            finalize_failed_launch_accounting(
+                                idea_id,
+                                self.results_dir / idea_id,
+                                int(gpu),
+                                "launch_failed",
+                            )
+                            _write_failure(self.results_dir / idea_id,
+                                           error_msg,
+                                           lake=self.lake, idea_id=idea_id, cfg=cfg)
+                            _record_failure(self.failure_counts, idea_id)
+                            continue
+                    try:
+                        if (force_pack_target is not None
+                                and idea_id == force_pack_target[0]
+                                and gpu == force_pack_target[1]):
+                            self.slot_mgr.force_assign(tp, gpu)
+                            force_pack_target = None
+                        else:
+                            self.active[gpu] = tp
+                    except RuntimeError as slot_err:
+                        # Race: capacity check passed at target selection but
+                        # failed at registration (system-load throttle kicked in
+                        # between launch() and assign()). A confirmed stop can
+                        # requeue; unknown effects remain durably held even
+                        # though this process never entered the active map.
+                        logger.warning(
+                            "[SLOT-RACE] %s on GPU %s: %s — terminating orphan "
+                            "and deferring idea", idea_id, gpu, slot_err)
+                        from orze.engine.process import _terminate_and_reap
+                        execution_phase = (
+                            getattr(getattr(tp, "attempt_ref", None), "phase", None)
+                            or ("posthoc" if getattr(tp, "is_posthoc", False) else "training"))
+                        if execution_phase == "posthoc":
+                            from orze.engine.posthoc_attempts import require_catalog
+                            require_catalog(self.lake, self.results_dir / idea_id, cfg, handle=tp)
+                        return_code = terminate_execution(
+                            tp, self.results_dir / idea_id,
+                            phase=execution_phase, reaper=_terminate_and_reap)
+                        tp.close_log()
+                        if getattr(tp, "attempt_ref", None) is not None:
+                            if execution_phase == "posthoc":
+                                from orze.engine.posthoc_completion import requeue
+                            else:
+                                from orze.engine.training_completion import requeue
+                            requeue(self.lake, tp, gpu, self.results_dir / idea_id,
+                                    cfg, return_code, "scheduler_slot_race")
+                            continue
+                        record_compute_terminal(
+                            tp,
+                            self.results_dir / idea_id,
+                            "requeued",
+                            "scheduler_slot_race",
+                            phase=execution_phase,
+                            return_code=return_code,
+                        )
+                        _reset_idea_for_retry(
+                            self.results_dir / idea_id,
+                            release_claim=True,
+                        )
+                        if self.lake:
+                            # Return idea to queue so a later iteration retries.
+                            if not self.lake.set_status(idea_id, "queued"):
+                                raise RuntimeError(
+                                    "Could not persist slot-race requeue for "
+                                    f"{idea_id}"
+                                )
+                        continue
+                    base_id = idea_id
+                    if "-ht-" in base_id:
+                        base_id = base_id.split("-ht-", 1)[0]
+                    elif "~" in base_id:
+                        base_id = base_id.split("~", 1)[0]
+
+                    if base_id != idea_id:
+                        sweep_counts[base_id] = sweep_counts.get(base_id, 0) + 1
+                        total_sweep_running += 1
+                    launched = True
+                    launch_count += 1
+                    break
+                if not launched:
+                    break
+        elif not unclaimed:
+            if not self.active and not self.active_evals:
+                logger.info("All ideas completed or skipped!")
+                if not self.once:
+                    logger.info("Waiting for new ideas...")
+            else:
+                logger.info("No unclaimed ideas. %d training, %d eval.",
+                            len(self.active), len(self.active_evals))
+        else:
+            logger.info("%d ideas queued, no free GPUs (%d training, "
+                        "%d eval)",
+                        len(unclaimed), len(self.active),
+                        len(self.active_evals))
+
+        # Circuit Breaker: if too many ideas exceeded max retries, stop the farm
+        max_fail = cfg.get("max_idea_failures", 0)
+        if (not managed_idea and max_fail > 0
+                and len(self.failure_counts) > 5):
+            exhausted = [fid for fid, count in self.failure_counts.items()
+                         if count >= max_fail]
+            if len(exhausted) > 10:
+                logger.error("CIRCUIT BREAKER: %d ideas exhausted %d retries. Stopping.",
+                             len(exhausted), max_fail)
+                (self.results_dir / ".orze_stop_all").touch()
+
+        return free
+
+    def _capture_campaign_progress_evidence(
+            self, completed_rows, unclaimed, disk_ok, backlog):
+        """Persist the progress row paired with this iteration's sample."""
+        cfg = self.cfg
+        campaign_cfg = cfg.get("campaign_efficiency") or {}
+        if (self.lake is None
+                or not campaign_cfg.get("enabled", False)):
+            return None
+        was_paused = _is_launcher_paused(cfg, self.results_dir)
+        sample_identity = getattr(
+            self, "_campaign_sample_identity", None
+        )
+        sample_identity_matches = (
+            isinstance(sample_identity, dict)
+            and sample_identity.get("campaign_id")
+            == campaign_cfg.get("campaign_id")
+            and sample_identity.get("controller_id") == self._instance_uuid
+            and sample_identity.get("host") == self._hostname
+            and sample_identity.get("iteration") == self.iteration
+            and isinstance(
+                sample_identity.get("observed_at_epoch"), (int, float)
+            )
+            and not isinstance(
+                sample_identity.get("observed_at_epoch"), bool
+            )
+        )
+        if not sample_identity_matches:
+            logger.warning(
+                "campaign operator progress missing paired scheduler sample"
+            )
+            if campaign_cfg.get("required_for_launch", False):
+                self._halt_required_campaign_evidence(
+                    "campaign_progress_sample_identity_missing"
+                )
+            return {
+                "status": "UNAVAILABLE",
+                "campaign_id": campaign_cfg.get("campaign_id"),
+                "reason": "campaign_progress_sample_identity_missing",
+            }
+        progress_blocker = derive_campaign_progress_blocker(
+            launcher_paused=was_paused,
+            disk_ok=bool(disk_ok),
+            active_training=bool(self.active),
+            active_evaluation=bool(self.active_evals),
+            remaining_training=bool(unclaimed),
+            remaining_evaluation=bool(self.pending_evals or backlog),
+        )
+        try:
+            campaign_progress = capture_campaign_progress_update(
+                self.lake,
+                results_dir=self.results_dir,
+                campaign_id=campaign_cfg.get("campaign_id"),
+                controller_id=self._instance_uuid,
+                host=self._hostname,
+                iteration=self.iteration,
+                completed_rows=completed_rows or [],
+                primary_metric=cfg["report"].get(
+                    "primary_metric", "test_accuracy"
+                ),
+                blocker_code=progress_blocker,
+                observed_at_epoch=sample_identity["observed_at_epoch"],
+            )
+            if campaign_progress is None:
+                if (campaign_cfg.get("required_for_launch", False)
+                        and not was_paused):
+                    self._halt_required_campaign_evidence(
+                        "campaign_progress_window_inactive")
+                return {
+                    "status": "INACTIVE",
+                    "campaign_id": campaign_cfg.get("campaign_id"),
+                }
+            return campaign_progress
+        except Exception as exc:
+            logger.warning(
+                "campaign operator progress update failed: %s",
+                type(exc).__name__,
+            )
+            if campaign_cfg.get("required_for_launch", False):
+                self._halt_required_campaign_evidence(
+                    "campaign_progress_update_failed")
+            return {
+                "status": "UNAVAILABLE",
+                "campaign_id": campaign_cfg.get("campaign_id"),
+                "reason": "campaign_progress_update_failed",
+            }
+
+    def _report_and_notify(self, completed_rows, ideas, counts,
+                           eval_finished, free, unclaimed, skipped,
+                           disk_ok, backlog):
+        """Phase: heartbeat, notifications, status.json, admin cache, save state."""
+        cfg = self.cfg
+        campaign_progress = self._capture_campaign_progress_evidence(
+            completed_rows, unclaimed, disk_ok, backlog
+        )
+        if not self.running:
+            return
+
+        # 9a. Retrospection hook (use completed_rows from report, not counts)
+        try:
+            self._run_retrospection(len(completed_rows) if completed_rows else 0)
+        except Exception as e:
+            logger.warning("Retrospection hook error: %s", e)
+
+        # 9b. Notifications (fires for eval-finished ideas, metrics available)
+        self._process_notifications(
+            eval_finished, completed_rows or [], ideas, counts)
+
+        # 8b. Heartbeat (rate-controlled, default 1800s = 30 min)
+        heartbeat_interval = (cfg.get("notifications") or {}).get(
+            "heartbeat_interval", 1800)
+        if heartbeat_interval > 0:
+            now_hb = time.time()
+            first_hb = (self._last_heartbeat == self._start_time)
+            if first_hb or now_hb - self._last_heartbeat >= heartbeat_interval:
+                uptime_s = int(now_hb - self._start_time)
+                h, rem = divmod(uptime_s, 3600)
+                m = rem // 60
+                uptime_str = f"{h}h{m:02d}m" if h else f"{m}m"
+                busy_gpus = self.slot_mgr.gpu_ids_in_use() | set(self.active_evals.keys())
+                n_free = len([g for g in self.gpu_ids if g not in busy_gpus])
+                # Best result for heartbeat
+                hb_best_id = None
+                hb_best_val = None
+                hb_best_title = None
+                if completed_rows:
+                    primary = cfg["report"].get("primary_metric",
+                                                "test_accuracy")
+                    top = completed_rows[0]
+                    hb_best_id = top.get("id", "?")
+                    hb_best_val = top.get("primary_val")
+                    hb_best_title = (top.get("title") or "")[:40]
+                    hb_best_metric = cfg["report"].get(
+                        "primary_metric", "score")
+
+                n_running = len(self.active) + len(self.active_evals)
+
+                # Collect per-dataset breakdown from best result
+                hb_best_details = {}
+                if completed_rows:
+                    top = completed_rows[0]
+                    for col in (cfg.get("report", {}).get("columns") or []):
+                        k = col.get("key", "")
+                        if k != primary and k in top and isinstance(top[k], (int, float)):
+                            label = col.get("label", k)
+                            hb_best_details[label] = top[k]
+
+                # GPU info from nvidia-smi
+                try:
+                    from orze.hardware.gpu import _query_gpu_details
+                    hb_gpu_info = _query_gpu_details(self.gpu_ids)
+                except Exception:
+                    hb_gpu_info = []
+
+                # Model name from base config
+                hb_model = (cfg.get("base_config_data") or {}).get(
+                    "model_path", cfg.get("model_name", ""))
+                if hb_model and "/" in hb_model:
+                    hb_model = hb_model.rstrip("/").rsplit("/", 1)[-1]
+
+                # Active runs info for heartbeat
+                hb_active_runs = []
+                now_ts = time.time()
+                for gpu_id, tp in sorted(self.active.items()):
+                    elapsed = (now_ts - tp.start_time) / 60.0
+                    hb_active_runs.append({
+                        "idea_id": tp.idea_id,
+                        "gpu": gpu_id,
+                        "elapsed_min": round(elapsed, 1),
+                    })
+                for gpu_id, tp in sorted(self.active_evals.items()):
+                    elapsed = (now_ts - tp.start_time) / 60.0
+                    hb_active_runs.append({
+                        "idea_id": tp.idea_id,
+                        "gpu": gpu_id,
+                        "elapsed_min": round(elapsed, 1),
+                        "phase": "eval",
+                    })
+
+                notify("heartbeat", {
+                    "host": socket.gethostname(),
+                    "iteration": self.iteration,
+                    "uptime": uptime_str,
+                    "training": len(self.active),
+                    "eval": len(self.active_evals),
+                    "running": n_running,
+                    "free": n_free,
+                    "total_gpus": len(self.gpu_ids),
+                    "completed": counts.get("COMPLETED", 0),
+                    "queued": counts.get("QUEUED", 0),
+                    "failed": counts.get("FAILED", 0),
+                    "eval_backlog": len(backlog),
+                    "rate": ("just started" if first_hb else
+                             f"{counts.get('COMPLETED', 0) - self._hb_completed_count}"
+                             f" since last heartbeat"),
+                    "heartbeat_interval": heartbeat_interval,
+                    "best_id": hb_best_id,
+                    "best_val": hb_best_val,
+                    "best_title": hb_best_title,
+                    "best_metric": hb_best_metric if completed_rows else None,
+                    "best_details": hb_best_details or None,
+                    "gpu_info": hb_gpu_info or None,
+                    "model_name": hb_model or None,
+                    "target": cfg.get("report", {}).get("target"),
+                    "sort": cfg.get("report", {}).get("sort", "descending"),
+                    "estimate_label": cfg.get("report", {}).get("estimate_label"),
+                    "estimate_warning": cfg.get("report", {}).get("estimate_warning"),
+                    "timeout": cfg.get("timeout", 21600),
+                    "verified": _load_verified(self.results_dir, cfg.get("report", {})),
+                    "active_runs": hb_active_runs or None,
+                    "next_queue": [
+                        {"id": uid,
+                         "title": (ideas.get(uid, {}).get("title", "") or "")[:40]}
+                        for uid in unclaimed[:5]
+                    ] or None,
+                }, cfg)
+                self._last_heartbeat = now_hb
+                self._hb_completed_count = counts.get("COMPLETED", 0)
+
+        # 8c. Milestone (every N completions, default 100)
+        milestone_every = (cfg.get("notifications") or {}).get(
+            "milestone_every", 100)
+        if milestone_every > 0:
+            completed_now = counts.get("COMPLETED", 0)
+            curr_milestone = (completed_now // milestone_every) * milestone_every
+            if curr_milestone > self._last_milestone and curr_milestone > 0:
+                notify("milestone", {"count": curr_milestone}, cfg)
+                self._last_milestone = curr_milestone
+
+        # 8d.0 Housekeeper (orze_substrate.housekeeper) — runs every
+        # ~30 min (wall-clock). Demotes Professor God Agent by handling
+        # mechanical/housekeeping jobs (archive stale triggers, disable
+        # satisfied validators, auto-close expired DECs, promote top
+        # exec_hashes). Pure-Python, no LLM. Idempotent and safe to run
+        # alongside legacy manual professor housekeeping.
+        try:
+            _hk_interval = 1800  # 30 min
+            _hk_now = time.time()
+            if _hk_now - self._last_housekeep >= _hk_interval:
+                from orze_substrate import housekeeper as _hk
+                _prof_cyc = ((self.role_states or {}).get("professor")
+                             or {}).get("cycles", 0) or 0
+                _hk_db = Path(".orze/exec_registry.db")
+                _hk_out = _hk.run_all(self.results_dir,
+                                      int(_prof_cyc), _hk_db)
+                logger.info(
+                    "[housekeeper] archived=%d disabled=%d closed=%d "
+                    "promoted=%d (prof_cycle=%d)",
+                    len(_hk_out["archived"]), len(_hk_out["disabled"]),
+                    len(_hk_out["closed"]), len(_hk_out["promoted"]),
+                    int(_prof_cyc))
+                self._last_housekeep = _hk_now
+        except ModuleNotFoundError as _hk_e:
+            if _hk_e.name == "orze_substrate":
+                # The substrate is optional.  Avoid retrying and warning on
+                # every cycle when it is not installed.
+                self._last_housekeep = _hk_now
+                logger.debug("housekeeper unavailable: orze_substrate not installed")
+            else:  # pragma: no cover - defensive for substrate dependencies
+                logger.warning("housekeeper sweep failed: %s", _hk_e)
+        except Exception as _hk_e:  # pragma: no cover - never break loop
+            logger.warning("housekeeper sweep failed: %s", _hk_e)
+
+        # 8d. Disk warning (at most once per 30 min)
+        if not disk_ok and time.time() - self._last_disk_warning > 1800:
+            try:
+                usage = shutil.disk_usage(self.results_dir)
+                free_gb = usage.free / (1024 ** 3)
+            except Exception:
+                free_gb = "?"
+            notify("disk_warning", {
+                "host": socket.gethostname(),
+                "free_gb": f"{free_gb:.1f}" if isinstance(free_gb, float) else free_gb,
+            }, cfg)
+            self._last_disk_warning = time.time()
+
+        top_results = []
+        if completed_rows:
+            primary = cfg["report"].get("primary_metric",
+                                        "test_accuracy")
+            for r in completed_rows[:10]:
+                top_results.append({
+                    "idea_id": r["id"],
+                    "title": r["title"][:60],
+                    primary: r.get("primary_val"),
+                })
+
+        # Merge runtime per-channel delivery state on top of the boot
+        # canary / hot-reload validation snapshot so status.json reflects
+        # live deliverability, not a stale boot reading. Without this,
+        # a token rotated mid-run keeps showing ``delivered: true`` from
+        # the canary even as every heartbeat 404s — an operator looking
+        # at the dashboard sees no problem.
+        nh = getattr(self, "notification_health", None)
+        try:
+            from orze.reporting.notifications import get_runtime_health
+            runtime = get_runtime_health()
+            if runtime:
+                merged = dict(nh or {})
+                merged.update(runtime)
+                nh = merged
+        except Exception as _e:  # pragma: no cover
+            logger.debug("notification runtime-health merge skipped: %s",
+                         _e)
+
+        write_status_json(
+            self.results_dir, self.iteration, self.active, free,
+            len(unclaimed), counts.get("COMPLETED", 0),
+            counts.get("FAILED", 0), len(skipped), top_results, cfg,
+            role_states=self.role_states,
+            active_roles=self.active_roles,
+            notification_health=nh,
+            campaign_progress=campaign_progress,
+        )
+
+        # Compute efficiency is separate from the genealogy-based Evo Score.
+        # Publish a derived snapshot from framework-owned immutable receipts;
+        # never use trainer-reported ``training_time`` for allocation totals.
+        try:
+            from orze.engine.accounting import summarize_compute_receipts
+            compute_summary = summarize_compute_receipts(self.results_dir)
+            atomic_write(
+                self.results_dir / "compute_accounting.json",
+                json.dumps(compute_summary, indent=2, sort_keys=True) + "\n",
+            )
+        except Exception as e:
+            logger.warning("Compute-accounting summary failed: %s", e)
+
+        # 9b. Admin cache (pre-aggregated nodes/queue/alerts)
+        try:
+            write_admin_cache(self.results_dir, ideas, cfg)
+        except Exception as e:
+            logger.warning("Admin cache write failed: %s", e)
+
+        # 9c. Evo Score (research efficiency) — orze's top-level metric. Compute
+        # once per loop so it is logged and trended over time. Guarded: never
+        # let metric computation break the reporting loop.
+        try:
+            lake_db = cfg.get("idea_lake_db") or (
+                Path(cfg.get("ideas_file", "ideas.md")).parent / "idea_lake.db")
+            if lake_db and Path(lake_db).exists():
+                _log_evo_score_if_changed(self, Path(lake_db), cfg)
+        except Exception as e:
+            logger.debug("Evo Score computation skipped: %s", e)
+
+        # 10. Save state
+        save_state(self.results_dir, self._build_state_dict())

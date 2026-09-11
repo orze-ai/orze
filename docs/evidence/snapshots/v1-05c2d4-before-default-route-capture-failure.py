@@ -245,8 +245,7 @@ def _try_executor_fix(idea_id: str, error_text: str, results_dir: Path,
     # Keep the original route even if shared configuration is edited while
     # preparing the prompt or the blocked worker. No native authority is held.
     admission_cfg = {key: copy.deepcopy(cfg[key])
-                     for key in ("idea_lake_db", "_project_root",
-                                 "_config_path", "_orze_dir") if key in cfg}
+                     for key in ("idea_lake_db",) if key in cfg}
     # F2: short-circuit argparse schema errors. These are never fixable by
     # patching the idea's own files — the engineer SOP handles schema gaps.
     log_tail_text = ""
@@ -404,13 +403,10 @@ so the experiment can succeed on retry.
             # Do not call the active-scope gate here: this invocation owns it.
             require_legacy_executor_scope(idea_dir, admission_cfg)
             require_legacy_executor_scope(idea_dir, cfg)
-            current_policy = cfg.get("agent_tool_policy", {"enabled": True})
-            if (not isinstance(current_policy, dict)
-                    or current_policy.get("enabled", True) is not True
-                    or Path(cfg.get("_project_root") or results_dir.parent).resolve()
+            if (Path(cfg.get("_project_root") or results_dir.parent).resolve()
                     != project_root
                     or cfg.get("executor_fix", {}) != fix_cfg
-                    or current_policy != policy_cfg
+                    or cfg.get("agent_tool_policy", {"enabled": True}) != policy_cfg
                     or cfg.get("max_fix_attempts", 0) != max_fix
                     or fix_counts.get(idea_id, 0) != attempts):
                 raise TerminationUnconfirmed("executor_fix_admission_changed")
