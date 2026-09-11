@@ -1,0 +1,182 @@
+{
+  "schema": 1,
+  "slice": "V1-06A",
+  "owner": "runtime_evidence",
+  "status": "source-specific author verification complete; whole-slice aggregate belongs to root",
+  "scope": "Same-IdeaLake CPU slot and wall-envelope reservation, binding, policy decisions, and confirmed native settlement. Not measured CPU billing and not a second ledger service.",
+  "owned_source": "src/orze/core/cpu_action_budget.py",
+  "owned_test": "tests/test_cpu_action_budget.py",
+  "classification": {
+    "owned_cases": 19,
+    "new_requirement_first_green": 18,
+    "observed_draft_red_cases": 1,
+    "historical_bug_cases": 0,
+    "related_native_cases": 9,
+    "overlap": "28-case runs include the same owned19/native9, not additional independent cases."
+  },
+  "api": {
+    "initialize": "initialize(lake, results_dir, declaration) -> detached scope dict",
+    "declaration": {
+      "version": 1,
+      "resource": "cpu",
+      "slots": "exact int 1..64",
+      "wall_budget_seconds": "positive finite int/float, not bool"
+    },
+    "scope_keys": [
+      "schema",
+      "results_dir",
+      "database",
+      "database_identity",
+      "directory_identity",
+      "declaration",
+      "policy_sha256"
+    ],
+    "snapshot_keys": [
+      "schema",
+      "scope",
+      "reserved_wall_seconds",
+      "remaining_wall_seconds",
+      "free_slots",
+      "active_reservations",
+      "stopped",
+      "stop"
+    ],
+    "reserve": "reserve(lake, scope, task_id, timeout_seconds) -> detached permit or None; None adds no reservation, claim, attempt or process",
+    "permit_keys": [
+      "schema",
+      "budget_scope",
+      "reservation_id",
+      "task_id",
+      "slot",
+      "wall_limit_seconds",
+      "reserved_nanoseconds"
+    ],
+    "bind": "bind(lake, permit, full AttemptRef); independent short transaction; actual attempt binding.reservation_id must match",
+    "require_permit": "require_permit(lake, permit, ref=None); exact durable permit and current Stop, plus full current reference when supplied",
+    "settle": "settle(lake, permit, ref, full_terminal_dict) -> settled|duplicate; current TERMINAL or NOT_STARTED, exact terminal, fullRef confirmed effect; TERMINAL also requires standard bound TREE_CLOSED, typed return code",
+    "record_decision": "record_decision(lake, scope, {kind:Wait|Stop, reason, wakeup}); Wait positive UTC epoch, Stop null; Stop sticky",
+    "transactions": "All public APIs reject an already-active lake.conn transaction. BEGIN IMMEDIATE admission. No implicit _in_tx commits.",
+    "storage_tables": [
+      "cpu_action_scopes",
+      "cpu_action_reservations",
+      "cpu_action_decisions"
+    ]
+  },
+  "draft": {
+    "finding": "Whole-scope postcommit fingerprint rejected a legitimate peer reservation committed between this reservation's commit and fresh readback.",
+    "source_snapshot": "docs/evidence/snapshots/v1-06a-before-budget-peer-readback.py",
+    "source_sha256": "fd36b40ec6c64e63a40debc4da7bbe08e59e80c0a92181521b0ec3e77423f940",
+    "snapshot_provenance": "Complete actual initial uncommitted module captured before the correction with apply_patch; exact bytes checked by replay.",
+    "first_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_budget.py --tb=short",
+    "first_result": {
+      "chunk_id": "1e9bc4",
+      "wall_time_seconds": 0.540546376,
+      "exit_code": 1,
+      "original_token_count": 240,
+      "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_______ test_legal_peer_after_commit_does_not_invalidate_own_reservation _______\ntests/test_cpu_action_budget.py:40: in test_legal_peer_after_commit_does_not_invalidate_own_reservation\n    own = budget.reserve(c.lake, c.scope, \"owner\", 3)\nsrc/orze/core/cpu_action_budget.py:416: in reserve\n    return _write(lake, scope, action)\nsrc/orze/core/cpu_action_budget.py:348: in _write\n    _fail(\"committed_rows_changed\")\nsrc/orze/core/cpu_action_budget.py:65: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_committed_rows_changed\n=========================== short test summary info ============================\nFAILED tests/test_cpu_action_budget.py::test_legal_peer_after_commit_does_not_invalidate_own_reservation\n1 failed in 0.40s\n"
+    },
+    "first_test_scope": "At first run this new test file contained only test_legal_peer_after_commit_does_not_invalidate_own_reservation. Later additive tests/imports leave that function and its six Assert AST nodes unchanged; no first-file SHA was recorded.",
+    "correction": "Capture only this operation's row(s), not all shared history. Fresh read verifies those rows, schema/scope, and consistent totals, while allowing legitimate peer additions/Stop. GO remains separately gated by require_permit.",
+    "accompanying_read_fix": "Independent read-only SQLite connections use closing, including exceptional validation paths. Its added test first ran green and is not counted as an observed draft red.",
+    "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 - <<'PY'\nfrom pathlib import Path\nimport hashlib\nimport pytest\nfrom orze.core import cpu_action_budget as module\npath=Path('docs/evidence/snapshots/v1-06a-before-budget-peer-readback.py')\nassert hashlib.sha256(path.read_bytes()).hexdigest() == 'fd36b40ec6c64e63a40debc4da7bbe08e59e80c0a92181521b0ec3e77423f940'\nexec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_cpu_action_budget.py::test_legal_peer_after_commit_does_not_invalidate_own_reservation','--tb=short']))\nPY",
+    "replay_result": {
+      "chunk_id": "acff5c",
+      "wall_time_seconds": 0.657941446,
+      "exit_code": 1,
+      "original_token_count": 260,
+      "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_______ test_legal_peer_after_commit_does_not_invalidate_own_reservation _______\ntests/test_cpu_action_budget.py:47: in test_legal_peer_after_commit_does_not_invalidate_own_reservation\n    own = budget.reserve(c.lake, c.scope, \"owner\", 3)\ndocs/evidence/snapshots/v1-06a-before-budget-peer-readback.py:416: in reserve\n    return _write(lake, scope, action)\ndocs/evidence/snapshots/v1-06a-before-budget-peer-readback.py:348: in _write\n    _fail(\"committed_rows_changed\")\ndocs/evidence/snapshots/v1-06a-before-budget-peer-readback.py:65: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_committed_rows_changed\n=========================== short test summary info ============================\nFAILED tests/test_cpu_action_budget.py::test_legal_peer_after_commit_does_not_invalidate_own_reservation\n1 failed in 0.47s\n"
+    }
+  },
+  "test_semantics": [
+    "Independent real SQLite connections contend for one slot; one reservation succeeds and one returns None.",
+    "Deterministic after-own-commit peer reservation changes shared totals but cannot invalidate an unrelated committed permit.",
+    "Budget/slot shortage and Wait do not create claim, execution-attempt, child or debit.",
+    "Same results scope cannot reset declaration limits by re-initialization.",
+    "Stop blocks reserve and GO authorization; a confirmed terminal may still release its occupied slot without any wall refund.",
+    "NOT_STARTED positive uses actual native effect transactions and real confirmed files, with no process ever created; no synthetic TREE_CLOSED claim.",
+    "Reserve and settlement commits deliberately roll back while returning normally; fresh readback raises HOLD, retains any charged active slot, and latches Stop.",
+    "Independent read-only connection is actually closed after validation failure.",
+    "Related native suite uses actual CPU supervisor/worker and confirms return codes, tree closure, action-only lifecycle, immutable inputs and artifacts."
+  ],
+  "candidate_history": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_budget.py tests/test_native_cpu_action.py --tb=short",
+      "session_id": 20194,
+      "start_chunk": "b01b7c",
+      "completion_chunk": "d8fce5",
+      "exit_code": 0,
+      "footer": "10 passed in 4.05s",
+      "scope": "At that time peer1 plus native9; pre/post source hashes not captured, not final."
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_budget.py --tb=short",
+      "session_id": 53326,
+      "start_chunk": "5d2a94",
+      "completion_chunk": "6ca843",
+      "exit_code": 0,
+      "footer": "19 passed in 3.37s",
+      "source_sha256": "ca4f0810f501ef2e6fa4c0077721bcacff4055a360800a24cc46271deb89d00f",
+      "scope": "First full owned19; before explicit reverse reservation_id binding checks."
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_budget.py tests/test_native_cpu_action.py --tb=short",
+      "session_id": 96441,
+      "start_chunk": "2c8a05",
+      "completion_chunk": "8cb559",
+      "exit_code": 0,
+      "footer": "28 passed in 9.68s",
+      "scope": "Candidate run; not substituted for final bounded pre/post audit."
+    }
+  ],
+  "final_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_budget.py tests/test_native_cpu_action.py --tb=short",
+    "session_id": 82115,
+    "start_chunk": "de03c9",
+    "completion_chunk": "5f063e",
+    "exit_code": 0,
+    "footer": "28 passed in 7.08s",
+    "pre_command": "python3 - <<'PY'\nfrom pathlib import Path\nimport hashlib,json\nfiles=[\"src/orze/core/cpu_action_budget.py\",\"tests/test_cpu_action_budget.py\",\"src/orze/core/execution_attempts.py\",\"src/orze/idea_lake.py\",\"src/orze/engine/execution_authority.py\",\"src/orze/engine/attempt_effect_receipts.py\",\"src/orze/engine/attempt_effect_lock.py\",\"src/orze/engine/native_cpu_action.py\",\"tests/test_native_cpu_action.py\"]\nprint(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+    "pre_chunk": "7f4f53",
+    "post_command": "python3 - <<'PY'\nfrom pathlib import Path\nimport hashlib,json\nfiles=[\"src/orze/core/cpu_action_budget.py\",\"tests/test_cpu_action_budget.py\",\"src/orze/core/execution_attempts.py\",\"src/orze/idea_lake.py\",\"src/orze/engine/execution_authority.py\",\"src/orze/engine/attempt_effect_receipts.py\",\"src/orze/engine/attempt_effect_lock.py\",\"src/orze/engine/native_cpu_action.py\",\"tests/test_native_cpu_action.py\"]\nprint(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+    "post_chunk": "8177b4",
+    "pre_sha256": {
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/engine/attempt_effect_lock.py": "7b00bd1d3f84dc07f6e6d3f5e1f75f1348f926523ee18109cce4e327a3b5a015",
+      "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+      "src/orze/engine/execution_authority.py": "9a4225c60cc0a5e478b85c66d2c45c2d5ec8090b3c7a8dbb0e4ac758486f5b2e",
+      "src/orze/engine/native_cpu_action.py": "f71914f2c03498d77c7aff1ea3a7c01e5295bc560be7d9efbce7b3e20b9c8261",
+      "src/orze/idea_lake.py": "f0f07c631a0428ecfb21fca9193281659d5942130f373eb98faab582d19a879f",
+      "tests/test_cpu_action_budget.py": "1e070def2f2af0633dfb9634c83794778c0540a8b376977cd55be23989aa04bb",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b"
+    },
+    "post_sha256": {
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/engine/attempt_effect_lock.py": "7b00bd1d3f84dc07f6e6d3f5e1f75f1348f926523ee18109cce4e327a3b5a015",
+      "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+      "src/orze/engine/execution_authority.py": "9a4225c60cc0a5e478b85c66d2c45c2d5ec8090b3c7a8dbb0e4ac758486f5b2e",
+      "src/orze/engine/native_cpu_action.py": "f71914f2c03498d77c7aff1ea3a7c01e5295bc560be7d9efbce7b3e20b9c8261",
+      "src/orze/idea_lake.py": "f0f07c631a0428ecfb21fca9193281659d5942130f373eb98faab582d19a879f",
+      "tests/test_cpu_action_budget.py": "1e070def2f2af0633dfb9634c83794778c0540a8b376977cd55be23989aa04bb",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b"
+    },
+    "all_nine_files_exact": true,
+    "owned_test_assert_count": 48,
+    "owned_test_assert_ast_sha256": "42d244aa998362c95453919534d16514e01d42f6e7c29986233deddbba571374",
+    "assert_digest_algorithm": "sha256('\\n'.join(ast.dump(n,include_attributes=False) for n in ast.walk(ast.parse(file_bytes)) if isinstance(n,ast.Assert)).encode())"
+  },
+  "boundaries": [
+    "The allocation is an execution wall-limit envelope charged once at reserve, not measured CPU seconds. Settlement releases capacity only; no unused wall refund even for known NOT_STARTED.",
+    "Reservation wall is rounded up to nanoseconds; total declared budget down to nanoseconds. Values are decimal integer text, not SQLite fixed-width debit arithmetic.",
+    "No age, PID, restart, stale-owner adoption or automatic uncertain reservation release exists.",
+    "Storage uncertainty keeps an in-process HOLD and attempts a durable Stop. It does not claim successful persistence if the database itself is unavailable.",
+    "Budget metadata is bounded to 16KiB per canonical value. Native terminal validation uses the existing attempt metadata bounds. This slice does not bound total reservation/decision history or claim constant-time history scans.",
+    "Same supplied main SQLite DB, physical DB/results identities and exact declaration are pinned. No second DB or JSONL ledger is introduced.",
+    "Tests use temporary storage only. Related native tests launch synthetic CPU children only and clean captured supervision handles. No GPU/provider, holdout plaintext, host process scan or host kill.",
+    "This report does not claim a whole-CLI run, a whole-suite result, scientific benefit or resource-policy coverage beyond these explicit APIs."
+  ],
+  "excluded_diagnostics": [
+    "An initial evidence-capture command used unavailable `python` instead of available `python3`; JSON parsing failed before any snapshot/test write. No product test ran and this is excluded from red counts."
+  ]
+}

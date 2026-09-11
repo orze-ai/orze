@@ -1,0 +1,178 @@
+{
+  "schema": 1,
+  "slice": "V1-06A",
+  "role": "independent_entry_review_and_new_draft_regression",
+  "status": "completed_independent_bounded_review_not_full_verification",
+  "ownership": {
+    "production_author": "root",
+    "reviewer_and_storage_pin_test_author": "pro_review",
+    "related_contract_helpers": "pro_review authored; not counted here as independent review of those helpers",
+    "production_edits_by_reviewer": []
+  },
+  "inspected_at_utc": "2026-09-11 09:36:41 UTC",
+  "test": {
+    "path": "tests/test_cpu_execution_storage_pin.py",
+    "sha256": "8e5d409ca88ee040cca48e2e3b9def7677ae619f4689c5991c39b09cd9ca4d8d",
+    "cases": 1,
+    "classification": "one new-feature candidate defect; not a historical missing-API failure",
+    "boundary": "Actual load_project_config and action artifact_binding metadata. Mutating _orze_dir changes publication root while scope/specification stay identical; loaded CPU pin must reject. No worker, path race or live artifact publication is claimed."
+  },
+  "before_snapshot": {
+    "path": "docs/evidence/snapshots/v1-06a-before-storage-pin-cpu-execution.py",
+    "sha256": "8d707cc9ba853728c4b352646a4be549d6aeea516a54d48b5f8e4e3bb6191786",
+    "provenance": "Complete then-current root-authored new cpu_execution module, saved before source correction, not a pre-feature baseline."
+  },
+  "first_failure": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_execution_storage_pin.py --tb=short",
+    "chunk_id": "6812d2",
+    "exit_code": 1,
+    "footer": "1 failed in 0.21s",
+    "failure": "DID NOT RAISE CPUExecutionError after actual artifact root changed"
+  },
+  "whole_module_replay": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, pathlib, sys, types\nimport orze.core.config as config\nname = 'orze.core.cpu_execution'\npath = pathlib.Path('docs/evidence/snapshots/v1-06a-before-storage-pin-cpu-execution.py')\nmodule = types.ModuleType(name)\nmodule.__file__ = str(path.resolve())\nmodule.__package__ = 'orze.core'\nsys.modules[name] = module\nsetattr(importlib.import_module('orze.core'), 'cpu_execution', module)\nexec(compile(path.read_bytes(), module.__file__, 'exec'), module.__dict__)\nconfig.cpu_execution = module.cpu_execution\nconfig.execution_fingerprint = module.execution_fingerprint\nimport pytest\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_cpu_execution_storage_pin.py', '--tb=short']))\nPY",
+    "chunk_id": "d16efd",
+    "wall_time_seconds": 0.344829088,
+    "exit_code": 1,
+    "original_token_count": 189,
+    "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n__________ test_loaded_cpu_pin_rejects_changed_artifact_control_root ___________\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_execution_storage_pin.py:34: in test_loaded_cpu_pin_rejects_changed_artifact_control_root\n    with pytest.raises(CPUExecutionError, match=\"loaded CPU configuration changed\"):\nE   Failed: DID NOT RAISE CPUExecutionError\n=========================== short test summary info ============================\nFAILED tests/test_cpu_execution_storage_pin.py::test_loaded_cpu_pin_rejects_changed_artifact_control_root\n1 failed in 0.17s\n",
+    "explanation": "Fresh Python process substitutes the complete snapshot in sys.modules and parent package, and rebinds current config loader's imported cpu_execution/execution_fingerprint functions to that same module. This preserves old loaded-stamp generation as well as old validation; worktree source and test are untouched."
+  },
+  "fixed_bounded_run": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_execution_storage_pin.py tests/test_cpu_execution_entry.py --tb=short",
+    "chunk_id": "5a3d3e",
+    "wall_time_seconds": 0.46896668,
+    "exit_code": 0,
+    "original_token_count": 25,
+    "output": "..........                                                               [100%]\n10 passed in 0.32s\n",
+    "classification": "1 independent frozen draft regression plus 9 root-authored entry mechanisms; 10 cases are not all reviewer-owned",
+    "inventory_command": "sha256sum src/orze/core/cpu_execution.py src/orze/core/config.py src/orze/core/cpu_action_contract.py tests/test_cpu_execution_storage_pin.py tests/test_cpu_execution_entry.py docs/evidence/snapshots/v1-06a-before-storage-pin-cpu-execution.py",
+    "pre": {
+      "chunk_id": "e981c2",
+      "wall_time_seconds": 0.000003641,
+      "exit_code": 0,
+      "original_token_count": 158,
+      "output": "b9ac04aea5e0c901f29e0b4b65850fb8e8b1c048215c2f749c6ca812b2b910a8  src/orze/core/cpu_execution.py\ned5956803503da2421a003859bb484e47a3afad1755702d82f718b1840ab98a3  src/orze/core/config.py\ncb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736  src/orze/core/cpu_action_contract.py\n8e5d409ca88ee040cca48e2e3b9def7677ae619f4689c5991c39b09cd9ca4d8d  tests/test_cpu_execution_storage_pin.py\n36f94b82694b3f4829dbe296a15191c1c7066f1e7ee91e1b7c5cf85d6a489b4d  tests/test_cpu_execution_entry.py\n8d707cc9ba853728c4b352646a4be549d6aeea516a54d48b5f8e4e3bb6191786  docs/evidence/snapshots/v1-06a-before-storage-pin-cpu-execution.py\n"
+    },
+    "post": {
+      "chunk_id": "dbecad",
+      "wall_time_seconds": 0.00000314,
+      "exit_code": 0,
+      "original_token_count": 158,
+      "output": "b9ac04aea5e0c901f29e0b4b65850fb8e8b1c048215c2f749c6ca812b2b910a8  src/orze/core/cpu_execution.py\ned5956803503da2421a003859bb484e47a3afad1755702d82f718b1840ab98a3  src/orze/core/config.py\ncb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736  src/orze/core/cpu_action_contract.py\n8e5d409ca88ee040cca48e2e3b9def7677ae619f4689c5991c39b09cd9ca4d8d  tests/test_cpu_execution_storage_pin.py\n36f94b82694b3f4829dbe296a15191c1c7066f1e7ee91e1b7c5cf85d6a489b4d  tests/test_cpu_execution_entry.py\n8d707cc9ba853728c4b352646a4be549d6aeea516a54d48b5f8e4e3bb6191786  docs/evidence/snapshots/v1-06a-before-storage-pin-cpu-execution.py\n"
+    },
+    "six_scoped_files_exact": true
+  },
+  "root_fix": "Root added _orze_dir and _project_root to actual invocation path fingerprint. Root separately refined finite numeric bounds and CLI override presence checks; this one regression specifically proves _orze_dir.",
+  "read_only_review": {
+    "command": "sha256sum src/orze/core/cpu_execution.py src/orze/core/config.py src/orze/cli.py src/orze/engine/cpu_phase.py src/orze/engine/orchestrator.py src/orze/engine/native_cpu_action.py src/orze/core/cpu_action_budget.py tests/test_cpu_execution_storage_pin.py docs/evidence/snapshots/v1-06a-before-storage-pin-cpu-execution.py",
+    "chunk_id": "20aa6f",
+    "wall_time_seconds": 0.000004209,
+    "exit_code": 0,
+    "original_token_count": 227,
+    "output": "b9ac04aea5e0c901f29e0b4b65850fb8e8b1c048215c2f749c6ca812b2b910a8  src/orze/core/cpu_execution.py\ned5956803503da2421a003859bb484e47a3afad1755702d82f718b1840ab98a3  src/orze/core/config.py\n35227ff834b38c9259c33c9c1c8c0218fd0ee9c5c02c271a27505b91ca41093b  src/orze/cli.py\n8f18b8fc22bfcd525c2311608fcf9681b436bbfdbc87d0d5d35e1bb9f74046e7  src/orze/engine/cpu_phase.py\na4fee1b5a2ce4456fece2f6b91722ec3427eb53d931610e54a42aad026c60bcd  src/orze/engine/orchestrator.py\n7ff9fff186f9601f8c9bae1f84a2cd2dccb1ef32ed4eda6ec69018743a1e8f0f  src/orze/engine/native_cpu_action.py\nca4f0810f501ef2e6fa4c0077721bcacff4055a360800a24cc46271deb89d00f  src/orze/core/cpu_action_budget.py\n8e5d409ca88ee040cca48e2e3b9def7677ae619f4689c5991c39b09cd9ca4d8d  tests/test_cpu_execution_storage_pin.py\n8d707cc9ba853728c4b352646a4be549d6aeea516a54d48b5f8e4e3bb6191786  docs/evidence/snapshots/v1-06a-before-storage-pin-cpu-execution.py\n",
+    "findings": [
+      "Explicit CPU selection occurs before legacy Orze constructor setup, and direct run uses the existing _run_leased while loop. CPU start/iteration/finally branches skip legacy startup recovery, orphan discovery, GPU lease/probe, implicit roles, hot reload, notification and post/evaluation paths.",
+      "Queue-policy Wait persists a decision and wakeup but does not itself claim, create an execution attempt or reserve a slot. Source ingestion and health checks precede policy choice, so this is not a claim of zero filesystem or queue-admission writes in a waiting iteration.",
+      "--once dispatches one action and subsequently harvests that captured map until completion; it does not make a second claim. Actual supervision/receipt correctness remains the native author/runtime test responsibility.",
+      "Stop sentinel is checked before new policy dispatch; captured native owners are the only cleanup inputs. This is not a controller stop ACK, restart authorization or unknown-process adoption.",
+      "Candidate concern reported to root: health check failure waits the full default 30-second retry even with active actions, delaying the next native deadline harvest compared with other active waits of 0.05 seconds. No regression execution or correction is claimed at this read epoch.",
+      "close sets _cpu_closed before cleanup attempts. A subsequent close returns without repeating a failed STOP; retained handles and first failure are not proof of closure. No downstream authorization consumer was identified in this bounded inspection."
+    ],
+    "limits": [
+      "Candidate files were being developed concurrently; read-only hash observation is not a global freeze.",
+      "No additional tests of loop/cleanup/health branch run here.",
+      "No full-suite, provider/GPU work, host scan, raw signal, holdout or scientific observation claim."
+    ]
+  },
+  "health_delay_addendum": {
+    "ownership": {
+      "production_author": "root",
+      "regression_author": "pro_review",
+      "reused_fixture_author": "root/runtime product project fixture, unmodified by reviewer"
+    },
+    "test": {
+      "path": "tests/test_cpu_action_health_wait.py",
+      "sha256": "6a34f781f8c8382ec6acb58e87f455b34f5cf44313ac9f47da5cf2f659e4532e",
+      "cases": 1,
+      "classification": "new candidate defect with real product launch and explicitly controlled health/Event seam"
+    },
+    "snapshot": {
+      "path": "docs/evidence/snapshots/v1-06a-before-health-wait-cpu-phase.py",
+      "sha256": "2a0d5aa3878684f34dd5cf416ad5c1de18c3c03259e0304bc14e802ca2869d07",
+      "provenance": "Complete root candidate cpu_phase immediately before first regression run; includes QueuePolicy fit/exhaustion changes already landed. Not the earlier read-only hash 8f18b8fc."
+    },
+    "first_failure": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_health_wait.py --tb=short",
+      "chunk_id": "2d7030",
+      "wall_time_seconds": 1.019997249,
+      "exit_code": 1,
+      "original_token_count": 354,
+      "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n______ test_active_action_health_retry_keeps_deadline_harvest_responsive _______\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_action_health_wait.py:58: in test_active_action_health_retry_keeps_deadline_harvest_responsive\n    assert 0 <= observation[\"requested\"] <= 0.05\nE   assert 30.0 <= 0.05\n---------------------------- Captured stderr setup -----------------------------\n\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\n------------------------------ Captured log setup ------------------------------\nERROR    orze:extensions.py:68 orze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n=========================== short test summary info ============================\nFAILED tests/test_cpu_action_health_wait.py::test_active_action_health_retry_keeps_deadline_harvest_responsive\n1 failed in 0.87s\n"
+    },
+    "replay": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, pathlib, sys, types\nimport orze.engine.cpu_phase\nname = 'orze.engine.cpu_phase'\npath = pathlib.Path('docs/evidence/snapshots/v1-06a-before-health-wait-cpu-phase.py')\nmodule = types.ModuleType(name)\nmodule.__file__ = str(path.resolve())\nmodule.__package__ = 'orze.engine'\nsys.modules[name] = module\nsetattr(importlib.import_module('orze.engine'), 'cpu_phase', module)\nexec(compile(path.read_bytes(), module.__file__, 'exec'), module.__dict__)\nimport pytest\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', 'tests/test_cpu_action_health_wait.py', '--tb=short']))\nPY",
+      "chunk_id": "09f7e9",
+      "wall_time_seconds": 1.013935195,
+      "exit_code": 1,
+      "original_token_count": 354,
+      "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n______ test_active_action_health_retry_keeps_deadline_harvest_responsive _______\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_action_health_wait.py:58: in test_active_action_health_retry_keeps_deadline_harvest_responsive\n    assert 0 <= observation[\"requested\"] <= 0.05\nE   assert 30.0 <= 0.05\n---------------------------- Captured stderr setup -----------------------------\n\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\n------------------------------ Captured log setup ------------------------------\nERROR    orze:extensions.py:68 orze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n=========================== short test summary info ============================\nFAILED tests/test_cpu_action_health_wait.py::test_active_action_health_retry_keeps_deadline_harvest_responsive\n1 failed in 0.76s\n"
+    },
+    "boundary": "Actual CLI/load/Orze loop, temp SQLite budget, supervised CPU worker and real monotonic deadline. When health is injected unhealthy, Event.wait only records the requested timeout, current deadline and real poll, then signals loop exit without sleeping. At the first failure/replay the preceding assertions prove live nonterminal process and deadline not yet reached, then requested 30.0 > 0.05 fails. The later closure assertions are reached only in the passing candidate; do not claim those assertion sites passed in failing runs.",
+    "fix": "Root bounds active health retry to min(retry_delay,0.05); idle unhealthy scopes retain their configured retry delay.",
+    "no_real_30_second_wait": true,
+    "unchanged_test": true
+  },
+  "final_bounded_review": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_health_wait.py tests/test_cpu_execution_storage_pin.py tests/test_cpu_execution_entry.py tests/test_cpu_product_loop.py --tb=short",
+    "chunk_id": "0ba3c7",
+    "wall_time_seconds": 3.673853214,
+    "exit_code": 0,
+    "original_token_count": 25,
+    "output": ".................                                                        [100%]\n17 passed in 3.52s\n",
+    "counts": {
+      "independent_frozen_draft_regressions": 2,
+      "root_entry_mechanisms": 9,
+      "product_mechanisms_owned_by_other_agent": 6,
+      "total": 17
+    },
+    "inventory_command": "sha256sum src/orze/core/cpu_execution.py src/orze/core/config.py src/orze/cli.py src/orze/engine/cpu_phase.py src/orze/engine/orchestrator.py src/orze/engine/native_cpu_action.py src/orze/core/cpu_action_budget.py src/orze/core/cpu_action_contract.py tests/test_cpu_action_health_wait.py tests/test_cpu_execution_storage_pin.py tests/test_cpu_execution_entry.py tests/test_cpu_product_loop.py",
+    "pre": {
+      "chunk_id": "1f3d05",
+      "wall_time_seconds": 0.000003933,
+      "exit_code": 0,
+      "original_token_count": 294,
+      "output": "b9ac04aea5e0c901f29e0b4b65850fb8e8b1c048215c2f749c6ca812b2b910a8  src/orze/core/cpu_execution.py\ned5956803503da2421a003859bb484e47a3afad1755702d82f718b1840ab98a3  src/orze/core/config.py\n35227ff834b38c9259c33c9c1c8c0218fd0ee9c5c02c271a27505b91ca41093b  src/orze/cli.py\n245b2e38ddf3cb2d4c46af4fc2e520117ed526e1db638e55e11c7c9bf94c50d8  src/orze/engine/cpu_phase.py\na4fee1b5a2ce4456fece2f6b91722ec3427eb53d931610e54a42aad026c60bcd  src/orze/engine/orchestrator.py\nf71914f2c03498d77c7aff1ea3a7c01e5295bc560be7d9efbce7b3e20b9c8261  src/orze/engine/native_cpu_action.py\nde7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761  src/orze/core/cpu_action_budget.py\ncb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736  src/orze/core/cpu_action_contract.py\n6a34f781f8c8382ec6acb58e87f455b34f5cf44313ac9f47da5cf2f659e4532e  tests/test_cpu_action_health_wait.py\n8e5d409ca88ee040cca48e2e3b9def7677ae619f4689c5991c39b09cd9ca4d8d  tests/test_cpu_execution_storage_pin.py\n36f94b82694b3f4829dbe296a15191c1c7066f1e7ee91e1b7c5cf85d6a489b4d  tests/test_cpu_execution_entry.py\n7327a4a65de2e946f3082863f153f8fd891e3ab04260300df9788e6ef55cd42e  tests/test_cpu_product_loop.py\n"
+    },
+    "post": {
+      "chunk_id": "9a68fb",
+      "wall_time_seconds": 0.000004472,
+      "exit_code": 0,
+      "original_token_count": 294,
+      "output": "b9ac04aea5e0c901f29e0b4b65850fb8e8b1c048215c2f749c6ca812b2b910a8  src/orze/core/cpu_execution.py\ned5956803503da2421a003859bb484e47a3afad1755702d82f718b1840ab98a3  src/orze/core/config.py\n35227ff834b38c9259c33c9c1c8c0218fd0ee9c5c02c271a27505b91ca41093b  src/orze/cli.py\n245b2e38ddf3cb2d4c46af4fc2e520117ed526e1db638e55e11c7c9bf94c50d8  src/orze/engine/cpu_phase.py\na4fee1b5a2ce4456fece2f6b91722ec3427eb53d931610e54a42aad026c60bcd  src/orze/engine/orchestrator.py\nf71914f2c03498d77c7aff1ea3a7c01e5295bc560be7d9efbce7b3e20b9c8261  src/orze/engine/native_cpu_action.py\nde7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761  src/orze/core/cpu_action_budget.py\ncb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736  src/orze/core/cpu_action_contract.py\n6a34f781f8c8382ec6acb58e87f455b34f5cf44313ac9f47da5cf2f659e4532e  tests/test_cpu_action_health_wait.py\n8e5d409ca88ee040cca48e2e3b9def7677ae619f4689c5991c39b09cd9ca4d8d  tests/test_cpu_execution_storage_pin.py\n36f94b82694b3f4829dbe296a15191c1c7066f1e7ee91e1b7c5cf85d6a489b4d  tests/test_cpu_execution_entry.py\n7327a4a65de2e946f3082863f153f8fd891e3ab04260300df9788e6ef55cd42e  tests/test_cpu_product_loop.py\n"
+    },
+    "twelve_scoped_files_exact": true,
+    "static_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json\nfrom pathlib import Path\nsnapshots = {\n 'docs/evidence/snapshots/v1-06a-before-storage-pin-cpu-execution.py': '8d707cc9ba853728c4b352646a4be549d6aeea516a54d48b5f8e4e3bb6191786',\n 'docs/evidence/snapshots/v1-06a-before-health-wait-cpu-phase.py': '2a0d5aa3878684f34dd5cf416ad5c1de18c3c03259e0304bc14e802ca2869d07',\n}\nfor path, expected in snapshots.items():\n raw = Path(path).read_bytes()\n assert hashlib.sha256(raw).hexdigest() == expected\n assert raw.endswith(b'\\n')\n ast.parse(raw, filename=path)\ncounts = {}\nfor name in ('tests/test_cpu_execution_storage_pin.py', 'tests/test_cpu_action_health_wait.py'):\n raw = Path(name).read_bytes()\n tree = ast.parse(raw, filename=name)\n counts[name] = {'sha256': hashlib.sha256(raw).hexdigest(), 'literal_asserts': sum(isinstance(n, ast.Assert) for n in ast.walk(tree))}\nprint(json.dumps({'snapshots': len(snapshots), 'tests': counts}, sort_keys=True))\nPY",
+    "static_result": {
+      "chunk_id": "5458b0",
+      "wall_time_seconds": 0.000004068,
+      "exit_code": 0,
+      "original_token_count": 79,
+      "output": "{\"snapshots\": 2, \"tests\": {\"tests/test_cpu_action_health_wait.py\": {\"literal_asserts\": 7, \"sha256\": \"6a34f781f8c8382ec6acb58e87f455b34f5cf44313ac9f47da5cf2f659e4532e\"}, \"tests/test_cpu_execution_storage_pin.py\": {\"literal_asserts\": 4, \"sha256\": \"8e5d409ca88ee040cca48e2e3b9def7677ae619f4689c5991c39b09cd9ca4d8d\"}}}\n"
+    },
+    "conclusions": [
+      "The storage-pin and health-delay findings are corrected by root, and both complete candidate modules independently replay their respective original behavioral failure without changing worktree source.",
+      "Native _permit_matches binds actual task/results/main database/action timeout before intent and again at admission; durable budget bind/GO uses complete AttemptRef plus exact reservation. Native publication waits for bound private closure before CPU slot settlement; charged execution envelope is not refunded.",
+      "The action branch is phase action, not training; default-off GPU compatibility and scientific observations are not broadened by these two regressions.",
+      "No additional critical product-entry blocker was identified in the bounded final source read. This is not a complete independent native, budget, controller or full-suite audit."
+    ],
+    "limits": [
+      "CPUActionHandle authority, supervised process/closure and same-Lake budget tests outside the 17-command group belong to other agents; this report does not claim their runs.",
+      "budget._terminal checks confirmed effect digest/reference and closure metadata but does not compare every terminal business field with prepared.plan. The present native path invokes it after same-ref closure/publication; no live-tree release counterexample was demonstrated here.",
+      "Cleanup is deliberately a once-attempt operation. First HOLD preserves the owner/reservation; repeated close being a no-op is neither recovery nor proof of closure, and grants no ACK/restart permission.",
+      "Queue Wait may follow source ingestion and health checks. Only action claim/attempt/reservation effects are absent on a no-permit Wait; not all filesystem/database writes.",
+      "Timeouts are cooperative polling/deadline supervision, not a hard real-time or OS-sandbox guarantee. The health test measures requested wait, not actual scheduling latency or 30 seconds elapsed.",
+      "No old tracked test changed by this reviewer, no actual GPU/provider/holdout, no raw process scans/signals, no production edits beyond the separately disclosed owned contract/artifact implementation."
+    ]
+  }
+}

@@ -158,22 +158,16 @@ def get_critical_force_pack_eligible(ideas: Dict[str, dict],
     return eligible
 
 
-def claim(idea_id: str, results_dir: Path, gpu: int | None, lake=None, *,
-          effect_lease=None, resource=None) -> bool:
+def claim(idea_id: str, results_dir: Path, gpu: int, lake=None, *,
+          effect_lease=None) -> bool:
     """Claim under the shared short guard; bind the supplied persistent DB."""
     from orze.engine.claim_authority import claim_change_guard
     from orze.engine.attempt_effect_lock import AttemptEffectInDoubt
     from orze.engine.termination_hold import TerminationUnconfirmed
-    if resource is not None and (resource != "cpu" or gpu is not None or lake is None):
-        raise ValueError("cpu_claim_resource_invalid")
-    if resource == "cpu":
-        row = lake.get(idea_id)
-        if row is None or row.get("kind") != "native_cpu_action":
-            raise ValueError("cpu_claim_kind_required")
     try:
         with claim_change_guard(results_dir / idea_id, lake=lake,
                                 effect_lease=effect_lease) as (_, _, db_path):
-            return _claim_under_effect_lock(idea_id, results_dir, gpu, lake, db_path, resource=resource)
+            return _claim_under_effect_lock(idea_id, results_dir, gpu, lake, db_path)
     except AttemptEffectInDoubt:
         # A nested lease is released by our caller. Do not turn uncertainty
         # into False and let that caller commit or release the retained owner.
@@ -184,7 +178,7 @@ def claim(idea_id: str, results_dir: Path, gpu: int | None, lake=None, *,
 
 
 def _claim_under_effect_lock(idea_id: str, results_dir: Path, gpu: int,
-                             lake=None, lifecycle_db=None, *, resource=None) -> bool:
+                             lake=None, lifecycle_db=None) -> bool:
     """Atomically claim an idea via mkdir. Returns True if we got it.
     If lake is provided, also updates the DB status to 'running'.
 
@@ -231,8 +225,6 @@ def _claim_under_effect_lock(idea_id: str, results_dir: Path, gpu: int,
         "pid": os.getpid(),
         "gpu": gpu,
     }
-    if resource == "cpu":
-        claim_info["resource"] = "cpu"
     if lifecycle_db is not None:
         claim_info["lifecycle_db"] = lifecycle_db
     try:
@@ -261,11 +253,9 @@ def _claim_under_effect_lock(idea_id: str, results_dir: Path, gpu: int,
                 idea_id,
                 from_state="QUEUED",
                 to_state="CLAIMED",
-                reason=(f"claimed by {socket.gethostname()} on cpu" if resource == "cpu"
-                        else f"claimed by {socket.gethostname()} on gpu {gpu}"),
+                reason=f"claimed by {socket.gethostname()} on gpu {gpu}",
                 host=socket.gethostname(),
                 pid=os.getpid(),
-                sop_type="action" if resource == "cpu" else None,
             )
             if not persisted:
                 raise RuntimeError("FSM claim was rejected")

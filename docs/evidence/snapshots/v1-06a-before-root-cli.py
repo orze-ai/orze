@@ -43,17 +43,12 @@ from orze.core.controller_profile import (
     validate_successor_cli,
 )
 from orze.hardware.gpu import detect_all_gpus
-from orze.core.cpu_execution import CPUExecutionError, cpu_execution, validate_cpu_cli
 
 logger = logging.getLogger("orze")
 
 
 def _load_controller_config(args):
-    try:
-        cfg = load_project_config(args.config_file)
-        validate_cpu_cli(cfg, args)
-    except CPUExecutionError as exc:
-        raise ControllerProfileError(str(exc)) from exc
+    cfg = load_project_config(args.config_file)
     validate_profile_cli(cfg, args)
     return cfg
 
@@ -1387,7 +1382,7 @@ Examples:
     # First-run social prompting is confined to the ordinary legacy launch.
     # Registered controllers and control/read-only commands must not spawn
     # untracked gh processes before their profile or observer is established.
-    if not local_stop_profile and cpu_execution(cfg) is None and not _find_pro_key():
+    if not local_stop_profile and not _find_pro_key():
         maybe_star()
 
     # Exact controller identity is checked before GPU discovery and before
@@ -1413,11 +1408,8 @@ Examples:
         print(f"HOLD: controller start rejected: {exc}")
         return 75
 
-    # Select the declared resource before any physical GPU inventory.
-    cpu = cpu_execution(cfg) is not None
-    if cpu:
-        gpu_ids = []
-    elif args.gpus:
+    # Detect GPUs
+    if args.gpus:
         gpu_ids = [int(g.strip()) for g in args.gpus.split(",")]
     else:
         configured_scope = (
@@ -1426,12 +1418,12 @@ Examples:
         # inventory query over devices outside that boundary.
         gpu_ids = list(configured_scope) if configured_scope else detect_all_gpus()
 
-    if not gpu_ids and not cpu:
+    if not gpu_ids:
         logger.error("No GPUs detected. Use --gpus to specify manually.")
         sys.exit(1)
 
     # Start admin panel in background thread (unless --role-only or --admin-off)
-    if not cpu and not local_stop_profile and not args.role_only and not getattr(args, 'no_admin', False):
+    if not local_stop_profile and not args.role_only and not getattr(args, 'no_admin', False):
         try:
             import threading
             from orze.admin.server import run_admin as _run_admin_server
@@ -1461,16 +1453,6 @@ Examples:
     # Launch orchestrator
     from orze.engine.orchestrator import Orze
     from orze.core.gpu_lease import GpuLeaseError, safe_gpu_lease_reason
-    if cpu:
-        from orze.core.cpu_action_budget import CpuBudgetHOLD
-        from orze.engine.native_cpu_action import CPUActionHOLD
-        try:
-            orze = Orze([], cfg, once=args.once)
-            orze.run()
-        except (CPUExecutionError, CpuBudgetHOLD, CPUActionHOLD) as exc:
-            print(f"HOLD: CPU action execution unconfirmed: {exc}")
-            return 75
-        return 0
     orze = Orze(gpu_ids, cfg, once=args.once)
 
     if args.role_only:

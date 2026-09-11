@@ -27,7 +27,7 @@ _SQL = """CREATE TABLE controller_members (
     controller_id TEXT NOT NULL COLLATE BINARY,
     payload_json TEXT NOT NULL
 )"""
-_NATIVE = {"training", "evaluation", "posthoc", "post_script", "pre_script", "artifact_preflight", "action"}
+_NATIVE = {"training", "evaluation", "posthoc", "post_script", "pre_script", "artifact_preflight"}
 _REPORTS = {"launch_failure_report", "pre_script_failure_report", "artifact_preflight_failure_report"}
 _OWNERS = {}  # Strong membership; never recovered from a mutable process label.
 _HANDLES = {}

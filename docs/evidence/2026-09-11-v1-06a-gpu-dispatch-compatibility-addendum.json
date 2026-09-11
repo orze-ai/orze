@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "slice": "V1-06A",
+  "author": "/root/core_review",
+  "classification": "Two CPU GPU-dispatch draft compatibility regressions revealed by unchanged existing tests; not fixture errors, API-absence reds, or preceding-commit product defects.",
+  "scope": {
+    "source_changed": [
+      "src/orze/engine/launcher.py"
+    ],
+    "tests_changed": [],
+    "tests_added": [],
+    "constraints": [
+      "No GPU, provider, holdout, host process discovery, or external process termination.",
+      "Root's separate shared-idle change is outside this addendum."
+    ]
+  },
+  "baseline": {
+    "commit": "382265eac1ea5e247908702f6b73d60776679ef0",
+    "candidate_source_sha256": "1f9a3a07b032aa39061f229db408a91fbb4c86948b1a1f54aa10ad9c4e7740e3",
+    "snapshot": "docs/evidence/snapshots/v1-06a-before-gpu-gate-compat-launcher.py",
+    "snapshot_sha256": "1f9a3a07b032aa39061f229db408a91fbb4c86948b1a1f54aa10ad9c4e7740e3",
+    "snapshot_capture_check": {
+      "exit_code": 0,
+      "chunk_id": "d6832a",
+      "byte_exact": true
+    }
+  },
+  "failures": [
+    {
+      "nodeid": "tests/test_launch_integrity.py::test_direct_launch_rejects_unsafe_idea_ids_before_writing[../escape]",
+      "cause": "The new require_gpu_task built/probed a task-scoped path before the original task-token validation, then declared_catalog raised AttemptEffectBusy instead of LaunchIntegrityError(idea_id_invalid). The existing test did not show an out-of-scope write; this is an ordering/typed-error regression, not a claimed filesystem escape."
+    },
+    {
+      "nodeid": "tests/test_launch_integrity.py::test_malformed_idea_config_fails_closed_before_gpu_check",
+      "cause": "The new YAML read raised raw yaml.parser.ParserError before the original validator could convert it to LaunchIntegrityError(idea_config_validation_failed:<type>). No GPU boundary was entered."
+    }
+  ],
+  "red": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_launch_integrity.py --tb=short",
+    "session_id": 88272,
+    "exit_code": 1,
+    "chunk_id": "5761bb",
+    "footer": "2 failed, 57 passed in 1.24s",
+    "output": "\n=================================== FAILURES ===================================\n_____ test_direct_launch_rejects_unsafe_idea_ids_before_writing[../escape] _____\ntests/test_launch_integrity.py:299: in test_direct_launch_rejects_unsafe_idea_ids_before_writing\n    launch(idea_id, 4, results, cfg)\nsrc/orze/engine/launcher.py:1639: in launch\n    require_gpu_task(idea_id, results_dir, cfg, lake=lake)\nsrc/orze/engine/launcher.py:1612: in require_gpu_task\n    route = declared_catalog(folder)\nsrc/orze/engine/execution_catalog.py:21: in declared_catalog\n    return _declared_catalog(idea_dir)\nsrc/orze/engine/execution_catalog.py:29: in _declared_catalog\n    raise AttemptEffectBusy(\"execution_catalog_directory_invalid\")\nE   orze.engine.attempt_effect_lock.AttemptEffectBusy: execution_catalog_directory_invalid\n___________ test_malformed_idea_config_fails_closed_before_gpu_check ___________\ntests/test_launch_integrity.py:315: in test_malformed_idea_config_fails_closed_before_gpu_check\n    launch(\"idea-test\", 4, results, cfg)\nsrc/orze/engine/launcher.py:1639: in launch\n    require_gpu_task(idea_id, results_dir, cfg, lake=lake)\nsrc/orze/engine/launcher.py:1603: in require_gpu_task\n    value = yaml.safe_load(stream)\n/home/erik/.local/lib/python3.10/site-packages/yaml/__init__.py:125: in safe_load\n    return load(stream, SafeLoader)\n/home/erik/.local/lib/python3.10/site-packages/yaml/__init__.py:81: in load\n    return loader.get_single_data()\n/home/erik/.local/lib/python3.10/site-packages/yaml/constructor.py:49: in get_single_data\n    node = self.get_single_node()\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:36: in get_single_node\n    document = self.compose_document()\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:55: in compose_document\n    node = self.compose_node(None, None)\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:84: in compose_node\n    node = self.compose_mapping_node(anchor)\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:133: in compose_mapping_node\n    item_value = self.compose_node(node, item_key)\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:82: in compose_node\n    node = self.compose_sequence_node(anchor)\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:110: in compose_sequence_node\n    while not self.check_event(SequenceEndEvent):\n/home/erik/.local/lib/python3.10/site-packages/yaml/parser.py:98: in check_event\n    self.current_event = self.state()\n/home/erik/.local/lib/python3.10/site-packages/yaml/parser.py:474: in parse_flow_sequence_first_entry\n    return self.parse_flow_sequence_entry(first=True)\n/home/erik/.local/lib/python3.10/site-packages/yaml/parser.py:495: in parse_flow_sequence_entry\n    return self.parse_flow_node()\n/home/erik/.local/lib/python3.10/site-packages/yaml/parser.py:268: in parse_flow_node\n    return self.parse_node()\n/home/erik/.local/lib/python3.10/site-packages/yaml/parser.py:369: in parse_node\n    raise ParserError(\"while parsing a %s node\" % node, start_mark,\nE   yaml.parser.ParserError: while parsing a flow node\nE   expected the node content, but found '<stream end>'\nE     in \"/tmp/pytest-of-erik/pytest-4884/test_malformed_idea_config_fai0/results/idea-test/idea_config.yaml\", line 2, column 1\n=========================== short test summary info ============================\nFAILED tests/test_launch_integrity.py::test_direct_launch_rejects_unsafe_idea_ids_before_writing[../escape]\nFAILED tests/test_launch_integrity.py::test_malformed_idea_config_fails_closed_before_gpu_check\n2 failed, 57 passed in 1.24s\n"
+  },
+  "fix": [
+    "Extract the unchanged original task-token predicate into _assert_idea_id_valid; both _assert_launch_authorized and the first line of require_gpu_task invoke it, before scope/path I/O.",
+    "Wrap YAML parsing errors from the new disk-config gate in the existing LaunchIntegrityError and content-free error convention. Preserve the CPU kind/history exclusion."
+  ],
+  "green": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_launch_integrity.py tests/test_cpu_action_gpu_dispatch_gate.py tests/test_force_pack_admission.py tests/test_native_training_caller_boundaries.py --tb=short",
+    "session_id": 2358,
+    "exit_code": 0,
+    "chunk_id": "3f0217",
+    "footer": "70 passed in 2.93s",
+    "source_sha256": "2666d4821bf308cfa7241576504e2513dffb685a81b4a8c3b21f8c0222e43c23",
+    "note": "Bounded compatibility validation, overlapping earlier author groups; do not sum with previous 112-test run or root full-suite results."
+  },
+  "complete_candidate_replay": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nimport orze.engine.launcher as launcher\nsource = Path('docs/evidence/snapshots/v1-06a-before-gpu-gate-compat-launcher.py')\nexec(compile(source.read_bytes(), str(source), 'exec'), launcher.__dict__)\nraise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', '--tb=short', 'tests/test_launch_integrity.py::test_direct_launch_rejects_unsafe_idea_ids_before_writing[../escape]', 'tests/test_launch_integrity.py::test_malformed_idea_config_fails_closed_before_gpu_check']))\nPY",
+    "exit_code": 1,
+    "chunk_id": "1f5027",
+    "footer": "2 failed in 0.27s",
+    "output": "FF                                                                       [100%]\n=================================== FAILURES ===================================\n_____ test_direct_launch_rejects_unsafe_idea_ids_before_writing[../escape] _____\ntests/test_launch_integrity.py:299: in test_direct_launch_rejects_unsafe_idea_ids_before_writing\n    launch(idea_id, 4, results, cfg)\ndocs/evidence/snapshots/v1-06a-before-gpu-gate-compat-launcher.py:1639: in launch\n    require_gpu_task(idea_id, results_dir, cfg, lake=lake)\ndocs/evidence/snapshots/v1-06a-before-gpu-gate-compat-launcher.py:1612: in require_gpu_task\n    route = declared_catalog(folder)\nsrc/orze/engine/execution_catalog.py:21: in declared_catalog\n    return _declared_catalog(idea_dir)\nsrc/orze/engine/execution_catalog.py:29: in _declared_catalog\n    raise AttemptEffectBusy(\"execution_catalog_directory_invalid\")\nE   orze.engine.attempt_effect_lock.AttemptEffectBusy: execution_catalog_directory_invalid\n___________ test_malformed_idea_config_fails_closed_before_gpu_check ___________\ntests/test_launch_integrity.py:315: in test_malformed_idea_config_fails_closed_before_gpu_check\n    launch(\"idea-test\", 4, results, cfg)\ndocs/evidence/snapshots/v1-06a-before-gpu-gate-compat-launcher.py:1639: in launch\n    require_gpu_task(idea_id, results_dir, cfg, lake=lake)\ndocs/evidence/snapshots/v1-06a-before-gpu-gate-compat-launcher.py:1603: in require_gpu_task\n    value = yaml.safe_load(stream)\n/home/erik/.local/lib/python3.10/site-packages/yaml/__init__.py:125: in safe_load\n    return load(stream, SafeLoader)\n/home/erik/.local/lib/python3.10/site-packages/yaml/__init__.py:81: in load\n    return loader.get_single_data()\n/home/erik/.local/lib/python3.10/site-packages/yaml/constructor.py:49: in get_single_data\n    node = self.get_single_node()\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:36: in get_single_node\n    document = self.compose_document()\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:55: in compose_document\n    node = self.compose_node(None, None)\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:84: in compose_node\n    node = self.compose_mapping_node(anchor)\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:133: in compose_mapping_node\n    item_value = self.compose_node(node, item_key)\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:82: in compose_node\n    node = self.compose_sequence_node(anchor)\n/home/erik/.local/lib/python3.10/site-packages/yaml/composer.py:110: in compose_sequence_node\n    while not self.check_event(SequenceEndEvent):\n/home/erik/.local/lib/python3.10/site-packages/yaml/parser.py:98: in check_event\n    self.current_event = self.state()\n/home/erik/.local/lib/python3.10/site-packages/yaml/parser.py:474: in parse_flow_sequence_first_entry\n    return self.parse_flow_sequence_entry(first=True)\n/home/erik/.local/lib/python3.10/site-packages/yaml/parser.py:495: in parse_flow_sequence_entry\n    return self.parse_flow_node()\n/home/erik/.local/lib/python3.10/site-packages/yaml/parser.py:268: in parse_flow_node\n    return self.parse_node()\n/home/erik/.local/lib/python3.10/site-packages/yaml/parser.py:369: in parse_node\n    raise ParserError(\"while parsing a %s node\" % node, start_mark,\nE   yaml.parser.ParserError: while parsing a flow node\nE   expected the node content, but found '<stream end>'\nE     in \"/tmp/pytest-of-erik/pytest-4886/test_malformed_idea_config_fai0/results/idea-test/idea_config.yaml\", line 2, column 1\n=========================== short test summary info ============================\nFAILED tests/test_launch_integrity.py::test_direct_launch_rejects_unsafe_idea_ids_before_writing[../escape]\nFAILED tests/test_launch_integrity.py::test_malformed_idea_config_fails_closed_before_gpu_check\n2 failed in 0.27s\n",
+    "method": "Compile and execute the complete frozen prior launcher into the imported launcher module in an isolated Python interpreter, then run the two unchanged existing tests. No on-disk production changes. This is not a whole baseline checkout replay."
+  },
+  "additional_diagnostic": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nfrom unittest.mock import patch\nfrom orze.engine.launcher import require_gpu_task, LaunchIntegrityError\nfrom orze.engine.execution_catalog import declared_catalog\nwith patch.object(Path, 'absolute', side_effect=AssertionError('scope path constructed')), patch.object(Path, 'exists', side_effect=AssertionError('filesystem probe')), patch.object(Path, 'lstat', side_effect=AssertionError('filesystem probe')):\n    for token in ['../escape', 'a/b', '.', '', None]:\n        try:\n            require_gpu_task(token, '/must-not-read', {})\n        except LaunchIntegrityError as exc:\n            assert str(exc) == 'idea_id_invalid'\n        else:\n            raise AssertionError('invalid token was accepted')\nprint('5 invalid-token cases refused before filesystem/path expansion')\nPY",
+    "exit_code": 0,
+    "chunk_id": "f699a1",
+    "output": "5 invalid-token cases refused before filesystem/path expansion",
+    "classification": "Five read-only explicit filesystem tripwires, not additional pytest cases or real process tests."
+  },
+  "final_files": {
+    "src/orze/engine/launcher.py": "2666d4821bf308cfa7241576504e2513dffb685a81b4a8c3b21f8c0222e43c23",
+    "tests/test_launch_integrity.py": "1a7195d8ba2f36250b8f64c4f864ffac3cc9dc16f3292bb1b2e84f1c88e4c443",
+    "tests/test_cpu_action_gpu_dispatch_gate.py": "cc2aabb02d284e7e7d50320bd705642d3c7ca8c3dced37b918491f2d6b8c6f3a",
+    "tests/test_force_pack_admission.py": "5c0fe680a9367ff960442f614ba832e1c577543b9477ede032ce108e2b4b1a69",
+    "tests/test_native_training_caller_boundaries.py": "fd0db515f3f43d7dfffe44a427111b58999e83d09a5b8065da554db63b49e516"
+  },
+  "unchanged_tests": {
+    "old_files_byte_exact_to_baseline": [
+      "tests/test_launch_integrity.py",
+      "tests/test_force_pack_admission.py",
+      "tests/test_native_training_caller_boundaries.py"
+    ],
+    "new_cpu_gate_unchanged": true,
+    "check_chunk": "e39e96",
+    "check_exit_code": 0,
+    "old_assertions_changed": 0
+  },
+  "diff_check": {
+    "command": "git diff --check",
+    "exit_code": 0,
+    "chunk_id": "7c73f2"
+  },
+  "prior_author_report": {
+    "path": "docs/evidence/2026-09-11-v1-06a-native-cpu-action-author.json",
+    "sha256": "9850f676b08f5e0e186bb13cc675bc043acc037ec8af7bf849eced2231dc9039",
+    "modified": false,
+    "note": "Its 112-test/final-candidate hashes remain a historical observation; this addendum supersedes only the launcher hash for the later candidate."
+  },
+  "full_validation": "Root owns full Core/Pro epochs. The first full epoch had exposed these failures and was invalidated separately by the root-owned shared-idle production fix. This addendum does not claim final full-suite success."
+}

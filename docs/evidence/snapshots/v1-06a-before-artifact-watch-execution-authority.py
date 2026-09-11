@@ -34,7 +34,6 @@ class ExecutionTransaction:
     prepare_started: bool = False
     _watched_attempts: dict = field(default_factory=dict, init=False, repr=False)
     _watched_dependencies: dict = field(default_factory=dict, init=False, repr=False)
-    _watched_artifacts: dict = field(default_factory=dict, init=False, repr=False)
 
     @property
     def conn(self):
@@ -75,34 +74,6 @@ class ExecutionTransaction:
         for ref, expected in self._watched_dependencies.items():
             if _dependency_snapshot(self, ref) != expected:
                 raise AttemptAuthorityError("execution_dependency_changed")
-        for ref, expected in self._watched_artifacts.items():
-            if _artifact_snapshot(self, ref) != expected:
-                raise AttemptAuthorityError("execution_artifacts_changed")
-
-    def watch_artifacts(self, ref: AttemptRef, records) -> None:
-        """Opt-in exact metadata fence before and after SQL commit.
-
-        Expected records come from the publisher's prepared set, never from
-        reading the possibly changed catalog as a new baseline. No file IO or
-        large-content hashing is performed by this watch.
-        """
-        from dataclasses import asdict
-        from orze.core.research_artifacts import MAX_ARTIFACTS, _record
-        if (not self.conn.in_transaction or type(ref) is not AttemptRef
-                or ref.task_id != self.idea_dir.name or ref in self._watched_artifacts
-                or len(self._watched_artifacts) >= 32
-                or type(records) not in (list, tuple) or len(records) > MAX_ARTIFACTS):
-            raise AttemptAuthorityError("execution_artifact_watch_invalid")
-        require_effect_lease(self.lease, self.idea_dir)
-        expected = sorted((json.loads(_record(record)) for record in records),
-                          key=lambda record: record["logical_name"])
-        if (any(_canonical(record["producer"]) != _canonical(asdict(ref)) for record in expected)
-                or len({record["logical_name"] for record in expected}) != len(expected)):
-            raise AttemptAuthorityError("execution_artifact_watch_producer_invalid")
-        encoded = _canonical(expected)
-        if _artifact_snapshot(self, ref) != encoded:
-            raise AttemptAuthorityError("execution_artifacts_changed")
-        self._watched_artifacts[ref] = encoded
 
     def watch_dependency(self, ref: AttemptRef) -> None:
         """Pin a closed source attempt without reviving its old lifecycle.
@@ -154,12 +125,6 @@ def _watched_snapshot(tx: ExecutionTransaction, ref: AttemptRef) -> str:
 
 def _dependency_snapshot(tx: ExecutionTransaction, ref: AttemptRef) -> str:
     return _canonical(require_current(tx.conn, ref, states=("TERMINAL", "NOT_STARTED")))
-
-
-def _artifact_snapshot(tx: ExecutionTransaction, ref: AttemptRef) -> str:
-    from orze.core.research_artifacts import artifacts_for_attempt
-    require_current(tx.conn, ref, states=("RUNNING", "TERMINAL"))
-    return _canonical(artifacts_for_attempt(tx.conn, ref))
 
 
 def _lifecycle_phase(payload, ref):

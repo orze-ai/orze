@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "slice": "V1-06A",
+  "author": "/root/core_review",
+  "classification": "Third draft compatibility regression discovered in the first full Core epoch; fixed production, not an old-test fixture migration or a preceding-commit defect.",
+  "scope": {
+    "source_changed": [
+      "src/orze/engine/phases.py"
+    ],
+    "old_tests_changed": [],
+    "new_tests_changed": [],
+    "new_tests_added": [],
+    "limited_to": "Optional-Lake compatibility in the new cross-resource guard. No controller/sealed check reordering."
+  },
+  "root_full_epoch_history": {
+    "attribution": "Root-reported complete first Core epoch; not run independently by this author.",
+    "session_id": 51177,
+    "chunk_id": "54d844",
+    "footer": "3 failed, 3727 passed, 7 skipped in 627.39s",
+    "note": "The two launcher regressions are recorded in the previous frozen compatibility addendum; this third failure was AttributeError on an existing no-Lake sealed-refusal path. Subsequent full validation belongs to root."
+  },
+  "snapshot": {
+    "path": "docs/evidence/snapshots/v1-06a-before-sealed-dispatch-order-phases.py",
+    "sha256": "a1fd05751857e8e1c83da97025d757dc2ba2ad18d9e8a3972d390e306c56461e",
+    "candidate_source_byte_exact": true,
+    "provenance": "Complete current implementation candidate captured before this correction; not the preceding-commit source. The filename does not imply that the eventual fix reordered checks."
+  },
+  "failure": {
+    "nodeid": "tests/test_sealed_hashes.py::test_sealed_violation_blocks_training_dispatch",
+    "cause": "The new initial require_gpu_task call accessed self.lake on the established legacy early-refusal test object, whose sealed drift must be rejected without a Lake. This AttributeError preempted that existing refusal path.",
+    "command": "sha256sum src/orze/engine/phases.py docs/evidence/snapshots/v1-06a-before-sealed-dispatch-order-phases.py tests/test_sealed_hashes.py; PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_sealed_hashes.py::test_sealed_violation_blocks_training_dispatch --tb=short",
+    "exit_code": 1,
+    "chunk_id": "c57ff0",
+    "footer": "1 failed in 0.25s",
+    "failure_trace": "tests/test_sealed_hashes.py:62 -> phases.py:1054 lake=self.lake; AttributeError: 'types.SimpleNamespace' object has no attribute 'lake'"
+  },
+  "fix": {
+    "before": "lake=self.lake",
+    "after": "lake=getattr(self, \"lake\", None)",
+    "rationale": "require_gpu_task already supports no-Lake callers and consults the declared/current catalog in that branch. Supplying None does not grant native CPU dispatch. Keeping this optional parameter preserves existing controller/sealed ordering and the new CPU kind exclusion before slots/claim.",
+    "source_sha256": "9a24f88eb2ee9ddfd3395b223425625f31d637af2b93ef72cb7dcdbaba3a9712"
+  },
+  "green": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_sealed_hashes.py tests/test_sealed_payload.py tests/test_cpu_action_gpu_dispatch_gate.py tests/test_launch_integrity.py --tb=short",
+    "session_id": 74643,
+    "exit_code": 0,
+    "chunk_id": "7ef842",
+    "footer": "90 passed in 1.22s",
+    "output": "........................................... [ 80%]\n..................                                                       [100%]\n90 passed in 1.22s\n",
+    "counts": {
+      "sealed_hashes": 5,
+      "sealed_payload": 23,
+      "cpu_dispatch_gate": 3,
+      "launch_integrity": 59
+    },
+    "note": "Includes all three unchanged original full-epoch failing cases. Overlaps historical 70/112 groups and is not additive."
+  },
+  "complete_candidate_replay": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nimport orze.engine.phases as phases\nsource=Path('docs/evidence/snapshots/v1-06a-before-sealed-dispatch-order-phases.py')\nexec(compile(source.read_bytes(),str(source),'exec'), phases.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','--tb=short','tests/test_sealed_hashes.py::test_sealed_violation_blocks_training_dispatch']))\nPY",
+    "exit_code": 1,
+    "chunk_id": "c36705",
+    "footer": "1 failed in 0.12s",
+    "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n________________ test_sealed_violation_blocks_training_dispatch ________________\ntests/test_sealed_hashes.py:62: in test_sealed_violation_blocks_training_dispatch\n    free = OrzePhaseMixin._launch_training(runner, unclaimed, True, {})\ndocs/evidence/snapshots/v1-06a-before-sealed-dispatch-order-phases.py:1054: in _launch_training\n    lake=self.lake, idea=ideas.get(idea_id))\nE   AttributeError: 'types.SimpleNamespace' object has no attribute 'lake'\n=========================== short test summary info ============================\nFAILED tests/test_sealed_hashes.py::test_sealed_violation_blocks_training_dispatch\n1 failed in 0.12s\n",
+    "method": "Complete frozen phases module compiled into the imported module in an isolated Python interpreter, then the unchanged original case runs. No disk source swap; not a whole baseline checkout replay."
+  },
+  "exact_change_audit": {
+    "command": "python3 - <<'PY'\nfrom pathlib import Path\nimport hashlib,subprocess\nbefore=Path('docs/evidence/snapshots/v1-06a-before-sealed-dispatch-order-phases.py').read_bytes()\nold=b'lake=self.lake, idea=ideas.get(idea_id))'\nnew=b'lake=getattr(self, \"lake\", None), idea=ideas.get(idea_id))'\nassert before.count(old)==1\nassert before.replace(old,new)==Path('src/orze/engine/phases.py').read_bytes()\nfor name in ['tests/test_sealed_hashes.py','tests/test_sealed_payload.py','tests/test_launch_integrity.py']:\n baseline=subprocess.check_output(['git','show','382265eac1ea5e247908702f6b73d60776679ef0:'+name])\n assert baseline==Path(name).read_bytes(),name\n print('old whole test baseline exact:',name,hashlib.sha256(baseline).hexdigest())\nprint('Complete phase candidate differs only by authorized optional-Lake expression')\nPY",
+    "exit_code": 0,
+    "chunk_id": "155ce7",
+    "output": "old whole test baseline exact: tests/test_sealed_hashes.py 8bcf075db7c06fb028108602d5b109044b7900f831335f9b8ac0151fcfb1178c\nold whole test baseline exact: tests/test_sealed_payload.py f2a1baaad054f92fc88354bc9a0aa501bcd44e1a9a0697b7c881aa13d696025d\nold whole test baseline exact: tests/test_launch_integrity.py 1a7195d8ba2f36250b8f64c4f864ffac3cc9dc16f3292bb1b2e84f1c88e4c443\nComplete phase candidate differs only by authorized optional-Lake expression\n",
+    "baseline_commit": "382265eac1ea5e247908702f6b73d60776679ef0",
+    "old_assertions_changed": 0
+  },
+  "final_files": {
+    "src/orze/engine/phases.py": "9a24f88eb2ee9ddfd3395b223425625f31d637af2b93ef72cb7dcdbaba3a9712",
+    "src/orze/engine/launcher.py": "2666d4821bf308cfa7241576504e2513dffb685a81b4a8c3b21f8c0222e43c23",
+    "tests/test_sealed_hashes.py": "8bcf075db7c06fb028108602d5b109044b7900f831335f9b8ac0151fcfb1178c",
+    "tests/test_sealed_payload.py": "f2a1baaad054f92fc88354bc9a0aa501bcd44e1a9a0697b7c881aa13d696025d",
+    "tests/test_cpu_action_gpu_dispatch_gate.py": "cc2aabb02d284e7e7d50320bd705642d3c7ca8c3dced37b918491f2d6b8c6f3a",
+    "tests/test_launch_integrity.py": "1a7195d8ba2f36250b8f64c4f864ffac3cc9dc16f3292bb1b2e84f1c88e4c443"
+  },
+  "diff_check": {
+    "command": "git diff --check",
+    "exit_code": 0,
+    "chunk_id": "5cd505"
+  },
+  "related_frozen_reports": [
+    {
+      "path": "docs/evidence/2026-09-11-v1-06a-native-cpu-action-author.json",
+      "sha256": "9850f676b08f5e0e186bb13cc675bc043acc037ec8af7bf849eced2231dc9039",
+      "modified": false
+    },
+    {
+      "path": "docs/evidence/2026-09-11-v1-06a-gpu-dispatch-compatibility-addendum.json",
+      "sha256": "b3327e685d31ead835a2382e30c89823fd48a80d801735ebafe119a0be5f145b",
+      "modified": false
+    }
+  ],
+  "freeze": "All author-owned source and tests frozen after the 90-test group. No claim that root's second whole epoch has completed."
+}

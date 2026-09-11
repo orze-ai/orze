@@ -555,18 +555,9 @@ class OrzePhaseMixin:
     def _sync_ideas(self, cfg):
         """Phase: sync ideas from ideas.md to lake, expand sweeps, build unclaimed queue."""
         profile = getattr(self, "_controller_session", None) is not None
-        from orze.engine.launcher import require_gpu_task
-        if self.lake:
-            for row in self.lake.get_queue(limit=2000):
-                getter = getattr(self.lake, "get", None)
-                persisted = getter(row["idea_id"]) if callable(getter) else row
-                if isinstance(persisted, dict) and persisted.get("kind") == "native_cpu_action":
-                    require_gpu_task(row["idea_id"], self.results_dir, cfg, lake=self.lake, idea=persisted)
         if self.lake:
             from orze.engine.idea_ingress import ingest_ideas_source
             raw_ideas, ingested_ids = ingest_ideas_source(self, cfg)
-            for idea_id, idea in raw_ideas.items():
-                require_gpu_task(idea_id, self.results_dir, cfg, lake=self.lake, idea=idea)
             # Optional enrichment runs only for committed admissions, after
             # the source lock is released. An ACK publication failure leaves
             # source retryable; enrichment may append work for a later tick.
@@ -587,8 +578,6 @@ class OrzePhaseMixin:
         else:
             # Legacy no-lake mode does not acknowledge or mutate its source.
             raw_ideas = parse_ideas(cfg["ideas_file"])
-            for idea_id, idea in raw_ideas.items():
-                require_gpu_task(idea_id, self.results_dir, cfg, idea=idea)
 
         # 5a-pre. Inline Tier 1 filter (orze-pro): skip garbage before it's claimed
         try:
@@ -656,7 +645,6 @@ class OrzePhaseMixin:
             queue_rows = self.lake.get_queue(limit=2000)
             queue_ids = []
             for r in queue_rows:
-                require_gpu_task(r["idea_id"], self.results_dir, cfg, lake=self.lake, idea=dict(r))
                 queue_ids.append(r["idea_id"])
                 cfg_parsed = self._parse_lake_queue_config(
                     r["idea_id"], r["config"] or "")
@@ -705,7 +693,6 @@ class OrzePhaseMixin:
                 queue_rows = self.lake.get_queue(limit=2000)
                 queue_ids = []
                 for r in queue_rows:
-                    require_gpu_task(r["idea_id"], self.results_dir, cfg, lake=self.lake, idea=dict(r))
                     queue_ids.append(r["idea_id"])
                     cfg_parsed = self._parse_lake_queue_config(
                         r["idea_id"], r["config"] or "")
@@ -1048,10 +1035,6 @@ class OrzePhaseMixin:
 
     def _launch_training(self, unclaimed, disk_ok, ideas):
         """Phase: launch training on free GPUs, enforce sweep limits, circuit breaker."""
-        from orze.engine.launcher import require_gpu_task
-        for idea_id in unclaimed:
-            require_gpu_task(idea_id, self.results_dir, self.cfg,
-                             lake=getattr(self, "lake", None), idea=ideas.get(idea_id))
         if not _controller_admission_ready(self):
             return []
         cfg = self.cfg

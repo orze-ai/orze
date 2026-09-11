@@ -1452,18 +1452,13 @@ def _is_launcher_paused(cfg: dict, results_dir: Path) -> bool:
     return config_paused or flag_present
 
 
-def _assert_idea_id_valid(idea_id: str) -> None:
-    """Validate the task token before constructing any task-scoped path."""
+def _assert_launch_authorized(idea_id: str, results_dir: Path,
+                              cfg: dict) -> None:
+    """Enforce stop/pause controls for every direct launcher caller."""
     if (not isinstance(idea_id, str) or not idea_id
             or Path(idea_id).parts != (idea_id,)
             or idea_id in (".", "..")):
         raise LaunchIntegrityError("idea_id_invalid")
-
-
-def _assert_launch_authorized(idea_id: str, results_dir: Path,
-                              cfg: dict) -> None:
-    """Enforce stop/pause controls for every direct launcher caller."""
-    _assert_idea_id_valid(idea_id)
     results_dir = Path(results_dir)
     for sentinel in (".orze_disabled", ".orze_stop_all", ".orze_shutdown"):
         try:
@@ -1576,7 +1571,6 @@ def _assert_campaign_evidence_authorized(cfg: dict, lake=None) -> None:
 
 def require_gpu_task(idea_id, results_dir, cfg, *, lake=None, idea=None):
     """CPU declarations/history cannot enter legacy GPU dispatch or sweeps."""
-    _assert_idea_id_valid(idea_id)
     from orze.engine.idea_ingress import _proposal_fields
     from orze.core.execution_attempts import current_attempt
     from orze.engine.execution_catalog import declared_catalog
@@ -1605,13 +1599,8 @@ def require_gpu_task(idea_id, results_dir, cfg, *, lake=None, idea=None):
         info = safe_file(config_path, missing=False)
         if info.st_size > 65536:
             raise LaunchIntegrityError("gpu_task_config_unavailable")
-        try:
-            with config_path.open(encoding="utf-8") as stream:
-                value = yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            raise LaunchIntegrityError(
-                "idea_config_validation_failed:"
-                f"{type(exc).__name__}") from exc
+        with config_path.open(encoding="utf-8") as stream:
+            value = yaml.safe_load(stream)
         metadata({"config": value})
     if lake is not None:
         getter = getattr(lake, "get", None)

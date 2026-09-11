@@ -60,11 +60,9 @@ def _dedup_owner(connection, prepared):
         "SELECT idea_id, CASE WHEN typeof(config)='text' "
         "AND length(CAST(config AS BLOB)) <= ? THEN config ELSE NULL END AS config "
         "FROM ideas WHERE status COLLATE NOCASE IN (?, ?, ?, ?) "
-        "AND ((? = 'native_cpu_action' AND kind = 'native_cpu_action') "
-        "OR (? != 'native_cpu_action' AND kind != 'native_cpu_action')) "
         "AND (config_hash=? OR config_hash IS NULL OR config_source_sha256 IS NULL) "
         "ORDER BY rowid LIMIT ?",
-        (_MAX_CONFIG_BYTES, *_ADMITTED_STATUSES, prepared["kind"], prepared["kind"], prepared["config_hash"],
+        (_MAX_CONFIG_BYTES, *_ADMITTED_STATUSES, prepared["config_hash"],
          _MAX_DEDUP_CANDIDATES + 1),
     ).fetchall()
     if len(rows) > _MAX_DEDUP_CANDIDATES:
@@ -99,7 +97,7 @@ def _new_rows(lake, prepared):
     host, pid = socket.gethostname(), os.getpid()
     state = {
         "idea_id": idea_id, "current_state": "QUEUED", "updated_by_host": host,
-        "updated_by_pid": pid, "sop_type": "action" if prepared["kind"] == "native_cpu_action" else "training", "updated_at": at,
+        "updated_by_pid": pid, "sop_type": "training", "updated_at": at,
         "first_queued_at": at, "queued_at": at, "claimed_at": None,
         "started_at": None, "terminal_at": None, "completed_at": None,
     }
@@ -112,7 +110,7 @@ def _new_rows(lake, prepared):
     transition = {
         "idea_id": idea_id, "from_state": "UNKNOWN", "to_state": "QUEUED",
         "reason": "proposal_admitted", "host": host, "pid": pid,
-        "sop_type": state["sop_type"], "ts": at,
+        "sop_type": "training", "ts": at,
     }
     cursor = connection.execute(
         f"INSERT INTO idea_transitions ({', '.join(transition)}) "

@@ -558,10 +558,8 @@ class OrzePhaseMixin:
         from orze.engine.launcher import require_gpu_task
         if self.lake:
             for row in self.lake.get_queue(limit=2000):
-                getter = getattr(self.lake, "get", None)
-                persisted = getter(row["idea_id"]) if callable(getter) else row
-                if isinstance(persisted, dict) and persisted.get("kind") == "native_cpu_action":
-                    require_gpu_task(row["idea_id"], self.results_dir, cfg, lake=self.lake, idea=persisted)
+                if row["kind"] == "native_cpu_action":
+                    require_gpu_task(row["idea_id"], self.results_dir, cfg, lake=self.lake, idea=dict(row))
         if self.lake:
             from orze.engine.idea_ingress import ingest_ideas_source
             raw_ideas, ingested_ids = ingest_ideas_source(self, cfg)
@@ -1051,7 +1049,7 @@ class OrzePhaseMixin:
         from orze.engine.launcher import require_gpu_task
         for idea_id in unclaimed:
             require_gpu_task(idea_id, self.results_dir, self.cfg,
-                             lake=getattr(self, "lake", None), idea=ideas.get(idea_id))
+                             lake=self.lake, idea=ideas.get(idea_id))
         if not _controller_admission_ready(self):
             return []
         cfg = self.cfg

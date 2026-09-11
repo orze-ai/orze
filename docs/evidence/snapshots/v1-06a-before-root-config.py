@@ -38,7 +38,6 @@ from orze.core.prompt_limits import DEFAULT_PROMPT_BYTES, prompt_byte_limit
 from orze.core.artifact_contract import get_artifact_contract
 from orze.core.observation_contract import get_observation_contract
 from orze.core.controller_profile import controller_profile, profile_fingerprint
-from orze.core.cpu_execution import cpu_execution, execution_fingerprint
 from orze.core.role_presets import configured_role_presets, apply_environment_research
 
 logger = logging.getLogger("orze")
@@ -418,7 +417,6 @@ def load_project_config(path: Optional[str] = None) -> dict:
 
     # Expand ${VAR} references in config values using os.environ
     cfg = _expand_env_vars(cfg)
-    cpu_execution(cfg)
     # Validate before any optional role expansion. Runtime consumers use the
     # same strict declaration through role_preset_enabled().
     configured_role_presets(cfg)
@@ -521,7 +519,7 @@ def load_project_config(path: Optional[str] = None) -> dict:
     # Auto-seal eval scripts (data leakage guardrail). Any file in the project
     # root matching eval_*.py or eval_*.sh is added to sealed_files unless
     # auto_seal_eval is explicitly set to false.
-    if cpu_execution(cfg) is None and cfg.get("auto_seal_eval", True):
+    if cfg.get("auto_seal_eval", True):
         sealed = list(cfg.get("sealed_files") or [])
         existing = set(sealed)
         auto_added = []
@@ -559,8 +557,6 @@ def load_project_config(path: Optional[str] = None) -> dict:
         cfg["_config_path"] = str(Path(path or "orze.yaml").absolute())
         cfg["_controller_workdir"] = str(Path.cwd())
         cfg["_controller_profile_fingerprint"] = profile_fingerprint(cfg)
-    if cpu_execution(cfg) is not None:
-        cfg["_cpu_execution_fingerprint"] = execution_fingerprint(cfg)
     return cfg
 
 
@@ -568,11 +564,6 @@ def _validate_config(cfg: dict) -> tuple:
     """Validate orze config on startup. Returns (errors, warnings) tuple."""
     errors = []
     warnings = []
-    cpu = None
-    try:
-        cpu = cpu_execution(cfg)
-    except ValueError as exc:
-        errors.append(str(exc))
     try:
         controller_profile(cfg)
     except ValueError as exc:
@@ -1110,7 +1101,7 @@ def _validate_config(cfg: dict) -> tuple:
     errors.extend(validate_research_policy_config(cfg))
 
     # train_script must exist
-    ts = None if cpu is not None else cfg.get("train_script")
+    ts = cfg.get("train_script")
     if ts and not Path(ts).exists():
         errors.append(f"train_script not found: {ts}")
 
@@ -1130,7 +1121,7 @@ def _validate_config(cfg: dict) -> tuple:
 
     # --- Warnings: things that might be unintentional ---
 
-    bc = None if cpu is not None else cfg.get("base_config")
+    bc = cfg.get("base_config")
     if bc and not Path(bc).exists():
         warnings.append(f"base_config not found: {bc}")
 
@@ -1197,7 +1188,6 @@ def _validate_config(cfg: dict) -> tuple:
     # but absent from this list, producing false-positive validator
     # warnings on every fresh `orze setup` install.
     _KNOWN_EXTRAS = {
-        "execution", "action_policy",
         "_config_path", "research", "gc", "metric_validation", "sealed_files",
         "sealed_hashes",
         "min_expected_results", "goal_file", "gpu_scheduling", "roles",

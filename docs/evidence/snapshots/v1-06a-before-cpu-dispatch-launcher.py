@@ -1452,18 +1452,13 @@ def _is_launcher_paused(cfg: dict, results_dir: Path) -> bool:
     return config_paused or flag_present
 
 
-def _assert_idea_id_valid(idea_id: str) -> None:
-    """Validate the task token before constructing any task-scoped path."""
+def _assert_launch_authorized(idea_id: str, results_dir: Path,
+                              cfg: dict) -> None:
+    """Enforce stop/pause controls for every direct launcher caller."""
     if (not isinstance(idea_id, str) or not idea_id
             or Path(idea_id).parts != (idea_id,)
             or idea_id in (".", "..")):
         raise LaunchIntegrityError("idea_id_invalid")
-
-
-def _assert_launch_authorized(idea_id: str, results_dir: Path,
-                              cfg: dict) -> None:
-    """Enforce stop/pause controls for every direct launcher caller."""
-    _assert_idea_id_valid(idea_id)
     results_dir = Path(results_dir)
     for sentinel in (".orze_disabled", ".orze_stop_all", ".orze_shutdown"):
         try:
@@ -1574,67 +1569,6 @@ def _assert_campaign_evidence_authorized(cfg: dict, lake=None) -> None:
         raise LaunchIntegrityError(str(exc)) from exc
 
 
-def require_gpu_task(idea_id, results_dir, cfg, *, lake=None, idea=None):
-    """CPU declarations/history cannot enter legacy GPU dispatch or sweeps."""
-    _assert_idea_id_valid(idea_id)
-    from orze.engine.idea_ingress import _proposal_fields
-    from orze.core.execution_attempts import current_attempt
-    from orze.engine.execution_catalog import declared_catalog
-    from orze.engine.claim_authority import safe_file
-    import sqlite3
-    import yaml
-
-    def metadata(value):
-        if not isinstance(value, dict):
-            return
-        configuration = value.get("config")
-        if type(configuration) is str and len(configuration.encode()) <= 65536:
-            try:
-                configuration = yaml.safe_load(configuration)
-            except yaml.YAMLError:
-                configuration = None  # Existing GPU validators retain their own error path.
-        normalized = {**value, "config": configuration if type(configuration) is dict else {}}
-        if (value.get("kind") == "native_cpu_action"
-                or _proposal_fields(normalized)["kind"] == "native_cpu_action"):
-            raise LaunchIntegrityError("cpu_action_requires_cpu_executor")
-
-    metadata(idea)
-    folder = Path(results_dir).absolute() / idea_id
-    config_path = folder / "idea_config.yaml"
-    if config_path.exists() or config_path.is_symlink():
-        info = safe_file(config_path, missing=False)
-        if info.st_size > 65536:
-            raise LaunchIntegrityError("gpu_task_config_unavailable")
-        try:
-            with config_path.open(encoding="utf-8") as stream:
-                value = yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            raise LaunchIntegrityError(
-                "idea_config_validation_failed:"
-                f"{type(exc).__name__}") from exc
-        metadata({"config": value})
-    if lake is not None:
-        getter = getattr(lake, "get", None)
-        metadata(getter(idea_id) if callable(getter) else None)
-        if hasattr(lake, "conn") and current_attempt(lake.conn, idea_id, "action") is not None:
-            raise LaunchIntegrityError("cpu_action_requires_cpu_executor")
-        return
-    from orze.reporting.evidence import report_lifecycle_db_path
-    route = declared_catalog(folder)
-    path = Path(route) if route else report_lifecycle_db_path(folder.parent, cfg)
-    if not path.exists() and not path.is_symlink():
-        return
-    safe_file(path, missing=False)
-    conn = sqlite3.connect(path.absolute().as_uri() + "?mode=ro", uri=True, timeout=1)
-    try:
-        conn.execute("PRAGMA query_only=ON")
-        row = conn.execute("SELECT kind FROM main.ideas WHERE idea_id COLLATE BINARY=?", (idea_id,)).fetchone()
-        if row is not None and row[0] == "native_cpu_action" or current_attempt(conn, idea_id, "action") is not None:
-            raise LaunchIntegrityError("cpu_action_requires_cpu_executor")
-    finally:
-        conn.close()
-
-
 def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> TrainingProcess:
     """Launch a training subprocess on the given GPU.
 
@@ -1647,7 +1581,6 @@ def launch(idea_id: str, gpu: int, results_dir: Path, cfg: dict, lake=None) -> T
         lake: IdeaLake instance for FSM transition recording (optional)
     """
     results_dir = Path(results_dir)
-    require_gpu_task(idea_id, results_dir, cfg, lake=lake)
     from orze.core.artifact_contract import get_artifact_contract
     if get_artifact_contract(cfg) is not None and lake is None:
         raise LaunchIntegrityError("training_artifact_native_catalog_required")

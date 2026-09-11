@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "slice": "V1-06A",
+  "status": "contract_and_artifact_path_first_candidate_verified",
+  "author": "pro_review",
+  "baseline_commit": "382265eac1ea5e247908702f6b73d60776679ef0",
+  "clock_observed_after_candidate": "2026-09-11 09:28:32 UTC",
+  "whole_v1_complete": false,
+  "scope": "Explicit CPU command declaration and artifact-publication path only. New native execution, sealed input transport, policy loop, budget reservation and lifecycle integration belong to other authors.",
+  "ownership": {
+    "new_production": [
+      "src/orze/core/cpu_action_contract.py"
+    ],
+    "modified_production": [
+      "src/orze/engine/artifact_publication.py"
+    ],
+    "new_tests": [
+      "tests/test_cpu_action_contract.py",
+      "tests/test_cpu_action_artifact_publication.py"
+    ],
+    "existing_test_edits": [],
+    "cpu_action_publication_module": "Not created: all three required metadata functions live in cpu_action_contract; the original artifact prepare/verify/register pipeline is reused."
+  },
+  "interfaces": {
+    "validate_action": "orze.core.cpu_action_contract.validate_action(value) -> detached dict",
+    "action_fingerprint": "orze.core.cpu_action_contract.action_fingerprint(action) -> sha256 string",
+    "artifact_binding": "orze.core.cpu_action_contract.artifact_binding(cfg, folder, action) -> existing four-field publication binding",
+    "exact_fields": [
+      "version",
+      "adapter",
+      "purpose",
+      "inputs",
+      "command",
+      "timeout_seconds",
+      "outputs"
+    ],
+    "types": "version exact int 1; adapter command; nonempty purpose text; inputs exact JSON dict; command nonempty list of nonempty strings without NUL; positive finite exact int/float timeout (not bool); existing strict artifact outputs mapping.",
+    "bounded_json": "Reuses execution_attempts._json: at most 65536 encoded bytes, finite JSON values, bounded depth/nodes; no implicit path/file references in inputs.",
+    "specification": "Canonical normalized action in domain orze.native_cpu_action.v1, including literal command/inline inputs/timeout/output declaration. No additional task ID, attempt ID or storage path is added.",
+    "artifact_root": "Existing configured _project_root/_orze_dir resolution and artifacts subdirectory; no metadata helper filesystem writes.",
+    "zero_outputs": "Explicit outputs={} yields a non-None native publication binding. Original prepare/register permit an empty set without creating files or registry tables.",
+    "zero_observations": "This slice publishes no scientific observations. The new SQL mechanism test demonstrates an explicitly bound empty batch; native action execution is not proved by that test."
+  },
+  "production_delta": {
+    "new_contract_sha256": "cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736",
+    "artifact_publication_sha256": "c495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2",
+    "existing_publisher_change": "Only action->_action_attempts exact attempt/work source mapping in _binding, plus documentation. Other original top-level definitions remain AST-identical.",
+    "snapshot": {
+      "path": "docs/evidence/snapshots/v1-06a-before-action-artifact-publication.py",
+      "source": "src/orze/engine/artifact_publication.py",
+      "sha256": "de752ad18c47e7c38b6ace3f5ee05bbdf15bb940c26e33ffd56568d983bf9ab6",
+      "complete_baseline_byte_equal": true
+    }
+  },
+  "test_classification": {
+    "new_contract_mechanisms": 27,
+    "new_artifact_path_and_store_mechanisms": 6,
+    "total_new_cases": 33,
+    "first_execution_failures": 0,
+    "missing_api_reds": 0,
+    "historical_behavior_reds": 0,
+    "old_neighborhood_cases": 103,
+    "old_plus_new_bounded_total": 136,
+    "literal_assert_statements": 31,
+    "overlap_note": "First 33-case run is contained in the later 136-case run; counts are not additive.",
+    "separate_review": "The subsequently authored test_cpu_execution_storage_pin.py concerns another author's CPU profile pin and is deliberately not included in these 33 mechanisms or this candidate run."
+  },
+  "runs": [
+    {
+      "name": "new_33_first_execution",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_contract.py tests/test_cpu_action_artifact_publication.py --tb=short",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "chunk_id": "394df2",
+      "exit_code": 0,
+      "output": ".................................                                        [100%]\n33 passed in 0.36s\n",
+      "scope": "First execution after new API implementation. No missing-API test was run. Hashes were read after this run; no simultaneous pre/post manifest is claimed for this first run."
+    },
+    {
+      "name": "new_plus_existing_artifact_observation_neighborhood",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_contract.py tests/test_cpu_action_artifact_publication.py tests/test_artifact_contract_binding.py tests/test_artifact_contract_config.py tests/test_research_artifact_store.py tests/test_research_observation_store.py tests/test_artifact_snapshot_contract.py --tb=short",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "initial": {
+        "chunk_id": "d405ad",
+        "wall_time_seconds": 1.001472907,
+        "session_id": 77427,
+        "original_token_count": 16,
+        "output": "................................................................"
+      },
+      "final": {
+        "chunk_id": "9df90b",
+        "wall_time_seconds": 0.000002869,
+        "exit_code": 0,
+        "original_token_count": 29,
+        "output": "........ [ 52%]\n................................................................         [100%]\n136 passed in 6.02s\n"
+      },
+      "exit_code": 0,
+      "complete_output": "........................................................................ [ 52%]\n................................................................         [100%]\n136 passed in 6.02s\n",
+      "scope": "33 new +103 existing cases; bounded candidate only, not full suite."
+    }
+  ],
+  "candidate_inventory": {
+    "command": "sha256sum src/orze/core/cpu_action_contract.py src/orze/engine/artifact_publication.py src/orze/core/artifact_contract.py src/orze/core/research_artifacts.py src/orze/core/research_observations.py tests/test_cpu_action_contract.py tests/test_cpu_action_artifact_publication.py tests/test_artifact_contract_binding.py tests/test_artifact_contract_config.py tests/test_research_artifact_store.py tests/test_research_observation_store.py tests/test_artifact_snapshot_contract.py",
+    "pre": {
+      "chunk_id": "073021",
+      "wall_time_seconds": 0.000004337,
+      "exit_code": 0,
+      "original_token_count": 315,
+      "output": "cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736  src/orze/core/cpu_action_contract.py\nc495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2  src/orze/engine/artifact_publication.py\ne5d746af0f48deb4a845e140853cf93415dc9bf62eee35da3e527a22a1c56c13  src/orze/core/artifact_contract.py\n10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33  src/orze/core/research_artifacts.py\n82596eceb7f6f4493d9f2cd2b71b574117175ea9d7e75f0bf6d013b2f8bc30fc  src/orze/core/research_observations.py\ncf852e265d612e90d7f2fe70de228e613a7def9f0cdae0825e91dc059c5564ac  tests/test_cpu_action_contract.py\n22555a9edbc77cc86a2b793cbaedf73cef60645092c6143b90187d174dc92ec4  tests/test_cpu_action_artifact_publication.py\n387ff26257a378bd74e6a98a5646010b6daee4be4b65dbbdbd78fb5c5ffa2766  tests/test_artifact_contract_binding.py\n6b38871b62fd0f6b42959a73b3e50ea353477faf37dec76577d09567e3b1ec8c  tests/test_artifact_contract_config.py\nbbb967bb85641d9c6908c4f6fa8cb06f0ebeae466c8461558d4553fee0407e3a  tests/test_research_artifact_store.py\n4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2  tests/test_research_observation_store.py\n00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359  tests/test_artifact_snapshot_contract.py\n"
+    },
+    "post": {
+      "chunk_id": "6cfbd1",
+      "wall_time_seconds": 0.000003637,
+      "exit_code": 0,
+      "original_token_count": 315,
+      "output": "cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736  src/orze/core/cpu_action_contract.py\nc495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2  src/orze/engine/artifact_publication.py\ne5d746af0f48deb4a845e140853cf93415dc9bf62eee35da3e527a22a1c56c13  src/orze/core/artifact_contract.py\n10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33  src/orze/core/research_artifacts.py\n82596eceb7f6f4493d9f2cd2b71b574117175ea9d7e75f0bf6d013b2f8bc30fc  src/orze/core/research_observations.py\ncf852e265d612e90d7f2fe70de228e613a7def9f0cdae0825e91dc059c5564ac  tests/test_cpu_action_contract.py\n22555a9edbc77cc86a2b793cbaedf73cef60645092c6143b90187d174dc92ec4  tests/test_cpu_action_artifact_publication.py\n387ff26257a378bd74e6a98a5646010b6daee4be4b65dbbdbd78fb5c5ffa2766  tests/test_artifact_contract_binding.py\n6b38871b62fd0f6b42959a73b3e50ea353477faf37dec76577d09567e3b1ec8c  tests/test_artifact_contract_config.py\nbbb967bb85641d9c6908c4f6fa8cb06f0ebeae466c8461558d4553fee0407e3a  tests/test_research_artifact_store.py\n4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2  tests/test_research_observation_store.py\n00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359  tests/test_artifact_snapshot_contract.py\n"
+    },
+    "file_count": 12,
+    "exact": true,
+    "files": {
+      "src/orze/core/cpu_action_contract.py": "cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736",
+      "src/orze/engine/artifact_publication.py": "c495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2",
+      "src/orze/core/artifact_contract.py": "e5d746af0f48deb4a845e140853cf93415dc9bf62eee35da3e527a22a1c56c13",
+      "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "src/orze/core/research_observations.py": "82596eceb7f6f4493d9f2cd2b71b574117175ea9d7e75f0bf6d013b2f8bc30fc",
+      "tests/test_cpu_action_contract.py": "cf852e265d612e90d7f2fe70de228e613a7def9f0cdae0825e91dc059c5564ac",
+      "tests/test_cpu_action_artifact_publication.py": "22555a9edbc77cc86a2b793cbaedf73cef60645092c6143b90187d174dc92ec4",
+      "tests/test_artifact_contract_binding.py": "387ff26257a378bd74e6a98a5646010b6daee4be4b65dbbdbd78fb5c5ffa2766",
+      "tests/test_artifact_contract_config.py": "6b38871b62fd0f6b42959a73b3e50ea353477faf37dec76577d09567e3b1ec8c",
+      "tests/test_research_artifact_store.py": "bbb967bb85641d9c6908c4f6fa8cb06f0ebeae466c8461558d4553fee0407e3a",
+      "tests/test_research_observation_store.py": "4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2",
+      "tests/test_artifact_snapshot_contract.py": "00870539f42684f5eb8076f883acbc72e140a652e0227c8f0ca5155eea59b359"
+    },
+    "limit": "Only these twelve files were bracketed. Other authors concurrently integrate the V1-06A loop; this is not an assertion of whole-repository freeze."
+  },
+  "static_verification": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, subprocess\nfrom pathlib import Path\nbaseline = '382265eac1ea5e247908702f6b73d60776679ef0'\nsource = 'src/orze/engine/artifact_publication.py'\nsnapshot = Path('docs/evidence/snapshots/v1-06a-before-action-artifact-publication.py')\nbefore = subprocess.check_output(['git', 'show', baseline + ':' + source])\nassert snapshot.read_bytes() == before and before.endswith(b'\\n')\nold, new = ast.parse(before), ast.parse(Path(source).read_bytes())\ndef definitions(t): return {n.name: ast.dump(n, include_attributes=False) for n in t.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))}\na, b = definitions(old), definitions(new)\nassert a.keys() == b.keys()\nassert all(a[name] == b[name] for name in a if name != '_binding')\nfiles = {}\nfor path in ['src/orze/core/cpu_action_contract.py', source, 'tests/test_cpu_action_contract.py', 'tests/test_cpu_action_artifact_publication.py']:\n raw = Path(path).read_bytes()\n t = ast.parse(raw)\n files[path] = {'sha256': hashlib.sha256(raw).hexdigest(), 'literal_asserts': sum(isinstance(n, ast.Assert) for n in ast.walk(t))}\nfor path in ['tests/test_artifact_contract_binding.py', 'tests/test_artifact_contract_config.py', 'tests/test_research_artifact_store.py', 'tests/test_research_observation_store.py', 'tests/test_artifact_snapshot_contract.py']:\n assert Path(path).read_bytes() == subprocess.check_output(['git', 'show', baseline + ':' + path])\nprint(json.dumps({'files': files, 'snapshot_sha256': hashlib.sha256(before).hexdigest(), 'snapshot_complete_baseline_equal': True, 'only_existing_binding_function_ast_changed': True, 'five_inherited_test_files_exact': True}, sort_keys=True))\nPY",
+    "result": {
+      "chunk_id": "fbc02a",
+      "wall_time_seconds": 0.000004938,
+      "exit_code": 0,
+      "original_token_count": 204,
+      "output": "{\"files\": {\"src/orze/core/cpu_action_contract.py\": {\"literal_asserts\": 0, \"sha256\": \"cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736\"}, \"src/orze/engine/artifact_publication.py\": {\"literal_asserts\": 0, \"sha256\": \"c495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2\"}, \"tests/test_cpu_action_artifact_publication.py\": {\"literal_asserts\": 14, \"sha256\": \"22555a9edbc77cc86a2b793cbaedf73cef60645092c6143b90187d174dc92ec4\"}, \"tests/test_cpu_action_contract.py\": {\"literal_asserts\": 17, \"sha256\": \"cf852e265d612e90d7f2fe70de228e613a7def9f0cdae0825e91dc059c5564ac\"}}, \"five_inherited_test_files_exact\": true, \"only_existing_binding_function_ast_changed\": true, \"snapshot_complete_baseline_equal\": true, \"snapshot_sha256\": \"de752ad18c47e7c38b6ace3f5ee05bbdf15bb940c26e33ffd56568d983bf9ab6\"}\n"
+    },
+    "interpretation": "Complete old publisher snapshot equals fixed baseline. Existing publisher functions/classes except _binding are unchanged; five exercised preexisting test files remain byte-exact."
+  },
+  "evidence_boundaries": [
+    "No process is launched by these two new test files: the command tokens are metadata only.",
+    "The publication mechanism uses real temporary files, independent copied inode, a retained source FD and actual SQLite execution/artifact/observation stores. It does not prove native admission, current source claim, effect-lease ownership or supervisor closure.",
+    "No successful scientific observation is fabricated. Empty observation batches are not zero scores.",
+    "Action work-directory whitelist remains exact; task root, missing explicit source_dir, another attempt and evaluation work are refused.",
+    "The new declaration specifies command argv, not shell expansion. It does not forbid explicitly named interpreter executables or claim their imports/environment/dependencies are hermetically captured.",
+    "The native author owns actual shell=False execution and sealed_payload worker-only-FD input transport; those are not implemented by this metadata module.",
+    "Read-only artifact snapshots remain a cooperative-writer boundary, not a hostile-same-UID sandbox or power-loss certification.",
+    "No provider/GPU workload, holdout access, full-suite pass, unknown recovery or whole-V1 completion is claimed."
+  ]
+}

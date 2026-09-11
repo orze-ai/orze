@@ -1051,7 +1051,7 @@ class OrzePhaseMixin:
         from orze.engine.launcher import require_gpu_task
         for idea_id in unclaimed:
             require_gpu_task(idea_id, self.results_dir, self.cfg,
-                             lake=getattr(self, "lake", None), idea=ideas.get(idea_id))
+                             lake=self.lake, idea=ideas.get(idea_id))
         if not _controller_admission_ready(self):
             return []
         cfg = self.cfg

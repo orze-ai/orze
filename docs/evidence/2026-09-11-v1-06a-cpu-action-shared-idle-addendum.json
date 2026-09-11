@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "slice": "V1-06A",
+  "owner": "runtime_evidence",
+  "status": "independent shared-scope idle addendum complete; source-specific, not whole-suite verification",
+  "finding": {
+    "classification": "one new CPU policy implementation-draft red, not historical API absence",
+    "description": "QueuePolicy used this Orze's empty in-memory active map to publish queue_drained Stop although the same SQLite scope held another owner's real active reservation.",
+    "bounded_premise": "A public initialize/reserve call creates a genuine RESERVED permit in the same IdeaLake and results scope. It represents admitted or unresolved peer capacity; no fake table/claim/attempt/process is constructed. A second actual foreground CLI --once with idle=stop must persist Wait and leave the permit unchanged.",
+    "snapshot": "docs/evidence/snapshots/v1-06a-before-shared-idle-cpu-phase.py",
+    "snapshot_sha256": "e8ec744674266b9333b3cff47fe1cfb327e42e171c10edf2c5d7812faf574128",
+    "snapshot_provenance": "Complete actual cpu_phase.py captured with apply_patch before the policy correction; same bytes checked during fixed replay.",
+    "test": "tests/test_cpu_action_shared_idle.py",
+    "test_sha256": "76bb805370143b98a1bd5186b48dccfe2ea84e43443b9deb56c4e92aefcd0cdd",
+    "assert_count": 10,
+    "assert_ast_sha256": "6e18b8e4c9e1dfe5bd5a97265afe8830324e3698dc40b4209f3a0c268d077a28",
+    "assert_digest_algorithm": "sha256('\\n'.join(ast.dump(n,include_attributes=False) for n in ast.walk(ast.parse(file_bytes)) if isinstance(n,ast.Assert)).encode())",
+    "first_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_shared_idle.py --tb=short",
+    "first_start": {
+      "chunk_id": "4e0db0",
+      "wall_time_seconds": 1.001532042,
+      "session_id": 71420,
+      "original_token_count": 20,
+      "output": "F                                                                        [100%]"
+    },
+    "first_completion": {
+      "chunk_id": "d0c121",
+      "wall_time_seconds": 0.000002578,
+      "exit_code": 1,
+      "original_token_count": 344,
+      "output": "\n=================================== FAILURES ===================================\n_______ test_empty_local_controller_waits_for_shared_active_reservation ________\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_action_shared_idle.py:30: in test_empty_local_controller_waits_for_shared_active_reservation\n    assert records[0][\"kind\"] == \"Wait\"\nE   AssertionError: assert 'Stop' == 'Wait'\nE     \nE     - Wait\nE     + Stop\n---------------------------- Captured stderr setup -----------------------------\n\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\n------------------------------ Captured log setup ------------------------------\nERROR    orze:extensions.py:68 orze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n=========================== short test summary info ============================\nFAILED tests/test_cpu_action_shared_idle.py::test_empty_local_controller_waits_for_shared_active_reservation\n1 failed in 0.92s\n"
+    },
+    "first_footer": "1 failed in 0.92s",
+    "failure_location": "Actual durable decision kind was Stop, expected Wait; setup reached the target assertion.",
+    "correction": "Root changed idle Stop and Wait reason to use scope_active = snapshot['active'] or budget['active_reservations'] > 0. No reviewer production change.",
+    "final_phase_sha256": "b4ac75e38f59ec2ac54d05589770de9d9e03923885c99843bf887b62a46fa28a",
+    "replay_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 - <<'PY'\nfrom pathlib import Path\nimport hashlib,pytest\nfrom orze.engine import cpu_phase as module\np=Path('docs/evidence/snapshots/v1-06a-before-shared-idle-cpu-phase.py')\nassert hashlib.sha256(p.read_bytes()).hexdigest()=='e8ec744674266b9333b3cff47fe1cfb327e42e171c10edf2c5d7812faf574128'\nexec(compile(p.read_bytes(),str(p),'exec'),module.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','tests/test_cpu_action_shared_idle.py','--tb=short']))\nPY",
+    "replay_result": {
+      "chunk_id": "d4c072",
+      "wall_time_seconds": 0.80090959,
+      "exit_code": 1,
+      "original_token_count": 364,
+      "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_______ test_empty_local_controller_waits_for_shared_active_reservation ________\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_action_shared_idle.py:30: in test_empty_local_controller_waits_for_shared_active_reservation\n    assert records[0][\"kind\"] == \"Wait\"\nE   AssertionError: assert 'Stop' == 'Wait'\nE     \nE     - Wait\nE     + Stop\n---------------------------- Captured stderr setup -----------------------------\n\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\n------------------------------ Captured log setup ------------------------------\nERROR    orze:extensions.py:68 orze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n=========================== short test summary info ============================\nFAILED tests/test_cpu_action_shared_idle.py::test_empty_local_controller_waits_for_shared_active_reservation\n1 failed in 0.54s\n"
+    }
+  },
+  "final_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_shared_idle.py tests/test_cpu_product_loop.py --tb=short",
+    "session_id": 3869,
+    "start_chunk": "f31fa1",
+    "completion_chunk": "552f5e",
+    "exit_code": 0,
+    "footer": "8 passed in 5.62s",
+    "composition": {
+      "new_shared_idle_case": 1,
+      "existing_cpu_product_cases": 7
+    },
+    "pre_command": "python3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\nfiles=[\"src/orze/engine/cpu_phase.py\",\"src/orze/core/cpu_action_budget.py\",\"src/orze/core/cpu_execution.py\",\"src/orze/core/config.py\",\"src/orze/cli.py\",\"src/orze/engine/orchestrator.py\",\"src/orze/idea_lake.py\",\"src/orze/engine/native_cpu_action.py\",\"tests/test_cpu_action_shared_idle.py\",\"tests/test_cpu_product_loop.py\"]\nprint(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+    "pre_chunk": "591355",
+    "post_command": "python3 - <<'PY'\nfrom pathlib import Path\nimport json,hashlib\nfiles=[\"src/orze/engine/cpu_phase.py\",\"src/orze/core/cpu_action_budget.py\",\"src/orze/core/cpu_execution.py\",\"src/orze/core/config.py\",\"src/orze/cli.py\",\"src/orze/engine/orchestrator.py\",\"src/orze/idea_lake.py\",\"src/orze/engine/native_cpu_action.py\",\"tests/test_cpu_action_shared_idle.py\",\"tests/test_cpu_product_loop.py\"]\nprint(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files},sort_keys=True))\nPY",
+    "post_chunk": "599768",
+    "pre_sha256": {
+      "src/orze/cli.py": "35227ff834b38c9259c33c9c1c8c0218fd0ee9c5c02c271a27505b91ca41093b",
+      "src/orze/core/config.py": "ed5956803503da2421a003859bb484e47a3afad1755702d82f718b1840ab98a3",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/cpu_execution.py": "b9ac04aea5e0c901f29e0b4b65850fb8e8b1c048215c2f749c6ca812b2b910a8",
+      "src/orze/engine/cpu_phase.py": "b4ac75e38f59ec2ac54d05589770de9d9e03923885c99843bf887b62a46fa28a",
+      "src/orze/engine/native_cpu_action.py": "9559e281b90a214feb0e2092d3836c17fd67ee9d21f5f529c085f82f767862cb",
+      "src/orze/engine/orchestrator.py": "a4fee1b5a2ce4456fece2f6b91722ec3427eb53d931610e54a42aad026c60bcd",
+      "src/orze/idea_lake.py": "f0f07c631a0428ecfb21fca9193281659d5942130f373eb98faab582d19a879f",
+      "tests/test_cpu_action_shared_idle.py": "76bb805370143b98a1bd5186b48dccfe2ea84e43443b9deb56c4e92aefcd0cdd",
+      "tests/test_cpu_product_loop.py": "81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22"
+    },
+    "post_sha256": {
+      "src/orze/cli.py": "35227ff834b38c9259c33c9c1c8c0218fd0ee9c5c02c271a27505b91ca41093b",
+      "src/orze/core/config.py": "ed5956803503da2421a003859bb484e47a3afad1755702d82f718b1840ab98a3",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/cpu_execution.py": "b9ac04aea5e0c901f29e0b4b65850fb8e8b1c048215c2f749c6ca812b2b910a8",
+      "src/orze/engine/cpu_phase.py": "b4ac75e38f59ec2ac54d05589770de9d9e03923885c99843bf887b62a46fa28a",
+      "src/orze/engine/native_cpu_action.py": "9559e281b90a214feb0e2092d3836c17fd67ee9d21f5f529c085f82f767862cb",
+      "src/orze/engine/orchestrator.py": "a4fee1b5a2ce4456fece2f6b91722ec3427eb53d931610e54a42aad026c60bcd",
+      "src/orze/idea_lake.py": "f0f07c631a0428ecfb21fca9193281659d5942130f373eb98faab582d19a879f",
+      "tests/test_cpu_action_shared_idle.py": "76bb805370143b98a1bd5186b48dccfe2ea84e43443b9deb56c4e92aefcd0cdd",
+      "tests/test_cpu_product_loop.py": "81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22"
+    },
+    "all_ten_files_exact": true
+  },
+  "history": {
+    "prior_final_review": "docs/evidence/2026-09-11-v1-06a-cpu-action-final-review.json",
+    "prior_report_sha256": "b5902ffbe23134f9f02cabadfdbd0b6ae960fe86babeb4dd78e66e46207fdc34",
+    "prior_budget_review": "docs/evidence/2026-09-11-v1-06a-cpu-action-budget-review.json",
+    "prior_budget_sha256": "a1f21cfaa483dbdf1f27ea46c7cba8135e517d9eae26a4e9bf03b545da4b4215",
+    "note": "Prior measured runs/hashes remain exact historical source epochs and were not edited. Product7 here overlaps prior product cases and is not seven new mechanisms. Whole-source legacy GPU compatibility and final aggregate remain root's responsibility."
+  },
+  "diagnostics": {
+    "note": "An installed Pro stub emits an import-time license diagnostic in the shared fixture; no installation/provider action was performed. It neither blocked setup nor caused the business failure, and is not counted as a defect.",
+    "fixture_changes": 0,
+    "production_changes_by_reviewer": 0,
+    "closed": "All test/replay processes exited. This new shared-idle case launches no worker; related product7 uses existing captured-supervision cleanup."
+  },
+  "limitations": [
+    "This proves scope occupancy handling, not a new controller registration/adoption protocol.",
+    "A real RESERVED permit is sufficient to prevent a false global idle decision, even with no new native attempt or live worker.",
+    "No new debit/refund, host process discovery, GPU, provider, holdout plaintext, automatic recovery or cross-DB quota claim."
+  ]
+}

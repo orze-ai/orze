@@ -124,11 +124,6 @@ def _proposal_fields(idea):
         return match.group(1).strip() if match else None
 
     priority = idea.get("priority", "medium")
-    declared = field("Kind")
-    configured = (idea.get("config") or {}).get("kind")
-    if declared is not None and configured is not None and declared != configured:
-        raise ValueError("proposal_kind_conflict")
-    kind = configured if configured is not None else declared if declared is not None else "train"
     if priority == "critical" and idea.get("_overlay_source") != "sidecar":
         priority = "high"
     return {
@@ -136,7 +131,6 @@ def _proposal_fields(idea):
         "category": field("Category"), "parent": field("Parent"),
         "hypothesis": field("Hypothesis"),
         "approach_family": idea.get("approach_family", field("Approach Family") or "other"),
-        "kind": kind,
     }
 
 
@@ -193,15 +187,7 @@ def ingest_ideas_source(engine, cfg):
                 fingerprint = pending.get(idea_id)
                 if (fingerprint and config_hashes.get(fingerprint)
                         and config_hashes[fingerprint] != idea_id):
-                    # CPU and legacy executable kinds have different admission
-                    # domains even when their raw config happens to hash alike.
-                    winner = engine.lake.get(config_hashes[fingerprint])
-                    try:
-                        cpu = _proposal_fields(idea)["kind"] == "native_cpu_action"
-                    except ValueError:
-                        continue
-                    if winner and (winner.get("kind") == "native_cpu_action") == cpu:
-                        continue
+                    continue
                 try:
                     outcome = engine.lake.insert(
                         idea_id, idea["title"], yaml.dump(idea.get("config", {})),

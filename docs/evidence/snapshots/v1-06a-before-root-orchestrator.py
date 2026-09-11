@@ -104,12 +104,6 @@ _roles_unavailable_warned = False
 
 class Orze(OrzePhaseMixin):
     def __init__(self, gpu_ids: List[int], cfg: dict, once: bool = False):
-        from orze.core.cpu_execution import cpu_execution
-        self._cpu_execution = cpu_execution(cfg)
-        if self._cpu_execution is not None:
-            from orze.engine.cpu_phase import initialize
-            initialize(self, gpu_ids, cfg, once)
-            return
         from orze.core.controller_profile import controller_profile, profile_fingerprint
         profile = controller_profile(cfg) is not None
         if not profile and cfg.get("_controller_profile_fingerprint") is not None:
@@ -315,10 +309,6 @@ class Orze(OrzePhaseMixin):
         atexit.register(self._atexit_cleanup)
 
     def _atexit_cleanup(self):
-        if getattr(self, "_cpu_execution", None) is not None:
-            from orze.engine.cpu_phase import close
-            close(self)
-            return
         if (getattr(self, "_controller_session", None) is not None
                 or getattr(self, "_controller_profile_enabled", False)):
             # Session failure is sticky. Interpreter exit cannot manufacture
@@ -600,9 +590,6 @@ class Orze(OrzePhaseMixin):
         return self.running
 
     def _graceful_shutdown(self, kill_all=False):
-        if getattr(self, "_cpu_execution", None) is not None:
-            from orze.engine.cpu_phase import close
-            return close(self)
         managed = bool(self.cfg.get("_managed_idea_id"))
         return graceful_shutdown(
             self.results_dir, self.cfg, self.active, self.active_evals,
@@ -643,9 +630,6 @@ class Orze(OrzePhaseMixin):
         run_role_step(role_name, role_cfg, ctx)
 
     def _run_role_once(self, role_name):
-        if getattr(self, "_cpu_execution", None) is not None:
-            from orze.core.cpu_execution import CPUExecutionError
-            raise CPUExecutionError("execution: CPU queue does not activate provider roles")
         if _run_role_once_impl is None:
             logger.info("Role '%s' requires orze-pro. Install with: pip install orze-pro", role_name)
             return
@@ -758,9 +742,6 @@ class Orze(OrzePhaseMixin):
         For 'roles', merges disk config with runtime-added roles (e.g.
         auto-enabled thinker/data_analyst) instead of replacing outright.
         """
-        if getattr(self, "_cpu_execution", None) is not None:
-            from orze.core.cpu_execution import CPUExecutionError
-            raise CPUExecutionError("execution: CPU invocation is frozen; hot reload is disabled")
         cfg_path = self.cfg.get("_config_path")
         if not cfg_path or not Path(cfg_path).exists():
             return
@@ -1012,12 +993,6 @@ class Orze(OrzePhaseMixin):
 
     def run(self):
         """Run only while this controller exclusively owns its GPU scope."""
-        if getattr(self, "_cpu_execution", None) is not None:
-            from orze.engine.cpu_phase import close
-            try:
-                return self._run_leased()
-            finally:
-                close(self)
         from orze.core.controller_profile import controller_profile
         if (controller_profile(self.cfg) is not None
                 or getattr(self, "_controller_profile_enabled", False)
@@ -1091,188 +1066,178 @@ class Orze(OrzePhaseMixin):
         managed_idea = cfg.get("_managed_idea_id")
         profile = getattr(self, "_controller_session", None) is not None
 
-        if getattr(self, "_cpu_execution", None) is not None:
-            from orze.engine.cpu_phase import start
-            start(self)
-        else:
-            def post_for_event(event):
-                if profile:
-                    from orze.engine.controller_control import current_controller
-                    current_controller().poll_control()
-                    if current_controller().quiescing:
-                        return
-                if not completion_is_current(event, self.lake, self.results_dir):
+        def post_for_event(event):
+            if profile:
+                from orze.engine.controller_control import current_controller
+                current_controller().poll_control()
+                if current_controller().quiescing:
                     return
-                kwargs = {"lake": self.lake}
-                if getattr(event, "attempt_ref", None) is not None:
-                    kwargs["source_event"] = event
-                run_post_scripts(event[0], event[1], self.results_dir, cfg, **kwargs)
+            if not completion_is_current(event, self.lake, self.results_dir):
+                return
+            kwargs = {"lake": self.lake}
+            if getattr(event, "attempt_ref", None) is not None:
+                kwargs["source_event"] = event
+            run_post_scripts(event[0], event[1], self.results_dir, cfg, **kwargs)
 
-            # Log pro status
-            from orze.extensions import has_pro, pro_version
-            pro_available = has_pro(auto_install=False) if profile else has_pro()
-            if pro_available and _run_all_roles_impl is not None:
-                logger.info("orze-pro %s detected — autopilot features enabled", pro_version())
-            elif pro_available and _run_all_roles_impl is None:
+        # Log pro status
+        from orze.extensions import has_pro, pro_version
+        pro_available = has_pro(auto_install=False) if profile else has_pro()
+        if pro_available and _run_all_roles_impl is not None:
+            logger.info("orze-pro %s detected — autopilot features enabled", pro_version())
+        elif pro_available and _run_all_roles_impl is None:
+            logger.error(
+                "orze-pro licensed but role_runner failed to import — "
+                "version mismatch? Try: pip install --upgrade orze orze-pro"
+            )
+        elif _role_mod is not None:
+            logger.info("Using built-in agent modules (install orze-pro to upgrade)")
+        else:
+            roles = cfg.get("roles", {})
+            if roles:
+                logger.warning(
+                    "Roles configured (%s) but no agent support available. "
+                    "Install orze-pro for autonomous research agents.",
+                    ", ".join(roles.keys()))
+
+        if managed_idea or profile:
+            # A one-idea run must not perform daemon-wide recovery, stale-lock
+            # cleanup, symlink normalization, or upgrade cleanup.
+            from orze.engine.health import HealthMonitor
+            self._health_monitor = HealthMonitor(self.results_dir)
+        else:
+            self._startup_checks()
+            self._kill_orphans()
+        # A prior stop/shutdown marker is not proof of closed writers. Recheck
+        # immediately before entering work; never silently clear these markers.
+        if not managed_idea and not profile:
+            from orze.core.control_outcome import require_controller_start_allowed
+            require_controller_start_allowed(self.results_dir)
+        # Clear upgrade sentinel if we're already at the target version
+        upgrade_sentinel = self.results_dir / ".orze_upgrade"
+        if upgrade_sentinel.exists() and not managed_idea and not profile:
+            try:
+                target = upgrade_sentinel.read_text(encoding="utf-8").strip()
+                def _ver(s):
+                    try:
+                        return tuple(int(x) for x in s.split(".")[:3])
+                    except (ValueError, AttributeError):
+                        return (0,)
+                if _ver(__version__) >= _ver(target):
+                    upgrade_sentinel.unlink(missing_ok=True)
+            except Exception:
+                pass
+        logger.info("Starting orze v%s on GPUs %s (PID %d)",
+                     __version__, self.gpu_ids, os.getpid())
+        logger.info("Ideas: %s | Results: %s | Timeout: %ds | Poll: %ds",
+                     cfg["ideas_file"], cfg["results_dir"],
+                     cfg["timeout"], cfg["poll"])
+        for rname, rcfg in (cfg.get("roles") or {}).items():
+            if not isinstance(rcfg, dict):
+                continue
+            rmode = rcfg.get("mode", "script")
+            if rmode == "claude":
+                skills = rcfg.get("skills") or []
+                rtarget = f"{len(skills)} skill(s)" if skills else None
+            elif rmode == "research":
+                skills = rcfg.get("skills") or []
+                rtarget = f"{rcfg.get('backend', '?')} + {len(skills)} skill(s)"
+            else:
+                rtarget = rcfg.get("script")
+            if rtarget:
+                logger.info("Role '%s' [%s]: %s (cooldown: %ds, timeout: %ds)",
+                            rname, rmode, rtarget,
+                            rcfg.get("cooldown", 300),
+                            rcfg.get("timeout", 600))
+
+        # Lifecycle notification: started
+        n_roles = len([r for r in (cfg.get("roles") or {}).values()
+                       if isinstance(r, dict)])
+        if not managed_idea:
+            notify("started", {
+                "host": socket.gethostname(),
+                "message": (f"v{__version__} | {len(self.gpu_ids)} GPUs | "
+                            f"{n_roles} roles | pid {os.getpid()}"),
+            }, cfg)
+
+        # Boot-time delivery canary. Closes the meta-audit blind spot
+        # that notification delivery was trust-based — a misconfigured
+        # webhook URL or revoked Telegram token would silently swallow
+        # every alert. Runs once on leader boot; per-channel result is
+        # stashed on self for write_status to surface under
+        # ``notification_health``. When ``notifications.startup_canary``
+        # is true (default true) any delivery failure exits the daemon
+        # nonzero so systemd / loop-restart picks it up.
+        ncfg = cfg.get("notifications") or {}
+        self.notification_health = (
+            {} if managed_idea else startup_canary(cfg))
+        if (ncfg.get("enabled") and ncfg.get("startup_canary", True)
+                and self.notification_health):
+            failed = [lbl for lbl, st in self.notification_health.items()
+                      if not st.get("delivered")]
+            if failed:
                 logger.error(
-                    "orze-pro licensed but role_runner failed to import — "
-                    "version mismatch? Try: pip install --upgrade orze orze-pro"
+                    "Startup canary FAILED on %d/%d channel(s): %s — "
+                    "exiting nonzero so the supervisor restarts. Set "
+                    "notifications.startup_canary: false in orze.yaml "
+                    "to disable this check.",
+                    len(failed), len(self.notification_health),
+                    ", ".join(failed))
+                raise SystemExit(
+                    f"startup_canary failed for: {', '.join(failed)}")
+
+        # Initialize milestone from current state (avoid spurious on restart)
+        if not managed_idea:
+            try:
+                init_ideas = parse_ideas(cfg["ideas_file"])
+                init_counts = _count_statuses(
+                    init_ideas, self.results_dir, lake=self.lake)
+                milestone_every = (cfg.get("notifications") or {}).get(
+                    "milestone_every", 100)
+                if milestone_every > 0:
+                    self._last_milestone = (
+                        init_counts.get("COMPLETED", 0) // milestone_every
+                    ) * milestone_every
+                    self._hb_completed_count = init_counts.get("COMPLETED", 0)
+            except Exception:
+                pass
+
+        # Full reconcile at startup: clear ALL stale queued ideas at once
+        if self.lake and not managed_idea and not profile:
+            try:
+                n = self.lake.reconcile_statuses(
+                    str(self.results_dir),
+                    evaluation_required=bool(cfg.get("eval_script")),
                 )
-            elif _role_mod is not None:
-                logger.info("Using built-in agent modules (install orze-pro to upgrade)")
-            else:
-                roles = cfg.get("roles", {})
-                if roles:
-                    logger.warning(
-                        "Roles configured (%s) but no agent support available. "
-                        "Install orze-pro for autonomous research agents.",
-                        ", ".join(roles.keys()))
+                if n:
+                    logger.info("Startup reconcile: updated %d stale ideas", n)
+            except Exception as e:
+                logger.warning("Startup reconcile failed: %s", e)
 
-            if managed_idea or profile:
-                # A one-idea run must not perform daemon-wide recovery, stale-lock
-                # cleanup, symlink normalization, or upgrade cleanup.
-                from orze.engine.health import HealthMonitor
-                self._health_monitor = HealthMonitor(self.results_dir)
-            else:
-                self._startup_checks()
-                self._kill_orphans()
-            # A prior stop/shutdown marker is not proof of closed writers. Recheck
-            # immediately before entering work; never silently clear these markers.
-            if not managed_idea and not profile:
-                from orze.core.control_outcome import require_controller_start_allowed
-                require_controller_start_allowed(self.results_dir)
-            # Clear upgrade sentinel if we're already at the target version
-            upgrade_sentinel = self.results_dir / ".orze_upgrade"
-            if upgrade_sentinel.exists() and not managed_idea and not profile:
-                try:
-                    target = upgrade_sentinel.read_text(encoding="utf-8").strip()
-                    def _ver(s):
-                        try:
-                            return tuple(int(x) for x in s.split(".")[:3])
-                        except (ValueError, AttributeError):
-                            return (0,)
-                    if _ver(__version__) >= _ver(target):
-                        upgrade_sentinel.unlink(missing_ok=True)
-                except Exception:
-                    pass
-            logger.info("Starting orze v%s on GPUs %s (PID %d)",
-                         __version__, self.gpu_ids, os.getpid())
-            logger.info("Ideas: %s | Results: %s | Timeout: %ds | Poll: %ds",
-                         cfg["ideas_file"], cfg["results_dir"],
-                         cfg["timeout"], cfg["poll"])
-            for rname, rcfg in (cfg.get("roles") or {}).items():
-                if not isinstance(rcfg, dict):
-                    continue
-                rmode = rcfg.get("mode", "script")
-                if rmode == "claude":
-                    skills = rcfg.get("skills") or []
-                    rtarget = f"{len(skills)} skill(s)" if skills else None
-                elif rmode == "research":
-                    skills = rcfg.get("skills") or []
-                    rtarget = f"{rcfg.get('backend', '?')} + {len(skills)} skill(s)"
-                else:
-                    rtarget = rcfg.get("script")
-                if rtarget:
-                    logger.info("Role '%s' [%s]: %s (cooldown: %ds, timeout: %ds)",
-                                rname, rmode, rtarget,
-                                rcfg.get("cooldown", 300),
-                                rcfg.get("timeout", 600))
+        # Rebuild config dedup hash cache from completed ideas
+        if not managed_idea:
+            try:
+                self._rebuild_config_hashes()
+            except Exception as e:
+                logger.error("Config hash cache rebuild failed: %s", e)
+                notify("config_hash_failure", {"error": str(e)}, self.cfg)
 
-            # Lifecycle notification: started
-            n_roles = len([r for r in (cfg.get("roles") or {}).values()
-                           if isinstance(r, dict)])
-            if not managed_idea:
-                notify("started", {
-                    "host": socket.gethostname(),
-                    "message": (f"v{__version__} | {len(self.gpu_ids)} GPUs | "
-                                f"{n_roles} roles | pid {os.getpid()}"),
-                }, cfg)
+        # Initialize code change detector (removed in v4.0)
 
-            # Boot-time delivery canary. Closes the meta-audit blind spot
-            # that notification delivery was trust-based — a misconfigured
-            # webhook URL or revoked Telegram token would silently swallow
-            # every alert. Runs once on leader boot; per-channel result is
-            # stashed on self for write_status to surface under
-            # ``notification_health``. When ``notifications.startup_canary``
-            # is true (default true) any delivery failure exits the daemon
-            # nonzero so systemd / loop-restart picks it up.
-            ncfg = cfg.get("notifications") or {}
-            self.notification_health = (
-                {} if managed_idea else startup_canary(cfg))
-            if (ncfg.get("enabled") and ncfg.get("startup_canary", True)
-                    and self.notification_health):
-                failed = [lbl for lbl, st in self.notification_health.items()
-                          if not st.get("delivered")]
-                if failed:
-                    logger.error(
-                        "Startup canary FAILED on %d/%d channel(s): %s — "
-                        "exiting nonzero so the supervisor restarts. Set "
-                        "notifications.startup_canary: false in orze.yaml "
-                        "to disable this check.",
-                        len(failed), len(self.notification_health),
-                        ", ".join(failed))
-                    raise SystemExit(
-                        f"startup_canary failed for: {', '.join(failed)}")
-
-            # Initialize milestone from current state (avoid spurious on restart)
-            if not managed_idea:
-                try:
-                    init_ideas = parse_ideas(cfg["ideas_file"])
-                    init_counts = _count_statuses(
-                        init_ideas, self.results_dir, lake=self.lake)
-                    milestone_every = (cfg.get("notifications") or {}).get(
-                        "milestone_every", 100)
-                    if milestone_every > 0:
-                        self._last_milestone = (
-                            init_counts.get("COMPLETED", 0) // milestone_every
-                        ) * milestone_every
-                        self._hb_completed_count = init_counts.get("COMPLETED", 0)
-                except Exception:
-                    pass
-
-            # Full reconcile at startup: clear ALL stale queued ideas at once
-            if self.lake and not managed_idea and not profile:
-                try:
-                    n = self.lake.reconcile_statuses(
-                        str(self.results_dir),
-                        evaluation_required=bool(cfg.get("eval_script")),
-                    )
-                    if n:
-                        logger.info("Startup reconcile: updated %d stale ideas", n)
-                except Exception as e:
-                    logger.warning("Startup reconcile failed: %s", e)
-
-            # Rebuild config dedup hash cache from completed ideas
-            if not managed_idea:
-                try:
-                    self._rebuild_config_hashes()
-                except Exception as e:
-                    logger.error("Config hash cache rebuild failed: %s", e)
-                    notify("config_hash_failure", {"error": str(e)}, self.cfg)
-
-            # Initialize code change detector (removed in v4.0)
-
-            # Compute sealed file manifest for metric integrity
-            sealed_files = cfg.get("sealed_files", [])
-            if sealed_files and not managed_idea:
-                from orze.engine.sealed import compute_sealed_hashes, write_sealed_manifest
-                hashes = compute_sealed_hashes(sealed_files)
-                # Explicit pins replace startup observations.  This detects source
-                # drift that predates the current Orze process, rather than blessing
-                # the already-drifted content as the new baseline.
-                hashes.update({
-                    str(path): str(digest).lower()
-                    for path, digest in (cfg.get("sealed_hashes") or {}).items()
-                })
-                write_sealed_manifest(self.results_dir, hashes)
+        # Compute sealed file manifest for metric integrity
+        sealed_files = cfg.get("sealed_files", [])
+        if sealed_files and not managed_idea:
+            from orze.engine.sealed import compute_sealed_hashes, write_sealed_manifest
+            hashes = compute_sealed_hashes(sealed_files)
+            # Explicit pins replace startup observations.  This detects source
+            # drift that predates the current Orze process, rather than blessing
+            # the already-drifted content as the new baseline.
+            hashes.update({
+                str(path): str(digest).lower()
+                for path, digest in (cfg.get("sealed_hashes") or {}).items()
+            })
+            write_sealed_manifest(self.results_dir, hashes)
 
         while self.running:
-            if getattr(self, "_cpu_execution", None) is not None:
-                from orze.engine.cpu_phase import iteration
-                self.iteration += 1
-                if not iteration(self):
-                    break
-                continue
             if profile:
                 from orze.engine.controller_control import current_controller
                 from orze.engine.controller_members import member_limit_reached
@@ -1750,8 +1715,6 @@ class Orze(OrzePhaseMixin):
                 break
 
         # Main loop exited (signal received or --once finished)
-        if getattr(self, "_cpu_execution", None) is not None:
-            return  # run() owns exact CPU action closure, including exceptions.
         if profile:
             # Always route through owned consumers, including an empty public
             # map. Only the session can certify the separate member inventory.

@@ -22,7 +22,7 @@ _HEX = re.compile(r"[0-9a-f]{64}")
 
 
 def _phase(phase):
-    if phase not in ("training", "evaluation", "posthoc", "post_script", "pre_script", "artifact_preflight", "action"):
+    if phase not in ("training", "evaluation", "posthoc", "post_script", "pre_script", "artifact_preflight"):
         raise ValueError("process_supervision_phase_invalid")
     return phase
 

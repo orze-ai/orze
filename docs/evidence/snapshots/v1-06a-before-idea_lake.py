@@ -280,7 +280,6 @@ _KNOWN_META_COLS = {
 # F8: closed vocabulary of idea kinds. Anything else is a hard error so the
 # launcher / scheduler can safely dispatch on kind.
 ALLOWED_KINDS = {
-    "native_cpu_action",  # explicit CPU action; never the training/eval pipeline
     "train",           # legacy / default: run train_script
     "posthoc_eval",    # inference-only job on an existing ckpt/npz
     "tta_sweep",       # generate a TTA view (subclass of posthoc_eval)
@@ -1111,7 +1110,7 @@ class IdeaLake:
                         initial_state,
                         "idea_insert",
                         os.getpid(),
-                        "action" if kind == "native_cpu_action" else "training",
+                        "training",
                         recorded_at,
                         # Only queue admission is a lifecycle event observed by
                         # this writer. Imported terminal/archive statuses retain
@@ -1166,7 +1165,6 @@ class IdeaLake:
                     return False
 
                 target = STATUS_TO_STATE.get(str(status).lower())
-                sop_type = self._sop_for_idea(idea_id)
                 if target is None:
                     self.conn.execute(
                         "UPDATE ideas SET status = ? WHERE idea_id = ?",
@@ -1188,7 +1186,7 @@ class IdeaLake:
                             target,
                             "legacy_status",
                             os.getpid(),
-                            sop_type,
+                            "training",
                             self._transition_time(self.conn),
                             record_lifecycle=False,
                         )
@@ -1215,7 +1213,7 @@ class IdeaLake:
                         target,
                         "legacy_status",
                         os.getpid(),
-                        sop_type,
+                        "training",
                         transition_at,
                         expected_state=current,
                     ):
@@ -1228,7 +1226,7 @@ class IdeaLake:
                         target,
                         "legacy_status",
                         os.getpid(),
-                        sop_type,
+                        "training",
                         transition_at,
                     )
 
@@ -1239,7 +1237,7 @@ class IdeaLake:
                     f"set_status:{str(status).lower()}",
                     "legacy_status",
                     os.getpid(),
-                    sop_type,
+                    "training",
                     transition_at,
                 ):
                     self.conn.rollback()
@@ -1248,9 +1246,9 @@ class IdeaLake:
                 self.conn.execute(
                     "INSERT INTO idea_transitions "
                     "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
-                    "VALUES (?, ?, ?, ?, 'legacy_status', ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, 'legacy_status', ?, 'training', ?)",
                     (idea_id, current, target,
-                     f"set_status:{str(status).lower()}", os.getpid(), sop_type,
+                     f"set_status:{str(status).lower()}", os.getpid(),
                      transition_at),
                 )
                 self.conn.execute(
@@ -2106,21 +2104,6 @@ class IdeaLake:
         self.conn.commit()
         logger.info("Successfully updated %d config summaries.", count)
 
-    def _stages_for_idea(self, idea_id: str):
-        row = self.conn.execute(
-            "SELECT kind FROM main.ideas WHERE idea_id COLLATE BINARY = ?", (idea_id,),
-        ).fetchone()
-        return ("action",) if row and row[0] == "native_cpu_action" else PIPELINE_STAGES
-
-    def _sop_for_idea(self, idea_id: str, requested=None):
-        if self._stages_for_idea(idea_id) == ("action",):
-            if requested not in (None, "action"):
-                raise ValueError("cpu_action_lifecycle_phase_mismatch")
-            return "action"
-        if requested == "action":
-            raise ValueError("cpu_action_kind_required")
-        return requested or "training"
-
     def _stage_state_in_tx(self, idea_id: str, stage: str) -> str:
         rows = self.conn.execute(
             "SELECT idea_id, stage, current_state FROM idea_stage_state "
@@ -2161,7 +2144,7 @@ class IdeaLake:
         at: str,
     ) -> bool:
         """Compare-and-swap one pipeline stage inside the caller's transaction."""
-        if (not self.conn.in_transaction or stage not in self._stages_for_idea(idea_id)
+        if (not self.conn.in_transaction or stage not in PIPELINE_STAGES
                 or not self._lifecycle_identity_exists_in_tx(idea_id)):
             return False
         actual = self._stage_state_in_tx(idea_id, stage)
@@ -2259,6 +2242,9 @@ class IdeaLake:
         receipts: Optional[dict] = None,
     ) -> bool:
         """Keep stage truth atomic with lifecycle launch/terminal/retry edges."""
+        if sop_type != "training":
+            return True
+
         def move(stage: str, target: str, stage_reason: str) -> bool:
             current = self._stage_state_in_tx(idea_id, stage)
             if current != target and not self._record_stage_transition_in_tx(
@@ -2270,15 +2256,6 @@ class IdeaLake:
                 receipts[stage] = self._stage_receipt_in_tx(idea_id, stage)
             return True
 
-        if self._stages_for_idea(idea_id) == ("action",):
-            if sop_type != "action":
-                return False
-            target = {"CLAIMED": "PENDING", "QUEUED": "PENDING",
-                      "IN_PROGRESS": "IN_PROGRESS", "COMPLETE": "COMPLETE",
-                      "FAILED": "FAILED", "SKIPPED": "SKIPPED"}.get(to_state)
-            return target is None or move("action", target, reason)
-        if sop_type != "training":
-            return True
         if from_state == "CLAIMED" and to_state == "IN_PROGRESS":
             return (
                 move("training", "IN_PROGRESS", reason)
@@ -2364,7 +2341,7 @@ class IdeaLake:
         return bool(_retry_on_busy(_do_transition))
 
     def get_stage_state(self, idea_id: str, stage: str) -> str:
-        if stage not in self._stages_for_idea(idea_id):
+        if stage not in PIPELINE_STAGES:
             raise ValueError(f"unknown pipeline stage: {stage}")
         row = _retry_on_busy(lambda: self.conn.execute(
             "SELECT current_state FROM idea_stage_state "
@@ -2414,7 +2391,7 @@ class IdeaLake:
         import socket as _socket
         host = host or _socket.gethostname()
         pid = pid or os.getpid()
-        sop_type = self._sop_for_idea(idea_id, sop_type)
+        sop_type = sop_type or "training"
         reason = reason or ""
         at = self._transition_time(self.conn) if at is None else at
 
@@ -2454,7 +2431,7 @@ class IdeaLake:
             return False
         # Keep already captured per-write receipts, and also ensure subsequent
         # global/legacy writes cannot change an untouched stage.
-        for stage in self._stages_for_idea(idea_id):
+        for stage in PIPELINE_STAGES:
             if stage not in pipeline:
                 pipeline[stage] = self._stage_receipt_in_tx(idea_id, stage)
         cursor = self.conn.execute(
@@ -2518,7 +2495,7 @@ class IdeaLake:
         import socket as _socket
         host = host or _socket.gethostname()
         pid = pid or os.getpid()
-        sop_type = self._sop_for_idea(idea_id, sop_type)
+        sop_type = sop_type or "training"
 
         def _do_transition():
             self.conn.execute("BEGIN IMMEDIATE")

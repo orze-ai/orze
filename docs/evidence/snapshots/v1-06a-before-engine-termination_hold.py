@@ -21,7 +21,7 @@ from pathlib import Path
 from orze.core.fs import atomic_create
 
 _TREE = "_execution_stops"
-_PHASES = {"training", "posthoc", "evaluation", "post_script", "pre_script", "artifact_preflight", "action"}
+_PHASES = {"training", "posthoc", "evaluation", "post_script", "pre_script", "artifact_preflight"}
 _TOKEN = re.compile(r"[A-Za-z0-9_.:-]{1,128}\Z")
 _MAX_STOPS = 1024
 
