@@ -1,0 +1,233 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2d4",
+  "status": "code_pushed_and_read_back; final_frozen_epoch_verified",
+  "whole_v1_complete": false,
+  "plan_commit": "1b3fc3e0365cf805017c8b3bcee32025af4beabe",
+  "baseline_core": "f6b3d14e609dbdc784983f4b435adfe47a362c7b",
+  "baseline_pro": "a58236d535e7d35d4bef97b7a584dcf37879dba9",
+  "code_commit": "69f2fdba4a38209997c6167671fe79fb8c57783a",
+  "pro_code_changed": false,
+  "scope": [
+    "Legacy synchronous fixer requires actual bound supervisor tree closure and both stdout/stderr EOF; bounded byte tails and execution deadline preserve termination uncertainty.",
+    "Tokenless fixer cannot repair tasks with native routing or registered history. Entry and actual READY gate retain original/current database routes and exact enabled policy.",
+    "Unconfirmed execution propagates through the fixer and all six successful-fix relaunch exception boundaries. No native repair action or recovery implementation is introduced."
+  ],
+  "case_classification": {
+    "new_cases_total": 63,
+    "previous_commit_behavior_red": 9,
+    "previous_commit_controls": 6,
+    "new_requirements_and_mechanisms": 45,
+    "draft_behavior_red": 3,
+    "assert_nodes": 181,
+    "test_files": 9,
+    "overlap_rule": "Do not add new, paired, independent, targeted, and full-suite counts together."
+  },
+  "verification": {
+    "core": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "exit_code": 0,
+      "footer": "3297 passed, 7 skipped in 510.24s (0:08:30)"
+    },
+    "pro": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "exit_code": 0,
+      "footer": "944 passed in 156.75s (0:02:36)"
+    },
+    "new": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_bounded_executor.py tests/test_bounded_executor_callback_timeout.py tests/test_bounded_executor_scope_identity.py tests/test_executor_fix_admission_boundaries.py tests/test_executor_fix_caller_authority.py tests/test_executor_fix_default_route.py tests/test_executor_fix_policy_type.py tests/test_executor_fix_supervision.py tests/test_executor_fix_tree_completion.py --tb=short",
+      "exit_code": 0,
+      "footer": "63 passed in 8.76s"
+    },
+    "paired": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "exit_code": 0,
+      "footer": "60 passed in 0.75s"
+    }
+  },
+  "root_validation": {
+    "path": "docs/evidence/2026-09-10-v1-05c2d4-root-validation.json",
+    "sha256": "bddc3e50b24482472a005f7cb83c1a2b048939f147b7a58a973439484737135a"
+  },
+  "inventory": {
+    "path": "docs/evidence/2026-09-10-v1-05c2d4-inventory.json",
+    "sha256": "c2ce3a0961915b634c236580ed7e9763b26f9779bc55afcdb6301dde54144038"
+  },
+  "references": [
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2d4-bounded-executor-author.json",
+      "sha256": "c4c95f0bf03a57c5f77af106771d77bf59d5f713b2a7eec073bd4dda2f8a2a34"
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2d4-executor-fix-admission-review.json",
+      "sha256": "edb934116f354bb97aa4d5d964befb4b75d1a026157fb73518ca7c01e64fd81b"
+    },
+    {
+      "path": "docs/evidence/2026-09-10-v1-05c2d4-executor-fix-tree-review.json",
+      "sha256": "4d17f49e21d369d8e943594c57537bf33d6eae89f8f4313fcb8cfb176d099636"
+    },
+    {
+      "path": "docs/bounded-executor-supervision.md",
+      "sha256": "1f110dffa8a04303119ad3f5b680dcaa0422237ba81ad85e560e051d3000eca5"
+    }
+  ],
+  "changed_source_test_files": [
+    {
+      "path": "src/orze/engine/bounded_executor.py",
+      "sha256": "47dc6965d9a8d41aa6920489ad7528be8fb725714d203e9c6f7fda3abf4a14b1"
+    },
+    {
+      "path": "src/orze/engine/executor_fix_admission.py",
+      "sha256": "ba173d80f45316af95e125f25ebb8b79812ff19edb055203f588d20e2534df76"
+    },
+    {
+      "path": "src/orze/engine/failure.py",
+      "sha256": "c292ae61b43e2d32215788ae897c1bd9ad865b24a6d8f467c1bc968180e6f09a"
+    },
+    {
+      "path": "src/orze/engine/launcher.py",
+      "sha256": "daa8dfeac4c51979154d047d7505924de2028aa6757883987f491f2a4a5fe142"
+    },
+    {
+      "path": "tests/test_bounded_executor.py",
+      "sha256": "d06170acfcd22bb85e09cea7fbbd7cdd44159c17077f6f313e5507cd6a98d18f"
+    },
+    {
+      "path": "tests/test_bounded_executor_callback_timeout.py",
+      "sha256": "fd4c8fd0633bb8192acfb855604aaaccd2dba35a7985223e03f79e4974be0308"
+    },
+    {
+      "path": "tests/test_bounded_executor_scope_identity.py",
+      "sha256": "780ff8fcc4c18490d21df43846cb9b33606cef0c7913c853aba354b94895201f"
+    },
+    {
+      "path": "tests/test_executor_fix_admission_boundaries.py",
+      "sha256": "d3591af4fedba252e6dfef17bb4ee044e6e30cff5ecd88e66ee0af6c1adf1540"
+    },
+    {
+      "path": "tests/test_executor_fix_caller_authority.py",
+      "sha256": "556c2c0cadd5bed77fe3d77d35036c2b98c7d9b2868f84526377ddc10002eaf2"
+    },
+    {
+      "path": "tests/test_executor_fix_default_route.py",
+      "sha256": "e55b3eb4e6e4f8dcf2fff45dc271725e49334d15136768b3dc3ef45ec20a335b"
+    },
+    {
+      "path": "tests/test_executor_fix_policy_type.py",
+      "sha256": "c73e4ae898698e138358705b5535dcd966cf079e5bcfeb643e05fff433e82ce0"
+    },
+    {
+      "path": "tests/test_executor_fix_supervision.py",
+      "sha256": "d06d20bcb1a6060e896cafb6e4b7b26f6095a6995cbdf71b7180fa2e994bab04"
+    },
+    {
+      "path": "tests/test_executor_fix_tree_completion.py",
+      "sha256": "4fc145b8fc01728b0c9c8a79be7cabfb8bfd44c3595a9af3db920e36638d6653"
+    }
+  ],
+  "fixture_and_test_premise_disclosures": [
+    "No existing test or fixture edited.",
+    "Original five tests include an unused forward-compatible failure.prepare_supervised capture seam; worker/daemon ownership proof instead comes from authenticated SO_PEERCRED and actual owned pidfds. New mechanisms use the implemented bounded_executor.prepare_supervised seam.",
+    "Independent scope rename failure is classified as a new requirement even though it failed against a draft helper; the callback TimeoutExpired case is a draft behavior red.",
+    "Independent source/hash drift in candidate runs is retained in supporting evidence, not counted as final source-bound proof.",
+    "Independent reviewer requested clarifying the runtime evidence's opening reserved-hook sentence; root changed prose only. Prior support SHA61308b9b retained as review history, no source/test change."
+  ],
+  "independent_reviews": {
+    "actual_cpu": {
+      "owner": "runtime_evidence",
+      "cases": 11,
+      "footer": "11 passed in 6.17s",
+      "pre_post_exact": 12
+    },
+    "caller_admission": {
+      "owner": "pro_review",
+      "footer": "36 passed in 2.89s",
+      "pre_post_exact": 10,
+      "scope": "18 own cases + 18 unchanged existing tests; gate is author's code, other three production files reviewed independently."
+    },
+    "helper_author": {
+      "owner": "core_review",
+      "footer": "52 passed in 4.85s",
+      "pre_post_exact": 7,
+      "scope": "Author's helper/test validation plus independent read review of callers. Additional existing four tests captured after run only."
+    },
+    "artifact_review": {
+      "author": "pro_review",
+      "source_hashes": 24,
+      "path_sha_references": 13,
+      "command_occurrences": 25,
+      "python_bodies": 10,
+      "test_files": 9,
+      "cases": 63,
+      "assert_nodes": 181,
+      "snapshots": 7,
+      "baseline_byte_equal": 4,
+      "draft_snapshots": 3,
+      "whole_v1_complete": false,
+      "result": "passed; read-only, no pytest rerun; root21 classified all new; contract limitations independently checked"
+    },
+    "aggregate": {
+      "reviewer": "pro_review",
+      "read_only": true,
+      "actual_exit_code": 0,
+      "command_reference": "audit.command in this canonical document",
+      "files_current_and_fixed_commit": 836,
+      "complete_manifest_paths": {
+        "core": 622,
+        "pro": 214
+      },
+      "exact_delta": {
+        "production": 4,
+        "new_test_files": 9
+      },
+      "command_occurrences": 41,
+      "python_bodies": 18,
+      "snapshots": 7,
+      "baseline_byte_equal": 4,
+      "assert_nodes": 181,
+      "cases": 63,
+      "conclusion": "Passed; initial checker path error retained as tool error, no remaining scoped blocker. No pytest repeated and no files edited by reviewer."
+    }
+  },
+  "audit": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, pathlib, shlex, subprocess\nroot = pathlib.Path(\".\").resolve()\ncanonical_path = root / \"docs/evidence/2026-09-10-v1-05c2d4-bounded-executor-supervision.json\"\nreport = json.loads(canonical_path.read_bytes())\nsha = lambda raw: hashlib.sha256(raw).hexdigest()\nfor entry in [report[\"root_validation\"], report[\"inventory\"], *report[\"references\"]]:\n    assert sha((root / entry[\"path\"]).read_bytes()) == entry[\"sha256\"], entry[\"path\"]\ninventory = json.loads((root / report[\"inventory\"][\"path\"]).read_bytes())\nassert inventory[\"pre_post_equal\"] is True\nassert inventory[\"counts\"] == {\"core\": 622, \"pro\": 214, \"total\": 836}\nfor repo, directory, commit in [(\"core\", root, report[\"code_commit\"]),\n        (\"pro\", root.parent / \"orze-pro\", report[\"baseline_pro\"])]:\n    subprocess.run([\"git\", \"-C\", str(directory), \"merge-base\", \"--is-ancestor\", commit, \"HEAD\"], check=True)\n    assert len(inventory[\"files\"][repo]) == inventory[\"counts\"][repo]\n    for entry in inventory[\"files\"][repo]:\n        assert sha((directory / entry[\"path\"]).read_bytes()) == entry[\"sha256\"], entry[\"path\"]\n        raw = subprocess.check_output([\"git\", \"-C\", str(directory), \"show\", commit + \":\" + entry[\"path\"]])\n        assert sha(raw) == entry[\"sha256\"], (repo, entry[\"path\"])\nvalidation = json.loads((root / report[\"root_validation\"][\"path\"]).read_bytes())\nchecked = subprocess.run(validation[\"static_audit_command\"], shell=True, text=True, capture_output=True, check=True)\nassert json.loads(checked.stdout) == validation[\"static_audit\"]\nsupport = subprocess.run(validation[\"supporting_audit_command\"], shell=True, text=True, capture_output=True, check=True)\nassert json.loads(support.stdout) == validation[\"supporting_audit\"]\nassert validation[\"verification\"] == report[\"verification\"]\nassert report[\"case_classification\"][\"new_cases_total\"] == 63\nassert sum(report[\"case_classification\"][key] for key in (\"previous_commit_behavior_red\", \"previous_commit_controls\", \"new_requirements_and_mechanisms\", \"draft_behavior_red\")) == 63\nassert report[\"whole_v1_complete\"] is False\ncommands = bodies = 0\ndef walk(value):\n    global commands, bodies\n    if isinstance(value, dict):\n        for key, child in value.items():\n            if isinstance(child, str) and (key == \"command\" or key.endswith(\"_command\")):\n                commands += 1\n                subprocess.run([\"bash\", \"-n\"], input=child, text=True, check=True, capture_output=True)\n                if \"<<'PY'\" in child:\n                    ast.parse(child.split(\"\\n\", 1)[1].rsplit(\"\\nPY\", 1)[0])\n                    bodies += 1\n                else:\n                    words = shlex.split(child)\n                    for i, word in enumerate(words):\n                        if word == \"-c\" and i and words[i-1] in (\"python\", \"python3\"):\n                            ast.parse(words[i+1])\n                            bodies += 1\n            walk(child)\n    elif isinstance(value, list):\n        for child in value:\n            walk(child)\nfor document in [report, validation, inventory, *[json.loads((root / entry[\"path\"]).read_bytes()) for entry in report[\"references\"] if entry[\"path\"].endswith(\".json\")]]:\n    walk(document)\nprint(json.dumps({\"status\": \"passed\", \"source_test_build_files\": 836,\n    \"worktree_and_fixed_commit_hashes_exact\": True, \"snapshots\": 7,\n    \"fixed_baseline_byte_equal\": 4, \"new_tests\": 63, \"assert_nodes\": 181,\n    \"command_occurrences\": commands, \"python_bodies\": bodies}, sort_keys=True))\nPY",
+    "status": "passed",
+    "exit_code": 0,
+    "result": {
+      "assert_nodes": 181,
+      "command_occurrences": 41,
+      "fixed_baseline_byte_equal": 4,
+      "new_tests": 63,
+      "python_bodies": 18,
+      "snapshots": 7,
+      "source_test_build_files": 836,
+      "status": "passed",
+      "worktree_and_fixed_commit_hashes_exact": true
+    }
+  },
+  "safety": {
+    "original_worktree_status_lines": 281,
+    "count_is_not_tree_hash": true,
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+    "holdout_plaintext_unread": true,
+    "no_real_provider_gpu_model_dataset_or_host_sweep": true,
+    "remote_main_unchanged": {
+      "core": "5ca2680dbd0139e63cd35a4f83da438b5b47ab99",
+      "pro": "57feb6e0af19dcf62a80b1e447f0771936d39afe"
+    },
+    "checked_utc": {
+      "current_time": "2026-09-11 02:08:36 UTC"
+    }
+  },
+  "limits": [
+    "Legacy synchronous helper uses private in-memory invocation identity only, no native AttemptRef, durable receipt, cross-controller lock or restart adoption.",
+    "Process-local scope HOLD is not cross-restart recovery. Directory rename/replacement cannot clear the same-controller HOLD; confirmed active owner may finish after a concurrent refusal.",
+    "Timeout bounds the running worker interval, plus owned STOP and EOF confirmation; it is not a total wall-clock budget for prompt construction or admission reads.",
+    "Native repair remains disabled in this tokenless API. Future explicit source-qualified repair is still required.",
+    "No scientific validity or research-efficiency improvement established; whole V1 remains incomplete."
+  ]
+}

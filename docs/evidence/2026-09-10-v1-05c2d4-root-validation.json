@@ -1,0 +1,328 @@
+{
+  "schema": 1,
+  "slice": "V1-05C2d4",
+  "role": "root integration and final source/test/build inventory",
+  "whole_v1_complete": false,
+  "baseline_core": "f6b3d14e609dbdc784983f4b435adfe47a362c7b",
+  "baseline_pro": "a58236d535e7d35d4bef97b7a584dcf37879dba9",
+  "root_owned_files": [
+    "src/orze/engine/failure.py",
+    "src/orze/engine/launcher.py",
+    "tests/test_executor_fix_admission_boundaries.py"
+  ],
+  "root_new_requirements": {
+    "cases": 21,
+    "test": "tests/test_executor_fix_admission_boundaries.py",
+    "sha256": "d3591af4fedba252e6dfef17bb4ee044e6e30cff5ecd88e66ee0af6c1adf1540",
+    "mechanisms": {
+      "raw_timeout_rejected_before_runner": 8,
+      "controlled_output_marker_qualification": 5,
+      "native_history_precedes_false_shortcuts": 3,
+      "actual_READY_gate_cases": 5
+    },
+    "actual_ready_variants": [
+      "Original explicit database gains registered history after READY while cfg route is removed",
+      "New catalog declaration",
+      "Project root changed",
+      "Max fix attempts revoked",
+      "Unchanged control"
+    ],
+    "limits": "Budget/output cases deliberately control the runner boundary; only the five READY cases use actual supervisor and CPU CLI. FIX_APPLIED remains an attestation, not verified patch correctness.",
+    "initial_candidate": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_executor_fix_admission_boundaries.py --tb=short",
+      "chunk_id": "6adb3f",
+      "wall_time_seconds": 0.828981263,
+      "exit_code": 0,
+      "original_token_count": 25,
+      "output": ".....................                                                    [100%]\n21 passed in 0.68s\n",
+      "qualification": "First green of 21 new requirements; no pre/post source inventory captured, not final version proof."
+    },
+    "route_fixed_candidate": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_executor_fix_admission_boundaries.py tests/test_executor_fix_default_route.py --tb=short",
+      "chunk_id": "ee4562",
+      "wall_time_seconds": 0.920800588,
+      "exit_code": 0,
+      "original_token_count": 25,
+      "output": "......................                                                   [100%]\n22 passed in 0.77s\n",
+      "qualification": "22-case candidate before typed-current-policy fix; not final epoch."
+    },
+    "final_targeted": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_executor_fix_admission_boundaries.py tests/test_executor_fix_default_route.py tests/test_executor_fix_policy_type.py --tb=short",
+      "exit_code": 0,
+      "footer": "23 passed in 0.88s",
+      "session_id": 81463,
+      "qualification": "Root21 + independent route/policy drafts; complete source inventory is established by the separate final epoch."
+    }
+  },
+  "static_audit_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, pathlib, subprocess\nroot = pathlib.Path(\".\")\nbase = \"f6b3d14e609dbdc784983f4b435adfe47a362c7b\"\nsha = lambda data: hashlib.sha256(data).hexdigest()\nsnapshots = {\n\"v1-05c2d4-before-failure.py\": \"src/orze/engine/failure.py\",\n\"v1-05c2d4-before-caller-authority-failure.py\": \"src/orze/engine/failure.py\",\n\"v1-05c2d4-before-caller-authority-launcher.py\": \"src/orze/engine/launcher.py\",\n\"v1-05c2d4-before-caller-authority-phases.py\": \"src/orze/engine/phases.py\",\n}\nout = {\"baseline_snapshots\": [], \"draft_snapshots\": [], \"new_tests\": []}\nfor name, source in snapshots.items():\n    raw = (root / \"docs/evidence/snapshots\" / name).read_bytes()\n    assert raw == subprocess.check_output([\"git\", \"show\", base + \":\" + source])\n    assert raw.endswith(b\"\\n\")\n    ast.parse(raw)\n    out[\"baseline_snapshots\"].append({\"path\": \"docs/evidence/snapshots/\" + name, \"source\": source, \"sha256\": sha(raw), \"bytes\": len(raw)})\nfor name in [\"v1-05c2d4-before-callback-timeout.py\", \"v1-05c2d4-before-default-route-capture-failure.py\", \"v1-05c2d4-before-policy-type-check-failure.py\"]:\n    path = root / \"docs/evidence/snapshots\" / name\n    raw = path.read_bytes()\n    assert raw.endswith(b\"\\n\")\n    ast.parse(raw)\n    out[\"draft_snapshots\"].append({\"path\": str(path), \"sha256\": sha(raw), \"bytes\": len(raw)})\nnew_tests = sorted(set(root.glob(\"tests/test_bounded_executor*.py\")) | set(root.glob(\"tests/test_executor_fix*.py\")))\nfor path in new_tests:\n    raw = path.read_bytes()\n    tree = ast.parse(raw)\n    out[\"new_tests\"].append({\"path\": str(path), \"sha256\": sha(raw), \"assert_nodes\": sum(isinstance(node, ast.Assert) for node in ast.walk(tree))})\nout[\"assert_nodes_total\"] = sum(row[\"assert_nodes\"] for row in out[\"new_tests\"])\nchanged = subprocess.check_output([\"git\", \"diff\", \"--name-only\", base, \"--\", \"src\", \"tests\", \"pyproject.toml\"], text=True).splitlines()\nbaseline_paths = set(subprocess.check_output([\"git\", \"ls-tree\", \"-r\", \"--name-only\", base, \"--\", \"src\", \"tests\", \"pyproject.toml\"], text=True).splitlines())\nchanged_existing = [path for path in changed if path in baseline_paths]\nassert changed_existing == [\"src/orze/engine/failure.py\", \"src/orze/engine/launcher.py\"], changed_existing\nout[\"tracked_changed\"] = changed_existing\nfailure = ast.parse((root / \"src/orze/engine/failure.py\").read_bytes())\nwrapper = next(node for node in failure.body if isinstance(node, ast.FunctionDef) and node.name == \"_run_bounded_executor\")\nassert any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == \"run_bounded_executor\" for node in ast.walk(wrapper))\nassert not any(isinstance(node, ast.Attribute) and node.attr in {\"Popen\", \"communicate\"} for node in ast.walk(wrapper))\nlauncher = ast.parse((root / \"src/orze/engine/launcher.py\").read_bytes())\ntries = []\nfor node in ast.walk(launcher):\n    if not isinstance(node, ast.Try):\n        continue\n    generic = next((handler for handler in node.handlers if isinstance(handler.type, ast.Name) and handler.type.id == \"Exception\"\n        and any(isinstance(value, ast.Constant) and isinstance(value.value, str) and \"[FIX-RETRY] %s relaunch failed\" in value.value for value in ast.walk(handler))), None)\n    if generic is not None:\n        assert isinstance(node.handlers[0].type, ast.Name) and node.handlers[0].type.id == \"TerminationUnconfirmed\"\n        assert len(node.handlers[0].body) == 1 and isinstance(node.handlers[0].body[0], ast.Raise)\n        tries.append(node.lineno)\nassert len(tries) == 6, tries\nout[\"six_explicit_relaunch_hold_handlers\"] = tries\nprint(json.dumps(out, sort_keys=True))\nPY",
+  "static_audit_exit_code": 0,
+  "static_audit": {
+    "assert_nodes_total": 181,
+    "baseline_snapshots": [
+      {
+        "bytes": 25523,
+        "path": "docs/evidence/snapshots/v1-05c2d4-before-failure.py",
+        "sha256": "3c569bf1f498c36c0eaf640a86ab5ec4276ddd7347a257ba2b9404748d698154",
+        "source": "src/orze/engine/failure.py"
+      },
+      {
+        "bytes": 25523,
+        "path": "docs/evidence/snapshots/v1-05c2d4-before-caller-authority-failure.py",
+        "sha256": "3c569bf1f498c36c0eaf640a86ab5ec4276ddd7347a257ba2b9404748d698154",
+        "source": "src/orze/engine/failure.py"
+      },
+      {
+        "bytes": 119021,
+        "path": "docs/evidence/snapshots/v1-05c2d4-before-caller-authority-launcher.py",
+        "sha256": "713680eddb3990e8b94ae0486ad5b242ad5d098b5c4d0af00db6b7aff6730118",
+        "source": "src/orze/engine/launcher.py"
+      },
+      {
+        "bytes": 110104,
+        "path": "docs/evidence/snapshots/v1-05c2d4-before-caller-authority-phases.py",
+        "sha256": "cb6e99ebff57c85a2b7393e4f955d18444aca6c98e0bb04906ee115e87899cb8",
+        "source": "src/orze/engine/phases.py"
+      }
+    ],
+    "draft_snapshots": [
+      {
+        "bytes": 14746,
+        "path": "docs/evidence/snapshots/v1-05c2d4-before-callback-timeout.py",
+        "sha256": "ae332e0ae2f63d31f02831048f77adbd428f11c3ff483b601db2699a06cb5798"
+      },
+      {
+        "bytes": 27115,
+        "path": "docs/evidence/snapshots/v1-05c2d4-before-default-route-capture-failure.py",
+        "sha256": "95af10624400636b40f393e02a2b2752d4b598dcd01c6d28d00870c1bba72b5e"
+      },
+      {
+        "bytes": 27193,
+        "path": "docs/evidence/snapshots/v1-05c2d4-before-policy-type-check-failure.py",
+        "sha256": "1238bd0df1d9c0f30111e9188847d69d2d45342580f062f3ace7927dd2b4a747"
+      }
+    ],
+    "new_tests": [
+      {
+        "assert_nodes": 29,
+        "path": "tests/test_bounded_executor.py",
+        "sha256": "d06170acfcd22bb85e09cea7fbbd7cdd44159c17077f6f313e5507cd6a98d18f"
+      },
+      {
+        "assert_nodes": 4,
+        "path": "tests/test_bounded_executor_callback_timeout.py",
+        "sha256": "fd4c8fd0633bb8192acfb855604aaaccd2dba35a7985223e03f79e4974be0308"
+      },
+      {
+        "assert_nodes": 2,
+        "path": "tests/test_bounded_executor_scope_identity.py",
+        "sha256": "780ff8fcc4c18490d21df43846cb9b33606cef0c7913c853aba354b94895201f"
+      },
+      {
+        "assert_nodes": 18,
+        "path": "tests/test_executor_fix_admission_boundaries.py",
+        "sha256": "d3591af4fedba252e6dfef17bb4ee044e6e30cff5ecd88e66ee0af6c1adf1540"
+      },
+      {
+        "assert_nodes": 24,
+        "path": "tests/test_executor_fix_caller_authority.py",
+        "sha256": "556c2c0cadd5bed77fe3d77d35036c2b98c7d9b2868f84526377ddc10002eaf2"
+      },
+      {
+        "assert_nodes": 7,
+        "path": "tests/test_executor_fix_default_route.py",
+        "sha256": "e55b3eb4e6e4f8dcf2fff45dc271725e49334d15136768b3dc3ef45ec20a335b"
+      },
+      {
+        "assert_nodes": 3,
+        "path": "tests/test_executor_fix_policy_type.py",
+        "sha256": "c73e4ae898698e138358705b5535dcd966cf079e5bcfeb643e05fff433e82ce0"
+      },
+      {
+        "assert_nodes": 60,
+        "path": "tests/test_executor_fix_supervision.py",
+        "sha256": "d06d20bcb1a6060e896cafb6e4b7b26f6095a6995cbdf71b7180fa2e994bab04"
+      },
+      {
+        "assert_nodes": 34,
+        "path": "tests/test_executor_fix_tree_completion.py",
+        "sha256": "4fc145b8fc01728b0c9c8a79be7cabfb8bfd44c3595a9af3db920e36638d6653"
+      }
+    ],
+    "six_explicit_relaunch_hold_handlers": [
+      2614,
+      2250,
+      2279,
+      2370,
+      2311,
+      2507
+    ],
+    "tracked_changed": [
+      "src/orze/engine/failure.py",
+      "src/orze/engine/launcher.py"
+    ]
+  },
+  "fixture_disclosures": [
+    "No existing test or fixture edited.",
+    "Original five tests include an unused forward-compatible failure.prepare_supervised capture seam; worker/daemon ownership proof instead comes from authenticated SO_PEERCRED and actual owned pidfds. New mechanisms use the implemented bounded_executor.prepare_supervised seam.",
+    "Independent scope rename failure is classified as a new requirement even though it failed against a draft helper; the callback TimeoutExpired case is a draft behavior red.",
+    "Independent source/hash drift in candidate runs is retained in supporting evidence, not counted as final source-bound proof.",
+    "Independent reviewer requested clarifying the runtime evidence's opening reserved-hook sentence; root changed prose only. Prior support SHA61308b9b retained as review history, no source/test change."
+  ],
+  "limits": [
+    "Legacy synchronous helper uses private in-memory invocation identity only, no native AttemptRef, durable receipt, cross-controller lock or restart adoption.",
+    "Process-local scope HOLD is not cross-restart recovery. Directory rename/replacement cannot clear the same-controller HOLD; confirmed active owner may finish after a concurrent refusal.",
+    "Timeout bounds the running worker interval, plus owned STOP and EOF confirmation; it is not a total wall-clock budget for prompt construction or admission reads.",
+    "Native repair remains disabled in this tokenless API. Future explicit source-qualified repair is still required.",
+    "No scientific validity or research-efficiency improvement established; whole V1 remains incomplete."
+  ],
+  "status": "final_frozen_epoch_verified",
+  "code_commit": "69f2fdba4a38209997c6167671fe79fb8c57783a",
+  "verification": {
+    "core": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+      "exit_code": 0,
+      "footer": "3297 passed, 7 skipped in 510.24s (0:08:30)"
+    },
+    "pro": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+      "exit_code": 0,
+      "footer": "944 passed in 156.75s (0:02:36)"
+    },
+    "new": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_bounded_executor.py tests/test_bounded_executor_callback_timeout.py tests/test_bounded_executor_scope_identity.py tests/test_executor_fix_admission_boundaries.py tests/test_executor_fix_caller_authority.py tests/test_executor_fix_default_route.py tests/test_executor_fix_policy_type.py tests/test_executor_fix_supervision.py tests/test_executor_fix_tree_completion.py --tb=short",
+      "exit_code": 0,
+      "footer": "63 passed in 8.76s"
+    },
+    "paired": {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+      "exit_code": 0,
+      "footer": "60 passed in 0.75s"
+    }
+  },
+  "freeze_utc": {
+    "current_time": "2026-09-11 02:04:40 UTC"
+  },
+  "checked_utc": {
+    "current_time": "2026-09-11 02:13:30 UTC"
+  },
+  "inventory_counts": {
+    "core": 622,
+    "pro": 214,
+    "total": 836
+  },
+  "postcommit_core_source_test_build_exact": true,
+  "cached_diff_check": 0,
+  "supporting_audit_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, pathlib, shlex, subprocess\npaths = [pathlib.Path(name) for name in [\"docs/evidence/2026-09-10-v1-05c2d4-bounded-executor-author.json\",\"docs/evidence/2026-09-10-v1-05c2d4-executor-fix-admission-review.json\",\"docs/evidence/2026-09-10-v1-05c2d4-executor-fix-tree-review.json\"]]\nassert len(paths) == 3\ntotal = bodies = 0\ndef walk(value, label):\n    global total, bodies\n    if isinstance(value, dict):\n        for key, child in value.items():\n            if isinstance(child, str) and (key == \"command\" or key.endswith(\"_command\")):\n                total += 1\n                checked = subprocess.run([\"bash\", \"-n\"], input=child, text=True, capture_output=True)\n                assert checked.returncode == 0, (label, key, checked.stderr)\n                if \"<<'PY'\" in child:\n                    body = child.split(\"\\n\", 1)[1].rsplit(\"\\nPY\", 1)[0]\n                    ast.parse(body)\n                    bodies += 1\n                else:\n                    tokens = shlex.split(child)\n                    for pos, token in enumerate(tokens):\n                        if token == \"-c\" and pos and tokens[pos-1] in (\"python\", \"python3\"):\n                            ast.parse(tokens[pos+1])\n                            bodies += 1\n            walk(child, label + \".\" + key)\n    elif isinstance(value, list):\n        for pos, child in enumerate(value):\n            walk(child, label + \"[\" + str(pos) + \"]\")\nout = []\nfor path in paths:\n    raw = path.read_bytes()\n    data = json.loads(raw)\n    walk(data, str(path))\n    out.append({\"path\": str(path), \"sha256\": hashlib.sha256(raw).hexdigest(), \"keys\": list(data)})\nprint(json.dumps({\"documents\": out, \"command_fields\": total, \"python_bodies\": bodies}, sort_keys=True))\nPY",
+  "supporting_audit": {
+    "command_fields": 25,
+    "documents": [
+      {
+        "keys": [
+          "schema",
+          "slice",
+          "role",
+          "baseline_core_commit",
+          "scope",
+          "ownership",
+          "classification",
+          "frozen_files",
+          "draft_snapshot",
+          "actual_runs",
+          "independent_read_review",
+          "external_baseline_context",
+          "limits"
+        ],
+        "path": "docs/evidence/2026-09-10-v1-05c2d4-bounded-executor-author.json",
+        "sha256": "c4c95f0bf03a57c5f77af106771d77bf59d5f713b2a7eec073bd4dda2f8a2a34"
+      },
+      {
+        "keys": [
+          "schema",
+          "milestone",
+          "title",
+          "status",
+          "ownership",
+          "scope",
+          "classification",
+          "tests",
+          "baseline",
+          "candidate_history",
+          "final_bounded_validation",
+          "snapshots",
+          "independent_findings",
+          "tool_errors",
+          "static_audit",
+          "prohibitions_observed"
+        ],
+        "path": "docs/evidence/2026-09-10-v1-05c2d4-executor-fix-admission-review.json",
+        "sha256": "edb934116f354bb97aa4d5d964befb4b75d1a026157fb73518ca7c01e64fd81b"
+      },
+      {
+        "keys": [
+          "schema_version",
+          "slice",
+          "review",
+          "status",
+          "scope",
+          "baseline",
+          "frozen_test",
+          "cleanup",
+          "limits",
+          "final_bounded",
+          "candidate_runs",
+          "new_mechanisms"
+        ],
+        "path": "docs/evidence/2026-09-10-v1-05c2d4-executor-fix-tree-review.json",
+        "sha256": "4d17f49e21d369d8e943594c57537bf33d6eae89f8f4313fcb8cfb176d099636"
+      }
+    ],
+    "python_bodies": 10
+  },
+  "supporting_audit_exit_code": 0,
+  "independent_support_audit": {
+    "author": "pro_review",
+    "source_hashes": 24,
+    "path_sha_references": 13,
+    "command_occurrences": 25,
+    "python_bodies": 10,
+    "test_files": 9,
+    "cases": 63,
+    "assert_nodes": 181,
+    "snapshots": 7,
+    "baseline_byte_equal": 4,
+    "draft_snapshots": 3,
+    "whole_v1_complete": false,
+    "result": "passed; read-only, no pytest rerun; root21 classified all new; contract limitations independently checked"
+  },
+  "support_prose_correction": {
+    "previous_sha256": "61308b9bd0f31d6cd1e681f24be28c5744622938d45c36fd8417618d4555dd2a",
+    "path": "docs/evidence/2026-09-10-v1-05c2d4-executor-fix-tree-review.json",
+    "kind": "Proposed by independent reviewer; root clarified unused original seam in opening sentence, matching existing final explanation. No source/test change."
+  },
+  "safety": {
+    "original_worktree_status_lines": 281,
+    "count_is_not_tree_hash": true,
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+    "holdout_plaintext_unread": true,
+    "no_real_provider_gpu_model_dataset_or_host_sweep": true,
+    "remote_main_unchanged": {
+      "core": "5ca2680dbd0139e63cd35a4f83da438b5b47ab99",
+      "pro": "57feb6e0af19dcf62a80b1e447f0771936d39afe"
+    },
+    "checked_utc": {
+      "current_time": "2026-09-11 02:08:36 UTC"
+    }
+  },
+  "full_suite_reuse": false,
+  "qualification": "Four full/paired/new commands were actually run in this frozen epoch; overlapping test groups are not additive. Seven optional Pro skips in Core are covered by the real paired group.",
+  "aggregate_checker_history": {
+    "initial_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, pathlib, shlex, subprocess\nroot = pathlib.Path(\".\")\ncanonical_path = root / \"docs/evidence/2026-09-10-v1-05c2d4-bounded-executor-supervision.json\"\nreport = json.loads(canonical_path.read_bytes())\nsha = lambda raw: hashlib.sha256(raw).hexdigest()\nfor entry in [report[\"root_validation\"], report[\"inventory\"], *report[\"references\"]]:\n    assert sha((root / entry[\"path\"]).read_bytes()) == entry[\"sha256\"], entry[\"path\"]\ninventory = json.loads((root / report[\"inventory\"][\"path\"]).read_bytes())\nassert inventory[\"pre_post_equal\"] is True\nassert inventory[\"counts\"] == {\"core\": 622, \"pro\": 214, \"total\": 836}\nfor repo, directory, commit in [(\"core\", root, report[\"code_commit\"]),\n        (\"pro\", root.parent / \"orze-pro\", report[\"baseline_pro\"])]:\n    subprocess.run([\"git\", \"-C\", str(directory), \"merge-base\", \"--is-ancestor\", commit, \"HEAD\"], check=True)\n    assert len(inventory[\"files\"][repo]) == inventory[\"counts\"][repo]\n    for entry in inventory[\"files\"][repo]:\n        assert sha((directory / entry[\"path\"]).read_bytes()) == entry[\"sha256\"], entry[\"path\"]\n        raw = subprocess.check_output([\"git\", \"-C\", str(directory), \"show\", commit + \":\" + entry[\"path\"]])\n        assert sha(raw) == entry[\"sha256\"], (repo, entry[\"path\"])\nvalidation = json.loads((root / report[\"root_validation\"][\"path\"]).read_bytes())\nchecked = subprocess.run(validation[\"static_audit_command\"], shell=True, text=True, capture_output=True, check=True)\nassert json.loads(checked.stdout) == validation[\"static_audit\"]\nsupport = subprocess.run(validation[\"supporting_audit_command\"], shell=True, text=True, capture_output=True, check=True)\nassert json.loads(support.stdout) == validation[\"supporting_audit\"]\nassert validation[\"verification\"] == report[\"verification\"]\nassert report[\"case_classification\"][\"new_cases_total\"] == 63\nassert sum(report[\"case_classification\"][key] for key in (\"previous_commit_behavior_red\", \"previous_commit_controls\", \"new_requirements_and_mechanisms\", \"draft_behavior_red\")) == 63\nassert report[\"whole_v1_complete\"] is False\ncommands = bodies = 0\ndef walk(value):\n    global commands, bodies\n    if isinstance(value, dict):\n        for key, child in value.items():\n            if isinstance(child, str) and (key == \"command\" or key.endswith(\"_command\")):\n                commands += 1\n                subprocess.run([\"bash\", \"-n\"], input=child, text=True, check=True, capture_output=True)\n                if \"<<'PY'\" in child:\n                    ast.parse(child.split(\"\\n\", 1)[1].rsplit(\"\\nPY\", 1)[0])\n                    bodies += 1\n                else:\n                    words = shlex.split(child)\n                    for i, word in enumerate(words):\n                        if word == \"-c\" and i and words[i-1] in (\"python\", \"python3\"):\n                            ast.parse(words[i+1])\n                            bodies += 1\n            walk(child)\n    elif isinstance(value, list):\n        for child in value:\n            walk(child)\nfor document in [report, validation, inventory, *[json.loads((root / entry[\"path\"]).read_bytes()) for entry in report[\"references\"] if entry[\"path\"].endswith(\".json\")]]:\n    walk(document)\nprint(json.dumps({\"status\": \"passed\", \"source_test_build_files\": 836,\n    \"worktree_and_fixed_commit_hashes_exact\": True, \"snapshots\": 7,\n    \"fixed_baseline_byte_equal\": 4, \"new_tests\": 63, \"assert_nodes\": 181,\n    \"command_occurrences\": commands, \"python_bodies\": bodies}, sort_keys=True))\nPY",
+    "exit_code": 1,
+    "classification": "Read-only verification-tool path bug, not a product/test failure.",
+    "detail": "Path('.') had not been resolved; its parent remained '.', so the Pro sibling was incorrectly addressed as Core/orze-pro. Changed checker root to Path('.').resolve(); no source/test or inventory changed."
+  }
+}
