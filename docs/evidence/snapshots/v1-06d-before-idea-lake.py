@@ -963,7 +963,7 @@ class IdeaLake:
 
         _retry_on_busy(_do_reconcile)
 
-    def prepare_proposal(
+    def insert(
         self,
         idea_id: str,
         title: str,
@@ -971,7 +971,7 @@ class IdeaLake:
         raw_markdown: str,
         eval_metrics: Optional[Dict[str, Any]] = None,
         config_summary: Optional[Dict[str, Any]] = None,
-        status: str = "queued",
+        status: str = "archived",
         priority: str = "medium",
         category: str = "architecture",
         parent: Optional[str] = None,
@@ -980,12 +980,17 @@ class IdeaLake:
         created_at: Optional[str] = None,
         approach_family: str = "other",
         kind: str = "train",
+        *,
+        if_absent: bool = False,
     ):
-        """Prepare ordinary admission metadata without accessing the database.
+        """Insert/update legacy records, or atomically admit an immutable proposal.
 
-        Derived config identities use the same normalization as legacy insert.
-        The returned dictionary grants no admission or transaction authority.
+        ``if_absent=True`` only admits queued proposals and returns a structured
+        result; it never replaces a same-ID record or owns a caller transaction.
+        The default retains the historical import/update behavior and return.
         """
+        if not isinstance(if_absent, bool):
+            raise ValueError("proposal_if_absent_invalid")
         if kind not in ALLOWED_KINDS:
             raise ValueError(
                 f"idea kind={kind!r} not in {sorted(ALLOWED_KINDS)}"
@@ -1033,62 +1038,22 @@ class IdeaLake:
             hash_config(config_obj) if isinstance(config_obj, dict) else None
         )
 
-        return {
-            "idea_id": idea_id, "id_num": id_num, "title": title,
-            "priority": priority, "category": category, "parent": parent,
-            "hypothesis": hypothesis, "config": config_yaml,
-            "config_hash": config_hash,
-            "config_source_sha256": config_source_sha256,
-            "raw_markdown": raw_markdown,
-            "config_summary": json.dumps(config_summary) if config_summary else None,
-            "eval_metrics": json.dumps(eval_metrics) if eval_metrics else None,
-            "status": status, "training_time": training_time,
-            "created_at": created_at, "approach_family": approach_family,
-            "kind": kind,
-        }
-
-    def insert(
-        self,
-        idea_id: str,
-        title: str,
-        config_yaml: str,
-        raw_markdown: str,
-        eval_metrics: Optional[Dict[str, Any]] = None,
-        config_summary: Optional[Dict[str, Any]] = None,
-        status: str = "archived",
-        priority: str = "medium",
-        category: str = "architecture",
-        parent: Optional[str] = None,
-        hypothesis: Optional[str] = None,
-        training_time: Optional[float] = None,
-        created_at: Optional[str] = None,
-        approach_family: str = "other",
-        kind: str = "train",
-        *,
-        if_absent: bool = False,
-    ):
-        """Insert/update legacy records, or atomically admit an immutable proposal.
-
-        ``if_absent=True`` only admits queued proposals and returns a structured
-        result; it never replaces a same-ID record or owns a caller transaction.
-        The default retains the historical import/update behavior and return.
-        """
-        if not isinstance(if_absent, bool):
-            raise ValueError("proposal_if_absent_invalid")
-        prepared = self.prepare_proposal(
-            idea_id, title, config_yaml, raw_markdown,
-            eval_metrics=eval_metrics, config_summary=config_summary,
-            status=status, priority=priority, category=category, parent=parent,
-            hypothesis=hypothesis, training_time=training_time,
-            created_at=created_at, approach_family=approach_family, kind=kind,
-        )
         if if_absent:
             from orze.core.proposal_admission import admit_proposal
 
-            return admit_proposal(self, prepared)
-        id_num = prepared["id_num"]
-        config_hash = prepared["config_hash"]
-        config_source_sha256 = prepared["config_source_sha256"]
+            return admit_proposal(self, {
+                "idea_id": idea_id, "id_num": id_num, "title": title,
+                "priority": priority, "category": category, "parent": parent,
+                "hypothesis": hypothesis, "config": config_yaml,
+                "config_hash": config_hash,
+                "config_source_sha256": config_source_sha256,
+                "raw_markdown": raw_markdown,
+                "config_summary": json.dumps(config_summary) if config_summary else None,
+                "eval_metrics": json.dumps(eval_metrics) if eval_metrics else None,
+                "status": status, "training_time": training_time,
+                "created_at": created_at, "approach_family": approach_family,
+                "kind": kind,
+            })
 
         def _do_insert():
             recorded_at = self._transition_time(self.conn)
@@ -1118,8 +1083,8 @@ class IdeaLake:
                     config_hash,
                     config_source_sha256,
                     raw_markdown,
-                    prepared["config_summary"],
-                    prepared["eval_metrics"],
+                    json.dumps(config_summary) if config_summary else None,
+                    json.dumps(eval_metrics) if eval_metrics else None,
                     status,
                     training_time,
                     recorded_at,

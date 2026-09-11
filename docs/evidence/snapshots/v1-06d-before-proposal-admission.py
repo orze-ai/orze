@@ -8,12 +8,6 @@ CALLING SPEC:
         Existing source identity is checked before config-dedup policy. Exact
         replay changes no metadata, result mirrors, lifecycle, or timestamps.
 
-    admit_proposal_in_tx(lake, prepared) -> dict
-        Same normal admission policy inside an existing caller-owned writer.
-        Never begins, commits, rolls back, or changes the busy timeout. Results
-        are provisional, not durable acknowledgments. Any admission error is
-        raised so the caller can roll back the whole composed transaction.
-
 This is task admission, not an observation/attempt ledger. The caller owns source
 acknowledgment. Only inserted or already_present_exact can acknowledge source
 bytes; neither rejected nor config_duplicate is a durable rejection receipt.
@@ -23,7 +17,6 @@ no transaction supplied by the caller is committed or rolled back.
 """
 from __future__ import annotations
 
-import hashlib
 import os
 import re
 import socket
@@ -50,12 +43,8 @@ _MAX_DEDUP_CANDIDATES = 1024
 _BUSY_TIMEOUT_MS = 1000
 
 
-class ProposalAdmissionError(Exception):
-    """A caller-owned admission failed; the caller must roll back its writer."""
-
-
-# Keep the existing private exception identity for privileged replica callers.
-_Rejected = ProposalAdmissionError
+class _Rejected(Exception):
+    pass
 
 
 def _result(prepared, status, reason, **extra):
@@ -145,105 +134,25 @@ def _new_rows(lake, prepared):
     return transition_id
 
 
-def _validation_error(prepared):
-    if str(prepared["status"]).lower() != "queued":
-        return "proposal_requires_queued"
-    if (not isinstance(prepared["idea_id"], str)
-            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", prepared["idea_id"]) is None):
-        return "proposal_id_invalid"
-    if (prepared["config_hash"] is None
-            or not isinstance(prepared["config"], str)
-            or len(prepared["config"].encode("utf-8")) > _MAX_CONFIG_BYTES):
-        return "proposal_config_invalid"
-    # The public entry has already prepared the complete metadata; reject
-    # non-text identity fields instead of letting SQLite silently coerce them.
-    if any(value is not None and not isinstance(value, str)
-           for value in (prepared[field] for field in _SOURCE_FIELDS)):
-        return "proposal_source_invalid"
-    return None
-
-
-def _admit_rows(lake, prepared):
-    """Normal policy only; _new_rows by itself is not a proposal admission API."""
-    connection = lake.conn
-    existing = connection.execute(
-        f"SELECT {', '.join(_SOURCE_FIELDS)} FROM ideas WHERE idea_id COLLATE BINARY=?",
-        (prepared["idea_id"],),
-    ).fetchall()
-    if existing:
-        exact = (len(existing) == 1 and all(
-            existing[0][field] == prepared[field] for field in _SOURCE_FIELDS))
-        return _result(prepared, "already_present_exact" if exact else "conflict",
-                       "proposal_exact_replay" if exact else "proposal_identity_conflict")
-    for table in ("idea_state", "idea_stage_state", "idea_transitions", "idea_stage_transitions"):
-        if connection.execute(
-            f"SELECT 1 FROM {table} WHERE idea_id=? LIMIT 1", (prepared["idea_id"],),
-        ).fetchone() is not None:
-            raise _Rejected("proposal_orphan_lifecycle")
-    owner = _dedup_owner(connection, prepared)
-    if owner is not None:
-        return _result(prepared, "config_duplicate", "proposal_config_duplicate", existing_id=owner)
-    transition_id = _new_rows(lake, prepared)
-    return _result(prepared, "inserted", "proposal_admitted", transition_id=transition_id)
-
-
-def admit_proposal_in_tx(lake, prepared):
-    """Stage an ordinary proposal in the caller's existing BEGIN IMMEDIATE.
-
-    The caller owns rollback even when an error followed a partial write. An
-    inserted result is not a commit receipt: composition must fence subsequent
-    writes and verify committed state before acknowledging its own source.
-    This entry never grants replica dedup exemptions or cross-database routing.
-    BEGIN IMMEDIATE is a caller precondition: in_transaction cannot distinguish
-    a deferred transaction, and this helper does not silently upgrade its lock.
-    """
-    connection = lake.conn
-    if not connection.in_transaction:
-        raise ProposalAdmissionError("proposal_requires_caller_transaction")
-    if type(prepared) is not dict or set(prepared) != set(_IDEA_FIELDS) - {"archived_at"}:
-        raise ProposalAdmissionError("proposal_prepared_invalid")
-    prepared = dict(prepared)
-    reason = _validation_error(prepared)
-    if reason is not None:
-        raise ProposalAdmissionError(reason)
-    # Unlike the old private insert branch, this composable API receives a
-    # dictionary directly. Recompute its dedup identity; supplied cache fields
-    # must not authorize ordinary duplicate tasks.
-    from orze.idea_lake import ALLOWED_KINDS
-
-    if prepared["kind"] not in ALLOWED_KINDS:
-        raise ProposalAdmissionError("proposal_kind_invalid")
-    try:
-        parsed = yaml.safe_load(prepared["config"])
-        if (not isinstance(parsed, dict)
-                or hash_config(parsed) != prepared["config_hash"]
-                or hashlib.sha256(prepared["config"].encode("utf-8")).hexdigest()
-                != prepared["config_source_sha256"]):
-            raise ProposalAdmissionError("proposal_config_identity_mismatch")
-    except (yaml.YAMLError, TypeError, ValueError, RecursionError) as exc:
-        raise ProposalAdmissionError("proposal_config_invalid") from exc
-    try:
-        # The existing normal policy uses the main catalog's table names. Do
-        # not let a caller-created TEMP alias redirect its reads or writes.
-        if connection.execute(
-            "SELECT 1 FROM sqlite_temp_master WHERE name COLLATE NOCASE IN "
-            "('ideas','idea_state','idea_stage_state','idea_transitions',"
-            "'idea_stage_transitions') LIMIT 1",
-        ).fetchone() is not None:
-            raise ProposalAdmissionError("proposal_temporary_catalog")
-        return _admit_rows(lake, prepared)
-    except sqlite3.Error as exc:
-        raise ProposalAdmissionError("proposal_storage_error") from exc
-
-
 def admit_proposal(lake, prepared):
     """Atomically check-and-create one queued task without replacing a winner."""
     connection = lake.conn
     if connection.in_transaction:
         return _result(prepared, "rejected", "proposal_caller_transaction")
-    reason = _validation_error(prepared)
-    if reason is not None:
-        return _result(prepared, "rejected", reason)
+    if str(prepared["status"]).lower() != "queued":
+        return _result(prepared, "rejected", "proposal_requires_queued")
+    if (not isinstance(prepared["idea_id"], str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", prepared["idea_id"]) is None):
+        return _result(prepared, "rejected", "proposal_id_invalid")
+    if (prepared["config_hash"] is None
+            or not isinstance(prepared["config"], str)
+            or len(prepared["config"].encode("utf-8")) > _MAX_CONFIG_BYTES):
+        return _result(prepared, "rejected", "proposal_config_invalid")
+    # The public entry has already prepared the complete metadata; reject
+    # non-text identity fields instead of letting SQLite silently coerce them.
+    if any(value is not None and not isinstance(value, str)
+           for value in (prepared[field] for field in _SOURCE_FIELDS)):
+        return _result(prepared, "rejected", "proposal_source_invalid")
 
     timeout = connection.execute("PRAGMA busy_timeout").fetchone()[0]
     connection.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
@@ -251,12 +160,28 @@ def admit_proposal(lake, prepared):
     try:
         connection.execute("BEGIN IMMEDIATE")
         owns_transaction = True
-        result = _admit_rows(lake, prepared)
-        if result["status"] != "inserted":
+        existing = connection.execute(
+            f"SELECT {', '.join(_SOURCE_FIELDS)} FROM ideas WHERE idea_id COLLATE BINARY=?",
+            (prepared["idea_id"],),
+        ).fetchall()
+        if existing:
+            exact = (len(existing) == 1 and all(
+                existing[0][field] == prepared[field] for field in _SOURCE_FIELDS))
             connection.rollback()
-            return result
+            return _result(prepared, "already_present_exact" if exact else "conflict",
+                           "proposal_exact_replay" if exact else "proposal_identity_conflict")
+        for table in ("idea_state", "idea_stage_state", "idea_transitions", "idea_stage_transitions"):
+            if connection.execute(
+                f"SELECT 1 FROM {table} WHERE idea_id=? LIMIT 1", (prepared["idea_id"],),
+            ).fetchone() is not None:
+                raise _Rejected("proposal_orphan_lifecycle")
+        owner = _dedup_owner(connection, prepared)
+        if owner is not None:
+            connection.rollback()
+            return _result(prepared, "config_duplicate", "proposal_config_duplicate", existing_id=owner)
+        transition_id = _new_rows(lake, prepared)
         connection.commit()
-        return result
+        return _result(prepared, "inserted", "proposal_admitted", transition_id=transition_id)
     except _Rejected as exc:
         if owns_transaction:
             connection.rollback()

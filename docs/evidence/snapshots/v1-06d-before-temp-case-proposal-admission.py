@@ -194,8 +194,6 @@ def admit_proposal_in_tx(lake, prepared):
     inserted result is not a commit receipt: composition must fence subsequent
     writes and verify committed state before acknowledging its own source.
     This entry never grants replica dedup exemptions or cross-database routing.
-    BEGIN IMMEDIATE is a caller precondition: in_transaction cannot distinguish
-    a deferred transaction, and this helper does not silently upgrade its lock.
     """
     connection = lake.conn
     if not connection.in_transaction:
@@ -226,7 +224,7 @@ def admit_proposal_in_tx(lake, prepared):
         # The existing normal policy uses the main catalog's table names. Do
         # not let a caller-created TEMP alias redirect its reads or writes.
         if connection.execute(
-            "SELECT 1 FROM sqlite_temp_master WHERE name COLLATE NOCASE IN "
+            "SELECT 1 FROM sqlite_temp_master WHERE name IN "
             "('ideas','idea_state','idea_stage_state','idea_transitions',"
             "'idea_stage_transitions') LIMIT 1",
         ).fetchone() is not None:

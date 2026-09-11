@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "task": "Read-only next-slice CPU deterministic retirement preparation",
+  "scope": "Diagnostic during frozen V1-06D full verification; no source or test edits, no cleanup patch, no whole-suite claim.",
+  "classification": "Existing explicitly retained strong ownership, not an undisclosed new V1-06D defect or a scientific performance result.",
+  "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport gc\nimport json\nimport sqlite3\nimport weakref\nfrom pathlib import Path\nimport pytest\nfrom orze.core import research_interfaces as registry\nfrom orze.engine import native_cpu_action as native\n\nclass RetentionProbe:\n    def pytest_sessionstart(self, session):\n        self.before = {\"contexts\": len(registry._CONTEXTS), \"runs\": len(registry._RUNS), \"owners\": len(native._OWNERS)}\n    def pytest_sessionfinish(self, session, exitstatus):\n        collected = gc.collect()\n        runs = tuple(registry._RUNS.values())\n        owners = tuple(native._OWNERS.values())\n        unique_sources = {id(run[\"sources\"]): run[\"sources\"] for run in runs}\n        source_bytes = sum(len(item.content) for source in unique_sources.values() for item in source._owner.items)\n        engines = {}\n        closure_edges = []\n        for owner in owners:\n            callback = owner.admission\n            for name, cell in zip(getattr(callback, \"__code__\", None).co_freevars, callback.__closure__ or ()):\n                value = cell.cell_contents\n                if name == \"engine\":\n                    engines[id(value)] = value\n                    closure_edges.append({\"task_id\": owner.handle.idea_id, \"freevar\": name})\n        engine_details = []\n        for engine in engines.values():\n            path = Path(engine.lake.db_path)\n            with sqlite3.connect(path.as_uri()+\"?mode=ro\", uri=True) as conn:\n                attempts = conn.execute(\"SELECT task_id,state,terminal_json FROM execution_attempts ORDER BY task_id\").fetchall()\n                reservations = conn.execute(\"SELECT state FROM cpu_action_reservations\").fetchall()\n            try:\n                engine.lake.conn.execute(\"SELECT 1\")\n                connection_closed = False\n            except sqlite3.ProgrammingError:\n                connection_closed = True\n            engine_details.append({\n                \"database\": str(path), \"engine_cpu_closed\": engine._cpu_closed,\n                \"active_handle_map_size\": len(engine._cpu_handles), \"lake_connection_closed\": connection_closed,\n                \"attempts\": [{\"task_id\": row[0], \"state\": row[1], \"outcome\": json.loads(row[2])[\"outcome\"]} for row in attempts],\n                \"reservation_states\": [row[0] for row in reservations],\n            })\n        report = {\"pytest_exitstatus\": int(exitstatus), \"gc_collected\": collected, \"before\": self.before,\n            \"after_gc\": {\"contexts\": len(registry._CONTEXTS), \"runs\": len(registry._RUNS), \"owners\": len(native._OWNERS)},\n            \"terminal_owners\": sum(owner.terminal is not None for owner in owners),\n            \"held_owners\": sum(owner.held for owner in owners),\n            \"unique_prepared_sources\": len(unique_sources), \"retained_source_content_bytes\": source_bytes,\n            \"retained_source_items\": sum(len(source._owner.items) for source in unique_sources.values()),\n            \"retained_engine_count_via_admission_closure\": len(engines), \"closure_edges\": closure_edges,\n            \"engines\": engine_details,\n            \"interpretation\": \"Measured after existing test fixture teardown and gc; no registry was cleared. Engine closure is one observed strong path, not claimed to be the only root (atexit also retains callbacks).\"}\n        print(\"\\nRETENTION_DIAGNOSTIC=\"+json.dumps(report, sort_keys=True))\nraise SystemExit(pytest.main([\"-q\",\"-p\",\"no:cacheprovider\",\n    \"tests/test_cpu_proposal_product.py::test_policy_builds_experiment_then_analysis_from_new_artifact_ids\",\n    \"--tb=short\"], plugins=[RetentionProbe()]))\nPY",
+  "initial": {
+    "chunk_id": "4e4bce",
+    "wall_time_seconds": 1.000821312,
+    "session_id": 88721,
+    "original_token_count": 0,
+    "output": ""
+  },
+  "completion": {
+    "chunk_id": "7e21dc",
+    "wall_time_seconds": 0.000002594,
+    "exit_code": 0,
+    "original_token_count": 296,
+    "output": ".                                                                        [100%]\nRETENTION_DIAGNOSTIC={\"after_gc\": {\"contexts\": 1, \"owners\": 2, \"runs\": 2}, \"before\": {\"contexts\": 0, \"owners\": 0, \"runs\": 0}, \"closure_edges\": [{\"freevar\": \"engine\", \"task_id\": \"idea-source\"}, {\"freevar\": \"engine\", \"task_id\": \"idea-analysis\"}], \"engines\": [{\"active_handle_map_size\": 0, \"attempts\": [{\"outcome\": \"completed\", \"state\": \"TERMINAL\", \"task_id\": \"idea-analysis\"}, {\"outcome\": \"completed\", \"state\": \"TERMINAL\", \"task_id\": \"idea-source\"}], \"database\": \"/tmp/pytest-of-erik/pytest-4994/test_policy_builds_experiment_0/lake.db\", \"engine_cpu_closed\": true, \"lake_connection_closed\": true, \"reservation_states\": [\"SETTLED\", \"SETTLED\"]}], \"gc_collected\": 1559, \"held_owners\": 0, \"interpretation\": \"Measured after existing test fixture teardown and gc; no registry was cleared. Engine closure is one observed strong path, not claimed to be the only root (atexit also retains callbacks).\", \"pytest_exitstatus\": 0, \"retained_engine_count_via_admission_closure\": 1, \"retained_source_content_bytes\": 1, \"retained_source_items\": 1, \"terminal_owners\": 2, \"unique_prepared_sources\": 2}\n\n1 passed in 2.36s\n"
+  },
+  "post_run_source_hashes": [
+    {
+      "path": "src/orze/engine/native_cpu_action.py",
+      "sha256": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09"
+    },
+    {
+      "path": "src/orze/core/research_interfaces.py",
+      "sha256": "0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557"
+    },
+    {
+      "path": "src/orze/engine/cpu_action_sources.py",
+      "sha256": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e"
+    },
+    {
+      "path": "src/orze/engine/cpu_phase.py",
+      "sha256": "12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34"
+    },
+    {
+      "path": "tests/test_cpu_proposal_product.py",
+      "sha256": "a613831bd98f659ea118137b3b9e73d2ec98471cbc382bd5286ae6712a9dabca"
+    }
+  ],
+  "observed": {
+    "after_gc": {
+      "contexts": 1,
+      "owners": 2,
+      "runs": 2
+    },
+    "before": {
+      "contexts": 0,
+      "owners": 0,
+      "runs": 0
+    },
+    "closure_edges": [
+      {
+        "freevar": "engine",
+        "task_id": "idea-source"
+      },
+      {
+        "freevar": "engine",
+        "task_id": "idea-analysis"
+      }
+    ],
+    "engines": [
+      {
+        "active_handle_map_size": 0,
+        "attempts": [
+          {
+            "outcome": "completed",
+            "state": "TERMINAL",
+            "task_id": "idea-analysis"
+          },
+          {
+            "outcome": "completed",
+            "state": "TERMINAL",
+            "task_id": "idea-source"
+          }
+        ],
+        "database": "/tmp/pytest-of-erik/pytest-4994/test_policy_builds_experiment_0/lake.db",
+        "engine_cpu_closed": true,
+        "lake_connection_closed": true,
+        "reservation_states": [
+          "SETTLED",
+          "SETTLED"
+        ]
+      }
+    ],
+    "gc_collected": 1559,
+    "held_owners": 0,
+    "interpretation": "Measured after existing test fixture teardown and gc; no registry was cleared. Engine closure is one observed strong path, not claimed to be the only root (atexit also retains callbacks).",
+    "pytest_exitstatus": 0,
+    "retained_engine_count_via_admission_closure": 1,
+    "retained_source_content_bytes": 1,
+    "retained_source_items": 1,
+    "terminal_owners": 2,
+    "unique_prepared_sources": 2
+  },
+  "interpretation": [
+    "The existing real Policy→CLI→Orze→source→analysis test completed normally. Both native attempts were TERMINAL/completed and both reservations were SETTLED; the engine's active handle map was empty and its Lake connection was closed.",
+    "After all pytest fixture teardown and explicit gc.collect(), two terminal non-HOLD native owners, two prepared DomainRuns, and one InterfaceContext remained in the module strong dictionaries.",
+    "One nonempty PreparedSources item still held its actual one-byte source content. This is a measured retained payload size for this tiny test, not a RSS measurement or a claim that one operation leaks its maximum 16 MiB.",
+    "Both retained native admission closures directly referenced the same closed Orze engine. The strong dictionary path is demonstrated, but atexit independently retains the bound cleanup callback, so deleting native entries alone would not prove engine reclamation.",
+    "The current native source explicitly states that unresolved and terminal owners are strong and makes no global memory-cap claim. No attempt was made to reinterpret the existing per-capture 16 MiB limit or wall budget as a process-lifetime bound."
+  ],
+  "concrete_paths": [
+    {
+      "path": "src/orze/engine/native_cpu_action.py",
+      "functions": [
+        "_OWNERS",
+        "launch",
+        "harvest"
+      ],
+      "edge": "_OWNERS → terminal _Owner → admission closure(engine) and domain_run. harvest sets terminal only after settle but does not retire the owner."
+    },
+    {
+      "path": "src/orze/core/research_interfaces.py",
+      "functions": [
+        "capture_interfaces",
+        "prepare_domain_run"
+      ],
+      "edge": "_CONTEXTS → callback objects; _RUNS → context, prepared action, interpret callback, strong PreparedSources."
+    },
+    {
+      "path": "src/orze/engine/cpu_action_sources.py",
+      "functions": [
+        "PreparedSources",
+        "_Owner",
+        "_Item"
+      ],
+      "edge": "PreparedSources._owner.items retain content bytes and the original Lake/connection. The handle/owner cycle is collectible only when external strong roots have gone."
+    },
+    {
+      "path": "src/orze/engine/cpu_phase.py",
+      "functions": [
+        "initialize",
+        "iteration",
+        "close"
+      ],
+      "edge": "CPU prepare registers a bound atexit callback; tick creates DomainRun before budget.reserve, and close clears completed active handles/Lake but does not retire registries or unregister successful cleanup."
+    }
+  ],
+  "next_slice_recommendation": {
+    "priority": "Implement bounded deterministic retirement before claiming suitability for long-running high-volume research loops; not a reason to invalidate this completed admission/transaction slice.",
+    "minimal_files": [
+      "src/orze/engine/native_cpu_action.py",
+      "src/orze/core/research_interfaces.py",
+      "src/orze/engine/cpu_phase.py"
+    ],
+    "sequence": [
+      "At the existing post-effect/post-budget-settle success boundary, create a private exact terminal retirement receipt. Do not infer completion from poll, empty maps, a boolean label or merely TERMINAL SQL.",
+      "Detach admission closure, DomainRun/input capability and other heavyweight live-only state only for that confirmed terminal owner. Preserve cached harvest/stop behavior through a lightweight opaque terminal record tied to the exact external handle; consider a weak-key terminal cache whose value does not strongly retain its key.",
+      "Remove a DomainRun's registry ownership only when no live native operation uses it. Release the prepared source capability by dropping the final strong reference, not by mutating shared content that another active operation could still use.",
+      "Retire the invocation InterfaceContext only after all its runs have been discharged. On successful CPU close, unregister only the exact captured atexit callback so it is not a separate permanent engine root.",
+      "Retain unresolved/HOLD/uncertain-commit owners and their sources strongly. Never use age, PID disappearance, source mutation, directory replacement or GC pressure as retirement permission."
+    ],
+    "additional_read_only_risk": "cpu_phase prepares a DomainRun before reserve. A known permit=None path can leave an unbound run without a native owner. The retirement contract should distinguish known never-entered-native preparation from native-admission-started uncertainty; this path was identified statically, not exercised as another red.",
+    "first_acceptance": [
+      "Repeated genuine completed+SETTLED CPU analyses drop heavy source/engine roots after caller references are released and GC, while cached terminal reads on still-held handles remain correct.",
+      "A live/shared source capability is not cleared when a different completed consumer retires.",
+      "Actual effect/settlement/launch uncertainty remains strongly held and cannot be replayed or garbage-collected into permission.",
+      "Known unbound preparation abandoned before native admission can retire without claiming that an unknown native attempt never executed."
+    ]
+  },
+  "limitations": [
+    "Only one existing two-action product test was measured; no large-payload load test, RSS benchmark or soak test was run.",
+    "No process dictionaries were cleared, no atexit callback was unregistered, and no product cleanup was simulated by deleting authority.",
+    "The diagnostic does not prove every possible engine retention root or resource descriptor lifetime."
+  ]
+}

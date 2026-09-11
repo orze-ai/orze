@@ -1,0 +1,319 @@
+{
+  "schema": 1,
+  "slice": "V1-06D",
+  "role": "author implementation and bounded verification; not independent review of own implementation",
+  "baseline_commit": "cd5833b09743b5fe7ad7265eb99df16d8d69b9e0",
+  "scope": {
+    "production": [
+      "src/orze/core/proposal_admission.py",
+      "src/orze/idea_lake.py"
+    ],
+    "new_tests": [
+      "tests/test_proposal_admission_transactions.py"
+    ],
+    "old_tests_changed": 0,
+    "provider_gpu_or_host_process_operations": false,
+    "no_commit_or_push": true
+  },
+  "result": {
+    "bounded": "101 passed in 30.87s",
+    "new_cases": 18,
+    "new_assert_ast_nodes": 48,
+    "preceding_commit_behavior_reds": 0,
+    "new_requirements": 17,
+    "candidate_draft_bug_cases": 1,
+    "full_suite_claim": false
+  },
+  "api": {
+    "prepare": "IdeaLake.prepare_proposal: same insert metadata normalization, no database operation, default status queued; no admission capability.",
+    "caller_owned": "admit_proposal_in_tx(lake, prepared): existing caller transaction required; no BEGIN/COMMIT/ROLLBACK/PRAGMA/SAVEPOINT; normal exact-ID/orphan/dedup/new-row policy.",
+    "failure": "ProposalAdmissionError propagates partial-write failure; caller must roll back the whole composed writer.",
+    "result_authority": "All returned outcomes are transaction-local/provisional. In particular inserted is not a durable ACK. The outer coordinator must validate its complete write set and read committed state before acknowledgment.",
+    "writer_mode": "BEGIN IMMEDIATE is a caller precondition, not something sqlite3.Connection.in_transaction can prove. No hidden lock upgrade is performed.",
+    "compatibility": "Old insert(if_absent=True) still rejects caller transactions and owns its original transaction/error-return semantics. Legacy default insert remains INSERT OR REPLACE with None return. Replica private _new_rows remains distinct and is never the normal-admission entry.",
+    "temp_scope": "Composable helper rejects case-insensitive TEMP table/view aliases of the five main admission tables; it does not introduce a second catalog."
+  },
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-06d-before-proposal-admission.py",
+      "source": "src/orze/core/proposal_admission.py",
+      "sha256": "db050229eb8048a907878fb100bcfdf194ce9665e712d8200ce5718a7b5dc16f",
+      "bytes": 8978,
+      "baseline_commit": "cd5833b09743b5fe7ad7265eb99df16d8d69b9e0"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06d-before-idea-lake.py",
+      "source": "src/orze/idea_lake.py",
+      "sha256": "f0f07c631a0428ecfb21fca9193281659d5942130f373eb98faab582d19a879f",
+      "bytes": 130817,
+      "baseline_commit": "cd5833b09743b5fe7ad7265eb99df16d8d69b9e0"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06d-before-temp-case-proposal-admission.py",
+      "source": "src/orze/core/proposal_admission.py",
+      "sha256": "e285654544bb61cb98af4f30c85ba686f3d0f2e49c4a80d638bf49101c5ccc7f",
+      "bytes": 12175,
+      "origin": "complete_candidate_before_mixed_case_temp_guard_fix"
+    }
+  ],
+  "classification": {
+    "first_new_run": "17 caller-owned requirements passed on their first execution after API implementation. Missing API was not executed or classified as an old behavior defect.",
+    "mixed_case_temp": {
+      "origin": "Root independent source review identified SQLite identifier case-insensitivity. Candidate guard checked sqlite_temp_master.name with binary comparison.",
+      "actual_red": "Real temporary IdEaS shadow table admitted a task rather than raising; lower-case control passed. This is a new candidate defect, not a defect demonstrated on the preceding committed implementation.",
+      "fixture": "One mixed-case parameter added to the existing new TEMP test; every existing assertion retained. No old test was modified.",
+      "repair": "Only TEMP-name COLLATE NOCASE plus explicit caller-lock-mode documentation.",
+      "source_sha256_before": "e285654544bb61cb98af4f30c85ba686f3d0f2e49c4a80d638bf49101c5ccc7f",
+      "test_sha256": "1340fe3017c3676b1fd0c13820b2fe30739727f6eb70923b6a742496e7510585",
+      "replay": "Complete candidate proposal_admission module replaced only in the child interpreter, after importing real parents; same frozen tests reproduce 1 failed / 1 passed."
+    },
+    "setup_or_fixture_failure": "None in the authored new tests."
+  },
+  "runs": [
+    {
+      "label": "preedit old admission neighborhood",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_proposal_admission.py tests/test_proposal_admission_identity_boundary.py --tb=short",
+      "session_id": 21153,
+      "initial_chunk": "36b3c8",
+      "final_chunk": "03345e",
+      "exit_code": 0,
+      "output": "22 passed in 3.93s",
+      "limitation": "Started after capturing exact baseline sources, but the IdeaLake disk edit occurred before collecting the footer. This run is not presented as a stable pre/post disk epoch; the later complete two-module baseline replay is authoritative."
+    },
+    {
+      "label": "initial candidate old neighborhood",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_proposal_admission.py tests/test_proposal_admission_identity_boundary.py --tb=short",
+      "session_id": 65842,
+      "initial_chunk": "1c2425",
+      "final_chunk": "34f867",
+      "exit_code": 0,
+      "output": "22 passed in 3.16s"
+    },
+    {
+      "label": "first new mechanisms",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_proposal_admission_transactions.py --tb=short",
+      "initial": {
+        "chunk_id": "881e22",
+        "wall_time_seconds": 1.001185691,
+        "session_id": 95033,
+        "original_token_count": 2,
+        "output": "....."
+      },
+      "completion": {
+        "chunk_id": "9a5d23",
+        "wall_time_seconds": 0.000002845,
+        "exit_code": 0,
+        "original_token_count": 24,
+        "output": "............                                                        [100%]\n17 passed in 2.35s\n"
+      },
+      "test_sha256": "c3fd4374fd68f3ec420b4edda190db2c90ca12db4dd226effdd539a1bb640d01"
+    },
+    {
+      "label": "mixed-case TEMP candidate red and lower-case control",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_proposal_admission_transactions.py -k temporary_catalog --tb=short",
+      "completion": {
+        "chunk_id": "2273dd",
+        "wall_time_seconds": 0.563740616,
+        "exit_code": 1,
+        "original_token_count": 182,
+        "output": ".F                                                                       [100%]\n=================================== FAILURES ===================================\n________ test_temporary_catalog_cannot_redirect_normal_admission[IdEaS] ________\ntests/test_proposal_admission_transactions.py:203: in test_temporary_catalog_cannot_redirect_normal_admission\n    with pytest.raises(ProposalAdmissionError, match=\"proposal_temporary_catalog\"):\nE   Failed: DID NOT RAISE ProposalAdmissionError\n=========================== short test summary info ============================\nFAILED tests/test_proposal_admission_transactions.py::test_temporary_catalog_cannot_redirect_normal_admission[IdEaS]\n1 failed, 1 passed, 16 deselected in 0.42s\n"
+      }
+    },
+    {
+      "label": "same fixed cases plus unchanged old22",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_proposal_admission_transactions.py tests/test_proposal_admission.py tests/test_proposal_admission_identity_boundary.py --tb=short",
+      "initial": {
+        "chunk_id": "4f5473",
+        "wall_time_seconds": 1.00102756,
+        "session_id": 76191,
+        "original_token_count": 2,
+        "output": "....."
+      },
+      "completion": {
+        "chunk_id": "24a3c8",
+        "wall_time_seconds": 0.000002202,
+        "exit_code": 0,
+        "original_token_count": 24,
+        "output": "...................................                                 [100%]\n40 passed in 5.99s\n"
+      }
+    },
+    {
+      "label": "final bounded compatibility",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_proposal_admission_transactions.py tests/test_proposal_admission.py tests/test_proposal_admission_identity_boundary.py tests/test_idea_ingress_contract.py tests/test_idea_ingress_lock_contract.py tests/test_idea_ingress_source_boundaries.py tests/test_cpu_replication.py tests/test_replication_requests.py tests/test_idea_lake_schema_cache.py --tb=short",
+      "initial": {
+        "chunk_id": "afc971",
+        "wall_time_seconds": 1.001105002,
+        "session_id": 13530,
+        "original_token_count": 1,
+        "output": ".."
+      },
+      "completion": {
+        "chunk_id": "4d2ff9",
+        "wall_time_seconds": 0.000002752,
+        "exit_code": 0,
+        "original_token_count": 45,
+        "output": "...................................................................... [ 71%]\n.............................                                            [100%]\n101 passed in 30.87s\n"
+      }
+    },
+    {
+      "label": "complete two-module preceding-commit replay of old22",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib\nimport importlib.util\nimport sys\nfrom pathlib import Path\nimport pytest\nfor name in (\"orze.core.proposal_admission\", \"orze.idea_lake\"):\n    importlib.import_module(name)\nfor name, filename in (\n    (\"orze.core.proposal_admission\", \"v1-06d-before-proposal-admission.py\"),\n    (\"orze.idea_lake\", \"v1-06d-before-idea-lake.py\"),\n):\n    path = Path(\"docs/evidence/snapshots\") / filename\n    spec = importlib.util.spec_from_file_location(name, path)\n    module = importlib.util.module_from_spec(spec)\n    sys.modules[name] = module\n    spec.loader.exec_module(module)\n    parent_name, attr = name.rsplit(\".\", 1)\n    setattr(sys.modules[parent_name], attr, module)\nraise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\",\n    \"tests/test_proposal_admission.py\",\n    \"tests/test_proposal_admission_identity_boundary.py\", \"--tb=short\"]))\nPY",
+      "initial": {
+        "chunk_id": "1b871e",
+        "wall_time_seconds": 1.001925645,
+        "session_id": 16704,
+        "original_token_count": 1,
+        "output": ".."
+      },
+      "completion": {
+        "chunk_id": "7c4a39",
+        "wall_time_seconds": 0.000001513,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "....................                                                   [100%]\n22 passed in 6.21s\n"
+      }
+    },
+    {
+      "label": "complete candidate module mixed-case replay",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib\nimport importlib.util\nimport sys\nfrom pathlib import Path\nimport pytest\nimportlib.import_module(\"orze.idea_lake\")\nname = \"orze.core.proposal_admission\"\nimportlib.import_module(name)\npath = Path(\"docs/evidence/snapshots/v1-06d-before-temp-case-proposal-admission.py\")\nspec = importlib.util.spec_from_file_location(name, path)\nmodule = importlib.util.module_from_spec(spec)\nsys.modules[name] = module\nspec.loader.exec_module(module)\nparent_name, attr = name.rsplit(\".\", 1)\nsetattr(sys.modules[parent_name], attr, module)\nraise SystemExit(pytest.main([\"-q\", \"-p\", \"no:cacheprovider\",\n    \"tests/test_proposal_admission_transactions.py\",\n    \"-k\", \"temporary_catalog\", \"--tb=short\"]))\nPY",
+      "completion": {
+        "chunk_id": "6d50a0",
+        "wall_time_seconds": 0.835192145,
+        "exit_code": 1,
+        "original_token_count": 182,
+        "output": ".F                                                                       [100%]\n=================================== FAILURES ===================================\n________ test_temporary_catalog_cannot_redirect_normal_admission[IdEaS] ________\ntests/test_proposal_admission_transactions.py:203: in test_temporary_catalog_cannot_redirect_normal_admission\n    with pytest.raises(ProposalAdmissionError, match=\"proposal_temporary_catalog\"):\nE   Failed: DID NOT RAISE ProposalAdmissionError\n=========================== short test summary info ============================\nFAILED tests/test_proposal_admission_transactions.py::test_temporary_catalog_cannot_redirect_normal_admission[IdEaS]\n1 failed, 1 passed, 16 deselected in 0.66s\n"
+      }
+    }
+  ],
+  "final_source_epoch": {
+    "hash_command": "sha256sum src/orze/core/proposal_admission.py src/orze/idea_lake.py tests/test_proposal_admission_transactions.py tests/test_proposal_admission.py tests/test_proposal_admission_identity_boundary.py tests/test_idea_ingress_contract.py tests/test_idea_ingress_lock_contract.py tests/test_idea_ingress_source_boundaries.py tests/test_cpu_replication.py tests/test_replication_requests.py tests/test_idea_lake_schema_cache.py",
+    "pre": {
+      "chunk_id": "0f602c",
+      "wall_time_seconds": 0.000003806,
+      "exit_code": 0,
+      "original_token_count": 285,
+      "output": "28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659  src/orze/core/proposal_admission.py\ncdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928  src/orze/idea_lake.py\n1340fe3017c3676b1fd0c13820b2fe30739727f6eb70923b6a742496e7510585  tests/test_proposal_admission_transactions.py\ndf96d73876bb7c70964ab8519ab823dbc76c7df04c585055580fd44943ca894f  tests/test_proposal_admission.py\n44b5545d0eb5404d9010e6b5a007481449ec6f7be275a96e36a1a5f8bf36e41f  tests/test_proposal_admission_identity_boundary.py\n8a767615506ad2a59d93e88384b866ba81501d940d4c30a9a3a87c2c7f228e61  tests/test_idea_ingress_contract.py\nf95c8cbe61d1093797d072b36d15eb1df09e1ac63d39ad677dd968e9ab3c021c  tests/test_idea_ingress_lock_contract.py\n6692bb63ba5faf05250eeb596cc873ce01368fc028984a18a967bb65ca748ad9  tests/test_idea_ingress_source_boundaries.py\n828178809d38abf1f04ed1c8cba54fa7e90b008cf37f18058d50249dc218489d  tests/test_cpu_replication.py\n1283bebf7385296fd9a969de11af1bc17614a729912bc6443cb368349e7c6198  tests/test_replication_requests.py\ne05554f155fa36c1dd54517752a3f9ee2e9bcf744f6ab893d0fb81a41f70736f  tests/test_idea_lake_schema_cache.py\n"
+    },
+    "post": {
+      "chunk_id": "99a316",
+      "wall_time_seconds": 0.000003718,
+      "exit_code": 0,
+      "original_token_count": 285,
+      "output": "28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659  src/orze/core/proposal_admission.py\ncdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928  src/orze/idea_lake.py\n1340fe3017c3676b1fd0c13820b2fe30739727f6eb70923b6a742496e7510585  tests/test_proposal_admission_transactions.py\ndf96d73876bb7c70964ab8519ab823dbc76c7df04c585055580fd44943ca894f  tests/test_proposal_admission.py\n44b5545d0eb5404d9010e6b5a007481449ec6f7be275a96e36a1a5f8bf36e41f  tests/test_proposal_admission_identity_boundary.py\n8a767615506ad2a59d93e88384b866ba81501d940d4c30a9a3a87c2c7f228e61  tests/test_idea_ingress_contract.py\nf95c8cbe61d1093797d072b36d15eb1df09e1ac63d39ad677dd968e9ab3c021c  tests/test_idea_ingress_lock_contract.py\n6692bb63ba5faf05250eeb596cc873ce01368fc028984a18a967bb65ca748ad9  tests/test_idea_ingress_source_boundaries.py\n828178809d38abf1f04ed1c8cba54fa7e90b008cf37f18058d50249dc218489d  tests/test_cpu_replication.py\n1283bebf7385296fd9a969de11af1bc17614a729912bc6443cb368349e7c6198  tests/test_replication_requests.py\ne05554f155fa36c1dd54517752a3f9ee2e9bcf744f6ab893d0fb81a41f70736f  tests/test_idea_lake_schema_cache.py\n"
+    },
+    "exact": true,
+    "files": [
+      {
+        "path": "src/orze/core/proposal_admission.py",
+        "sha256": "28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659"
+      },
+      {
+        "path": "src/orze/idea_lake.py",
+        "sha256": "cdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928"
+      },
+      {
+        "path": "tests/test_proposal_admission_transactions.py",
+        "sha256": "1340fe3017c3676b1fd0c13820b2fe30739727f6eb70923b6a742496e7510585"
+      },
+      {
+        "path": "tests/test_proposal_admission.py",
+        "sha256": "df96d73876bb7c70964ab8519ab823dbc76c7df04c585055580fd44943ca894f"
+      },
+      {
+        "path": "tests/test_proposal_admission_identity_boundary.py",
+        "sha256": "44b5545d0eb5404d9010e6b5a007481449ec6f7be275a96e36a1a5f8bf36e41f"
+      },
+      {
+        "path": "tests/test_idea_ingress_contract.py",
+        "sha256": "8a767615506ad2a59d93e88384b866ba81501d940d4c30a9a3a87c2c7f228e61"
+      },
+      {
+        "path": "tests/test_idea_ingress_lock_contract.py",
+        "sha256": "f95c8cbe61d1093797d072b36d15eb1df09e1ac63d39ad677dd968e9ab3c021c"
+      },
+      {
+        "path": "tests/test_idea_ingress_source_boundaries.py",
+        "sha256": "6692bb63ba5faf05250eeb596cc873ce01368fc028984a18a967bb65ca748ad9"
+      },
+      {
+        "path": "tests/test_cpu_replication.py",
+        "sha256": "828178809d38abf1f04ed1c8cba54fa7e90b008cf37f18058d50249dc218489d"
+      },
+      {
+        "path": "tests/test_replication_requests.py",
+        "sha256": "1283bebf7385296fd9a969de11af1bc17614a729912bc6443cb368349e7c6198"
+      },
+      {
+        "path": "tests/test_idea_lake_schema_cache.py",
+        "sha256": "e05554f155fa36c1dd54517752a3f9ee2e9bcf744f6ab893d0fb81a41f70736f"
+      }
+    ]
+  },
+  "static_audit": {
+    "command": "python3 - <<'PY'\nimport ast, hashlib, json, pathlib, subprocess\nbase = \"cd5833b09743b5fe7ad7265eb99df16d8d69b9e0\"\nroot = pathlib.Path(\".\")\npairs = [\n (\"src/orze/core/proposal_admission.py\", \"docs/evidence/snapshots/v1-06d-before-proposal-admission.py\"),\n (\"src/orze/idea_lake.py\", \"docs/evidence/snapshots/v1-06d-before-idea-lake.py\"),\n]\nsnapshots = []\nfor source, path in pairs:\n    original = subprocess.check_output([\"git\",\"show\",f\"{base}:{source}\"])\n    raw = pathlib.Path(path).read_bytes()\n    assert original == raw\n    snapshots.append({\"path\":path,\"source\":source,\"sha256\":hashlib.sha256(raw).hexdigest(),\"bytes\":len(raw),\"baseline_commit\":base})\np = pathlib.Path(\"docs/evidence/snapshots/v1-06d-before-temp-case-proposal-admission.py\")\nraw = p.read_bytes()\nast.parse(raw)\nassert hashlib.sha256(raw).hexdigest() == \"e285654544bb61cb98af4f30c85ba686f3d0f2e49c4a80d638bf49101c5ccc7f\"\nsnapshots.append({\"path\":str(p),\"source\":\"src/orze/core/proposal_admission.py\",\"sha256\":hashlib.sha256(raw).hexdigest(),\"bytes\":len(raw),\"origin\":\"complete_candidate_before_mixed_case_temp_guard_fix\"})\ndef fn(tree, name):\n    return next(node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name)\ndef dump(node):\n    return ast.dump(node, include_attributes=False)\nold_lake = ast.parse(pathlib.Path(pairs[1][1]).read_text())\nnew_lake = ast.parse(pathlib.Path(pairs[1][0]).read_text())\nold_insert = fn(old_lake, \"insert\")\nnew_insert = fn(new_lake, \"insert\")\nprepare = fn(new_lake, \"prepare_proposal\")\nassert dump(old_insert.args) == dump(new_insert.args)\nold_start = next(i for i, n in enumerate(old_insert.body) if isinstance(n,ast.If) and \"kind not in ALLOWED_KINDS\" in ast.unparse(n.test))\nold_end = next(i for i,n in enumerate(old_insert.body) if isinstance(n,ast.If) and isinstance(n.test,ast.Name) and n.test.id == \"if_absent\")\nassert [dump(n) for n in old_insert.body[old_start:old_end]] == [dump(n) for n in prepare.body[1:-1]]\nold_dict = old_insert.body[old_end].body[-1].value.args[1]\nassert dump(old_dict) == dump(prepare.body[-1].value)\nlegacy_old = fn(old_lake,\"_do_insert\")\nlegacy_new = fn(new_lake,\"_do_insert\")\nclass SerializePrepared(ast.NodeTransformer):\n    def visit_IfExp(self, n):\n        for field in (\"config_summary\",\"eval_metrics\"):\n            if ast.unparse(n) == f\"json.dumps({field}) if {field} else None\":\n                return ast.Subscript(value=ast.Name(id=\"prepared\",ctx=ast.Load()), slice=ast.Constant(value=field), ctx=ast.Load())\n        return self.generic_visit(n)\nlegacy_old = SerializePrepared().visit(legacy_old)\nassert dump(legacy_old) == dump(legacy_new)\nold_admission = ast.parse(pathlib.Path(pairs[0][1]).read_text())\nnew_admission = ast.parse(pathlib.Path(pairs[0][0]).read_text())\nfor name in (\"_new_rows\",\"_dedup_owner\"):\n    assert dump(fn(old_admission,name)) == dump(fn(new_admission,name))\nold_tests = subprocess.check_output([\"git\",\"ls-tree\",\"-r\",\"--name-only\",base,\"tests\"]).decode().splitlines()\nold_tests = [name for name in old_tests if name.endswith(\".py\")]\nfor path in old_tests:\n    assert pathlib.Path(path).read_bytes() == subprocess.check_output([\"git\",\"show\",f\"{base}:{path}\"]), path\ntest = pathlib.Path(\"tests/test_proposal_admission_transactions.py\")\ntree = ast.parse(test.read_bytes())\nasserts = sum(isinstance(node,ast.Assert) for node in ast.walk(tree))\nfunctions = [node.name for node in tree.body if isinstance(node,ast.FunctionDef) and node.name.startswith(\"test_\")]\nprint(json.dumps({\"snapshots\":snapshots,\"old_tracked_python_tests_exact\":len(old_tests),\"insert_signature_exact\":True,\"normalization_statement_AST_exact\":True,\"prepared_dict_AST_exact\":True,\"legacy_write_body_AST_exact_except_two_prepared_serializations\":True,\"dedup_owner_AST_exact\":True,\"new_rows_AST_exact\":True,\"new_test\":{\"path\":str(test),\"sha256\":hashlib.sha256(test.read_bytes()).hexdigest(),\"functions\":functions,\"case_count\":18,\"assert_count\":asserts}},indent=2))\nPY",
+    "completion": {
+      "chunk_id": "b9570a",
+      "wall_time_seconds": 0.890703039,
+      "exit_code": 0,
+      "original_token_count": 562,
+      "output": "{\n  \"snapshots\": [\n    {\n      \"path\": \"docs/evidence/snapshots/v1-06d-before-proposal-admission.py\",\n      \"source\": \"src/orze/core/proposal_admission.py\",\n      \"sha256\": \"db050229eb8048a907878fb100bcfdf194ce9665e712d8200ce5718a7b5dc16f\",\n      \"bytes\": 8978,\n      \"baseline_commit\": \"cd5833b09743b5fe7ad7265eb99df16d8d69b9e0\"\n    },\n    {\n      \"path\": \"docs/evidence/snapshots/v1-06d-before-idea-lake.py\",\n      \"source\": \"src/orze/idea_lake.py\",\n      \"sha256\": \"f0f07c631a0428ecfb21fca9193281659d5942130f373eb98faab582d19a879f\",\n      \"bytes\": 130817,\n      \"baseline_commit\": \"cd5833b09743b5fe7ad7265eb99df16d8d69b9e0\"\n    },\n    {\n      \"path\": \"docs/evidence/snapshots/v1-06d-before-temp-case-proposal-admission.py\",\n      \"source\": \"src/orze/core/proposal_admission.py\",\n      \"sha256\": \"e285654544bb61cb98af4f30c85ba686f3d0f2e49c4a80d638bf49101c5ccc7f\",\n      \"bytes\": 12175,\n      \"origin\": \"complete_candidate_before_mixed_case_temp_guard_fix\"\n    }\n  ],\n  \"old_tracked_python_tests_exact\": 444,\n  \"insert_signature_exact\": true,\n  \"normalization_statement_AST_exact\": true,\n  \"prepared_dict_AST_exact\": true,\n  \"legacy_write_body_AST_exact_except_two_prepared_serializations\": true,\n  \"dedup_owner_AST_exact\": true,\n  \"new_rows_AST_exact\": true,\n  \"new_test\": {\n    \"path\": \"tests/test_proposal_admission_transactions.py\",\n    \"sha256\": \"1340fe3017c3676b1fd0c13820b2fe30739727f6eb70923b6a742496e7510585\",\n    \"functions\": [\n      \"test_preparation_is_pure_and_matches_legacy_normalization\",\n      \"test_new_entry_requires_existing_caller_transaction\",\n      \"test_insert_is_provisional_and_outer_rollback_owns_all_changes\",\n      \"test_only_caller_commit_publishes_exact_admission\",\n      \"test_read_only_outcomes_preserve_caller_writer\",\n      \"test_second_admission_write_failure_raises_and_caller_rolls_back_whole_batch\",\n      \"test_orphan_rejection_does_not_rollback_unrelated_caller_state\",\n      \"test_prepared_cache_cannot_authorize_dedup_bypass\",\n      \"test_ordinary_cpu_proposals_keep_normal_resource_aware_dedup\",\n      \"test_temporary_catalog_cannot_redirect_normal_admission\",\n      \"test_later_caller_fault_cannot_turn_provisional_insert_into_durable_receipt\"\n    ],\n    \"case_count\": 18,\n    \"assert_count\": 48\n  }\n}\n"
+    },
+    "findings": {
+      "snapshots": [
+        {
+          "path": "docs/evidence/snapshots/v1-06d-before-proposal-admission.py",
+          "source": "src/orze/core/proposal_admission.py",
+          "sha256": "db050229eb8048a907878fb100bcfdf194ce9665e712d8200ce5718a7b5dc16f",
+          "bytes": 8978,
+          "baseline_commit": "cd5833b09743b5fe7ad7265eb99df16d8d69b9e0"
+        },
+        {
+          "path": "docs/evidence/snapshots/v1-06d-before-idea-lake.py",
+          "source": "src/orze/idea_lake.py",
+          "sha256": "f0f07c631a0428ecfb21fca9193281659d5942130f373eb98faab582d19a879f",
+          "bytes": 130817,
+          "baseline_commit": "cd5833b09743b5fe7ad7265eb99df16d8d69b9e0"
+        },
+        {
+          "path": "docs/evidence/snapshots/v1-06d-before-temp-case-proposal-admission.py",
+          "source": "src/orze/core/proposal_admission.py",
+          "sha256": "e285654544bb61cb98af4f30c85ba686f3d0f2e49c4a80d638bf49101c5ccc7f",
+          "bytes": 12175,
+          "origin": "complete_candidate_before_mixed_case_temp_guard_fix"
+        }
+      ],
+      "old_tracked_python_tests_exact": 444,
+      "insert_signature_exact": true,
+      "normalization_statement_AST_exact": true,
+      "prepared_dict_AST_exact": true,
+      "legacy_write_body_AST_exact_except_two_prepared_serializations": true,
+      "dedup_owner_AST_exact": true,
+      "new_rows_AST_exact": true,
+      "new_test": {
+        "path": "tests/test_proposal_admission_transactions.py",
+        "sha256": "1340fe3017c3676b1fd0c13820b2fe30739727f6eb70923b6a742496e7510585",
+        "functions": [
+          "test_preparation_is_pure_and_matches_legacy_normalization",
+          "test_new_entry_requires_existing_caller_transaction",
+          "test_insert_is_provisional_and_outer_rollback_owns_all_changes",
+          "test_only_caller_commit_publishes_exact_admission",
+          "test_read_only_outcomes_preserve_caller_writer",
+          "test_second_admission_write_failure_raises_and_caller_rolls_back_whole_batch",
+          "test_orphan_rejection_does_not_rollback_unrelated_caller_state",
+          "test_prepared_cache_cannot_authorize_dedup_bypass",
+          "test_ordinary_cpu_proposals_keep_normal_resource_aware_dedup",
+          "test_temporary_catalog_cannot_redirect_normal_admission",
+          "test_later_caller_fault_cannot_turn_provisional_insert_into_durable_receipt"
+        ],
+        "case_count": 18,
+        "assert_count": 48
+      }
+    }
+  },
+  "limitations": [
+    "This helper does not itself commit or provide a source acknowledgment. Coordinator-level request/outcome/source fences and commit uncertainty belong to the new coordinator, not to this local result dictionary.",
+    "No normal-proposal duplicate exemption was introduced. CPU versus non-CPU grouping and admitted-status policy are unchanged; non-CPU kinds are not silently split into separate dedup categories.",
+    "The normalizer and legacy insertion body were statically compared, and the relevant old tests were run. This is bounded compatibility evidence, not an independent whole-repository certification.",
+    "No holdout, GPU, provider, external service or host-process discovery was used. Tests used private SQLite files and ordinary connection-level operations."
+  ]
+}

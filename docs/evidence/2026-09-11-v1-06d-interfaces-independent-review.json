@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "slice": "V1-06D",
+  "roles": {
+    "independent_scope": [
+      "root research_interfaces.py Propose parsing/BoundPolicy capture",
+      "root cpu_phase.py Propose→durable normal admission→Wait integration",
+      "runtime cpu_proposals.py exact request/source/commit and lifecycle readback"
+    ],
+    "author_scope_excluded": "I authored cpu_proposal_requests.py and its33cases; they are not independently reviewed by this report.",
+    "independent_tests": "I authored two independent reviewer cases against other agents' production APIs, not a second implementation."
+  },
+  "baseline": {
+    "core": "cd5833b09743b5fe7ad7265eb99df16d8d69b9e0",
+    "pro": "29bff9af679739acd464a2023ff7b05bec25b718"
+  },
+  "conclusion": "No blocking issue found in the bounded read scope and two actual-source interface cases. No full-suite or complete autonomous-research claim.",
+  "final_verification": {
+    "scope": "Final frozen cdc80f5c source: two independent reviewer cases plus five root-authored actual product cases, not seven newly authored tests.",
+    "prior_candidate": "ec5103bd1ccbae2dabd11d3aa8493848feff53ef1618bb614fc1618c2847f532",
+    "final_coordinator": "cdc80f5c98ffc4e20b90d45965093411d3eb9993ce55197265ed174929abcff2",
+    "delta": "Root's final narrow SQL projection hardening bounds status, latest to_state and sop_type before loading. No source/test contract changes by this reviewer; prior first-green candidate results remain historical.",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess,sys\npaths=['src/orze/core/research_interfaces.py','src/orze/core/cpu_proposal_requests.py','src/orze/core/proposal_admission.py','src/orze/core/cpu_execution.py','src/orze/idea_lake.py','src/orze/engine/cpu_proposals.py','src/orze/engine/cpu_action_sources.py','src/orze/engine/cpu_policy_evidence.py','src/orze/engine/cpu_phase.py','src/orze/engine/scheduler.py','tests/test_cpu_proposals_interfaces_review.py','tests/test_cpu_proposal_product.py','tests/test_cpu_action_sources.py','tests/test_cpu_domain_product.py','tests/test_cpu_product_loop.py']\ndef hashes():return {p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\npre=hashes();print('PRE '+json.dumps(pre,sort_keys=True),flush=True)\nassert pre['src/orze/engine/cpu_proposals.py']=='cdc80f5c98ffc4e20b90d45965093411d3eb9993ce55197265ed174929abcff2'\nr=subprocess.run([sys.executable,'-m','pytest','-q','-p','no:cacheprovider','tests/test_cpu_proposals_interfaces_review.py','tests/test_cpu_proposal_product.py','--tb=short'])\npost=hashes();print('POST '+json.dumps(post,sort_keys=True),flush=True);print('EXACT',pre==post,flush=True)\nassert pre==post\nraise SystemExit(r.returncode)\nPY",
+    "initial": {
+      "chunk_id": "d561e6",
+      "wall_time_seconds": 1.001747408,
+      "session_id": 6092,
+      "original_token_count": 396,
+      "output": "PRE {\"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/cpu_proposal_requests.py\": \"cec4875247a7f6790d0055448eb4bf2d4893956bcab339c6046aee5ffa030af1\", \"src/orze/core/proposal_admission.py\": \"28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659\", \"src/orze/core/research_interfaces.py\": \"0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557\", \"src/orze/engine/cpu_action_sources.py\": \"ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e\", \"src/orze/engine/cpu_phase.py\": \"12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34\", \"src/orze/engine/cpu_policy_evidence.py\": \"b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae\", \"src/orze/engine/cpu_proposals.py\": \"cdc80f5c98ffc4e20b90d45965093411d3eb9993ce55197265ed174929abcff2\", \"src/orze/engine/scheduler.py\": \"fd7755b6b649e5adb8909816553120387e8ff9f110387d7898b6d33ea182a1d3\", \"src/orze/idea_lake.py\": \"cdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928\", \"tests/test_cpu_action_sources.py\": \"3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e\", \"tests/test_cpu_domain_product.py\": \"cdaf494107b04a8586b37d0937aef003063738bfe5bbaaaf5eee35d9a40ac79d\", \"tests/test_cpu_product_loop.py\": \"81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22\", \"tests/test_cpu_proposal_product.py\": \"a613831bd98f659ea118137b3b9e73d2ec98471cbc382bd5286ae6712a9dabca\", \"tests/test_cpu_proposals_interfaces_review.py\": \"4c817657a3f701b51cba618470b7f612b0ce16d35f0d3798ef1353bc23b2752e\"}\n"
+    },
+    "final": {
+      "chunk_id": "649b0c",
+      "wall_time_seconds": 0.000002897,
+      "exit_code": 0,
+      "original_token_count": 423,
+      "output": ".......                                                                  [100%]\n7 passed in 6.53s\nPOST {\"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/cpu_proposal_requests.py\": \"cec4875247a7f6790d0055448eb4bf2d4893956bcab339c6046aee5ffa030af1\", \"src/orze/core/proposal_admission.py\": \"28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659\", \"src/orze/core/research_interfaces.py\": \"0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557\", \"src/orze/engine/cpu_action_sources.py\": \"ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e\", \"src/orze/engine/cpu_phase.py\": \"12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34\", \"src/orze/engine/cpu_policy_evidence.py\": \"b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae\", \"src/orze/engine/cpu_proposals.py\": \"cdc80f5c98ffc4e20b90d45965093411d3eb9993ce55197265ed174929abcff2\", \"src/orze/engine/scheduler.py\": \"fd7755b6b649e5adb8909816553120387e8ff9f110387d7898b6d33ea182a1d3\", \"src/orze/idea_lake.py\": \"cdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928\", \"tests/test_cpu_action_sources.py\": \"3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e\", \"tests/test_cpu_domain_product.py\": \"cdaf494107b04a8586b37d0937aef003063738bfe5bbaaaf5eee35d9a40ac79d\", \"tests/test_cpu_product_loop.py\": \"81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22\", \"tests/test_cpu_proposal_product.py\": \"a613831bd98f659ea118137b3b9e73d2ec98471cbc382bd5286ae6712a9dabca\", \"tests/test_cpu_proposals_interfaces_review.py\": \"4c817657a3f701b51cba618470b7f612b0ce16d35f0d3798ef1353bc23b2752e\"}\nEXACT True\n"
+    },
+    "summary": "7 passed in6.53s, exit0; all15capturedsource/testfiles prepostexact.",
+    "read_only_delta_review": {
+      "chunk_id": "7333cb",
+      "exit_code": 0,
+      "conclusion": "Bounded SQL metadata projection retains legal CLAIMED advancement and strict status/latest consistency. No new blocker observed."
+    },
+    "evidence_freeze": "This addendum extends the original report; no prior run or snapshot sourcepoint has been rewritten. No full-suite claim."
+  },
+  "classification": {
+    "new_first_green_cases": 2,
+    "draft_red_cases": 0,
+    "old_behavior_red_cases": 0,
+    "old_test_changes": 0,
+    "pro_source_changes": 0
+  },
+  "boundaries": [
+    {
+      "case": "test_policy_callback_cannot_replace_real_captured_artifact_metadata",
+      "proof": "Two actual tiny CPU sources publish real artifacts/effects. Actual recorded_evidence→BoundPolicy callback mutates its detached same-ID content hash/producer and budget copy. Caller view/budget remain original; actual proposal_sources and coordinator capture persist the original complete source records. Proposed task has no worker or reservation.",
+      "fault_seam": "Controlled trusted callback metadata mutation, not arbitrary malicious Python sandboxing."
+    },
+    {
+      "case": "test_legitimate_peer_claim_after_commit_is_not_a_failed_proposal",
+      "proof": "Transparent lake.conn proxy is installed before capture. Its commit performs actual SQLite commit, then opens a separate real Lake connection and calls actual scheduler.claim(resource='cpu'). Fresh coordinator readers return original inserted outcome despite currentCLAIMED; subsequent exact replay preserves claimbytes and does not add request/worker/reservation.",
+      "fault_seam": "Deterministic post-COMMIT scheduling seam, not a measured concurrent race or a proposed-task execution. The two source workers remain real."
+    }
+  ],
+  "read_review": [
+    "Propose's exactfive-field detached decision requires selectedDomain and uniquely selected completed original artifactmetadata. BoundPolicy rechecks captured registry entries after callback; cpu_phase keeps an additional private snapshot.",
+    "Metadata alone does not confer source permissions: coordinator captures actual same-Lake sources outside the writer and compares full expectedrecords; same-TX current-source metadata and finalfresh committed source readers remain required.",
+    "Ordinary normal admission/dedup is reused, with requestedtask ID separate from duplicateexisting ID. The stable request record and normal admission share one transaction; no replica salt, budgetreserve, claim, process launch or Domain.prepare is added by Propose.",
+    "Inserted results verify real typedcurrentstate/statusmirror/latesttransition, while legitimate peer advancement does not require immutable QUEUED. Creation/request/source evidence remains separately bound.",
+    "Policy Propose becomes a timed Wait after acknowledged outcome. Stop/disk/admission gates remain before request; normal later Execute retains its own admission and budget. Domain pin records proposalorigin/replay, not a private future execution grant."
+  ],
+  "snapshots": {
+    "origin": "Complete candidate files captured before independent tests, not fixed Cbaseline blobs. Existing interfaces/cpu_phase already contain D edits; cpu_proposals is a new D module.",
+    "paths": [
+      "docs/evidence/snapshots/v1-06d-before-interfaces-review-research-interfaces.py",
+      "docs/evidence/snapshots/v1-06d-before-interfaces-review-cpu-proposals.py",
+      "docs/evidence/snapshots/v1-06d-before-interfaces-review-cpu-phase.py"
+    ],
+    "capture_readback": {
+      "chunk_id": "117033",
+      "exit_code": 0,
+      "sha256s": {
+        "research_interfaces": "0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557",
+        "cpu_proposals": "c5c36cbe58091e84e360df92a8d16296dd53811725ca35a68ed5a836ff96fe7f",
+        "cpu_phase": "12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34"
+      }
+    },
+    "sourcepoint_disclosure": "Between snapshot and first test, runtime independently added lifecycle fences for Core-agent's four actual same-cause draft reds. My first test used ec5103bd, not c5c36cbe; all11test/source hashes then stayed exact. No snapshot replay performed or old-candidate green claimed by this review."
+  },
+  "runs": [
+    {
+      "purpose": "Independent actual-source boundary first run",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess,sys\npaths=['src/orze/core/research_interfaces.py','src/orze/core/cpu_proposal_requests.py','src/orze/core/proposal_admission.py','src/orze/engine/cpu_proposals.py','src/orze/engine/cpu_action_sources.py','src/orze/engine/cpu_policy_evidence.py','src/orze/engine/cpu_phase.py','src/orze/engine/scheduler.py','tests/test_cpu_proposals_interfaces_review.py','tests/test_cpu_action_sources.py','tests/test_cpu_domain_product.py']\ndef hashes():return {p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\npre=hashes();print('PRE '+json.dumps(pre,sort_keys=True),flush=True)\nr=subprocess.run([sys.executable,'-m','pytest','-q','-p','no:cacheprovider','tests/test_cpu_proposals_interfaces_review.py','--tb=short'])\npost=hashes();print('POST '+json.dumps(post,sort_keys=True),flush=True);print('EXACT',pre==post,flush=True)\nraise SystemExit(r.returncode)\nPY",
+      "initial": {
+        "chunk_id": "467040",
+        "wall_time_seconds": 1.001444062,
+        "session_id": 92781,
+        "original_token_count": 295,
+        "output": "PRE {\"src/orze/core/cpu_proposal_requests.py\": \"cec4875247a7f6790d0055448eb4bf2d4893956bcab339c6046aee5ffa030af1\", \"src/orze/core/proposal_admission.py\": \"28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659\", \"src/orze/core/research_interfaces.py\": \"0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557\", \"src/orze/engine/cpu_action_sources.py\": \"ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e\", \"src/orze/engine/cpu_phase.py\": \"12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34\", \"src/orze/engine/cpu_policy_evidence.py\": \"b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae\", \"src/orze/engine/cpu_proposals.py\": \"ec5103bd1ccbae2dabd11d3aa8493848feff53ef1618bb614fc1618c2847f532\", \"src/orze/engine/scheduler.py\": \"fd7755b6b649e5adb8909816553120387e8ff9f110387d7898b6d33ea182a1d3\", \"tests/test_cpu_action_sources.py\": \"3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e\", \"tests/test_cpu_domain_product.py\": \"cdaf494107b04a8586b37d0937aef003063738bfe5bbaaaf5eee35d9a40ac79d\", \"tests/test_cpu_proposals_interfaces_review.py\": \"4c817657a3f701b51cba618470b7f612b0ce16d35f0d3798ef1353bc23b2752e\"}\n"
+      },
+      "final": {
+        "chunk_id": "5a7991",
+        "wall_time_seconds": 0.000003151,
+        "exit_code": 0,
+        "original_token_count": 322,
+        "output": "..                                                                       [100%]\n2 passed in 2.28s\nPOST {\"src/orze/core/cpu_proposal_requests.py\": \"cec4875247a7f6790d0055448eb4bf2d4893956bcab339c6046aee5ffa030af1\", \"src/orze/core/proposal_admission.py\": \"28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659\", \"src/orze/core/research_interfaces.py\": \"0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557\", \"src/orze/engine/cpu_action_sources.py\": \"ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e\", \"src/orze/engine/cpu_phase.py\": \"12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34\", \"src/orze/engine/cpu_policy_evidence.py\": \"b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae\", \"src/orze/engine/cpu_proposals.py\": \"ec5103bd1ccbae2dabd11d3aa8493848feff53ef1618bb614fc1618c2847f532\", \"src/orze/engine/scheduler.py\": \"fd7755b6b649e5adb8909816553120387e8ff9f110387d7898b6d33ea182a1d3\", \"tests/test_cpu_action_sources.py\": \"3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e\", \"tests/test_cpu_domain_product.py\": \"cdaf494107b04a8586b37d0937aef003063738bfe5bbaaaf5eee35d9a40ac79d\", \"tests/test_cpu_proposals_interfaces_review.py\": \"4c817657a3f701b51cba618470b7f612b0ce16d35f0d3798ef1353bc23b2752e\"}\nEXACT True\n"
+      },
+      "summary": "2 passed in2.28s; 11 captured source/test files pre/post exact."
+    },
+    {
+      "purpose": "Static baseline preservation, snapshot AST/EOF and collection",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess,pytest\nroot=pathlib.Path('.').resolve(); baseline='cd5833b09743b5fe7ad7265eb99df16d8d69b9e0'\npath='tests/test_cpu_proposals_interfaces_review.py'\ntracked=subprocess.check_output(['git','ls-tree','-r','--name-only',baseline]).decode().splitlines()\nold=[p for p in tracked if p.startswith('tests/')]\nassert all(pathlib.Path(p).read_bytes()==subprocess.check_output(['git','show',baseline+':'+p]) for p in old)\nassert path not in tracked\nsnapshots=[]\nfor p in sorted(pathlib.Path('docs/evidence/snapshots').glob('v1-06d-before-interfaces-review-*.py')):\n raw=p.read_bytes();ast.parse(raw)\n snapshots.append({'path':str(p),'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'lines':len(raw.splitlines()),'ends_newline':raw.endswith(b'\\n')})\npro=root.parent/'orze-pro'; pbase='29bff9af679739acd464a2023ff7b05bec25b718'\npro_paths=[p for p in subprocess.check_output(['git','ls-tree','-r','--name-only',pbase],cwd=pro).decode().splitlines() if p.startswith(('src/','tests/')) or p=='pyproject.toml']\nassert all((pro/p).read_bytes()==subprocess.check_output(['git','show',pbase+':'+p],cwd=pro) for p in pro_paths)\nraw=pathlib.Path(path).read_bytes()\nprint('STATIC '+json.dumps({'file':path,'sha256':hashlib.sha256(raw).hexdigest(),'literal_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(raw))),'old_tests_checked':len(old),'old_tests_changed':0,'pro_source_test_pyproject_checked':len(pro_paths),'pro_changed':0,'snapshots':snapshots},sort_keys=True),flush=True)\nclass Counts:\n def pytest_collection_finish(self,session):print('COLLECTION '+json.dumps({'file':path,'cases':len(session.items),'nodeids':[i.nodeid for i in session.items]}),flush=True)\nraise SystemExit(pytest.main(['--collect-only','-p','no:terminal','-p','no:cacheprovider',path],plugins=[Counts()]))\nPY",
+      "result": {
+        "chunk_id": "674abe",
+        "wall_time_seconds": 1.677937306,
+        "exit_code": 0,
+        "original_token_count": 317,
+        "output": "STATIC {\"file\": \"tests/test_cpu_proposals_interfaces_review.py\", \"literal_asserts\": 21, \"old_tests_changed\": 0, \"old_tests_checked\": 444, \"pro_changed\": 0, \"pro_source_test_pyproject_checked\": 223, \"sha256\": \"4c817657a3f701b51cba618470b7f612b0ce16d35f0d3798ef1353bc23b2752e\", \"snapshots\": [{\"bytes\": 16266, \"ends_newline\": true, \"lines\": 316, \"path\": \"docs/evidence/snapshots/v1-06d-before-interfaces-review-cpu-phase.py\", \"sha256\": \"12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34\"}, {\"bytes\": 12034, \"ends_newline\": true, \"lines\": 248, \"path\": \"docs/evidence/snapshots/v1-06d-before-interfaces-review-cpu-proposals.py\", \"sha256\": \"c5c36cbe58091e84e360df92a8d16296dd53811725ca35a68ed5a836ff96fe7f\"}, {\"bytes\": 18880, \"ends_newline\": true, \"lines\": 433, \"path\": \"docs/evidence/snapshots/v1-06d-before-interfaces-review-research-interfaces.py\", \"sha256\": \"0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557\"}]}\nCOLLECTION {\"file\": \"tests/test_cpu_proposals_interfaces_review.py\", \"cases\": 2, \"nodeids\": [\"tests/test_cpu_proposals_interfaces_review.py::test_policy_callback_cannot_replace_real_captured_artifact_metadata\", \"tests/test_cpu_proposals_interfaces_review.py::test_legitimate_peer_claim_after_commit_is_not_a_failed_proposal\"]}\n"
+      }
+    }
+  ],
+  "collection": {
+    "file": "tests/test_cpu_proposals_interfaces_review.py",
+    "sha256": "4c817657a3f701b51cba618470b7f612b0ce16d35f0d3798ef1353bc23b2752e",
+    "cases": 2,
+    "literal_asserts": 21
+  },
+  "limitations": [
+    "No proposed action is executed by these two cases; autonomous Policy→newexperiment→analysis product acceptance belongs to root's separate actualCLI tests.",
+    "No provider/GPU/holdout/live jobs, source adoption or arbitrary Python sandbox proof.",
+    "No entire-suite claim; final global source freeze and full inventory remain parent responsibilities.",
+    "Store author work is separately reported and must not be counted as independent evidence here."
+  ]
+}

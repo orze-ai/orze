@@ -7,7 +7,6 @@ are hidden inside this resource adapter. Unknown work is retained, not adopted.
 from __future__ import annotations
 
 import atexit
-import copy
 import logging
 from pathlib import Path
 import signal
@@ -188,37 +187,13 @@ def iteration(engine):
     try:
         if interfaces is not None:
             from orze.engine.cpu_policy_evidence import recorded_evidence
-            from orze.engine.cpu_proposals import recorded_proposals
             snapshot["queue"] = [{"idea_id": item["idea_id"],
                 "action": {"timeout_seconds": item["action"]["timeout_seconds"]},
                 "request": item.get("request", item["action"])} for item in queue]
             snapshot["recorded_evidence"] = recorded_evidence(engine.lake, engine.results_dir)
-            snapshot["recorded_proposals"] = recorded_proposals(engine.lake, engine.results_dir)
-        # This private copy is not passed to a trusted callback. The selected
-        # source metadata is still independently verified by normal admission.
-        proposal_snapshot = copy.deepcopy(snapshot)
         decision = engine._cpu_policy.decide(snapshot, budget.snapshot(engine.lake, engine._cpu_scope))
     except Exception as exc:
         raise CPUExecutionError("execution: research policy decision rejected") from exc
-    if decision["kind"] == "Propose":
-        from orze.core.research_interfaces import proposal_sources
-        from orze.engine.cpu_proposals import propose
-        try:
-            require_admission(engine)
-            if not domain_enabled:
-                raise CPUExecutionError("execution: proposed task has no selected Domain")
-            if check_disk_space(engine.results_dir, engine.cfg.get("min_disk_gb", 5)):
-                result = propose(engine.lake, engine.results_dir, engine.cfg, decision,
-                    expected_sources=proposal_sources(proposal_snapshot, decision))
-                reason = "proposal_" + result["status"]
-            else:
-                reason = "disk_space"
-        except Exception as exc:
-            raise CPUExecutionError("execution: policy proposal admission rejected") from exc
-        # Normal admission records an outcome, not execution or a free permit.
-        # A retry returns the original outcome; every proposal yields the loop.
-        decision = {"kind": "Wait", "reason": reason,
-                    "wakeup": time.time() + engine._cpu_policy.declaration["wait_seconds"]}
     if decision["kind"] == "Replicate":
         from orze.engine.replication import request_replication
         try:

@@ -1,0 +1,213 @@
+{
+  "schema": 1,
+  "slice": "V1-06D",
+  "author": "runtime_evidence",
+  "baseline": "cd5833b09743b5fe7ad7265eb99df16d8d69b9e0",
+  "classification": {
+    "own_new_mechanisms": 14,
+    "historical_bug_claims": 0,
+    "independently_found_draft_root_causes": 1,
+    "draft_failure_cases": 4,
+    "note": "The draft lifecycle gap was independently discovered and reproduced by core_review. This author implemented the correction and independently replayed its four frozen behavior cases. Counts below overlap; do not add target runs."
+  },
+  "ownership": {
+    "production": [
+      "src/orze/engine/cpu_proposals.py"
+    ],
+    "new_tests": [
+      "tests/test_cpu_proposals.py",
+      "tests/test_cpu_proposal_legacy_exact.py"
+    ],
+    "unchanged": "No existing production module or old test was edited by this author. Store/admission/phase/interface changes belong to their named peer owners.",
+    "no_historical_coordinator": "cpu_proposals.py is new; its complete captured first candidate is not represented as a committed baseline."
+  },
+  "calling_contract": {
+    "propose": "propose(lake, results_dir, cfg, decision, *, expected_sources) -> exact {request_id,task_id,status,reason,existing_id}. Own BEGIN IMMEDIATE; caller transactions rejected untouched. No claim, attempt, budget debit, Domain.prepare or child.",
+    "recorded_proposals": "recorded_proposals(lake, results_dir, *, limit=32) -> {results:[compact outcomes], more_available:bool}. Fresh read-only connection, no schema creation, historical metadata only.",
+    "sources": "Capture real confirmed current B sources before writer; compare ordered full records to private policy selection; cheap bound-source revalidation in writer and after commit, plus fresh source-row/artifact metadata readback.",
+    "atomicity": "Normal admission and request record share supplied main SQLite writer. Precommit exact immutable target/creation/request fences and complete staged lifecycle for new insertion; postcommit fresh readback allows legitimate consistent lifecycle advancement. Commit uncertainty gives HOLD, never provisional success.",
+    "replay": "Same key must preserve exact decision/config/Domain audit/source snapshot. Exact record replay retains original outcome without resetting task. Changed key contents HOLD; ordinary same-config dedup and known same-task conflict remain distinct durable denials.",
+    "execution_boundary": "Domain pin records origin/exact replay, not a private future execution grant. Ordinary target execution follows executing invocation's Domain/native checks. No replica exemption or config salt."
+  },
+  "owned_tests": [
+    {
+      "path": "tests/test_cpu_proposals.py",
+      "sha256": "69e9898f863b8bf57cbf5912e7d71880084c96cdd95c3bab0be78ba8ded7c5e3",
+      "cases": 13,
+      "assert_count": 28,
+      "assert_ast_sha256": "edac2c1430a527a1c76a79d156a8b952530c1167772d6021a1cc30efcd8cf9ca",
+      "classification": "First-run green new mechanisms. All original assertions unchanged."
+    },
+    {
+      "path": "tests/test_cpu_proposal_legacy_exact.py",
+      "sha256": "81bad8c6dea347529ab797843a784e49bb289b4f8d9040e0afd89404c693f2a3",
+      "cases": 1,
+      "assert_count": 6,
+      "assert_ast_sha256": "6cc1207f2aac4721357216070c253ee565d0f86b2a5cda8020534aebab702da6",
+      "classification": "Additional first-green normal legacy exact-ID compatibility control; no transition history manufactured."
+    }
+  ],
+  "assert_ast_algorithm": "SHA256(UTF8(json.dumps([ast.dump(n, include_attributes=False) for n in ast.walk(ast.parse(file_bytes)) if isinstance(n, ast.Assert)], ensure_ascii=False, separators=(',', ':')))). This is not newline-joined AST encoding.",
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-06d-cpu-proposals-first-candidate.py",
+      "source": "src/orze/engine/cpu_proposals.py",
+      "sha256": "c5c36cbe58091e84e360df92a8d16296dd53811725ca35a68ed5a836ff96fe7f",
+      "origin": "Complete on-disk first D coordinator candidate, captured before correction; source and snapshot byte hash verified equal in chunk2e0447. New uncommitted module, not baseline commit."
+    }
+  ],
+  "diagnostics": [
+    {
+      "command": "PYTHONPATH=src:tests python -m pytest -q tests/test_cpu_proposal_product.py",
+      "exit_code": 127,
+      "chunk": "1b4d18",
+      "output": "/usr/bin/bash: line 1: python: command not found",
+      "classification": "Shell interpreter-name setup diagnostic; no tests collected, not a product red. Actual repeated command used python3."
+    }
+  ],
+  "candidate_history": [
+    {
+      "command": "PYTHONPATH=src:tests python3 -m pytest -q tests/test_cpu_proposal_product.py",
+      "session": 53433,
+      "chunk": "d2e955",
+      "exit_code": 0,
+      "footer": "5 passed in 3.07s",
+      "coordinator_sha256": "c5c36cbe58091e84e360df92a8d16296dd53811725ca35a68ed5a836ff96fe7f",
+      "classification": "Actual peer-owned product tests invoked by this author on first candidate; not a whole-slice freeze."
+    },
+    {
+      "command": "PYTHONPATH=src:tests python3 -m pytest -q tests/test_cpu_proposals.py",
+      "session": 5687,
+      "chunk": "673113",
+      "exit_code": 0,
+      "footer": "13 passed in 4.35s",
+      "coordinator_sha256": "c5c36cbe58091e84e360df92a8d16296dd53811725ca35a68ed5a836ff96fe7f",
+      "classification": "Own new mechanism first run, no premise corrections or altered assertions."
+    },
+    {
+      "command": "PYTHONPATH=src:tests python3 -m pytest -q tests/test_cpu_proposals.py tests/test_cpu_proposal_legacy_exact.py tests/test_cpu_proposals_transaction_review.py tests/test_cpu_proposal_product.py",
+      "session": 41712,
+      "chunk": "f25fa7",
+      "exit_code": 0,
+      "footer": "28 passed in 8.85s",
+      "coordinator_sha256": "ec5103bd1ccbae2dabd11d3aa8493848feff53ef1618bb614fc1618c2847f532",
+      "classification": "Lifecycle correction candidate; subsequent bounded SQL projections produce final cdc80 epoch."
+    }
+  ],
+  "draft_regression": {
+    "owner": "core_review",
+    "test": "tests/test_cpu_proposals_transaction_review.py",
+    "test_sha256": "9780c3ecba1cb3bba5c6bdafd513282c08848ebf71e6bdae992229355ea4a9ce",
+    "first_peer_observation": {
+      "session": 54198,
+      "chunk": "8a57b9",
+      "exit_code": 1,
+      "footer": "1 failed, 5 passed in 1.05s",
+      "note": "Delete state case first; reported by independent peer, not rerun claimed by this author."
+    },
+    "expanded_peer_observation": {
+      "session": 57478,
+      "chunk": "23f7f3",
+      "exit_code": 1,
+      "footer": "4 failed, 5 passed in 1.51s"
+    },
+    "failure": "AFTER INSERT on request table deleted idea_state or altered status/current_state/sop_type after normal admission's earlier checks; first coordinator returned inserted, so expected ProposalHOLD was not raised.",
+    "root_cause_count": 1,
+    "fix": "For own inserted outcome only: capture complete new lifecycle/status/latest transition before request insertion and require unchanged at writer end. Fresh postcommit validates consistent typed action lifecycle/status mirror/current transition, while preserving original creation event. Legacy exact/denial do not acquire invented FSM requirements.",
+    "independent_whole_module_replay": {
+      "command": "PYTHONPATH=src:tests python3 -c 'import pathlib,pytest; import orze.engine.cpu_proposals as m; p=pathlib.Path(\"docs/evidence/snapshots/v1-06d-cpu-proposals-first-candidate.py\"); exec(compile(p.read_bytes(),str(p),\"exec\"),m.__dict__); raise SystemExit(pytest.main([\"-q\",\"tests/test_cpu_proposals_transaction_review.py::test_request_trigger_cannot_erase_admission_state_then_ack_inserted\"]))'",
+      "chunk": "427237",
+      "exit_code": 1,
+      "footer": "4 failed in 0.74s",
+      "failure_kind": "All four actual behavior assertions fail DID NOT RAISE ProposalHOLD; no absent API/import failure.",
+      "snapshot": "docs/evidence/snapshots/v1-06d-cpu-proposals-first-candidate.py"
+    }
+  },
+  "non_red_hardening": "Final bounded CASE projections on ideas.status/latest transition state+sop were approved read-only-review hardening, not an experimentally observed additional defect.",
+  "final_bounded": {
+    "command": "PYTHONPATH=src:tests python3 -m pytest -q tests/test_cpu_proposals.py tests/test_cpu_proposal_legacy_exact.py tests/test_cpu_proposals_transaction_review.py tests/test_cpu_proposals_interfaces_review.py tests/test_cpu_proposal_policy.py tests/test_cpu_proposal_product.py tests/test_cpu_proposal_requests.py tests/test_proposal_admission_transactions.py",
+    "session": 53901,
+    "initial_chunk": "dbf9ab",
+    "chunk": "25f550",
+    "exit_code": 0,
+    "footer": "96 passed in 13.91s",
+    "scope": "Author-invoked aggregate of all eight new D test files, not a whole repository/full-suite result. Own tests are 14 of these 96; peer groups overlap earlier observations.",
+    "pre_chunk": "568f22",
+    "post_chunk": "de9550",
+    "pre_sha256": {
+      "src/orze/core/control_outcome.py": "9e5f8ce529d2256715516dd0886bf2fcd63f606e93d881af5bb5b1a58d50db9c",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/cpu_action_contract.py": "cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736",
+      "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+      "src/orze/core/cpu_proposal_requests.py": "cec4875247a7f6790d0055448eb4bf2d4893956bcab339c6046aee5ffa030af1",
+      "src/orze/core/proposal_admission.py": "28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659",
+      "src/orze/core/research_interfaces.py": "0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_phase.py": "12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34",
+      "src/orze/engine/cpu_policy_evidence.py": "b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae",
+      "src/orze/engine/cpu_proposals.py": "cdc80f5c98ffc4e20b90d45965093411d3eb9993ce55197265ed174929abcff2",
+      "src/orze/engine/execution_authority.py": "ed080cabb0a7a7bc48e36fdb1512c2ecf96aa9cde3577e18c22b5622e93da471",
+      "src/orze/engine/native_cpu_action.py": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09",
+      "src/orze/idea_lake.py": "cdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928",
+      "tests/test_cpu_proposal_legacy_exact.py": "81bad8c6dea347529ab797843a784e49bb289b4f8d9040e0afd89404c693f2a3",
+      "tests/test_cpu_proposal_policy.py": "daa4cd38c305639bab5940775414220d894ecc453bdfe5ca01a93180f001aa8e",
+      "tests/test_cpu_proposal_product.py": "a613831bd98f659ea118137b3b9e73d2ec98471cbc382bd5286ae6712a9dabca",
+      "tests/test_cpu_proposal_requests.py": "f1b3ca7f6a0b4d7e744db0fc43533c4bdbc36485e11648eb3db0809e64d01b8b",
+      "tests/test_cpu_proposals.py": "69e9898f863b8bf57cbf5912e7d71880084c96cdd95c3bab0be78ba8ded7c5e3",
+      "tests/test_cpu_proposals_interfaces_review.py": "4c817657a3f701b51cba618470b7f612b0ce16d35f0d3798ef1353bc23b2752e",
+      "tests/test_cpu_proposals_transaction_review.py": "9780c3ecba1cb3bba5c6bdafd513282c08848ebf71e6bdae992229355ea4a9ce",
+      "tests/test_proposal_admission_transactions.py": "1340fe3017c3676b1fd0c13820b2fe30739727f6eb70923b6a742496e7510585"
+    },
+    "post_sha256": {
+      "src/orze/core/control_outcome.py": "9e5f8ce529d2256715516dd0886bf2fcd63f606e93d881af5bb5b1a58d50db9c",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/cpu_action_contract.py": "cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736",
+      "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+      "src/orze/core/cpu_proposal_requests.py": "cec4875247a7f6790d0055448eb4bf2d4893956bcab339c6046aee5ffa030af1",
+      "src/orze/core/proposal_admission.py": "28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659",
+      "src/orze/core/research_interfaces.py": "0d5284b6e21ee96e663dff0d1487f4816acf6e0163efff3d11ff8a8cb1f78557",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_phase.py": "12d02beb86cf52e7084b77f19c8c3a14afad55f62ac072c20a42817ec72c3c34",
+      "src/orze/engine/cpu_policy_evidence.py": "b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae",
+      "src/orze/engine/cpu_proposals.py": "cdc80f5c98ffc4e20b90d45965093411d3eb9993ce55197265ed174929abcff2",
+      "src/orze/engine/execution_authority.py": "ed080cabb0a7a7bc48e36fdb1512c2ecf96aa9cde3577e18c22b5622e93da471",
+      "src/orze/engine/native_cpu_action.py": "54ea1e475f7bba69c919ea9ea687ed3b9aedf3b2efda96dd5c6d38a22542ac09",
+      "src/orze/idea_lake.py": "cdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928",
+      "tests/test_cpu_proposal_legacy_exact.py": "81bad8c6dea347529ab797843a784e49bb289b4f8d9040e0afd89404c693f2a3",
+      "tests/test_cpu_proposal_policy.py": "daa4cd38c305639bab5940775414220d894ecc453bdfe5ca01a93180f001aa8e",
+      "tests/test_cpu_proposal_product.py": "a613831bd98f659ea118137b3b9e73d2ec98471cbc382bd5286ae6712a9dabca",
+      "tests/test_cpu_proposal_requests.py": "f1b3ca7f6a0b4d7e744db0fc43533c4bdbc36485e11648eb3db0809e64d01b8b",
+      "tests/test_cpu_proposals.py": "69e9898f863b8bf57cbf5912e7d71880084c96cdd95c3bab0be78ba8ded7c5e3",
+      "tests/test_cpu_proposals_interfaces_review.py": "4c817657a3f701b51cba618470b7f612b0ce16d35f0d3798ef1353bc23b2752e",
+      "tests/test_cpu_proposals_transaction_review.py": "9780c3ecba1cb3bba5c6bdafd513282c08848ebf71e6bdae992229355ea4a9ce",
+      "tests/test_proposal_admission_transactions.py": "1340fe3017c3676b1fd0c13820b2fe30739727f6eb70923b6a742496e7510585"
+    },
+    "prepost_exact": true,
+    "related_file_count": 22
+  },
+  "old_test_audit": {
+    "baseline": "cd5833b09743b5fe7ad7265eb99df16d8d69b9e0",
+    "tracked_paths": 444,
+    "byte_changes": [],
+    "chunk": "364743",
+    "exit_code": 0,
+    "note": "Actual git ls-tree plus git show byte comparison, not only count inference."
+  },
+  "document_review": {
+    "path": "docs/cpu-policy-proposals.md",
+    "sha256": "2957a15bd9469d8ab14704777644e92823893907392f0bf8b784e4f142dc689f",
+    "full_read_chunk": "9d3488",
+    "conclusion": "Scope accurately distinguishes admission/Wait from execution, metadata from source authority, Domain audit from future permission, bounded window from full history, and fixture arithmetic from scientific gain."
+  },
+  "boundaries": [
+    "Same supplied Lake/scope only; no cross-database global queue or budget ledger.",
+    "No automatic source adoption, history migration, replica grant, claim, budget charge or execution from Propose.",
+    "Requests are not reservations: no refund or once-only execution entitlement; later actions use normal permits.",
+    "No callbacks inside the writer; trusted registered Python callbacks are not a sandbox or timed worker.",
+    "Actual native source fixtures publish tiny local CPU bytes and use owned supervised cleanup. SQL/commit corruption is explicit test fault injection, not proof of a hostile writer crossing SQLite locks.",
+    "No holdout, real model training, provider, GPU probe or host process enumeration used.",
+    "All test sessions invoked by this author completed. Native source fixture cleanup asserts owned process closure. Other agents' whole-suite sessions are outside this report."
+  ],
+  "status": "source_and_owned_tests_frozen; bounded aggregate passed; root canonical owns eventual full-suite and slice completion",
+  "verification_command": "python3 - <<'PY'\nimport ast, hashlib, json, pathlib, shlex, subprocess\np=pathlib.Path(\"docs/evidence/2026-09-11-v1-06d-cpu-proposals-author.json\")\nr=json.loads(p.read_text())\nv=r[\"final_bounded\"]\nassert v[\"pre_sha256\"]==v[\"post_sha256\"]\nfor name,digest in v[\"post_sha256\"].items():\n assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()==digest,name\nfor item in r[\"snapshots\"]+r[\"owned_tests\"]:\n b=pathlib.Path(item[\"path\"]).read_bytes()\n assert hashlib.sha256(b).hexdigest()==item[\"sha256\"],item[\"path\"]\n if \"assert_count\" in item:\n  nodes=[ast.dump(n,include_attributes=False) for n in ast.walk(ast.parse(b)) if isinstance(n,ast.Assert)]\n  assert len(nodes)==item[\"assert_count\"]\n  assert hashlib.sha256(json.dumps(nodes,ensure_ascii=False,separators=(\",\",\":\")).encode()).hexdigest()==item[\"assert_ast_sha256\"]\npaths=subprocess.check_output([\"git\",\"ls-tree\",\"-r\",\"--name-only\",r[\"baseline\"],\"--\",\"tests\"],text=True).splitlines()\nassert len(paths)==444\nfor name in paths:\n assert pathlib.Path(name).read_bytes()==subprocess.check_output([\"git\",\"show\",r[\"baseline\"]+\":\"+name]),name\ntokens=shlex.split(r[\"draft_regression\"][\"independent_whole_module_replay\"][\"command\"])\ncompile(tokens[tokens.index(\"-c\")+1],\"<recorded replay>\",\"exec\")\nprint(json.dumps({\"related_files\":len(v[\"post_sha256\"]),\"old_test_paths\":len(paths),\"own_test_asserts\":34,\"snapshots\":len(r[\"snapshots\"]),\"replay_python_valid\":True,\"status\":\"ok\"},sort_keys=True))\nPY"
+}

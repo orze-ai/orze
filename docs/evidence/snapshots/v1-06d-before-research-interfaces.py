@@ -144,51 +144,6 @@ def parse_domain_task(raw_config):
     return validate_domain_request(value["domain_request"])
 
 
-def validate_proposal_decision(value):
-    """Validate data-only normal admission; this grants no execution authority."""
-    if (type(value) is not dict or set(value) != {
-            "kind", "request_id", "task_id", "reason", "domain_request"}
-            or value["kind"] != "Propose"
-            or type(value["reason"]) is not str or not value["reason"].strip()
-            or len(value["reason"].encode()) > 1024):
-        _fail("Propose requires stable identities, bounded reason and domain request")
-    _token(value["request_id"])
-    _token(value["task_id"])
-    result = _copy(value)
-    result["domain_request"] = validate_domain_request(value["domain_request"])
-    return result
-
-
-def proposal_sources(snapshot, decision):
-    """Select original metadata, never authorizing a callback's modified view.
-
-    The coordinator must still verify these records against its actual Lake,
-    effects and bytes. Callers retain a private snapshot before invoking Policy.
-    """
-    selected = validate_proposal_decision(decision)
-    results = snapshot.get("recorded_evidence", {}).get("results", [])
-    records = []
-    for identity in selected["domain_request"]["input_artifact_ids"]:
-        matches = []
-        for result in results:
-            if result.get("outcome") != "completed":
-                continue
-            ref = result.get("ref")
-            if (type(ref) is not dict or set(ref) != {
-                    "task_id", "phase", "attempt_id", "generation"}
-                    or ref["phase"] != "action" or type(ref["generation"]) is not int
-                    or not 0 < ref["generation"] < 2**63):
-                continue
-            for artifact in result.get("artifact_records", []):
-                if (artifact.get("artifact_id") == identity
-                        and _same(artifact.get("producer"), ref)):
-                    matches.append(artifact)
-        if len(matches) != 1:
-            _fail("Propose must select unique completed inputs in captured evidence")
-        records.append(_copy(matches[0]))
-    return tuple(records)
-
-
 @dataclass(eq=False, frozen=True)
 class InterfaceContext:
     """Opaque invocation handle; constructing a lookalike confers no authority."""
@@ -259,11 +214,6 @@ class BoundPolicy:
             if (set(decision) != {"kind", "task_id"}
                     or decision["task_id"] not in {r["idea_id"] for r in captured["queue"]}):
                 _fail("Execute must select a task in this captured queue")
-        elif kind == "Propose":
-            if state["domain"] is None:
-                _fail("Propose requires a selected Domain")
-            decision = validate_proposal_decision(decision)
-            proposal_sources(captured, decision)
         elif kind == "Replicate":
             from orze.core.replication_requests import token
             if (set(decision) != {"kind", "source_ref", "request_id", "reason"}
