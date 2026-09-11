@@ -1,0 +1,489 @@
+{
+  "schema": 1,
+  "slice": "V1-06E",
+  "role": "Root CPU phase/product author and integration/evidence verifier",
+  "status": "Frozen full validation passed; fixed code committed, pushed and remote readback verified",
+  "whole_v1_complete": false,
+  "whole_v1_06_complete": false,
+  "baseline_commits": {
+    "core": "188af473184463fd2b5835f57cdcc3b5ed9af569",
+    "pro": "e5c3d75c00c5e157747bd39dcb59e8c3151e504d"
+  },
+  "scope": [
+    "Remove unconditional unused Context/DomainRun capture roots without invalidating shared live captures.",
+    "Retire heavy native owners only after real effect publication and confirmed budget settlement; historical exact-handle readback remains detached.",
+    "After successful invocation close release interface/Policy and own exit/signal hooks, preserving later external handlers and non-LIFO invocations.",
+    "No source change in Pro; no actor recovery/adoption, global cap, GPU/provider or research-efficiency gain claim."
+  ],
+  "test_classification": {
+    "new_cases": 30,
+    "baseline_new_requirement_failures": 11,
+    "candidate_behavior_failures": 2,
+    "other_controls_and_mechanisms": 17,
+    "old_tracked_tests_modified": 0,
+    "new_fixture_representation_assert_changes": 1,
+    "baseline_breakdown": {
+      "interfaces": 3,
+      "native": 3,
+      "independent_retired_handle": 1,
+      "root_product_hooks": 4
+    },
+    "candidate_breakdown": {
+      "mutable_handle_supplied_process_witness": 1,
+      "non_lifo_restores_closed_signal_owner": 1
+    },
+    "meaning": "Counts classify test cases, not independent defects. Prior A/B explicitly disclosed strong retention and no global cap; baseline failures demonstrate E's new retirement requirements, not an undisclosed promised guarantee or missing-API error. Overlapping replays/neighborhoods do not add cases.",
+    "fixture_audit": {
+      "unique_original_assertions": 57,
+      "preserved": 56,
+      "representation_changed": 1,
+      "core_first_9": 15,
+      "root_first_4": 15,
+      "independent_first_5": 27,
+      "independent_first_3_nested_subset": 20,
+      "source_of_change": "An owned signal wrapper replaces the bound-method representation. Only __self__ is engine -> callable assertion changes; original business invariants and other bytes remain exact."
+    }
+  },
+  "root_history": {
+    "first_four_fixed_whole_baseline": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys, types\nfrom pathlib import Path\nimport pytest\nfor name, path in [\n ('orze.core.research_interfaces', 'docs/evidence/snapshots/v1-06e-before-research-interfaces.py'),\n ('orze.engine.native_cpu_action', 'docs/evidence/snapshots/v1-06e-before-native-cpu-action.py'),\n ('orze.engine.cpu_phase', 'docs/evidence/snapshots/v1-06e-before-cpu-phase.py'),\n]:\n parent, attr = name.rsplit('.', 1)\n package = importlib.import_module(parent)\n module = types.ModuleType(name)\n module.__file__ = str(Path(path).absolute())\n module.__package__ = parent\n sys.modules[name] = module\n setattr(package, attr, module)\n exec(compile(Path(path).read_bytes(), module.__file__, 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q','tests/test_cpu_retirement_product.py','--tb=short']))\nPY",
+      "initial": {
+        "chunk_id": "843fbd",
+        "wall_time_seconds": 1.008418062,
+        "session_id": 3666,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "completion": {
+        "chunk_id": "02f1e6",
+        "wall_time_seconds": 0.000003,
+        "exit_code": 1,
+        "original_token_count": 700,
+        "output": "FFF.                                                                     [100%]\n=================================== FAILURES ===================================\n___ test_real_two_action_cli_releases_closed_invocation_and_source_captures ____\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_retirement_product.py:52: in test_real_two_action_cli_releases_closed_invocation_and_source_captures\n    assert all(reference() is None for reference in references)\nE   assert False\nE    +  where False = all(<generator object test_real_two_action_cli_releases_closed_invocation_and_source_captures.<locals>.<genexpr> at 0x14d249101150>)\n---------------------------- Captured stderr setup -----------------------------\n\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\n------------------------------ Captured log setup ------------------------------\nERROR    orze:extensions.py:68 orze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n____ test_successful_close_releases_interfaces_even_if_caller_keeps_engine _____\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_retirement_product.py:93: in test_successful_close_releases_interfaces_even_if_caller_keeps_engine\n    assert engine._cpu_interfaces is None\nE   assert InterfaceContext() is None\nE    +  where InterfaceContext() = <orze.engine.orchestrator.Orze object at 0x14d248d2e800>._cpu_interfaces\n_____________ test_close_unregisters_only_its_unique_exit_callback _____________\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_retirement_product.py:110: in test_close_unregisters_only_its_unique_exit_callback\n    assert callbacks == [unrelated]\nE   assert [<bound metho...4d2493cf4f0>>] == [<bound metho...4d2493cf4f0>>]\nE     \nE     Left contains one more item: <bound method Orze._atexit_cleanup of <orze.engine.orchestrator.Orze object at 0x14d2493cf4f0>>\nE     Use -v to get more diff\n=========================== short test summary info ============================\nFAILED tests/test_cpu_retirement_product.py::test_real_two_action_cli_releases_closed_invocation_and_source_captures\nFAILED tests/test_cpu_retirement_product.py::test_successful_close_releases_interfaces_even_if_caller_keeps_engine\nFAILED tests/test_cpu_retirement_product.py::test_close_unregisters_only_its_unique_exit_callback\n3 failed, 1 passed in 2.12s\n"
+      },
+      "cases": 4,
+      "failed": 3,
+      "passed": 1,
+      "test_sha256": "505e67eb1689ce474a09a7c78f4077e2a8c0a4ec78c7db241c93a3ee3652c787",
+      "test_hash_note": "Post-run hash capture 56b5c6; full first file is archived before appending fifth case, not claimed as a pre-run digest capture."
+    },
+    "final_five_fixed_whole_baseline": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport importlib, sys, types\nfrom pathlib import Path\nimport pytest\nfor name, path in [\n ('orze.core.research_interfaces', 'docs/evidence/snapshots/v1-06e-before-research-interfaces.py'),\n ('orze.engine.native_cpu_action', 'docs/evidence/snapshots/v1-06e-before-native-cpu-action.py'),\n ('orze.engine.cpu_phase', 'docs/evidence/snapshots/v1-06e-before-cpu-phase.py'),\n]:\n parent, attr = name.rsplit('.', 1)\n package = importlib.import_module(parent)\n module = types.ModuleType(name)\n module.__file__ = str(Path(path).absolute())\n module.__package__ = parent\n sys.modules[name] = module\n setattr(package, attr, module)\n exec(compile(Path(path).read_bytes(), module.__file__, 'exec'), module.__dict__)\nraise SystemExit(pytest.main(['-q','tests/test_cpu_retirement_product.py','--tb=short']))\nPY",
+      "initial": {
+        "chunk_id": "031aef",
+        "wall_time_seconds": 1.001833211,
+        "session_id": 7322,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "completion": {
+        "chunk_id": "f66446",
+        "exit_code": 1,
+        "excerpt": "4 failed, 1 passed in 2.15s",
+        "cases_failed": [
+          "test_real_two_action_cli_releases_closed_invocation_and_source_captures",
+          "test_successful_close_releases_interfaces_even_if_caller_keeps_engine",
+          "test_close_unregisters_only_its_unique_exit_callback",
+          "test_actual_empty_cli_restores_exact_preexisting_signal_handlers"
+        ],
+        "output_recording": "Summary of the complete tool output, not a full-output archive."
+      },
+      "cases": 5,
+      "failed": 4,
+      "passed": 1
+    },
+    "first_candidate": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cpu_retirement_product.py tests/test_cpu_retirement_interfaces_review.py tests/test_cpu_interface_lifetime.py tests/test_native_cpu_retirement.py --tb=short",
+      "initial": {
+        "chunk_id": "5f70ca",
+        "wall_time_seconds": 1.000963702,
+        "session_id": 70571,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "completion": {
+        "chunk_id": "e083be",
+        "wall_time_seconds": 0.000003006,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "...........................                                              [100%]\n27 passed in 9.86s\n"
+      },
+      "passed": 27,
+      "note": "Bounded first phase candidate, not the final epoch or a full-suite source-stability claim."
+    },
+    "post_non_lifo_before_fixture_adapter": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cpu_retirement_product.py tests/test_cpu_retirement_interfaces_review.py tests/test_cpu_interface_lifetime.py tests/test_native_cpu_retirement.py tests/test_cpu_signal_retirement_review.py --tb=short",
+      "initial": {
+        "chunk_id": "1eac30",
+        "wall_time_seconds": 1.001257588,
+        "session_id": 30484,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "completion": {
+        "chunk_id": "3f657f",
+        "wall_time_seconds": 0.000002739,
+        "exit_code": 1,
+        "original_token_count": 208,
+        "output": "........F.....................                                           [100%]\n=================================== FAILURES ===================================\n______ test_successful_close_does_not_replace_an_external_signal_handler _______\n/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/tests/test_cpu_retirement_interfaces_review.py:137: in test_successful_close_does_not_replace_an_external_signal_handler\n    assert signal.getsignal(signal.SIGTERM).__self__ is engine\nE   AttributeError: '_ShutdownHandler' object has no attribute '__self__'. Did you mean: '__call__'?\n=========================== short test summary info ============================\nFAILED tests/test_cpu_retirement_interfaces_review.py::test_successful_close_does_not_replace_an_external_signal_handler\n1 failed, 29 passed in 10.65s\n"
+      },
+      "passed": 29,
+      "failed": 1,
+      "classification": "New test representation premise __self__ raised AttributeError. Not a product behavior regression or baseline failure. Complete prior fixture archived and the single change separately audited."
+    }
+  },
+  "collection": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest --collect-only -q tests/test_cpu_interface_lifetime.py tests/test_native_cpu_retirement.py tests/test_cpu_retirement_product.py tests/test_cpu_retirement_interfaces_review.py tests/test_cpu_signal_retirement_review.py",
+    "complete": {
+      "chunk_id": "270f48",
+      "wall_time_seconds": 0.513572136,
+      "exit_code": 0,
+      "original_token_count": 808,
+      "output": "tests/test_cpu_interface_lifetime.py::test_unused_context_is_not_a_global_strong_root[False]\ntests/test_cpu_interface_lifetime.py::test_unused_context_is_not_a_global_strong_root[True]\ntests/test_cpu_interface_lifetime.py::test_unused_run_releases_real_source_bytes_even_with_callback_cycle\ntests/test_cpu_interface_lifetime.py::test_external_run_keeps_context_sources_and_interpreter_valid\ntests/test_cpu_interface_lifetime.py::test_bound_policy_is_an_external_consumer\ntests/test_cpu_interface_lifetime.py::test_live_handle_copies_and_lookalikes_still_fail_closed[context]\ntests/test_cpu_interface_lifetime.py::test_live_handle_copies_and_lookalikes_still_fail_closed[run]\ntests/test_cpu_interface_lifetime.py::test_live_registration_replacement_still_refuses_run[domain]\ntests/test_cpu_interface_lifetime.py::test_live_registration_replacement_still_refuses_run[policy]\ntests/test_cpu_interface_lifetime.py::test_private_state_changes_cannot_rebind_live_authority[remove-context]\ntests/test_cpu_interface_lifetime.py::test_private_state_changes_cannot_rebind_live_authority[remove-run]\ntests/test_cpu_interface_lifetime.py::test_private_state_changes_cannot_rebind_live_authority[replace-context]\ntests/test_cpu_interface_lifetime.py::test_private_state_changes_cannot_rebind_live_authority[replace-run]\ntests/test_native_cpu_retirement.py::test_confirmed_terminal_and_settled_budget_release_heavy_callback[pass-completed]\ntests/test_native_cpu_retirement.py::test_confirmed_terminal_and_settled_budget_release_heavy_callback[raise SystemExit(7)-failed]\ntests/test_native_cpu_retirement.py::test_explicit_stop_zero_settled_interruption_can_release_heavy_callback\ntests/test_native_cpu_retirement.py::test_running_owner_remains_strong_despite_collection\ntests/test_native_cpu_retirement.py::test_settlement_uncertainty_retains_strong_owner_and_does_not_refund\ntests/test_cpu_retirement_product.py::test_real_two_action_cli_releases_closed_invocation_and_source_captures\ntests/test_cpu_retirement_product.py::test_successful_close_releases_interfaces_even_if_caller_keeps_engine\ntests/test_cpu_retirement_product.py::test_close_unregisters_only_its_unique_exit_callback\ntests/test_cpu_retirement_product.py::test_unconfirmed_close_preserves_captured_callbacks_and_interfaces\ntests/test_cpu_retirement_product.py::test_actual_empty_cli_restores_exact_preexisting_signal_handlers\ntests/test_cpu_retirement_interfaces_review.py::test_closed_settled_handle_has_no_terminal_cache_value_backreference\ntests/test_cpu_retirement_interfaces_review.py::test_cached_terminal_is_detached_and_exact_handle_route_permit_bound\ntests/test_cpu_retirement_interfaces_review.py::test_retiring_one_native_consumer_preserves_external_run_and_shared_sources\ntests/test_cpu_retirement_interfaces_review.py::test_successful_close_does_not_replace_an_external_signal_handler\ntests/test_cpu_retirement_interfaces_review.py::test_cached_terminal_cannot_rebind_process_using_handle_supplied_weakref\ntests/test_cpu_signal_retirement_review.py::test_closed_invocations_do_not_restore_a_retired_signal_owner[non_lifo]\ntests/test_cpu_signal_retirement_review.py::test_closed_invocations_do_not_restore_a_retired_signal_owner[lifo]\n\n30 tests collected in 0.36s\n"
+    }
+  },
+  "static_audit": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 - <<'PY'\nimport ast, hashlib, json, subprocess\nfrom pathlib import Path\nbase='188af473184463fd2b5835f57cdcc3b5ed9af569'\nold=[p for p in subprocess.check_output(['git','ls-tree','-r','--name-only',base,'--','tests']).decode().splitlines() if p.endswith('.py')]\nassert len(old)==452\nassert all(Path(p).read_bytes()==subprocess.check_output(['git','show',base+':'+p]) for p in old)\ntests=['tests/test_cpu_interface_lifetime.py','tests/test_native_cpu_retirement.py','tests/test_cpu_retirement_product.py','tests/test_cpu_retirement_interfaces_review.py','tests/test_cpu_signal_retirement_review.py']\nmetadata=[]\nfor path in tests:\n raw=Path(path).read_bytes()\n metadata.append({'path':path,'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'literal_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(raw)))})\naudits=[]\nfor before,after in [('v1-06e-first-cpu-interface-lifetime-tests.py',tests[0]),('v1-06e-first-cpu-retirement-product-tests.py',tests[2]),('v1-06e-retirement-review-first-three-tests.py',tests[3])]:\n raw=(Path('docs/evidence/snapshots')/before).read_bytes()\n current={n.name:ast.dump(n) for n in ast.parse(Path(after).read_bytes()).body if isinstance(n,(ast.FunctionDef,ast.ClassDef))}\n prior=[n for n in ast.parse(raw).body if isinstance(n,(ast.FunctionDef,ast.ClassDef))]\n assert all(ast.dump(n)==current[n.name] for n in prior)\n audits.append({'before':before,'after':after,'full_function_class_AST_preserved':True,'literal_asserts_preserved':sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(raw)))})\nprior=(Path('docs/evidence/snapshots')/'v1-06e-before-signal-wrapper-retirement-review-tests.py').read_text()\ncurrent=Path(tests[3]).read_text()\nassert prior.replace('assert signal.getsignal(signal.SIGTERM).__self__ is engine','assert callable(signal.getsignal(signal.SIGTERM))')==current\nprint(json.dumps({'old_tests_byte_exact':len(old),'test_files':metadata,'append_only_audits':audits,'representation_fixture':{'old_asserts':27,'preserved':26,'changed':1,'all_other_bytes_equal':True}},sort_keys=True))\nPY",
+    "result": {
+      "chunk_id": "a2f973",
+      "wall_time_seconds": 0.862389625,
+      "exit_code": 0,
+      "original_token_count": 398,
+      "output": "{\"append_only_audits\": [{\"after\": \"tests/test_cpu_interface_lifetime.py\", \"before\": \"v1-06e-first-cpu-interface-lifetime-tests.py\", \"full_function_class_AST_preserved\": true, \"literal_asserts_preserved\": 15}, {\"after\": \"tests/test_cpu_retirement_product.py\", \"before\": \"v1-06e-first-cpu-retirement-product-tests.py\", \"full_function_class_AST_preserved\": true, \"literal_asserts_preserved\": 15}, {\"after\": \"tests/test_cpu_retirement_interfaces_review.py\", \"before\": \"v1-06e-retirement-review-first-three-tests.py\", \"full_function_class_AST_preserved\": true, \"literal_asserts_preserved\": 20}], \"old_tests_byte_exact\": 452, \"representation_fixture\": {\"all_other_bytes_equal\": true, \"changed\": 1, \"old_asserts\": 27, \"preserved\": 26}, \"test_files\": [{\"bytes\": 6863, \"literal_asserts\": 16, \"path\": \"tests/test_cpu_interface_lifetime.py\", \"sha256\": \"8de3b1844d4018382d44f1fe527bbe51b043feff6c0b8a1711701244e00bf19c\"}, {\"bytes\": 4118, \"literal_asserts\": 21, \"path\": \"tests/test_native_cpu_retirement.py\", \"sha256\": \"2b5a426359155a15634cc1d916b64a5355c321d65775e7dbd39d42aefdec3741\"}, {\"bytes\": 5467, \"literal_asserts\": 17, \"path\": \"tests/test_cpu_retirement_product.py\", \"sha256\": \"61fd434ba9401d29c7aca906258c658e2027302a4629e9926f24332992c62a73\"}, {\"bytes\": 8650, \"literal_asserts\": 27, \"path\": \"tests/test_cpu_retirement_interfaces_review.py\", \"sha256\": \"4a7b1d88ea907d4a4785f83e2b21565670de2f4b8c093698900a3a5e7661208c\"}, {\"bytes\": 2715, \"literal_asserts\": 5, \"path\": \"tests/test_cpu_signal_retirement_review.py\", \"sha256\": \"dadbfd89cf8eb2af1a18fa847322a10a285f2673fce9ed724f8cd04f9cf1559a\"}]}\n"
+    },
+    "observed": {
+      "append_only_audits": [
+        {
+          "after": "tests/test_cpu_interface_lifetime.py",
+          "before": "v1-06e-first-cpu-interface-lifetime-tests.py",
+          "full_function_class_AST_preserved": true,
+          "literal_asserts_preserved": 15
+        },
+        {
+          "after": "tests/test_cpu_retirement_product.py",
+          "before": "v1-06e-first-cpu-retirement-product-tests.py",
+          "full_function_class_AST_preserved": true,
+          "literal_asserts_preserved": 15
+        },
+        {
+          "after": "tests/test_cpu_retirement_interfaces_review.py",
+          "before": "v1-06e-retirement-review-first-three-tests.py",
+          "full_function_class_AST_preserved": true,
+          "literal_asserts_preserved": 20
+        }
+      ],
+      "old_tests_byte_exact": 452,
+      "representation_fixture": {
+        "all_other_bytes_equal": true,
+        "changed": 1,
+        "old_asserts": 27,
+        "preserved": 26
+      },
+      "test_files": [
+        {
+          "bytes": 6863,
+          "literal_asserts": 16,
+          "path": "tests/test_cpu_interface_lifetime.py",
+          "sha256": "8de3b1844d4018382d44f1fe527bbe51b043feff6c0b8a1711701244e00bf19c"
+        },
+        {
+          "bytes": 4118,
+          "literal_asserts": 21,
+          "path": "tests/test_native_cpu_retirement.py",
+          "sha256": "2b5a426359155a15634cc1d916b64a5355c321d65775e7dbd39d42aefdec3741"
+        },
+        {
+          "bytes": 5467,
+          "literal_asserts": 17,
+          "path": "tests/test_cpu_retirement_product.py",
+          "sha256": "61fd434ba9401d29c7aca906258c658e2027302a4629e9926f24332992c62a73"
+        },
+        {
+          "bytes": 8650,
+          "literal_asserts": 27,
+          "path": "tests/test_cpu_retirement_interfaces_review.py",
+          "sha256": "4a7b1d88ea907d4a4785f83e2b21565670de2f4b8c093698900a3a5e7661208c"
+        },
+        {
+          "bytes": 2715,
+          "literal_asserts": 5,
+          "path": "tests/test_cpu_signal_retirement_review.py",
+          "sha256": "dadbfd89cf8eb2af1a18fa847322a10a285f2673fce9ed724f8cd04f9cf1559a"
+        }
+      ]
+    }
+  },
+  "independent_evidence": [
+    {
+      "path": "docs/evidence/2026-09-11-v1-06e-interface-lifetime-author.json",
+      "sha256": "6a950558a21ed7db543116ba3181c38b614cfa0786a392f18494b844e5b69345"
+    },
+    {
+      "path": "docs/evidence/2026-09-11-v1-06e-native-cpu-retirement-author.json",
+      "sha256": "b6dbcfc7b6fa225c09c550676d6e985c6d51e399adf4a699f68d04dd9e5e1e20"
+    },
+    {
+      "path": "docs/evidence/2026-09-11-v1-06e-retirement-independent-review.json",
+      "sha256": "12bc239c96c420290d51751b0db41962844830299ecafe83dac72c7294421da4"
+    },
+    {
+      "path": "docs/evidence/2026-09-11-v1-06e-lifetime-final-review.json",
+      "sha256": "a8a46299e069dd80b16fe5ad9f106103067b2b3fb494c360b8ff409bfb48ab3f"
+    },
+    {
+      "path": "docs/evidence/2026-09-11-v1-06e-snapshot-provenance.json",
+      "sha256": "1c731b037d1215206fbec19fcf1b75964c3b3bea35c12a557a500dd43227d984"
+    },
+    {
+      "path": "docs/evidence/2026-09-11-v1-06e-cpu-retention-product.json",
+      "sha256": "de76397d1048661e6cf1186f07527baa8e14fa3e3b9f9607dcd0b2f321f16cdf"
+    }
+  ],
+  "final_epoch": {
+    "started_utc": "2026-09-11 13:07:40 UTC",
+    "finished_utc": "2026-09-11 13:20:16 UTC",
+    "file_counts": {
+      "core": 735,
+      "pro": 223
+    },
+    "source_bytes_equal_before_after": true,
+    "results": {
+      "core": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests --tb=short -rs",
+        "session_id": 21770,
+        "exit_code": 0,
+        "passed": 4036,
+        "skipped": 7,
+        "seconds": 703.53,
+        "tool_chunks": [
+          {
+            "chunk_id": "2e8249",
+            "wall_time_seconds": 1.001554124,
+            "session_id": 21770,
+            "original_token_count": 0,
+            "output": ""
+          },
+          {
+            "chunk_id": "919a62",
+            "wall_time_seconds": 5.000791346,
+            "session_id": 21770,
+            "original_token_count": 268,
+            "output": "........................................................................ [  1%]\n........................................................................ [  3%]\n........................................................................ [  5%]\n........................................................................ [  7%]\n........................................................................ [  8%]\n........................................................................ [ 10%]\n........................................................................ [ 12%]\n........................................................................ [ 14%]\n........................................................................ [ 16%]\n........................................................................ [ 17%]\n........................................................................ [ 19%]\n........................................................................ [ 21%]\n........................................................................ [ 23%]\n............................."
+          },
+          {
+            "chunk_id": "bd0c0d",
+            "wall_time_seconds": 5.001885014,
+            "session_id": 21770,
+            "original_token_count": 201,
+            "output": "........................................... [ 24%]\n........................................................................ [ 26%]\n........................................................................ [ 28%]\n........................................................................ [ 30%]\n........................................................................ [ 32%]\n........................................................................ [ 33%]\n........................................................................ [ 35%]\n........................................................................ [ 37%]\n........................................................................ [ 39%]\n.................sss.................................................... [ 40%]\n................................"
+          },
+          {
+            "chunk_id": "85537d",
+            "wall_time_seconds": 5.00108303,
+            "session_id": 21770,
+            "original_token_count": 309,
+            "output": "........................................ [ 42%]\n........................................................................ [ 44%]\n........................................................................ [ 46%]\n.............................s.......................................... [ 48%]\n........................................................................ [ 49%]\n........................................................................ [ 51%]\n........................................................................ [ 53%]\n........................................................................ [ 55%]\n........................................................................ [ 57%]\n........................................................................ [ 58%]\n........................................................................ [ 60%]\n........................................................................ [ 62%]\n........................................................................ [ 64%]\n........................................................................ [ 65%]\n........................................................................ [ 67%]\n.................................................................."
+          },
+          {
+            "chunk_id": "b0b44f",
+            "wall_time_seconds": 5.001647909,
+            "session_id": 21770,
+            "original_token_count": 268,
+            "output": "...... [ 69%]\n........................................................................ [ 71%]\n........................................................................ [ 73%]\n........................................................................ [ 74%]\n........................................................................ [ 76%]\n........................................................................ [ 78%]\n........................................................................ [ 80%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 85%]\n........................................................................ [ 87%]\n........................................................................ [ 89%]\n........................................................................ [ 90%]\n......................................ss................................ [ 92%]\n................."
+          },
+          {
+            "chunk_id": "aaaec3",
+            "wall_time_seconds": 0.000003083,
+            "exit_code": 0,
+            "original_token_count": 388,
+            "output": "....................................................... [ 94%]\n........................................................................ [ 96%]\n........................................................................ [ 97%]\n........................................................................ [ 99%]\n..........                                                               [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n4036 passed, 7 skipped in 703.53s (0:11:43)\n"
+          }
+        ],
+        "complete_output": "........................................................................ [  1%]\n........................................................................ [  3%]\n........................................................................ [  5%]\n........................................................................ [  7%]\n........................................................................ [  8%]\n........................................................................ [ 10%]\n........................................................................ [ 12%]\n........................................................................ [ 14%]\n........................................................................ [ 16%]\n........................................................................ [ 17%]\n........................................................................ [ 19%]\n........................................................................ [ 21%]\n........................................................................ [ 23%]\n........................................................................ [ 24%]\n........................................................................ [ 26%]\n........................................................................ [ 28%]\n........................................................................ [ 30%]\n........................................................................ [ 32%]\n........................................................................ [ 33%]\n........................................................................ [ 35%]\n........................................................................ [ 37%]\n........................................................................ [ 39%]\n.................sss.................................................... [ 40%]\n........................................................................ [ 42%]\n........................................................................ [ 44%]\n........................................................................ [ 46%]\n.............................s.......................................... [ 48%]\n........................................................................ [ 49%]\n........................................................................ [ 51%]\n........................................................................ [ 53%]\n........................................................................ [ 55%]\n........................................................................ [ 57%]\n........................................................................ [ 58%]\n........................................................................ [ 60%]\n........................................................................ [ 62%]\n........................................................................ [ 64%]\n........................................................................ [ 65%]\n........................................................................ [ 67%]\n........................................................................ [ 69%]\n........................................................................ [ 71%]\n........................................................................ [ 73%]\n........................................................................ [ 74%]\n........................................................................ [ 76%]\n........................................................................ [ 78%]\n........................................................................ [ 80%]\n........................................................................ [ 81%]\n........................................................................ [ 83%]\n........................................................................ [ 85%]\n........................................................................ [ 87%]\n........................................................................ [ 89%]\n........................................................................ [ 90%]\n......................................ss................................ [ 92%]\n........................................................................ [ 94%]\n........................................................................ [ 96%]\n........................................................................ [ 97%]\n........................................................................ [ 99%]\n..........                                                               [100%]\n=========================== short test summary info ============================\nSKIPPED [1] tests/test_sweeper.py:12: could not import 'orze_pro.engine.role_runner': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:228: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:239: could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_evolution.py:255: could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_fsm_runner_registry.py:13: could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\nSKIPPED [1] tests/test_skill_registry.py:123: orze-pro not installed\nSKIPPED [1] tests/test_skill_registry.py:135: orze-pro not installed\n4036 passed, 7 skipped in 703.53s (0:11:43)\n"
+      },
+      "pro": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\", \"tests\", \"--tb=short\"]))'",
+        "session_id": 14697,
+        "exit_code": 0,
+        "passed": 974,
+        "skipped": 0,
+        "seconds": 178.03,
+        "tool_chunks": [
+          {
+            "chunk_id": "7bea7e",
+            "wall_time_seconds": 1.00176499,
+            "session_id": 14697,
+            "original_token_count": 0,
+            "output": ""
+          },
+          {
+            "chunk_id": "5f835b",
+            "wall_time_seconds": 0.000002005,
+            "exit_code": 0,
+            "original_token_count": 288,
+            "output": "........................................................................ [  7%]\n........................................................................ [ 14%]\n........................................................................ [ 22%]\n........................................................................ [ 29%]\n........................................................................ [ 36%]\n........................................................................ [ 44%]\n........................................................................ [ 51%]\n........................................................................ [ 59%]\n........................................................................ [ 66%]\n........................................................................ [ 73%]\n........................................................................ [ 81%]\n........................................................................ [ 88%]\n........................................................................ [ 96%]\n......................................                                   [100%]\n974 passed in 178.03s (0:02:58)\n"
+          }
+        ],
+        "complete_output": "........................................................................ [  7%]\n........................................................................ [ 14%]\n........................................................................ [ 22%]\n........................................................................ [ 29%]\n........................................................................ [ 36%]\n........................................................................ [ 44%]\n........................................................................ [ 51%]\n........................................................................ [ 59%]\n........................................................................ [ 66%]\n........................................................................ [ 73%]\n........................................................................ [ 81%]\n........................................................................ [ 88%]\n........................................................................ [ 96%]\n......................................                                   [100%]\n974 passed in 178.03s (0:02:58)\n"
+      },
+      "paired": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -c 'from unittest.mock import patch; import pytest; p=patch(\"orze_pro._gate.require_license\"); p.start(); raise SystemExit(pytest.main([\"-q\",\"tests/test_evolution.py\",\"tests/test_sweeper.py\",\"tests/test_skill_registry.py\",\"tests/test_fsm_runner_registry.py\",\"tests/test_skill_composition_manifest.py\",\"--tb=short\",\"-rs\"]))'",
+        "session_id": 96169,
+        "exit_code": 0,
+        "passed": 60,
+        "skipped": 0,
+        "seconds": 0.95,
+        "tool_chunks": [
+          {
+            "chunk_id": "261ba6",
+            "wall_time_seconds": 1.001063359,
+            "session_id": 96169,
+            "original_token_count": 12,
+            "output": "............................................."
+          },
+          {
+            "chunk_id": "bd17c5",
+            "wall_time_seconds": 0.000002443,
+            "exit_code": 0,
+            "original_token_count": 14,
+            "output": "...............             [100%]\n60 passed in 0.95s\n"
+          }
+        ],
+        "complete_output": "............................................................             [100%]\n60 passed in 0.95s\n"
+      },
+      "target": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cpu_interface_lifetime.py tests/test_native_cpu_retirement.py tests/test_cpu_retirement_product.py tests/test_cpu_retirement_interfaces_review.py tests/test_cpu_signal_retirement_review.py --tb=short",
+        "session_id": 5828,
+        "exit_code": 0,
+        "passed": 30,
+        "skipped": 0,
+        "seconds": 18.91,
+        "tool_chunks": [
+          {
+            "chunk_id": "1f975a",
+            "wall_time_seconds": 1.000847579,
+            "session_id": 5828,
+            "original_token_count": 1,
+            "output": ".."
+          },
+          {
+            "chunk_id": "a4c82c",
+            "wall_time_seconds": 0.000001933,
+            "exit_code": 0,
+            "original_token_count": 25,
+            "output": "............................                                           [100%]\n30 passed in 18.91s\n"
+          }
+        ],
+        "complete_output": "..............................                                           [100%]\n30 passed in 18.91s\n"
+      }
+    }
+  },
+  "metadata_tool_diagnostics": [
+    {
+      "tool_chunk": "741f79",
+      "exit_code": 1,
+      "meaning": "Read-only status ledger filename typo after successful source diff; corrected to ...-v1-status.zh-CN.md. Not a product red."
+    },
+    {
+      "tool_chunk": "e60df9",
+      "exit_code": 2,
+      "meaning": "Read-only checker path typo; corrected to docs/evidence/checks/v1-06d-check.py. Not a product red."
+    },
+    {
+      "meaning": "Reading provenance with sed limited to 2500 lines yielded incomplete JSON and a parse error before any test or write. Re-read complete report via cat and parsed all 207540 characters (2d8e0c). No evidence input was edited to hide failure."
+    },
+    {
+      "meaning": "Independent read-only review strengthened the draft checker before any accepted run: bind complete provenance/snapshot classes and required support set, pin baselines/file counts, reject earlier completed/failed/truncated logs, compute fixture counts and refuse Python optimized mode. No product source or tests changed."
+    }
+  ],
+  "safety": {
+    "holdout_opened": false,
+    "holdout_sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+    "holdout_digest_tool_chunk": "76f0bc",
+    "gpu_executed": false,
+    "provider_called": false,
+    "live_campaign_changed": false,
+    "main_merged": false,
+    "owner_registries_cleared_for_gc": false,
+    "unknown_owners_retired": false,
+    "process_adoption": false
+  },
+  "limitations": [
+    "Small real synthetic CPU reachability tests and actual CLI closure only, not RSS, immediate deallocation or an unbounded/global memory cap.",
+    "Active/HOLD/unknown effect or settlement owners intentionally retain their captures and reservations. Retirement is not automatic recovery.",
+    "Same exact retained terminal handle reads historical cache, not current database/source revalidation or fresh GO authority.",
+    "Trusted plugin factories and callers may intentionally retain captures; these are not OS-sandboxed.",
+    "Controller member/ACK proofs and other execution adapters are unchanged.",
+    "V1-06/V1-07 and whole V1 remain open pending heterogeneous tasks, held-out acceptance and other explicit unfinished recovery/repair items."
+  ],
+  "publication": {
+    "code_commits": {
+      "core": "8f61ae5f68c0846d5149aceb4df55c69263c9df2",
+      "pro": "e5c3d75c00c5e157747bd39dcb59e8c3151e504d"
+    },
+    "code_commit": {
+      "chunk_id": "4c12fa",
+      "wall_time_seconds": 0.00000342,
+      "exit_code": 0,
+      "original_token_count": 568,
+      "output": "[feat/autoresearch-v1 8f61ae5] fix(cpu): retire confirmed action and invocation ownership\n 30 files changed, 8969 insertions(+), 13 deletions(-)\n create mode 100644 docs/cpu-retirement.md\n create mode 100644 docs/evidence/2026-09-11-v1-06e-cpu-retention-product.json\n create mode 100644 docs/evidence/2026-09-11-v1-06e-interface-lifetime-author.json\n create mode 100644 docs/evidence/2026-09-11-v1-06e-lifetime-final-review.json\n create mode 100644 docs/evidence/2026-09-11-v1-06e-native-cpu-retirement-author.json\n create mode 100644 docs/evidence/2026-09-11-v1-06e-retirement-independent-review.json\n create mode 100644 docs/evidence/2026-09-11-v1-06e-snapshot-provenance.json\n create mode 100644 docs/evidence/checks/v1-06e-check.py\n create mode 100644 docs/evidence/snapshots/v1-06e-before-cached-process-witness-native.py\n create mode 100644 docs/evidence/snapshots/v1-06e-before-cpu-phase.py\n create mode 100644 docs/evidence/snapshots/v1-06e-before-native-cpu-action.py\n create mode 100644 docs/evidence/snapshots/v1-06e-before-nonlifo-signal-cpu-phase.py\n create mode 100644 docs/evidence/snapshots/v1-06e-before-research-interfaces.py\n create mode 100644 docs/evidence/snapshots/v1-06e-before-retirement-review-cpu-phase.py\n create mode 100644 docs/evidence/snapshots/v1-06e-before-retirement-review-native-cpu-action.py\n create mode 100644 docs/evidence/snapshots/v1-06e-before-retirement-review-research-interfaces.py\n create mode 100644 docs/evidence/snapshots/v1-06e-before-signal-wrapper-retirement-review-tests.py\n create mode 100644 docs/evidence/snapshots/v1-06e-cached-process-witness-replay.txt\n create mode 100644 docs/evidence/snapshots/v1-06e-first-cpu-interface-lifetime-tests.py\n create mode 100644 docs/evidence/snapshots/v1-06e-first-cpu-retirement-product-tests.py\n create mode 100644 docs/evidence/snapshots/v1-06e-native-retirement-baseline-replay.txt\n create mode 100644 docs/evidence/snapshots/v1-06e-retirement-review-first-three-tests.py\n create mode 100644 tests/test_cpu_interface_lifetime.py\n create mode 100644 tests/test_cpu_retirement_interfaces_review.py\n create mode 100644 tests/test_cpu_retirement_product.py\n create mode 100644 tests/test_cpu_signal_retirement_review.py\n create mode 100644 tests/test_native_cpu_retirement.py\n"
+    },
+    "push_initial": {
+      "chunk_id": "fa3e73",
+      "wall_time_seconds": 1.000601236,
+      "session_id": 36611,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "push_completion": {
+      "chunk_id": "869e59",
+      "wall_time_seconds": 0.000003219,
+      "exit_code": 0,
+      "original_token_count": 27,
+      "output": "To https://github.com/orze-ai/orze.git\n   188af47..8f61ae5  feat/autoresearch-v1 -> feat/autoresearch-v1\n"
+    },
+    "remote_readback": {
+      "chunk_id": "8b039a",
+      "wall_time_seconds": 0.08671174,
+      "exit_code": 0,
+      "original_token_count": 33,
+      "output": "8f61ae5f68c0846d5149aceb4df55c69263c9df2\trefs/heads/feat/autoresearch-v1\n5ca2680dbd0139e63cd35a4f83da438b5b47ab99\trefs/heads/main\n"
+    },
+    "code_staged_whitespace": {
+      "chunk_id": "5e9a83",
+      "wall_time_seconds": 0.000004176,
+      "exit_code": 0,
+      "original_token_count": 423,
+      "output": "docs/cpu-retirement.md\ndocs/evidence/2026-09-11-v1-06e-cpu-retention-product.json\ndocs/evidence/2026-09-11-v1-06e-interface-lifetime-author.json\ndocs/evidence/2026-09-11-v1-06e-lifetime-final-review.json\ndocs/evidence/2026-09-11-v1-06e-native-cpu-retirement-author.json\ndocs/evidence/2026-09-11-v1-06e-retirement-independent-review.json\ndocs/evidence/2026-09-11-v1-06e-snapshot-provenance.json\ndocs/evidence/checks/v1-06e-check.py\ndocs/evidence/snapshots/v1-06e-before-cached-process-witness-native.py\ndocs/evidence/snapshots/v1-06e-before-cpu-phase.py\ndocs/evidence/snapshots/v1-06e-before-native-cpu-action.py\ndocs/evidence/snapshots/v1-06e-before-nonlifo-signal-cpu-phase.py\ndocs/evidence/snapshots/v1-06e-before-research-interfaces.py\ndocs/evidence/snapshots/v1-06e-before-retirement-review-cpu-phase.py\ndocs/evidence/snapshots/v1-06e-before-retirement-review-native-cpu-action.py\ndocs/evidence/snapshots/v1-06e-before-retirement-review-research-interfaces.py\ndocs/evidence/snapshots/v1-06e-before-signal-wrapper-retirement-review-tests.py\ndocs/evidence/snapshots/v1-06e-cached-process-witness-replay.txt\ndocs/evidence/snapshots/v1-06e-first-cpu-interface-lifetime-tests.py\ndocs/evidence/snapshots/v1-06e-first-cpu-retirement-product-tests.py\ndocs/evidence/snapshots/v1-06e-native-retirement-baseline-replay.txt\ndocs/evidence/snapshots/v1-06e-retirement-review-first-three-tests.py\nsrc/orze/core/research_interfaces.py\nsrc/orze/engine/cpu_phase.py\nsrc/orze/engine/native_cpu_action.py\ntests/test_cpu_interface_lifetime.py\ntests/test_cpu_retirement_interfaces_review.py\ntests/test_cpu_retirement_product.py\ntests/test_cpu_signal_retirement_review.py\ntests/test_native_cpu_retirement.py\n"
+    },
+    "whitespace_scope": "Immutable historical snapshots excluded from normalization; all current code/tests/contracts/support/checker staged paths checked.",
+    "root_precommit_checker": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/checks/v1-06e-check.py --worktree-only",
+      "initial": {
+        "chunk_id": "fe58bd",
+        "wall_time_seconds": 1.001692349,
+        "session_id": 26117,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "completion": {
+        "chunk_id": "9eb7a4",
+        "wall_time_seconds": 0.000002832,
+        "exit_code": 0,
+        "original_token_count": 123,
+        "output": "{\"baseline_snapshots\": 6, \"explicit_representation_change\": 1, \"literal_asserts\": 86, \"mode\": \"worktree_only\", \"new_cases\": 30, \"old_tests_byte_exact\": 452, \"preserved\": 56, \"python_heredocs\": 16, \"python_inline\": 4, \"record_consistency_not_cryptographic_execution_attestation\": true, \"result\": \"verified\", \"shell_commands\": 37, \"snapshots\": 14, \"source_files\": 958, \"supporting_files\": 8, \"unique_audited_new_fixture_asserts\": 57, \"whole_v1_06_complete\": false, \"whole_v1_complete\": false}\n"
+      }
+    },
+    "independent_precommit_checker": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/checks/v1-06e-check.py --worktree-only",
+      "session_id": 50250,
+      "initial_chunk": "e5799c",
+      "completion_chunk": "4149b6",
+      "exit_code": 0,
+      "result": "verified 958 files / 8 supports / 14 snapshots / 6 baseline / 30 cases / 86 asserts / 452 old tests / 57 original assertions, 56 preserved and 1 explicit representation change."
+    },
+    "note": "Evidence-only Core/Pro commits follow. This document pins the fixed implementation commit, not its own commit SHA."
+  },
+  "accepted_epoch": "first_frozen_full_validation",
+  "discarded_full_epochs": []
+}
