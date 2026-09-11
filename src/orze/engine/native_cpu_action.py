@@ -40,7 +40,7 @@ from orze.engine.sealed_payload import sealed_payload
 from orze.engine.supervised_process import prepare_supervised, SupervisedProcess, SupervisionUncertain
 from orze.engine.supervisor_worker import canonical as protocol_bytes
 from orze.engine.termination_hold import terminate_execution, require_no_unconfirmed_stop
-from orze.engine.training_attempts import _read  # structural bounded JSON reader only
+from orze.engine import claim_authority
 
 
 class CPUActionHOLD(AttemptEffectInDoubt):
@@ -103,7 +103,8 @@ def _scope(lake, folder, action, domain_run=None, *, cfg):
     declared = declared_catalog(folder)
     if declared is not None and declared != database:
         raise CPUActionHOLD("cpu_action_catalog_changed")
-    claim, claim_sha = _read(folder / "claim.json", 8192)
+    claim, claim_sha = claim_authority.read_claim_snapshot(
+        folder / "claim.json", limit=8192, required=True)
     if (claim.get("resource") != "cpu" or "gpu" not in claim or claim["gpu"] is not None
             or claim.get("lifecycle_db") != database):
         raise CPUActionHOLD("cpu_action_claim_resource_changed")

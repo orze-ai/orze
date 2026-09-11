@@ -7,6 +7,8 @@ creates/migrates a database. Only absence of every route retains legacy
 behavior; an unavailable, conflicting or redirected route never downgrades.
 """
 from contextlib import contextmanager
+import errno
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -40,20 +42,32 @@ def safe_file(path, *, missing=True):
     return info
 
 
-def read_claim(path):
-    info = safe_file(path)
+def read_claim_snapshot(path, *, limit=_MAX_CLAIM, required=False):
+    """Read stable claim bytes and their hash; grant no execution authority.
+
+    Pure read refusals are Busy, not evidence of a partially published effect.
+    The legacy read_claim wrapper retains its conservative InDoubt contract.
+    """
+    if type(limit) is not int or not 0 < limit <= _MAX_CLAIM or type(required) is not bool:
+        raise ValueError("claim_read_options_invalid")
+    try:
+        info = safe_file(path)
+    except AttemptEffectInDoubt as exc:
+        raise AttemptEffectBusy(str(exc)) from exc
     if info is None:
+        if required:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), os.fspath(path))
         return None
-    if not 0 < info.st_size <= _MAX_CLAIM:
-        raise AttemptEffectInDoubt("claim_metadata_invalid")
+    if not 0 < info.st_size <= limit:
+        raise AttemptEffectBusy("claim_metadata_invalid")
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    identity = lambda item: (item.st_dev, item.st_ino, item.st_size,
+    identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_size,
                              item.st_mtime_ns, item.st_ctime_ns, item.st_nlink)
     try:
-        raw = os.read(fd, _MAX_CLAIM + 1)
+        raw = os.read(fd, limit + 1)
         if (len(raw) != info.st_size or identity(os.fstat(fd)) != identity(info)
                 or identity(Path(path).lstat()) != identity(info)):
-            raise AttemptEffectInDoubt("claim_metadata_changed")
+            raise AttemptEffectBusy("claim_metadata_changed")
         def pairs(items):
             result = {}
             for key, value in items:
@@ -64,11 +78,20 @@ def read_claim(path):
         value = json.loads(raw, object_pairs_hook=pairs)
         if not isinstance(value, dict):
             raise ValueError("claim must be an object")
-        return value
+        return value, hashlib.sha256(raw).hexdigest()
     except (ValueError, TypeError, UnicodeError, RecursionError) as exc:
-        raise AttemptEffectInDoubt("claim_metadata_invalid") from exc
+        raise AttemptEffectBusy("claim_metadata_invalid") from exc
     finally:
         os.close(fd)
+
+
+def read_claim(path):
+    """Compatibility projection retaining the original conservative errors."""
+    try:
+        snapshot = read_claim_snapshot(path)
+    except AttemptEffectBusy as exc:
+        raise AttemptEffectInDoubt(str(exc)) from exc
+    return None if snapshot is None else snapshot[0]
 
 
 def _lake_path(lake):

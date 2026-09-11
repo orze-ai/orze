@@ -607,7 +607,7 @@ def _recovery_terminal(conn, scope, permit, ref, evidence):
     from orze.core.research_observations import observations_for_attempt
     from orze.engine.execution_authority import lifecycle_fence
     from orze.engine.execution_catalog import declared_catalog
-    from orze.engine.training_attempts import _read as read_claim
+    from orze.engine import claim_authority
     from orze.engine.attempt_effect_receipts import _read as effect_read, _decode as effect_decode
     from orze.engine.process_supervision import PROTOCOL
     from orze.engine.supervisor_worker import canonical
@@ -650,7 +650,8 @@ def _recovery_terminal(conn, scope, permit, ref, evidence):
     if (type(source) is not dict or set(source) not in (source_fields, source_fields | {"replication_request"})
             or source["database"] != scope["database"] or declared_catalog(folder) != scope["database"]):
         _fail("recovery_source_invalid")
-    claim, claim_sha = read_claim(folder / "claim.json", 8192)
+    claim, claim_sha = claim_authority.read_claim_snapshot(
+        folder / "claim.json", limit=8192, required=True)
     if (claim.get("attempt_id") != source["claim_attempt_id"] or claim_sha != source["claim_sha256"]
             or claim.get("resource") != "cpu" or "gpu" not in claim or claim["gpu"] is not None
             or claim.get("lifecycle_db") != scope["database"]):
