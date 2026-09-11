@@ -1,0 +1,184 @@
+{
+  "schema": 1,
+  "slice": "V1-07B",
+  "author": "/root/core_review",
+  "status": "domain_unit_validation_complete_not_product_acceptance",
+  "baseline": {
+    "core_product_commit": "8f61ae5f68c0846d5149aceb4df55c69263c9df2",
+    "prior_acceptance_core_commit": "ce88e12dfbc2fe6091e9c49d7996df7ab13a8e19",
+    "prior_acceptance_pro_commit": "85be1273cf0719f60cc7f4f83d1a461da3514601",
+    "scope": "Application-only integration. No product src/schema, prior A application/test, or Pro implementation edit by this author."
+  },
+  "preregistration": {
+    "plan": {
+      "path": "docs/plans/2026-09-11-v1-07b-holdout.zh-CN.md",
+      "sha256": "8bb1d64fb29eb9bd5a16a2a0ea3d374d4e74d540f7d99ae22d83fc12c1fe246c",
+      "complete_read": {
+        "chunk_id": "cd32ab",
+        "exit_code": 0
+      }
+    },
+    "original_challenge": {
+      "path": "docs/evidence/challenges/v1-07b-original.md",
+      "sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+      "complete_read": {
+        "chunk_id": "31f247",
+        "exit_code": 0
+      }
+    },
+    "first_open": {
+      "time_utc": "2026-09-11 14:21:57 UTC",
+      "actor": "/root",
+      "tool_chunk": "437c4a",
+      "attribution": "Time and root tool identifier recorded in the frozen plan; not presented as this author's separately timestamped read."
+    },
+    "author_original_read": {
+      "path": "../holdout-challenge.md",
+      "complete_read_chunk": "cd50ba",
+      "hash_chunk": "cf817a",
+      "sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+      "scope": "Authorized read after root opened the original. The external original was not edited."
+    },
+    "disclosure": "The frozen plan explicitly authorized publication of the byte-identical original. Once opened/published, this same instance is not claimed to be a new unseen challenge."
+  },
+  "owned_files": [
+    {
+      "path": "examples/holdout/scheduling.py",
+      "sha256": "bd4479a031effef72103719e9951698fd37a726b41a85d597a9501d7e97174bd",
+      "bytes": 19418,
+      "classification": "new application Domain and stdlib worker"
+    },
+    {
+      "path": "tests/test_holdout_domain.py",
+      "sha256": "2f242e4942f38f8153535cf9b1377c9b1d39942f09e56eb0ce346e9cd10bc19b",
+      "bytes": 14815,
+      "classification": "new bounded domain/descriptor unit mechanisms"
+    }
+  ],
+  "interfaces": {
+    "config": "Exactly {instance: dict}; detached, explicitly bounded, validated IDs/job fields/types/dependencies.",
+    "validate_instance": "validate_instance(instance) -> detached dict",
+    "produce": "produce(instance, candidate) -> exactly {instance_id, schedule}",
+    "evaluate": "evaluate(instance, raw_bytes, protocol) -> {status, reason_code}, plus scheduled_value only for valid",
+    "request": "make_request(operation, candidate=None, protocol=None, source_id=None, artifact_utf8=None) -> ordinary seven-field Domain request, timeout_seconds=2",
+    "domain": "SchedulingDomain.prepare/interpret use the existing registered Domain contract; producer declares observation=None and interpret(None) returns ().",
+    "output_bounds": {
+      "candidate": {
+        "path": "candidate.json",
+        "max_bytes": 16384
+      },
+      "evaluation": {
+        "path": "evaluation.json",
+        "max_bytes": 16384
+      }
+    }
+  },
+  "scientific_semantics": {
+    "candidate_generation": "Baseline selects required jobs only, and challenger visits a stable input-order topological ordering; each chooses the earliest feasible start without backtracking. Required jobs that cannot fit these choices raise rather than falsely claiming feasibility. Neither generator embeds original job IDs, a reference answer, threshold or optimal schedule.",
+    "problem_resource": "Instance capacity and job demand are simulated feasibility parameters, not physical CPU/GPU allocations.",
+    "objective": "scheduled_value, direction maximize; score is the sum of selected job values only after scientific validity is established.",
+    "valid_zero": "Zero is retained as a legitimate valid value. Lower feasible values remain valid; equal values mean numerical equality only.",
+    "invalid": "No numeric scheduled_value in verdict or value in observation values; no magic penalty, infinity, zero substitution or repair request.",
+    "invalid_reasons": [
+      "candidate_json_invalid",
+      "candidate_schema_invalid",
+      "unknown_job",
+      "duplicate_job",
+      "missing_required",
+      "time_window",
+      "missing_prerequisite",
+      "precedence_violation",
+      "capacity_overload"
+    ],
+    "candidate_schema": "Strict bounded UTF-8 JSON, duplicate JSON keys rejected, exact top-level/entry fields, exact nonnegative integer starts (bool/float rejected). Candidate errors return typed invalid; malformed configuration/protocol or corrupted transport instead refuses execution/interpretation.",
+    "protocol": "schedule-feasibility-v2 changes only simulated capacity to 1. The original instance is not mutated. Separate protocol fingerprints and comparison scopes preserve protocol qualification while the same captured artifact subject remains bound.",
+    "trust": "The pinned local evaluator computes the verdict from actual source bytes. Controller interpretation checks typed/pinned metadata and verdict shape; this is not sandboxing or proof against a malicious replacement worker."
+  },
+  "measurements": {
+    "worker_cpu_and_wall": "Sampled inside worker main before input reads and through verdict/envelope construction; excludes interpreter startup/imports and final JSON encoding/write.",
+    "cost_claims": "No GPU hours, saved resource percentage, statistical superiority or research productivity is inferred from these timings or invocation counts."
+  },
+  "fault_injection": {
+    "environment": "ORZE_HOLDOUT_EVALUATOR_FAULT=partial_exit_71",
+    "placement": "Evaluator only, after reading the actual sealed source and verifying its captured raw-byte SHA-256, before producing any complete evaluation envelope.",
+    "action": "Writes a partial evaluation.json then performs actual os._exit(71).",
+    "contract": "Explicit test process fault, not a research parameter. It is absent from raw domain_request, purpose, action inputs and scientific protocol. Re-running with the switch absent does not salt or otherwise change the research request.",
+    "unit_controls": "Actual partial worker exits 71; wrong SHA or descriptor ID is rejected before partial output is written. Producer is unaffected.",
+    "not_proven_here": "Cross-interpreter failed/SETTLED restart, same-artifact retry and absence of eligible partial observations require the root's actual CLI/SQLite campaign."
+  },
+  "validation": {
+    "pytest_cases": 45,
+    "literal_asserts": 38,
+    "first_run_passed": 45,
+    "first_run_failed": 0,
+    "historical_defect_red_cases": 0,
+    "candidate_red_cases": 0,
+    "missing_api_failures_claimed": 0,
+    "scope": "Toy-instance hand-written facts, independent event-sweep oracle, strict candidate/config/envelope controls and sealed-FD worker units.",
+    "actual_worker_units": 4,
+    "actual_worker_cases": [
+      "produce",
+      "evaluate valid",
+      "evaluate invalid malformed candidate",
+      "evaluate partial_exit_71"
+    ],
+    "worker_boundary": "These four use real prepare_supervised and the actual stdlib script with sealed descriptors. They are not native CPUAction/Lake/Policy/CLI runs and must not be counted as four of the separate planned 17 product actions.",
+    "safety": "Each supervised unit retains the actual process, confirms completion or stops only that owned handle in finally; descriptors are local memfds. No host process discovery, GPU, provider or network operation.",
+    "main_claim_limit": "The 45-case run does not itself establish original-instance optimality, the full holdout workflow, actual product attempt totals, restart recovery or final full-suite acceptance."
+  },
+  "runs": [
+    {
+      "kind": "pre_hashes",
+      "command": "sha256sum examples/holdout/scheduling.py tests/test_holdout_domain.py",
+      "result": {
+        "chunk_id": "d06bc7",
+        "exit_code": 0,
+        "output": "bd4479a031effef72103719e9951698fd37a726b41a85d597a9501d7e97174bd  examples/holdout/scheduling.py\n2f242e4942f38f8153535cf9b1377c9b1d39942f09e56eb0ce346e9cd10bc19b  tests/test_holdout_domain.py\n"
+      }
+    },
+    {
+      "kind": "first_owned_tests",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_holdout_domain.py --tb=short",
+      "result": {
+        "chunk_id": "67bfb4",
+        "wall_time_seconds": 0.720449847,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": ".............................................                            [100%]\n45 passed in 0.57s\n"
+      }
+    },
+    {
+      "kind": "post_hashes",
+      "command": "sha256sum examples/holdout/scheduling.py tests/test_holdout_domain.py",
+      "result": {
+        "chunk_id": "7ff9a1",
+        "wall_time_seconds": 0.000002954,
+        "exit_code": 0,
+        "original_token_count": 48,
+        "output": "bd4479a031effef72103719e9951698fd37a726b41a85d597a9501d7e97174bd  examples/holdout/scheduling.py\n2f242e4942f38f8153535cf9b1377c9b1d39942f09e56eb0ce346e9cd10bc19b  tests/test_holdout_domain.py\n"
+      }
+    },
+    {
+      "kind": "literal_assert_and_unchanged_tracked_scope_audit",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\npaths=['examples/holdout/scheduling.py','tests/test_holdout_domain.py']\nfiles=[{'path':p,'bytes':pathlib.Path(p).stat().st_size,'sha256':hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()} for p in paths]\nassert_count=sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(pathlib.Path(paths[1]).read_bytes())))\nfor path in paths:ast.parse(pathlib.Path(path).read_bytes())\nchanged=subprocess.check_output(['git','diff','ce88e12dfbc2fe6091e9c49d7996df7ab13a8e19','--name-only','--','src','examples/acceptance','tests'],text=True).splitlines()\nassert not changed,changed\nprint(json.dumps({'files':files,'literal_asserts':assert_count,'tracked_core_known_examples_old_tests_changed':changed,'exit':0},sort_keys=True))\nPY",
+      "result": {
+        "chunk_id": "a69be1",
+        "wall_time_seconds": 0.000004263,
+        "exit_code": 0,
+        "original_token_count": 94,
+        "output": "{\"exit\": 0, \"files\": [{\"bytes\": 19418, \"path\": \"examples/holdout/scheduling.py\", \"sha256\": \"bd4479a031effef72103719e9951698fd37a726b41a85d597a9501d7e97174bd\"}, {\"bytes\": 14815, \"path\": \"tests/test_holdout_domain.py\", \"sha256\": \"2f242e4942f38f8153535cf9b1377c9b1d39942f09e56eb0ce346e9cd10bc19b\"}], \"literal_asserts\": 38, \"tracked_core_known_examples_old_tests_changed\": []}\n"
+      }
+    }
+  ],
+  "pre_post_exact": true,
+  "candidate_history": "Both owned files passed their first actual pytest run unchanged. No failing candidate, snapshot replay or historical product defect is manufactured.",
+  "exclusions": [
+    "No Core or Pro patch",
+    "No pre-existing test/assert changes",
+    "No edits to the original challenge",
+    "No reimplementation of the product runner/budget/attempt store",
+    "No global-optimum claim",
+    "No candidate schema weakening to pass the original instance",
+    "No product workflow rerun by this author"
+  ]
+}

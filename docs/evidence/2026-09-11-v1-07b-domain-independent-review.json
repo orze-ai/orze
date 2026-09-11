@@ -1,0 +1,233 @@
+{
+  "schema": 1,
+  "slice": "V1-07B",
+  "reviewer": "runtime_evidence",
+  "status": "independent_fixed_instance_domain_review_passed",
+  "scope": "Independent handwritten and generated candidate verdict checks for the published original scheduling holdout. No CLI, worker, controller, SQLite execution, GPU, provider, or full workflow was executed by this review. This report does not substitute for separately archived product runs.",
+  "authorization": {
+    "plan": {
+      "path": "docs/plans/2026-09-11-v1-07b-holdout.zh-CN.md",
+      "sha256": "8bb1d64fb29eb9bd5a16a2a0ea3d374d4e74d540f7d99ae22d83fc12c1fe246c",
+      "complete_read_chunk": "438632"
+    },
+    "published_challenge": {
+      "path": "docs/evidence/challenges/v1-07b-original.md",
+      "sha256": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+      "complete_read_chunk": "601913",
+      "input_matches_original_json": true
+    },
+    "source_complete_read": {
+      "path": "examples/holdout/scheduling.py",
+      "sha256": "bd4479a031effef72103719e9951698fd37a726b41a85d597a9501d7e97174bd",
+      "chunk": "ffed5b"
+    }
+  },
+  "run": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_holdout_domain_review.py --tb=short",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "chunk_id": "d79169",
+    "session_id": null,
+    "exit_code": 0,
+    "stdout": "...........................                                              [100%]\n27 passed in 0.19s\n",
+    "passed": 27,
+    "failed": 0,
+    "seconds": 0.19,
+    "classification": "new independent domain unit mechanisms; first observed run green",
+    "historical_reds": 0,
+    "candidate_reds": 0,
+    "setup_errors": 0,
+    "executed_cli_calls": 0,
+    "executed_worker_actions": 0,
+    "other_agents_runs_not_counted": true
+  },
+  "freeze": {
+    "pre": {
+      "chunk_id": "e81f8b",
+      "exit_code": 0,
+      "sha256": {
+        "docs/evidence/challenges/v1-07b-original.md": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+        "docs/evidence/checks/v1-07b-domain-check.py": "7907844dc7cb2362efc75f56415a900b9e1ed729f1cecb8aa8c4311d3c842c3e",
+        "docs/plans/2026-09-11-v1-07b-holdout.zh-CN.md": "8bb1d64fb29eb9bd5a16a2a0ea3d374d4e74d540f7d99ae22d83fc12c1fe246c",
+        "examples/holdout/instance.json": "f98eff6941c4148ba7a78097f8ea0a65f797dc0d1db080d51f51a91c373dfe7b",
+        "examples/holdout/scheduling.py": "bd4479a031effef72103719e9951698fd37a726b41a85d597a9501d7e97174bd",
+        "tests/test_holdout_domain_review.py": "8fb124f817990794359b7f43c79367106326f53ca7d05c3fd28759f34304f28b"
+      }
+    },
+    "post": {
+      "chunk_id": "f733b1",
+      "exit_code": 0,
+      "sha256": {
+        "docs/evidence/challenges/v1-07b-original.md": "fd1a4795c25829e5891680980bdaaef311985e92c4878f8a1552caa260023245",
+        "docs/evidence/checks/v1-07b-domain-check.py": "7907844dc7cb2362efc75f56415a900b9e1ed729f1cecb8aa8c4311d3c842c3e",
+        "docs/plans/2026-09-11-v1-07b-holdout.zh-CN.md": "8bb1d64fb29eb9bd5a16a2a0ea3d374d4e74d540f7d99ae22d83fc12c1fe246c",
+        "examples/holdout/instance.json": "f98eff6941c4148ba7a78097f8ea0a65f797dc0d1db080d51f51a91c373dfe7b",
+        "examples/holdout/scheduling.py": "bd4479a031effef72103719e9951698fd37a726b41a85d597a9501d7e97174bd",
+        "tests/test_holdout_domain_review.py": "8fb124f817990794359b7f43c79367106326f53ca7d05c3fd28759f34304f28b"
+      }
+    },
+    "all_six_file_bytes_exact": true,
+    "test_literal_asserts": 19,
+    "assert_ast_sha256": "f84e518947d8067f01a0b6c689a5d229abc8f6fc7df0b76cd14b0f071aa8bb47",
+    "test_ast_sha256": "7602f89836b83f08ac73edf4cd685f8e2bacd5350864501d2045dc6b970c1d01",
+    "algorithms": {
+      "file_sha256": "sha256(exact bytes)",
+      "test_ast_sha256": "sha256(ast.dump(ast.parse(raw_bytes), include_attributes=False).encode())",
+      "assert_ast_sha256": "sha256(json.dumps([ast.dump(n, include_attributes=False) for n in ast.walk(ast.parse(raw_bytes)) if isinstance(n, ast.Assert)], ensure_ascii=False, separators=(',', ':')).encode())",
+      "assert_count": "Literal ast.Assert nodes; parameterized test cases are counted separately."
+    },
+    "later_read_only_audit_chunk": "3ee6a4"
+  },
+  "coverage": [
+    {
+      "cases": 1,
+      "description": "Published challenge SHA and exact parsed JSON equal the declared instance."
+    },
+    {
+      "cases": 2,
+      "description": "Handwritten a@0 valid zero; a@0,b@3,e@6 valid value 20 with exact deadline 6 and half-open demand-2 boundary. These are fixtures, not reference optima."
+    },
+    {
+      "cases": 1,
+      "description": "Entry order has no semantics; v2 rejects the same boundary bytes for capacity overload, equals v1 under only capacity=1, and retains a-only valid zero."
+    },
+    {
+      "cases": 4,
+      "description": "Single-fault duplicate a; a+e missing b; a+b overload; malformed raw JSON. All typed invalid with no objective value."
+    },
+    {
+      "cases": 14,
+      "description": "Bool/float/negative start, top/entry extra fields, instance mismatch, nonbytes, invalid UTF8, duplicate JSON key, oversized raw bytes, unknown job, missing required job, deadline and precedence violations."
+    },
+    {
+      "cases": 2,
+      "description": "Actual baseline/challenger producer helpers are deterministic and their outputs independently feasible. No process invocation and no optimality threshold."
+    },
+    {
+      "cases": 3,
+      "description": "Independent recorded-verdict comparison rejects False, 0.0, and 999 as substitutions for a valid exact integer zero."
+    }
+  ],
+  "independent_checker": {
+    "path": "docs/evidence/checks/v1-07b-domain-check.py",
+    "sha256": "7907844dc7cb2362efc75f56415a900b9e1ed729f1cecb8aa8c4311d3c842c3e",
+    "stdlib_only": true,
+    "imports_tested_domain": false,
+    "capacity_algorithm": "At every distinct integer start/end event, independently sum demands whose start <= tick < end. Usage is constant between such events, so this checks the specified integer-tick half-open condition without reusing the Domain's per-tick capacity loop.",
+    "output_semantics": "Only valid verdicts have an exact integer scheduled_value, including zero; invalid verdicts contain only status and reason_code. Canonical JSON equality rejects bool/float numeric coercion.",
+    "future_archive_interface": "verify_result(instance, raw_candidate_bytes, protocol, recorded_verdict) -> independently recomputed verdict, raising ValueError on mismatch. It can inspect an archived evaluation but does not prove that evaluation executed.",
+    "candidate_bounds": "Raw candidates are bounded at 16384 bytes; UTF8, JSON duplicate keys, exact candidate/entry keys, and exact integer nonnegative starts are independently checked.",
+    "limits": [
+      "This is an independent proof for the original fixed holdout instance and the listed candidate cases, not an equivalence proof for every input accepted by SchedulingDomain.",
+      "The independent validate_instance rejects negative job values, while the Domain permits bounded negative values. The fixed original instance has only nonnegative values.",
+      "The independent validator does not duplicate every generic Domain limit, including all identifier restrictions, job-count 128, horizon/capacity bounds, dependency-cycle checks, or 63-bit candidate start bounds. Such arbitrary instances/candidates are outside this review's equivalence claim.",
+      "The event-based verifier checks feasibility and summed value, not global optimality, research gains, automated Policy portability, or process closure.",
+      "The verifier rejects optimized Python invocation. Its negative expected-verdict check uses explicit ValueError, not removable assert statements."
+    ]
+  },
+  "preservation_audit": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\nbaseline='8f61ae5f68c0846d5149aceb4df55c69263c9df2'\napplication='e97be5bd8fb0b0c04f44592a9ba218cda9934f05'\ndef paths(commit,*names):\n return subprocess.check_output(['git','ls-tree','-r','--name-only',commit,'--',*names]).decode().splitlines()\ndef sha(raw): return hashlib.sha256(raw).hexdigest()\ndef audit(commit,names):\n rows={}\n for name in names:\n  expected=subprocess.check_output(['git','show',commit+':'+name]); actual=pathlib.Path(name).read_bytes()\n  rows[name]={'sha256':sha(actual),'baseline_sha256':sha(expected),'byte_exact':actual==expected}\n return rows\nsources=paths(baseline,'src','pyproject.toml')\nactual_sources=set(subprocess.check_output(['rg','--files','src']).decode().splitlines())|{'pyproject.toml'}\nafiles=paths(application,'examples/acceptance')+['tests/test_acceptance_compression.py','tests/test_acceptance_policy_review.py','tests/test_acceptance_product.py','tests/test_acceptance_sorting.py']\nsource_rows=audit(baseline,sources); application_rows=audit(application,afiles)\ntestpath=pathlib.Path('tests/test_holdout_domain_review.py'); testtree=ast.parse(testpath.read_bytes()); asserts=[ast.dump(n,include_attributes=False) for n in ast.walk(testtree) if isinstance(n,ast.Assert)]\nresult={'core_baseline':baseline,'application_baseline':application,'source_and_build_count':len(sources),'source_manifest_sha256':sha(json.dumps(source_rows,sort_keys=True,separators=(',',':')).encode()),'source_mismatches':[name for name,row in source_rows.items() if not row['byte_exact']],'source_added':sorted(actual_sources-set(sources)),'source_removed':sorted(set(sources)-actual_sources),'application_count':len(afiles),'application_files':application_rows,'test_sha256':sha(testpath.read_bytes()),'literal_assert_count':len(asserts),'assert_ast_sha256':sha(json.dumps(asserts,ensure_ascii=False,separators=(',',':')).encode()),'test_ast_sha256':sha(ast.dump(testtree,include_attributes=False).encode())}\nassert len(afiles)==11 and len(sources)==278\nassert not result['source_mismatches'] and not result['source_added'] and not result['source_removed']\nassert all(row['byte_exact'] for row in application_rows.values())\nprint(json.dumps(result,sort_keys=True,indent=2))\nPY",
+    "chunk_id": "3ee6a4",
+    "exit_code": 0,
+    "actual_result": {
+      "application_baseline": "e97be5bd8fb0b0c04f44592a9ba218cda9934f05",
+      "application_count": 11,
+      "application_files": {
+        "examples/acceptance/__init__.py": {
+          "baseline_sha256": "2121d551f0f6d8864689a881589b488478ad4b85d2790270ab0226aadfe669a4",
+          "byte_exact": true,
+          "sha256": "2121d551f0f6d8864689a881589b488478ad4b85d2790270ab0226aadfe669a4"
+        },
+        "examples/acceptance/__main__.py": {
+          "baseline_sha256": "5cc04a310205f5d29a9dd66f1f21ae7ad9d8cbd4c3e03ea5a19a77679b751055",
+          "byte_exact": true,
+          "sha256": "5cc04a310205f5d29a9dd66f1f21ae7ad9d8cbd4c3e03ea5a19a77679b751055"
+        },
+        "examples/acceptance/common.py": {
+          "baseline_sha256": "d83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068",
+          "byte_exact": true,
+          "sha256": "d83c30c87b25a430841768637add29a0183e696ab1ff93b7a8af76dcc46a9068"
+        },
+        "examples/acceptance/compression.py": {
+          "baseline_sha256": "e97cdf45f538ef6d0d009bb8b8e95a5e228b5fc8d8a09b14bd90cce394c36779",
+          "byte_exact": true,
+          "sha256": "e97cdf45f538ef6d0d009bb8b8e95a5e228b5fc8d8a09b14bd90cce394c36779"
+        },
+        "examples/acceptance/policy.py": {
+          "baseline_sha256": "c54a67739341935dd1a0d6789ee4289c32d497118ab54912e35abb76f494dc2f",
+          "byte_exact": true,
+          "sha256": "c54a67739341935dd1a0d6789ee4289c32d497118ab54912e35abb76f494dc2f"
+        },
+        "examples/acceptance/sorting.py": {
+          "baseline_sha256": "b1d3f2ec9d33e8942c91a5a3b49fa57ccd2f086efbdc0c29b6772e851c5ea96c",
+          "byte_exact": true,
+          "sha256": "b1d3f2ec9d33e8942c91a5a3b49fa57ccd2f086efbdc0c29b6772e851c5ea96c"
+        },
+        "examples/acceptance/testing.py": {
+          "baseline_sha256": "e3e5d909ab1cd5b106fde04c38e868634e1c317c8e49fb55d045e910364b151a",
+          "byte_exact": true,
+          "sha256": "e3e5d909ab1cd5b106fde04c38e868634e1c317c8e49fb55d045e910364b151a"
+        },
+        "tests/test_acceptance_compression.py": {
+          "baseline_sha256": "533e6cc0be8f052b86881919ec53acae68783ade2d1cd9f9c6f5192c2ff2d14a",
+          "byte_exact": true,
+          "sha256": "533e6cc0be8f052b86881919ec53acae68783ade2d1cd9f9c6f5192c2ff2d14a"
+        },
+        "tests/test_acceptance_policy_review.py": {
+          "baseline_sha256": "13b7a93b965668c22bc6e0c1c240c1b77ba8e2e5db7a20acc07941c718d7bdd6",
+          "byte_exact": true,
+          "sha256": "13b7a93b965668c22bc6e0c1c240c1b77ba8e2e5db7a20acc07941c718d7bdd6"
+        },
+        "tests/test_acceptance_product.py": {
+          "baseline_sha256": "253dab92b00644c6409ad49f83d8c7cb8fc27e239c97cd97d8e18d2e806eb74e",
+          "byte_exact": true,
+          "sha256": "253dab92b00644c6409ad49f83d8c7cb8fc27e239c97cd97d8e18d2e806eb74e"
+        },
+        "tests/test_acceptance_sorting.py": {
+          "baseline_sha256": "8afc4125b7b935f17da1bb5d2622e7e9dba1d39f4f1a58c3ad02010f90516cde",
+          "byte_exact": true,
+          "sha256": "8afc4125b7b935f17da1bb5d2622e7e9dba1d39f4f1a58c3ad02010f90516cde"
+        }
+      },
+      "assert_ast_sha256": "f84e518947d8067f01a0b6c689a5d229abc8f6fc7df0b76cd14b0f071aa8bb47",
+      "core_baseline": "8f61ae5f68c0846d5149aceb4df55c69263c9df2",
+      "literal_assert_count": 19,
+      "source_added": [],
+      "source_and_build_count": 278,
+      "source_manifest_sha256": "cf64bc373fff3ee094f43fdd9b1a397c425b825e74e58a5554b308ec4973f9fb",
+      "source_mismatches": [],
+      "source_removed": [],
+      "test_ast_sha256": "7602f89836b83f08ac73edf4cd685f8e2bacd5350864501d2045dc6b970c1d01",
+      "test_sha256": "8fb124f817990794359b7f43c79367106326f53ca7d05c3fd28759f34304f28b"
+    },
+    "comparison_note": "Core src/pyproject are compared to the interface-freeze commit 8f61ae5. The A application files did not exist there, so their separate correct baseline is the final committed A application e97be5b. No claim is made that those A additions existed in 8f61ae5."
+  },
+  "policy_scope_review": {
+    "commands": [
+      {
+        "command": "rg -n 'Policy|policy|QueuePolicy|register' examples/holdout src/orze/engine/cpu_phase.py docs/plans/2026-09-11-v1-07b-holdout.zh-CN.md",
+        "chunk_id": "0a1f07",
+        "exit_code": 0
+      },
+      {
+        "command": "sed -n '1,35p' examples/holdout/__main__.py\nsed -n '125,165p' examples/holdout/testing.py\nsed -n '1,270p' tests/test_holdout_domain_review.py",
+        "chunk_id": "f0320b",
+        "exit_code": 0
+      }
+    ],
+    "finding": "The holdout application entry registers only SchedulingDomain and delegates to existing orze.cli.main. The declared harness action_policy is version 1, kind queue, idle wait. Existing Core QueuePolicy remains byte-identical to 8f61ae5. Task declarations are explicit acceptance inputs, not a newly implemented Policy or Policy-generated dynamic tasks.",
+    "claim_boundary": "This review neither claims unchanged CommonPolicy transfers to the held-out domain nor downgrades A's separately established automatic proposal/analysis loop."
+  },
+  "diff_check": {
+    "command": "git diff --check",
+    "chunk_id": "48badb",
+    "exit_code": 0,
+    "stdout": ""
+  },
+  "changes_by_reviewer": "The two new checker/test files were authored for this independent group and remained unchanged during the run. This follow-up writes only this new report; no frozen checker/test, Core/Pro source, A application file, or original challenge is modified.",
+  "not_claimed": [
+    "No whole workflow/full-suite outcome is borrowed from root or other agents.",
+    "Root's later helper snapshot-label diagnostic and fix, and its joint/full test outcomes, are separate evidence and are not counted as this review's domain failures or executions.",
+    "No candidate/draft or historical product red occurred in this group.",
+    "No global optimal schedule or general scientific benefit is established."
+  ]
+}
