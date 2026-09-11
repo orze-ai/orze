@@ -19,9 +19,6 @@ An observation occurrence, its subject specification and its evaluator attempt
 have different identities. Empty batches mean no observations, never zero scores.
 valid/invalid/unknown records are stored without promoting any of them to a rank,
 comparison result, statistical independence claim or scientific conclusion.
-Explicit v2 records retain each input's original producer/spec/content hash;
-v1 inputs still require the single observation subject specification. File and
-closed-source checks remain the adapter's responsibility, not this SQL store.
 Caller must hold its effect lease and BEGIN IMMEDIATE; in_transaction alone
 cannot establish SQLite's transaction locking mode. API writes are insert-only,
 not protection against arbitrary direct SQL/filesystem modification. Adapters
@@ -154,12 +151,9 @@ def _encode(value):
 
 def _record(value):
     from orze.core.observation_contract import validate_observation_publication_binding
-    version_two = (type(value) is dict and type(value.get("schema")) is int
-                   and value["schema"] == 2)
-    fields = _FIELDS | {"input_artifact_bindings"} if version_two else _FIELDS
-    if type(value) is not dict or set(value) != fields:
+    if type(value) is not dict or set(value) != _FIELDS:
         raise ResearchObservationError("observation_record_fields_invalid")
-    if type(value["schema"]) is not int or value["schema"] not in (1, 2):
+    if type(value["schema"]) is not int or value["schema"] != 1:
         raise ResearchObservationError("observation_record_schema_invalid")
     _token(value["observation_id"])
     evaluator = value["evaluator"]
@@ -169,10 +163,7 @@ def _record(value):
         _ref(AttemptRef(**evaluator))
     except AttemptAuthorityError as exc:
         raise ResearchObservationError("observation_evaluator_invalid") from exc
-    publication = {key: value[key] for key in _BINDING_FIELDS}
-    if version_two:
-        publication.update(version=2, input_artifact_bindings=value["input_artifact_bindings"])
-    validate_observation_publication_binding(publication)
+    validate_observation_publication_binding({key: value[key] for key in _BINDING_FIELDS})
     _ids(value["input_artifact_ids"])
     _ids(value["result_artifact_ids"], required=True)
     if type(value["name"]) is not str or _NAME.fullmatch(value["name"]) is None:
@@ -300,14 +291,8 @@ def _dependencies(conn, ref, binding, records):
 
     for artifact_id in binding["input_artifact_ids"]:
         artifact = read(artifact_id)
-        if artifact is None or artifact["scope"] != binding["scope"]:
-            raise ResearchObservationError("observation_input_artifact_mismatch")
-        if binding.get("version") == 2:
-            actual = {key: artifact[key] for key in (
-                "producer", "spec_fingerprint", "content_sha256")}
-            if actual != binding["input_artifact_bindings"][artifact_id]:
-                raise ResearchObservationError("observation_input_artifact_mismatch")
-        elif artifact["spec_fingerprint"] != binding["spec_fingerprint"]:
+        if (artifact is None or artifact["scope"] != binding["scope"]
+                or artifact["spec_fingerprint"] != binding["spec_fingerprint"]):
             raise ResearchObservationError("observation_input_artifact_mismatch")
     for record in records:
         for artifact_id in record["result_artifact_ids"]:
@@ -334,10 +319,7 @@ def register_observations(conn, ref: AttemptRef, records: list[dict]) -> tuple[s
         name, identity = record["name"], record["observation_id"]
         if name in encoded or identity in ids:
             raise ResearchObservationError("observation_batch_identity_duplicate")
-        if (record["schema"] != binding.get("version", 1)
-                or record["evaluator"] != evaluator
-                or (record["schema"] == 2 and record["input_artifact_bindings"]
-                    != binding["input_artifact_bindings"])
+        if (record["evaluator"] != evaluator
                 or any(record[key] != binding[key] for key in _BINDING_FIELDS)):
             raise ResearchObservationError("observation_record_binding_mismatch")
         encoded[name] = raw

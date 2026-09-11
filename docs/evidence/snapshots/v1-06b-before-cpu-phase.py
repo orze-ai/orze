@@ -53,7 +53,6 @@ def initialize(engine, gpu_ids, cfg, once):
     from orze.core.config import _validate_config
     from orze.core.control_outcome import require_controller_start_allowed
     from orze.idea_lake import IdeaLake
-    from orze.core.research_interfaces import BoundPolicy, capture_interfaces
     if type(gpu_ids) is not list or gpu_ids:
         raise CPUExecutionError("execution: CPU actions require an empty physical GPU scope")
     errors, _ = _validate_config(cfg)
@@ -80,12 +79,7 @@ def initialize(engine, gpu_ids, cfg, once):
     engine._cpu_scope = None
     engine._cpu_wait_until = 0.0
     engine._cpu_once_dispatched = False
-    try:
-        engine._cpu_interfaces = capture_interfaces(cfg)
-        engine._cpu_policy = (QueuePolicy(action_policy(cfg)) if engine._cpu_interfaces is None
-                              else BoundPolicy(engine._cpu_interfaces))
-    except Exception as exc:
-        raise CPUExecutionError("execution: interface initialization rejected") from exc
+    engine._cpu_policy = QueuePolicy(action_policy(cfg))
     engine.results_dir.mkdir(parents=True, exist_ok=True)
     # CPU execution cannot downgrade to text-only lifecycle or copy an old DB.
     if not cfg.get("idea_lake_db"):
@@ -128,7 +122,6 @@ def iteration(engine):
     from orze.engine.health import check_disk_space
     from orze.engine.idea_ingress import ingest_ideas_source
     from orze.engine.scheduler import claim
-    from orze.core.research_interfaces import parse_domain_task, prepare_domain_run
 
     for key, (handle, permit) in list(engine._cpu_handles.items()):
         terminal = executor.harvest(handle, engine.results_dir, engine.cfg,
@@ -161,39 +154,21 @@ def iteration(engine):
         return True
     require_admission(engine)
     ingest_ideas_source(engine, engine.cfg)
-    interfaces = engine._cpu_interfaces
-    domain_enabled = engine.cfg.get("action_domain") is not None
-    queue = engine.lake.get_queue(limit=2000 if interfaces is None else 32)
+    queue = engine.lake.get_queue(limit=2000)
     for queued in queue:
         row = engine.lake.get(queued["idea_id"])
         if row is None or row["kind"] != "native_cpu_action":
             raise CPUExecutionError("execution: CPU queue contains a non-CPU task")
         try:
-            if domain_enabled:
-                request = parse_domain_task(row["config"])
-                queued["_raw_config"] = row["config"]
-                queued["request"] = request
-                queued["action"] = {"timeout_seconds": request["timeout_seconds"]}
-            else:
-                parsed = yaml.safe_load(row["config"])
-                if type(parsed) is not dict:
-                    raise ValueError("not a mapping")
-                if parsed.get("domain_request") is not None:
-                    raise ValueError("domain request has no selected domain")
-                queued["action"] = validate_action(parsed.get("action"))
+            parsed = yaml.safe_load(row["config"])
+            if type(parsed) is not dict:
+                raise ValueError("not a mapping")
+            queued["action"] = validate_action(parsed.get("action"))
         except (ValueError, TypeError, yaml.YAMLError) as exc:
             raise CPUExecutionError("execution: queued CPU action declaration is invalid") from exc
-    snapshot = {"queue": queue, "active": bool(engine._cpu_handles), "now": time.time()}
-    try:
-        if interfaces is not None:
-            from orze.engine.cpu_policy_evidence import recorded_evidence
-            snapshot["queue"] = [{"idea_id": item["idea_id"],
-                "action": {"timeout_seconds": item["action"]["timeout_seconds"]},
-                "request": item.get("request", item["action"])} for item in queue]
-            snapshot["recorded_evidence"] = recorded_evidence(engine.lake, engine.results_dir)
-        decision = engine._cpu_policy.decide(snapshot, budget.snapshot(engine.lake, engine._cpu_scope))
-    except Exception as exc:
-        raise CPUExecutionError("execution: research policy decision rejected") from exc
+    decision = engine._cpu_policy.decide({"queue": queue,
+        "active": bool(engine._cpu_handles), "now": time.time()},
+        budget.snapshot(engine.lake, engine._cpu_scope))
     if decision["kind"] == "Execute":
         idea_id = decision["task_id"]
         action = next(task["action"] for task in queue if task["idea_id"] == idea_id)
@@ -201,17 +176,6 @@ def iteration(engine):
             decision = {"kind": "Wait", "reason": "disk_space",
                         "wakeup": time.time() + engine._cpu_policy.declaration["wait_seconds"]}
         else:
-            domain_run = None
-            if domain_enabled:
-                from orze.engine.cpu_action_sources import capture_sources
-                item = next(task for task in queue if task["idea_id"] == idea_id)
-                try:
-                    sources = capture_sources(engine.lake, engine.results_dir,
-                                              item["request"]["input_artifact_ids"])
-                    domain_run = prepare_domain_run(interfaces, item["_raw_config"], sources)
-                    action = domain_run.action
-                except Exception as exc:
-                    raise CPUExecutionError("execution: domain preparation rejected") from exc
             permit = budget.reserve(engine.lake, engine._cpu_scope, idea_id, action["timeout_seconds"])
             if permit is None:
                 decision = {"kind": "Wait", "reason": "cpu_resource_or_budget_unavailable",
@@ -221,10 +185,9 @@ def iteration(engine):
                 if not claim(idea_id, engine.results_dir, None, lake=engine.lake, resource="cpu"):
                     raise CPUExecutionError("execution: reserved action claim unconfirmed; budget retained")
                 try:
-                    extension = {} if domain_run is None else {"domain_run": domain_run}
                     handle = executor.launch(idea_id, engine.results_dir, engine.cfg,
                         lake=engine.lake, action=action, permit=permit,
-                        admission=lambda: require_admission(engine), **extension)
+                        admission=lambda: require_admission(engine))
                 except BaseException as exc:
                     handle = getattr(exc, "cpu_action_handle", None)
                     if handle is not None:

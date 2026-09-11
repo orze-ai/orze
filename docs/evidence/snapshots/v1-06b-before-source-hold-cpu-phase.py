@@ -84,7 +84,7 @@ def initialize(engine, gpu_ids, cfg, once):
         engine._cpu_interfaces = capture_interfaces(cfg)
         engine._cpu_policy = (QueuePolicy(action_policy(cfg)) if engine._cpu_interfaces is None
                               else BoundPolicy(engine._cpu_interfaces))
-    except Exception as exc:
+    except ValueError as exc:
         raise CPUExecutionError("execution: interface initialization rejected") from exc
     engine.results_dir.mkdir(parents=True, exist_ok=True)
     # CPU execution cannot downgrade to text-only lifecycle or copy an old DB.
@@ -184,15 +184,15 @@ def iteration(engine):
         except (ValueError, TypeError, yaml.YAMLError) as exc:
             raise CPUExecutionError("execution: queued CPU action declaration is invalid") from exc
     snapshot = {"queue": queue, "active": bool(engine._cpu_handles), "now": time.time()}
+    if interfaces is not None:
+        from orze.engine.cpu_policy_evidence import recorded_evidence
+        snapshot["queue"] = [{"idea_id": item["idea_id"],
+            "action": {"timeout_seconds": item["action"]["timeout_seconds"]},
+            "request": item.get("request", item["action"])} for item in queue]
+        snapshot["recorded_evidence"] = recorded_evidence(engine.lake, engine.results_dir)
     try:
-        if interfaces is not None:
-            from orze.engine.cpu_policy_evidence import recorded_evidence
-            snapshot["queue"] = [{"idea_id": item["idea_id"],
-                "action": {"timeout_seconds": item["action"]["timeout_seconds"]},
-                "request": item.get("request", item["action"])} for item in queue]
-            snapshot["recorded_evidence"] = recorded_evidence(engine.lake, engine.results_dir)
         decision = engine._cpu_policy.decide(snapshot, budget.snapshot(engine.lake, engine._cpu_scope))
-    except Exception as exc:
+    except ValueError as exc:
         raise CPUExecutionError("execution: research policy decision rejected") from exc
     if decision["kind"] == "Execute":
         idea_id = decision["task_id"]
@@ -210,7 +210,7 @@ def iteration(engine):
                                               item["request"]["input_artifact_ids"])
                     domain_run = prepare_domain_run(interfaces, item["_raw_config"], sources)
                     action = domain_run.action
-                except Exception as exc:
+                except ValueError as exc:
                     raise CPUExecutionError("execution: domain preparation rejected") from exc
             permit = budget.reserve(engine.lake, engine._cpu_scope, idea_id, action["timeout_seconds"])
             if permit is None:

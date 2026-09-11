@@ -6,13 +6,11 @@ are rejected explicitly instead of dropping existing qualification policies.
 """
 from __future__ import annotations
 
-from dataclasses import asdict
 import os
 from pathlib import Path
 import re
 
 from orze.core.artifact_contract import get_artifact_contract
-from orze.core.execution_attempts import AttemptAuthorityError, AttemptRef
 
 JSON_OBSERVATION_ADAPTER = "orze.json_observations.v1"
 MAX_OBSERVATIONS = 32
@@ -97,50 +95,10 @@ def get_observation_contract(cfg: dict | None) -> dict | None:
             "protocol_id": protocol_id, "inputs": list(inputs), "output": dict(output)}
 
 
-def _input_artifact_bindings(value, identities):
-    """Detached v2 provenance, not file verification or source authority."""
-    if type(value) is not dict or set(value) != set(identities):
-        _fail("input artifact bindings must exactly match input IDs")
-    result = {}
-    for identity in identities:
-        item = value[identity]
-        if type(item) is not dict or set(item) != {
-                "producer", "spec_fingerprint", "content_sha256"}:
-            _fail("invalid input artifact binding")
-        producer = item["producer"]
-        if type(producer) is not dict or set(producer) != {
-                "task_id", "phase", "attempt_id", "generation"}:
-            _fail("invalid input artifact producer")
-        if any(type(producer[key]) is not str for key in ("task_id", "phase", "attempt_id")):
-            _fail("invalid input artifact producer")
-        try:
-            producer = asdict(AttemptRef(**producer))
-        except (AttemptAuthorityError, TypeError, ValueError) as exc:
-            _fail("invalid input artifact producer: " + type(exc).__name__)
-        for key in ("spec_fingerprint", "content_sha256"):
-            if type(item[key]) is not str or not _SHA.fullmatch(item[key]):
-                _fail("invalid input artifact " + key)
-        result[identity] = {"producer": producer, "spec_fingerprint": item["spec_fingerprint"],
-                            "content_sha256": item["content_sha256"]}
-    return result
-
-
 def validate_observation_publication_binding(binding: dict) -> dict:
-    """Metadata only: implicit v1 or explicit v2 multi-spec input provenance.
-
-    V1 remains the exact original five-field contract. V2 binds each input's
-    own producer/spec/content, without equating it to the observation subject.
-    Neither form proves closed sources, immutable file bytes or domain validity.
-    """
-    fields = {"adapter_id", "protocol_fingerprint", "spec_fingerprint", "scope", "input_artifact_ids"}
-    if type(binding) is not dict:
-        _fail("invalid publication binding")
-    version_two = "version" in binding
-    if version_two:
-        if type(binding["version"]) is not int or binding["version"] != 2:
-            _fail("invalid publication binding version")
-        fields |= {"version", "input_artifact_bindings"}
-    if set(binding) != fields:
+    """Metadata-only generic binding; no phase, adapter or domain inference."""
+    if type(binding) is not dict or set(binding) != {
+            "adapter_id", "protocol_fingerprint", "spec_fingerprint", "scope", "input_artifact_ids"}:
         _fail("invalid publication binding")
     adapter = _text(binding["adapter_id"], 128, "adapter_id")
     for key in ("protocol_fingerprint", "spec_fingerprint"):
@@ -149,10 +107,6 @@ def validate_observation_publication_binding(binding: dict) -> dict:
     scope = _text(binding["scope"], 4096, "scope")
     if "\\" in scope or not Path(scope).is_absolute() or os.path.normpath(scope) != scope:
         _fail("scope must be a normalized absolute path")
-    result = {"adapter_id": adapter, "protocol_fingerprint": binding["protocol_fingerprint"],
+    return {"adapter_id": adapter, "protocol_fingerprint": binding["protocol_fingerprint"],
             "spec_fingerprint": binding["spec_fingerprint"], "scope": scope,
             "input_artifact_ids": _ids(binding["input_artifact_ids"])}
-    if version_two:
-        result.update(version=2, input_artifact_bindings=_input_artifact_bindings(
-            binding["input_artifact_bindings"], result["input_artifact_ids"]))
-    return result

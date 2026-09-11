@@ -29,8 +29,6 @@ def cpu_execution(cfg):
             _fail("loaded CPU declaration was erased")
         if cfg.get("action_policy") is not None:
             _fail("action_policy requires explicit CPU execution")
-        if cfg.get("action_domain") is not None:
-            _fail("action_domain requires explicit CPU execution")
         return None
     if (type(value) is not dict or set(value) != {
             "version", "resource", "slots", "wall_budget_seconds"}
@@ -60,7 +58,6 @@ def cpu_execution(cfg):
         if cfg.get(key):
             _fail(key + " is not an action-local CPU contract")
     action_policy(cfg)
-    action_domain(cfg)
     loaded = cfg.get("_cpu_execution_fingerprint")
     if loaded is not None and loaded != execution_fingerprint(cfg, declaration=result):
         _fail("loaded CPU configuration changed")
@@ -70,29 +67,15 @@ def cpu_execution(cfg):
 def action_policy(cfg):
     value = cfg.get("action_policy", {"version": 1, "kind": "queue",
                                       "idle": "wait", "wait_seconds": 1})
-    if (type(value) is not dict or set(value) not in (
-            {"version", "kind", "idle", "wait_seconds"},
-            {"version", "kind", "idle", "wait_seconds", "config"})
+    if (type(value) is not dict or set(value) != {"version", "kind", "idle", "wait_seconds"}
             or type(value["version"]) is not int or value["version"] != 1
-            or type(value["kind"]) is not str or value["idle"] not in ("wait", "stop")):
-        _fail("action_policy requires version 1, registered kind, idle wait/stop, wait_seconds")
+            or value["kind"] != "queue" or value["idle"] not in ("wait", "stop")):
+        _fail("action_policy requires version 1, kind queue, idle wait/stop, wait_seconds")
     seconds = value["wait_seconds"]
     if (type(seconds) not in (int, float) or not 0.01 <= seconds <= 3600
             or not math.isfinite(seconds)):
         _fail("action_policy.wait_seconds must be finite in [0.01, 3600]")
-    from orze.core.research_interfaces import require_policy_declaration
-    try:
-        return require_policy_declaration(value)
-    except ValueError as exc:
-        _fail(str(exc))
-
-
-def action_domain(cfg):
-    from orze.core.research_interfaces import domain_declaration
-    try:
-        return domain_declaration(cfg)
-    except ValueError as exc:
-        _fail(str(exc))
+    return dict(value)
 
 
 def execution_fingerprint(cfg, *, declaration=None):
@@ -102,7 +85,6 @@ def execution_fingerprint(cfg, *, declaration=None):
         "results_dir", "idea_lake_db", "ideas_file", "_orze_dir", "_project_root") if cfg.get(key)}
     paths["cwd"] = str(Path.cwd())
     raw = json.dumps({"execution": value, "action_policy": action_policy(cfg),
-                      "action_domain": action_domain(cfg),
                       "paths": paths}, sort_keys=True, allow_nan=False)
     return hashlib.sha256(raw.encode()).hexdigest()
 

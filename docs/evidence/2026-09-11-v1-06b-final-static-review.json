@@ -1,0 +1,217 @@
+{
+  "schema": 1,
+  "slice": "V1-06B",
+  "kind": "independent_final_static_review",
+  "reviewer": "/root/pro_review",
+  "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "baseline_commits": {
+    "core": "52d479d0f74fe4feb3c10b9501833d156b4c8cb6",
+    "pro": "7afa4e34d2bcb3de7a2b2e37e6f383a6aa1b8b1a"
+  },
+  "ownership": {
+    "author_scope": [
+      "src/orze/core/observation_contract.py",
+      "src/orze/core/research_observations.py",
+      "src/orze/core/cpu_observation_contract.py",
+      "tests/test_cpu_observation_contract.py",
+      "tests/test_research_observations_v2.py"
+    ],
+    "independent_scope": "Read-only review of root-owned research_interfaces/cpu_execution/cpu_phase and sibling-owned native publication/watch integration; five separate review tests. This static audit independently verifies bytes, collection and documentary scope, not the scientific correctness of reviewer-authored code.",
+    "existing_reports_changed": false,
+    "source_tests_changed_for_this_review": false
+  },
+  "collection": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom collections import Counter\nfrom contextlib import redirect_stdout,redirect_stderr\nimport ast,hashlib,io,json,pathlib,subprocess,pytest\nbase='52d479d0f74fe4feb3c10b9501833d156b4c8cb6'\npaths=subprocess.check_output(['git','ls-files','--others','--exclude-standard','--','tests']).decode().splitlines()\nassert len(paths)==11,paths\ncounter={}\nclass Counts:\n def pytest_collection_finish(self,session):counter.update(Counter(item.nodeid.split('::',1)[0] for item in session.items))\noutput=io.StringIO()\nwith redirect_stdout(output),redirect_stderr(output):\n result=pytest.main(['--collect-only','-q','-p','no:cacheprovider',*paths],plugins=[Counts()])\nassert result==0,output.getvalue()\nrecords=[]\nfor path in paths:\n raw=pathlib.Path(path).read_bytes();records.append({'path':path,'cases':counter[path],'literal_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(raw))),'sha256':hashlib.sha256(raw).hexdigest()})\nassert subprocess.check_output(['git','diff','--name-only',base,'--','tests'])==b''\nprint(json.dumps({'files':records,'total_files':len(records),'total_cases':sum(counter.values()),'total_literal_asserts':sum(r['literal_asserts'] for r in records),'old_tracked_tests_changed':0,'collection_output_sha256':hashlib.sha256(output.getvalue().encode()).hexdigest()},sort_keys=True))\nPY",
+    "chunk": "7bba23",
+    "exit_code": 0,
+    "raw_output": "{\"collection_output_sha256\": \"c3cf4551c2a48bfbd31f0748971084b0a609113831b2d2206fdd648a46ffdd85\", \"files\": [{\"cases\": 12, \"literal_asserts\": 13, \"path\": \"tests/test_cpu_action_sources.py\", \"sha256\": \"3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e\"}, {\"cases\": 7, \"literal_asserts\": 1, \"path\": \"tests/test_cpu_domain_entry.py\", \"sha256\": \"afb1a5a8d589b0e845aa54ac15a82547470d05344f6e6e4b2bb61c60a4ada15c\"}, {\"cases\": 10, \"literal_asserts\": 48, \"path\": \"tests/test_cpu_domain_product.py\", \"sha256\": \"cdaf494107b04a8586b37d0937aef003063738bfe5bbaaaf5eee35d9a40ac79d\"}, {\"cases\": 2, \"literal_asserts\": 29, \"path\": \"tests/test_cpu_domain_runtime_review.py\", \"sha256\": \"c8f6bd2fe54604fdc31bd87636c03ea7eaa1f55c51579b62b42f340b7ebad808\"}, {\"cases\": 22, \"literal_asserts\": 16, \"path\": \"tests/test_cpu_observation_contract.py\", \"sha256\": \"0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7\"}, {\"cases\": 9, \"literal_asserts\": 19, \"path\": \"tests/test_cpu_policy_evidence.py\", \"sha256\": \"75705cf1880cacea45922e57ee79d896f22efc2d87e5162d6db90c48de38a139\"}, {\"cases\": 11, \"literal_asserts\": 8, \"path\": \"tests/test_execution_observation_watch.py\", \"sha256\": \"58ccc26faeda8aea7dd10aa62423d4068a1107e1b86b1efa609aac14aa764dc7\"}, {\"cases\": 11, \"literal_asserts\": 32, \"path\": \"tests/test_native_cpu_domain_publication.py\", \"sha256\": \"1c3d481c8c168d8a51a0eb8c4d7681bcd95422d43fd9815113a428cb9d2ec466\"}, {\"cases\": 1, \"literal_asserts\": 4, \"path\": \"tests/test_research_interfaces.py\", \"sha256\": \"061b3c4b5e46fa62a510b3a2bc385abd0644988b43ef1508799c55c5b946f7d3\"}, {\"cases\": 5, \"literal_asserts\": 16, \"path\": \"tests/test_research_interfaces_review.py\", \"sha256\": \"20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5\"}, {\"cases\": 14, \"literal_asserts\": 17, \"path\": \"tests/test_research_observations_v2.py\", \"sha256\": \"b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92\"}], \"old_tracked_tests_changed\": 0, \"total_cases\": 104, \"total_files\": 11, \"total_literal_asserts\": 203}\n",
+    "result": {
+      "collection_output_sha256": "c3cf4551c2a48bfbd31f0748971084b0a609113831b2d2206fdd648a46ffdd85",
+      "files": [
+        {
+          "cases": 12,
+          "literal_asserts": 13,
+          "path": "tests/test_cpu_action_sources.py",
+          "sha256": "3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e"
+        },
+        {
+          "cases": 7,
+          "literal_asserts": 1,
+          "path": "tests/test_cpu_domain_entry.py",
+          "sha256": "afb1a5a8d589b0e845aa54ac15a82547470d05344f6e6e4b2bb61c60a4ada15c"
+        },
+        {
+          "cases": 10,
+          "literal_asserts": 48,
+          "path": "tests/test_cpu_domain_product.py",
+          "sha256": "cdaf494107b04a8586b37d0937aef003063738bfe5bbaaaf5eee35d9a40ac79d"
+        },
+        {
+          "cases": 2,
+          "literal_asserts": 29,
+          "path": "tests/test_cpu_domain_runtime_review.py",
+          "sha256": "c8f6bd2fe54604fdc31bd87636c03ea7eaa1f55c51579b62b42f340b7ebad808"
+        },
+        {
+          "cases": 22,
+          "literal_asserts": 16,
+          "path": "tests/test_cpu_observation_contract.py",
+          "sha256": "0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7"
+        },
+        {
+          "cases": 9,
+          "literal_asserts": 19,
+          "path": "tests/test_cpu_policy_evidence.py",
+          "sha256": "75705cf1880cacea45922e57ee79d896f22efc2d87e5162d6db90c48de38a139"
+        },
+        {
+          "cases": 11,
+          "literal_asserts": 8,
+          "path": "tests/test_execution_observation_watch.py",
+          "sha256": "58ccc26faeda8aea7dd10aa62423d4068a1107e1b86b1efa609aac14aa764dc7"
+        },
+        {
+          "cases": 11,
+          "literal_asserts": 32,
+          "path": "tests/test_native_cpu_domain_publication.py",
+          "sha256": "1c3d481c8c168d8a51a0eb8c4d7681bcd95422d43fd9815113a428cb9d2ec466"
+        },
+        {
+          "cases": 1,
+          "literal_asserts": 4,
+          "path": "tests/test_research_interfaces.py",
+          "sha256": "061b3c4b5e46fa62a510b3a2bc385abd0644988b43ef1508799c55c5b946f7d3"
+        },
+        {
+          "cases": 5,
+          "literal_asserts": 16,
+          "path": "tests/test_research_interfaces_review.py",
+          "sha256": "20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5"
+        },
+        {
+          "cases": 14,
+          "literal_asserts": 17,
+          "path": "tests/test_research_observations_v2.py",
+          "sha256": "b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92"
+        }
+      ],
+      "old_tracked_tests_changed": 0,
+      "total_cases": 104,
+      "total_files": 11,
+      "total_literal_asserts": 203
+    },
+    "classification": "Actual pytest collection only. No test body, worker or full suite was run. Case counts are the collected final node IDs, not inferred parameter arithmetic."
+  },
+  "static_checks": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\nroot=pathlib.Path.cwd().resolve(); pro=root.parent/'orze-pro'\nbase='52d479d0f74fe4feb3c10b9501833d156b4c8cb6'; pro_base='7afa4e34d2bcb3de7a2b2e37e6f383a6aa1b8b1a'\ncollected=json.loads(\"[{\\\"cases\\\":12,\\\"literal_asserts\\\":13,\\\"path\\\":\\\"tests/test_cpu_action_sources.py\\\",\\\"sha256\\\":\\\"3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e\\\"},{\\\"cases\\\":7,\\\"literal_asserts\\\":1,\\\"path\\\":\\\"tests/test_cpu_domain_entry.py\\\",\\\"sha256\\\":\\\"afb1a5a8d589b0e845aa54ac15a82547470d05344f6e6e4b2bb61c60a4ada15c\\\"},{\\\"cases\\\":10,\\\"literal_asserts\\\":48,\\\"path\\\":\\\"tests/test_cpu_domain_product.py\\\",\\\"sha256\\\":\\\"cdaf494107b04a8586b37d0937aef003063738bfe5bbaaaf5eee35d9a40ac79d\\\"},{\\\"cases\\\":2,\\\"literal_asserts\\\":29,\\\"path\\\":\\\"tests/test_cpu_domain_runtime_review.py\\\",\\\"sha256\\\":\\\"c8f6bd2fe54604fdc31bd87636c03ea7eaa1f55c51579b62b42f340b7ebad808\\\"},{\\\"cases\\\":22,\\\"literal_asserts\\\":16,\\\"path\\\":\\\"tests/test_cpu_observation_contract.py\\\",\\\"sha256\\\":\\\"0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7\\\"},{\\\"cases\\\":9,\\\"literal_asserts\\\":19,\\\"path\\\":\\\"tests/test_cpu_policy_evidence.py\\\",\\\"sha256\\\":\\\"75705cf1880cacea45922e57ee79d896f22efc2d87e5162d6db90c48de38a139\\\"},{\\\"cases\\\":11,\\\"literal_asserts\\\":8,\\\"path\\\":\\\"tests/test_execution_observation_watch.py\\\",\\\"sha256\\\":\\\"58ccc26faeda8aea7dd10aa62423d4068a1107e1b86b1efa609aac14aa764dc7\\\"},{\\\"cases\\\":11,\\\"literal_asserts\\\":32,\\\"path\\\":\\\"tests/test_native_cpu_domain_publication.py\\\",\\\"sha256\\\":\\\"1c3d481c8c168d8a51a0eb8c4d7681bcd95422d43fd9815113a428cb9d2ec466\\\"},{\\\"cases\\\":1,\\\"literal_asserts\\\":4,\\\"path\\\":\\\"tests/test_research_interfaces.py\\\",\\\"sha256\\\":\\\"061b3c4b5e46fa62a510b3a2bc385abd0644988b43ef1508799c55c5b946f7d3\\\"},{\\\"cases\\\":5,\\\"literal_asserts\\\":16,\\\"path\\\":\\\"tests/test_research_interfaces_review.py\\\",\\\"sha256\\\":\\\"20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5\\\"},{\\\"cases\\\":14,\\\"literal_asserts\\\":17,\\\"path\\\":\\\"tests/test_research_observations_v2.py\\\",\\\"sha256\\\":\\\"b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92\\\"}]\")\nexpected={r['path'] for r in collected}\nchanged=subprocess.check_output(['git','diff','--name-status',base,'--','tests']).decode().splitlines()\nassert all(line.startswith('A\\t') and line.split('\\t')[1] in expected for line in changed),changed\nadded={line.split('\\t')[1] for line in changed}\nuntracked=set(subprocess.check_output(['git','ls-files','--others','--exclude-standard','--','tests']).decode().splitlines())\nassert added|untracked==expected and not added&untracked\nassert subprocess.check_output(['git','-C',str(pro),'diff','--name-status',pro_base,'--','src','tests','pyproject.toml'])==b''\nassert subprocess.check_output(['git','-C',str(pro),'ls-files','--others','--exclude-standard','--','src','tests','pyproject.toml'])==b''\nprograms=[]\nfor entry in collected:\n raw=(root/entry['path']).read_bytes();assert hashlib.sha256(raw).hexdigest()==entry['sha256'];tree=ast.parse(raw)\n assert sum(isinstance(n,ast.Assert) for n in ast.walk(tree))==entry['literal_asserts']\n for node in ast.walk(tree):\n  if not isinstance(node,ast.Constant) or type(node.value) is not str or 'assert ' not in node.value:continue\n  try: program=ast.parse(node.value)\n  except (SyntaxError,ValueError):continue\n  count=sum(isinstance(n,ast.Assert) for n in ast.walk(program))\n  if count:programs.append({'path':entry['path'],'line':node.lineno,'sha256':hashlib.sha256(node.value.encode()).hexdigest(),'asserts':count})\nmanifests={}\nfor name,repo in [('core',root),('pro',pro)]:\n paths=sorted(set(p.decode() for p in subprocess.check_output(['git','-C',str(repo),'ls-files','-c','-o','--exclude-standard','-z','--','src','tests','pyproject.toml']).split(b'\\0') if p))\n hashes={p:hashlib.sha256((repo/p).read_bytes()).hexdigest() for p in paths}\n raw=''.join(hashes[p]+'  '+p+'\\n' for p in paths).encode()\n manifests[name]={'files':len(paths),'sorted_sha256sum_stdout_sha256':hashlib.sha256(raw).hexdigest()}\nassert manifests['core']['files']==712 and manifests['pro']['files']==223\nprint(json.dumps({'old_core_tests_modified':0,'pro_src_tests_pyproject_modified':0,'new_tests':len(expected),'collected_cases':sum(r['cases'] for r in collected),'literal_asserts':sum(r['literal_asserts'] for r in collected),'individually_parseable_constant_programs':programs,'constant_program_assert_total':sum(p['asserts'] for p in programs),'limitation':'String constants only; not complete generated or concatenated worker programs. These assertions are separate from literal AST totals.','current_manifests':manifests},sort_keys=True))\nPY",
+    "chunk": "01fc49",
+    "exit_code": 0,
+    "raw_output": "{\"collected_cases\": 104, \"constant_program_assert_total\": 8, \"current_manifests\": {\"core\": {\"files\": 712, \"sorted_sha256sum_stdout_sha256\": \"c78cb57e0a84988882dc274819533e80fbe7333317cca3484bc96218fc97378e\"}, \"pro\": {\"files\": 223, \"sorted_sha256sum_stdout_sha256\": \"a39247f3562bb30c606f59a74a26785d44f086179de455d46cc074fba58fb70b\"}}, \"individually_parseable_constant_programs\": [{\"asserts\": 2, \"line\": 75, \"path\": \"tests/test_cpu_action_sources.py\", \"sha256\": \"f97d373f9f3f00af9e5f5aa8ba739e6633604f4bad6ffb3c7a3fef5bced01453\"}, {\"asserts\": 1, \"line\": 186, \"path\": \"tests/test_cpu_domain_product.py\", \"sha256\": \"bf333a02f18e33eb0129a8996f3d3b193a825e34fe8a2b95867f795b70c34c84\"}, {\"asserts\": 1, \"line\": 33, \"path\": \"tests/test_cpu_domain_runtime_review.py\", \"sha256\": \"cd62657d930dda8f81493b7aaedfe5be7582f487785531a10e9f3de055c2f313\"}, {\"asserts\": 4, \"line\": 144, \"path\": \"tests/test_native_cpu_domain_publication.py\", \"sha256\": \"bfc4171a29e7abbd7459270e6484db9867526b86dce21f9f1a8eef2cdb0cfdcf\"}], \"limitation\": \"String constants only; not complete generated or concatenated worker programs. These assertions are separate from literal AST totals.\", \"literal_asserts\": 203, \"new_tests\": 11, \"old_core_tests_modified\": 0, \"pro_src_tests_pyproject_modified\": 0}\n",
+    "result": {
+      "collected_cases": 104,
+      "constant_program_assert_total": 8,
+      "current_manifests": {
+        "core": {
+          "files": 712,
+          "sorted_sha256sum_stdout_sha256": "c78cb57e0a84988882dc274819533e80fbe7333317cca3484bc96218fc97378e"
+        },
+        "pro": {
+          "files": 223,
+          "sorted_sha256sum_stdout_sha256": "a39247f3562bb30c606f59a74a26785d44f086179de455d46cc074fba58fb70b"
+        }
+      },
+      "individually_parseable_constant_programs": [
+        {
+          "asserts": 2,
+          "line": 75,
+          "path": "tests/test_cpu_action_sources.py",
+          "sha256": "f97d373f9f3f00af9e5f5aa8ba739e6633604f4bad6ffb3c7a3fef5bced01453"
+        },
+        {
+          "asserts": 1,
+          "line": 186,
+          "path": "tests/test_cpu_domain_product.py",
+          "sha256": "bf333a02f18e33eb0129a8996f3d3b193a825e34fe8a2b95867f795b70c34c84"
+        },
+        {
+          "asserts": 1,
+          "line": 33,
+          "path": "tests/test_cpu_domain_runtime_review.py",
+          "sha256": "cd62657d930dda8f81493b7aaedfe5be7582f487785531a10e9f3de055c2f313"
+        },
+        {
+          "asserts": 4,
+          "line": 144,
+          "path": "tests/test_native_cpu_domain_publication.py",
+          "sha256": "bfc4171a29e7abbd7459270e6484db9867526b86dce21f9f1a8eef2cdb0cfdcf"
+        }
+      ],
+      "limitation": "String constants only; not complete generated or concatenated worker programs. These assertions are separate from literal AST totals.",
+      "literal_asserts": 203,
+      "new_tests": 11,
+      "old_core_tests_modified": 0,
+      "pro_src_tests_pyproject_modified": 0
+    },
+    "scope": "Checks exact current new-test bytes/literal AST, Core old-test zero modifications and Pro src/tests/pyproject zero modifications relative to fixed baselines. The 712/223 manifests are a read-only current point, not this reviewer's full-test pre/post evidence."
+  },
+  "contract_review": {
+    "path": "docs/research-interfaces.md",
+    "initial_read": {
+      "sha256": "a830d548c3d0f36c6d0d9a7f2fcc165393210d3247cbc051abc3167996588588",
+      "chunk": "027873",
+      "mode": "complete document read"
+    },
+    "final_read": {
+      "sha256": "7cd294620f196f922d201bf8bb15431c61302879b1d55f198632f3bba5106d3b",
+      "chunks": [
+        "0898ae",
+        "a344a1"
+      ],
+      "mode": "read back corrected paragraphs and final file SHA"
+    },
+    "findings": [
+      {
+        "status": "resolved_by_root_documentation_only",
+        "issue": "Initial wording placed all callback failures before claim/reservation, which incorrectly included interpret after real execution.",
+        "correction": "Final text distinguishes initialization/policy/source capture/preparation failures before claim/reservation from post-execution interpretation/publication HOLD retaining existing attempt/reservation, without success or refund."
+      },
+      {
+        "status": "resolved_by_root_documentation_only",
+        "issue": "Initial 'no observations requires observation=None' wording could conflate absent observation declaration with a declared empty measurement batch.",
+        "correction": "Final text says no declared observation output requires None and tuple(), while a declared output may explicitly yield zero claims."
+      }
+    ],
+    "conclusion": "No remaining overclaim found in this bounded document check. No production edit was requested or performed.",
+    "aligned_boundaries": [
+      "Same foreground CLI, Orze._run_leased loop, IdeaLake, CPU reservation and supervised native action; no second runner/storage.",
+      "Domain/Policy are actually selected trusted local implementations; no queued import path, automatic plugin discovery or claim of callback OS/time isolation.",
+      "CommandDomain permits outputs={} and zero observations; declared JSON result permits 0..32 observations. Missing or malformed declared results are not empty success.",
+      "V2 per-input original producer/spec/hash provenance does not relax V1 same-subject checks; output artifact producer remains the exact analysis attempt.",
+      "Source byte capture and metadata-only policy evidence are different capabilities. An evidence view does not authorize GO or prove current artifact contents.",
+      "Cross-task source watch is read-only. Complete artifact/observation sets and exact source capture are rechecked around terminal/effect publication.",
+      "Two different-purpose analysis tasks reuse the same subject/protocol/measurement program and produce distinct observation occurrences, not a scientific independence claim or an implemented same-request CPU replica.",
+      "Whole V1-06/V1-07, interface freeze, held-out evaluation, restart/adoption, scientific benefit and GPU/provider acceptance remain explicitly incomplete."
+    ]
+  },
+  "integration_readback": {
+    "product_test": "tests/test_cpu_domain_product.py::test_policy_reads_confirmed_evidence_and_analyzes_two_distinct_specs",
+    "facts": "The test creates two real source tasks with different commands/specs, then two analysis requests differing in purpose. It checks four unique observation IDs across two evaluator attempts, one subject spec, preserved original input provenance, sum=8 and count=2. The shared protocol follows from the reused declaration/program, not a separate statistical claim.",
+    "limitations": "This reviewer read the actual test/callers but did not rerun the product workers during this frozen static task; runtime full/target results belong to their own recorded runs."
+  },
+  "checker_recommendations": [
+    "Canonical refs should bind root-validation, final inventory, complete snapshot provenance, contract and each supporting file. Snapshot objects including origins must equal the provenance list; compare the full slice snapshot glob to the declared set.",
+    "Final worktree/source commit arrays must exactly match the same 712 Core and 223 Pro paths. Verify sorted manifest stdout hashes for both actual pre/post captures, and require root.final_epoch==canonical.final_epoch.",
+    "Do not require historical candidate hashes to equal final production. Bind each candidate to its own complete snapshot or recorded pre/post epoch. Preserve first failures, controls and tool/fixture corrections separately.",
+    "Check 11 final new files, 104 unique collected cases, 203 literal Assert AST nodes. Four independently parseable constant strings contain eight additional Assert nodes, reported separately; this does not exhaust generated or concatenated programs.",
+    "New fixture corrections are not old-test migration or released defects. Final per-node classification must sum to 104 without recounting replay executions or duplicate candidate snapshots.",
+    "Recursively validate command syntax with bash -n, parse Python heredoc bodies separately and shlex only non-heredoc inline -c commands. Do not execute replay/test commands as part of a static checker.",
+    "Preserve author versus independent-review attribution, including this reviewer's 36 self-authored metadata cases versus five independent interface cases.",
+    "Do not declare full-suite success while a footer/post-manifest is pending; this report contains no full-suite claim."
+  ],
+  "limitations": [
+    "Read-only except this new evidence file; no existing report was overwritten.",
+    "No full test suite, actual worker execution, GPU/provider/live host scan, holdout access or external research run.",
+    "Current file counts and source hashes are static checks, not a replacement for root's final full-epoch records.",
+    "No old public missing-API replay or new product red is inferred from collection, source absence, a fixture correction or a static checker premise error."
+  ]
+}

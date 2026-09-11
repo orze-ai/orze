@@ -176,8 +176,8 @@ def _owned(owner, lake, cfg, *, states=("RUNNING",)):
         from orze.core.research_interfaces import domain_run_metadata
         from orze.engine.cpu_domain_publication import publication_binding
         if (not same(domain_run_metadata(owner.domain_run), owner.binding["domain_run"])
-                or not same({"publication": publication_binding(owner.domain_run, folder.parent)},
-                            {"publication": owner.binding.get("observation_publication")})):
+                or not same(publication_binding(owner.domain_run, folder.parent),
+                            owner.binding.get("observation_publication"))):
             raise CPUActionHOLD("cpu_action_domain_binding_changed")
     if not same(artifact_binding(cfg, folder, owner.action), owner.binding["artifact_publication"]):
         raise CPUActionHOLD("cpu_action_artifact_binding_changed")

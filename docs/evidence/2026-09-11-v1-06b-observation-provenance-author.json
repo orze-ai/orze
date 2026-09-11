@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "slice": "V1-06B",
+  "kind": "author_mechanism_evidence",
+  "author": "/root/pro_review",
+  "baseline": {
+    "core": "52d479d0f74fe4feb3c10b9501833d156b4c8cb6",
+    "pro": "7afa4e34d2bcb3de7a2b2e37e6f383a6aa1b8b1a"
+  },
+  "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "scope": {
+    "owned_source_paths": [
+      "src/orze/core/observation_contract.py",
+      "src/orze/core/research_observations.py",
+      "src/orze/core/cpu_observation_contract.py"
+    ],
+    "owned_new_tests": [
+      "tests/test_cpu_observation_contract.py",
+      "tests/test_research_observations_v2.py"
+    ],
+    "old_tests_modified": 0,
+    "classification": {
+      "new_requirements": 36,
+      "historical_behavior_red": 0,
+      "draft_behavior_red": 0,
+      "pure_metadata_cases": 22,
+      "real_sqlite_metadata_cases": 14
+    },
+    "independence": "Author implementation and verification only. No independent review claim for these three owned sources."
+  },
+  "contract": {
+    "v1": "Original five-field implicit-v1 binding and schema-1 exact thirteen-field record remain accepted. Its input-artifact same-subject-spec constraint is unchanged; get_observation_contract remains version-1-only.",
+    "v2_binding": "Original five fields plus exact integer version=2 and input_artifact_bindings.",
+    "v2_record": "Original thirteen fields with exact integer schema=2 plus input_artifact_bindings; no version field in a record.",
+    "provenance": "Exact input ID keyset maps to {producer: complete AttemptRef, spec_fingerprint, content_sha256}. Each current artifact metadata entry must match its compact reference and common scope. Inputs may have different original specs from each other and from the observation subject.",
+    "result_authority": "Every nonempty observation requires result_artifact_ids from the exact current RUNNING evaluator AttemptRef and same scope, independently of the subject spec.",
+    "bounds": "Explicit list/tuple factory inputs, claims and result IDs; at most 32 each. Store continues to accept an exact list batch, at most 32. None never becomes an empty observation batch. Existing 32768-byte per-record, finite JSON, depth 16 and 8192-node limits unchanged.",
+    "atomicity": "Store requires caller-owned transaction and current RUNNING full Ref; whole batch names/IDs, metadata dependencies and readbacks verified. Failures require full caller rollback. No SQL schema changes.",
+    "factories": [
+      "input_artifact_bindings(records) -> dict",
+      "cpu_observation_binding(*, adapter_id, protocol_fingerprint, spec_fingerprint, scope, input_artifacts) -> dict",
+      "cpu_observation_records(ref, binding, result_artifact_ids, claims) -> list[dict]"
+    ]
+  },
+  "snapshots": [
+    {
+      "complete_baseline_equal": true,
+      "path": "docs/evidence/snapshots/v1-06b-before-observation-contract.py",
+      "sha256": "60906b19ed280b0a43a00c6f48e88a851b63dbe9d8cde114b705f7ddc86d1a40",
+      "source": "src/orze/core/observation_contract.py"
+    },
+    {
+      "complete_baseline_equal": true,
+      "path": "docs/evidence/snapshots/v1-06b-before-research-observations.py",
+      "sha256": "82596eceb7f6f4493d9f2cd2b71b574117175ea9d7e75f0bf6d013b2f8bc30fc",
+      "source": "src/orze/core/research_observations.py"
+    }
+  ],
+  "source_and_test_point": {
+    "src/orze/core/cpu_observation_contract.py": "0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102",
+    "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+    "src/orze/core/observation_contract.py": "7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699",
+    "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+    "src/orze/core/research_observations.py": "ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8",
+    "tests/test_cpu_observation_contract.py": "0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7",
+    "tests/test_observation_contract_config.py": "6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00",
+    "tests/test_research_observation_store.py": "4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2",
+    "tests/test_research_observations_v2.py": "b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92"
+  },
+  "runs": [
+    {
+      "name": "first_new_mechanisms",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess,sys\npaths=['src/orze/core/observation_contract.py','src/orze/core/research_observations.py','src/orze/core/cpu_observation_contract.py','src/orze/core/research_artifacts.py','src/orze/core/execution_attempts.py','tests/test_cpu_observation_contract.py','tests/test_research_observations_v2.py','tests/test_research_observation_store.py','tests/test_observation_contract_config.py']\ndef hashes():return {p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\npre=hashes(); print('PRE '+json.dumps(pre,sort_keys=True),flush=True)\nrun=subprocess.run([sys.executable,'-m','pytest','-q','-p','no:cacheprovider','tests/test_cpu_observation_contract.py','tests/test_research_observations_v2.py','--tb=short'])\npost=hashes(); print('POST '+json.dumps(post,sort_keys=True),flush=True);print('EXACT',pre==post,flush=True)\nsys.exit(run.returncode)\nPY",
+      "chunk": "46dd98",
+      "exit_code": 0,
+      "footer": "36 passed in 0.62s",
+      "counts": {
+        "passed": 36
+      },
+      "pre": {
+        "src/orze/core/cpu_observation_contract.py": "0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102",
+        "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+        "src/orze/core/observation_contract.py": "7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699",
+        "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+        "src/orze/core/research_observations.py": "ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8",
+        "tests/test_cpu_observation_contract.py": "0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7",
+        "tests/test_observation_contract_config.py": "6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00",
+        "tests/test_research_observation_store.py": "4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2",
+        "tests/test_research_observations_v2.py": "b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92"
+      },
+      "post": {
+        "src/orze/core/cpu_observation_contract.py": "0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102",
+        "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+        "src/orze/core/observation_contract.py": "7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699",
+        "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+        "src/orze/core/research_observations.py": "ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8",
+        "tests/test_cpu_observation_contract.py": "0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7",
+        "tests/test_observation_contract_config.py": "6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00",
+        "tests/test_research_observation_store.py": "4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2",
+        "tests/test_research_observations_v2.py": "b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92"
+      },
+      "source_and_test_exact": true,
+      "output": "PRE {\"src/orze/core/cpu_observation_contract.py\": \"0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102\", \"src/orze/core/execution_attempts.py\": \"c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69\", \"src/orze/core/observation_contract.py\": \"7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699\", \"src/orze/core/research_artifacts.py\": \"10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33\", \"src/orze/core/research_observations.py\": \"ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8\", \"tests/test_cpu_observation_contract.py\": \"0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7\", \"tests/test_observation_contract_config.py\": \"6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00\", \"tests/test_research_observation_store.py\": \"4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2\", \"tests/test_research_observations_v2.py\": \"b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92\"}\n....................................                                     [100%]\n36 passed in 0.62s\nPOST {\"src/orze/core/cpu_observation_contract.py\": \"0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102\", \"src/orze/core/execution_attempts.py\": \"c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69\", \"src/orze/core/observation_contract.py\": \"7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699\", \"src/orze/core/research_artifacts.py\": \"10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33\", \"src/orze/core/research_observations.py\": \"ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8\", \"tests/test_cpu_observation_contract.py\": \"0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7\", \"tests/test_observation_contract_config.py\": \"6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00\", \"tests/test_research_observation_store.py\": \"4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2\", \"tests/test_research_observations_v2.py\": \"b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92\"}\nEXACT True\n"
+    },
+    {
+      "name": "bounded_observation_artifact_compatibility",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess,sys\npaths=['src/orze/core/observation_contract.py','src/orze/core/research_observations.py','src/orze/core/cpu_observation_contract.py','src/orze/core/research_artifacts.py','src/orze/core/execution_attempts.py']\ntests=['tests/test_cpu_observation_contract.py','tests/test_research_observations_v2.py','tests/test_research_observation_store.py','tests/test_observation_contract_config.py','tests/test_observation_binding_metadata.py','tests/test_observation_dependency_reads.py','tests/test_observation_input_final_fence.py','tests/test_observation_report_protocol_binding.py','tests/test_observation_prepared_identity.py','tests/test_native_observation_publication.py','tests/test_observation_legacy_evidence_boundary.py','tests/test_observation_snapshot_contract.py','tests/test_research_artifact_store.py','tests/test_artifact_contract_binding.py','tests/test_artifact_contract_config.py']\npaths+=tests\ndef hashes():return {p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\npre=hashes();print('PRE '+json.dumps(pre,sort_keys=True),flush=True)\nrun=subprocess.run([sys.executable,'-m','pytest','-q','-p','no:cacheprovider',*tests,'--tb=short'])\npost=hashes();print('POST '+json.dumps(post,sort_keys=True),flush=True);print('EXACT',pre==post,flush=True)\nsys.exit(run.returncode)\nPY",
+      "session_id": 35459,
+      "chunks": [
+        "ebd232",
+        "895d99"
+      ],
+      "exit_code": 0,
+      "footer": "198 passed in 18.71s",
+      "counts": {
+        "passed": 198,
+        "new_mechanisms": 36,
+        "existing_regression_cases": 162
+      },
+      "pre": {
+        "src/orze/core/cpu_observation_contract.py": "0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102",
+        "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+        "src/orze/core/observation_contract.py": "7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699",
+        "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+        "src/orze/core/research_observations.py": "ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8",
+        "tests/test_artifact_contract_binding.py": "387ff26257a378bd74e6a98a5646010b6daee4be4b65dbbdbd78fb5c5ffa2766",
+        "tests/test_artifact_contract_config.py": "6b38871b62fd0f6b42959a73b3e50ea353477faf37dec76577d09567e3b1ec8c",
+        "tests/test_cpu_observation_contract.py": "0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7",
+        "tests/test_native_observation_publication.py": "3e5849b66429e588a2ef57dc4cf5bac2d23d29407b02b8ca2376a1a23b10bdbf",
+        "tests/test_observation_binding_metadata.py": "f4595d64d165fb955c95a1f02abc56dc762f16c2971250534e8c7701f56aea9c",
+        "tests/test_observation_contract_config.py": "6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00",
+        "tests/test_observation_dependency_reads.py": "452367278caca59dd9132784bb0c7115a322c5870b34c1d6e1925dd5da367cf7",
+        "tests/test_observation_input_final_fence.py": "7175a7155dfa6ac7d73026108955cb7a299718e0c43b2f0a07ac5744d00fb019",
+        "tests/test_observation_legacy_evidence_boundary.py": "196b21b46ddef53d7983f184be1a88d7b8a3389640820666d7f444cfaa1d4359",
+        "tests/test_observation_prepared_identity.py": "cd8d2fc408429a64bb6b458e57d4e2af979807607b1625f49b7863907da6d71f",
+        "tests/test_observation_report_protocol_binding.py": "ff01a51f59a9787147a1be5f9288c64e2e3d9e313bf3bd2a15ed9176fe3b9212",
+        "tests/test_observation_snapshot_contract.py": "a434a4f67d9e8af4fccdd5a4c1cff12e6ceebc63e28e2a9315e589f63bc8a51a",
+        "tests/test_research_artifact_store.py": "bbb967bb85641d9c6908c4f6fa8cb06f0ebeae466c8461558d4553fee0407e3a",
+        "tests/test_research_observation_store.py": "4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2",
+        "tests/test_research_observations_v2.py": "b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92"
+      },
+      "post": {
+        "src/orze/core/cpu_observation_contract.py": "0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102",
+        "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+        "src/orze/core/observation_contract.py": "7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699",
+        "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+        "src/orze/core/research_observations.py": "ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8",
+        "tests/test_artifact_contract_binding.py": "387ff26257a378bd74e6a98a5646010b6daee4be4b65dbbdbd78fb5c5ffa2766",
+        "tests/test_artifact_contract_config.py": "6b38871b62fd0f6b42959a73b3e50ea353477faf37dec76577d09567e3b1ec8c",
+        "tests/test_cpu_observation_contract.py": "0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7",
+        "tests/test_native_observation_publication.py": "3e5849b66429e588a2ef57dc4cf5bac2d23d29407b02b8ca2376a1a23b10bdbf",
+        "tests/test_observation_binding_metadata.py": "f4595d64d165fb955c95a1f02abc56dc762f16c2971250534e8c7701f56aea9c",
+        "tests/test_observation_contract_config.py": "6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00",
+        "tests/test_observation_dependency_reads.py": "452367278caca59dd9132784bb0c7115a322c5870b34c1d6e1925dd5da367cf7",
+        "tests/test_observation_input_final_fence.py": "7175a7155dfa6ac7d73026108955cb7a299718e0c43b2f0a07ac5744d00fb019",
+        "tests/test_observation_legacy_evidence_boundary.py": "196b21b46ddef53d7983f184be1a88d7b8a3389640820666d7f444cfaa1d4359",
+        "tests/test_observation_prepared_identity.py": "cd8d2fc408429a64bb6b458e57d4e2af979807607b1625f49b7863907da6d71f",
+        "tests/test_observation_report_protocol_binding.py": "ff01a51f59a9787147a1be5f9288c64e2e3d9e313bf3bd2a15ed9176fe3b9212",
+        "tests/test_observation_snapshot_contract.py": "a434a4f67d9e8af4fccdd5a4c1cff12e6ceebc63e28e2a9315e589f63bc8a51a",
+        "tests/test_research_artifact_store.py": "bbb967bb85641d9c6908c4f6fa8cb06f0ebeae466c8461558d4553fee0407e3a",
+        "tests/test_research_observation_store.py": "4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2",
+        "tests/test_research_observations_v2.py": "b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92"
+      },
+      "source_and_test_exact": true,
+      "output": "PRE {\"src/orze/core/cpu_observation_contract.py\": \"0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102\", \"src/orze/core/execution_attempts.py\": \"c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69\", \"src/orze/core/observation_contract.py\": \"7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699\", \"src/orze/core/research_artifacts.py\": \"10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33\", \"src/orze/core/research_observations.py\": \"ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8\", \"tests/test_artifact_contract_binding.py\": \"387ff26257a378bd74e6a98a5646010b6daee4be4b65dbbdbd78fb5c5ffa2766\", \"tests/test_artifact_contract_config.py\": \"6b38871b62fd0f6b42959a73b3e50ea353477faf37dec76577d09567e3b1ec8c\", \"tests/test_cpu_observation_contract.py\": \"0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7\", \"tests/test_native_observation_publication.py\": \"3e5849b66429e588a2ef57dc4cf5bac2d23d29407b02b8ca2376a1a23b10bdbf\", \"tests/test_observation_binding_metadata.py\": \"f4595d64d165fb955c95a1f02abc56dc762f16c2971250534e8c7701f56aea9c\", \"tests/test_observation_contract_config.py\": \"6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00\", \"tests/test_observation_dependency_reads.py\": \"452367278caca59dd9132784bb0c7115a322c5870b34c1d6e1925dd5da367cf7\", \"tests/test_observation_input_final_fence.py\": \"7175a7155dfa6ac7d73026108955cb7a299718e0c43b2f0a07ac5744d00fb019\", \"tests/test_observation_legacy_evidence_boundary.py\": \"196b21b46ddef53d7983f184be1a88d7b8a3389640820666d7f444cfaa1d4359\", \"tests/test_observation_prepared_identity.py\": \"cd8d2fc408429a64bb6b458e57d4e2af979807607b1625f49b7863907da6d71f\", \"tests/test_observation_report_protocol_binding.py\": \"ff01a51f59a9787147a1be5f9288c64e2e3d9e313bf3bd2a15ed9176fe3b9212\", \"tests/test_observation_snapshot_contract.py\": \"a434a4f67d9e8af4fccdd5a4c1cff12e6ceebc63e28e2a9315e589f63bc8a51a\", \"tests/test_research_artifact_store.py\": \"bbb967bb85641d9c6908c4f6fa8cb06f0ebeae466c8461558d4553fee0407e3a\", \"tests/test_research_observation_store.py\": \"4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2\", \"tests/test_research_observations_v2.py\": \"b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92\"}\n........................................................................ [ 36%]\n........................................................................ [ 72%]\n......................................................                   [100%]\n198 passed in 18.71s\nPOST {\"src/orze/core/cpu_observation_contract.py\": \"0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102\", \"src/orze/core/execution_attempts.py\": \"c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69\", \"src/orze/core/observation_contract.py\": \"7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699\", \"src/orze/core/research_artifacts.py\": \"10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33\", \"src/orze/core/research_observations.py\": \"ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8\", \"tests/test_artifact_contract_binding.py\": \"387ff26257a378bd74e6a98a5646010b6daee4be4b65dbbdbd78fb5c5ffa2766\", \"tests/test_artifact_contract_config.py\": \"6b38871b62fd0f6b42959a73b3e50ea353477faf37dec76577d09567e3b1ec8c\", \"tests/test_cpu_observation_contract.py\": \"0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7\", \"tests/test_native_observation_publication.py\": \"3e5849b66429e588a2ef57dc4cf5bac2d23d29407b02b8ca2376a1a23b10bdbf\", \"tests/test_observation_binding_metadata.py\": \"f4595d64d165fb955c95a1f02abc56dc762f16c2971250534e8c7701f56aea9c\", \"tests/test_observation_contract_config.py\": \"6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00\", \"tests/test_observation_dependency_reads.py\": \"452367278caca59dd9132784bb0c7115a322c5870b34c1d6e1925dd5da367cf7\", \"tests/test_observation_input_final_fence.py\": \"7175a7155dfa6ac7d73026108955cb7a299718e0c43b2f0a07ac5744d00fb019\", \"tests/test_observation_legacy_evidence_boundary.py\": \"196b21b46ddef53d7983f184be1a88d7b8a3389640820666d7f444cfaa1d4359\", \"tests/test_observation_prepared_identity.py\": \"cd8d2fc408429a64bb6b458e57d4e2af979807607b1625f49b7863907da6d71f\", \"tests/test_observation_report_protocol_binding.py\": \"ff01a51f59a9787147a1be5f9288c64e2e3d9e313bf3bd2a15ed9176fe3b9212\", \"tests/test_observation_snapshot_contract.py\": \"a434a4f67d9e8af4fccdd5a4c1cff12e6ceebc63e28e2a9315e589f63bc8a51a\", \"tests/test_research_artifact_store.py\": \"bbb967bb85641d9c6908c4f6fa8cb06f0ebeae466c8461558d4553fee0407e3a\", \"tests/test_research_observation_store.py\": \"4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2\", \"tests/test_research_observations_v2.py\": \"b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92\"}\nEXACT True\n"
+    },
+    {
+      "name": "static_baseline_schema_and_assert_audit",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\nbase='52d479d0f74fe4feb3c10b9501833d156b4c8cb6'\nnew=['tests/test_cpu_observation_contract.py','tests/test_research_observations_v2.py']\nold=['tests/test_research_observation_store.py','tests/test_observation_contract_config.py','tests/test_observation_binding_metadata.py','tests/test_observation_dependency_reads.py','tests/test_observation_input_final_fence.py','tests/test_observation_report_protocol_binding.py','tests/test_observation_prepared_identity.py','tests/test_native_observation_publication.py','tests/test_observation_legacy_evidence_boundary.py','tests/test_observation_snapshot_contract.py','tests/test_research_artifact_store.py','tests/test_artifact_contract_binding.py','tests/test_artifact_contract_config.py']\nsource=['src/orze/core/observation_contract.py','src/orze/core/research_observations.py','src/orze/core/cpu_observation_contract.py']\ndef blob(path): return subprocess.check_output(['git','show',base+':'+path])\ndef sha(raw):return hashlib.sha256(raw).hexdigest()\nsnapshots=[]\nfor path,snapshot in [(source[0],'docs/evidence/snapshots/v1-06b-before-observation-contract.py'),(source[1],'docs/evidence/snapshots/v1-06b-before-research-observations.py')]:\n raw=pathlib.Path(snapshot).read_bytes();assert raw==blob(path);ast.parse(raw);assert raw.endswith(b'\\n');snapshots.append({'path':snapshot,'source':path,'sha256':sha(raw),'complete_baseline_equal':True})\nfor path in old: assert pathlib.Path(path).read_bytes()==blob(path),path\nbefore=ast.parse(blob(source[0]));after=ast.parse(pathlib.Path(source[0]).read_bytes())\nfor name in ['get_observation_contract','_ids','_text']:\n pick=lambda tree:next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name==name)\n assert ast.dump(pick(before),include_attributes=False)==ast.dump(pick(after),include_attributes=False),name\nbefore=ast.parse(blob(source[1]));after=ast.parse(pathlib.Path(source[1]).read_bytes())\nfor name in ['_SQL','_COLUMNS','_SELECT','MAX_OBSERVATIONS','MAX_RECORD_BYTES','MAX_JSON_DEPTH','MAX_JSON_NODES']:\n pick=lambda tree:next(n for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id==name for t in n.targets))\n assert ast.dump(pick(before),include_attributes=False)==ast.dump(pick(after),include_attributes=False),name\nresult={'snapshots':snapshots,'old_test_files_byte_equal':len(old),'unchanged_v1_declaration_helpers':True,'unchanged_store_schema_and_limits':True,'new_tests':{}}\nfor path in source+new:ast.parse(pathlib.Path(path).read_bytes())\nfor path in new:\n raw=pathlib.Path(path).read_bytes();result['new_tests'][path]={'sha256':sha(raw),'literal_assert_ast_count':sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(raw)))}\ncheck=subprocess.run(['git','diff','--check','--',*source],capture_output=True,text=True);assert check.returncode==0,check.stdout+check.stderr\nprint(json.dumps(result,sort_keys=True))\nPY",
+      "chunk": "c7bd3b",
+      "exit_code": 0,
+      "result": {
+        "new_tests": {
+          "tests/test_cpu_observation_contract.py": {
+            "literal_assert_ast_count": 16,
+            "sha256": "0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7"
+          },
+          "tests/test_research_observations_v2.py": {
+            "literal_assert_ast_count": 17,
+            "sha256": "b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92"
+          }
+        },
+        "old_test_files_byte_equal": 13,
+        "snapshots": [
+          {
+            "complete_baseline_equal": true,
+            "path": "docs/evidence/snapshots/v1-06b-before-observation-contract.py",
+            "sha256": "60906b19ed280b0a43a00c6f48e88a851b63dbe9d8cde114b705f7ddc86d1a40",
+            "source": "src/orze/core/observation_contract.py"
+          },
+          {
+            "complete_baseline_equal": true,
+            "path": "docs/evidence/snapshots/v1-06b-before-research-observations.py",
+            "sha256": "82596eceb7f6f4493d9f2cd2b71b574117175ea9d7e75f0bf6d013b2f8bc30fc",
+            "source": "src/orze/core/research_observations.py"
+          }
+        ],
+        "unchanged_store_schema_and_limits": true,
+        "unchanged_v1_declaration_helpers": true
+      }
+    },
+    {
+      "name": "actual_collection",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom collections import Counter\nimport json,pytest\nclass Counts:\n def pytest_collection_finish(self,session):\n  print('CASE_COUNTS '+json.dumps(dict(Counter(item.nodeid.split('::',1)[0] for item in session.items)),sort_keys=True))\nraise SystemExit(pytest.main(['--collect-only','-q','-p','no:cacheprovider','tests/test_cpu_observation_contract.py','tests/test_research_observations_v2.py'],plugins=[Counts()]))\nPY",
+      "chunk": "176b6d",
+      "exit_code": 0,
+      "footer": "36 tests collected in 0.20s",
+      "output": "tests/test_cpu_observation_contract.py::test_v2_binding_is_detached_and_preserves_original_specs\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[version_bool]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[version_one]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[no_version]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[extra]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[missing]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[extra_input]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[missing_input]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[wrong_ref_fields]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[generation_float]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[generation_bool]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[bad_spec]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[bad_hash]\ntests/test_cpu_observation_contract.py::test_v2_binding_rejects_ambiguous_or_incomplete_provenance[provenance_extra]\ntests/test_cpu_observation_contract.py::test_input_record_factory_rejects_duplicates_missing_types_and_foreign_scope\ntests/test_cpu_observation_contract.py::test_cpu_occurrences_are_deterministic_detached_and_not_subject_identity\ntests/test_cpu_observation_contract.py::test_empty_measurements_are_explicit_and_nonempty_require_result_artifacts\ntests/test_cpu_observation_contract.py::test_records_keep_exact_schema_and_bounded_json[schema_bool]\ntests/test_cpu_observation_contract.py::test_records_keep_exact_schema_and_bounded_json[schema_one_with_v2]\ntests/test_cpu_observation_contract.py::test_records_keep_exact_schema_and_bounded_json[record_version]\ntests/test_cpu_observation_contract.py::test_records_keep_exact_schema_and_bounded_json[too_large]\ntests/test_cpu_observation_contract.py::test_records_keep_exact_schema_and_bounded_json[nonfinite]\ntests/test_research_observations_v2.py::test_mixed_specs_register_exact_batch_and_duplicate_has_no_write\ntests/test_research_observations_v2.py::test_zero_and_full_32_batch_are_valid_but_33_is_not\ntests/test_research_observations_v2.py::test_v1_single_subject_constraint_is_not_relaxed\ntests/test_research_observations_v2.py::test_input_catalog_drift_is_rejected_before_insert[producer]\ntests/test_research_observations_v2.py::test_input_catalog_drift_is_rejected_before_insert[spec_fingerprint]\ntests/test_research_observations_v2.py::test_input_catalog_drift_is_rejected_before_insert[content_sha256]\ntests/test_research_observations_v2.py::test_input_catalog_drift_is_rejected_before_insert[scope]\ntests/test_research_observations_v2.py::test_input_catalog_drift_is_rejected_before_insert[missing]\ntests/test_research_observations_v2.py::test_whole_batch_authority_and_identity_refuse_without_partial_records[foreign_result]\ntests/test_research_observations_v2.py::test_whole_batch_authority_and_identity_refuse_without_partial_records[duplicate_name]\ntests/test_research_observations_v2.py::test_whole_batch_authority_and_identity_refuse_without_partial_records[duplicate_id]\ntests/test_research_observations_v2.py::test_whole_batch_authority_and_identity_refuse_without_partial_records[record_binding]\ntests/test_research_observations_v2.py::test_whole_batch_authority_and_identity_refuse_without_partial_records[stale]\ntests/test_research_observations_v2.py::test_insert_trigger_dependency_drift_requires_whole_caller_rollback\nCASE_COUNTS {\"tests/test_cpu_observation_contract.py\": 22, \"tests/test_research_observations_v2.py\": 14}\n\n36 tests collected in 0.20s\n"
+    }
+  ],
+  "initial_diagnostics": [
+    {
+      "classification": "patch_format_tool_error_not_test_or_product_failure",
+      "message": "An initial combined Add File patch omitted the '+' prefix before def project; apply_patch rejected the patch atomically. Both new files were then added correctly. No test had run and no production behavioral red is inferred."
+    }
+  ],
+  "limits": [
+    "No missing-API baseline replay was run or represented as a bug: explicit v2 provenance is a new requirement.",
+    "The SQLite fixtures register real metadata rows but do not execute or claim completed source workers, verify artifact bytes, or establish source effect closure. Those belong to separate captured-source/native integration evidence.",
+    "Domain validation labels and comparison scopes are stored claims; Core does not infer scientific validity, statistical independence, ranking, or equivalence from them. Zero observations are not zero-valued measurements.",
+    "The inserted SQL trigger mechanism changes a dependency within the caller transaction and verifies rollback; it is not proof against arbitrary external writes.",
+    "The original 13 nearby test files are byte-equal to fixed baseline; no old fixture or assertion migration occurred.",
+    "This report does not claim CLI/Domain/Policy native integration, a full repository test run, restart/adoption, GPU/provider work, or holdout access.",
+    "Candidate bounded run hashes cover the explicitly listed source/test files only, not concurrently authored native/loop/source-capture modules."
+  ]
+}

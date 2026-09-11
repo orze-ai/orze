@@ -1,0 +1,299 @@
+{
+  "schema": 1,
+  "slice": "V1-06B",
+  "author": "/root/core_review",
+  "baseline": {
+    "core": "52d479d0f74fe4feb3c10b9501833d156b4c8cb6",
+    "pro": "7afa4e34d2bcb3de7a2b2e37e6f383a6aa1b8b1a",
+    "provenance": "The preceding implementation commit, not a released product baseline.",
+    "snapshot_command": "python3 - <<'PY'\nfrom pathlib import Path\nimport hashlib,subprocess\nfor name,snapshot in [('src/orze/engine/native_cpu_action.py','v1-06b-before-native-cpu-action.py'),('src/orze/engine/execution_authority.py','v1-06b-before-execution-authority.py')]:\n p=Path(name); s=Path('docs/evidence/snapshots')/snapshot\n assert p.read_bytes()==s.read_bytes()==subprocess.check_output(['git','show','52d479d0f74fe4feb3c10b9501833d156b4c8cb6:'+name])\n print(name,hashlib.sha256(p.read_bytes()).hexdigest(),str(s),'baseline exact')\nPY",
+    "snapshot_command_timing": "Executed before modifying either production file; it is a historical pre-edit check, not a command expected to pass against final production.",
+    "snapshot_check": {
+      "exit_code": 0,
+      "chunk_id": "f27576",
+      "files": 2
+    }
+  },
+  "ownership": {
+    "modified_sources": [
+      "src/orze/engine/native_cpu_action.py",
+      "src/orze/engine/execution_authority.py"
+    ],
+    "new_sources": [
+      "src/orze/engine/cpu_domain_publication.py"
+    ],
+    "new_tests": [
+      "tests/test_native_cpu_domain_publication.py",
+      "tests/test_execution_observation_watch.py"
+    ],
+    "old_tests_modified": [],
+    "not_authored": [
+      "research_interfaces and CPU loop/config: root",
+      "cpu_action_sources: runtime_evidence",
+      "v2 observation metadata contract/store/factories: pro_review"
+    ],
+    "constraints": [
+      "All file writes used apply_patch.",
+      "No GPU/provider/holdout, host PID discovery, raw signal cleanup, new runner/service/database, or commits/pushes."
+    ]
+  },
+  "contract": [
+    "launch retains all A arguments and adds domain_run=None; A's seven-field action path remains the default and does not import/select a Domain.",
+    "Opt-in DomainRun is verified by the process-local strong registry against the actual persisted raw task config SHA and detached prepared action. Native captures its metadata and retains the strong run in the private owner.",
+    "Sources are strong same-Lake captures; normal-read offset-zero sealed read-only FDs are passed worker-only alongside the separate inline input FD. Full source verification stays outside writer transactions.",
+    "Natural TREE_CLOSED precedes artifact preparation and bounded strict result parsing/Domain.interpret. No observation declaration still requires explicit tuple(); declared malformed/missing output or a non-tuple never degrades into zero observations.",
+    "On failure/STOP, no Domain interpretation or scientific result is manufactured. On success, prepared artifact records and zero-to-32 v2 observation records are inserted while RUNNING, followed by lifecycle/terminal and exact-set watches in the same execution effect transaction.",
+    "watch_observations is same-task metadata-only. watch_cpu_sources is cross-task read-only and requires a strong original same-Lake/connection/scope capture; it does not relax watch_dependency/artifact ownership or grant source write authority.",
+    "Watch verification occurs immediately, before SQL commit and after SQL commit before effect confirmation. Native settles the existing budget only after the whole effect context exits."
+  ],
+  "test_classification": {
+    "new_cases": 22,
+    "assert_statements": 40,
+    "test_functions": 12,
+    "native_module": {
+      "cases": 11,
+      "actual_supervised_cpu_cases": 10,
+      "no_execution_forged_handle_case": 1,
+      "note": "The source FD case runs both a real source producer and a real evaluator. Failed first-draft CommandDomain cases stopped before prepare; the fixed cases reach their stated real CPU/READY boundaries."
+    },
+    "watch_module": {
+      "cases": 11,
+      "classification": "Real SQLite and bounded metadata mechanisms, not OS/tree-closure evidence."
+    },
+    "preceding_commit_public_behavior_reds": 0,
+    "note": "These are new interface mechanisms. The draft None comparison failure and the first new-test exception mismatch are retained separately below; neither is called an old released behavior defect."
+  },
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/v1-06b-before-execution-authority.py",
+      "sha256": "c0bdd08e1e06b75d692e6503007e96bfc9e997d4fa6b01759fb5eba5a5b3de2b"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06b-before-native-cpu-action.py",
+      "sha256": "9559e281b90a214feb0e2092d3836c17fd67ee9d21f5f529c085f82f767862cb"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06b-before-optional-observation-native-cpu-action.py",
+      "sha256": "355e7ddde2102937b56d70956ab83126bbc04547d70f0421d8d9ea6df2285042"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06b-before-optional-observation-tests.py",
+      "sha256": "1c3d481c8c168d8a51a0eb8c4d7681bcd95422d43fd9815113a428cb9d2ec466"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06b-first-watch-cpu-domain-publication.py",
+      "sha256": "53d27c33c878ed5c17e7af000bccd1c473217a6f8414763b7f21daa99bd7b803"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06b-first-watch-execution-authority.py",
+      "sha256": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06b-first-watch-native-cpu-action.py",
+      "sha256": "355e7ddde2102937b56d70956ab83126bbc04547d70f0421d8d9ea6df2285042"
+    },
+    {
+      "path": "docs/evidence/snapshots/v1-06b-first-watch-tests.py",
+      "sha256": "4afaf703a7e0b91fa69a7cedf559fa7af960762a926e8732aaf12e24ad9f5de1"
+    }
+  ],
+  "first_watch_run": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_execution_observation_watch.py tests/test_execution_artifact_watch.py tests/test_native_cpu_action.py --tb=short",
+    "session_id": 70362,
+    "exit_code": 1,
+    "chunk_id": "34013d",
+    "footer": "1 failed, 26 passed in 7.30s",
+    "output": "...F....................                                              [100%]\n=================================== FAILURES ===================================\n______________ test_empty_observation_watch_rejects_later_insert _______________\nsrc/orze/engine/execution_authority.py:299: in _execution_transaction\n    tx._verify_watches()\nsrc/orze/engine/execution_authority.py:85: in _verify_watches\n    raise AttemptAuthorityError(\"execution_observations_changed\")\nE   orze.core.execution_attempts.AttemptAuthorityError: execution_observations_changed\n\nThe above exception was the direct cause of the following exception:\ntests/test_execution_observation_watch.py:77: in test_empty_observation_watch_rejects_later_insert\n    with execution_transaction(lake, folder) as tx:\n/usr/lib/python3.10/contextlib.py:142: in __exit__\n    next(self.gen)\nsrc/orze/engine/execution_authority.py:253: in execution_transaction\n    with _execution_transaction(lake, idea_dir, lease=lease) as tx:\n/usr/lib/python3.10/contextlib.py:142: in __exit__\n    next(self.gen)\nsrc/orze/engine/execution_authority.py:345: in _execution_transaction\n    raise AttemptEffectBusy(\"execution_authority_rejected\") from failure\nE   orze.engine.attempt_effect_lock.AttemptEffectBusy: execution_authority_rejected\n=========================== short test summary info ============================\nFAILED tests/test_execution_observation_watch.py::test_empty_observation_watch_rejects_later_insert\n1 failed, 26 passed in 7.30s\n",
+    "classification": "New test's exception-type premise was too narrow. The actual watch caught the unauthorized insertion before commit and the existing coordinator wrapped it as AttemptEffectBusy.",
+    "fixture_refinement": "Only the new watcher test import/raises expectation changed; two explicit cause assertions were added. The existing assertion that SQL rolled back to zero observations was preserved. No production changes were needed for this failure.",
+    "before_test_sha256": "4afaf703a7e0b91fa69a7cedf559fa7af960762a926e8732aaf12e24ad9f5de1",
+    "after_test_sha256": "58ccc26faeda8aea7dd10aa62423d4068a1107e1b86b1efa609aac14aa764dc7"
+  },
+  "first_native_run": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_cpu_domain_publication.py --tb=short",
+    "session_id": 63466,
+    "exit_code": 1,
+    "chunk_id": "17aa8f",
+    "footer": "2 failed, 9 passed in 5.34s",
+    "output": ".......F..                                                              [100%]\n=================================== FAILURES ===================================\n__________ test_real_command_domain_explicit_zero_without_measurement __________\nsrc/orze/engine/native_cpu_action.py:280: in launch\n    _owned(owner, lake, cfg, states=(\"LAUNCHING\",))\nsrc/orze/engine/native_cpu_action.py:181: in _owned\n    raise CPUActionHOLD(\"cpu_action_domain_binding_changed\")\nE   orze.engine.native_cpu_action.CPUActionHOLD: cpu_action_domain_binding_changed\n\nThe above exception was the direct cause of the following exception:\ntests/test_native_cpu_domain_publication.py:88: in test_real_command_domain_explicit_zero_without_measurement\n    handle = launch(domain_context, run, permit)\ntests/test_native_cpu_domain_publication.py:81: in launch\n    return native.launch(\"idea-domain\", results, cfg, lake=lake, action=run.action,\nsrc/orze/engine/native_cpu_action.py:333: in launch\n    _hold(owner, exc)\nsrc/orze/engine/native_cpu_action.py:223: in _hold\n    raise error from exc\nE   orze.engine.native_cpu_action.CPUActionHOLD: cpu_action_unconfirmed\n______________ test_raw_task_mutation_at_actual_ready_refuses_go _______________\ntests/test_native_cpu_domain_publication.py:179: in test_raw_task_mutation_at_actual_ready_refuses_go\n    assert len(handles) == 1 and not handles[0]._started\nE   assert (0 == 1)\nE    +  where 0 = len([])\n=========================== short test summary info ============================\nFAILED tests/test_native_cpu_domain_publication.py::test_real_command_domain_explicit_zero_without_measurement\nFAILED tests/test_native_cpu_domain_publication.py::test_raw_task_mutation_at_actual_ready_refuses_go\n2 failed, 9 passed in 5.34s\n",
+    "classification": "One draft native optional-publication comparison defect, affecting two tests. same(None,None) uses the existing dict-only identity contract and therefore rejects, wrongly blocking CommandDomain before prepare. The READY mutation test had not yet reached its prepare seam and is not a second root cause.",
+    "fix": "Compare {'publication': value} objects rather than relaxing shared JSON identity semantics. The entire original native test file remained byte-exact.",
+    "before_source_sha256": "355e7ddde2102937b56d70956ab83126bbc04547d70f0421d8d9ea6df2285042",
+    "after_source_sha256": "49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906"
+  },
+  "complete_candidate_replay": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nfrom pathlib import Path\nimport pytest\nimport orze.engine.native_cpu_action as native\nsource=Path('docs/evidence/snapshots/v1-06b-before-optional-observation-native-cpu-action.py')\nexec(compile(source.read_bytes(),str(source),'exec'),native.__dict__)\nraise SystemExit(pytest.main(['-q','-p','no:cacheprovider','--tb=short','tests/test_native_cpu_domain_publication.py::test_real_command_domain_explicit_zero_without_measurement','tests/test_native_cpu_domain_publication.py::test_raw_task_mutation_at_actual_ready_refuses_go']))\nPY",
+    "exit_code": 1,
+    "chunk_id": "eb8fbe",
+    "footer": "2 failed in 0.74s",
+    "output": "FF                                                                       [100%]\n=================================== FAILURES ===================================\n__________ test_real_command_domain_explicit_zero_without_measurement __________\ndocs/evidence/snapshots/v1-06b-before-optional-observation-native-cpu-action.py:280: in launch\n    _owned(owner, lake, cfg, states=(\"LAUNCHING\",))\ndocs/evidence/snapshots/v1-06b-before-optional-observation-native-cpu-action.py:181: in _owned\n    raise CPUActionHOLD(\"cpu_action_domain_binding_changed\")\nE   orze.engine.native_cpu_action.CPUActionHOLD: cpu_action_domain_binding_changed\n\nThe above exception was the direct cause of the following exception:\ntests/test_native_cpu_domain_publication.py:88: in test_real_command_domain_explicit_zero_without_measurement\n    handle = launch(domain_context, run, permit)\ntests/test_native_cpu_domain_publication.py:81: in launch\n    return native.launch(\"idea-domain\", results, cfg, lake=lake, action=run.action,\ndocs/evidence/snapshots/v1-06b-before-optional-observation-native-cpu-action.py:333: in launch\n    _hold(owner, exc)\ndocs/evidence/snapshots/v1-06b-before-optional-observation-native-cpu-action.py:223: in _hold\n    raise error from exc\nE   orze.engine.native_cpu_action.CPUActionHOLD: cpu_action_unconfirmed\n______________ test_raw_task_mutation_at_actual_ready_refuses_go _______________\ntests/test_native_cpu_domain_publication.py:179: in test_raw_task_mutation_at_actual_ready_refuses_go\n    assert len(handles) == 1 and not handles[0]._started\nE   assert (0 == 1)\nE    +  where 0 = len([])\n=========================== short test summary info ============================\nFAILED tests/test_native_cpu_domain_publication.py::test_real_command_domain_explicit_zero_without_measurement\nFAILED tests/test_native_cpu_domain_publication.py::test_raw_task_mutation_at_actual_ready_refuses_go\n2 failed in 0.74s\n",
+    "method": "Complete frozen prior native_cpu_action module is compiled into its imported module in an isolated Python interpreter, followed by the two unchanged tests. No on-disk source substitution; not a whole baseline checkout replay."
+  },
+  "first_combined_green": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_cpu_domain_publication.py tests/test_execution_observation_watch.py tests/test_native_cpu_action.py tests/test_execution_artifact_watch.py --tb=short",
+    "session_id": 49762,
+    "exit_code": 0,
+    "chunk_id": "ef328e",
+    "footer": "38 passed in 13.56s",
+    "output": "......................................                                   [100%]\n38 passed in 13.56s\n",
+    "note": "22 new cases plus 16 old A/artifact-watch controls. Overlaps final group; do not add counts."
+  },
+  "final_bounded": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_native_cpu_domain_publication.py tests/test_execution_observation_watch.py tests/test_native_cpu_action.py tests/test_execution_artifact_watch.py tests/test_execution_authority.py tests/test_research_observation_store.py tests/test_observation_contract_config.py tests/test_native_observation_publication.py tests/test_cpu_observation_contract.py tests/test_research_observations_v2.py tests/test_cpu_action_sources.py --tb=short",
+    "session_id": 40101,
+    "exit_code": 0,
+    "chunk_id": "70cc17",
+    "footer": "179 passed in 39.39s",
+    "output": "........................................................................ [ 40%]\n........................................................................ [ 80%]\n...................................                                      [100%]\n179 passed in 39.39s\n",
+    "files": 11,
+    "composition": {
+      "own_new": 22,
+      "peer_v2_new": 36,
+      "peer_sources_new": 12,
+      "old_neighbors": 109
+    },
+    "hash_check": {
+      "command": "python3 - <<'PY'\nimport hashlib,json\nfrom pathlib import Path\npaths=[\"src/orze/engine/native_cpu_action.py\",\"src/orze/engine/execution_authority.py\",\"src/orze/engine/cpu_domain_publication.py\",\"src/orze/core/research_interfaces.py\",\"src/orze/core/cpu_execution.py\",\"src/orze/engine/cpu_action_sources.py\",\"src/orze/core/observation_contract.py\",\"src/orze/core/research_observations.py\",\"src/orze/core/cpu_observation_contract.py\",\"src/orze/engine/artifact_publication.py\",\"src/orze/core/cpu_action_budget.py\",\"src/orze/core/cpu_action_contract.py\",\"src/orze/core/execution_attempts.py\",\"src/orze/core/research_artifacts.py\",\"tests/test_native_cpu_domain_publication.py\",\"tests/test_execution_observation_watch.py\",\"tests/test_native_cpu_action.py\",\"tests/test_execution_artifact_watch.py\",\"tests/test_execution_authority.py\",\"tests/test_research_observation_store.py\",\"tests/test_observation_contract_config.py\",\"tests/test_native_observation_publication.py\",\"tests/test_cpu_observation_contract.py\",\"tests/test_research_observations_v2.py\",\"tests/test_cpu_action_sources.py\"]\nprint(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths},sort_keys=True))\nPY",
+      "pre_chunk": "a15eb8",
+      "post_chunk": "d5f591",
+      "pre_exit": 0,
+      "post_exit": 0,
+      "source_files": 14,
+      "test_files": 11,
+      "checked": 25,
+      "changed": []
+    },
+    "pre_files": {
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/cpu_action_contract.py": "cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736",
+      "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+      "src/orze/core/cpu_observation_contract.py": "0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/observation_contract.py": "7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699",
+      "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "src/orze/core/research_interfaces.py": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+      "src/orze/core/research_observations.py": "ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8",
+      "src/orze/engine/artifact_publication.py": "c495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_domain_publication.py": "53d27c33c878ed5c17e7af000bccd1c473217a6f8414763b7f21daa99bd7b803",
+      "src/orze/engine/execution_authority.py": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa",
+      "src/orze/engine/native_cpu_action.py": "49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906",
+      "tests/test_cpu_action_sources.py": "3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e",
+      "tests/test_cpu_observation_contract.py": "0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7",
+      "tests/test_execution_artifact_watch.py": "dabb030a51f5091eaf3dc68829081696931cd93b34898a1866626bc4e05f71b8",
+      "tests/test_execution_authority.py": "1cae610b1f1b8cb2b59cc28e0d343827854df425024db024147d15cf4b67d783",
+      "tests/test_execution_observation_watch.py": "58ccc26faeda8aea7dd10aa62423d4068a1107e1b86b1efa609aac14aa764dc7",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b",
+      "tests/test_native_cpu_domain_publication.py": "1c3d481c8c168d8a51a0eb8c4d7681bcd95422d43fd9815113a428cb9d2ec466",
+      "tests/test_native_observation_publication.py": "3e5849b66429e588a2ef57dc4cf5bac2d23d29407b02b8ca2376a1a23b10bdbf",
+      "tests/test_observation_contract_config.py": "6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00",
+      "tests/test_research_observation_store.py": "4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2",
+      "tests/test_research_observations_v2.py": "b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92"
+    },
+    "post_files": {
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/cpu_action_contract.py": "cb198f4bf7498445b2fdb84e136d9718971f5a1f7f4169bfa15ad101b3381736",
+      "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+      "src/orze/core/cpu_observation_contract.py": "0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/observation_contract.py": "7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699",
+      "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "src/orze/core/research_interfaces.py": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+      "src/orze/core/research_observations.py": "ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8",
+      "src/orze/engine/artifact_publication.py": "c495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_domain_publication.py": "53d27c33c878ed5c17e7af000bccd1c473217a6f8414763b7f21daa99bd7b803",
+      "src/orze/engine/execution_authority.py": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa",
+      "src/orze/engine/native_cpu_action.py": "49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906",
+      "tests/test_cpu_action_sources.py": "3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e",
+      "tests/test_cpu_observation_contract.py": "0ecc516268a3cc7a3fe680716f2d9d4c7005ed19339e675391b78b7c8b9524f7",
+      "tests/test_execution_artifact_watch.py": "dabb030a51f5091eaf3dc68829081696931cd93b34898a1866626bc4e05f71b8",
+      "tests/test_execution_authority.py": "1cae610b1f1b8cb2b59cc28e0d343827854df425024db024147d15cf4b67d783",
+      "tests/test_execution_observation_watch.py": "58ccc26faeda8aea7dd10aa62423d4068a1107e1b86b1efa609aac14aa764dc7",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b",
+      "tests/test_native_cpu_domain_publication.py": "1c3d481c8c168d8a51a0eb8c4d7681bcd95422d43fd9815113a428cb9d2ec466",
+      "tests/test_native_observation_publication.py": "3e5849b66429e588a2ef57dc4cf5bac2d23d29407b02b8ca2376a1a23b10bdbf",
+      "tests/test_observation_contract_config.py": "6d20f52515d57dfdd2fdd20bc681e7537a92ed2bb8482eedf6f20e33e9216d00",
+      "tests/test_research_observation_store.py": "4e6a1bb69f13b4d629c49ed94570dfb619e43ad5232619a1c8d2eb1bf9887fd2",
+      "tests/test_research_observations_v2.py": "b6d60f646e16006fd5bb238dbad17fd5d34b412dd2bd04be25549df4cb1d9c92"
+    },
+    "note": "Author bounded validation only, not the actual CLI product suite, whole Core/Pro, or full V1-06 closure."
+  },
+  "static_audit": {
+    "command": "python3 - <<'PY'\nimport ast,hashlib,json,subprocess\nfrom pathlib import Path\nbase='52d479d0f74fe4feb3c10b9501833d156b4c8cb6'\nsnapshots=[]\nfor p in sorted(Path('docs/evidence/snapshots').glob('v1-06b-*')):\n if p.name.startswith(('v1-06b-before-native-cpu-action','v1-06b-before-execution-authority','v1-06b-first-watch-','v1-06b-before-optional-observation-')):\n  snapshots.append({'path':str(p),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()})\nfor source,snapshot in [('src/orze/engine/native_cpu_action.py','v1-06b-before-native-cpu-action.py'),('src/orze/engine/execution_authority.py','v1-06b-before-execution-authority.py')]:\n assert (Path('docs/evidence/snapshots')/snapshot).read_bytes()==subprocess.check_output(['git','show',base+':'+source])\ncounts={}\nfor name in ['tests/test_native_cpu_domain_publication.py','tests/test_execution_observation_watch.py']:\n tree=ast.parse(Path(name).read_bytes()); counts[name]={'test_functions':sum(isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name.startswith('test_') for n in ast.walk(tree)),'assert_statements':sum(isinstance(n,ast.Assert) for n in ast.walk(tree)),'sha256':hashlib.sha256(Path(name).read_bytes()).hexdigest()}\nold_changed=subprocess.check_output(['git','diff','--name-only','--','tests']).decode().splitlines()\nassert old_changed==[],old_changed\nprint(json.dumps({'snapshots':snapshots,'new_tests':counts,'old_tracked_tests_changed':old_changed,'baseline_snapshots_exact':2},indent=2))\nPY",
+    "exit_code": 0,
+    "chunk_id": "c9ef66",
+    "result": {
+      "snapshots": [
+        {
+          "path": "docs/evidence/snapshots/v1-06b-before-execution-authority.py",
+          "sha256": "c0bdd08e1e06b75d692e6503007e96bfc9e997d4fa6b01759fb5eba5a5b3de2b"
+        },
+        {
+          "path": "docs/evidence/snapshots/v1-06b-before-native-cpu-action.py",
+          "sha256": "9559e281b90a214feb0e2092d3836c17fd67ee9d21f5f529c085f82f767862cb"
+        },
+        {
+          "path": "docs/evidence/snapshots/v1-06b-before-optional-observation-native-cpu-action.py",
+          "sha256": "355e7ddde2102937b56d70956ab83126bbc04547d70f0421d8d9ea6df2285042"
+        },
+        {
+          "path": "docs/evidence/snapshots/v1-06b-before-optional-observation-tests.py",
+          "sha256": "1c3d481c8c168d8a51a0eb8c4d7681bcd95422d43fd9815113a428cb9d2ec466"
+        },
+        {
+          "path": "docs/evidence/snapshots/v1-06b-first-watch-cpu-domain-publication.py",
+          "sha256": "53d27c33c878ed5c17e7af000bccd1c473217a6f8414763b7f21daa99bd7b803"
+        },
+        {
+          "path": "docs/evidence/snapshots/v1-06b-first-watch-execution-authority.py",
+          "sha256": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa"
+        },
+        {
+          "path": "docs/evidence/snapshots/v1-06b-first-watch-native-cpu-action.py",
+          "sha256": "355e7ddde2102937b56d70956ab83126bbc04547d70f0421d8d9ea6df2285042"
+        },
+        {
+          "path": "docs/evidence/snapshots/v1-06b-first-watch-tests.py",
+          "sha256": "4afaf703a7e0b91fa69a7cedf559fa7af960762a926e8732aaf12e24ad9f5de1"
+        }
+      ],
+      "new_tests": {
+        "tests/test_native_cpu_domain_publication.py": {
+          "test_functions": 7,
+          "assert_statements": 32,
+          "sha256": "1c3d481c8c168d8a51a0eb8c4d7681bcd95422d43fd9815113a428cb9d2ec466"
+        },
+        "tests/test_execution_observation_watch.py": {
+          "test_functions": 5,
+          "assert_statements": 8,
+          "sha256": "58ccc26faeda8aea7dd10aa62423d4068a1107e1b86b1efa609aac14aa764dc7"
+        }
+      },
+      "old_tracked_tests_changed": [],
+      "baseline_snapshots_exact": 2
+    }
+  },
+  "independent_review": {
+    "reviewed_nonowned": [
+      "Complete v2 changes in src/orze/core/observation_contract.py",
+      "Complete v2 changes in src/orze/core/research_observations.py",
+      "Entire src/orze/core/cpu_observation_contract.py"
+    ],
+    "conclusion": "No blocker found in this bounded metadata contract/store scope. V1 remains the original five-field/same-subject path; V2 requires explicit version and exact input-ID producer/spec/content bindings. Nonempty observations still require result artifacts produced by their own exact evaluator ref. No source closure or scientific validity is inferred by these factories.",
+    "independent_test_scope": "The final 179 group includes the peer's 36 v2 new tests and old observation neighbors, with their source/test hashes unchanged.",
+    "peer_review_of_owned": {
+      "reviewer": "/root/pro_review",
+      "attribution": "Peer reported reading the complete native/authority diff and entire new publication module, with no new thin-layer blocker. This author does not relabel that read-only peer review as a peer test run."
+    }
+  },
+  "limitations": [
+    "Registry-selected Domain code is trusted Python, not a sandbox, import/content attestation, CPU-time bound, or provider budget.",
+    "Source capture is a process-local capability and conservative current-source fence, not restart adoption or permission to write a prior task.",
+    "The observation claims, values and comparison scope are domain declarations, not Core validation of scientific truth, statistical independence, rank or convergence.",
+    "Result reading is capped at the declared output bound and independently at 1 MiB; source aggregate/read-only FD limits belong to the separately authored source module.",
+    "Old/native handles and reservations remain HOLD after uncertain launch/publication; no new refund, retry, recovery or detached cleanup semantics are added.",
+    "The generic postcommit observation rewrite test uses real SQLite with an explicit commit wrapper and no OS claim. The native terminal-trigger test uses real CPU plus a controlled SQL trigger before commit. The report does not claim a hostile-code filesystem sandbox or coverage of every possible callback race.",
+    "No whole-suite or next V1-07/holdout completion is claimed. Root owns product/global validation and the slice closing decision."
+  ]
+}

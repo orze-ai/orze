@@ -1,0 +1,211 @@
+{
+  "schema": 1,
+  "slice": "V1-06B",
+  "kind": "independent_bounded_interface_review",
+  "reviewer": "/root/pro_review",
+  "working_directory": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "baseline": {
+    "core": "52d479d0f74fe4feb3c10b9501833d156b4c8cb6",
+    "pro": "7afa4e34d2bcb3de7a2b2e37e6f383a6aa1b8b1a"
+  },
+  "scope": {
+    "independently_read_root_source": [
+      "src/orze/core/research_interfaces.py",
+      "src/orze/core/cpu_execution.py",
+      "src/orze/engine/cpu_phase.py"
+    ],
+    "new_test_file": "tests/test_research_interfaces_review.py",
+    "production_edits": 0,
+    "old_test_edits": 0,
+    "classification": {
+      "new_mechanisms": 5,
+      "historical_behavior_red": 0,
+      "draft_behavior_red": 0
+    },
+    "test_environment": "Actual IdeaLake, CPU budget rows and empty strong capture_sources owner; all inspected interface methods are actual implementations. No worker, CLI or native action was launched by these five tests. Registry dictionaries are shallow-copied only to isolate test registration state."
+  },
+  "conclusion": "No blocking issue found within the reviewed interface/caller boundaries. Five first-green mechanisms validate callback metadata/authority contracts; they are not a proof of arbitrary trusted Python isolation or whole product integration.",
+  "review_findings": [
+    "BoundPolicy receives detached queue/budget values, validates Execute against its independent captured queue and rechecks captured registry identity after callback return.",
+    "Domain.prepare receives detached request and source metadata. The original request's purpose, timeout and output contract are checked after the callback; changing received data cannot redefine the execution envelope.",
+    "Captured DomainRun and InterfaceContext have process-local strong registry ownership; constructor/copy/metadata lookalikes cannot pass the exact identity lookup. DomainRun action and metadata getters return detached values.",
+    "Registry implementation replacement during prepare or interpret is rejected before returning new authority or accepted claims. Trusted captured callables are not dynamically replaced from queued configuration.",
+    "cpu_execution pins parsed domain/policy declarations and actual invocation paths; cpu_phase rechecks admission before claiming and native launch. Source metadata alone is not a source capability; native uses the separate strong source capture.",
+    "The same existing CPU phase invokes the selected real Policy and Domain. Budget reserve/permit authority remains outside callbacks, independently bounds CPU execution, and is not a second executor.",
+    "After the first independent run, root narrowed error routing by wrapping ordinary interface initialization, policy evidence/decision and source/domain preparation exceptions as CPUExecutionError. Read-only diff found no removed authority gate; source change is between runs, not during either run."
+  ],
+  "test_cases": [
+    {
+      "name": "test_prepare_cannot_rewrite_captured_execution_envelope",
+      "count": 1,
+      "classification": "new mechanism",
+      "assertion": "A real captured Domain changing timeout from 1 to 99 is rejected, with no new DomainRun or Lake/budget write."
+    },
+    {
+      "name": "test_registration_replacement_inside_callback_cannot_return_authority",
+      "count": 2,
+      "classification": "new mechanisms",
+      "assertion": "Replacement of the actual registered entry during prepare or interpret is rejected; existing run becomes unavailable after replacement."
+    },
+    {
+      "name": "test_policy_input_mutation_cannot_expand_execute_selection",
+      "count": 1,
+      "classification": "new mechanism",
+      "assertion": "A policy appending an unlisted task to its detached queue and inflating its detached budget cannot select the foreign task or mutate caller/Lake state."
+    },
+    {
+      "name": "test_run_copies_and_metadata_are_not_execution_capabilities",
+      "count": 1,
+      "classification": "new mechanism",
+      "assertion": "The exact run is accepted; copy, newly constructed run and detached metadata are rejected. Returned action/metadata mutation does not replace capture."
+    }
+  ],
+  "snapshots": [
+    {
+      "origin": "complete_current_root_candidate_before_new_independent_tests_not_baseline_or_red",
+      "path": "docs/evidence/snapshots/v1-06b-before-independent-review-research-interfaces.py",
+      "sha256": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+      "source": "src/orze/core/research_interfaces.py"
+    },
+    {
+      "origin": "complete_current_root_candidate_before_new_independent_tests_not_baseline_or_red",
+      "path": "docs/evidence/snapshots/v1-06b-before-independent-review-cpu-execution.py",
+      "sha256": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+      "source": "src/orze/core/cpu_execution.py"
+    },
+    {
+      "origin": "complete_current_root_candidate_before_new_independent_tests_not_baseline_or_red",
+      "path": "docs/evidence/snapshots/v1-06b-before-independent-review-cpu-phase.py",
+      "sha256": "c647dfd32e9884e254a1fa5e7749e0735f01c8d524b163b01f82a74e3c421e49",
+      "source": "src/orze/engine/cpu_phase.py"
+    }
+  ],
+  "test": {
+    "literal_assert_ast_count": 16,
+    "path": "tests/test_research_interfaces_review.py",
+    "sha256": "20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5"
+  },
+  "runs": [
+    {
+      "name": "first_independent_five",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess,sys\npaths=['src/orze/core/research_interfaces.py','src/orze/core/cpu_execution.py','src/orze/engine/cpu_phase.py','src/orze/engine/cpu_action_sources.py','src/orze/core/cpu_action_budget.py','tests/test_research_interfaces_review.py']\ndef hashes():return {p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\npre=hashes();print('PRE '+json.dumps(pre,sort_keys=True),flush=True)\nrun=subprocess.run([sys.executable,'-m','pytest','-q','-p','no:cacheprovider','tests/test_research_interfaces_review.py','--tb=short'])\npost=hashes();print('POST '+json.dumps(post,sort_keys=True),flush=True);print('EXACT',pre==post,flush=True)\nsys.exit(run.returncode)\nPY",
+      "chunk": "29b905",
+      "exit_code": 0,
+      "footer": "5 passed in 0.81s",
+      "pre": {
+        "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+        "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+        "src/orze/engine/cpu_phase.py": "c647dfd32e9884e254a1fa5e7749e0735f01c8d524b163b01f82a74e3c421e49",
+        "tests/test_research_interfaces_review.py": "20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5"
+      },
+      "post": {
+        "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+        "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+        "src/orze/engine/cpu_phase.py": "c647dfd32e9884e254a1fa5e7749e0735f01c8d524b163b01f82a74e3c421e49",
+        "tests/test_research_interfaces_review.py": "20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5"
+      },
+      "prepost_exact": true,
+      "output": "PRE {\"src/orze/core/cpu_action_budget.py\": \"de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730\", \"src/orze/engine/cpu_action_sources.py\": \"ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e\", \"src/orze/engine/cpu_phase.py\": \"c647dfd32e9884e254a1fa5e7749e0735f01c8d524b163b01f82a74e3c421e49\", \"tests/test_research_interfaces_review.py\": \"20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5\"}\n.....                                                                    [100%]\n5 passed in 0.81s\nPOST {\"src/orze/core/cpu_action_budget.py\": \"de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730\", \"src/orze/engine/cpu_action_sources.py\": \"ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e\", \"src/orze/engine/cpu_phase.py\": \"c647dfd32e9884e254a1fa5e7749e0735f01c8d524b163b01f82a74e3c421e49\", \"tests/test_research_interfaces_review.py\": \"20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5\"}\nEXACT True\n"
+    },
+    {
+      "name": "same_frozen_five_after_root_error_adapter_change",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib,json,pathlib,subprocess,sys\npaths=['src/orze/core/research_interfaces.py','src/orze/core/cpu_execution.py','src/orze/engine/cpu_phase.py','src/orze/engine/cpu_action_sources.py','src/orze/core/cpu_action_budget.py','tests/test_research_interfaces_review.py']\ndef hashes():return {p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\npre=hashes();print('PRE '+json.dumps(pre,sort_keys=True),flush=True)\nrun=subprocess.run([sys.executable,'-m','pytest','-q','-p','no:cacheprovider','tests/test_research_interfaces_review.py','--tb=short'])\npost=hashes();print('POST '+json.dumps(post,sort_keys=True),flush=True);print('EXACT',pre==post,flush=True)\nsys.exit(run.returncode)\nPY",
+      "chunk": "60732e",
+      "exit_code": 0,
+      "footer": "5 passed in 0.81s",
+      "pre": {
+        "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+        "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+        "src/orze/engine/cpu_phase.py": "fffd8a63995a2e0386adc1acaf1a8f313d25f249230a2765bb19ad6fc57fb2a3",
+        "tests/test_research_interfaces_review.py": "20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5"
+      },
+      "post": {
+        "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+        "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+        "src/orze/engine/cpu_phase.py": "fffd8a63995a2e0386adc1acaf1a8f313d25f249230a2765bb19ad6fc57fb2a3",
+        "tests/test_research_interfaces_review.py": "20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5"
+      },
+      "prepost_exact": true,
+      "output": "PRE {\"src/orze/core/cpu_action_budget.py\": \"de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730\", \"src/orze/engine/cpu_action_sources.py\": \"ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e\", \"src/orze/engine/cpu_phase.py\": \"fffd8a63995a2e0386adc1acaf1a8f313d25f249230a2765bb19ad6fc57fb2a3\", \"tests/test_research_interfaces_review.py\": \"20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5\"}\n.....                                                                    [100%]\n5 passed in 0.81s\nPOST {\"src/orze/core/cpu_action_budget.py\": \"de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761\", \"src/orze/core/cpu_execution.py\": \"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\", \"src/orze/core/research_interfaces.py\": \"c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730\", \"src/orze/engine/cpu_action_sources.py\": \"ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e\", \"src/orze/engine/cpu_phase.py\": \"fffd8a63995a2e0386adc1acaf1a8f313d25f249230a2765bb19ad6fc57fb2a3\", \"tests/test_research_interfaces_review.py\": \"20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5\"}\nEXACT True\n"
+    }
+  ],
+  "static_audit": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib\nexpected=json.loads(\"{\\\"src/orze/core/cpu_action_budget.py\\\":\\\"de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761\\\",\\\"src/orze/core/cpu_execution.py\\\":\\\"321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63\\\",\\\"src/orze/core/research_interfaces.py\\\":\\\"c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730\\\",\\\"src/orze/engine/cpu_action_sources.py\\\":\\\"ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e\\\",\\\"src/orze/engine/cpu_phase.py\\\":\\\"c647dfd32e9884e254a1fa5e7749e0735f01c8d524b163b01f82a74e3c421e49\\\",\\\"tests/test_research_interfaces_review.py\\\":\\\"20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5\\\"}\")\npairs=[('src/orze/core/research_interfaces.py','docs/evidence/snapshots/v1-06b-before-independent-review-research-interfaces.py'),('src/orze/core/cpu_execution.py','docs/evidence/snapshots/v1-06b-before-independent-review-cpu-execution.py'),('src/orze/engine/cpu_phase.py','docs/evidence/snapshots/v1-06b-before-independent-review-cpu-phase.py')]\nresult={'snapshots':[],'current_reviewed_source':{}}\nfor source,snapshot in pairs:\n raw=pathlib.Path(snapshot).read_bytes();ast.parse(raw);assert raw.endswith(b'\\n');assert hashlib.sha256(raw).hexdigest()==expected[source]\n result['snapshots'].append({'path':snapshot,'source':source,'origin':'complete_current_root_candidate_before_new_independent_tests_not_baseline_or_red','sha256':hashlib.sha256(raw).hexdigest()})\n result['current_reviewed_source'][source]=hashlib.sha256(pathlib.Path(source).read_bytes()).hexdigest()\npath='tests/test_research_interfaces_review.py';raw=pathlib.Path(path).read_bytes();tree=ast.parse(raw);assert hashlib.sha256(raw).hexdigest()==expected[path]\nresult['test']={'path':path,'sha256':hashlib.sha256(raw).hexdigest(),'literal_assert_ast_count':sum(isinstance(n,ast.Assert) for n in ast.walk(tree))}\nprint(json.dumps(result,sort_keys=True))\nPY",
+    "chunk": "2fdfff",
+    "exit_code": 0,
+    "result": {
+      "current_reviewed_source": {
+        "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+        "src/orze/core/research_interfaces.py": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+        "src/orze/engine/cpu_phase.py": "fffd8a63995a2e0386adc1acaf1a8f313d25f249230a2765bb19ad6fc57fb2a3"
+      },
+      "snapshots": [
+        {
+          "origin": "complete_current_root_candidate_before_new_independent_tests_not_baseline_or_red",
+          "path": "docs/evidence/snapshots/v1-06b-before-independent-review-research-interfaces.py",
+          "sha256": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+          "source": "src/orze/core/research_interfaces.py"
+        },
+        {
+          "origin": "complete_current_root_candidate_before_new_independent_tests_not_baseline_or_red",
+          "path": "docs/evidence/snapshots/v1-06b-before-independent-review-cpu-execution.py",
+          "sha256": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+          "source": "src/orze/core/cpu_execution.py"
+        },
+        {
+          "origin": "complete_current_root_candidate_before_new_independent_tests_not_baseline_or_red",
+          "path": "docs/evidence/snapshots/v1-06b-before-independent-review-cpu-phase.py",
+          "sha256": "c647dfd32e9884e254a1fa5e7749e0735f01c8d524b163b01f82a74e3c421e49",
+          "source": "src/orze/engine/cpu_phase.py"
+        }
+      ],
+      "test": {
+        "literal_assert_ast_count": 16,
+        "path": "tests/test_research_interfaces_review.py",
+        "sha256": "20246b6a8b0fc0fec0c6874a7e7157fa0adce7e5240f900e2541734e8f76f0f5"
+      }
+    }
+  },
+  "checker_history": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib\npairs=[('src/orze/core/research_interfaces.py','docs/evidence/snapshots/v1-06b-before-independent-review-research-interfaces.py'),('src/orze/core/cpu_execution.py','docs/evidence/snapshots/v1-06b-before-independent-review-cpu-execution.py'),('src/orze/engine/cpu_phase.py','docs/evidence/snapshots/v1-06b-before-independent-review-cpu-phase.py')]\nresult={'snapshots':[]}\nfor source,snapshot in pairs:\n raw=pathlib.Path(snapshot).read_bytes();ast.parse(raw);assert raw.endswith(b'\\n');assert raw==pathlib.Path(source).read_bytes()\n result['snapshots'].append({'path':snapshot,'source':source,'origin':'complete_current_root_candidate_before_new_independent_tests_not_baseline_or_red','sha256':hashlib.sha256(raw).hexdigest()})\npath='tests/test_research_interfaces_review.py';raw=pathlib.Path(path).read_bytes();tree=ast.parse(raw)\nresult['test']={'path':path,'sha256':hashlib.sha256(raw).hexdigest(),'literal_assert_ast_count':sum(isinstance(n,ast.Assert) for n in ast.walk(tree))}\nprint(json.dumps(result,sort_keys=True))\nPY",
+      "chunk": "088d18",
+      "exit_code": 1,
+      "output": "Traceback (most recent call last):\n  File \"<stdin>\", line 5, in <module>\nAssertionError\n",
+      "classification": "static checker premise error, not product or test red",
+      "explanation": "Checker initially required the saved candidate snapshot to equal the later current worktree. Root legitimately changed cpu_phase between the completed stable test run and this static audit. Corrected check binds complete snapshots to the first run's exact prehash, and records the newer current source separately."
+    }
+  ],
+  "adjacent_read_only_review": {
+    "source_sha256": {
+      "src/orze/engine/native_cpu_action.py": "49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906",
+      "src/orze/engine/cpu_domain_publication.py": "53d27c33c878ed5c17e7af000bccd1c473217a6f8414763b7f21daa99bd7b803",
+      "src/orze/engine/execution_authority.py": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa"
+    },
+    "findings": "Read the sibling-authored native diff, publication adapter complete file and transaction watches. Strong DomainRun plus exact raw config is rechecked; optional no-observation binding is compared through a wrapper; interpretation follows closed successful outputs outside the writer; STOP/failure does not publish outputs; artifacts, observations and source dependencies are fenced before/after terminal commit. No new blocker in this limited read.",
+    "tests_executed_in_this_review": 0,
+    "exclusion": "This is not an independent review of the reviewer's own observation contract/store implementation and not independent execution of sibling-owned native CPU tests."
+  },
+  "corrections": [
+    {
+      "finding": "Empty output mappings",
+      "status": "withdrawn read-only concern, not a defect",
+      "basis": "The actual artifact contract accepts an exact dict with length <=32, including {}. Parent also reported an actual B CLI command-domain outputs={} positive control. This reviewer did not execute that parent test and does not claim it as independent evidence."
+    }
+  ],
+  "limits": [
+    "No full suite run, provider/GPU/host scan/holdout or external workload.",
+    "Empty source captures exercise strong owner interfaces without proving nonempty source closure or multi-spec byte transport; those are covered by separately owned tests.",
+    "CPU loop config/claim/admission and the final exception adapter were read, not exercised end-to-end by these five interface tests.",
+    "Registration and callbacks are trusted Python application setup, not a hostile-code sandbox; arbitrary callback wall time, memory mutation outside supplied arguments and process permissions remain outside this API claim.",
+    "Independent test assertions and snapshots are new B artifacts. No existing report, production source or existing test was edited for this review."
+  ]
+}

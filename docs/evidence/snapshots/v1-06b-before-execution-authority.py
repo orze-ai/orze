@@ -35,8 +35,6 @@ class ExecutionTransaction:
     _watched_attempts: dict = field(default_factory=dict, init=False, repr=False)
     _watched_dependencies: dict = field(default_factory=dict, init=False, repr=False)
     _watched_artifacts: dict = field(default_factory=dict, init=False, repr=False)
-    _watched_observations: dict = field(default_factory=dict, init=False, repr=False)
-    _watched_cpu_sources: dict = field(default_factory=dict, init=False, repr=False)
 
     @property
     def conn(self):
@@ -80,46 +78,6 @@ class ExecutionTransaction:
         for ref, expected in self._watched_artifacts.items():
             if _artifact_snapshot(self, ref) != expected:
                 raise AttemptAuthorityError("execution_artifacts_changed")
-        for ref, expected in self._watched_observations.items():
-            if _observation_snapshot(self, ref) != expected:
-                raise AttemptAuthorityError("execution_observations_changed")
-        for prepared, expected in self._watched_cpu_sources.values():
-            if _cpu_source_snapshot(self, prepared) != expected:
-                raise AttemptAuthorityError("execution_cpu_sources_changed")
-
-    def watch_observations(self, ref: AttemptRef, records) -> None:
-        """Fence the publisher's exact observation set, including explicit zero."""
-        from dataclasses import asdict
-        from orze.core.research_observations import MAX_OBSERVATIONS, validate_observation_record
-        if (not self.conn.in_transaction or type(ref) is not AttemptRef
-                or ref.task_id != self.idea_dir.name or ref in self._watched_observations
-                or len(self._watched_observations) >= 32
-                or type(records) not in (list, tuple) or len(records) > MAX_OBSERVATIONS):
-            raise AttemptAuthorityError("execution_observation_watch_invalid")
-        require_effect_lease(self.lease, self.idea_dir)
-        expected = sorted((validate_observation_record(record) for record in records),
-                          key=lambda record: record["name"])
-        if (any(_canonical(record["evaluator"]) != _canonical(asdict(ref)) for record in expected)
-                or len({record["name"] for record in expected}) != len(expected)
-                or len({record["observation_id"] for record in expected}) != len(expected)):
-            raise AttemptAuthorityError("execution_observation_watch_evaluator_invalid")
-        encoded = _canonical(expected)
-        if _observation_snapshot(self, ref) != encoded:
-            raise AttemptAuthorityError("execution_observations_changed")
-        self._watched_observations[ref] = encoded
-
-    def watch_cpu_sources(self, prepared) -> None:
-        """Read-only cross-task fence of a strong, same-Lake source capture.
-
-        This grants no write or effect-lease authority for any source task.
-        Only the source module validates captures; arbitrary callbacks and
-        caller-supplied metadata are not publication capabilities.
-        """
-        if (not self.conn.in_transaction or id(prepared) in self._watched_cpu_sources
-                or len(self._watched_cpu_sources) >= 32):
-            raise AttemptAuthorityError("execution_cpu_source_watch_invalid")
-        require_effect_lease(self.lease, self.idea_dir)
-        self._watched_cpu_sources[id(prepared)] = (prepared, _cpu_source_snapshot(self, prepared))
 
     def watch_artifacts(self, ref: AttemptRef, records) -> None:
         """Opt-in exact metadata fence before and after SQL commit.
@@ -202,18 +160,6 @@ def _artifact_snapshot(tx: ExecutionTransaction, ref: AttemptRef) -> str:
     from orze.core.research_artifacts import artifacts_for_attempt
     require_current(tx.conn, ref, states=("RUNNING", "TERMINAL"))
     return _canonical(artifacts_for_attempt(tx.conn, ref))
-
-
-def _observation_snapshot(tx: ExecutionTransaction, ref: AttemptRef) -> str:
-    from orze.core.research_observations import observations_for_attempt
-    require_current(tx.conn, ref, states=("RUNNING", "TERMINAL"))
-    return _canonical(observations_for_attempt(tx.conn, ref))
-
-
-def _cpu_source_snapshot(tx: ExecutionTransaction, prepared) -> str:
-    from orze.engine.cpu_action_sources import require_sources, snapshot
-    require_sources(tx.lake, tx.idea_dir.parent, prepared, metadata_only=True)
-    return _canonical(snapshot(prepared))
 
 
 def _lifecycle_phase(payload, ref):

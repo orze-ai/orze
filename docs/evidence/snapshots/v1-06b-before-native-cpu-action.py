@@ -7,7 +7,6 @@ Unknown preparation/publication retains the strong owner and its reservation.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from contextlib import ExitStack
 import copy
 import hashlib
 import json
@@ -67,7 +66,6 @@ class _Owner:
     terminal: dict | None = None
     work_identity: tuple | None = None
     started_at: float | None = None
-    domain_run: object = None
 
 
 _OWNERS = {}  # Strong unresolved and terminal owners; no global memory-cap claim.
@@ -89,7 +87,7 @@ def _permit_matches(lake, folder, action, permit):
         raise CPUActionHOLD("cpu_action_permit_execution_mismatch")
 
 
-def _scope(lake, folder, action, domain_run=None):
+def _scope(lake, folder, action):
     if lake is None:
         raise CPUActionHOLD("cpu_action_catalog_required")
     paths = [row[2] for row in lake.conn.execute("PRAGMA database_list") if row[1] == "main"]
@@ -110,17 +108,9 @@ def _scope(lake, folder, action, domain_run=None):
     if row is None or row[0] != "native_cpu_action" or type(row[1]) is not str or len(row[1].encode()) > 65536:
         raise CPUActionHOLD("cpu_action_task_kind_changed")
     configured = yaml.safe_load(row[1])
-    if (type(configured) is not dict or configured.get("kind", "native_cpu_action") != "native_cpu_action"):
+    if (type(configured) is not dict or configured.get("kind", "native_cpu_action") != "native_cpu_action"
+            or not same(validate_action(configured.get("action")), action)):
         raise CPUActionHOLD("cpu_action_task_config_changed")
-    if domain_run is None:
-        if not same(validate_action(configured.get("action")), action):
-            raise CPUActionHOLD("cpu_action_task_config_changed")
-    else:
-        from orze.core.research_interfaces import require_domain_run, domain_sources
-        from orze.engine.cpu_action_sources import require_sources
-        require_domain_run(domain_run, raw_config_sha256=hashlib.sha256(row[1].encode()).hexdigest(),
-                           action=action)
-        require_sources(lake, folder.parent, domain_sources(domain_run), metadata_only=True)
     return {"claim_attempt_id": claim["attempt_id"], "claim_sha256": claim_sha,
             "config_sha256": hashlib.sha256(row[1].encode()).hexdigest(), "database": database}
 
@@ -170,15 +160,8 @@ def _owned(owner, lake, cfg, *, states=("RUNNING",)):
     row = require_current(lake.conn, handle.attempt_ref, states=states)
     if not same(row["binding"], owner.binding):
         raise CPUActionHOLD("cpu_action_binding_changed")
-    if not same(_scope(lake, folder, owner.action, owner.domain_run), owner.binding["source"]):
+    if not same(_scope(lake, folder, owner.action), owner.binding["source"]):
         raise CPUActionHOLD("cpu_action_source_changed")
-    if owner.domain_run is not None:
-        from orze.core.research_interfaces import domain_run_metadata
-        from orze.engine.cpu_domain_publication import publication_binding
-        if (not same(domain_run_metadata(owner.domain_run), owner.binding["domain_run"])
-                or not same({"publication": publication_binding(owner.domain_run, folder.parent)},
-                            {"publication": owner.binding.get("observation_publication")})):
-            raise CPUActionHOLD("cpu_action_domain_binding_changed")
     if not same(artifact_binding(cfg, folder, owner.action), owner.binding["artifact_publication"]):
         raise CPUActionHOLD("cpu_action_artifact_binding_changed")
     if not same(lifecycle_fence(lake, handle.idea_id, "action"), owner.binding["lifecycle"]):
@@ -200,10 +183,6 @@ def _admit(owner, lake):
     _permit_matches(lake, owner.folder, owner.action, owner.permit)
     require_permit(lake, owner.permit, owner.handle.attempt_ref)
     require_no_unconfirmed_stop(owner.folder)
-    if owner.domain_run is not None:
-        from orze.core.research_interfaces import domain_sources
-        from orze.engine.cpu_action_sources import require_sources
-        require_sources(lake, owner.folder.parent, domain_sources(owner.domain_run))
 
 
 def _terminate(owner):
@@ -223,7 +202,7 @@ def _hold(owner, exc):
     raise error from exc
 
 
-def launch(idea_id, results_dir, cfg, *, lake, action, permit, admission, domain_run=None):
+def launch(idea_id, results_dir, cfg, *, lake, action, permit, admission):
     """Return an actual READY-bound action owner after GO (or cancellation)."""
     from orze.core.cpu_action_budget import bind, require_permit
     owner = None
@@ -237,7 +216,7 @@ def launch(idea_id, results_dir, cfg, *, lake, action, permit, admission, domain
             raise CPUActionHOLD("cpu_action_admission_required")
         admission()
         require_permit(lake, permit)
-        source = _scope(lake, folder, action, domain_run)
+        source = _scope(lake, folder, action)
         inputs = _canonical(action["inputs"])
         attempt_id = secrets.token_hex(16)
         work = folder / "_action_attempts" / attempt_id / "work"
@@ -248,15 +227,8 @@ def launch(idea_id, results_dir, cfg, *, lake, action, permit, admission, domain
             "timeout_seconds": action["timeout_seconds"], "reservation_id": permit["reservation_id"],
             "process_supervision_protocol": proof.PROTOCOL,
             "artifact_publication": artifact_binding(cfg, folder, action), "lifecycle_phase": "action"}
-        if domain_run is not None:
-            from orze.core.research_interfaces import domain_run_metadata
-            from orze.engine.cpu_domain_publication import publication_binding
-            binding["domain_run"] = domain_run_metadata(domain_run)
-            observation = publication_binding(domain_run, folder.parent)
-            if observation is not None:
-                binding["observation_publication"] = observation
         with execution_transaction(lake, folder) as tx:
-            if not same(_scope(lake, folder, action, domain_run), source):
+            if not same(_scope(lake, folder, action), source):
                 raise CPUActionHOLD("cpu_action_source_changed")
             _closed(tx.conn, idea_id)
             fence = lifecycle_fence(lake, idea_id, "action")
@@ -271,8 +243,7 @@ def launch(idea_id, results_dir, cfg, *, lake, action, permit, admission, domain
             _update(tx.conn, ref, require_current(tx.conn, ref), state="LAUNCHING", binding=binding)
             tx.watch_attempt(ref)
         handle = CPUActionHandle(idea_id, attempt_id, ref)
-        owner = _Owner(handle, folder, copy.deepcopy(action), permit, admission, copy.deepcopy(binding),
-                       domain_run=domain_run)
+        owner = _Owner(handle, folder, copy.deepcopy(action), permit, admission, copy.deepcopy(binding))
         _OWNERS[id(handle)] = owner
         bind(lake, permit, ref)
         owner.work_identity = _create_work(work)
@@ -281,23 +252,16 @@ def launch(idea_id, results_dir, cfg, *, lake, action, permit, admission, domain
         environment = dict(os.environ)
         for key in ("CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES", "HIP_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES"):
             environment[key] = ""
-        with ExitStack() as streams:
-            fd = streams.enter_context(sealed_payload(inputs))
+        with sealed_payload(inputs) as fd:
             # This public input descriptor supports ordinary os.read, unlike
             # internal sealed readers which deliberately use offset-free pread.
             if os.lseek(fd, 0, os.SEEK_SET) != 0:
                 raise CPUActionHOLD("cpu_action_input_offset_unconfirmed")
             environment["ORZE_ACTION_INPUT_FD"] = str(fd)
             environment["ORZE_ACTION_INPUT_SHA256"] = binding["inputs_sha256"]
-            source_fds = ()
-            if domain_run is not None:
-                from orze.core.research_interfaces import domain_sources
-                from orze.engine.cpu_action_sources import sealed_sources
-                source_environment, source_fds = streams.enter_context(sealed_sources(domain_sources(domain_run)))
-                environment.update(source_environment)
             process = prepare_supervised(list(action["command"]),
                 identity=proof.identity(handle, folder, phase="action"), env=environment, cwd=str(work),
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, worker_only_fds=(fd, *source_fds))
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, worker_only_fds=(fd,))
             owner.process = handle.process = process
             ready = proof.ready_binding(handle, folder, phase="action")
             if ready["command_sha256"] != binding["command_sha256"]:
@@ -353,10 +317,6 @@ def harvest(handle, results_dir, cfg, *, lake, permit):
         prepared = (prepare_artifacts(handle.attempt_ref, owner.folder,
                     owner.binding["artifact_publication"], source_dir=Path(owner.binding["work_dir"]))
                     if outcome == "completed" else None)
-        domain_publication = None
-        if owner.domain_run is not None and prepared is not None:
-            from orze.engine.cpu_domain_publication import prepare as prepare_domain_publication
-            domain_publication = prepare_domain_publication(owner.domain_run, handle.attempt_ref, prepared)
         with execution_transaction(lake, owner.folder) as tx:
             row = _owned(owner, lake, cfg)
             if not same(closure, proof.require_closed(handle, row, owner.folder, ret, phase="action")):
@@ -364,22 +324,14 @@ def harvest(handle, results_dir, cfg, *, lake, permit):
             records = [] if prepared is None else list(verify_prepared_artifacts(prepared,
                 handle.attempt_ref, owner.folder, owner.binding["artifact_publication"],
                 source_dir=Path(owner.binding["work_dir"])))
-            observations = []
-            if domain_publication is not None:
-                from orze.engine.cpu_domain_publication import verify as verify_domain_publication
-                observations = verify_domain_publication(domain_publication, handle.attempt_ref)
             terminal = {"outcome": outcome, "reason_code": "cpu_action_" + outcome,
                 "return_code": ret, "process_tree": closure, "artifact_ids": [r["artifact_id"] for r in records],
-                "observation_ids": [r["observation_id"] for r in observations],
-                "lifecycle_phase": "action", "elapsed_wall_seconds": elapsed_wall_seconds}
+                "observation_ids": [], "lifecycle_phase": "action", "elapsed_wall_seconds": elapsed_wall_seconds}
             digest = tx.prepare(handle.attempt_ref, {"operation": "cpu_action_terminal", **terminal})
             if prepared is not None:
                 verify_prepared_artifacts(prepared, handle.attempt_ref, owner.folder,
                     owner.binding["artifact_publication"], source_dir=Path(owner.binding["work_dir"]))
                 register_artifacts(tx.conn, handle.attempt_ref, records)
-            if owner.domain_run is not None and "observation_publication" in owner.binding:
-                from orze.core.research_observations import register_observations
-                register_observations(tx.conn, handle.attempt_ref, observations)
             if not lake._record_state_transition_in_tx(handle.idea_id, "IN_PROGRESS",
                     "COMPLETE" if outcome == "completed" else "FAILED", terminal["reason_code"],
                     pid=owner.process.pid, sop_type="action"):
@@ -397,12 +349,6 @@ def harvest(handle, results_dir, cfg, *, lake, permit):
                 verify_prepared_artifacts(prepared, handle.attempt_ref, owner.folder,
                     owner.binding["artifact_publication"], source_dir=Path(owner.binding["work_dir"]))
             tx.watch_artifacts(handle.attempt_ref, records)
-            if owner.domain_run is not None:
-                from orze.core.research_interfaces import domain_sources
-                if domain_publication is not None:
-                    verify_domain_publication(domain_publication, handle.attempt_ref)
-                tx.watch_observations(handle.attempt_ref, observations)
-                tx.watch_cpu_sources(domain_sources(owner.domain_run))
             tx.watch_attempt(handle.attempt_ref)
         owner.binding = copy.deepcopy(updated)
         from orze.core.cpu_action_budget import settle

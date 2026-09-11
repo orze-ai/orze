@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "slice": "V1-06B",
+  "role": "cpu_action_sources author and bounded mechanism tests",
+  "baseline": {
+    "core_commit": "52d479d0f74fe4feb3c10b9501833d156b4c8cb6",
+    "pro_commit": "7afa4e34d2bcb3de7a2b2e37e6f383a6aa1b8b1a",
+    "origin": "New module and new tests after the preceding committed implementation-branch baseline; neither has an old module version.",
+    "historical_red_count": 0,
+    "draft_red_count": 0,
+    "fixture_corrections": [],
+    "snapshots": []
+  },
+  "implementation": {
+    "path": "src/orze/engine/cpu_action_sources.py",
+    "sha256": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+    "api": [
+      "capture_sources(lake, results_dir, artifact_ids) -> PreparedSources",
+      "snapshot(prepared) -> detached JSON dict",
+      "records(prepared) -> detached list of original artifact records",
+      "require_sources(lake, results_dir, prepared, *, metadata_only=False) -> None",
+      "sealed_sources(prepared) -> context manager yielding (env_dict, worker_only_fds)"
+    ],
+    "limits": {
+      "input_count": 32,
+      "aggregate_content_bytes": 16777216,
+      "snapshot_bytes": 32768,
+      "empty_sources": true,
+      "empty_content": true
+    },
+    "authority": "Original Lake object, connection object, PID, results/main DB path identities; current TERMINAL/completed producer fullRef, original artifact binding/spec/metadata, exact terminal artifact membership, confirmed effect and captured regular single-link file/receipt identities. No source write authority, restart adoption or JSON rehydration.",
+    "transport": "Anonymous memfds with WRITE/GROW/SHRINK/SEAL; exact own fd reopened O_RDONLY via /proc/self/fd, inode/size/access/seals/content readback checked, offset zero, worker_only_fds. This is not host process discovery.",
+    "metadata_only": "Uses the caller's same lake.conn; no content hash/read. Revalidates captured current source rows/artifact records and receipt/path stat identities. Full capture/require and sealing reject active SQL transactions."
+  },
+  "tests": {
+    "path": "tests/test_cpu_action_sources.py",
+    "sha256": "3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e",
+    "case_count": 12,
+    "classification": "12 new mechanisms; no historical missing-API or draft product reds",
+    "assert_ast_count": 13,
+    "assert_ast_sha256": "68819bafb23e099081785254fbefc5e77c0f56137f41584f92c3f88d416c098c",
+    "assert_ast_algorithm": "sha256('\\n'.join(ast.dump(n, include_attributes=False) for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Assert)).encode())",
+    "embedded_programs": [
+      {
+        "variable": "code",
+        "assert_count": 2,
+        "description": "Real supervised worker verifies readonly fd access and all seals, reads artifact bytes and checks writes fail."
+      }
+    ],
+    "mechanisms": [
+      "Two actual native CPU producers with distinct specs, detached metadata, real supervised consumer sealed read-only source FDs and closure",
+      "Empty source set and zero-byte sealed transport",
+      "Writer metadata-only verification, full-read prohibition, copied/JSON/other-Lake owner rejection",
+      "Same writer source metadata/spec mutation",
+      "Same writer terminal membership mutation",
+      "Same writer actual create_attempt current phase rotation",
+      "Confirmed receipt removal",
+      "Same-content new inode replacement",
+      "Hardlink rejection",
+      "Symlink rejection",
+      "Duplicate/count/aggregate/metadata limits and targeted actual source early EOF",
+      "Seal failure closes only created descriptors and never yields"
+    ],
+    "legacy_tests_changed": false
+  },
+  "first_run": {
+    "command": "PYTHONPATH=src pytest -q tests/test_cpu_action_sources.py",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "session_id": 33090,
+    "initial_chunk": "ed6c09",
+    "completion_chunk": "9a1a4a",
+    "exit_code": 0,
+    "footer": "12 passed in 11.65s",
+    "classification": "First execution of the new module/test file; all intended mechanisms reached and passed."
+  },
+  "candidate_bounded": {
+    "command": "PYTHONPATH=src pytest -q tests/test_cpu_action_sources.py",
+    "session_id": 99270,
+    "initial_chunk": "ba36a9",
+    "completion_chunk": "b11b68",
+    "exit_code": 0,
+    "footer": "12 passed in 11.91s",
+    "scope": "Source-specific bounded author rerun, not whole-slice final epoch or public analyze CLI acceptance.",
+    "pre_chunk": "f30cb3",
+    "post_chunk": "a45b7c",
+    "pre": {
+      "src/orze/core/artifact_contract.py": "e5d746af0f48deb4a845e140853cf93415dc9bf62eee35da3e527a22a1c56c13",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "src/orze/engine/artifact_publication.py": "c495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2",
+      "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+      "src/orze/engine/claim_authority.py": "e40097c649f48168e2d364a0515d90174d60904004a264e70c95c885e9556c37",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/execution_authority.py": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa",
+      "src/orze/engine/execution_catalog.py": "32ba10fd2cc951d82865d5727507cd92a1916be29615adee257f44c4df9e8ed8",
+      "src/orze/engine/native_cpu_action.py": "355e7ddde2102937b56d70956ab83126bbc04547d70f0421d8d9ea6df2285042",
+      "src/orze/engine/process_supervision.py": "cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053",
+      "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+      "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "a0c1c64d8560e3a791c9f0c4ad274d0d2420fc646523091b49739e8a817060ec",
+      "tests/test_cpu_action_sources.py": "3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b"
+    },
+    "post": {
+      "src/orze/core/artifact_contract.py": "e5d746af0f48deb4a845e140853cf93415dc9bf62eee35da3e527a22a1c56c13",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "src/orze/engine/artifact_publication.py": "c495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2",
+      "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+      "src/orze/engine/claim_authority.py": "e40097c649f48168e2d364a0515d90174d60904004a264e70c95c885e9556c37",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/execution_authority.py": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa",
+      "src/orze/engine/execution_catalog.py": "32ba10fd2cc951d82865d5727507cd92a1916be29615adee257f44c4df9e8ed8",
+      "src/orze/engine/native_cpu_action.py": "355e7ddde2102937b56d70956ab83126bbc04547d70f0421d8d9ea6df2285042",
+      "src/orze/engine/process_supervision.py": "cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053",
+      "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+      "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "a0c1c64d8560e3a791c9f0c4ad274d0d2420fc646523091b49739e8a817060ec",
+      "tests/test_cpu_action_sources.py": "3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b"
+    },
+    "prepost_exact": true,
+    "hash_command": "python3 - <<'PY'\nimport ast,hashlib,json,pathlib\npaths=['src/orze/engine/cpu_action_sources.py','tests/test_cpu_action_sources.py','src/orze/engine/artifact_publication.py','src/orze/engine/attempt_effect_receipts.py','src/orze/engine/claim_authority.py','src/orze/engine/execution_catalog.py','src/orze/engine/termination_hold.py','src/orze/engine/sealed_payload.py','src/orze/core/execution_attempts.py','src/orze/core/research_artifacts.py','src/orze/core/artifact_contract.py','src/orze/engine/native_cpu_action.py','tests/test_native_cpu_action.py','src/orze/engine/supervised_process.py','src/orze/engine/supervisor_worker.py','src/orze/engine/process_supervision.py','src/orze/core/cpu_action_budget.py','src/orze/engine/execution_authority.py']\nresult={p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\ntree=ast.parse(pathlib.Path('tests/test_cpu_action_sources.py').read_text()); assertions=[ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Assert)]\nprint(json.dumps({'files':result,'assert_count':len(assertions),'assert_ast_sha256':hashlib.sha256('\\n'.join(assertions).encode()).hexdigest()},sort_keys=True))\nPY"
+  },
+  "boundaries": [
+    "Real temp SQLite/claim/budget/artifact publication and real CPU workers/supervisors; consumer direct prepare_supervised API, not the new analyze CLI.",
+    "IO/SQL faults are explicitly targeted test seams, not evidence of arbitrary hostile same-UID isolation.",
+    "Count limits can be preceded by aggregate content or binding metadata limits; no unlimited source or history claim.",
+    "The inherited confirmed-effect scanner remains bounded by its existing contract; no new historical adoption path.",
+    "No global owner registry, claim/attempt/budget mutations by the input helpers, GPU/provider calls, holdout reads, host scans or bare-PID signals.",
+    "All child processes created by these tests reached actual supervisor closure or were stopped only through their captured own handles in finally; no running test session remains."
+  ],
+  "status": "author source and tests frozen pending root integration/final epoch"
+}

@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "slice": "V1-06B",
+  "role": "Independent actual CLI runtime boundary reviewer",
+  "baseline": {
+    "core_commit": "52d479d0f74fe4feb3c10b9501833d156b4c8cb6",
+    "classification": "Two new integration rejection mechanisms, not missing-API historical or draft product reds.",
+    "historical_red_count": 0,
+    "draft_red_count": 0,
+    "fixture_errors": [],
+    "fixture_corrections": [],
+    "snapshots": []
+  },
+  "test": {
+    "path": "tests/test_cpu_domain_runtime_review.py",
+    "sha256": "c8f6bd2fe54604fdc31bd87636c03ea7eaa1f55c51579b62b42f340b7ebad808",
+    "case_count": 2,
+    "assert_ast_count": 29,
+    "assert_ast_sha256": "09e3ce8fe85e0321ca8f1de0af2bcfe469d6c4b776ff70e3788c467cf2fa8d40",
+    "assert_ast_algorithm": "sha256('\\n'.join(ast.dump(n,include_attributes=False) for n in ast.walk(ast.parse(source)) if isinstance(n,ast.Assert)).encode())",
+    "embedded_program": {
+      "variable": "program",
+      "assert_count": 1,
+      "behavior": "Real JSON domain CPU worker reads the sealed source FDs and asserts the actual source value before writing one unknown-validation observation."
+    },
+    "old_source_or_tests_edited": false
+  },
+  "cases": [
+    {
+      "name": "test_cli_ready_source_inode_replacement_refuses_go_and_keeps_reservation",
+      "route": "Real first commandDomain CLI publishes a confirmed source artifact. Second actual CLI selects json_observations. Transparent actual prepare_supervised returns a real READY handle, retained before fault; only then replace the source path with identical bytes at a new inode.",
+      "asserted": "CLI75; actual inode changed with byte equality and original preserved; no worker GO marker; captured supervisor confirms STOP closure; analysis is LAUNCHING/RUNNING without terminal, artifact or observation rows; its reservation remains BOUND while source reservation remains SETTLED."
+    },
+    {
+      "name": "test_cli_terminal_trigger_changes_real_input_after_analysis_registration_and_rolls_back",
+      "route": "Real first CLI commandDomain source, then real json_observations worker. Transparent register_artifacts calls the actual writer before installing a same-writer terminal AFTER trigger. The trigger calls a test SQL observer with real analysis artifact, real analysis observation and original input records, then changes the input content_sha256.",
+      "asserted": "Observer reached exactly once and proves both output registrations already existed, correct full producer/evaluator/input/result IDs; actual worker return0 with no STOP; CLI75; whole SQL terminal/publication rolls back, old input metadata remains byte-equivalent, reservation remains BOUND; prepared filesystem effect remains without committed confirmation.",
+      "fault_boundary": "Explicit mutation through SQLite trigger in the real terminal writer, not a claim that a concurrent writer crosses BEGIN IMMEDIATE, and not fabricated artifact/observation rows."
+    }
+  ],
+  "first_run": {
+    "command": "PYTHONPATH=src pytest -q tests/test_cpu_domain_runtime_review.py",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "session_id": 7594,
+    "initial_chunk": "d8019e",
+    "completion_chunk": "9a0109",
+    "exit_code": 0,
+    "footer": "2 passed in 2.35s",
+    "classification": "First execution, both intended mechanisms passed; no API/premise failures."
+  },
+  "final_bounded": {
+    "command": "PYTHONPATH=src pytest -q tests/test_cpu_domain_runtime_review.py",
+    "session_id": 25134,
+    "initial_chunk": "f4ff68",
+    "completion_chunk": "71bf98",
+    "exit_code": 0,
+    "footer": "2 passed in 2.26s",
+    "pre_chunk": "ecdf1e",
+    "post_chunk": "76c05b",
+    "pre": {
+      "src/orze/cli.py": "35227ff834b38c9259c33c9c1c8c0218fd0ee9c5c02c271a27505b91ca41093b",
+      "src/orze/core/artifact_contract.py": "e5d746af0f48deb4a845e140853cf93415dc9bf62eee35da3e527a22a1c56c13",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+      "src/orze/core/cpu_observation_contract.py": "0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/observation_contract.py": "7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699",
+      "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "src/orze/core/research_interfaces.py": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+      "src/orze/core/research_observations.py": "ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8",
+      "src/orze/engine/artifact_publication.py": "c495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2",
+      "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+      "src/orze/engine/claim_authority.py": "e40097c649f48168e2d364a0515d90174d60904004a264e70c95c885e9556c37",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_domain_publication.py": "53d27c33c878ed5c17e7af000bccd1c473217a6f8414763b7f21daa99bd7b803",
+      "src/orze/engine/cpu_phase.py": "fffd8a63995a2e0386adc1acaf1a8f313d25f249230a2765bb19ad6fc57fb2a3",
+      "src/orze/engine/cpu_policy_evidence.py": "b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae",
+      "src/orze/engine/execution_authority.py": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa",
+      "src/orze/engine/execution_catalog.py": "32ba10fd2cc951d82865d5727507cd92a1916be29615adee257f44c4df9e8ed8",
+      "src/orze/engine/native_cpu_action.py": "49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906",
+      "src/orze/engine/orchestrator.py": "a4fee1b5a2ce4456fece2f6b91722ec3427eb53d931610e54a42aad026c60bcd",
+      "src/orze/engine/process_supervision.py": "cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053",
+      "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+      "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "a0c1c64d8560e3a791c9f0c4ad274d0d2420fc646523091b49739e8a817060ec",
+      "tests/test_cpu_action_sources.py": "3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e",
+      "tests/test_cpu_domain_product.py": "cdaf494107b04a8586b37d0937aef003063738bfe5bbaaaf5eee35d9a40ac79d",
+      "tests/test_cpu_domain_runtime_review.py": "c8f6bd2fe54604fdc31bd87636c03ea7eaa1f55c51579b62b42f340b7ebad808",
+      "tests/test_cpu_policy_evidence.py": "75705cf1880cacea45922e57ee79d896f22efc2d87e5162d6db90c48de38a139",
+      "tests/test_cpu_product_loop.py": "81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b"
+    },
+    "post": {
+      "src/orze/cli.py": "35227ff834b38c9259c33c9c1c8c0218fd0ee9c5c02c271a27505b91ca41093b",
+      "src/orze/core/artifact_contract.py": "e5d746af0f48deb4a845e140853cf93415dc9bf62eee35da3e527a22a1c56c13",
+      "src/orze/core/cpu_action_budget.py": "de7802443517f2f5924ead844068598944b4c555249dd9e2e398e8742663e761",
+      "src/orze/core/cpu_execution.py": "321df69d57a4e2e95576b4529b9b4dc0a7f95cd69acd763e6f02f016a8446e63",
+      "src/orze/core/cpu_observation_contract.py": "0673d0d90ddb64513a74aa1b787e359b5bbff8dedf12715047fbe101ce4e6102",
+      "src/orze/core/execution_attempts.py": "c79adf919eec430bd20836a1b959c9cc51454ea4651ae61f7e4c54145eb12c69",
+      "src/orze/core/observation_contract.py": "7a1afabcd25f17ef108211c5b1014d1bf3a1d0d4ec6daed946e11021ebd5b699",
+      "src/orze/core/research_artifacts.py": "10596c56951644cba2108484d353c846a934e8f5ec11c40d958424570e029e33",
+      "src/orze/core/research_interfaces.py": "c3a38c07ae7cef686d619d08a57f9f144b10dd71c6efa2d1859a2a7559cba730",
+      "src/orze/core/research_observations.py": "ff6256c0f272d94f25fe58f6537d6fdfaa96d1672ee541cb78ec4d9d0b191ec8",
+      "src/orze/engine/artifact_publication.py": "c495a50d76d91fbb6cdd13bf3560e2d071cdb90923e9d19a4e2ec0c099d396f2",
+      "src/orze/engine/attempt_effect_receipts.py": "39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593",
+      "src/orze/engine/claim_authority.py": "e40097c649f48168e2d364a0515d90174d60904004a264e70c95c885e9556c37",
+      "src/orze/engine/cpu_action_sources.py": "ee27ecfc3dc951cfb1681fd4e932899a9991992fb6bfd3ec9514fb91b8a2319e",
+      "src/orze/engine/cpu_domain_publication.py": "53d27c33c878ed5c17e7af000bccd1c473217a6f8414763b7f21daa99bd7b803",
+      "src/orze/engine/cpu_phase.py": "fffd8a63995a2e0386adc1acaf1a8f313d25f249230a2765bb19ad6fc57fb2a3",
+      "src/orze/engine/cpu_policy_evidence.py": "b96dcb737dd9ec56ac3d60f3e6de63c7cd19b90d8aa0265420ef1e4b87d634ae",
+      "src/orze/engine/execution_authority.py": "6641858525db96e6586465b383148e5f6300a07274d89c8544db12558aad23fa",
+      "src/orze/engine/execution_catalog.py": "32ba10fd2cc951d82865d5727507cd92a1916be29615adee257f44c4df9e8ed8",
+      "src/orze/engine/native_cpu_action.py": "49ddf51dc96e2a6978494270193d201f6b0a1f81a57ccf059f3c51df40059906",
+      "src/orze/engine/orchestrator.py": "a4fee1b5a2ce4456fece2f6b91722ec3427eb53d931610e54a42aad026c60bcd",
+      "src/orze/engine/process_supervision.py": "cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053",
+      "src/orze/engine/sealed_payload.py": "80cc915b00d66533445f4d595b0b7be7a22b6a282972fc72742369c1a6a5deaa",
+      "src/orze/engine/supervised_process.py": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "src/orze/engine/supervisor_worker.py": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "src/orze/engine/termination_hold.py": "a0c1c64d8560e3a791c9f0c4ad274d0d2420fc646523091b49739e8a817060ec",
+      "tests/test_cpu_action_sources.py": "3a143039ce0565361d7df629941e9e1c41b2d4ccf718768457f8169a43ae9a2e",
+      "tests/test_cpu_domain_product.py": "cdaf494107b04a8586b37d0937aef003063738bfe5bbaaaf5eee35d9a40ac79d",
+      "tests/test_cpu_domain_runtime_review.py": "c8f6bd2fe54604fdc31bd87636c03ea7eaa1f55c51579b62b42f340b7ebad808",
+      "tests/test_cpu_policy_evidence.py": "75705cf1880cacea45922e57ee79d896f22efc2d87e5162d6db90c48de38a139",
+      "tests/test_cpu_product_loop.py": "81e4631bd668f27a5e4a92b928efff23f5865ffe34a771a41df8bdd0904efc22",
+      "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b"
+    },
+    "prepost_exact": true,
+    "hash_command": "python3 - <<'PY'\nimport ast,hashlib,json,pathlib\npaths=[\"src/orze/core/artifact_contract.py\",\"src/orze/core/cpu_action_budget.py\",\"src/orze/core/cpu_observation_contract.py\",\"src/orze/core/execution_attempts.py\",\"src/orze/core/observation_contract.py\",\"src/orze/core/research_artifacts.py\",\"src/orze/core/research_observations.py\",\"src/orze/engine/artifact_publication.py\",\"src/orze/engine/attempt_effect_receipts.py\",\"src/orze/engine/claim_authority.py\",\"src/orze/engine/cpu_action_sources.py\",\"src/orze/engine/cpu_policy_evidence.py\",\"src/orze/engine/execution_authority.py\",\"src/orze/engine/execution_catalog.py\",\"src/orze/engine/native_cpu_action.py\",\"src/orze/engine/process_supervision.py\",\"src/orze/engine/sealed_payload.py\",\"src/orze/engine/supervised_process.py\",\"src/orze/engine/supervisor_worker.py\",\"src/orze/engine/termination_hold.py\",\"tests/test_cpu_action_sources.py\",\"tests/test_cpu_policy_evidence.py\",\"tests/test_native_cpu_action.py\",\"src/orze/core/research_interfaces.py\",\"src/orze/engine/cpu_domain_publication.py\",\"src/orze/engine/cpu_phase.py\",\"src/orze/cli.py\",\"src/orze/engine/orchestrator.py\",\"src/orze/core/cpu_execution.py\",\"tests/test_cpu_domain_product.py\",\"tests/test_cpu_product_loop.py\",\"tests/test_cpu_domain_runtime_review.py\"]\np=pathlib.Path('tests/test_cpu_domain_runtime_review.py');tree=ast.parse(p.read_text());items=[ast.dump(n,include_attributes=False) for n in ast.walk(tree) if isinstance(n,ast.Assert)]\nprint(json.dumps({'files':{x:hashlib.sha256(pathlib.Path(x).read_bytes()).hexdigest() for x in paths},'assert_count':len(items),'assert_ast_sha256':hashlib.sha256('\\n'.join(items).encode()).hexdigest()},sort_keys=True))\nPY",
+    "scope": "Independent two-case bounded rerun on recorded source bytes, not a whole-suite result. Does not add its cases to overlapping parent aggregate counts."
+  },
+  "review": {
+    "source_checkpoints": [
+      "native_cpu_action.launch: actual READY then re-admission/full source check before GO",
+      "native_cpu_action.harvest: artifact and observation registrations precede terminal, followed by exact output/observation/source watches",
+      "execution_authority.watch_cpu_sources: same captured Lake/connection and results scope, read-only cross-task source recheck",
+      "cpu_action_sources.require_sources: originally captured bytes/receipt/path identities and current metadata, never source mutation authority"
+    ],
+    "finding": "No blocker observed in these two pipelines. Both preserve operational HOLD and do not settle uncertainty."
+  },
+  "boundaries": [
+    "Actual cli.main, config loader, Orze, queue/claim, native CPU process/supervisor, effects and SQLite are not replaced.",
+    "Inherited project fixture explicitly forbids GPU detection/leases/canary, Pro/provider lookup and legacy orphan discovery; tests do not exercise such resources.",
+    "Only declared private temporary files and databases are faulted. No holdout, real workload, host process scans, bare-PID signals or external state changes.",
+    "Cleanup uses only the strong real handles captured immediately after actual prepare returned; all own workers/supervisors closed and no test session remains.",
+    "Unregistered filesystem staging may remain after HOLD; tests do not claim that SQLite rollback removes prepared artifacts/effects."
+  ],
+  "status": "Frozen independent runtime review; final whole-slice suite and aggregate remain parent-owned."
+}
