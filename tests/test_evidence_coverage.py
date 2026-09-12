@@ -21,6 +21,7 @@ def test_asr_coverage_excludes_aggregate_and_timing_columns():
     report = {
         "primary_metric": "avg_wer",
         "min_datasets": 2,
+        "dataset_keys": ["wer_a", "wer_b"],
         "columns": [
             {"key": "avg_wer"},
             {"key": "wer_a"},
@@ -38,6 +39,7 @@ def test_asr_coverage_excludes_aggregate_and_timing_columns():
 def test_coverage_rejects_boolean_nan_and_infinity():
     report = {
         "min_datasets": 3,
+        "dataset_keys": ["a", "b", "c", "d"],
         "columns": [{"key": key} for key in ("a", "b", "c", "d")],
     }
     assert count_dataset_metrics(
@@ -49,6 +51,7 @@ def test_coverage_rejects_boolean_nan_and_infinity():
 def test_configured_source_value_cannot_fall_back_to_metrics():
     report = {
         "min_datasets": 1,
+        "dataset_keys": ["wer_a"],
         "columns": [{"key": "wer_a", "source": "external.json:wer"}],
     }
     assert minimum_dataset_coverage(
@@ -58,12 +61,15 @@ def test_configured_source_value_cannot_fall_back_to_metrics():
     ) == (False, 0, 1)
 
 
-def test_legacy_wer_fallback_only_applies_without_declared_columns():
+def test_s3_live_coverage_never_infers_a_legacy_wer_declaration():
+    # S3 deliberately replaces the S1 live name fallback. The immutable old
+    # expectation is retained at 69ff7babb57371632fb3048db781b24a3545548a.
+    with pytest.raises(ValueError, match="^dataset_coverage_not_declared$"):
+        minimum_dataset_coverage(
+            {"min_datasets": 1}, metrics={"wer_legacy": 1.0},
+        )
     assert minimum_dataset_coverage(
-        {"min_datasets": 1}, metrics={"wer_legacy": 1.0},
-    ) == (True, 1, 1)
-    assert minimum_dataset_coverage(
-        {"min_datasets": 1, "columns": [{"key": "score"}]},
+        {"min_datasets": 1, "columns": [{"key": "score"}], "dataset_keys": ["score"]},
         metrics={"score": None, "wer_legacy": 1.0},
     ) == (False, 0, 1)
 

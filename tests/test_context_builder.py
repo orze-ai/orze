@@ -51,6 +51,7 @@ def _source_cfg(results):
             "primary_metric": "avg",
             "sort": "ascending",
             "min_datasets": 2,
+            "dataset_keys": ["wer_a", "wer_b"],
             "columns": [
                 {"key": "avg", "source": "evaluation.json:avg"},
                 {"key": "wer_a", "source": "evaluation.json:wer_a"},

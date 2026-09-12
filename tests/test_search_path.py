@@ -246,6 +246,7 @@ class TestResolver:
             "report": {
                 "primary_metric": "avg_wer",
                 "min_datasets": 2,
+                "dataset_keys": ["wer_a", "wer_b"],
                 "columns": [
                     {"key": "avg_wer"},
                     {"key": "wer_a"},

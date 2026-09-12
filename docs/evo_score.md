@@ -24,6 +24,10 @@ non-symlinked `metrics.json` must independently declare `COMPLETED`, configured
 source files must be readable without path redirection, values must be finite
 and non-boolean, metric validation must pass, and `report.min_datasets` coverage
 is shared with the leaderboard report. When `report.benchmark_contract` is
+disabled, a positive minimum requires explicit `report.dataset_keys`; neither
+metric names nor display columns imply coverage. An enabled benchmark may use
+its explicit `required_metrics` as the fallback declaration. See
+[coverage configuration and migration](report-coverage.md). When the benchmark is
 enabled, the current per-idea nonce, exposure-ledger link, evaluator and
 benchmark identity, single-model/single-pass receipt, exact required-metric
 coverage, and macro aggregate must additionally validate. The API returns

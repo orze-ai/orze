@@ -189,6 +189,7 @@ def test_valid_raw_metrics_cannot_authorize_invalid_declared_source(
         p.output["measurements"]["quality"] = -1.0
     elif invalid_source == "coverage":
         p.cfg["report"]["min_datasets"] = 3
+        p.cfg["report"]["dataset_keys"] = ["quality_delta", "fold_a", "fold_b"]
         p.cfg["report"]["columns"].extend([
             {"key": "fold_a", "source": "assessment.json:measurements.fold_a"},
             {"key": "fold_b", "source": "assessment.json:measurements.fold_b"},

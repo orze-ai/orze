@@ -125,23 +125,62 @@ def legacy_archive_metric_value(metrics: dict, primary_metric: str,
 
 
 def dataset_metric_keys(report_cfg: Mapping) -> list[str]:
-    """Return the configured columns that constitute dataset coverage.
+    """Resolve explicit coverage members; metric names grant no validity.
 
-    Preserve the established report behavior: ASR-style ``wer_*`` columns are
-    the explicit per-dataset set and exclude the primary aggregate; other tasks
-    use their declared report columns.
+    Benchmark components are already a declaration, not a naming convention.
+    Each member resolves through exactly one declared report source column.
     """
-    primary = report_cfg.get("primary_metric")
-    keys = [
-        column["key"]
-        for column in (report_cfg.get("columns") or [])
-        if isinstance(column, dict) and column.get("key")
-    ]
-    wer_keys = [
-        key for key in keys
-        if key.startswith("wer_") and key != primary
-    ]
-    return wer_keys or keys
+    contract = report_cfg.get("benchmark_contract")
+    has_required = isinstance(contract, Mapping) and "required_metrics" in contract
+    if "dataset_keys" not in report_cfg and not has_required:
+        return []
+
+    def checked(value):
+        invalid = "dataset_coverage_declaration_invalid"
+        if type(value) is not list or len(value) > 256:
+            raise ValueError(invalid)
+        columns = report_cfg.get("columns", [])
+        if type(columns) is not list:
+            raise ValueError(invalid)
+        seen = set()
+        for key in value:
+            if type(key) is not str or not key.strip() or key in seen:
+                raise ValueError(invalid)
+            try:
+                if len(key.encode("utf-8")) > 1024:
+                    raise ValueError(invalid)
+            except UnicodeError as exc:
+                raise ValueError(invalid) from exc
+            if sum(isinstance(column, Mapping) and column.get("key") == key
+                   for column in columns) != 1:
+                raise ValueError(invalid)
+            seen.add(key)
+        return list(value)
+
+    required = checked(contract["required_metrics"]) if has_required else []
+    if has_required and not required:
+        raise ValueError("dataset_coverage_declaration_invalid")
+    keys = checked(report_cfg["dataset_keys"]) if "dataset_keys" in report_cfg else required
+    if not set(required).issubset(keys):
+        raise ValueError("dataset_coverage_declaration_invalid")
+    return keys
+
+
+def dataset_coverage_identity(report_cfg: Mapping) -> dict:
+    """Bind caches to validated coverage semantics, including invalid input.
+
+    JSON alone conflates tuples with lists and a missing field with null.
+    Invalid declarations must never share authority with a valid cache entry.
+    """
+    try:
+        keys = dataset_metric_keys(report_cfg)
+    except ValueError as exc:
+        return {"version": 2, "error": str(exc)}
+    return {
+        "version": 2,
+        "explicit": "dataset_keys" in report_cfg,
+        "keys": keys,
+    }
 
 
 def count_dataset_metrics(
@@ -154,18 +193,10 @@ def count_dataset_metrics(
     values = values if isinstance(values, Mapping) else {}
     metrics = metrics if isinstance(metrics, Mapping) else {}
     dataset_keys = dataset_metric_keys(report_cfg)
-    count = sum(
+    return sum(
         1 for key in dataset_keys
         if _finite_number(values[key] if key in values else metrics.get(key))
     )
-    if not dataset_keys:
-        # Backward-compatible evidence for projects that configured no useful
-        # columns but historically emitted flat per-dataset WER keys.
-        count = sum(
-            1 for key, value in metrics.items()
-            if str(key).startswith("wer_") and _finite_number(value)
-        )
-    return count
 
 
 def minimum_dataset_coverage(
@@ -186,6 +217,10 @@ def minimum_dataset_coverage(
         return False, 0, -1
     if required < 0:
         return False, 0, required
+    contract = report_cfg.get("benchmark_contract")
+    if (required > 0 and "dataset_keys" not in report_cfg
+            and not (isinstance(contract, Mapping) and "required_metrics" in contract)):
+        raise ValueError("dataset_coverage_not_declared")
     observed = count_dataset_metrics(
         report_cfg, values=values, metrics=metrics)
     return observed >= required, observed, required
@@ -326,6 +361,12 @@ def qualify_local_report_evidence(
         # observations, even when the task's operational stage is COMPLETE.
         return {}, {}, None, adapter_reason
     report = cfg.get("report") or {}
+    # Validate declarations before any source loader iterates their columns.
+    # This is configuration validation only; actual coverage is checked below.
+    try:
+        minimum_dataset_coverage(report)
+    except ValueError as exc:
+        return {}, {}, None, str(exc)
     metrics, values, reason = load_local_report_evidence(idea_dir, report)
     if reason != "local_evidence_loaded":
         return metrics, values, None, reason
@@ -357,8 +398,11 @@ def qualify_local_report_evidence(
     value = values.get(primary) if isinstance(primary, str) else None
     if (require_primary or "primary_metric" in report) and not _finite_number(value):
         return metrics, values, None, "primary_metric_missing_or_nonfinite"
-    coverage_ok, observed, required = minimum_dataset_coverage(
-        report, values=values, metrics=metrics)
+    try:
+        coverage_ok, observed, required = minimum_dataset_coverage(
+            report, values=values, metrics=metrics)
+    except ValueError as exc:
+        return metrics, values, None, str(exc)
     if not coverage_ok:
         return (
             metrics,

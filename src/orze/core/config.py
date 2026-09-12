@@ -1106,6 +1106,13 @@ def _validate_config(cfg: dict) -> tuple:
             validate_benchmark_contract_config,
         )
         errors.extend(validate_benchmark_contract_config(cfg))
+        from orze.reporting.evidence import minimum_dataset_coverage
+        try:
+            _, _, coverage_minimum = minimum_dataset_coverage(report_cfg)
+            if coverage_minimum < 0:
+                errors.append("report.min_datasets: must be a non-negative integer")
+        except ValueError as exc:
+            errors.append("report: " + str(exc))
 
     errors.extend(validate_research_policy_config(cfg))
 

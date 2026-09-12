@@ -159,6 +159,7 @@ def test_true_declaration_does_not_override_other_authoritative_requirements(
             {"key": "replicate", "source": "evaluation.json:measurement.replicate"}
         )
         cfg["report"]["min_datasets"] = 2
+        cfg["report"]["dataset_keys"] = ["score", "replicate"]
     elif rejection == "nonfinite":
         (folder / "evaluation.json").write_text(
             json.dumps({"measurement": {"score": float("inf")}}), encoding="utf-8"

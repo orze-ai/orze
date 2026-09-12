@@ -342,7 +342,8 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         columns = user_columns or mh_columns or DEFAULT_CONFIG["report"]["columns"]
     evidence_cfg = dict(cfg)
     evidence_report = dict(report_cfg)
-    evidence_report["columns"] = columns
+    # Display/harvest fallbacks cannot supply qualification members or change
+    # their source. The offline adapter follows the same raw policy as native.
     evidence_cfg["report"] = evidence_report
     from orze.reporting.native_report import (
         native_report_evidence, report_authority,
@@ -363,12 +364,15 @@ def update_report(results_dir: Path, ideas: Dict[str, dict],
         else "unavailable_idea_lake" if native_authority
         else "unverified_local_artifact"
     )
+    from orze.reporting.evidence import dataset_coverage_identity
     _col_hash = hashlib.sha256(json.dumps(
         {
             "columns": columns,
+            "evidence_columns": evidence_report.get("columns"),
             "primary_metric": primary_metric,
             "secondary_metric": report_cfg.get("secondary_metric"),
             "min_datasets": report_cfg.get("min_datasets", 0),
+            "dataset_coverage": dataset_coverage_identity(evidence_report),
             "metric_validation": cfg.get("metric_validation", {}),
             "eval_output": cfg.get("eval_output") or "eval_report.json",
             "evaluation_enabled": bool(cfg.get("eval_script")),

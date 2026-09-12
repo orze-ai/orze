@@ -94,6 +94,7 @@ def test_min_datasets_counts_dataset_wer_not_aggregate_or_time(tmp_path):
             "primary_metric": "avg_wer",
             "sort": "ascending",
             "min_datasets": 8,
+            "dataset_keys": keys,
             "columns": columns,
         }
     }

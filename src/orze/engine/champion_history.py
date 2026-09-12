@@ -20,7 +20,9 @@ import sqlite3
 from pathlib import Path
 
 from orze.core.sqlite_policy import apply_shared_database_policy
-from orze.reporting.evidence import _open_authoritative_lifecycle
+from orze.reporting.evidence import (
+    _open_authoritative_lifecycle, dataset_coverage_identity,
+)
 
 _TABLE = "champion_guard_history_v1"
 _SCHEMA = """
@@ -50,6 +52,7 @@ def objective_scope(cfg: dict) -> str:
         "sort": report.get("sort", "descending"),
         "sources": sources,
         "min_datasets": report.get("min_datasets", 0),
+        "dataset_coverage": dataset_coverage_identity(report),
         "benchmark_contract": report.get("benchmark_contract"),
         "eval_output": cfg.get("eval_output") or "eval_report.json",
         "evaluation_enabled": bool(cfg.get("eval_script")),

@@ -109,7 +109,7 @@ def test_native_declared_default_columns_are_not_replaced_by_harvest(project):
 
 def test_native_coverage_is_not_satisfied_by_undeclared_harvest_columns(project):
     p = project
-    p.cfg["report"].update(columns=[], min_datasets=2)
+    p.cfg["report"].update(columns=[], dataset_keys=[], min_datasets=2)
     p.cfg["metric_harvest"] = {"columns": [
         {"key": "subset_a"}, {"key": "subset_b"},
     ]}
