@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-12",
+  "scope": "Repair existing wheel data declaration; no runtime Python change.",
+  "baseline_commit": "82012aeb81cf6b6b137b80f27319a53d5ddeb8db",
+  "missing": "pyproject.toml declares orze/SKILL.md but src/orze/SKILL.md does not exist and the real baseline wheel omits it.",
+  "red": {
+    "chunk_id": "97e310",
+    "wall_time_seconds": 0.414353013,
+    "exit_code": 1,
+    "original_token_count": 231,
+    "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n___________ test_declared_operations_guide_exists_in_package_source ____________\ntests/test_packaged_operations_guide.py:7: in test_declared_operations_guide_exists_in_package_source\n    assert (package / \"SKILL.md\").is_file(), \"declared orze/SKILL.md is missing from package source\"\nE   AssertionError: declared orze/SKILL.md is missing from package source\nE   assert False\nE    +  where False = is_file()\nE    +    where is_file = (PosixPath('/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze/src/orze') / 'SKILL.md').is_file\n=========================== short test summary info ============================\nFAILED tests/test_packaged_operations_guide.py::test_declared_operations_guide_exists_in_package_source\n1 failed in 0.27s\n"
+  },
+  "green": {
+    "chunk_id": "0fc641",
+    "exit_code": 0,
+    "output": "46 passed in 0.47s",
+    "scope": "1 unchanged package-guide assertion plus 45 new policy checks; not the whole product suite"
+  },
+  "fix": "Add a packaged current operations guide at the already-declared package-data path. Root historical SKILL.md is not silently copied: it documents stale upgrade/watchdog behavior. No new build hook or dependency.",
+  "limitations": [
+    "Actual rebuilt wheel resource verification and isolated canary still required.",
+    "No existing service/project/global install mutation; no production rollout claim.",
+    "CPU efficiency comparison remains on the original frozen 82012ae wheel, so rebuilding this packaging fix must use a distinct environment."
+  ]
+}
