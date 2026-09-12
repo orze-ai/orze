@@ -1204,7 +1204,7 @@ def _validate_config(cfg: dict) -> tuple:
     # but absent from this list, producing false-positive validator
     # warnings on every fresh `orze setup` install.
     _KNOWN_EXTRAS = {
-        "execution", "action_policy", "action_domain",
+        "execution", "action_policy", "action_domain", "cpu_runtime_lease",
         "_config_path", "research", "gc", "metric_validation", "sealed_files",
         "sealed_hashes",
         "min_expected_results", "goal_file", "gpu_scheduling", "roles",

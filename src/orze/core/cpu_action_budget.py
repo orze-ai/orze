@@ -554,11 +554,108 @@ def bind(lake, permit, ref):
             conn, permit, ref, states=("LAUNCHING", "RUNNING")))))
 
 
+def _terminal_runtime_lease(bound, terminal):
+    """Validate historical v2 provenance, never current execution permission.
+
+    A confirmed sample is compared only with its captured descriptor. Reading
+    today's clock/boot here would make historical F settlement time-dependent.
+    The caller still checks the actual full Ref, effect and closure authority.
+    """
+    ready, closure = bound.get("supervision"), terminal.get("process_tree")
+    versioned = ("runtime_lease" in bound or "runtime_lease" in terminal
+                 or bound.get("process_supervision_protocol") == "orze.linux_subreaper.v2"
+                 or (type(ready) is dict and ("runtime_lease" in ready
+                     or ready.get("schema") == 2 or ready.get("protocol") == "orze.linux_subreaper.v2"))
+                 or (type(closure) is dict and (closure.get("schema") == 2
+                     or "lease_expired" in closure or "lease_observed_ns" in closure)))
+    if not versioned:
+        return None
+    terminal_fields = {"outcome", "reason_code", "return_code", "process_tree", "artifact_ids",
+                       "observation_ids", "lifecycle_phase", "elapsed_wall_seconds", "lifecycle",
+                       "effect_receipt_sha256", "runtime_lease"}
+    elapsed = terminal.get("elapsed_wall_seconds")
+    if (set(terminal) != terminal_fields or terminal["lifecycle_phase"] != "action"
+            or type(elapsed) not in (int, float) or not 0 <= elapsed <= 2**63 - 1
+            or not math.isfinite(elapsed)):
+        _fail("runtime_lease_terminal_invalid")
+    from orze.engine.supervisor_worker import validate_runtime_lease
+    try:
+        lease = validate_runtime_lease(bound.get("runtime_lease"))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise CpuBudgetHOLD("cpu_budget_runtime_lease_invalid") from exc
+    timeout = _number(bound.get("timeout_seconds"))
+    numerator, denominator = (timeout.as_integer_ratio() if type(timeout) is float else (timeout, 1))
+    # Match supervisor capture exactly; the budget's historical Decimal-based
+    # debit rounding is intentionally unchanged.
+    if lease["deadline_ns"] - lease["issued_ns"] > numerator * 1_000_000_000 // denominator:
+        _fail("runtime_lease_exceeds_envelope")
+    fields = {"schema", "protocol", "identity", "nonce_sha256", "command_sha256",
+              "worker", "supervisor", "runtime_lease"}
+    if (bound.get("process_supervision_protocol") != "orze.linux_subreaper.v2"
+            or type(ready) is not dict or set(ready) != fields
+            or type(ready["schema"]) is not int or ready["schema"] != 2
+            or ready["protocol"] != "orze.linux_subreaper.v2"
+            or _attempt_json(ready["runtime_lease"]) != _attempt_json(lease)
+            or ready["command_sha256"] != bound.get("command_sha256")
+            or any(type(ready[key]) is not str or not _SHA.fullmatch(ready[key])
+                   for key in ("command_sha256", "nonce_sha256"))):
+        _fail("runtime_lease_ready_invalid")
+    for key in ("worker", "supervisor"):
+        member = ready[key]
+        if (type(member) is not dict or set(member) != {"pid", "start_ticks"}
+                or type(member["pid"]) is not int or member["pid"] <= 0
+                or type(member["start_ticks"]) is not int or member["start_ticks"] < 0):
+            _fail("runtime_lease_identity_invalid")
+    if (type(bound.get("process_pid")) is not int or bound["process_pid"] != ready["worker"]["pid"]
+            or ready["worker"]["pid"] == ready["supervisor"]["pid"]):
+        _fail("runtime_lease_identity_invalid")
+    closure_fields = {"schema", "event", "binding", "worker_returncode", "stop_requested",
+                      "forced_cleanup", "reaped_children", "wait_proof",
+                      "lease_expired", "lease_observed_ns"}
+    if (type(closure) is not dict or set(closure) != closure_fields
+            or type(closure["schema"]) is not int or closure["schema"] != 2
+            or _attempt_json(closure["binding"]) != _attempt_json(ready)
+            or type(closure["lease_expired"]) is not bool
+            or type(closure["lease_observed_ns"]) is not int
+            or not lease["issued_ns"] <= closure["lease_observed_ns"] <= 2**63 - 1
+            or closure["lease_expired"] != (closure["lease_observed_ns"] >= lease["deadline_ns"])
+            or (closure["lease_expired"] and closure["stop_requested"] is not True)):
+        _fail("runtime_lease_closure_invalid")
+    sample = terminal.get("runtime_lease")
+    if (type(sample) is not dict or set(sample) != {"schema", "status", "observed_ns"}
+            or type(sample["schema"]) is not int or sample["schema"] != 1
+            or type(sample["status"]) is not str or sample["status"] not in {"authorized", "expired"}
+            or type(sample["observed_ns"]) is not int
+            or not lease["issued_ns"] <= sample["observed_ns"] <= 2**63 - 1):
+        _fail("runtime_lease_terminal_invalid")
+    expired = sample["observed_ns"] >= lease["deadline_ns"]
+    if (sample["status"] != ("expired" if expired else "authorized")
+            or sample["observed_ns"] < closure["lease_observed_ns"]
+            or (closure["lease_expired"] and not expired)):
+        _fail("runtime_lease_terminal_invalid")
+    if expired and (terminal.get("outcome") != "interrupted"
+            or terminal.get("reason_code") != "cpu_runtime_lease_expired"
+            or type(terminal.get("artifact_ids")) is not list or terminal["artifact_ids"]
+            or type(terminal.get("observation_ids")) is not list or terminal["observation_ids"]):
+        _fail("runtime_lease_expiry_invalid")
+    if not expired:
+        outcome = ("interrupted" if closure["stop_requested"] or closure["forced_cleanup"]
+                   else "completed" if closure["worker_returncode"] == 0 else "failed")
+        if (terminal.get("outcome") != outcome
+                or terminal.get("reason_code") != "cpu_action_" + outcome):
+            _fail("runtime_lease_terminal_invalid")
+    return sample["status"]
+
+
 def _terminal(conn, permit, ref, evidence):
     from orze.engine.attempt_effect_receipts import _scan, _read as effect_read, _decode as effect_decode, _ref_fields
     scope = permit["budget_scope"]
     row = _bound_current(conn, permit, ref, states=("TERMINAL", "NOT_STARTED"))
     terminal = row["terminal"]
+    if row["state"] == "NOT_STARTED" and ("runtime_lease" in row["binding"]
+            or "runtime_lease" in terminal
+            or row["binding"].get("process_supervision_protocol") == "orze.linux_subreaper.v2"):
+        _fail("runtime_lease_not_started_unconfirmed")
     if _attempt_json(terminal) != _attempt_json(evidence):
         _fail("terminal_evidence_changed")
     folder = Path(scope["results_dir"]) / ref.task_id
@@ -572,11 +669,14 @@ def _terminal(conn, permit, ref, evidence):
             or _json({k: prepared.get(k) for k in identity}) != _json(identity)):
         _fail("effect_reference_changed")
     if row["state"] == "TERMINAL":
+        lease_status = _terminal_runtime_lease(row["binding"], terminal)
         closure = terminal.get("process_tree")
         fields = {"schema", "event", "binding", "worker_returncode", "stop_requested",
                   "forced_cleanup", "reaped_children", "wait_proof"}
+        if lease_status is not None:
+            fields |= {"lease_expired", "lease_observed_ns"}
         if (type(closure) is not dict or set(closure) != fields
-                or type(closure["schema"]) is not int or closure["schema"] != 1
+                or type(closure["schema"]) is not int or closure["schema"] != (2 if lease_status else 1)
                 or closure["event"] != "TREE_CLOSED" or closure["wait_proof"] != "ECHILD_WALL"
                 or type(closure["worker_returncode"]) is not int
                 or type(closure["stop_requested"]) is not bool
@@ -589,6 +689,12 @@ def _terminal(conn, permit, ref, evidence):
         codes = [terminal[k] for k in ("return_code", "exit_code") if k in terminal]
         if not codes or any(type(v) is not int or v != closure["worker_returncode"] for v in codes):
             _fail("return_code_unconfirmed")
+        if lease_status is not None:
+            planned = {key: value for key, value in terminal.items()
+                       if key not in {"lifecycle", "effect_receipt_sha256"}}
+            if _attempt_json(prepared.get("plan")) != _attempt_json(
+                    {"operation": "cpu_action_terminal", **planned}):
+                _fail("runtime_lease_effect_plan_changed")
     return hashlib.sha256(_attempt_json(terminal).encode()).hexdigest()
 
 
@@ -617,22 +723,27 @@ def _recovery_terminal(conn, scope, permit, ref, evidence):
     digest = _terminal(conn, permit, ref, evidence)
     row = require_current(conn, ref, states=("TERMINAL",))
     bound, terminal = row["binding"], row["terminal"]
+    lease_status = _terminal_runtime_lease(bound, terminal)
     folder = Path(scope["results_dir"]) / ref.task_id
     expected = {"origin": "native_cpu_action", "kind": "native_cpu_action", "resource": "cpu",
         "attempt_id": ref.attempt_id, "attempt_ref": asdict(ref), "scope": str(folder),
         "work_dir": str(folder / "_action_attempts" / ref.attempt_id / "work"),
         "timeout_seconds": permit["wall_limit_seconds"], "reservation_id": permit["reservation_id"],
-        "process_supervision_protocol": PROTOCOL, "lifecycle_phase": "action"}
+        "process_supervision_protocol": "orze.linux_subreaper.v2" if lease_status else PROTOCOL,
+        "lifecycle_phase": "action"}
     if _attempt_json({key: bound.get(key) for key in expected}) != _attempt_json(expected):
         _fail("recovery_native_binding_changed")
     for key in ("action_sha256", "command_sha256", "inputs_sha256"):
         if type(bound.get(key)) is not str or not _SHA.fullmatch(bound[key]):
             _fail("recovery_native_digest_invalid")
     ready = bound.get("supervision")
-    if (type(ready) is not dict or set(ready) != {"schema", "protocol", "identity",
-            "nonce_sha256", "command_sha256", "worker", "supervisor"}
-            or type(ready["schema"]) is not int or ready["schema"] != 1
-            or ready["protocol"] != PROTOCOL or ready["command_sha256"] != bound["command_sha256"]
+    ready_fields = {"schema", "protocol", "identity", "nonce_sha256", "command_sha256", "worker", "supervisor"}
+    if lease_status is not None:
+        ready_fields.add("runtime_lease")
+    if (type(ready) is not dict or set(ready) != ready_fields
+            or type(ready["schema"]) is not int or ready["schema"] != (2 if lease_status else 1)
+            or ready["protocol"] != expected["process_supervision_protocol"]
+            or ready["command_sha256"] != bound["command_sha256"]
             or type(ready["nonce_sha256"]) is not str or not _SHA.fullmatch(ready["nonce_sha256"])):
         _fail("recovery_ready_invalid")
     for key in ("worker", "supervisor"):
@@ -745,11 +856,16 @@ def _recovery_terminal(conn, scope, permit, ref, evidence):
     closure = terminal["process_tree"]
     outcome = ("interrupted" if closure["stop_requested"] or closure["forced_cleanup"]
                else "completed" if closure["worker_returncode"] == 0 else "failed")
+    if lease_status == "expired":
+        outcome = "interrupted"
     fields = {"outcome", "reason_code", "return_code", "process_tree", "artifact_ids", "observation_ids",
               "lifecycle_phase", "elapsed_wall_seconds", "lifecycle", "effect_receipt_sha256"}
+    if lease_status is not None:
+        fields.add("runtime_lease")
+    reason = "cpu_runtime_lease_expired" if lease_status == "expired" else "cpu_action_" + outcome
     elapsed = terminal.get("elapsed_wall_seconds")
     if (set(terminal) != fields or terminal["outcome"] != outcome
-            or terminal["reason_code"] != "cpu_action_" + outcome or terminal["lifecycle_phase"] != "action"
+            or terminal["reason_code"] != reason or terminal["lifecycle_phase"] != "action"
             or type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0):
         _fail("recovery_terminal_invalid")
     lifecycle = lifecycle_fence(SimpleNamespace(conn=conn), ref.task_id, "action")

@@ -31,6 +31,8 @@ def cpu_execution(cfg):
             _fail("action_policy requires explicit CPU execution")
         if cfg.get("action_domain") is not None:
             _fail("action_domain requires explicit CPU execution")
+        if "cpu_runtime_lease" in cfg:
+            _fail("cpu_runtime_lease requires explicit CPU execution")
         return None
     if (type(value) is not dict or set(value) != {
             "version", "resource", "slots", "wall_budget_seconds"}
@@ -61,6 +63,7 @@ def cpu_execution(cfg):
             _fail(key + " is not an action-local CPU contract")
     action_policy(cfg)
     action_domain(cfg)
+    runtime_lease_config(cfg)
     loaded = cfg.get("_cpu_execution_fingerprint")
     if loaded is not None and loaded != execution_fingerprint(cfg, declaration=result):
         _fail("loaded CPU configuration changed")
@@ -103,8 +106,33 @@ def execution_fingerprint(cfg, *, declaration=None):
     paths["cwd"] = str(Path.cwd())
     raw = json.dumps({"execution": value, "action_policy": action_policy(cfg),
                       "action_domain": action_domain(cfg),
+                      "cpu_runtime_lease": runtime_lease_config(cfg),
                       "paths": paths}, sort_keys=True, allow_nan=False)
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def runtime_lease_config(cfg):
+    """Normalize invocation policy without changing the budget namespace."""
+    if "cpu_runtime_lease" not in cfg:
+        return {"version": 1, "ttl_seconds": None}
+    value = cfg["cpu_runtime_lease"]
+    if (type(value) is not dict or set(value) != {"version", "ttl_seconds"}
+            or type(value["version"]) is not int or value["version"] != 1):
+        _fail("cpu_runtime_lease requires version 1 and ttl_seconds")
+    seconds = value["ttl_seconds"]
+    if (type(seconds) not in (int, float) or not 0 < seconds <= 365 * 86400
+            or not math.isfinite(seconds) or seconds < 1e-9):
+        _fail("cpu_runtime_lease.ttl_seconds must be finite in [1e-9, 31536000]")
+    return {"version": 1, "ttl_seconds": float(seconds)}
+
+
+def runtime_lease_seconds(cfg, timeout_seconds):
+    value = runtime_lease_config(cfg)["ttl_seconds"]
+    if value is None:
+        return timeout_seconds
+    if value > timeout_seconds:
+        _fail("cpu_runtime_lease.ttl_seconds exceeds action timeout_seconds")
+    return value
 
 
 def validate_cpu_cli(cfg, args):

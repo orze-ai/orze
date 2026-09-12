@@ -16,6 +16,9 @@ import re
 
 from orze.core.execution_attempts import AttemptRef
 from orze.engine.attempt_effect_lock import AttemptEffectBusy
+from orze.engine.supervisor_worker import (
+    MAX_NS, RUNTIME_LEASE_PROTOCOL, validate_runtime_lease,
+)
 
 PROTOCOL = "orze.linux_subreaper.v1"
 _HEX = re.compile(r"[0-9a-f]{64}")
@@ -53,11 +56,19 @@ def ready_binding(ep, idea_dir, *, phase):
         raise AttemptEffectBusy(f"{phase}_supervised_process_required")
     try:
         binding = process.binding
-        if (type(binding) is not dict or set(binding) != {
+        keys = {
                 "schema", "protocol", "identity", "nonce_sha256", "command_sha256",
                 "worker", "supervisor"}
-                or type(binding["schema"]) is not int or binding["schema"] != 1
-                or binding["protocol"] != PROTOCOL
+        schema, protocol = 1, PROTOCOL
+        if type(binding) is dict and binding.get("protocol") == RUNTIME_LEASE_PROTOCOL:
+            if phase != "action":
+                raise ValueError("runtime_lease_phase")
+            validate_runtime_lease(binding.get("runtime_lease"))
+            keys.add("runtime_lease")
+            schema, protocol = 2, RUNTIME_LEASE_PROTOCOL
+        if (type(binding) is not dict or set(binding) != keys
+                or type(binding["schema"]) is not int or binding["schema"] != schema
+                or binding["protocol"] != protocol
                 or not _same(binding["identity"], identity(ep, idea_dir, phase=phase))):
             raise ValueError("binding")
         for field in ("nonce_sha256", "command_sha256"):
@@ -84,9 +95,17 @@ def bound_binding(ep, row, idea_dir, *, phase, allow_launch_cleanup=False):
     """An old or replaced process cannot acquire supervision by callback."""
     _phase(phase)
     bound = row["binding"]
-    if bound.get("process_supervision_protocol") != PROTOCOL:
+    protocol = bound.get("process_supervision_protocol")
+    if protocol not in (PROTOCOL, RUNTIME_LEASE_PROTOCOL):
         raise AttemptEffectBusy(f"{phase}_supervision_unbound")
     ready = ready_binding(ep, idea_dir, phase=phase)
+    if ready["protocol"] != protocol:
+        raise AttemptEffectBusy(f"{phase}_supervision_protocol_changed")
+    if protocol == RUNTIME_LEASE_PROTOCOL:
+        if phase != "action" or not _same(bound.get("runtime_lease"), ready["runtime_lease"]):
+            raise AttemptEffectBusy(f"{phase}_runtime_lease_changed")
+    elif "runtime_lease" in bound:
+        raise AttemptEffectBusy(f"{phase}_runtime_lease_downgrade")
     stored = bound.get("supervision")
     if not _same(stored, ready):
         if not (allow_launch_cleanup is True and row["state"] == "LAUNCHING"
@@ -111,10 +130,22 @@ def require_closed(ep, row, idea_dir, ret, *, phase, allow_launch_cleanup=False)
         raise AttemptEffectBusy(f"{phase}_supervision_unconfirmed") from exc
     if type(actual) is not int or actual != ret or closure is None:
         raise AttemptEffectBusy(f"{phase}_process_tree_unclosed")
-    if (type(closure) is not dict or set(closure) != {
+    keys = {
             "schema", "event", "binding", "worker_returncode", "stop_requested",
             "forced_cleanup", "reaped_children", "wait_proof"}
-            or type(closure["schema"]) is not int or closure["schema"] != 1
+    schema = 1
+    if ready["protocol"] == RUNTIME_LEASE_PROTOCOL:
+        keys.update(("lease_expired", "lease_observed_ns"))
+        schema = 2
+        lease = ready["runtime_lease"]
+        observed = closure.get("lease_observed_ns") if type(closure) is dict else None
+        expired = closure.get("lease_expired") if type(closure) is dict else None
+        if (type(observed) is not int or not lease["issued_ns"] <= observed <= MAX_NS
+                or type(expired) is not bool or expired != (observed >= lease["deadline_ns"])
+                or (expired and closure.get("stop_requested") is not True)):
+            raise AttemptEffectBusy(f"{phase}_runtime_lease_receipt_invalid")
+    if (type(closure) is not dict or set(closure) != keys
+            or type(closure["schema"]) is not int or closure["schema"] != schema
             or closure["event"] != "TREE_CLOSED"
             or not _same(closure["binding"], ready)
             or type(closure["worker_returncode"]) is not int

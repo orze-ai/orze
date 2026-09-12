@@ -20,6 +20,7 @@ import yaml
 
 from orze.core.cpu_execution import (
     CPUExecutionError, action_policy, cpu_execution, execution_fingerprint,
+    runtime_lease_seconds,
 )
 
 logger = logging.getLogger("orze")
@@ -292,6 +293,9 @@ def iteration(engine):
                               action=action, domain_run=domain_run)
             except Exception as exc:
                 raise CPUExecutionError("execution: CPU replication authorization rejected") from exc
+            # Reject a static lease/action mismatch before consuming a slot or
+            # claim. Native launch independently repeats this dynamic check.
+            runtime_lease_seconds(engine.cfg, action["timeout_seconds"])
             permit = budget.reserve(engine.lake, engine._cpu_scope, idea_id, action["timeout_seconds"])
             if permit is None:
                 decision = {"kind": "Wait", "reason": "cpu_resource_or_budget_unavailable",

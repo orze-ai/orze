@@ -38,6 +38,7 @@ class ExecutionTransaction:
     _watched_observations: dict = field(default_factory=dict, init=False, repr=False)
     _watched_cpu_sources: dict = field(default_factory=dict, init=False, repr=False)
     _watched_cpu_replication: dict = field(default_factory=dict, init=False, repr=False)
+    _watched_cpu_runtime_leases: dict = field(default_factory=dict, init=False, repr=False)
 
     @property
     def conn(self):
@@ -90,6 +91,35 @@ class ExecutionTransaction:
         for record, expected in self._watched_cpu_replication.values():
             if _cpu_replication_snapshot(self, record) != expected:
                 raise AttemptAuthorityError("execution_cpu_replication_changed")
+        self._verify_runtime_leases()
+
+    def watch_cpu_runtime_lease(self, ref: AttemptRef, descriptor, *, status="authorized") -> None:
+        """Time-sensitive same-attempt fence, not a callback or new capability."""
+        from orze.engine.supervisor_worker import validate_runtime_lease
+        if (not self.conn.in_transaction or type(ref) is not AttemptRef
+                or ref.task_id != self.idea_dir.name or ref.phase != "action"
+                or ref in self._watched_cpu_runtime_leases
+                or len(self._watched_cpu_runtime_leases) >= 32
+                or status not in ("authorized", "expired")):
+            raise AttemptAuthorityError("execution_cpu_runtime_lease_watch_invalid")
+        require_effect_lease(self.lease, self.idea_dir)
+        self._watched_cpu_runtime_leases[ref] = (validate_runtime_lease(descriptor), status)
+        self._verify_runtime_leases()
+
+    def _verify_runtime_leases(self) -> None:
+        if not self._watched_cpu_runtime_leases:
+            return
+        from orze.engine.supervisor_worker import runtime_lease_now, RUNTIME_LEASE_PROTOCOL
+        for ref, (descriptor, status) in self._watched_cpu_runtime_leases.items():
+            row = require_current(self.conn, ref, states=("LAUNCHING", "RUNNING", "TERMINAL"))
+            bound = row["binding"]
+            if (bound.get("origin") != "native_cpu_action"
+                    or bound.get("process_supervision_protocol") != RUNTIME_LEASE_PROTOCOL
+                    or _canonical(bound.get("runtime_lease")) != _canonical(descriptor)):
+                raise AttemptAuthorityError("execution_cpu_runtime_lease_changed")
+            observed = runtime_lease_now(descriptor)
+            if (observed >= descriptor["deadline_ns"]) != (status == "expired"):
+                raise AttemptAuthorityError("execution_cpu_runtime_lease_" + status + "_rejected")
 
     def watch_cpu_replication(self, record) -> None:
         """Read-only request fence for its exact source or target task guard.
@@ -345,7 +375,11 @@ def _execution_transaction(lake, idea_dir: Path, *, lease=None):
                 require_effect_lease(acquired, idea_dir)
                 if _bound_terminal(tx) != expected_terminal:
                     raise AttemptEffectInDoubt("execution_committed_terminal_changed")
+                tx._verify_runtime_leases()
                 confirm_effect(acquired, tx.prepared_ref, tx.prepared_sha256)
+                # Keep this gate INSIDE the effect guard. Even an actually
+                # written confirmation cannot release a late/unknown owner.
+                tx._verify_runtime_leases()
         except BaseException as exc:
             failure = exc
             uncertain = (isinstance(exc, AttemptEffectInDoubt)

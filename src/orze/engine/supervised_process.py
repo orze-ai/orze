@@ -23,6 +23,8 @@ import time
 
 from orze.engine.supervisor_worker import (
     MAX_FRAME, PROTOCOL, canonical, process_identity, send_frame, take_frame,
+    MAX_NS, RUNTIME_LEASE_PROTOCOL, RuntimeLeaseExpired,
+    validate_runtime_lease, runtime_lease_now, require_runtime_lease,
 )
 
 
@@ -41,15 +43,19 @@ class SupervisionUncertain(RuntimeError):
 class SupervisedProcess:
     """A Popen-like handle whose pid is the actual worker, not the supervisor."""
 
-    def __init__(self, supervisor, channel, identity, nonce, command_sha256):
-        self._initialize(supervisor, channel, identity, nonce, command_sha256)
+    def __init__(self, supervisor, channel, identity, nonce, command_sha256, *, runtime_lease=None):
+        self._initialize(supervisor, channel, identity, nonce, command_sha256,
+                         runtime_lease=runtime_lease)
 
-    def _initialize(self, supervisor, channel, identity, nonce, command_sha256):
+    def _initialize(self, supervisor, channel, identity, nonce, command_sha256, *, runtime_lease=None):
         self._supervisor = supervisor
         self._channel = channel
         self._identity = json.loads(canonical(identity))
         self._nonce = nonce
         self._command_sha256 = command_sha256
+        self._runtime_lease = (None if runtime_lease is None
+                               else validate_runtime_lease(runtime_lease))
+        self._lease_observed_ns = None
         self._binding = None
         self._closed = None
         self._buffer = bytearray()
@@ -85,13 +91,19 @@ class SupervisedProcess:
             if set(message) != {"event", "binding"} or message["event"] != "READY":
                 self._fail("supervisor_ready_invalid")
             binding = message["binding"]
-            if not isinstance(binding, dict) or set(binding) != {
+            keys = {
                     "schema", "protocol", "identity", "nonce_sha256", "command_sha256",
-                    "worker", "supervisor"}:
+                    "worker", "supervisor"}
+            if self._runtime_lease is not None:
+                keys.add("runtime_lease")
+            if not isinstance(binding, dict) or set(binding) != keys:
                 self._fail("supervisor_binding_invalid")
             expected = {"schema": 1, "protocol": PROTOCOL, "identity": self._identity,
                         "nonce_sha256": hashlib.sha256(self._nonce.encode("ascii")).hexdigest(),
                         "command_sha256": self._command_sha256}
+            if self._runtime_lease is not None:
+                expected.update(schema=2, protocol=RUNTIME_LEASE_PROTOCOL,
+                                runtime_lease=self._runtime_lease)
             if canonical({key: binding[key] for key in expected}) != canonical(expected):
                 self._fail("supervisor_binding_mismatch")
             for key in ("worker", "supervisor"):
@@ -112,8 +124,20 @@ class SupervisedProcess:
             return
         expected_keys = {"schema", "event", "binding", "worker_returncode", "stop_requested",
                          "forced_cleanup", "reaped_children", "wait_proof"}
+        schema = 1
+        if self._runtime_lease is not None:
+            schema = 2
+            expected_keys.update(("lease_expired", "lease_observed_ns"))
+            observed = message.get("lease_observed_ns")
+            expired = message.get("lease_expired")
+            if (type(observed) is not int
+                    or not self._runtime_lease["issued_ns"] <= observed <= MAX_NS
+                    or type(expired) is not bool
+                    or expired != (observed >= self._runtime_lease["deadline_ns"])
+                    or (expired and message.get("stop_requested") is not True)):
+                self._fail("supervisor_lease_closure_invalid")
         if (self._closed is not None or set(message) != expected_keys
-                or type(message["schema"]) is not int or message["schema"] != 1
+                or type(message["schema"]) is not int or message["schema"] != schema
                 or message["event"] != "TREE_CLOSED"
                 or canonical(message["binding"]) != canonical(self._binding)
                 or type(message["worker_returncode"]) is not int
@@ -158,6 +182,16 @@ class SupervisedProcess:
     def start(self):
         if self._uncertainty or self._binding is None or self._started or self._stop_sent:
             self._fail("supervisor_start_not_authorized")
+        if self._runtime_lease is not None:
+            try:
+                observed = runtime_lease_now(self._runtime_lease)
+                if self._lease_observed_ns is not None and observed < self._lease_observed_ns:
+                    raise ValueError("runtime_lease_clock_reversed")
+                self._lease_observed_ns = observed
+            except Exception:
+                self._fail("supervisor_lease_clock_uncertain")
+            if observed >= self._runtime_lease["deadline_ns"]:
+                raise RuntimeLeaseExpired(observed)
         from orze.engine.controller_members import start_guard
         with start_guard(self) as admitted:
             if not admitted:
@@ -207,7 +241,9 @@ class SupervisedProcess:
     def stop(self, timeout=10):
         if self.poll() is not None:
             return True
-        if not self._stop_sent:
+        # A v2 autonomous expiry may deliver CLOSED before waitpid observes
+        # supervisor exit. Do not send STOP back into an already closed peer.
+        if not self._stop_sent and (self._runtime_lease is None or self._closed is None):
             self._send("STOP")
             self._stop_sent = True
         try:
@@ -224,7 +260,8 @@ class SupervisedProcess:
 
 
 def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
-                       stderr=None, pass_fds=(), worker_only_fds=(), ready_timeout=10):
+                       stderr=None, pass_fds=(), worker_only_fds=(), ready_timeout=10,
+                       runtime_lease=None):
     """Create a blocked worker; post-Popen failures carry a HOLD handle.
 
     ``pass_fds`` are retained by both supervisor and worker until their own
@@ -243,6 +280,12 @@ def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
                 or not isinstance(identity, dict)):
             raise ValueError("supervisor_setup_invalid")
         identity = json.loads(canonical(identity))
+        lease = None if runtime_lease is None else validate_runtime_lease(runtime_lease)
+        if lease is not None:
+            if (type(identity.get("attempt_ref")) is not dict
+                    or identity["attempt_ref"].get("phase") != "action"):
+                raise ValueError("supervisor_lease_phase_invalid")
+            require_runtime_lease(lease)
         if len(canonical(identity)) > 16384:
             raise ValueError("supervisor_identity_limit")
         if type(ready_timeout) not in (int, float) or not 0 < ready_timeout <= 60:
@@ -264,6 +307,8 @@ def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
         nonce = secrets.token_hex(32)
         config = {"cmd": list(cmd), "identity": identity, "env": environment, "nonce": nonce,
                   "worker_only_fds": list(worker_fds)}
+        if lease is not None:
+            config["runtime_lease"] = lease
         if len(canonical(config)) > MAX_FRAME:
             raise ValueError("supervisor_setup_limit")
         # Probe only ourselves, without installing a process-wide subreaper.
@@ -286,7 +331,8 @@ def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
     # handle construction is still inside the post-spawn uncertainty boundary.
     try:
         fallback = object.__new__(SupervisedProcess)
-        SupervisedProcess._initialize(fallback, None, parent, identity, nonce, command_hash)
+        options = {} if lease is None else {"runtime_lease": lease}
+        SupervisedProcess._initialize(fallback, None, parent, identity, nonce, command_hash, **options)
         bind_prepared(member, fallback)
     except BaseException:
         parent.close()
@@ -313,7 +359,7 @@ def prepare_supervised(cmd, *, identity, env=None, cwd=None, stdout=None,
     fallback._supervisor = supervisor
     try:
         child.close()
-        handle = SupervisedProcess(supervisor, parent, identity, nonce, command_hash)
+        handle = SupervisedProcess(supervisor, parent, identity, nonce, command_hash, **options)
         bind_prepared(member, handle)
         handle._supervisor_pidfd = os.pidfd_open(supervisor.pid, 0)
         parent.settimeout(ready_timeout)
