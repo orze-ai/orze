@@ -944,6 +944,8 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     training_count = len(active)
     eval_count = len(active_evals)
     held_training, held_evals, held_roles = {}, {}, {}
+    training_snapshot = dict(active.items())
+    eval_snapshot = dict(active_evals.items())
     role_snapshot = dict(active_roles)
     from orze.engine.shutdown_publication import handle_shutdown
     from orze.engine.role_delivery import stop_owned_role
@@ -991,7 +993,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
 
     if kill_all:
         # Kill ALL child processes: training, eval, and roles
-        for gpu, tp in active.items():
+        for gpu, tp in training_snapshot.items():
             logger.info("Killing training %s on GPU %s (PID %d)",
                         tp.idea_id, gpu, tp.process.pid)
             phase = "posthoc" if getattr(tp, "is_posthoc", False) else "training"
@@ -1011,7 +1013,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
             except Exception as exc:
                 logger.warning("Could not persist interruption receipt for %s: %s",
                                tp.idea_id, type(exc).__name__)
-        for gpu, ep in active_evals.items():
+        for gpu, ep in eval_snapshot.items():
             logger.info("Killing eval %s on GPU %s (PID %d)",
                         ep.idea_id, gpu, ep.process.pid)
             native = handle_shutdown(ep, results_dir, "evaluation", _stop_for_shutdown, lake=lake, cfg=cfg)
@@ -1042,7 +1044,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
         # detach. Evaluators do not: detaching left an unowned allocation that
         # could never write its terminal receipt. Interrupt evals cleanly and
         # return their stage to PENDING so the next controller can retry.
-        for gpu, tp in active.items():
+        for gpu, tp in training_snapshot.items():
             if getattr(tp, "_termination_unconfirmed", False) is True:
                 held_training[gpu] = tp
                 continue
@@ -1050,7 +1052,7 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
                         "-- will finish in background",
                         tp.idea_id, gpu, tp.process.pid)
             tp.close_log()
-        for gpu, ep in active_evals.items():
+        for gpu, ep in eval_snapshot.items():
             logger.info("Interrupting eval %s on GPU %s (PID %d) "
                         "-- next controller will retry",
                         ep.idea_id, gpu, ep.process.pid)
@@ -1133,10 +1135,15 @@ def graceful_shutdown(results_dir: Path, cfg: dict,
     for role_name, rp in role_snapshot.items():
         if role_name not in held_roles and active_roles.get(role_name) is rp:
             del active_roles[role_name]
-    active.clear()
-    active.update(held_training)
-    active_evals.clear()
-    active_evals.update(held_evals)
+    # Keep held slots in place: GpuSlotManager deletion releases bookkeeping,
+    # while clearing/reinserting is neither its interface nor identity-safe.
+    # Cleanup callbacks may install new owners that this snapshot cannot stop.
+    for mapping, snapshot, held in (
+            (active, training_snapshot, held_training),
+            (active_evals, eval_snapshot, held_evals)):
+        for key, tracked in snapshot.items():
+            if key not in held and mapping.get(key) is tracked:
+                del mapping[key]
 
 
 def _profile_shutdown(results_dir, cfg, active, active_evals, active_roles,
