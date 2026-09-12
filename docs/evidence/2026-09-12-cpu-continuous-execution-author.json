@@ -1,0 +1,375 @@
+{
+  "schema": 1,
+  "kind": "cpu_continuous_authorization_author",
+  "status": "bounded_candidate_verified_not_full_suite_or_complete_autonomous_research",
+  "baseline_commit": "828878e2c7e9f5d541771dad446bfd81f922ab90",
+  "scope": {
+    "worktree": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+    "production_files": [
+      "src/orze/core/cpu_execution.py",
+      "src/orze/core/cpu_action_budget.py",
+      "src/orze/engine/cpu_phase.py"
+    ],
+    "phase_ownership": "Only QueuePolicy cumulative-budget comparison changed; other engine paths unchanged in this candidate epoch.",
+    "new_test": "tests/test_cpu_continuous_execution.py",
+    "new_cases": 28,
+    "new_literal_asserts": 37,
+    "old_test_edits": 0
+  },
+  "contract": {
+    "v1": "Existing exact v1 declaration, finite limits, errors and finite cumulative authorization retained.",
+    "v2": {
+      "version": 2,
+      "resource": "cpu",
+      "slots": 1,
+      "wall_budget_seconds": null
+    },
+    "v2_rules": [
+      "Version must be exact integer 2, wall_budget_seconds must be explicit JSON null; absent, finite numeric substitute, infinity, bool and other invalid declarations refuse.",
+      "Same SQLite DDL, budget scope schema 1 and permit schema 1; v2 stays explicit within the immutable declaration and fingerprint.",
+      "snapshot.remaining_wall_seconds is null; reserved_wall_seconds continues to count all original action envelopes, including unused time.",
+      "No resetting charges, new scope substitution, slot bypass, Stop/HOLD bypass, action timeout relaxation, runtime-lease relaxation or recovery adoption.",
+      "QueuePolicy accepts null remaining time as no cumulative ceiling; slots and Stop checks still precede execution."
+    ],
+    "unchanged_functions": "initialize/bind/require_permit/settle/F reconciliation and execution/runtime lease implementation retain prior bodies."
+  },
+  "classification": {
+    "baseline": "New continuous-authorization requirements, not retrospective bugs in the explicitly finite v1 contract.",
+    "baseline_actual": {
+      "failed": 6,
+      "passed": 11,
+      "errors": 11
+    },
+    "baseline_details": [
+      "Two explicit v2 config cases and both mode-transition cases fail before the v2 contract exists.",
+      "Two QueuePolicy cases hit the old numeric comparison against null.",
+      "Eleven setup errors come from the old budget declaration gate; their downstream safety assertions were not reached and are not eleven separate defects."
+    ],
+    "candidate": "The same unchanged 28 cases pass after the narrow implementation; no test-correction or candidate production failure occurred.",
+    "compatibility": "61 existing targeted cases pass, including actual native completion/failure/stop, escaped descendants, publication expiry and crash→fresh-interpreter terminal settlement; one existing pytest assert-rewrite warning."
+  },
+  "evidence": {
+    "baseline_pre": {
+      "command": "git rev-parse HEAD\nsha256sum src/orze/core/cpu_execution.py src/orze/core/cpu_action_budget.py src/orze/engine/cpu_phase.py tests/test_cpu_continuous_execution.py\nmktemp -d /tmp/orze-cpu-continuous-baseline.XXXXXX",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+      "result": {
+        "chunk_id": "267b73",
+        "wall_time_seconds": 0.000009425,
+        "exit_code": 0,
+        "original_token_count": 120,
+        "output": "828878e2c7e9f5d541771dad446bfd81f922ab90\nf0f532f658b7fcbf24261a21c6526b668022dbfc97c0e2734b8ec0765a89aed7  src/orze/core/cpu_execution.py\n42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259  src/orze/core/cpu_action_budget.py\n92cf3640039d86660d511fe6085674356efbffa7d21bfc4a5c2466a46a9a811a  src/orze/engine/cpu_phase.py\n527d4db3d156bca680e2b24a62357ae32eeb22e5141e42d317a6007231c99989  tests/test_cpu_continuous_execution.py\n/tmp/orze-cpu-continuous-baseline.o8OVyQ\n"
+      }
+    },
+    "baseline_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_continuous_execution.py --tb=short --basetemp=/tmp/orze-cpu-continuous-baseline.o8OVyQ/pytest --junitxml=/tmp/orze-cpu-continuous-baseline.o8OVyQ/junit.xml",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+      "result": {
+        "chunk_id": "8660e8",
+        "wall_time_seconds": 3.824533901,
+        "exit_code": 1,
+        "original_token_count": 2963,
+        "output": "F.........EEEEEEEFEEFFEEFF..                                             [100%]\n==================================== ERRORS ====================================\n_ ERROR at setup of test_continuous_settlement_preserves_charge_and_restart_identity _\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n_ ERROR at setup of test_continuous_action_still_needs_finite_positive_timeout[None] _\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n_ ERROR at setup of test_continuous_action_still_needs_finite_positive_timeout[True] _\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n_ ERROR at setup of test_continuous_action_still_needs_finite_positive_timeout[0] _\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n_ ERROR at setup of test_continuous_action_still_needs_finite_positive_timeout[-1] _\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n_ ERROR at setup of test_continuous_action_still_needs_finite_positive_timeout[inf] _\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n_ ERROR at setup of test_continuous_action_still_needs_finite_positive_timeout[nan] _\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n_ ERROR at setup of test_continuous_stop_blocks_new_go_but_allows_confirmed_settlement _\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n____ ERROR at setup of test_continuous_recovery_never_adopts_reserved_work _____\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n_ ERROR at setup of test_continuous_parallel_reservations_still_share_one_slot _\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n___ ERROR at setup of test_continuous_unknown_commit_does_not_grant_a_permit ___\ntests/test_cpu_continuous_execution.py:35: in context\n    scope = budget.initialize(lake, results, CONTINUOUS)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n=================================== FAILURES ===================================\n____________ test_v2_configuration_is_explicit_detached_and_pinned _____________\ntests/test_cpu_continuous_execution.py:43: in test_v2_configuration_is_explicit_detached_and_pinned\n    declaration = cpu_execution(cfg)\nsrc/orze/core/cpu_execution.py:42: in cpu_execution\n    _fail(\"requires version 1, resource cpu, slots 1..64 and wall_budget_seconds\")\nsrc/orze/core/cpu_execution.py:20: in _fail\n    raise CPUExecutionError(\"execution: \" + reason)\nE   orze.core.cpu_execution.CPUExecutionError: execution: requires version 1, resource cpu, slots 1..64 and wall_budget_seconds\n____________ test_runtime_lease_cannot_exceed_finite_action_timeout ____________\ntests/test_cpu_continuous_execution.py:125: in test_runtime_lease_cannot_exceed_finite_action_timeout\n    assert cpu_execution(cfg) == CONTINUOUS\nsrc/orze/core/cpu_execution.py:42: in cpu_execution\n    _fail(\"requires version 1, resource cpu, slots 1..64 and wall_budget_seconds\")\nsrc/orze/core/cpu_execution.py:20: in _fail\n    raise CPUExecutionError(\"execution: \" + reason)\nE   orze.core.cpu_execution.CPUExecutionError: execution: requires version 1, resource cpu, slots 1..64 and wall_budget_seconds\n_____________ test_same_scope_cannot_change_authorization_mode[1] ______________\ntests/test_cpu_continuous_execution.py:174: in test_same_scope_cannot_change_authorization_mode\n    with pytest.raises(budget.CpuBudgetHOLD, match=\"scope_binding_changed\"):\nE   AssertionError: Regex pattern did not match.\nE     Expected regex: 'scope_binding_changed'\nE     Actual message: 'cpu_budget_declaration_invalid'\n_____________ test_same_scope_cannot_change_authorization_mode[2] ______________\ntests/test_cpu_continuous_execution.py:171: in test_same_scope_cannot_change_authorization_mode\n    scope = budget.initialize(lake, results, initial)\nsrc/orze/core/cpu_action_budget.py:460: in initialize\n    \"declaration\": _declaration(declaration)}\nsrc/orze/core/cpu_action_budget.py:166: in _declaration\n    _fail(\"declaration_invalid\")\nsrc/orze/core/cpu_action_budget.py:73: in _fail\n    raise CpuBudgetHOLD(\"cpu_budget_\" + reason)\nE   orze.core.cpu_action_budget.CpuBudgetHOLD: cpu_budget_declaration_invalid\n_ test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-1-0-False-Execute-None] _\ntests/test_cpu_continuous_execution.py:225: in test_queue_policy_separates_continuous_authorization_from_slot_and_stop\n    result = policy.decide(view, {\"remaining_wall_seconds\": remaining, \"free_slots\": free,\nsrc/orze/engine/cpu_phase.py:57: in decide\n    eligible = next((task for task in snapshot[\"queue\"] if\nsrc/orze/engine/cpu_phase.py:58: in <genexpr>\n    task[\"action\"][\"timeout_seconds\"] <= budget[\"remaining_wall_seconds\"]), None)\nE   TypeError: '<=' not supported between instances of 'int' and 'NoneType'\n_ test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-0-1-False-Wait-cpu_resource_or_budget_unavailable] _\ntests/test_cpu_continuous_execution.py:225: in test_queue_policy_separates_continuous_authorization_from_slot_and_stop\n    result = policy.decide(view, {\"remaining_wall_seconds\": remaining, \"free_slots\": free,\nsrc/orze/engine/cpu_phase.py:57: in decide\n    eligible = next((task for task in snapshot[\"queue\"] if\nsrc/orze/engine/cpu_phase.py:58: in <genexpr>\n    task[\"action\"][\"timeout_seconds\"] <= budget[\"remaining_wall_seconds\"]), None)\nE   TypeError: '<=' not supported between instances of 'int' and 'NoneType'\n=========================== short test summary info ============================\nFAILED tests/test_cpu_continuous_execution.py::test_v2_configuration_is_explicit_detached_and_pinned\nFAILED tests/test_cpu_continuous_execution.py::test_runtime_lease_cannot_exceed_finite_action_timeout\nFAILED tests/test_cpu_continuous_execution.py::test_same_scope_cannot_change_authorization_mode[1]\nFAILED tests/test_cpu_continuous_execution.py::test_same_scope_cannot_change_authorization_mode[2]\nFAILED tests/test_cpu_continuous_execution.py::test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-1-0-False-Execute-None]\nFAILED tests/test_cpu_continuous_execution.py::test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-0-1-False-Wait-cpu_resource_or_budget_unavailable]\nERROR tests/test_cpu_continuous_execution.py::test_continuous_settlement_preserves_charge_and_restart_identity\nERROR tests/test_cpu_continuous_execution.py::test_continuous_action_still_needs_finite_positive_timeout[None]\nERROR tests/test_cpu_continuous_execution.py::test_continuous_action_still_needs_finite_positive_timeout[True]\nERROR tests/test_cpu_continuous_execution.py::test_continuous_action_still_needs_finite_positive_timeout[0]\nERROR tests/test_cpu_continuous_execution.py::test_continuous_action_still_needs_finite_positive_timeout[-1]\nERROR tests/test_cpu_continuous_execution.py::test_continuous_action_still_needs_finite_positive_timeout[inf]\nERROR tests/test_cpu_continuous_execution.py::test_continuous_action_still_needs_finite_positive_timeout[nan]\nERROR tests/test_cpu_continuous_execution.py::test_continuous_stop_blocks_new_go_but_allows_confirmed_settlement\nERROR tests/test_cpu_continuous_execution.py::test_continuous_recovery_never_adopts_reserved_work\nERROR tests/test_cpu_continuous_execution.py::test_continuous_parallel_reservations_still_share_one_slot\nERROR tests/test_cpu_continuous_execution.py::test_continuous_unknown_commit_does_not_grant_a_permit\n6 failed, 11 passed, 11 errors in 3.67s\n"
+      }
+    },
+    "baseline_post": {
+      "command": "sha256sum src/orze/core/cpu_execution.py src/orze/core/cpu_action_budget.py src/orze/engine/cpu_phase.py tests/test_cpu_continuous_execution.py",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+      "result": {
+        "chunk_id": "9f5df1",
+        "wall_time_seconds": 0.000003445,
+        "exit_code": 0,
+        "original_token_count": 100,
+        "output": "f0f532f658b7fcbf24261a21c6526b668022dbfc97c0e2734b8ec0765a89aed7  src/orze/core/cpu_execution.py\n42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259  src/orze/core/cpu_action_budget.py\n92cf3640039d86660d511fe6085674356efbffa7d21bfc4a5c2466a46a9a811a  src/orze/engine/cpu_phase.py\n527d4db3d156bca680e2b24a62357ae32eeb22e5141e42d317a6007231c99989  tests/test_cpu_continuous_execution.py\n"
+      }
+    },
+    "candidate_pre": {
+      "command": "sha256sum src/orze/core/cpu_execution.py src/orze/core/cpu_action_budget.py src/orze/engine/cpu_phase.py tests/test_cpu_continuous_execution.py\nmktemp -d /tmp/orze-cpu-continuous-candidate.XXXXXX",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+      "result": {
+        "chunk_id": "9e27f0",
+        "wall_time_seconds": 0.000003753,
+        "exit_code": 0,
+        "original_token_count": 110,
+        "output": "d1954eee7710d2d41ad73ba4e19e8686fa818ca29e2164ada940d9280ddf5be7  src/orze/core/cpu_execution.py\n6a225cca1774c21fc68822753a0c3872aef1eecd89d9cd45dfbc011aeea058df  src/orze/core/cpu_action_budget.py\n9f87d99f8455558b59f337bad993183bc062897002158feb25aaa4c10b89bec0  src/orze/engine/cpu_phase.py\n527d4db3d156bca680e2b24a62357ae32eeb22e5141e42d317a6007231c99989  tests/test_cpu_continuous_execution.py\n/tmp/orze-cpu-continuous-candidate.JkWTpZ\n"
+      }
+    },
+    "candidate_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_continuous_execution.py --tb=short --basetemp=/tmp/orze-cpu-continuous-candidate.JkWTpZ/pytest --junitxml=/tmp/orze-cpu-continuous-candidate.JkWTpZ/junit.xml",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+      "result": {
+        "chunk_id": "99d012",
+        "wall_time_seconds": 3.9488756130000002,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "............................                                             [100%]\n28 passed in 3.80s\n"
+      }
+    },
+    "candidate_post": {
+      "command": "sha256sum src/orze/core/cpu_execution.py src/orze/core/cpu_action_budget.py src/orze/engine/cpu_phase.py tests/test_cpu_continuous_execution.py",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+      "result": {
+        "chunk_id": "27f22f",
+        "wall_time_seconds": 0.000004569,
+        "exit_code": 0,
+        "original_token_count": 100,
+        "output": "d1954eee7710d2d41ad73ba4e19e8686fa818ca29e2164ada940d9280ddf5be7  src/orze/core/cpu_execution.py\n6a225cca1774c21fc68822753a0c3872aef1eecd89d9cd45dfbc011aeea058df  src/orze/core/cpu_action_budget.py\n9f87d99f8455558b59f337bad993183bc062897002158feb25aaa4c10b89bec0  src/orze/engine/cpu_phase.py\n527d4db3d156bca680e2b24a62357ae32eeb22e5141e42d317a6007231c99989  tests/test_cpu_continuous_execution.py\n"
+      }
+    },
+    "neighborhood_pre": {
+      "command": "mktemp -d /tmp/orze-cpu-continuous-neighborhood.XXXXXX\nsha256sum src/orze/core/cpu_execution.py src/orze/core/cpu_action_budget.py src/orze/engine/cpu_phase.py src/orze/core/research_interfaces.py src/orze/engine/native_cpu_action.py src/orze/engine/execution_authority.py src/orze/engine/supervised_process.py src/orze/engine/supervisor_worker.py",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+      "result": {
+        "chunk_id": "c07b95",
+        "wall_time_seconds": 0.00000432,
+        "exit_code": 0,
+        "original_token_count": 214,
+        "output": "/tmp/orze-cpu-continuous-neighborhood.I3OGmu\nd1954eee7710d2d41ad73ba4e19e8686fa818ca29e2164ada940d9280ddf5be7  src/orze/core/cpu_execution.py\n6a225cca1774c21fc68822753a0c3872aef1eecd89d9cd45dfbc011aeea058df  src/orze/core/cpu_action_budget.py\n9f87d99f8455558b59f337bad993183bc062897002158feb25aaa4c10b89bec0  src/orze/engine/cpu_phase.py\n26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee  src/orze/core/research_interfaces.py\n11497c36447e6deb44f88fad6a867d128fb7e6a0f739332619a86b7a09721452  src/orze/engine/native_cpu_action.py\n137bcf0b80a42da216b7710136477cc38ca87a10e60889772564f880f9dc2d11  src/orze/engine/execution_authority.py\nd10060e1ec3f6ab5fa154737c9a3333e1c644912ec3a649b6ec19512c350a2e2  src/orze/engine/supervised_process.py\n03dfcacf3de44f344ec5fb8a6c176005cfefc7547d3d667d0eb34cc65289ef2f  src/orze/engine/supervisor_worker.py\n"
+      }
+    },
+    "neighborhood_run": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_cpu_action_budget.py tests/test_cpu_execution_entry.py tests/test_native_cpu_action.py tests/test_cpu_runtime_lease_config.py tests/test_runtime_lease_publication.py tests/test_cpu_terminal_settlement_recovery.py --tb=short --basetemp=/tmp/orze-cpu-continuous-neighborhood.I3OGmu/pytest --junitxml=/tmp/orze-cpu-continuous-neighborhood.I3OGmu/junit.xml",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+      "initial_result": {
+        "chunk_id": "7afb33",
+        "wall_time_seconds": 1.00099577,
+        "session_id": 60092,
+        "original_token_count": 1,
+        "output": "."
+      },
+      "completion": {
+        "chunk_id": "025562",
+        "wall_time_seconds": 4.673661967,
+        "exit_code": 0,
+        "original_token_count": 331,
+        "output": "............................................................            [100%]CPU_RECOVERY_REPORTS=[{\"bytes\": 221714, \"path\": \"/tmp/orze-cpu-continuous-neighborhood.I3OGmu/pytest/test_restart_settles_confirmed0/project-0/recovery-report.json\", \"sha256\": \"bd8470e1f71fec07de8c0f1d586d1c0a1ef92da5b6538345313ca6d27cd612be\", \"test\": \"tests/test_cpu_terminal_settlement_recovery.py::test_restart_settles_confirmed_terminal_without_repeating_original_worker[0]\"}, {\"bytes\": 209314, \"path\": \"/tmp/orze-cpu-continuous-neighborhood.I3OGmu/pytest/test_restart_settles_confirmed1/project-0/recovery-report.json\", \"sha256\": \"068228733d4de1c7b28b32cb219a64c75982de8d1676ff73d2f5f241b5d9cde9\", \"test\": \"tests/test_cpu_terminal_settlement_recovery.py::test_restart_settles_confirmed_terminal_without_repeating_original_worker[7]\"}]\n\n=============================== warnings summary ===============================\n../../../../../../home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885\n  /home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; cpu_terminal_recovery_helpers\n    self.import_plugin(import_spec)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n61 passed, 1 warning in 26.45s\n"
+      }
+    },
+    "neighborhood_post": {
+      "command": "sha256sum src/orze/core/cpu_execution.py src/orze/core/cpu_action_budget.py src/orze/engine/cpu_phase.py src/orze/core/research_interfaces.py src/orze/engine/native_cpu_action.py src/orze/engine/execution_authority.py src/orze/engine/supervised_process.py src/orze/engine/supervisor_worker.py\nsha256sum tests/test_cpu_continuous_execution.py /tmp/orze-cpu-continuous-baseline.o8OVyQ/junit.xml /tmp/orze-cpu-continuous-candidate.JkWTpZ/junit.xml /tmp/orze-cpu-continuous-neighborhood.I3OGmu/junit.xml",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+      "result": {
+        "chunk_id": "c9af43",
+        "wall_time_seconds": 0.000004051,
+        "exit_code": 0,
+        "original_token_count": 318,
+        "output": "d1954eee7710d2d41ad73ba4e19e8686fa818ca29e2164ada940d9280ddf5be7  src/orze/core/cpu_execution.py\n6a225cca1774c21fc68822753a0c3872aef1eecd89d9cd45dfbc011aeea058df  src/orze/core/cpu_action_budget.py\n9f87d99f8455558b59f337bad993183bc062897002158feb25aaa4c10b89bec0  src/orze/engine/cpu_phase.py\n26d0e57c8b5cb335caa4f39a0c23663367218e42c77c897592f6ae75593fe2ee  src/orze/core/research_interfaces.py\n11497c36447e6deb44f88fad6a867d128fb7e6a0f739332619a86b7a09721452  src/orze/engine/native_cpu_action.py\n137bcf0b80a42da216b7710136477cc38ca87a10e60889772564f880f9dc2d11  src/orze/engine/execution_authority.py\nd10060e1ec3f6ab5fa154737c9a3333e1c644912ec3a649b6ec19512c350a2e2  src/orze/engine/supervised_process.py\n03dfcacf3de44f344ec5fb8a6c176005cfefc7547d3d667d0eb34cc65289ef2f  src/orze/engine/supervisor_worker.py\n527d4db3d156bca680e2b24a62357ae32eeb22e5141e42d317a6007231c99989  tests/test_cpu_continuous_execution.py\n2aaf68e97f99f8cee7dfe8bc1c524a472d4e62191b6ee6c155c22a135ce242b6  /tmp/orze-cpu-continuous-baseline.o8OVyQ/junit.xml\n4c26c2c5766adf8da03bcb1dfa691618550ccccb811223b7bd47aa0adacb1f8a  /tmp/orze-cpu-continuous-candidate.JkWTpZ/junit.xml\n34a3e6b3b13e9127ded78ff836c195851de4e49ed077802c244e2241a1af7387  /tmp/orze-cpu-continuous-neighborhood.I3OGmu/junit.xml\n"
+      }
+    },
+    "audit": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, subprocess\nfrom pathlib import Path\nimport xml.etree.ElementTree as E\nbase='828878e2c7e9f5d541771dad446bfd81f922ab90'\nfiles=['src/orze/core/cpu_execution.py','src/orze/core/cpu_action_budget.py','src/orze/engine/cpu_phase.py']\nout={}\nfor name in files:\n    old=subprocess.check_output(['git','show',base+':'+name])\n    snap=Path('docs/evidence/snapshots/2026-09-12-continuous-before-'+Path(name).name)\n    assert snap.read_bytes()==old\n    funcs=lambda raw:{n.name:ast.dump(n,include_attributes=False) for n in ast.parse(raw).body if isinstance(n,(ast.FunctionDef,ast.ClassDef))}\n    before,after=funcs(old),funcs(Path(name).read_bytes())\n    out[name]={'before_sha256':hashlib.sha256(old).hexdigest(),'current_sha256':hashlib.sha256(Path(name).read_bytes()).hexdigest(),'snapshot':str(snap),'baseline_byteexact':True,'changed_definitions':[n for n in before if before[n]!=after.get(n)],'new_definitions':sorted(set(after)-set(before))}\nold_tests=subprocess.check_output(['git','ls-tree','-r','--name-only',base,'tests']).decode().splitlines()\nfor name in old_tests:\n    assert Path(name).read_bytes()==subprocess.check_output(['git','show',base+':'+name]),name\nnew=Path('tests/test_cpu_continuous_execution.py')\ntree=ast.parse(new.read_text())\nresults=[]\nfor path in ['/tmp/orze-cpu-continuous-baseline.o8OVyQ/junit.xml','/tmp/orze-cpu-continuous-candidate.JkWTpZ/junit.xml','/tmp/orze-cpu-continuous-neighborhood.I3OGmu/junit.xml']:\n    suite=E.parse(path).getroot().find('testsuite')\n    results.append({'path':path,'sha256':hashlib.sha256(Path(path).read_bytes()).hexdigest(),'counts':{k:suite.attrib[k] for k in ('tests','failures','errors','skipped')},'case_names':[n.attrib['name'] for n in suite.findall('testcase')]})\nprint(json.dumps({'sources':out,'tracked_old_test_files_byteexact':len(old_tests),'new_test_sha256':hashlib.sha256(new.read_bytes()).hexdigest(),'new_literal_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(tree)),'junit':results},sort_keys=True))\nPY",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+      "result": {
+        "chunk_id": "197596",
+        "wall_time_seconds": 1.156481821,
+        "exit_code": 0,
+        "original_token_count": 2690,
+        "output": "{\"junit\": [{\"case_names\": [\"test_v2_configuration_is_explicit_detached_and_pinned\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[1-None]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[1-inf]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-10]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-inf]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-nan]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[True-None]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2.0-None]\", \"test_v1_finite_envelope_still_exhausts\", \"test_continuous_settlement_preserves_charge_and_restart_identity\", \"test_continuous_action_still_needs_finite_positive_timeout[None]\", \"test_continuous_action_still_needs_finite_positive_timeout[True]\", \"test_continuous_action_still_needs_finite_positive_timeout[0]\", \"test_continuous_action_still_needs_finite_positive_timeout[-1]\", \"test_continuous_action_still_needs_finite_positive_timeout[inf]\", \"test_continuous_action_still_needs_finite_positive_timeout[nan]\", \"test_runtime_lease_cannot_exceed_finite_action_timeout\", \"test_continuous_stop_blocks_new_go_but_allows_confirmed_settlement\", \"test_continuous_recovery_never_adopts_reserved_work\", \"test_same_scope_cannot_change_authorization_mode[1]\", \"test_same_scope_cannot_change_authorization_mode[2]\", \"test_continuous_parallel_reservations_still_share_one_slot\", \"test_continuous_unknown_commit_does_not_grant_a_permit\", \"test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-1-0-False-Execute-None]\", \"test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-0-1-False-Wait-cpu_resource_or_budget_unavailable]\", \"test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-1-0-True-Stop-scope_stopped]\", \"test_queue_policy_separates_continuous_authorization_from_slot_and_stop[0-1-0-False-Stop-wall_envelope_exhausted]\"], \"counts\": {\"errors\": \"11\", \"failures\": \"6\", \"skipped\": \"0\", \"tests\": \"28\"}, \"path\": \"/tmp/orze-cpu-continuous-baseline.o8OVyQ/junit.xml\", \"sha256\": \"2aaf68e97f99f8cee7dfe8bc1c524a472d4e62191b6ee6c155c22a135ce242b6\"}, {\"case_names\": [\"test_v2_configuration_is_explicit_detached_and_pinned\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[1-None]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[1-inf]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-10]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-inf]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-nan]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[True-None]\", \"test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2.0-None]\", \"test_v1_finite_envelope_still_exhausts\", \"test_continuous_settlement_preserves_charge_and_restart_identity\", \"test_continuous_action_still_needs_finite_positive_timeout[None]\", \"test_continuous_action_still_needs_finite_positive_timeout[True]\", \"test_continuous_action_still_needs_finite_positive_timeout[0]\", \"test_continuous_action_still_needs_finite_positive_timeout[-1]\", \"test_continuous_action_still_needs_finite_positive_timeout[inf]\", \"test_continuous_action_still_needs_finite_positive_timeout[nan]\", \"test_runtime_lease_cannot_exceed_finite_action_timeout\", \"test_continuous_stop_blocks_new_go_but_allows_confirmed_settlement\", \"test_continuous_recovery_never_adopts_reserved_work\", \"test_same_scope_cannot_change_authorization_mode[1]\", \"test_same_scope_cannot_change_authorization_mode[2]\", \"test_continuous_parallel_reservations_still_share_one_slot\", \"test_continuous_unknown_commit_does_not_grant_a_permit\", \"test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-1-0-False-Execute-None]\", \"test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-0-1-False-Wait-cpu_resource_or_budget_unavailable]\", \"test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-1-0-True-Stop-scope_stopped]\", \"test_queue_policy_separates_continuous_authorization_from_slot_and_stop[0-1-0-False-Stop-wall_envelope_exhausted]\"], \"counts\": {\"errors\": \"0\", \"failures\": \"0\", \"skipped\": \"0\", \"tests\": \"28\"}, \"path\": \"/tmp/orze-cpu-continuous-candidate.JkWTpZ/junit.xml\", \"sha256\": \"4c26c2c5766adf8da03bcb1dfa691618550ccccb811223b7bd47aa0adacb1f8a\"}, {\"case_names\": [\"test_legal_peer_after_commit_does_not_invalidate_own_reservation\", \"test_initialize_is_idempotent_but_cannot_reset_same_scope_limits\", \"test_declaration_rejects_nonexact_or_nonfinite_without_mutating[version-True]\", \"test_declaration_rejects_nonexact_or_nonfinite_without_mutating[resource-gpu]\", \"test_declaration_rejects_nonexact_or_nonfinite_without_mutating[slots-True]\", \"test_declaration_rejects_nonexact_or_nonfinite_without_mutating[slots-65]\", \"test_declaration_rejects_nonexact_or_nonfinite_without_mutating[wall_budget_seconds-nan]\", \"test_declaration_rejects_nonexact_or_nonfinite_without_mutating[wall_budget_seconds-inf]\", \"test_declaration_rejects_nonexact_or_nonfinite_without_mutating[wall_budget_seconds-False]\", \"test_begin_immediate_concurrent_admission_has_one_available_slot\", \"test_insufficient_budget_and_slot_wait_have_zero_admission_effects\", \"test_wait_is_a_decision_without_debit_and_stop_is_sticky\", \"test_bind_full_reference_and_settle_no_exec_release_slot_without_refund\", \"test_unconfirmed_or_changed_terminal_never_releases_slot\", \"test_permit_metadata_cannot_reassign_another_task\", \"test_public_api_refuses_caller_transaction_without_committing_it\", \"test_silent_commit_rollback_holds_instead_of_granting_or_releasing[False]\", \"test_silent_commit_rollback_holds_instead_of_granting_or_releasing[True]\", \"test_reader_closes_independent_connection_even_on_validation_failure\", \"test_cpu_config_does_not_require_training_files\", \"test_cpu_declaration_rejected_by_existing_validator[update0]\", \"test_cpu_declaration_rejected_by_existing_validator[update1]\", \"test_cpu_declaration_rejected_by_existing_validator[update2]\", \"test_cpu_declaration_rejected_by_existing_validator[update3]\", \"test_cpu_declaration_rejected_by_existing_validator[update4]\", \"test_cpu_declaration_rejected_by_existing_validator[update5]\", \"test_cli_explicit_cpu_bypasses_gpu_inventory\", \"test_empty_gpu_allowlist_does_not_infer_cpu_mode\", \"test_cpu_kind_admission_and_claim_do_not_create_training_stages\", \"test_kind_aware_dedup_preserves_cpu_and_legacy_domains\", \"test_proposal_kind_sources_must_agree\", \"test_actual_zero_artifact_action_closes_and_settles_without_gpu_accounting[0-True]\", \"test_actual_zero_artifact_action_closes_and_settles_without_gpu_accounting[7-False]\", \"test_real_worker_reads_sealed_inputs_and_publishes_owned_artifact\", \"test_leader_exit_does_not_publish_before_real_escaped_writer_closes\", \"test_real_stop_zero_is_interrupted_and_settles_after_policy_stop\", \"test_ready_admission_refusal_preserves_owner_without_go_or_budget_refund\", \"test_default_and_shorter_lease_preserve_original_budget_and_action_envelope\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[None]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[False]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[0]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[value3]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[value4]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[value5]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[value6]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[value7]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[value8]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[value9]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[value10]\", \"test_explicit_malformed_lease_cannot_disable_or_weaken_default[value11]\", \"test_normalized_policy_is_fingerprinted_and_cannot_hot_reload\", \"test_legacy_profile_cannot_silently_ignore_explicit_runtime_lease\", \"test_default_lease_completes_and_charges_original_envelope\", \"test_short_lease_autonomously_closes_term_zero_and_escaped_child_without_parent_poll\", \"test_natural_closure_then_slow_artifact_preparation_expires_without_fake_stop\", \"test_expiry_after_actual_registration_retains_prepared_effect_without_second_terminal\", \"test_actual_publication_response_after_deadline_holds_and_fresh_f_cannot_settle[commit]\", \"test_actual_publication_response_after_deadline_holds_and_fresh_f_cannot_settle[confirm]\", \"test_owned_supervisor_loss_after_go_remains_hold_after_expiry_and_fresh_claim\", \"test_restart_settles_confirmed_terminal_without_repeating_original_worker[0]\", \"test_restart_settles_confirmed_terminal_without_repeating_original_worker[7]\"], \"counts\": {\"errors\": \"0\", \"failures\": \"0\", \"skipped\": \"0\", \"tests\": \"61\"}, \"path\": \"/tmp/orze-cpu-continuous-neighborhood.I3OGmu/junit.xml\", \"sha256\": \"34a3e6b3b13e9127ded78ff836c195851de4e49ed077802c244e2241a1af7387\"}], \"new_literal_asserts\": 37, \"new_test_sha256\": \"527d4db3d156bca680e2b24a62357ae32eeb22e5141e42d317a6007231c99989\", \"sources\": {\"src/orze/core/cpu_action_budget.py\": {\"baseline_byteexact\": true, \"before_sha256\": \"42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259\", \"changed_definitions\": [\"_declaration\", \"_totals\", \"snapshot\", \"reserve\"], \"current_sha256\": \"6a225cca1774c21fc68822753a0c3872aef1eecd89d9cd45dfbc011aeea058df\", \"new_definitions\": [\"_wall_limit_ns\"], \"snapshot\": \"docs/evidence/snapshots/2026-09-12-continuous-before-cpu_action_budget.py\"}, \"src/orze/core/cpu_execution.py\": {\"baseline_byteexact\": true, \"before_sha256\": \"f0f532f658b7fcbf24261a21c6526b668022dbfc97c0e2734b8ec0765a89aed7\", \"changed_definitions\": [\"cpu_execution\"], \"current_sha256\": \"d1954eee7710d2d41ad73ba4e19e8686fa818ca29e2164ada940d9280ddf5be7\", \"new_definitions\": [], \"snapshot\": \"docs/evidence/snapshots/2026-09-12-continuous-before-cpu_execution.py\"}, \"src/orze/engine/cpu_phase.py\": {\"baseline_byteexact\": true, \"before_sha256\": \"92cf3640039d86660d511fe6085674356efbffa7d21bfc4a5c2466a46a9a811a\", \"changed_definitions\": [\"QueuePolicy\"], \"current_sha256\": \"9f87d99f8455558b59f337bad993183bc062897002158feb25aaa4c10b89bec0\", \"new_definitions\": [], \"snapshot\": \"docs/evidence/snapshots/2026-09-12-continuous-before-cpu_phase.py\"}}, \"tracked_old_test_files_byteexact\": 492}\n"
+      }
+    }
+  },
+  "audit_result": {
+    "junit": [
+      {
+        "case_names": [
+          "test_v2_configuration_is_explicit_detached_and_pinned",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[1-None]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[1-inf]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-10]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-inf]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-nan]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[True-None]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2.0-None]",
+          "test_v1_finite_envelope_still_exhausts",
+          "test_continuous_settlement_preserves_charge_and_restart_identity",
+          "test_continuous_action_still_needs_finite_positive_timeout[None]",
+          "test_continuous_action_still_needs_finite_positive_timeout[True]",
+          "test_continuous_action_still_needs_finite_positive_timeout[0]",
+          "test_continuous_action_still_needs_finite_positive_timeout[-1]",
+          "test_continuous_action_still_needs_finite_positive_timeout[inf]",
+          "test_continuous_action_still_needs_finite_positive_timeout[nan]",
+          "test_runtime_lease_cannot_exceed_finite_action_timeout",
+          "test_continuous_stop_blocks_new_go_but_allows_confirmed_settlement",
+          "test_continuous_recovery_never_adopts_reserved_work",
+          "test_same_scope_cannot_change_authorization_mode[1]",
+          "test_same_scope_cannot_change_authorization_mode[2]",
+          "test_continuous_parallel_reservations_still_share_one_slot",
+          "test_continuous_unknown_commit_does_not_grant_a_permit",
+          "test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-1-0-False-Execute-None]",
+          "test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-0-1-False-Wait-cpu_resource_or_budget_unavailable]",
+          "test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-1-0-True-Stop-scope_stopped]",
+          "test_queue_policy_separates_continuous_authorization_from_slot_and_stop[0-1-0-False-Stop-wall_envelope_exhausted]"
+        ],
+        "counts": {
+          "errors": "11",
+          "failures": "6",
+          "skipped": "0",
+          "tests": "28"
+        },
+        "path": "/tmp/orze-cpu-continuous-baseline.o8OVyQ/junit.xml",
+        "sha256": "2aaf68e97f99f8cee7dfe8bc1c524a472d4e62191b6ee6c155c22a135ce242b6"
+      },
+      {
+        "case_names": [
+          "test_v2_configuration_is_explicit_detached_and_pinned",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[1-None]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[1-inf]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-10]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-inf]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2-nan]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[True-None]",
+          "test_invalid_opt_in_rejected_by_config_and_budget_without_rows[2.0-None]",
+          "test_v1_finite_envelope_still_exhausts",
+          "test_continuous_settlement_preserves_charge_and_restart_identity",
+          "test_continuous_action_still_needs_finite_positive_timeout[None]",
+          "test_continuous_action_still_needs_finite_positive_timeout[True]",
+          "test_continuous_action_still_needs_finite_positive_timeout[0]",
+          "test_continuous_action_still_needs_finite_positive_timeout[-1]",
+          "test_continuous_action_still_needs_finite_positive_timeout[inf]",
+          "test_continuous_action_still_needs_finite_positive_timeout[nan]",
+          "test_runtime_lease_cannot_exceed_finite_action_timeout",
+          "test_continuous_stop_blocks_new_go_but_allows_confirmed_settlement",
+          "test_continuous_recovery_never_adopts_reserved_work",
+          "test_same_scope_cannot_change_authorization_mode[1]",
+          "test_same_scope_cannot_change_authorization_mode[2]",
+          "test_continuous_parallel_reservations_still_share_one_slot",
+          "test_continuous_unknown_commit_does_not_grant_a_permit",
+          "test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-1-0-False-Execute-None]",
+          "test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-0-1-False-Wait-cpu_resource_or_budget_unavailable]",
+          "test_queue_policy_separates_continuous_authorization_from_slot_and_stop[None-1-0-True-Stop-scope_stopped]",
+          "test_queue_policy_separates_continuous_authorization_from_slot_and_stop[0-1-0-False-Stop-wall_envelope_exhausted]"
+        ],
+        "counts": {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "28"
+        },
+        "path": "/tmp/orze-cpu-continuous-candidate.JkWTpZ/junit.xml",
+        "sha256": "4c26c2c5766adf8da03bcb1dfa691618550ccccb811223b7bd47aa0adacb1f8a"
+      },
+      {
+        "case_names": [
+          "test_legal_peer_after_commit_does_not_invalidate_own_reservation",
+          "test_initialize_is_idempotent_but_cannot_reset_same_scope_limits",
+          "test_declaration_rejects_nonexact_or_nonfinite_without_mutating[version-True]",
+          "test_declaration_rejects_nonexact_or_nonfinite_without_mutating[resource-gpu]",
+          "test_declaration_rejects_nonexact_or_nonfinite_without_mutating[slots-True]",
+          "test_declaration_rejects_nonexact_or_nonfinite_without_mutating[slots-65]",
+          "test_declaration_rejects_nonexact_or_nonfinite_without_mutating[wall_budget_seconds-nan]",
+          "test_declaration_rejects_nonexact_or_nonfinite_without_mutating[wall_budget_seconds-inf]",
+          "test_declaration_rejects_nonexact_or_nonfinite_without_mutating[wall_budget_seconds-False]",
+          "test_begin_immediate_concurrent_admission_has_one_available_slot",
+          "test_insufficient_budget_and_slot_wait_have_zero_admission_effects",
+          "test_wait_is_a_decision_without_debit_and_stop_is_sticky",
+          "test_bind_full_reference_and_settle_no_exec_release_slot_without_refund",
+          "test_unconfirmed_or_changed_terminal_never_releases_slot",
+          "test_permit_metadata_cannot_reassign_another_task",
+          "test_public_api_refuses_caller_transaction_without_committing_it",
+          "test_silent_commit_rollback_holds_instead_of_granting_or_releasing[False]",
+          "test_silent_commit_rollback_holds_instead_of_granting_or_releasing[True]",
+          "test_reader_closes_independent_connection_even_on_validation_failure",
+          "test_cpu_config_does_not_require_training_files",
+          "test_cpu_declaration_rejected_by_existing_validator[update0]",
+          "test_cpu_declaration_rejected_by_existing_validator[update1]",
+          "test_cpu_declaration_rejected_by_existing_validator[update2]",
+          "test_cpu_declaration_rejected_by_existing_validator[update3]",
+          "test_cpu_declaration_rejected_by_existing_validator[update4]",
+          "test_cpu_declaration_rejected_by_existing_validator[update5]",
+          "test_cli_explicit_cpu_bypasses_gpu_inventory",
+          "test_empty_gpu_allowlist_does_not_infer_cpu_mode",
+          "test_cpu_kind_admission_and_claim_do_not_create_training_stages",
+          "test_kind_aware_dedup_preserves_cpu_and_legacy_domains",
+          "test_proposal_kind_sources_must_agree",
+          "test_actual_zero_artifact_action_closes_and_settles_without_gpu_accounting[0-True]",
+          "test_actual_zero_artifact_action_closes_and_settles_without_gpu_accounting[7-False]",
+          "test_real_worker_reads_sealed_inputs_and_publishes_owned_artifact",
+          "test_leader_exit_does_not_publish_before_real_escaped_writer_closes",
+          "test_real_stop_zero_is_interrupted_and_settles_after_policy_stop",
+          "test_ready_admission_refusal_preserves_owner_without_go_or_budget_refund",
+          "test_default_and_shorter_lease_preserve_original_budget_and_action_envelope",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[None]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[False]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[0]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[value3]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[value4]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[value5]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[value6]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[value7]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[value8]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[value9]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[value10]",
+          "test_explicit_malformed_lease_cannot_disable_or_weaken_default[value11]",
+          "test_normalized_policy_is_fingerprinted_and_cannot_hot_reload",
+          "test_legacy_profile_cannot_silently_ignore_explicit_runtime_lease",
+          "test_default_lease_completes_and_charges_original_envelope",
+          "test_short_lease_autonomously_closes_term_zero_and_escaped_child_without_parent_poll",
+          "test_natural_closure_then_slow_artifact_preparation_expires_without_fake_stop",
+          "test_expiry_after_actual_registration_retains_prepared_effect_without_second_terminal",
+          "test_actual_publication_response_after_deadline_holds_and_fresh_f_cannot_settle[commit]",
+          "test_actual_publication_response_after_deadline_holds_and_fresh_f_cannot_settle[confirm]",
+          "test_owned_supervisor_loss_after_go_remains_hold_after_expiry_and_fresh_claim",
+          "test_restart_settles_confirmed_terminal_without_repeating_original_worker[0]",
+          "test_restart_settles_confirmed_terminal_without_repeating_original_worker[7]"
+        ],
+        "counts": {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "61"
+        },
+        "path": "/tmp/orze-cpu-continuous-neighborhood.I3OGmu/junit.xml",
+        "sha256": "34a3e6b3b13e9127ded78ff836c195851de4e49ed077802c244e2241a1af7387"
+      }
+    ],
+    "new_literal_asserts": 37,
+    "new_test_sha256": "527d4db3d156bca680e2b24a62357ae32eeb22e5141e42d317a6007231c99989",
+    "sources": {
+      "src/orze/core/cpu_action_budget.py": {
+        "baseline_byteexact": true,
+        "before_sha256": "42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259",
+        "changed_definitions": [
+          "_declaration",
+          "_totals",
+          "snapshot",
+          "reserve"
+        ],
+        "current_sha256": "6a225cca1774c21fc68822753a0c3872aef1eecd89d9cd45dfbc011aeea058df",
+        "new_definitions": [
+          "_wall_limit_ns"
+        ],
+        "snapshot": "docs/evidence/snapshots/2026-09-12-continuous-before-cpu_action_budget.py"
+      },
+      "src/orze/core/cpu_execution.py": {
+        "baseline_byteexact": true,
+        "before_sha256": "f0f532f658b7fcbf24261a21c6526b668022dbfc97c0e2734b8ec0765a89aed7",
+        "changed_definitions": [
+          "cpu_execution"
+        ],
+        "current_sha256": "d1954eee7710d2d41ad73ba4e19e8686fa818ca29e2164ada940d9280ddf5be7",
+        "new_definitions": [],
+        "snapshot": "docs/evidence/snapshots/2026-09-12-continuous-before-cpu_execution.py"
+      },
+      "src/orze/engine/cpu_phase.py": {
+        "baseline_byteexact": true,
+        "before_sha256": "92cf3640039d86660d511fe6085674356efbffa7d21bfc4a5c2466a46a9a811a",
+        "changed_definitions": [
+          "QueuePolicy"
+        ],
+        "current_sha256": "9f87d99f8455558b59f337bad993183bc062897002158feb25aaa4c10b89bec0",
+        "new_definitions": [],
+        "snapshot": "docs/evidence/snapshots/2026-09-12-continuous-before-cpu_phase.py"
+      }
+    },
+    "tracked_old_test_files_byteexact": 492
+  },
+  "limits": [
+    "This authorization slice is not the general autonomous research decision policy, an application-level pause implementation or proof of research convergence.",
+    "No new continuous-mode worker experiment was claimed: new tests use real SQLite and genuine no-execution receipts. Real worker/supervisor and fresh-process recovery checks are unchanged v1 neighborhood tests.",
+    "At the recorded candidate epoch, CommonPolicy still compared remaining_wall_seconds numerically. This was reported to the parent for separate compatibility wiring; no claim is made that that example was changed or verified by this agent.",
+    "Persistent reservation history still grows and _totals scans history; no claim of indefinitely bounded metadata size or constant overhead.",
+    "No GPU/provider/network/deployment/service/user-project change. No commit, push or full-suite run by this agent.",
+    "This exact candidate precedes the parent's separately owned Pause changes in the bottom of budget/phase; future combined source hashes require their own verification epoch."
+  ]
+}

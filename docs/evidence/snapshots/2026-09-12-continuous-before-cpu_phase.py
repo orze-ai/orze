@@ -54,9 +54,8 @@ class QueuePolicy:
         if budget["stopped"]:
             return {"kind": "Stop", "reason": "scope_stopped", "wakeup": None}
         if snapshot["queue"]:
-            remaining = budget["remaining_wall_seconds"]
             eligible = next((task for task in snapshot["queue"] if
-                remaining is None or task["action"]["timeout_seconds"] <= remaining), None)
+                task["action"]["timeout_seconds"] <= budget["remaining_wall_seconds"]), None)
             if eligible is not None and budget["free_slots"] > 0:
                 return {"kind": "Execute", "task_id": eligible["idea_id"]}
             if eligible is None and budget["active_reservations"] == 0:
@@ -320,7 +319,7 @@ def iteration(engine):
                 return True
     budget.record_decision(engine.lake, engine._cpu_scope, decision)
     logger.info("CPU policy %s: %s", decision["kind"], decision["reason"])
-    if decision["kind"] in {"Pause", "Stop"} or engine.once:
+    if decision["kind"] == "Stop" or engine.once:
         return False
     engine._cpu_wait_until = time.monotonic() + max(0, decision["wakeup"] - time.time())
     return True

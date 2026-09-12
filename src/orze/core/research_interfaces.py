@@ -305,15 +305,21 @@ class BoundPolicy:
             if not any(item.get("outcome") == "completed" and _same(item.get("ref"), ref)
                        for item in captured.get("recorded_evidence", {}).get("results", [])):
                 _fail("Replicate must select a completed occurrence in captured evidence")
-        elif kind in ("Wait", "Stop"):
+        elif kind in ("Wait", "Pause", "Stop"):
             if (set(decision) != {"kind", "reason", "wakeup"}
                     or type(decision["reason"]) is not str or not decision["reason"]
                     or len(decision["reason"].encode()) > 128):
-                _fail("Wait/Stop requires a bounded reason and wakeup")
+                _fail("Wait/Pause/Stop requires a bounded reason and wakeup")
             wakeup = decision["wakeup"]
-            if kind == "Stop":
+            if kind in ("Pause", "Stop"):
                 if wakeup is not None:
-                    _fail("Stop has no wakeup")
+                    _fail("Pause/Stop has no wakeup")
+                if kind == "Pause" and (
+                        not decision["reason"].strip()
+                        or captured.get("active") is not False
+                        or type(budget.get("active_reservations")) is not int
+                        or budget["active_reservations"] != 0):
+                    _fail("Pause requires a reason and confirmed quiescent resources")
             elif (type(wakeup) not in (int, float)
                     or not captured["now"] + 0.01 <= wakeup <= captured["now"] + 3600):
                 _fail("Wait must declare a future wakeup within one hour")

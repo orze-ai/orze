@@ -3,8 +3,6 @@
 The first CPU profile uses a queue policy and a command adapter. No GPU
 profile, provider role, implicit evaluator, or background service is inferred.
 Wall budgets reserve execution envelopes, not measured CPU utilization.
-Version 2 explicitly permits continued authorization without a cumulative wall
-ceiling; individual actions still require finite execution bounds.
 """
 from __future__ import annotations
 
@@ -38,15 +36,12 @@ def cpu_execution(cfg):
         return None
     if (type(value) is not dict or set(value) != {
             "version", "resource", "slots", "wall_budget_seconds"}
-            or type(value["version"]) is not int or value["version"] not in (1, 2)
+            or type(value["version"]) is not int or value["version"] != 1
             or value["resource"] != "cpu"
             or type(value["slots"]) is not int or not 1 <= value["slots"] <= 64):
         _fail("requires version 1, resource cpu, slots 1..64 and wall_budget_seconds")
     wall = value["wall_budget_seconds"]
-    if value["version"] == 2:
-        if wall is not None:
-            _fail("version 2 requires wall_budget_seconds to be null")
-    elif (type(wall) not in (int, float) or not 0 < wall <= 365 * 86400
+    if (type(wall) not in (int, float) or not 0 < wall <= 365 * 86400
             or not math.isfinite(wall)):
         _fail("wall_budget_seconds must be finite and in (0, 31536000]")
     result = dict(value)

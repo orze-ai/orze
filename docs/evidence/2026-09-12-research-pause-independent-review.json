@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "reviewer": "core_review",
+  "kind": "research_pause_independent_transaction_review",
+  "status": "passed_bounded_candidate",
+  "scope": {
+    "worktree": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+    "changed_by_this_agent": [
+      "tests/test_research_pause_review.py",
+      "docs/evidence/2026-09-12-research-pause-independent-review.json"
+    ],
+    "production_edits": false,
+    "old_test_edits": false,
+    "new_cases": 7,
+    "author_cases_replayed": 12,
+    "resource_v2_independent_claim": false
+  },
+  "review": {
+    "paths": [
+      "src/orze/core/research_interfaces.py:BoundPolicy.decide",
+      "src/orze/core/cpu_action_budget.py:record_decision",
+      "src/orze/core/cpu_action_budget.py:_write",
+      "src/orze/engine/cpu_phase.py:iteration"
+    ],
+    "conclusion": "No blocking error observed in this bounded independent Pause review.",
+    "semantics": "Pause is a recoverable exit of this quiescent foreground invocation, not a scope-wide lease forbidding subsequent peer reservations. Stop remains sticky; no charge refund or claim is granted.",
+    "checked": [
+      "Policy snapshot passed, then a real peer reserve committed before decision recording: Pause refuses without poisoning the peer's valid permit.",
+      "After actual writer-side quiescence check and before decision INSERT, a second SQLite BEGIN IMMEDIATE is blocked; after actual COMMIT a legitimate peer reserve succeeds and the original Pause readback remains successful.",
+      "Silent rollback, actual COMMIT then response exception, and actual COMMIT then deletion of the decision row all return CpuBudgetHOLD; storage uncertainty persists as a Stop marker instead of being counted as successful Pause.",
+      "A legitimate peer Stop after Pause COMMIT remains sticky while the original Pause record remains valid.",
+      "An actual same-process CLI invocation pauses a nonempty CPU queue without claim, execution_attempt, reservation or worker."
+    ],
+    "limits": [
+      "No new worker was started by these tests. The one actual CLI case verifies non-execution; separate fresh-CLI Pause/resume worker acceptance belongs to the runtime reviewer.",
+      "SQLite connection subclasses intercept only test-owned transaction windows and delegate actual operations; they do not fabricate native closure, completion or authorization.",
+      "The continuous-v2 resource code was written by this agent and is not claimed as independently reviewed here.",
+      "No full suite, long-duration autonomous research, provider/GPU execution or deployment conclusion follows from this result."
+    ]
+  },
+  "pre": {
+    "command": "sha256sum src/orze/core/research_interfaces.py src/orze/core/cpu_action_budget.py src/orze/engine/cpu_phase.py tests/test_research_pause.py tests/test_research_pause_review.py\nmktemp -d /tmp/orze-pause-independent-review.XXXXXX",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+    "result": {
+      "chunk_id": "fcd15b",
+      "wall_time_seconds": 0.000003914,
+      "exit_code": 0,
+      "original_token_count": 135,
+      "output": "b206d832a3ac6d9f9f0d1daf00dcc64b5d972c3649fc606ef7f2b8d573640925  src/orze/core/research_interfaces.py\n71bc89977cb582aa86a218003398431bb975ce11410f1df0d43b385ae4667169  src/orze/core/cpu_action_budget.py\na7d04d2c2e24e4c749277e5b570ccc01536191efc273af29c44a10911bc8da27  src/orze/engine/cpu_phase.py\nc1c381b2e0135709f92d76a2fc63c67a8febbbb20ef65dd329373cab22d37c30  tests/test_research_pause.py\nc068746e29061c0ef0fbaf7fc387170d18322486bee9d91775c04abfaf5e6fa8  tests/test_research_pause_review.py\n/tmp/orze-pause-independent-review.51dRqW\n"
+    }
+  },
+  "execution": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:. CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_research_pause_review.py tests/test_research_pause.py --tb=short --basetemp=/tmp/orze-pause-independent-review.51dRqW/pytest --junitxml=/tmp/orze-pause-independent-review.51dRqW/junit.xml",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+    "result": {
+      "chunk_id": "02c0db",
+      "wall_time_seconds": 2.277637988,
+      "exit_code": 0,
+      "original_token_count": 25,
+      "output": "...................                                                      [100%]\n19 passed in 2.12s\n"
+    }
+  },
+  "post": {
+    "command": "sha256sum src/orze/core/research_interfaces.py src/orze/core/cpu_action_budget.py src/orze/engine/cpu_phase.py tests/test_research_pause.py tests/test_research_pause_review.py",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+    "result": {
+      "chunk_id": "ca365d",
+      "wall_time_seconds": 0.000003557,
+      "exit_code": 0,
+      "original_token_count": 124,
+      "output": "b206d832a3ac6d9f9f0d1daf00dcc64b5d972c3649fc606ef7f2b8d573640925  src/orze/core/research_interfaces.py\n71bc89977cb582aa86a218003398431bb975ce11410f1df0d43b385ae4667169  src/orze/core/cpu_action_budget.py\na7d04d2c2e24e4c749277e5b570ccc01536191efc273af29c44a10911bc8da27  src/orze/engine/cpu_phase.py\nc1c381b2e0135709f92d76a2fc63c67a8febbbb20ef65dd329373cab22d37c30  tests/test_research_pause.py\nc068746e29061c0ef0fbaf7fc387170d18322486bee9d91775c04abfaf5e6fa8  tests/test_research_pause_review.py\n"
+    }
+  },
+  "audit": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json\nfrom pathlib import Path\nimport xml.etree.ElementTree as E\np=Path('tests/test_research_pause_review.py')\nt=ast.parse(p.read_text())\nj=Path('/tmp/orze-pause-independent-review.51dRqW/junit.xml')\ns=E.fromstring(j.read_bytes()).find('testsuite')\nprint(json.dumps({'new_test_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'new_test_functions':len([n for n in t.body if isinstance(n,ast.FunctionDef) and n.name.startswith('test_')]),'literal_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(t)),'junit_sha256':hashlib.sha256(j.read_bytes()).hexdigest(),'junit':{k:s.attrib[k] for k in ('tests','failures','errors','skipped')}},sort_keys=True))\nPY",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+    "result": {
+      "chunk_id": "ab3548",
+      "wall_time_seconds": 0.000004231,
+      "exit_code": 0,
+      "original_token_count": 74,
+      "output": "{\"junit\": {\"errors\": \"0\", \"failures\": \"0\", \"skipped\": \"0\", \"tests\": \"19\"}, \"junit_sha256\": \"5841b1ea31b3bcc1bb17794153956969deb3475e570eedb9d57871568a93f2ca\", \"literal_asserts\": 24, \"new_test_functions\": 5, \"new_test_sha256\": \"c068746e29061c0ef0fbaf7fc387170d18322486bee9d91775c04abfaf5e6fa8\"}\n"
+    }
+  },
+  "audit_result": {
+    "junit": {
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "19"
+    },
+    "junit_sha256": "5841b1ea31b3bcc1bb17794153956969deb3475e570eedb9d57871568a93f2ca",
+    "literal_asserts": 24,
+    "new_test_functions": 5,
+    "new_test_sha256": "c068746e29061c0ef0fbaf7fc387170d18322486bee9d91775c04abfaf5e6fa8"
+  },
+  "classification": "First candidate run 19 passed; no independent candidate red or new-test correction occurred. This does not alter the author's earlier 3F9P→12P history."
+}

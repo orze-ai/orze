@@ -81,7 +81,8 @@ class CommonPolicy:
             if len(snapshot["queue"]) != 1:
                 raise ValueError("finite sequential acceptance project has unexpected work")
             item = snapshot["queue"][0]
-            if item["request"]["timeout_seconds"] > budget["remaining_wall_seconds"]:
+            remaining = budget["remaining_wall_seconds"]
+            if remaining is not None and item["request"]["timeout_seconds"] > remaining:
                 return {"kind": "Stop", "reason": "insufficient_example_budget", "wakeup": None}
             return {"kind": "Execute", "task_id": item["idea_id"]}
         if snapshot["active"] or budget["active_reservations"]:

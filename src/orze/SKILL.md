@@ -23,6 +23,19 @@ wall_budget_seconds: N}` with a positive finite budget. It uses the existing
 CLI and native attempt, artifact, observation and budget protocols; it does
 not require a fabricated GPU slot.
 
+For research with no preset overall deadline, explicitly choose
+`execution: {version: 2, resource: cpu, slots: 1, wall_budget_seconds: null}`.
+This removes only the cumulative wall ceiling: each action still needs a
+finite timeout and runtime lease, all reservations remain charged, and slots,
+Stop and HOLD still apply. Existing v1 projects are unchanged. A prior resource
+scope cannot be switched to another declaration to reset its authorization.
+This CPU declaration grants no GPU or paid-provider access.
+
+The registered Policy decides what to explore, analyze, replicate or conclude.
+It must handle `remaining_wall_seconds: null` in continuous mode. Queue drain
+is not scientific convergence, and a truncated/unavailable evidence view is
+not proof that useful research is exhausted.
+
 Custom domains and policies must be registered by the application's entry
 module before calling the real Orze CLI. A declaration alone does not install
 an adapter. Run that trusted entry module with the intended environment and
@@ -43,6 +56,14 @@ specific controller profile. Preserve explicit Stop/HOLD markers, attempt
 identities, pending effects, guards and reserved budget. A dead PID, empty
 process list, elapsed time or inactive service is not proof that all owned
 writers closed. Do not manually remove locks to force a retry.
+
+A registered Policy may return `{kind: Pause, reason: ..., wakeup: null}` only
+when no action or reservation is active. The decision is recorded durably and
+ends this foreground invocation without setting the permanent Stop latch.
+The next invocation re-evaluates current inputs using the same scope and ledger.
+Pause does not refund charges, clear an existing Stop/HOLD, claim queued work,
+or prohibit another authorized controller from acting later. `Wait` instead
+waits within the running invocation; `Stop` persists final scope termination.
 
 Recovery of a fully confirmed CPU terminal effect may settle its original
 reservation without executing the worker again. This is not general process

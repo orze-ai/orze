@@ -5,8 +5,6 @@ transaction. A permit is metadata whose exact durable row must be rechecked;
 it is neither process authority nor permission to replay an unknown launch.
 Slots remain occupied until confirmed native settlement. Reserved wall time
 is charged forever, including unused time; no age/PID-based refund exists.
-Explicit version 2 authorization has no cumulative wall ceiling; the same
-ledger, finite per-action permits, slots and durable refusal gates still apply.
 """
 from __future__ import annotations
 
@@ -162,23 +160,12 @@ def _route(lake):
 def _declaration(value):
     if (type(value) is not dict or set(value) != {
             "version", "resource", "slots", "wall_budget_seconds"}
-            or type(value["version"]) is not int or value["version"] not in (1, 2)
+            or type(value["version"]) is not int or value["version"] != 1
             or value["resource"] != "cpu" or type(value["slots"]) is not int
             or not 0 < value["slots"] <= 64):
         _fail("declaration_invalid")
-    if value["version"] == 2:
-        if value["wall_budget_seconds"] is not None:
-            _fail("declaration_invalid")
-    else:
-        _number(value["wall_budget_seconds"])
+    _number(value["wall_budget_seconds"])
     return _decode(_json(value))
-
-
-def _wall_limit_ns(scope):
-    """Only an already-validated v2 declaration omits the cumulative limit."""
-    if scope["declaration"]["version"] == 2:
-        return None
-    return _ns(scope["declaration"]["wall_budget_seconds"])
 
 
 def _scope(value):
@@ -374,8 +361,7 @@ def _totals(conn, scope):
             if permit["slot"] in active:
                 _fail("slot_conflict")
             active[permit["slot"]] = permit["task_id"]
-    limit = _wall_limit_ns(scope)
-    if limit is not None and charged > limit:
+    if charged > _ns(scope["declaration"]["wall_budget_seconds"]):
         _fail("charged_budget_invalid")
     return charged, active
 
@@ -489,10 +475,9 @@ def snapshot(lake, scope):
     with _read(lake, scope) as conn:
         stopped = _scope_row(conn, scope)
         charged, active = _totals(conn, scope)
-    limit = _wall_limit_ns(scope)
     return {"schema": 1, "scope": scope["results_dir"],
             "reserved_wall_seconds": _seconds(charged),
-            "remaining_wall_seconds": None if limit is None else _seconds(limit - charged),
+            "remaining_wall_seconds": _seconds(_ns(scope["declaration"]["wall_budget_seconds"]) - charged),
             "free_slots": scope["declaration"]["slots"] - len(active),
             "active_reservations": len(active),
             "stopped": stopped is not None or _key(scope) in _HELD, "stop": stopped}
@@ -508,9 +493,8 @@ def reserve(lake, scope, task_id, timeout_seconds):
             _fail("stopped")
         _recovery_available(conn, scope)
         charged, active = _totals(conn, scope)
-        limit = _wall_limit_ns(scope)
         if (task_id in active.values() or len(active) == scope["declaration"]["slots"]
-                or (limit is not None and charged + amount > limit)):
+                or charged + amount > _ns(scope["declaration"]["wall_budget_seconds"])):
             return None
         slot = next(index for index in range(scope["declaration"]["slots"]) if index not in active)
         permit = {"schema": 1, "budget_scope": scope, "reservation_id": secrets.token_hex(24),
@@ -1081,10 +1065,10 @@ def reconcile_confirmed_terminals(lake, scope):
 def record_decision(lake, scope, decision):
     scope = _scope(scope)
     if (type(decision) is not dict or set(decision) != {"kind", "reason", "wakeup"}
-            or decision["kind"] not in {"Wait", "Pause", "Stop"}
+            or decision["kind"] not in {"Wait", "Stop"}
             or type(decision["reason"]) is not str or not decision["reason"].strip()
             or len(decision["reason"].encode()) > 128
-            or (decision["kind"] in {"Pause", "Stop"} and decision["wakeup"] is not None)
+            or (decision["kind"] == "Stop" and decision["wakeup"] is not None)
             or (decision["kind"] == "Wait" and decision["wakeup"] is None)):
         _fail("decision_invalid")
     if decision["wakeup"] is not None:
@@ -1100,10 +1084,6 @@ def record_decision(lake, scope, decision):
         return tuple(row)
     def action(conn):
         _scope_row(conn, scope)
-        # Pause exits this quiescent invocation, not the research scope. Check
-        # again under the writer transaction; a callback's view is not a lease.
-        if decision["kind"] == "Pause" and _totals(conn, scope)[1]:
-            _fail("pause_requires_quiescence")
         record = {**decision, "decision_id": secrets.token_hex(24), "recorded_at": time.time()}
         conn.execute("INSERT INTO main.cpu_action_decisions VALUES (?,?,?)",
                      (record["decision_id"], scope["results_dir"], _json(record)))

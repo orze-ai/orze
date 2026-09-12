@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "scope": "New recoverable quiescent Pause contract; not a claim of general scientific convergence or whole-suite validation.",
+  "test": "tests/test_research_pause.py",
+  "test_sha256": "c1c381b2e0135709f92d76a2fc63c67a8febbbb20ef65dd329373cab22d37c30",
+  "red": {
+    "chunk_id": "d5b617",
+    "exit_code": 1,
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q tests/test_research_pause.py --tb=short -p no:cacheprovider",
+    "summary": "3 failed, 9 passed in 0.84s",
+    "failed_tests": [
+      "test_explicit_quiescent_pause_is_a_valid_policy_decision",
+      "test_pause_is_durable_without_permanently_stopping_the_resource_scope",
+      "test_pause_does_not_clear_an_existing_permanent_stop"
+    ],
+    "causes": ["research_interface: unknown policy decision", "cpu_budget_decision_invalid"],
+    "classification": "Pause is absent in the pre-Pause candidate. The v2 budget change was already present during this run; this is not a pristine 828878e run or a historical v1 defect."
+  },
+  "combined_green": {
+    "chunks": ["1173ff", "c84fdb"],
+    "session_id": 19201,
+    "exit_code": 0,
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.:src python3 -m pytest -q tests/test_research_pause.py tests/test_cpu_continuous_execution.py tests/test_research_efficiency_policy.py tests/test_research_efficiency_policy_review.py tests/test_research_efficiency_measurement_review.py tests/test_cpu_proposal_policy.py tests/test_cpu_replication_policy.py --tb=short -p no:cacheprovider",
+    "summary": "115 passed in 4.78s",
+    "test_revision": "The original 12 Pause cases are unchanged. The other 103 cases cover v2 and existing related policy interfaces; this is not the full product suite."
+  },
+  "semantics": [
+    "BoundPolicy checks the original detached view and budget, not callback-mutated copies.",
+    "Pause requires no active execution and exact integer zero active reservations; the ledger repeats its active-reservation check under its writer transaction.",
+    "The existing decision table records Pause, but stop_json is never cleared or set by it. Existing operator/terminal/storage Stop remains sticky.",
+    "The foreground invocation exits while preserving queued work, resource scope, reservations and accumulated charges. A later invocation re-evaluates actual state.",
+    "This is not a global peer-admission ban or a scientific completion judgment."
+  ],
+  "independent_review": "docs/evidence/2026-09-12-research-pause-independent-review.json",
+  "real_installed_cli_validation": "Required separately; unit tests do not stand in for an installed continuous/Pause workflow."
+}
