@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "title": "Live report coverage depends on metric-name prefix",
+  "classification": "actual_original_criterion_semantic_gap",
+  "status": "diagnostic_only; no product or test implementation",
+  "original_plan": "docs/plans/2026-09-10-autoresearch-v1.zh-CN.md",
+  "criterion": "Core must not infer experiment validity from domain-specific metric names; equivalent declared finite metric values must not change qualification solely on a rename.",
+  "entry_point": "orze.reporting.evidence.qualify_local_report_evidence",
+  "implicated_functions": [
+    "dataset_metric_keys",
+    "count_dataset_metrics",
+    "minimum_dataset_coverage"
+  ],
+  "source": {
+    "path": "src/orze/reporting/evidence.py",
+    "before_sha256": "731b8a0223ed9d752e3b08ac3bd0ebd4f1e3de9f1daac582418dbca95a5598a5",
+    "after_sha256": "731b8a0223ed9d752e3b08ac3bd0ebd4f1e3de9f1daac582418dbca95a5598a5",
+    "pre_post_exact": true
+  },
+  "execution": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 - <<'PY'\nimport hashlib,json,tempfile\nfrom pathlib import Path\nfrom orze.reporting.evidence import qualify_local_report_evidence\nsource=Path('src/orze/reporting/evidence.py')\nbefore=hashlib.sha256(source.read_bytes()).hexdigest()\nwith tempfile.TemporaryDirectory(prefix='orze-v1-live-coverage-review-') as private:\n    folder=Path(private)/'idea-case'\n    folder.mkdir()\n    outcomes=[]\n    for label,key in [('generic_name','loss_a'),('renamed_only','wer_a')]:\n        metrics={'status':'COMPLETED','objective':0,key:1,'loss_b':2}\n        (folder/'metrics.json').write_text(json.dumps(metrics),encoding='utf-8')\n        report={'primary_metric':'objective','sort':'ascending','columns':[{'key':key},{'key':'loss_b'}],'min_datasets':2}\n        _,values,value,reason=qualify_local_report_evidence(folder,{'report':report})\n        outcomes.append((value,reason))\n        print(json.dumps({'case':label,'values':values,'qualified_value':value,'reason':reason}),flush=True)\n    _,_,value,reason=qualify_local_report_evidence(folder,{'report':{**report,'min_datasets':0}})\n    assert value==0 and reason=='local_evidence_verified'\n    assert outcomes[0]==(0.0,'local_evidence_verified')\n    after=hashlib.sha256(source.read_bytes()).hexdigest()\n    assert before==after\n    print(json.dumps({'controls':'original generic naming and disabled coverage both qualified','source_sha256':after,'source_pre_post_exact':True,'scope':'actual live qualifier over private temporary metrics; no Lake, worker, pytest, or repository edit'}),flush=True)\n    assert outcomes[1]==outcomes[0], 'renaming one finite declared dataset column must not change qualification'\nPY",
+    "tool": "functions.exec -> tools.exec_command",
+    "result": {
+      "chunk_id": "d9e40b",
+      "wall_time_seconds": 0.003930676,
+      "exit_code": 1,
+      "original_token_count": 189,
+      "output": "{\"case\": \"generic_name\", \"values\": {\"loss_a\": 1, \"loss_b\": 2, \"objective\": 0}, \"qualified_value\": 0.0, \"reason\": \"local_evidence_verified\"}\n{\"case\": \"renamed_only\", \"values\": {\"wer_a\": 1, \"loss_b\": 2, \"objective\": 0}, \"qualified_value\": null, \"reason\": \"metric_coverage_below_min:1/2\"}\n{\"controls\": \"original generic naming and disabled coverage both qualified\", \"source_sha256\": \"731b8a0223ed9d752e3b08ac3bd0ebd4f1e3de9f1daac582418dbca95a5598a5\", \"source_pre_post_exact\": true, \"scope\": \"actual live qualifier over private temporary metrics; no Lake, worker, pytest, or repository edit\"}\nTraceback (most recent call last):\n  File \"<stdin>\", line 23, in <module>\nAssertionError: renaming one finite declared dataset column must not change qualification\n"
+    }
+  },
+  "observations": [
+    {
+      "case": "generic_name",
+      "columns": [
+        "loss_a",
+        "loss_b"
+      ],
+      "minimum": 2,
+      "value": 0,
+      "reason": "local_evidence_verified"
+    },
+    {
+      "case": "renamed_only",
+      "columns": [
+        "wer_a",
+        "loss_b"
+      ],
+      "minimum": 2,
+      "value": null,
+      "reason": "metric_coverage_below_min:1/2"
+    },
+    {
+      "case": "coverage_disabled_control",
+      "minimum": 0,
+      "value": 0,
+      "reason": "local_evidence_verified"
+    }
+  ],
+  "interpretation": [
+    "The live public qualifier loaded actual metrics.json from a private temporary project. Renaming loss_a to wer_a in both report.columns and metrics changed eligible evidence to ineligible evidence although all numeric values and the minimum were unchanged.",
+    "The final assertion is a real behavior failure, not an import/API-absence failure. The script is not a pytest run or a frozen new regression test.",
+    "Current report.columns are presentation/source declarations, not an explicit dataset coverage schema. The fix should add explicit coverage declarations rather than preserve either legacy prefix inference or the all-columns fallback.",
+    "S1 characterized and preserved this old behavior; its successful tests do not establish domain-neutral qualification. This is not an S2 claim-reader defect."
+  ],
+  "safety_and_limits": {
+    "temporary_files_only": true,
+    "temporary_prefix": "orze-v1-live-coverage-review-",
+    "repository_source_or_test_writes": false,
+    "lake_used": false,
+    "worker_started": false,
+    "pytest_run": false,
+    "gpu_provider_network_or_host_process_operations": false,
+    "whole_application_replay": false,
+    "diagnostic_scope": "One actual live qualification path and two controls; not universal report-consumer acceptance."
+  },
+  "proposed_contract_not_implemented": [
+    "Use explicit report.dataset_keys, or a validated benchmark_contract.required_metrics declaration when dataset_keys is absent.",
+    "When min_datasets > 0 and neither explicit coverage declaration exists, fail closed. With min_datasets absent or zero, existing no-coverage ranking remains supported.",
+    "Remove live wer-prefix and undeclared-column fallbacks; preserve the separately named non-authoritative legacy archive metric helper.",
+    "Bind the new declaration into leaderboard cache and champion-history objective scope; direct qualifier and configuration validation must agree.",
+    "Legacy positive-coverage configurations require explicit declaration migration where no benchmark declaration already supplies it; preserve thresholds and business assertions."
+  ]
+}
