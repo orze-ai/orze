@@ -1,0 +1,111 @@
+usage: orze [-h] [-V] [-c CONFIG_FILE] [--gpus GPUS] [--timeout TIMEOUT]
+            [--poll POLL] [--once] [--stop] [--restart]
+            [--request-id CONTROLLER_REQUEST_ID] [--disable] [--enable]
+            [--report-only] [--role-only NAME] [--research-only]
+            [--ideas-md IDEAS_MD] [--base-config BASE_CONFIG]
+            [--results-dir RESULTS_DIR] [--train-script TRAIN_SCRIPT]
+            [--init [PATH]] [--admin] [--no-admin] [--upgrade] [--reinstall]
+            [--reinstall-orze-version VER] [--reinstall-pro-version VER]
+            [--reinstall-extra-index-url URL] [--no-restart] [--check]
+            [--launch-status] [--uninstall] [-v]
+            {stop,resume,retry-eval,replicate,run-idea,gpu-lease-run,start,restart,service,reset,result,pro,sop,rebuild-state,catalog,ingest-champion,rebuild-lake,manual-notify,hf-discover,admin,ideas,init,upgrade}
+            ...
+
+orze: GPU experiment orchestrator
+
+positional arguments:
+  {stop,resume,retry-eval,replicate,run-idea,gpu-lease-run,start,restart,service,reset,result,pro,sop,rebuild-state,catalog,ingest-champion,rebuild-lake,manual-notify,hf-discover,admin,ideas,init,upgrade}
+    stop                Request cooperative stop; closure remains unconfirmed
+                        (75)
+    resume              Re-admit one interrupted trainer checkpoint
+    retry-eval          Admit one failed evaluation for retry without
+                        retraining
+    replicate           Explicitly admit a same-configuration repeat task
+    run-idea            Run one exact queued idea on one physical GPU
+    gpu-lease-run       Run an external command under exclusive physical-GPU
+                        leases
+    start               Start orze as a background daemon
+    restart             Request stop; v2 permits source-qualified one-shot
+                        handoff
+    service             Manage orze watchdog service
+    reset               Reset idea lake: purge failed/stale ideas for a fresh
+                        start
+    result              Register external experiment results so
+                        professor/research agents see them
+    pro                 Manage orze-pro license
+    sop                 Inspect SOP skills
+    rebuild-state       Rebuild best_idea_id + completions_since_best from
+                        idea_lake.db
+    catalog             Manage the ArtifactCatalog (ckpts / preds NPZs index)
+    ingest-champion     Retroactively ingest a manual champion bundle into
+                        idea_lake
+    rebuild-lake        Rebuild idea_lake.db from existing results directories
+    manual-notify       Send a manual status notification report
+    hf-discover         Query the HuggingFace Hub for models matching criteria
+    admin               Administrative utilities
+    ideas               Manage rows in idea_lake.db
+    init                Initialize a new orze project
+    upgrade             Request upgrade; package changes and restart await
+                        confirmed stop (75)
+
+options:
+  -h, --help            show this help message and exit
+  -V, --version         show program's version number and exit
+  -c CONFIG_FILE, --config-file CONFIG_FILE
+                        Path to orze.yaml project config
+  --gpus GPUS           Comma-separated GPU IDs (default: auto-detect)
+  --timeout TIMEOUT     Max training time in seconds
+  --poll POLL           Seconds between iterations
+  --once                Run one cycle and exit
+  --stop                Request cooperative stop; unconfirmed closure returns
+                        75
+  --restart             Request stop; v2 one-shot handoff requires --request-
+                        id
+  --request-id CONTROLLER_REQUEST_ID
+                        Stable one-shot controller restart key (not a
+                        replication key)
+  --disable             Stop and persistently disable Orze (survives restarts)
+  --enable              Check enable admission; pending stop markers are
+                        preserved
+  --report-only         Only regenerate report
+  --role-only NAME      Run a single agent role once and exit
+  --research-only       Alias for --role-only research
+  --ideas-md IDEAS_MD   Path to ideas markdown file
+  --base-config BASE_CONFIG
+                        Path to base config YAML
+  --results-dir RESULTS_DIR
+                        Directory for results
+  --train-script TRAIN_SCRIPT
+                        Training script to run per idea
+  --init [PATH]         (deprecated — use 'orze init [path]') Initialize a new
+                        project
+  --admin               Launch admin panel instead of farm loop
+  --no-admin            Do not start the background admin panel
+  --upgrade             Request upgrade; installation requires confirmed stop
+                        (75)
+  --reinstall           Request reinstall; confirmed stop is required before
+                        package changes or restart (75 while unconfirmed)
+  --reinstall-orze-version VER
+                        Pin orze version for --reinstall
+  --reinstall-pro-version VER
+                        Pin orze-pro version for --reinstall
+  --reinstall-extra-index-url URL
+                        Extra pip index URL for --reinstall (e.g. private
+                        PyPI)
+  --no-restart          Compatibility option; does not bypass confirmed-stop
+                        admission
+  --check               Validate config, check files, API keys, GPUs, .env —
+                        then exit
+  --launch-status       Report stop/pause launch policy as JSON without GPU
+                        access, then exit
+  --uninstall           Full uninstall: stop orze, remove runtime files, pip
+                        uninstall — keeps only research results
+  -v, --verbose         Debug logging
+
+Examples:
+  python -m orze.cli                             # all GPUs, continuous
+  python -m orze.cli -c orze.yaml --gpus 0,1     # with project config
+  python -m orze.cli --once                      # one cycle then exit
+  python -m orze.cli --report-only               # regenerate report
+        
+HELP_ISOLATION={"core_help_exit": 0, "forbidden_events": [], "guard_replaces_no_product_function": true, "pro_imported": false}

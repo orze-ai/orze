@@ -1,0 +1,145 @@
+Metadata-Version: 2.4
+Name: orze-pro
+Version: 0.13.1
+Summary: Autopilot for GPU experiments — autonomous research agents for orze
+Author: orze contributors
+License-Expression: LicenseRef-Proprietary
+Project-URL: Homepage, https://orze.ai
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: orze<4.7,>=4.6.2
+Requires-Dist: cryptography>=41.0
+Dynamic: license-file
+
+# orze-pro — Autopilot for GPU Experiments
+
+[![PyPI](https://img.shields.io/badge/pypi-private-blue)](https://pypi.orze.ai/simple/orze-pro/)
+[![Requires](https://img.shields.io/badge/requires-orze%20%E2%89%A54.6-green)](https://pypi.org/project/orze/)
+
+The intelligence layer for [orze](https://github.com/orze-ai/orze).
+
+**orze** (open source) is a complete GPU experiment orchestrator: scheduling, leaderboard, notifications, retrospection, analysis, admin dashboard, and Smart Suggestions.
+
+**orze-pro** adds **autopilot**: LLM-powered research agents that propose ideas, auto-fix failures, and evolve code on plateaus — so experiments run while you sleep.
+
+## Install
+
+```bash
+ORZE_PRO_KEY=ORZE-PRO-xxx curl -sL https://orze.ai/install | bash
+```
+
+That's it. It installs orze + orze-pro, initializes your project, and starts running.
+
+## What's Included
+
+| Feature | orze (free) | + orze-pro |
+|---------|:-----------:|:----------:|
+| GPU scheduling & multi-node | ✓ | ✓ |
+| Idea queue (ideas.md + SQLite) | ✓ | ✓ |
+| Hyperparameter sweep | ✓ | ✓ |
+| Leaderboard report | ✓ | ✓ |
+| Telegram/Slack notifications | ✓ | ✓ |
+| Admin dashboard & MCP server | ✓ | ✓ |
+| Retrospection (plateau detection) | ✓ | ✓ |
+| Cross-experiment regression analysis | ✓ | ✓ |
+| Failure analysis & categorization | ✓ | ✓ |
+| Checkpoint GC | ✓ | ✓ |
+| Sealed eval protection | ✓ | ✓ |
+| Service watchdog (auto-restart + containers) | ✓ | ✓ |
+| Smart Suggestions (rule-based ideas) | ✓ | ✓ |
+| **Autonomous research agents** (Gemini/GPT/Claude) | | ✓ |
+| **The Professor** (paper lake, cross-domain search, strategy) | | ✓ |
+| **Engineer** (implement ideas, fix bugs) | | ✓ |
+| **Auto-fix failed experiments** | | ✓ |
+| **Code evolution on plateau** | | ✓ |
+| **Meta-research (strategy adjustment)** | | ✓ |
+| **FSM orchestration** (7 procedures) | | ✓ |
+| **Data analyst & thinker** (auto-injected) | | ✓ |
+
+## Smart Suggestions vs Research Agents
+
+| | Smart Suggestions (free) | Research Agents (pro) |
+|---|---|---|
+| How | Rule-based: perturbations, scale sweeps | LLM-driven: reads results, forms hypotheses |
+| Requires API key | No | Yes |
+| Finds ±10% improvements | Yes | Yes |
+| Discovers new approaches | No | Yes |
+| Fixes failures | No | Yes (auto-diagnose + patch) |
+| Evolves code | No | Yes (modifies train script) |
+
+## Pro Roles
+
+orze-pro ships 6 autonomous roles, each composing from bundled SOPs:
+
+| Role | What it does |
+|------|-------------|
+| **research** | Reads results, forms hypotheses, designs experiments |
+| **professor** | Cross-domain search, idea review, strategy, gap closure |
+| **engineer** | Implements ideas, fixes bugs in training code |
+| **code_evolution** | Modifies train.py when stuck on a plateau |
+| **meta_research** | Adjusts research strategy based on progress |
+| **fsm** | Finite state machine that orchestrates all other roles |
+
+```bash
+orze sop list                      # see all available SOPs
+```
+
+## How It Works
+
+```bash
+# Same command — pro features activate automatically:
+orze start
+# ✓ Research agent reads results and proposes novel ideas
+# ✓ Auto-fixes failures and retries
+# ✓ Evolves train script when stuck on a plateau
+# ✓ The Professor searches literature and reviews strategy
+# ✓ You sleep. Experiments run.
+```
+
+Zero config change — same `orze.yaml`. Pro features activate on install.
+
+## Compatibility
+
+| orze | orze-pro | Notes |
+|------|----------|-------|
+| 4.6.x | 0.13.x | Current release |
+
+## Research campaign boundaries
+
+Orze-pro is a research harness, not a general agent platform. Research roles
+default to evidence/file tools without unrestricted shell access, each Claude
+invocation defaults to 20 turns, and unsafe permission bypass is opt-in. The
+engineer role is the deliberate exception because its job is to test code changes.
+
+Finite campaigns can impose durable attempt budgets. A failed launch or daemon
+crash remains charged:
+
+```yaml
+research_budget:
+  max_agent_attempts: 200
+
+roles:
+  research:
+    max_attempts: 80
+    max_turns: 12
+```
+
+Optional hard envelopes are backend-specific: built-in `mode: research` roles
+support `max_total_tokens` plus `tokens_per_agent_attempt`; `mode: claude` roles
+support `max_cost_usd` plus `cost_usd_per_agent_attempt` through Claude's
+`--max-budget-usd`. Unsupported combinations fail closed. Reservations are in
+`.orze/state/agent_attempts.jsonl`, completed attempts in `agent_usage.jsonl`, and
+provider usage in `llm_usage.jsonl`. OpenAI-compatible streaming records include
+cache-read and reasoning-token counts when the provider exposes them, and a
+stream is committed only after its `[DONE]` sentinel; truncated streams are
+reported as provider failures instead of being parsed as partial research.
+
+Meta-research and bundled SOPs stage validated proposals under
+`.orze/policy/proposals/`; they never directly edit active rules. Promotion is
+explicit (or requires `meta_research.auto_apply: true`), and a checksum-verified
+recorded version can be restored with `meta_research --rollback`.
+
+## License
+
+Proprietary. Contact support@orze.ai for licensing.

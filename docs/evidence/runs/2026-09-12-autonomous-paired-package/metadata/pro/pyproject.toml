@@ -1,0 +1,29 @@
+[build-system]
+# setuptools >= 77 is required to parse the PEP 639 SPDX `license` string
+# ("LicenseRef-Proprietary") below. Older setuptools silently drops the
+# project metadata and writes a stub wheel named "UNKNOWN-0.0.0" —
+# onboarding users see no error, only a mystery package on pip list.
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orze-pro"
+version = "0.13.1"
+description = "Autopilot for GPU experiments — autonomous research agents for orze"
+readme = "README.md"
+license = "LicenseRef-Proprietary"
+requires-python = ">=3.9"
+authors = [{name = "orze contributors"}]
+# The shared objective ordering API first ships in core 4.6.2. Do not advertise
+# compatibility with older cores that cannot import the research context.
+# Versioned here for paired development/installability; not a PyPI release.
+dependencies = ["orze>=4.6.2,<4.7", "cryptography>=41.0"]
+
+[project.urls]
+Homepage = "https://orze.ai"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+orze_pro = ["procedures/*.yaml", "sops/*.skill.md"]
