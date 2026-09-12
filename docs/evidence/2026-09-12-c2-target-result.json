@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "status": "target passed; full regression and C3 pending",
+  "source_commit": "e449bf8",
+  "source_sha256": "ea8ff6b5534a74d5d9a1f9f2e86d4feae3a085cff058def1d3b4652b23980fd3",
+  "test_sha256": "efc165780768d8524ccd3a15c8290b4d11d870dbbc934ad945803f723c2a8ee1",
+  "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+  "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_shutdown_slot_bookkeeping.py tests/test_shutdown_termination_authority.py tests/test_role_shutdown_slot.py tests/test_native_training_shutdown_boundaries.py tests/test_native_shutdown_publication.py tests/test_controller_profile_shutdown.py tests/test_evaluation_supervision_shutdown.py tests/test_role_shutdown_reaping.py --tb=short",
+  "chunks": [
+    {
+      "chunk_id": "deb72c",
+      "wall_time_seconds": 1.001189718,
+      "session_id": 89173,
+      "original_token_count": 3,
+      "output": ".........."
+    },
+    {
+      "chunk_id": "a56450",
+      "wall_time_seconds": 0.000002681,
+      "exit_code": 0,
+      "original_token_count": 23,
+      "output": "..........................................                     [100%]\n52 passed in 15.40s\n"
+    }
+  ],
+  "result": "52 passed in 15.40s across 8 explicit shutdown modules. Ten new mapping cases unchanged; actual quota/worker integration is separately archived in Pro.",
+  "baseline": "docs/evidence/2026-09-12-c2-shutdown-slots-baseline.json",
+  "full_before_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nfrom pathlib import Path\nimport hashlib,json,subprocess\nresult={}\nfor name in ('orze','orze-pro'):\n base=Path.cwd() if name=='orze' else Path.cwd().parent/name\n paths=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','-z','--','src','tests','examples','pyproject.toml','setup.cfg','setup.py','pytest.ini','tox.ini','MANIFEST.in','requirements.txt','uv.lock','requirements-dev.txt'],cwd=base).decode().split('\\0')\n files={p:hashlib.sha256((base/p).read_bytes()).hexdigest() for p in sorted(set(paths)) if p and (base/p).is_file() and '__pycache__' not in Path(p).parts}\n result[name]={'head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=base,text=True).strip(),'files':files,'count':len(files)}\nprint(json.dumps(result,sort_keys=True))\nPY",
+  "full_before_tool_metadata": {
+    "chunk_id": "c58810",
+    "wall_time_seconds": 0.00000392,
+    "exit_code": 0,
+    "original_token_count": 27091,
+    "output": "Complete 995-file source inventory retained for final full-suite report, not repeated in this target record."
+  },
+  "scope": "Only legacy map capture/removal changes. No MutableMapping adapter, effect/termination authority relaxation, new OS signaling, GPU/provider execution, or live deployment."
+}
