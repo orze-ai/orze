@@ -1,0 +1,186 @@
+{
+  "schema": 1,
+  "title": "C3 real terminal-restart boundary supplement",
+  "classification": "Two first-green real CPU/SQLite/CLI mechanisms; not historical failures, not pytest collection additions",
+  "status": "passed",
+  "author": "runtime_evidence",
+  "scope": {
+    "frozen_product_files_edited": 0,
+    "frozen_test_files_edited": 0,
+    "examples_or_build_edited": 0,
+    "diagnostic": "docs/evidence/snapshots/c3_terminal_restart_diagnostic.py",
+    "diagnostic_sha256": "3cc565b008e195a30f50400577afd588f6eafb6a88cb657efe43955b0b3fabb4",
+    "scenarios": 2,
+    "actual_fresh_cli_invocations": 6,
+    "actual_native_actions": 2,
+    "product_draft_reds": 0,
+    "production_full_suite_claim": false,
+    "root_full_suite_concurrent_session": 27852,
+    "count_note": "These two diagnostics are outside tests/ and outside the root 91-case target. Six includes two crashing controllers plus four fresh restart controllers. Native actions count excludes supervisor/controller infrastructure processes."
+  },
+  "actual_run": {
+    "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests:. python3 docs/evidence/snapshots/c3_terminal_restart_diagnostic.py",
+    "initial": {
+      "chunk_id": "69a16b",
+      "wall_time_seconds": 1.000994345,
+      "session_id": 75415,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "completion": {
+      "chunk_id": "33e751",
+      "wall_time_seconds": 0.000002554,
+      "exit_code": 0,
+      "original_token_count": 135,
+      "output": "C3_TERMINAL_RESTART_DIAGNOSTIC={\"cases\": [{\"mode\": \"expired\", \"passed\": true, \"report\": {\"bytes\": 183320, \"path\": \"/tmp/orze-c3-terminal-restart-921_x_75/expired/recovery-report.json\", \"sha256\": \"28e9bd0a3aeba1fe51d77d029c706ec4cb4fed966d7ec731d10c1d0840b2d205\"}}, {\"mode\": \"confirm\", \"passed\": true, \"report\": {\"bytes\": 195064, \"path\": \"/tmp/orze-c3-terminal-restart-921_x_75/confirm/recovery-report.json\", \"sha256\": \"170575fc74e25f616c13d4a04648b9e87ea9330cd2641ad9acd3b80000066550\"}}], \"root\": \"/tmp/orze-c3-terminal-restart-921_x_75\"}\n"
+    },
+    "result": {
+      "cases": [
+        {
+          "mode": "expired",
+          "passed": true,
+          "report": {
+            "bytes": 183320,
+            "path": "/tmp/orze-c3-terminal-restart-921_x_75/expired/recovery-report.json",
+            "sha256": "28e9bd0a3aeba1fe51d77d029c706ec4cb4fed966d7ec731d10c1d0840b2d205"
+          }
+        },
+        {
+          "mode": "confirm",
+          "passed": true,
+          "report": {
+            "bytes": 195064,
+            "path": "/tmp/orze-c3-terminal-restart-921_x_75/confirm/recovery-report.json",
+            "sha256": "170575fc74e25f616c13d4a04648b9e87ea9330cd2641ad9acd3b80000066550"
+          }
+        }
+      ],
+      "root": "/tmp/orze-c3-terminal-restart-921_x_75"
+    }
+  },
+  "hashes": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib\npaths=['src/orze/engine/supervisor_worker.py','src/orze/engine/supervised_process.py','src/orze/engine/process_supervision.py','src/orze/engine/native_cpu_action.py','src/orze/engine/execution_authority.py','src/orze/engine/attempt_effect_receipts.py','src/orze/core/cpu_action_budget.py','src/orze/engine/cpu_phase.py','tests/cpu_terminal_recovery_helpers.py','docs/evidence/snapshots/c3_terminal_restart_diagnostic.py']\nresult={p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths}\nast.parse(pathlib.Path(paths[-1]).read_text())\nprint(json.dumps(result,sort_keys=True,indent=2))\nPY",
+    "pre": {
+      "chunk_id": "440217",
+      "wall_time_seconds": 0.000003533,
+      "exit_code": 0,
+      "original_token_count": 282,
+      "output": "{\n  \"docs/evidence/snapshots/c3_terminal_restart_diagnostic.py\": \"3cc565b008e195a30f50400577afd588f6eafb6a88cb657efe43955b0b3fabb4\",\n  \"src/orze/core/cpu_action_budget.py\": \"42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259\",\n  \"src/orze/engine/attempt_effect_receipts.py\": \"39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593\",\n  \"src/orze/engine/cpu_phase.py\": \"92cf3640039d86660d511fe6085674356efbffa7d21bfc4a5c2466a46a9a811a\",\n  \"src/orze/engine/execution_authority.py\": \"137bcf0b80a42da216b7710136477cc38ca87a10e60889772564f880f9dc2d11\",\n  \"src/orze/engine/native_cpu_action.py\": \"11497c36447e6deb44f88fad6a867d128fb7e6a0f739332619a86b7a09721452\",\n  \"src/orze/engine/process_supervision.py\": \"772f0a918d7d21ad21f9187ffb39710c52d4b429277f9e2db0e6eddd124cd61e\",\n  \"src/orze/engine/supervised_process.py\": \"d10060e1ec3f6ab5fa154737c9a3333e1c644912ec3a649b6ec19512c350a2e2\",\n  \"src/orze/engine/supervisor_worker.py\": \"03dfcacf3de44f344ec5fb8a6c176005cfefc7547d3d667d0eb34cc65289ef2f\",\n  \"tests/cpu_terminal_recovery_helpers.py\": \"21ff43c3feb5367b9637a5498bc02881005ea777ec6614c4653ee3d7fcc8c1a3\"\n}\n"
+    },
+    "post": {
+      "chunk_id": "64eda5",
+      "wall_time_seconds": 0.000003838,
+      "exit_code": 0,
+      "original_token_count": 282,
+      "output": "{\n  \"docs/evidence/snapshots/c3_terminal_restart_diagnostic.py\": \"3cc565b008e195a30f50400577afd588f6eafb6a88cb657efe43955b0b3fabb4\",\n  \"src/orze/core/cpu_action_budget.py\": \"42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259\",\n  \"src/orze/engine/attempt_effect_receipts.py\": \"39472982730b84f88a6548e0eee08fd9df36ecf03444cb9ab3fe421c11d48593\",\n  \"src/orze/engine/cpu_phase.py\": \"92cf3640039d86660d511fe6085674356efbffa7d21bfc4a5c2466a46a9a811a\",\n  \"src/orze/engine/execution_authority.py\": \"137bcf0b80a42da216b7710136477cc38ca87a10e60889772564f880f9dc2d11\",\n  \"src/orze/engine/native_cpu_action.py\": \"11497c36447e6deb44f88fad6a867d128fb7e6a0f739332619a86b7a09721452\",\n  \"src/orze/engine/process_supervision.py\": \"772f0a918d7d21ad21f9187ffb39710c52d4b429277f9e2db0e6eddd124cd61e\",\n  \"src/orze/engine/supervised_process.py\": \"d10060e1ec3f6ab5fa154737c9a3333e1c644912ec3a649b6ec19512c350a2e2\",\n  \"src/orze/engine/supervisor_worker.py\": \"03dfcacf3de44f344ec5fb8a6c176005cfefc7547d3d667d0eb34cc65289ef2f\",\n  \"tests/cpu_terminal_recovery_helpers.py\": \"21ff43c3feb5367b9637a5498bc02881005ea777ec6614c4653ee3d7fcc8c1a3\"\n}\n"
+    },
+    "exact_match": true,
+    "coverage": "Ten files: eight relevant production modules, unchanged original recovery helper, new isolated diagnostic. Root owns the separate complete frozen source/test/build manifest."
+  },
+  "fixture_preconditions": {
+    "original_helper": "tests/cpu_terminal_recovery_helpers.py",
+    "helper_unchanged_sha256": "21ff43c3feb5367b9637a5498bc02881005ea777ec6614c4653ee3d7fcc8c1a3",
+    "actual_entry": "Unchanged helpers.run_cli -> actual prepare_supervised outer controller -> fresh python -m docs.evidence.snapshots.c3_terminal_restart_diagnostic -> unchanged helpers._child_main -> cli.main/Orze/native/F",
+    "hardware_boundary": "Existing helper's GPU/provider/legacy-repair entry points are explicit forbidden-call spies; no actual GPU/provider operations.",
+    "configuration": "Private same-Lake CPU project, slots=1, wall_budget_seconds=6, each action timeout=2; expired case explicitly shortens its runtime lease to 1 second. No production config is loaded.",
+    "expired_worker": "Original helper worker audit and answer.json write retained. Its final exit is replaced only in the diagnostic's temporary helper.WORKER value with a real sleeping CPU worker whose SIGTERM handler exits 0. Actual expiry must remain interrupted and publish no successful artifacts or observations.",
+    "crash_hook_labels": "Both hooks emit the unchanged helper's expected metadata event name crash_before_settle. Each adds an exact boundary field: the confirm case really crashes inside a transparent confirm_effect wrapper after real confirm returned, before the coordinator sees that return; it does not crash at budget.settle.",
+    "static_premise_adjustment": {
+      "executed_before_first_run": true,
+      "actual_failed_run": false,
+      "detail": "Read-only source inspection showed permit.reserved_nanoseconds is a decimal string, not an integer. Diagnostic assertion changed from integer 2000000000 to exact string '2000000000' before its first execution.",
+      "initial_unexecuted_diagnostic_sha256": "0dbe6dabe161484b5e59593ae16380896c44483c76c22a829db53e9bb913a704"
+    },
+    "no_missing_api_red": true,
+    "no_terminal_receipt_forgery": true,
+    "no_database_writer_replacement": true,
+    "cleanup": "The unchanged outer owned-supervisor helper obtains real TREE_CLOSED/ECHILD_WALL for each controller; each native action also has real TREE_CLOSED. No host-wide PID census, bare PID signal, guard removal, age takeover, or cleanup of user resources. Only isolated mkdtemp project artifacts remain."
+  },
+  "cases": [
+    {
+      "id": "expired_terminal_confirmed_then_crash_before_settle",
+      "boundary": "budget.settle entry after actual expired TERMINAL plus confirmed effect and confirmed effect-guard release",
+      "pre_crash_assertions": "Actual current full Ref/terminal, BOUND reservation, real committed effect, absent effect guard, v2 expired TREE_CLOSED/ECHILD_WALL, interrupted even return_code=0, zero published artifact/observation IDs",
+      "process_exit_codes": [
+        86,
+        0,
+        0
+      ],
+      "durable_reservation_states": [
+        "BOUND",
+        "SETTLED",
+        "SETTLED"
+      ],
+      "recovery": "First fresh CLI records COMPLETE with examined=1 and exactly the captured reservation in settled; second fresh CLI preserves that exact recovery row and reservation.",
+      "no_refund": "Original exact permit remains charged '2000000000' nanoseconds at all three snapshots.",
+      "no_go": "Only one native attempt and worker birth, with attempts/artifacts/observations/lifecycle/effect files/audit unchanged across both restarts.",
+      "artifact_count": 0,
+      "observation_count": 0
+    },
+    {
+      "id": "confirm_committed_then_crash_before_postconfirm_gate",
+      "boundary": "Transparent actual confirm_effect completes its committed receipt, then diagnostic os._exit(86) while original effect guard is still held and before execution_authority coordinator post-confirm checks",
+      "pre_crash_assertions": "Actual TERMINAL completed/authorized, real committed digest, real v2 nonexpired TREE_CLOSED, BOUND reservation, original effect guard present. Actual BOOTTIME sampled before bound deadline.",
+      "process_exit_codes": [
+        86,
+        75,
+        75
+      ],
+      "durable_reservation_states": [
+        "BOUND",
+        "BOUND",
+        "BOUND"
+      ],
+      "recovery": "Fresh F cannot acquire the retained original effect guard. Original guard bytes/nonce remain exact, recovery becomes IN_PROGRESS, and second fresh CLI preserves that same IN_PROGRESS row. No auto-release or takeover was attempted.",
+      "after_deadline": "The executed diagnostic calculates remaining time with actual CLOCK_BOOTTIME and waits until the old deadline plus 20 ms before first fresh restart. This is a real bounded elapsed-time check, not a claim that age grants authority.",
+      "truthful_partial_state": "The original SQL completed/authorized terminal, committed effect, and one already-published artifact remain. They are not rewritten to interrupted or falsely reported absent. No post-confirm acceptance or budget SETTLED is fabricated.",
+      "no_refund": "The same BOUND permit and '2000000000' nanosecond charge remain exact.",
+      "no_go": "Only one original native attempt/worker birth; both fresh CLI processes return HOLD without new attempts, workers, artifacts, observations, or lifecycle changes.",
+      "artifact_count": 1,
+      "observation_count": 0
+    }
+  ],
+  "raw_archives": [
+    {
+      "mode": "expired",
+      "original": {
+        "bytes": 183320,
+        "path": "/tmp/orze-c3-terminal-restart-921_x_75/expired/recovery-report.json",
+        "sha256": "28e9bd0a3aeba1fe51d77d029c706ec4cb4fed966d7ec731d10c1d0840b2d205"
+      },
+      "archive": "docs/evidence/snapshots/c3-terminal-restart-expired-raw.json",
+      "byte_exact": true
+    },
+    {
+      "mode": "confirm",
+      "original": {
+        "bytes": 195064,
+        "path": "/tmp/orze-c3-terminal-restart-921_x_75/confirm/recovery-report.json",
+        "sha256": "170575fc74e25f616c13d4a04648b9e87ea9330cd2641ad9acd3b80000066550"
+      },
+      "archive": "docs/evidence/snapshots/c3-terminal-restart-confirm-raw.json",
+      "byte_exact": true
+    }
+  ],
+  "archive_audit": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,pathlib\nbase=pathlib.Path('docs/evidence/snapshots')\nexpected={'expired':'28e9bd0a3aeba1fe51d77d029c706ec4cb4fed966d7ec731d10c1d0840b2d205','confirm':'170575fc74e25f616c13d4a04648b9e87ea9330cd2641ad9acd3b80000066550'}\nchecks=[]\nfor mode,sha in expected.items():\n p=base/('c3-terminal-restart-'+mode+'-raw.json'); raw=p.read_bytes(); assert hashlib.sha256(raw).hexdigest()==sha\n r=json.loads(raw); calls=r['calls']; assert len(calls)==3\n assert [x['exit_code'] for x in calls]==([86,0,0] if mode=='expired' else [86,75,75])\n assert len({(x['controller_binding']['worker']['pid'],x['controller_binding']['worker']['start_ticks']) for x in calls})==3\n for c in calls:\n  close=c['controller_closure']; assert close['event']=='TREE_CLOSED' and close['wait_proof']=='ECHILD_WALL' and close['worker_returncode']==c['exit_code']\n  assert close['forced_cleanup'] is False and close['stop_requested'] is False\n snap=[s for s in r['snapshots'] if 'guards' in s][:3]; assert len(snap)==3\n first=snap[0]; rows=first['database']['execution_attempts']; assert len(rows)==1\n attempt=rows[0]; terminal=json.loads(attempt['terminal_json']); binding=json.loads(attempt['binding_json']); close=terminal['process_tree']\n assert attempt['state']=='TERMINAL' and close['event']=='TREE_CLOSED' and close['wait_proof']=='ECHILD_WALL'\n assert close['binding']==binding['supervision'] and close['binding']['runtime_lease']==binding['runtime_lease']\n assert len(first['worker_events'])==1 and first['worker_events'][0]['pid']==close['binding']['worker']['pid']\n for s in snap[1:]:\n  for name in ('execution_attempts','research_artifacts','research_observations','ideas','idea_state','idea_transitions','idea_stage_state','idea_stage_transitions'):\n   assert s['database'][name]==first['database'][name],(mode,name)\n  assert s['files']==first['files'] and s['worker_events']==first['worker_events']\n reservations=[s['database']['cpu_action_reservations'] for s in snap]\n assert all(len(v)==1 for v in reservations)\n assert len({v[0]['permit_json'] for v in reservations})==1\n assert json.loads(reservations[0][0]['permit_json'])['reserved_nanoseconds']=='2000000000'\n effect=[v for key,v in first['files'].items() if key.endswith('/committed.json')]; assert len(effect)==1\n assert all(hashlib.sha256(v['utf8'].encode()).hexdigest()==v['sha256'] for v in first['files'].values())\n assert reservations[0][0]['state']=='BOUND'\n if mode=='expired':\n  assert terminal['outcome']=='interrupted' and terminal['return_code']==0 and terminal['reason_code']=='cpu_runtime_lease_expired'\n  assert terminal['runtime_lease']['status']=='expired' and close['lease_expired'] is True and close['stop_requested'] is True\n  assert terminal['runtime_lease']['observed_ns']>=binding['runtime_lease']['deadline_ns']\n  assert terminal['artifact_ids']==terminal['observation_ids']==[]\n  assert reservations[1][0]['state']=='SETTLED' and reservations[2]==reservations[1]\n  assert snap[2]['database']['cpu_action_recovery']==snap[1]['database']['cpu_action_recovery']\n  recovery=snap[1]['database']['cpu_action_recovery']; assert len(recovery)==1 and recovery[0]['state']=='COMPLETE'\n  summary=json.loads(recovery[0]['summary_json']); assert summary['settled']==[reservations[0][0]['reservation_id']] and summary['examined']==1\n  assert all(not s['guards']['results/idea-first/_attempt_effect.lock']['exists'] for s in snap)\n else:\n  assert terminal['outcome']=='completed' and terminal['runtime_lease']['status']=='authorized' and close['lease_expired'] is False\n  assert terminal['runtime_lease']['observed_ns']<binding['runtime_lease']['deadline_ns']\n  assert calls[0]['metadata'][1]['observed_ns']<binding['runtime_lease']['deadline_ns']\n  assert reservations[0]==reservations[1]==reservations[2]\n  assert all(s['guards']['results/idea-first/_attempt_effect.lock']==first['guards']['results/idea-first/_attempt_effect.lock'] for s in snap)\n  assert first['guards']['results/idea-first/_attempt_effect.lock']['exists'] is True\n  assert snap[1]['database']['cpu_action_recovery']==snap[2]['database']['cpu_action_recovery']\n  assert snap[1]['database']['cpu_action_recovery'][0]['state']=='IN_PROGRESS'\n checks.append({'mode':mode,'archive_sha256':sha,'archive_bytes':len(raw),'cli_exit_codes':[c['exit_code'] for c in calls],'controller_closures':len(calls),'native_actions':len(rows),'worker_births':first['worker_events'],'native_outcome':terminal['outcome'],'native_return_code':terminal['return_code'],'lease_status':terminal['runtime_lease']['status'],'reservation_states':[v[0]['state'] for v in reservations],'artifact_count':len(first['database']['research_artifacts']),'observation_count':len(first['database']['research_observations']),'reserved_nanoseconds':'2000000000','no_reexecution':True,'unchanged_attempt_effect_artifact_lifecycle':True})\nprint(json.dumps({'passed':True,'cases':checks,'total_cli_invocations':6,'total_native_actions':2,'actual_product_draft_reds':0},sort_keys=True,indent=2))\nPY",
+    "result": {
+      "chunk_id": "b263ff",
+      "wall_time_seconds": 0.000003491,
+      "exit_code": 0,
+      "original_token_count": 440,
+      "output": "{\n  \"actual_product_draft_reds\": 0,\n  \"cases\": [\n    {\n      \"archive_bytes\": 183320,\n      \"archive_sha256\": \"28e9bd0a3aeba1fe51d77d029c706ec4cb4fed966d7ec731d10c1d0840b2d205\",\n      \"artifact_count\": 0,\n      \"cli_exit_codes\": [\n        86,\n        0,\n        0\n      ],\n      \"controller_closures\": 3,\n      \"lease_status\": \"expired\",\n      \"mode\": \"expired\",\n      \"native_actions\": 1,\n      \"native_outcome\": \"interrupted\",\n      \"native_return_code\": 0,\n      \"no_reexecution\": true,\n      \"observation_count\": 0,\n      \"reservation_states\": [\n        \"BOUND\",\n        \"SETTLED\",\n        \"SETTLED\"\n      ],\n      \"reserved_nanoseconds\": \"2000000000\",\n      \"unchanged_attempt_effect_artifact_lifecycle\": true,\n      \"worker_births\": [\n        {\n          \"pid\": 2837244,\n          \"start_ticks\": 1064397595,\n          \"tag\": \"first\"\n        }\n      ]\n    },\n    {\n      \"archive_bytes\": 195064,\n      \"archive_sha256\": \"170575fc74e25f616c13d4a04648b9e87ea9330cd2641ad9acd3b80000066550\",\n      \"artifact_count\": 1,\n      \"cli_exit_codes\": [\n        86,\n        75,\n        75\n      ],\n      \"controller_closures\": 3,\n      \"lease_status\": \"authorized\",\n      \"mode\": \"confirm\",\n      \"native_actions\": 1,\n      \"native_outcome\": \"completed\",\n      \"native_return_code\": 0,\n      \"no_reexecution\": true,\n      \"observation_count\": 0,\n      \"reservation_states\": [\n        \"BOUND\",\n        \"BOUND\",\n        \"BOUND\"\n      ],\n      \"reserved_nanoseconds\": \"2000000000\",\n      \"unchanged_attempt_effect_artifact_lifecycle\": true,\n      \"worker_births\": [\n        {\n          \"pid\": 2837378,\n          \"start_ticks\": 1064397900,\n          \"tag\": \"first\"\n        }\n      ]\n    }\n  ],\n  \"passed\": true,\n  \"total_cli_invocations\": 6,\n  \"total_native_actions\": 2\n}\n"
+    },
+    "scope": "Read-only recheck of complete archived raw reports, native/controller closure bindings, durable state sequence, unchanged effect/artifact/lifecycle rows, exact charge, zero reexecution, and original raw SHA."
+  },
+  "limitations": [
+    "These are two bounded actual private CPU command-action restart windows, not general fault-tolerance or distributed adoption proof.",
+    "The confirm window intentionally preserves a genuinely committed terminal/artifact plus unknown coordinator completion. HOLD and retained guards are the correct outcome; this evidence does not authorize clearing them.",
+    "No Domain analysis/observation worker is added here; observation count is zero in both fixtures. Existing separate Domain/F evidence is not relabeled as this run.",
+    "No worker, terminal, receipt, or SQLite state is forged. Only narrow crash hooks and the declared diagnostic worker body differ from the original helper.",
+    "Exactly-once settlement here means one captured reservation appears in the durable COMPLETE summary and remains byte-identical on the second fresh restart; it is not a claim about arbitrary distributed retries.",
+    "No full test suite was run by this diagnostic. Its own pre/post check covers the named ten files, not a fabricated whole-repository audit.",
+    "No runtime lease renewal, restart replay of old work, budget refund, or unknown-effect recovery is authorized."
+  ]
+}
