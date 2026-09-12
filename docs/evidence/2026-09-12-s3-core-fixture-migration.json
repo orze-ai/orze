@@ -417,6 +417,66 @@
     "limited_scope": "No new definite blocker found in this bounded review. Root's reported 58 passing new cases are not counted as this reviewer's independent execution, and full regression closure is still pending.",
     "remaining_compatibility_note": "Ordinary configurations without a positive coverage gate retain no-gate behavior. Positive legacy configurations with no explicit or benchmark coverage declaration require deliberate migration; no user project or deployment was modified."
   },
+  "independent_final_review_addendum": {
+    "classification": "independent corrected-candidate review epoch; appended without changing earlier migration or baseline records",
+    "prior_migration_document_sha256": "37d585555eaf024bb2fa451230c05e9cb7a2e9d6e0da3d653ed8cb86645fb445",
+    "source_and_test_pre_post_exact": true,
+    "executions": [
+      {
+        "purpose": "source/test pre-fingerprints; complete legacy archive function AST equality; valid/invalid coverage and history identity controls",
+        "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 - <<'PY'\nimport ast,copy,hashlib,json,subprocess\nfrom pathlib import Path\nfrom orze.reporting.evidence import dataset_coverage_identity,minimum_dataset_coverage\nfrom orze.engine.champion_history import objective_scope\nbaseline='69ff7babb57371632fb3048db781b24a3545548a'\npath='src/orze/reporting/evidence.py'\ndef archive(tree):\n    functions=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='legacy_archive_metric_value']\n    assert len(functions)==1\n    return ast.dump(functions[0],include_attributes=False)\nassert archive(ast.parse(subprocess.check_output(['git','show',baseline+':'+path])))==archive(ast.parse(Path(path).read_bytes()))\nreport={'primary_metric':'score','columns':[{'key':'part'}],'min_datasets':0}\nnone=dict(report,dataset_keys=None)\nvalid=dict(report,dataset_keys=['part'])\ntuple_invalid=dict(report,dataset_keys=('part',))\nassert minimum_dataset_coverage(report,metrics={'wer_unrelated':1})==(True,0,0)\nassert dataset_coverage_identity(report)!=dataset_coverage_identity(none)\nassert dataset_coverage_identity(valid)!=dataset_coverage_identity(tuple_invalid)\nassert objective_scope({'report':report})!=objective_scope({'report':none})\nassert objective_scope({'report':valid})!=objective_scope({'report':tuple_invalid})\npaths=[path,'src/orze/reporting/leaderboard.py','src/orze/engine/champion_history.py','src/orze/core/config.py','tests/test_declared_coverage_boundaries.py','tests/test_declared_coverage_review.py']\nprint(json.dumps({'sha256':{p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths},'legacy_archive_full_function_ast_exact':True,'invalid_marker_and_champion_scope_checks':4,'min0_compatibility_control':True},sort_keys=True))\nPY",
+        "result": {
+          "chunk_id": "935bc1",
+          "wall_time_seconds": 0.008214932,
+          "exit_code": 0,
+          "original_token_count": 195,
+          "output": "{\"invalid_marker_and_champion_scope_checks\": 4, \"legacy_archive_full_function_ast_exact\": true, \"min0_compatibility_control\": true, \"sha256\": {\"src/orze/core/config.py\": \"21861491bdbe353e2684c39bc0f923e9999801d5b6ed56e8ce1f289dca15b420\", \"src/orze/engine/champion_history.py\": \"1eb83c70797946221ed425301b84b8d896ab078771fc4a7d075f7379a2842eef\", \"src/orze/reporting/evidence.py\": \"d81c189876fe6cffa33b0e55b2638a61a28e8dcccaf8d4b9beb2cf12670f14d5\", \"src/orze/reporting/leaderboard.py\": \"88f6af0c2e32b83cdda6ebb18511188b0c64796f171928648d8700a268642ea9\", \"tests/test_declared_coverage_boundaries.py\": \"2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0\", \"tests/test_declared_coverage_review.py\": \"850c40dc0375ad70f5870c520d166f54a87cd87582ab621febdee9ff65fc547e\"}}\n"
+        }
+      },
+      {
+        "purpose": "independent actual execution of both unchanged new reviewer test files",
+        "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_declared_coverage_boundaries.py tests/test_declared_coverage_review.py --tb=short",
+        "result": {
+          "chunk_id": "b69c60",
+          "wall_time_seconds": 0.851149576,
+          "exit_code": 0,
+          "original_token_count": 25,
+          "output": "...............................................                          [100%]\n47 passed in 0.71s\n"
+        }
+      },
+      {
+        "purpose": "same source/test fingerprints and semantic controls after pytest",
+        "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 - <<'PY'\nimport ast,copy,hashlib,json,subprocess\nfrom pathlib import Path\nfrom orze.reporting.evidence import dataset_coverage_identity,minimum_dataset_coverage\nfrom orze.engine.champion_history import objective_scope\nbaseline='69ff7babb57371632fb3048db781b24a3545548a'\npath='src/orze/reporting/evidence.py'\ndef archive(tree):\n    functions=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='legacy_archive_metric_value']\n    assert len(functions)==1\n    return ast.dump(functions[0],include_attributes=False)\nassert archive(ast.parse(subprocess.check_output(['git','show',baseline+':'+path])))==archive(ast.parse(Path(path).read_bytes()))\nreport={'primary_metric':'score','columns':[{'key':'part'}],'min_datasets':0}\nnone=dict(report,dataset_keys=None)\nvalid=dict(report,dataset_keys=['part'])\ntuple_invalid=dict(report,dataset_keys=('part',))\nassert minimum_dataset_coverage(report,metrics={'wer_unrelated':1})==(True,0,0)\nassert dataset_coverage_identity(report)!=dataset_coverage_identity(none)\nassert dataset_coverage_identity(valid)!=dataset_coverage_identity(tuple_invalid)\nassert objective_scope({'report':report})!=objective_scope({'report':none})\nassert objective_scope({'report':valid})!=objective_scope({'report':tuple_invalid})\npaths=[path,'src/orze/reporting/leaderboard.py','src/orze/engine/champion_history.py','src/orze/core/config.py','tests/test_declared_coverage_boundaries.py','tests/test_declared_coverage_review.py']\nprint(json.dumps({'sha256':{p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths},'legacy_archive_full_function_ast_exact':True,'invalid_marker_and_champion_scope_checks':4,'min0_compatibility_control':True},sort_keys=True))\nPY",
+        "result": {
+          "chunk_id": "83b8b9",
+          "wall_time_seconds": 0.008592196,
+          "exit_code": 0,
+          "original_token_count": 195,
+          "output": "{\"invalid_marker_and_champion_scope_checks\": 4, \"legacy_archive_full_function_ast_exact\": true, \"min0_compatibility_control\": true, \"sha256\": {\"src/orze/core/config.py\": \"21861491bdbe353e2684c39bc0f923e9999801d5b6ed56e8ce1f289dca15b420\", \"src/orze/engine/champion_history.py\": \"1eb83c70797946221ed425301b84b8d896ab078771fc4a7d075f7379a2842eef\", \"src/orze/reporting/evidence.py\": \"d81c189876fe6cffa33b0e55b2638a61a28e8dcccaf8d4b9beb2cf12670f14d5\", \"src/orze/reporting/leaderboard.py\": \"88f6af0c2e32b83cdda6ebb18511188b0c64796f171928648d8700a268642ea9\", \"tests/test_declared_coverage_boundaries.py\": \"2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0\", \"tests/test_declared_coverage_review.py\": \"850c40dc0375ad70f5870c520d166f54a87cd87582ab621febdee9ff65fc547e\"}}\n"
+        }
+      }
+    ],
+    "counts": {
+      "cases": 47,
+      "passed": 47,
+      "failed": 0,
+      "elapsed_pytest_seconds": 0.71,
+      "source_files": 4,
+      "test_files": 2
+    },
+    "findings": [
+      "The exact frozen 42 declaration cases and five independent candidate counterexamples all pass on this epoch's current source.",
+      "The legacy_archive_metric_value entire function AST is exactly equal to the pinned 69ff baseline, not merely equivalent sample outputs.",
+      "Validated coverage identity distinguishes missing from explicit-null declarations and valid list from invalid tuple; corresponding champion-history scopes also differ.",
+      "No declaration with zero minimum still reports a satisfied zero-coverage gate; no WER/raw fallback was restored.",
+      "Read-only diff review confirms direct declaration validation precedes source-column iteration, the cache includes original evidence columns plus validated/error-marked coverage identity, and display/harvest columns are no longer substituted into the offline qualification policy."
+    ],
+    "conclusion": "No additional definite blocker found in this bounded source/consumer review. This is not a full-suite result, deployment approval, closure of C2/C3, or complete original V1 acceptance.",
+    "unchanged_scope": "No source, old fixture, or new test was edited during this review epoch. The earlier eight-file migration and its intentional S1 behavior changes remain recorded above."
+  },
   "not_modified": [
     "production source by this reviewer",
     "the three new declared-coverage test files",
