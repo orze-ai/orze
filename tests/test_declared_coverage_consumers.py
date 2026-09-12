@@ -34,6 +34,11 @@ def test_declared_live_qualification_is_invariant_to_metric_renaming(tmp_path):
     assert outcomes[1] == outcomes[0]
 
 
+def test_existing_zero_coverage_native_authority_control(project):
+    _publish(project, score=0)
+    assert _oracle(project)[2:4] == (0.0, "authoritative_local_evidence_verified")
+
+
 @pytest.mark.parametrize("name", ["loss_a", "wer_a"])
 def test_live_positive_gate_without_coverage_declaration_is_explicitly_refused(tmp_path, name):
     (tmp_path / "metrics.json").write_text(json.dumps(
@@ -63,6 +68,8 @@ def test_bad_declaration_is_refused_by_config_and_direct_live_entry(tmp_path, de
     assert evidence.qualify_local_report_evidence(tmp_path, cfg)[2:] == (
         None, "dataset_coverage_declaration_invalid")
     check_cfg = deepcopy(DEFAULT_CONFIG)
+    # Internal validation consumes paths resolved by load_project_config.
+    check_cfg["ideas_file"] = str(tmp_path / "ideas.md")
     check_cfg["report"] = cfg["report"]
     errors, _ = _validate_config(check_cfg)
     assert any("dataset_coverage_declaration_invalid" in error for error in errors)
@@ -72,12 +79,12 @@ def test_current_report_rebuild_and_digest_use_declared_mixed_name_coverage(proj
     p = project
     p.cfg["report"] = report(["wer_a", "part_b"])
     _publish(p, score=0, wer_a=1, part_b=2)
-    assert _oracle(p)[2:4] == (0.0, "local_evidence_verified")
+    assert _oracle(p)[2:4] == (0.0, "authoritative_local_evidence_verified")
     rows = leaderboard.update_report(p.results, p.ideas, p.cfg, lake=p.lake)
     assert [(r["id"], r["primary_val"]) for r in rows] == [("idea-native", 0.0)]
     assert _payload(p.results)["top"][0]["idea_id"] == "idea-native"
-    best, value = rebuild_best_from_evidence(p.results, p.cfg, lake=p.lake)
-    assert (best, value) == ("idea-native", 0.0)
+    best, completions_since_best = rebuild_best_from_evidence(p.results, p.cfg, lake=p.lake)
+    assert (best, completions_since_best) == ("idea-native", 0)
     digest = build_digest(p.results, p.cfg)
     assert "idea-native" in digest
     assert "qualification: 1 accepted, 0 rejected" in digest

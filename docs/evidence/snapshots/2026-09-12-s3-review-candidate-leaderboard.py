@@ -1,0 +1,1688 @@
+"""Leaderboard report generation from experiment results.
+
+CALLING SPEC:
+    update_report(results_dir: Path, ideas: Dict[str, dict], cfg: dict,
+                  lake: Optional[IdeaLake] = None) -> list
+        Generate report.md leaderboard and JSON caches from all results.
+        Returns sorted list of completed row dicts. Reads metrics.json per
+        idea, caches results, handles sweep grouping and filtered views.
+        cfg must contain 'report' key with primary_metric, columns, etc.
+
+    write_admin_cache(results_dir: Path, ideas: dict, cfg: dict) -> None
+        Write _admin_cache.json with pre-aggregated nodes, queue, and alerts
+        for the admin panel. Reads heartbeats, expands sweeps, scans for
+        recent failures.
+
+    _resolve_primary_metric(cfg: dict, eval_file: str, eval_data: dict) -> Any
+        Extract the primary metric value from eval_data using report column
+        source mappings. Falls back to metrics.<primary_metric> dotpath.
+
+    _format_report_text(data: dict) -> str
+        Format a periodic report summary as plain text. data keys: title,
+        completed, failed, active_count, queued, leaderboard (list of
+        {id, title, value}), metric_name, machines (list of {host,
+        gpus_busy, gpus_total, utilization}).
+"""
+import datetime
+import hashlib
+import json
+import logging
+import os
+import re
+import socket
+import shutil
+import time
+from collections import Counter
+from pathlib import Path
+from typing import Dict, Optional
+
+import yaml
+from orze.core.fs import deep_get, atomic_write
+from orze.core.ideas import expand_sweeps
+from orze.core.config import DEFAULT_CONFIG, orze_path
+from orze.core.benchmark_contract import (
+    BenchmarkContractError,
+    PROVENANCE_FILE,
+    benchmark_exposure_evidence_paths,
+    benchmark_exposure_summary,
+    get_benchmark_contract,
+    validate_benchmark_receipt,
+)
+from orze.reporting.state import _read_all_heartbeats
+from orze.reporting.objective import objective_improves, objective_sort_key
+
+
+def notify(event, data, cfg):
+    """Lazy-imported wrapper around orze.reporting.notifications.notify.
+
+    Imported lazily because notifications.py imports _format_report_text
+    from this module (circular import).
+    """
+    from orze.reporting.notifications import notify as _notify
+    return _notify(event, data, cfg)
+
+try:
+    from orze.idea_lake import IdeaLake
+except ImportError:
+    IdeaLake = None
+
+logger = logging.getLogger("orze")
+
+
+_CMP_OPS = {
+    "$lt": lambda a, b: a < b,
+    "$lte": lambda a, b: a <= b,
+    "$gt": lambda a, b: a > b,
+    "$gte": lambda a, b: a >= b,
+}
+
+_REPORT_UPDATED_TOKEN = "__ORZE_UPDATED_AT__"
+_RESULT_CACHE_SCHEMA_VERSION = 8
+
+
+def _evidence_content_hash(paths) -> str:
+    """Hash evidence at constant memory without following leaf symlinks."""
+    from orze.reporting.evidence import evidence_content_sha256
+    return evidence_content_sha256(paths)
+
+
+def _evidence_metadata_signature(paths) -> str:
+    """Hash change-resistant local metadata without reading file contents."""
+    digest = hashlib.sha256()
+    for path in sorted(set(map(Path, paths)), key=lambda item: str(item)):
+        digest.update(str(path).encode("utf-8"))
+        try:
+            stat = os.lstat(path)
+            digest.update(json.dumps([
+                stat.st_dev,
+                stat.st_ino,
+                stat.st_mode,
+                stat.st_size,
+                stat.st_mtime_ns,
+                stat.st_ctime_ns,
+            ], separators=(",", ":")).encode("utf-8"))
+        except OSError:
+            digest.update(b"<missing-or-unreadable>")
+    return digest.hexdigest()
+
+
+def _cache_row_hash(row) -> str:
+    return hashlib.sha256(json.dumps(
+        row, sort_keys=True, default=str, separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+
+
+def _atomic_write_if_changed(path: Path, content: str) -> bool:
+    """Publish changed bytes and verify them; a silent failed write is failure."""
+    expected = content.encode("utf-8")
+    try:
+        if path.read_bytes() == expected:
+            return False
+    except OSError:
+        pass
+    atomic_write(path, content)
+    try:
+        observed = path.read_bytes()
+    except OSError as exc:
+        raise OSError(f"Observer publication not confirmed: {path}") from exc
+    if observed != expected:
+        raise OSError(f"Observer publication content mismatch: {path}")
+    return True
+
+
+def _write_report_if_changed(path: Path, template: str, updated_at: str) -> bool:
+    """Keep the prior Updated timestamp when report semantics are unchanged."""
+    try:
+        previous = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        previous = ""
+    normalized = re.sub(
+        r"(?m)^(\*\*Updated:\*\* ).*?( \| \*\*Host:\*\*)",
+        rf"\g<1>{_REPORT_UPDATED_TOKEN}\g<2>",
+        previous,
+        count=1,
+    )
+    if normalized == template:
+        return False
+    return _atomic_write_if_changed(
+        path, template.replace(_REPORT_UPDATED_TOKEN, updated_at, 1))
+
+
+def _matches_view_filter(results_dir: Path, idea_id: str, view_filter: dict) -> bool:
+    """Check if an idea's resolved_config matches all view filter conditions.
+
+    Filter keys are dotpaths into resolved_config.yaml.
+    Values can be:
+      - a single value: exact match
+      - a list: any-of match
+      - a dict with comparison operators: {"$lte": 100}
+    """
+    config_path = results_dir / idea_id / "resolved_config.yaml"
+    if not config_path.exists():
+        return False
+    try:
+        import yaml
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    if not isinstance(config, dict):
+        return False
+
+    for dotpath, expected in view_filter.items():
+        actual = deep_get(config, dotpath)
+        if isinstance(expected, dict):
+            for op, threshold in expected.items():
+                cmp_fn = _CMP_OPS.get(op)
+                if cmp_fn is None:
+                    return False
+                if actual is None:
+                    return False
+                try:
+                    if not cmp_fn(float(actual), float(threshold)):
+                        return False
+                except (ValueError, TypeError):
+                    return False
+        elif isinstance(expected, list):
+            if actual not in expected:
+                return False
+        else:
+            if actual != expected:
+                return False
+    return True
+
+
+def _resolve_primary_metric(cfg: dict, eval_file: str, eval_data: dict):
+    """Resolve the primary metric value from eval data using report config."""
+    primary = cfg.get("report", {}).get("primary_metric", "test_accuracy")
+    columns = cfg.get("report", {}).get("columns", [])
+    for col in columns:
+        if col.get("key") == primary:
+            src = col.get("source", "")
+            if ":" in src:
+                src_file, json_path = src.split(":", 1)
+                if src_file == eval_file:
+                    return deep_get(eval_data, json_path)
+    # Fallback: try metrics.{primary} directly
+    return deep_get(eval_data, f"metrics.{primary}")
+
+
+_diversity_cache_signature = None
+_diversity_cache_markdown = ""
+
+
+def _diversity_signature(results_dir: Path, completed_ids: list) -> tuple:
+    """Cheap invalidation for immutable completed-run configs."""
+    entries = []
+    for idea_id in sorted(completed_ids):
+        path = results_dir / idea_id / "resolved_config.yaml"
+        try:
+            stat = path.stat()
+            entries.append((idea_id, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size))
+        except OSError:
+            entries.append((idea_id, 0, 0, 0))
+    return (str(results_dir.resolve()), tuple(entries))
+
+
+def _analyze_config_diversity(results_dir: Path, completed_ids: list, max_dims: int = 15) -> str:
+    """Analyze resolved config diversity. Returns markdown table string."""
+    global _diversity_cache_signature, _diversity_cache_markdown
+    signature = (_diversity_signature(results_dir, completed_ids), max_dims)
+    if signature == _diversity_cache_signature:
+        return _diversity_cache_markdown
+
+    try:
+        import yaml as _yaml
+    except ImportError:
+        return ""
+
+    # Collect values for each key path across all completed ideas
+    key_values = {}  # dotpath -> list of values
+
+    def _walk(d, prefix="", depth=0):
+        if depth > 3 or not isinstance(d, dict):
+            return
+        for k, v in d.items():
+            if k.startswith("_") or "/" in k:
+                continue
+            dotpath = f"{prefix}{k}" if not prefix else f"{prefix}.{k}"
+            if isinstance(v, dict):
+                _walk(v, dotpath, depth + 1)
+            elif isinstance(v, (str, int, float, bool, type(None))):
+                key_values.setdefault(dotpath, []).append(v)
+            # skip lists and other non-scalar types
+
+    for idea_id in completed_ids:
+        cfg_path = results_dir / idea_id / "resolved_config.yaml"
+        if not cfg_path.exists():
+            continue
+        try:
+            config = _yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+            if isinstance(config, dict):
+                _walk(config)
+        except Exception:
+            continue
+
+    if not key_values:
+        result = ""
+        _diversity_cache_signature = signature
+        _diversity_cache_markdown = result
+        return result
+
+    # Analyze each dimension
+    dim_stats = []
+    for dotpath, vals in key_values.items():
+        n_unique = len(set(str(v) for v in vals))
+        # Find most common value
+        counts = {}
+        for v in vals:
+            sv = str(v)
+            counts[sv] = counts.get(sv, 0) + 1
+        dominant_val = max(counts, key=counts.get)
+        dominant_pct = counts[dominant_val] / len(vals) * 100
+
+        # Collect all unique values for display
+        all_unique = sorted(set(str(v) for v in vals))
+
+        # Filter: one value dominates >70% OR n_unique < 5
+        if dominant_pct > 70 or n_unique < 5:
+            dim_stats.append({
+                "dim": dotpath,
+                "n_unique": n_unique,
+                "dominant": dominant_val,
+                "dominant_pct": dominant_pct,
+                "all_values": all_unique,
+            })
+
+    if not dim_stats:
+        result = ""
+        _diversity_cache_signature = signature
+        _diversity_cache_markdown = result
+        return result
+
+    # Sort by n_unique ascending (least diverse first)
+    dim_stats.sort(key=lambda x: x["n_unique"])
+    dim_stats = dim_stats[:max_dims]
+
+    lines = [
+        "## Config Diversity",
+        "",
+        "| Dimension | Unique | Dominant (%) | All Values |",
+        "|-----------|--------|--------------|------------|",
+    ]
+    for s in dim_stats:
+        all_vals_str = ", ".join(s["all_values"][:10])
+        if len(s["all_values"]) > 10:
+            all_vals_str += f", ... (+{len(s['all_values']) - 10})"
+        lines.append(
+            f"| {s['dim']} | {s['n_unique']} "
+            f"| {s['dominant']} ({s['dominant_pct']:.0f}%) "
+            f"| {all_vals_str} |"
+        )
+    lines.append("")
+    result = "\n".join(lines)
+    _diversity_cache_signature = signature
+    _diversity_cache_markdown = result
+    return result
+
+
+def update_report(results_dir: Path, ideas: Dict[str, dict],
+                  cfg: dict, lake: Optional[IdeaLake] = None,
+                  role_states: Optional[dict] = None) -> list:
+    """Generate a configurable leaderboard report.md from all results.
+    Returns sorted list of completed row dicts."""
+    report_cfg = cfg.get("report") or DEFAULT_CONFIG["report"]
+    benchmark_contract = get_benchmark_contract(cfg)
+    exposure_summary = benchmark_exposure_summary(results_dir, cfg)
+    primary_metric = report_cfg.get("primary_metric") or "test_accuracy"
+    mh_columns = (cfg.get("metric_harvest") or {}).get("columns")
+    user_columns = report_cfg.get("columns")
+    if mh_columns and user_columns == DEFAULT_CONFIG["report"]["columns"]:
+        columns = mh_columns
+    else:
+        columns = user_columns or mh_columns or DEFAULT_CONFIG["report"]["columns"]
+    evidence_cfg = dict(cfg)
+    evidence_report = dict(report_cfg)
+    evidence_report["columns"] = columns
+    evidence_cfg["report"] = evidence_report
+    from orze.reporting.native_report import (
+        native_report_evidence, report_authority,
+    )
+    if lake is None and "idea_lake_db" in cfg:
+        from orze.reporting.catalog import load_catalog_snapshot
+        from orze.reporting.evidence import report_lifecycle_db_path
+        try:
+            lake = load_catalog_snapshot(report_lifecycle_db_path(results_dir, cfg))
+        except (OSError, TypeError, ValueError):
+            # report_authority retains the explicit request and fails closed.
+            # Invalid configuration must not select legacy artifact authority.
+            pass
+    native_authority, authoritative_ids, authority_reason = report_authority(
+        results_dir, cfg, lake)
+    lifecycle_authority = (
+        "agreed_idea_lake" if authority_reason == "authoritative_lifecycle_loaded"
+        else "unavailable_idea_lake" if native_authority
+        else "unverified_local_artifact"
+    )
+    _col_hash = hashlib.sha256(json.dumps(
+        {
+            "columns": columns,
+            "primary_metric": primary_metric,
+            "secondary_metric": report_cfg.get("secondary_metric"),
+            "min_datasets": report_cfg.get("min_datasets", 0),
+            "dataset_coverage": {"version": 2, "keys": report_cfg.get("dataset_keys")},
+            "metric_validation": cfg.get("metric_validation", {}),
+            "eval_output": cfg.get("eval_output") or "eval_report.json",
+            "evaluation_enabled": bool(cfg.get("eval_script")),
+            "benchmark_contract": benchmark_contract,
+            "model_lineage": cfg.get("model_lineage", {}),
+            "data_boundaries": cfg.get("data_boundaries", {}),
+            "data_separation": cfg.get("data_separation", {}),
+            "lifecycle_authority": lifecycle_authority,
+            "cache_schema_version": _RESULT_CACHE_SCHEMA_VERSION,
+        },
+        sort_keys=True, default=str,
+    ).encode()).hexdigest()
+    title = report_cfg.get("title") or "Orze Report"
+    def _get_tiebreaker_sort_key(r):
+        return objective_sort_key(
+            r.get("primary_val"), r.get("values", {}), report_cfg, r["id"])
+
+    # --- Load results cache ---
+    cache_path = results_dir / "_results_cache.json"
+    cache = {}
+    try:
+        cache_readable = (
+            not cache_path.is_symlink()
+            and cache_path.is_file()
+            and cache_path.stat().st_size <= 128 * 1024 * 1024
+        )
+    except OSError:
+        cache_readable = False
+    if cache_readable:
+        try:
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            cache = {}
+        if not isinstance(cache, dict):
+            cache = {}
+
+    rows = []
+    def _id_sort_key(x):
+        return x
+
+    # Include archived ideas from cached index
+    all_ideas = dict(ideas)
+    lake_index = {}
+    if lake:
+        # DB is source of truth for full idea set (archived + hot)
+        lake_index = lake.get_metadata_index()
+        db_ids = set(lake_index)
+        # In memory ideas (hot) take precedence for config, but DB knows about everyone
+        for aid in db_ids:
+            if aid not in all_ideas:
+                # Stub for report walker — title will be fetched from DB below
+                all_ideas[aid] = {"title": "...", "priority": "archived"}
+    elif not native_authority:
+        archived_index = results_dir / "_archived_index.json"
+        if archived_index.exists():
+            try:
+                idx = json.loads(archived_index.read_text(encoding="utf-8"))
+                for arch_id, arch_title in idx.items():
+                    if arch_id not in all_ideas:
+                        all_ideas[arch_id] = {"title": arch_title, "priority": "archived"}
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    # The loaded project policy can specify an authoritative database without
+    # passing an open Lake object (e.g. report-only callers). Completed IDs are
+    # still candidates; an empty inbox must not hide archived observations.
+    if native_authority:
+        for idea_id in authoritative_ids:
+            all_ideas.setdefault(idea_id, {"title": idea_id, "priority": "archived"})
+
+    # Determine report title
+    report_title = report_cfg.get("title") or "Orze Report"
+
+    updated_cache = False
+    for idea_id in sorted(all_ideas.keys(), key=_id_sort_key):
+        if (not isinstance(idea_id, str)
+                or Path(idea_id).parts != (idea_id,)
+                or idea_id in (".", "..")):
+            logger.warning("report skipped invalid idea identity")
+            continue
+        idea_dir = results_dir / idea_id
+        
+        # Determine base title/data (from memory or DB)
+        idea_info = all_ideas.get(idea_id, {"title": idea_id})
+        curr_idea_title = idea_info["title"]
+        
+        db_idea = lake_index.get(idea_id)
+        if db_idea and curr_idea_title == "...":
+            # Lazy fetch title from DB for archived ideas
+            curr_idea_title = db_idea["title"]
+            all_ideas[idea_id]["title"] = curr_idea_title
+
+        # When no metrics exist, the lake is the lifecycle authority. Without
+        # this mapping every archived, skipped, failed, or completed DB row
+        # whose result directory was cleaned up is falsely reported as queued.
+        lake_status = str((db_idea or {}).get("status", "")).lower()
+        audited_state = (db_idea or {}).get("fsm_state")
+        if db_idea:
+            lifecycle_completed = (
+                audited_state == "COMPLETE" if audited_state
+                else lake_status == "completed"
+            )
+            lifecycle_signature = f"{audited_state or ''}:{lake_status}"
+        else:
+            lifecycle_completed = None
+            lifecycle_signature = "artifact-only"
+        audited_without_metrics = {
+            "QUEUED": "QUEUED",
+            "CLAIMED": "IN_PROGRESS",
+            "IN_PROGRESS": "IN_PROGRESS",
+            "FAILED": "FAILED",
+            "SKIPPED": "SKIPPED",
+            "ARCHIVED": "ARCHIVED",
+            # A completed row without its metrics artifact cannot be ranked.
+            "COMPLETE": "ARCHIVED",
+        }.get(audited_state)
+        status_without_metrics = audited_without_metrics or {
+            "queued": "QUEUED",
+            "running": "IN_PROGRESS",
+            "failed": "FAILED",
+            "partial": "FAILED",
+            "dead": "FAILED",
+            "skipped": "SKIPPED",
+            "archived": "ARCHIVED",
+            "completed": "ARCHIVED",
+        }.get(lake_status)
+
+        if native_authority:
+            # A cache is a derived presentation, not evidence. Requalify using
+            # the original full policy, without display/harvest source guesses,
+            # and bind the row to the shared before/after evidence identity.
+            metrics, values, primary_val, evidence_reason, identity = (
+                native_report_evidence(
+                    idea_id, results_dir, cfg, authoritative_ids, authority_reason)
+            )
+            lifecycle_completed = idea_id in authoritative_ids
+            evidence_ok = primary_val is not None and identity is not None
+            row_data = {
+                "id": idea_id, "title": curr_idea_title,
+                "status": metrics.get("status") or status_without_metrics or (
+                    "COMPLETED" if lifecycle_completed else "UNKNOWN"),
+                "lifecycle_completed": lifecycle_completed,
+                "lifecycle_authority": lifecycle_authority,
+                "values": values, "primary_val": primary_val, "metrics": metrics,
+                "evidence_qualified": evidence_ok,
+                "evidence_reason": evidence_reason,
+                "benchmark_contract_ok": evidence_ok if benchmark_contract else True,
+                "benchmark_contract_reason": evidence_reason if benchmark_contract
+                    else "benchmark_contract_disabled",
+                "evidence_sha256": identity, "evidence_identity": identity,
+            }
+            rows.append(row_data)
+            snapshot = {
+                "cache_schema_version": _RESULT_CACHE_SCHEMA_VERSION,
+                "col_hash": _col_hash, "evidence_hash": identity,
+                "lifecycle_signature": lifecycle_signature,
+                "row_hash": _cache_row_hash(row_data), "row": row_data,
+            }
+            if cache.get(idea_id) != snapshot:
+                cache[idea_id] = snapshot
+                updated_cache = True
+            continue
+
+        if idea_dir.is_symlink():
+            rows.append({
+                "id": idea_id,
+                "title": curr_idea_title,
+                "status": status_without_metrics or "ARCHIVED",
+                "values": {},
+                "lifecycle_completed": bool(lifecycle_completed),
+                "evidence_qualified": False,
+                "evidence_reason": "local_idea_dir_symlink",
+            })
+            continue
+        if not idea_dir.exists():
+            rows.append({"id": idea_id, "title": curr_idea_title,
+                         "status": status_without_metrics or "QUEUED",
+                         "values": {},
+                         "lifecycle_completed": bool(lifecycle_completed),
+                         "evidence_qualified": False,
+                         "evidence_reason": "local_metrics_missing"})
+            continue
+
+        metrics_path = idea_dir / "metrics.json"
+        if not metrics_path.exists():
+            rows.append({"id": idea_id, "title": curr_idea_title,
+                         "status": status_without_metrics or "IN_PROGRESS",
+                         "values": {},
+                         "lifecycle_completed": bool(lifecycle_completed),
+                         "evidence_qualified": False,
+                         "evidence_reason": "local_metrics_missing"})
+            continue
+
+        # Evidence bytes, not timestamps, determine cache validity. This also
+        # means a stale cache can nominate no value after a same-size/backdated
+        # rewrite. Unsafe configured source paths are never added to the read
+        # set and will fail qualification below.
+        from orze.reporting.evidence import local_report_evidence_paths
+        evidence_paths = local_report_evidence_paths(
+            idea_dir, evidence_report, evidence_cfg)
+        if benchmark_contract:
+            for evidence_name in (
+                benchmark_contract["receipt"], PROVENANCE_FILE,
+            ):
+                evidence_path = idea_dir / evidence_name
+                evidence_paths.append(evidence_path)
+            try:
+                evidence_paths.extend(
+                    benchmark_exposure_evidence_paths(results_dir, cfg)
+                )
+            except BenchmarkContractError:
+                # The exposure summary already carries the stable fail-closed
+                # reason. Keep rendering the unrankable report instead of
+                # turning invalid control-path evidence into a report crash.
+                pass
+        content_evidence_paths = list(evidence_paths)
+        managed_lineage = (
+            isinstance(cfg.get("model_lineage"), dict)
+            and cfg["model_lineage"].get("enabled") is True
+        )
+        if managed_lineage:
+            try:
+                from orze.core.model_lineage import (
+                    model_lineage_evidence_paths,
+                )
+                evidence_paths.extend(
+                    model_lineage_evidence_paths(idea_dir, cfg))
+            except Exception:
+                evidence_paths.append(idea_dir / "_model_lineage.json")
+        evidence_metadata = _evidence_metadata_signature(evidence_paths)
+        cached = cache.get(idea_id)
+        cached_row = cached.get("row") if isinstance(cached, dict) else None
+        cache_identity_ok = (
+            isinstance(cached_row, dict)
+                and cached.get("cache_schema_version")
+                == _RESULT_CACHE_SCHEMA_VERSION
+                and cached.get("col_hash") == _col_hash
+                and cached.get("lifecycle_signature") == lifecycle_signature
+                and cached.get("row_hash") == _cache_row_hash(cached_row)
+        )
+        # Local evidence is explicitly non-official. On an unchanged ordinary
+        # file identity, nanosecond mtime + ctime avoid re-reading tens of
+        # thousands of artifacts. Benchmark-contract evidence is always
+        # content-hashed, even when metadata is unchanged.
+        if (cache_identity_ok and not benchmark_contract
+                and cached.get("evidence_metadata") == evidence_metadata):
+            rows.append(cached_row)
+            continue
+        evidence_hash = _evidence_content_hash(content_evidence_paths)
+        if (cache_identity_ok and not managed_lineage
+                and cached.get("evidence_hash") == evidence_hash):
+            if cached.get("evidence_metadata") != evidence_metadata:
+                cached["evidence_metadata"] = evidence_metadata
+                updated_cache = True
+            rows.append(cached_row)
+            continue
+
+        # Cache miss or evidence drift: one shared fail-closed qualification
+        # path supplies current metrics, exact source values, finite primary,
+        # metric validation, and configured dataset coverage.
+        from orze.reporting.evidence import qualify_local_report_evidence
+        metrics, values, primary_val, evidence_reason = (
+            qualify_local_report_evidence(idea_dir, evidence_cfg)
+        )
+        local_ok = evidence_reason == "local_evidence_verified"
+        if not metrics:
+            metrics = {"status": "FAILED", "error": "corrupt metrics.json"}
+        if benchmark_contract and local_ok:
+            contract_ok, contract_reason = validate_benchmark_receipt(
+                idea_dir, cfg, values=values,
+            )
+        elif benchmark_contract:
+            contract_ok, contract_reason = False, evidence_reason
+        else:
+            contract_ok, contract_reason = True, "benchmark_contract_disabled"
+        evidence_ok = contract_ok if benchmark_contract else local_ok
+        final_reason = contract_reason if benchmark_contract else evidence_reason
+        row_data = {
+            "id": idea_id, "title": curr_idea_title,
+            "status": metrics.get("status", "UNKNOWN"),
+            "lifecycle_completed": (
+                bool(lifecycle_completed) if lifecycle_completed is not None
+                else metrics.get("status") == "COMPLETED"
+            ),
+            "values": values,
+            "primary_val": primary_val,
+            "metrics": metrics,
+            "evidence_qualified": evidence_ok,
+            "evidence_reason": final_reason,
+            "benchmark_contract_ok": contract_ok,
+            "benchmark_contract_reason": contract_reason,
+            "evidence_sha256": evidence_hash,
+        }
+        rows.append(row_data)
+        cache[idea_id] = {
+            "cache_schema_version": _RESULT_CACHE_SCHEMA_VERSION,
+            "col_hash": _col_hash,
+            "evidence_hash": evidence_hash,
+            "evidence_metadata": evidence_metadata,
+            "lifecycle_signature": lifecycle_signature,
+            "row_hash": _cache_row_hash(row_data),
+            "row": row_data,
+        }
+        updated_cache = True
+
+    if updated_cache:
+        try:
+            if not cache_path.is_symlink():
+                atomic_write(cache_path, json.dumps(cache))
+        except OSError:
+            pass
+
+    if lake:
+        # Pipeline status describes executable experiments, not every archived
+        # idea ever seen. Skipped ideas never consumed a run and archived ideas
+        # are catalog entries, so neither belongs in this four-state total.
+        if hasattr(lake, "get_lifecycle_counts"):
+            audited_counts = lake.get_lifecycle_counts()
+            counts = {
+                state: audited_counts.get(state, 0)
+                for state in ("COMPLETED", "FAILED", "IN_PROGRESS", "QUEUED")
+            }
+        else:
+            # Compatibility for external lake adapters. Native IdeaLake uses
+            # the audited FSM path above.
+            counts = {
+                "COMPLETED": len(lake.get_all_ids(status="completed")),
+                "FAILED": sum(
+                    len(lake.get_all_ids(status=status))
+                    for status in ("failed", "partial", "dead")
+                ),
+                "IN_PROGRESS": len(lake.get_all_ids(status="running")),
+                "QUEUED": len(lake.get_all_ids(status="queued")),
+            }
+    else:
+        counts = {}
+        for r in rows:
+            counts[r["status"]] = counts.get(r["status"], 0) + 1
+
+    pipeline_total = sum(counts.values())
+    pipeline_scope = (
+        "unavailable_lake_catalog" if lake and getattr(lake, "available", True) is False
+        else "lake_catalog" if lake else "provided_and_completed_candidates"
+        if native_authority else "provided_offline_candidates"
+    )
+
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines = [
+        f"# {report_title}",
+        f"**Updated:** {_REPORT_UPDATED_TOKEN} | **Host:** {socket.gethostname()}",
+        "",
+        "## Pipeline Status",
+        f"Coverage: `{pipeline_scope}` (not the qualified ranking count).",
+        "| Total | Completed | Failed | In Progress | Queued |",
+        "|-------|-----------|--------|-------------|--------|",
+        f"| {pipeline_total} | {counts.get('COMPLETED', 0)} "
+        f"| {counts.get('FAILED', 0)} "
+        f"| {counts.get('IN_PROGRESS', 0)} | {counts.get('QUEUED', 0)} |",
+        "",
+    ]
+    if benchmark_contract:
+        lines.extend([
+            "## Benchmark Contract",
+            "",
+            f"- Benchmark: `{benchmark_contract['benchmark_id']}`",
+            f"- Immutable revision: `{benchmark_contract['revision']}`",
+            f"- View: `{benchmark_contract['view']}`",
+            f"- Evidence scope: `{benchmark_contract['evidence_scope']}`",
+            f"- Selection mode: `{benchmark_contract['selection_mode']}`",
+            "- Model form: `single_model_single_pass`",
+            "- Rank scope: **local ordering among contract-verified runs; "
+            "not an official leaderboard rank**",
+            "- Exact metric coverage: "
+            + ", ".join(f"`{key}`" for key in
+                        benchmark_contract["required_metrics"]),
+            "- Exposure budget: "
+            + (
+                f"{exposure_summary.get('total_exposures', '?')}/"
+                f"{exposure_summary.get('max_evaluations', '?')} used "
+                f"({exposure_summary.get('remaining', '?')} remaining)"
+                if exposure_summary.get("valid") else
+                f"**invalid** (`{exposure_summary.get('reason', 'unknown')}`)"
+            ),
+            "- Interpretation: "
+            + (
+                "**unrankable: exposure evidence is invalid**"
+                if not exposure_summary.get("valid") else
+                (
+                    "**benchmark-fitted adaptive evidence; not an independent "
+                    "confirmation**"
+                    if exposure_summary.get("benchmark_fitted") else
+                    "bounded confirmation evidence"
+                )
+            ),
+            "",
+        ])
+    lines.extend([
+        "## Results",
+        "",
+    ])
+
+    # A downstream eval file never overrides lifecycle state. Every ranked row
+    # must be explicitly completed and pass the selected evidence contract.
+    completed_candidates = [
+        row for row in rows if row.get("lifecycle_completed") is True
+    ]
+    evidence_exclusions = [
+        row for row in completed_candidates
+        if not row.get("evidence_qualified", False)
+    ]
+    completed = [
+        row for row in completed_candidates
+        if row.get("evidence_qualified", False)
+    ]
+    rejection_counts = dict(sorted(Counter(
+        str(row.get("evidence_reason") or "evidence_reason_missing")
+        for row in evidence_exclusions
+    ).items()))
+    qualification_summary = {
+        "mode": (
+            "benchmark_contract" if benchmark_contract
+            else "verified_local_artifact"
+        ),
+        "primary_metric": primary_metric,
+        "fallback_metrics_allowed": False,
+        "accepted": len(completed),
+        "rejected": rejection_counts,
+        "leaderboard_rank_comparable": False,
+        "lifecycle_authority": lifecycle_authority,
+        "lifecycle_authority_reason": authority_reason,
+    }
+    if benchmark_contract:
+        qualification_summary.update({
+            "benchmark_id": benchmark_contract.get("benchmark_id"),
+            "benchmark_view": benchmark_contract.get("view"),
+            "evidence_scope": benchmark_contract.get("evidence_scope"),
+            "selection_mode": benchmark_contract.get("selection_mode"),
+        })
+
+    qualification_lines = [
+        "## Evidence Qualification",
+        "",
+        f"- Mode: `{qualification_summary['mode']}`",
+        f"- Lifecycle authority: `{lifecycle_authority}`",
+        f"- Accepted completed rows: {qualification_summary['accepted']}",
+        f"- Rejected completed rows: {sum(rejection_counts.values())}",
+        "- Metric fallback: disabled",
+        "- Rank scope: **local evidence ordering; not an official leaderboard rank**",
+    ]
+    if not native_authority:
+        qualification_lines.append(
+            "- Lifecycle is unverified: this legacy offline display is not "
+            "research steering authority.")
+    elif authority_reason != "authoritative_lifecycle_loaded":
+        qualification_lines.append(
+            f"- Required lifecycle evidence unavailable: `{authority_reason}`")
+    if rejection_counts:
+        qualification_lines.append(
+            "- Rejection reasons: " + ", ".join(
+                f"`{reason}`={count}"
+                for reason, count in rejection_counts.items()
+            )
+        )
+    qualification_lines.extend(["", "## Results", ""])
+    lines[-2:] = qualification_lines
+
+    completed.sort(key=_get_tiebreaker_sort_key)
+
+    # --- Sweep grouping: split into standalone + sweep groups ---
+    standalone = []
+    sweep_groups = {}  # parent_id -> list of sub-run rows
+    for r in completed:
+        parent_id = None
+        if "-ht-" in r["id"]:
+            parent_id = r["id"].split("-ht-", 1)[0]
+        elif "~" in r["id"]:
+            parent_id = r["id"].split("~", 1)[0]
+            
+        if parent_id:
+            sweep_groups.setdefault(parent_id, []).append(r)
+        else:
+            standalone.append(r)
+
+    # Build main table: standalone + best of each sweep group
+    main_rows = list(standalone)
+    for parent_id, children in sweep_groups.items():
+        children.sort(key=_get_tiebreaker_sort_key)
+        best = dict(children[0])
+        best["title"] = f"{best['title']} (best of {len(children)})"
+        main_rows.append(best)
+
+    main_rows.sort(key=_get_tiebreaker_sort_key)
+
+    if main_rows:
+        header = "| Local Rank | Idea | Title"
+        sep = "|------------|------|------"
+        for col in columns:
+            label = col.get("label", col.get("key", "?"))
+            header += f" | {label}"
+            sep += " |" + "-" * max(6, len(str(label)))
+        header += " |"
+        sep += " |"
+        lines.append(header)
+        lines.append(sep)
+
+        for rank, r in enumerate(main_rows, 1):
+            row = f"| {rank} | {r['id']} | {r['title'][:50]}"
+            for col in columns:
+                key = col.get("key")
+                if not key:
+                    row += " | —"
+                    continue
+                val = r["values"].get(key)
+                if val is not None:
+                    fmt = col.get("fmt", "")
+                    try:
+                        row += f" | {val:{fmt}}"
+                    except (ValueError, TypeError):
+                        row += f" | {val}"
+                else:
+                    row += " | —"
+            row += " |"
+            lines.append(row)
+        lines.append("")
+
+    if evidence_exclusions:
+        exclusion_title = (
+            "Benchmark Contract Not Proven" if benchmark_contract
+            else "Local Evidence Not Qualified"
+        )
+        lines.extend([
+            f"## Unranked: {exclusion_title}",
+            "",
+            "These completed runs remain visible for audit but cannot enter "
+            "the local evidence ordering.",
+            "",
+        ])
+        ordered_exclusions = sorted(
+            evidence_exclusions, key=lambda row: row["id"])
+        for row in ordered_exclusions[:100]:
+            lines.append(
+                f"- **{row['id']}** — "
+                f"`{row.get('evidence_reason', 'unknown')}`"
+            )
+        if len(ordered_exclusions) > 100:
+            lines.append(
+                f"- ... {len(ordered_exclusions) - 100} additional rejected "
+                "completed rows (see aggregate reasons above)"
+            )
+        lines.append("")
+
+    # --- Sweep Details section ---
+    if sweep_groups:
+        lines.append("## Sweep Details")
+        lines.append("")
+        for parent_id in sorted(sweep_groups.keys(), key=_id_sort_key):
+            children = sweep_groups[parent_id]
+            children.sort(key=_get_tiebreaker_sort_key)
+            lines.append(f"### {parent_id} ({len(children)} variants)")
+            lines.append(f"| Local Rank | Sub-run | {primary_metric} |")
+            lines.append("|------------|---------|" + "-" * max(6, len(primary_metric)) + "|")
+            for i, r in enumerate(children, 1):
+                pv = r.get("primary_val", "—")
+                if isinstance(pv, float):
+                    pv = f"{pv:.4f}"
+                
+                # Extract suffix for display
+                sub_id = r["id"]
+                if "-ht-" in sub_id:
+                    suffix = "ht-" + sub_id.split("-ht-", 1)[1]
+                elif "~" in sub_id:
+                    suffix = sub_id.split("~", 1)[1]
+                else:
+                    suffix = sub_id
+                    
+                lines.append(f"| {i} | {suffix} | {pv} |")
+            lines.append("")
+
+    failed = [r for r in rows if r["status"] == "FAILED"]
+    if failed:
+        lines.append("## Failed")
+        for r in failed:
+            err = r.get("metrics", {}).get("error", "unknown")
+            lines.append(
+                f"- **{r['id']}**: {r['title'][:50]} — {str(err)[:80]}")
+        lines.append("")
+
+    queued = [r for r in rows if r["status"] == "QUEUED"]
+    if queued:
+        lines.append(f"## Queue ({len(queued)} ideas)")
+        for r in queued[:20]:
+            pri = all_ideas.get(r["id"], {}).get("priority", "medium")
+            lines.append(f"- **{r['id']}** [{pri}]: {r['title'][:60]}")
+        if len(queued) > 20:
+            lines.append(f"- ... and {len(queued) - 20} more")
+        lines.append("")
+
+    # --- Score Ceiling Detection ---
+    ceiling_k = report_cfg.get("ceiling_k", 20)
+    ceiling_threshold = report_cfg.get("ceiling_std_threshold", 0.015)
+    ceiling_min = report_cfg.get("ceiling_min_ideas", 30)
+    if len(completed) >= ceiling_min:
+        primary_vals = []
+        for r in completed:
+            try:
+                primary_vals.append(float(r.get("primary_val")))
+            except (ValueError, TypeError):
+                pass
+        if len(primary_vals) >= ceiling_k:
+            top_k = primary_vals[:ceiling_k]  # already sorted
+            top_std = (sum((v - sum(top_k) / len(top_k)) ** 2 for v in top_k)
+                       / len(top_k)) ** 0.5
+            top_min = min(top_k)
+            top_max = max(top_k)
+            if top_std < ceiling_threshold:
+                lines.append("## Score Ceiling Warning")
+                lines.append(
+                    f"Top {ceiling_k} scores cluster tightly "
+                    f"(std={top_std:.4f}, range={top_min:.4f}-{top_max:.4f}).")
+                lines.append(
+                    "Current approach may have reached a fundamental ceiling.")
+                lines.append(
+                    "Consider a fundamentally different architecture or data strategy.")
+                lines.append("")
+
+    # --- Config Diversity ---
+    if len(completed) >= 10:
+        completed_ids = [r["id"] for r in completed]
+        diversity_md = _analyze_config_diversity(results_dir, completed_ids)
+        if diversity_md:
+            lines.append(diversity_md)
+
+    # --- Role Health (post-mortem fix for 2026-04 silent campaign) ---
+    # Render the same HEALTHY/DEGRADED/LOCKED_OUT verdict that lands in
+    # status.json so a human reading report.md sees brain-death even
+    # when the leaderboard above looks healthy.
+    if role_states is not None and (cfg.get("roles") or {}):
+        from orze.reporting.state import build_role_health_block
+        orze_dir_str = cfg.get("_orze_dir")
+        _orze_dir = Path(orze_dir_str) if orze_dir_str else None
+        rh = build_role_health_block(cfg, role_states or {}, _orze_dir)
+        if rh:
+            lines.append("## Role Health")
+            lines.append("")
+            lines.append(
+                "| Role | Status | LastRun | LastMeaningful | Cooldown | "
+                "ConsecFails | WorstHost |")
+            lines.append(
+                "|------|--------|---------|----------------|----------|"
+                "-------------|-----------|")
+            for rname in sorted(rh):
+                h = rh[rname]
+                lr = h.get("last_run_time")
+                lr_s = ("never" if lr is None else
+                        datetime.datetime.fromtimestamp(
+                            lr, datetime.timezone.utc).strftime("%Y-%m-%d %H:%MZ"))
+                lm = h.get("last_meaningful_time")
+                lm_s = ("—" if lm is None else
+                        datetime.datetime.fromtimestamp(
+                            lm, datetime.timezone.utc).strftime("%Y-%m-%d %H:%MZ"))
+                co = h.get("cooldown_override_s") or 0
+                if co >= 3600:
+                    co_s = f"{co/3600:.1f}h"
+                elif co > 0:
+                    co_s = f"{int(co)}s"
+                else:
+                    co_s = "—"
+                wh = h.get("worst_host") or "—"
+                lines.append(
+                    f"| {rname} | {h.get('status','?')} | {lr_s} | {lm_s} | "
+                    f"{co_s} | {h.get('consecutive_failures',0)} | {wh} |"
+                )
+            lines.append("")
+
+    report_path = results_dir / "report.md"
+
+    # Write leaderboard cache for admin panel (avoids expensive rescan)
+    lb_entries = []
+    for r in main_rows[:20]:
+        lb_entries.append({
+            "idea_id": r["id"],
+            "title": r["title"],
+            "metric_value": r.get("primary_val"),
+            "training_time": r["values"].get("training_time"),
+            "status": "COMPLETED",
+            "eval_metrics": r["values"],
+        })
+    lb_path = results_dir / "_leaderboard.json"
+    _atomic_write_if_changed(
+        lb_path,
+        json.dumps({
+            "top": lb_entries,
+            "metric": primary_metric,
+            "rank_scope": "local",
+            "lifecycle_authority": lifecycle_authority,
+            "pipeline_scope": pipeline_scope,
+            "benchmark_contract": benchmark_contract,
+            "benchmark_exposure": exposure_summary,
+            "evidence_qualification": qualification_summary,
+        }, default=str),
+    )
+
+    # --- Filtered view leaderboards ---
+    views = report_cfg.get("views") or []
+    view_names = []
+    for view in views:
+        vname = view.get("name")
+        vtitle = view.get("title", vname)
+        vfilter = view.get("filter", {})
+        if not vname or not vfilter:
+            continue
+        view_names.append(vname)
+
+        filtered_rows = [
+            r for r in main_rows
+            if _matches_view_filter(results_dir, r["id"], vfilter)
+        ]
+
+        # Write filtered leaderboard JSON
+        view_entries = []
+        for r in filtered_rows[:20]:
+            view_entries.append({
+                "idea_id": r["id"],
+                "title": r["title"],
+                "metric_value": r.get("primary_val"),
+                "training_time": r["values"].get("training_time"),
+                "status": "COMPLETED",
+                "eval_metrics": r["values"],
+            })
+        view_lb_path = results_dir / f"_leaderboard_{vname}.json"
+        _atomic_write_if_changed(view_lb_path, json.dumps(
+            {"top": view_entries, "metric": primary_metric, "view": vname,
+             "title": vtitle, "rank_scope": "local",
+             "lifecycle_authority": lifecycle_authority,
+             "benchmark_contract": benchmark_contract,
+             "benchmark_exposure": exposure_summary,
+             "evidence_qualification": qualification_summary}, default=str))
+
+        # Append view section to report.md
+        lines.append(f"## {vtitle}")
+        lines.append("")
+        if filtered_rows:
+            header = "| Local Rank | Idea | Title"
+            sep = "|------------|------|------"
+            for col in columns:
+                label = col.get("label", col.get("key", "?"))
+                header += f" | {label}"
+                sep += " |" + "-" * max(6, len(str(label)))
+            header += " |"
+            sep += " |"
+            lines.append(header)
+            lines.append(sep)
+            for rank, r in enumerate(filtered_rows, 1):
+                row = f"| {rank} | {r['id']} | {r['title'][:50]}"
+                for col in columns:
+                    key = col.get("key")
+                    if not key:
+                        row += " | —"
+                        continue
+                    val = r["values"].get(key)
+                    if val is not None:
+                        fmt = col.get("fmt", "")
+                        try:
+                            row += f" | {val:{fmt}}"
+                        except (ValueError, TypeError):
+                            row += f" | {val}"
+                    else:
+                        row += " | —"
+                row += " |"
+                lines.append(row)
+        else:
+            lines.append("*No matching models.*")
+        lines.append("")
+
+    report_changed = _write_report_if_changed(report_path, "\n".join(lines), now)
+
+    # Write views index for admin API (always write, even if empty, to clear stale views)
+    _atomic_write_if_changed(results_dir / "_leaderboard_views.json",
+                             json.dumps({"views": view_names}))
+
+    if report_changed:
+        logger.info("Report updated: %d completed, %d queued, %d failed",
+                    counts.get("COMPLETED", 0), counts.get("QUEUED", 0),
+                    counts.get("FAILED", 0))
+
+    return completed
+
+
+
+
+# ---------------------------------------------------------------------------
+# Admin cache + report formatting (merged from leaderboard_admin.py in v4.0)
+# ---------------------------------------------------------------------------
+
+
+def write_admin_cache(results_dir: Path, ideas: dict, cfg: dict):
+    """Write pre-aggregated _admin_cache.json for instant admin panel access."""
+    now = time.time()
+
+    # Nodes
+    raw_hb = _read_all_heartbeats(results_dir, stale_seconds=600)
+    heartbeats = []
+    for hb in raw_hb:
+        age = now - hb.get("epoch", 0)
+        status = "online" if age <= 120 else ("degraded" if age <= 300 else "offline")
+        heartbeats.append({**hb, "status": status, "heartbeat_age_sec": round(age, 1)})
+
+    # Queue: lifecycle is independent of successful training metrics. The
+    # catalog reader closes its read-only snapshot before publication.
+    from orze.reporting.admin_queue import build_admin_queue
+    queue = build_admin_queue(results_dir, ideas, cfg)
+
+    # Alerts
+    alerts = []
+    two_hours_ago = now - 7200
+    try:
+        with os.scandir(results_dir) as it:
+            for entry in it:
+                if not entry.is_dir() or not entry.name.startswith("idea-"):
+                    continue
+                try:
+                    mtime = entry.stat().st_mtime
+                except OSError:
+                    continue
+                if mtime < two_hours_ago:
+                    continue
+                mpath = Path(entry.path) / "metrics.json"
+                if not mpath.exists():
+                    continue
+                try:
+                    m = json.loads(mpath.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+                    continue
+                if not isinstance(m, dict) or m.get("status") not in ("FAILED", "ERROR"):
+                    continue
+                alerts.append({
+                    "type": "failure", "idea_id": entry.name,
+                    "error": str(m.get("error", m.get("status", "")))[:200],
+                    "minutes_ago": round((now - mtime) / 60, 1),
+                })
+    except OSError:
+        pass
+
+    for hb in heartbeats:
+        if hb.get("status") == "offline":
+            alerts.append({
+                "type": "stale_host",
+                "host": hb.get("host", "unknown"),
+                "minutes_ago": round(hb.get("heartbeat_age_sec", 0) / 60, 1),
+            })
+
+    try:
+        usage = shutil.disk_usage(results_dir)
+        if round(usage.free / (1024 ** 3), 1) < 50:
+            alerts.append({"type": "low_disk",
+                           "disk_free_gb": round(usage.free / (1024 ** 3), 1)})
+    except Exception:
+        pass
+
+    cache = {
+        "nodes": {"heartbeats": heartbeats, "local_gpus": []},
+        "queue": queue,
+        "alerts": {"alerts": alerts, "count": len(alerts)},
+        "epoch": now,
+    }
+    admin_cache_path = orze_path(cfg, "state", "admin_cache.json")
+    _atomic_write_if_changed(admin_cache_path, json.dumps(cache, default=str))
+
+
+def format_report_text(data: dict) -> str:
+    """Format a periodic report summary for notifications."""
+    c, f, a, q = (data.get(k, 0) for k in
+                   ("completed", "failed", "active_count", "queued"))
+    title = data.get("title", "Report")
+    metric = data.get("metric_name", "score")
+    board = data.get("leaderboard", [])
+    machines = data.get("machines", [])
+
+    lines = [title, f"{c} completed | {f} failed | {a} active | {q} queued", ""]
+
+    if machines:
+        lines.append("Machines:")
+        for m in machines:
+            lines.append(f"  {m.get('host','?')}: "
+                         f"{m.get('gpus_busy',0)}/{m.get('gpus_total',0)} GPUs, "
+                         f"{m.get('utilization','?')}% util")
+        lines.append("")
+
+    if board:
+        contract = data.get("evidence_scope")
+        selection = data.get("selection_mode")
+        context = (
+            f" [{contract}/{selection}]" if contract and selection else ""
+        )
+        lines.append(f"Local top {len(board)} ({metric}){context}:")
+        for i, entry in enumerate(board, 1):
+            val = entry.get("value")
+            val_str = f"{val:.4f}" if isinstance(val, float) else str(val)
+            lines.append(f"  #{i} {entry.get('id','?')}: {val_str} "
+                         f"{entry.get('title','')[:25]}")
+
+    return "\n".join(lines)
+
+# Legacy alias preserved for existing callers
+_format_report_text = format_report_text
+
+
+# ---------------------------------------------------------------------------
+# NotificationProcessor (merged from engine/reporter.py in v4.0)
+# ---------------------------------------------------------------------------
+
+class NotificationProcessor:
+    """Updates qualified completion bookkeeping and optionally sends events.
+
+    Owns plateau-detection counters and periodic-report timing so that
+    the orchestrator can persist / restore them across restarts.
+    """
+
+    def __init__(self, results_dir: Path, cfg: dict, lake=None):
+        self.results_dir = results_dir
+        self.cfg = cfg
+        self.lake = lake
+        self._best_idea_id = None  # Optional[str]
+        self._completions_since_best: int = 0
+        self._plateau_notified: bool = False
+        self._last_report_notify: float = 0.0
+
+    def load_state(self, state: dict):
+        """Restore persisted state from state.json."""
+        self._best_idea_id = state.get("best_idea_id")
+        self._completions_since_best = state.get("completions_since_best", 0)
+        self._plateau_notified = state.get("plateau_notified", False)
+
+    def get_state(self) -> dict:
+        """Return state dict for persistence."""
+        return {
+            "best_idea_id": self._best_idea_id,
+            "completions_since_best": self._completions_since_best,
+            "plateau_notified": self._plateau_notified,
+        }
+
+    def process(self, finished: list, completed_rows: list, ideas: dict,
+                counts: dict, active_count: int,
+                save_config_hash_fn, build_machine_status_fn):
+        """Consume a finished batch independently of delivery settings.
+
+        Reconcile current evidence even without a finished batch. Selection
+        changes alone are not objective improvements. Repeated batches and
+        result revisions still require a separate observation identity model;
+        this boundary does not promise exactly-once observations or delivery.
+        """
+        try:
+            from orze.engine.completion_events import completion_is_current, filter_completions
+            finished = filter_completions(finished, self.lake, self.results_dir)
+            cfg = self.cfg
+            ncfg = cfg.get("notifications") or {}
+            if finished:
+                logger.info("Processing completion evidence for %d finished items",
+                            len(finished))
+            from orze.reporting.notification_evidence import (
+                qualified_notification_rows,
+            )
+            candidates = list(completed_rows)
+            candidates.extend({"id": idea_id,
+                               "title": ideas.get(idea_id, {}).get("title", idea_id)}
+                              for idea_id, _ in finished)
+            if self._best_idea_id:
+                candidates.append({"id": self._best_idea_id})
+            completed_rows = qualified_notification_rows(
+                self.results_dir, cfg, candidates, self.lake)
+            primary = (cfg.get("report") or {}).get("primary_metric")
+
+            # Build rank lookup and top-10 leaderboard
+            rank_lookup, leaderboard = {}, []
+            for rank, r in enumerate(completed_rows, 1):
+                rank_lookup[r["id"]] = rank
+                if rank <= 10:
+                    leaderboard.append({"id": r["id"],
+                                        "title": r.get("title", r["id"]),
+                                        "value": r.get("primary_val")})
+
+            view_lbs = self._build_view_leaderboards(cfg, completed_rows)
+            row_lookup = {r["id"]: r for r in completed_rows}
+
+            for event in finished:
+                if not completion_is_current(event, self.lake, self.results_dir):
+                    continue
+                idea_id, gpu = event
+                try:
+                    self._notify_finished(
+                        idea_id, gpu, cfg, primary, row_lookup, rank_lookup,
+                        leaderboard, view_lbs, ideas, save_config_hash_fn,
+                        **({"source_event": event}
+                           if getattr(event, "attempt_ref", None) is not None else {}))
+                except Exception as exc:
+                    logger.warning("Completion diagnostic skipped for %s: %s",
+                                   idea_id, type(exc).__name__)
+
+            # New best detection + plateau tracking
+            new_best = self._check_new_best(
+                completed_rows, primary, leaderboard, view_lbs, cfg)
+            n_completed = len({event[0] for event in finished
+                               if event[0] in row_lookup and completion_is_current(
+                                   event, self.lake, self.results_dir)})
+            if new_best:
+                self._completions_since_best = 0
+                self._plateau_notified = False
+            else:
+                self._completions_since_best += n_completed
+
+            if finished and ncfg.get("enabled", False):
+                self._check_plateau(completed_rows, cfg)
+                self._periodic_report(ncfg, cfg, primary, counts, active_count,
+                                      leaderboard, view_lbs, build_machine_status_fn)
+        except Exception as e:
+            logger.warning("Notification processing error: %s", e)
+
+    # -- internal helpers ------------------------------------------------
+
+    def _build_view_leaderboards(self, cfg: dict, completed_rows: list) -> dict:
+        """Filter the same qualified rows; never revive cached view scores."""
+        view_leaderboards = {}
+        for view in (cfg.get("report", {}).get("views") or []):
+            vname = view.get("name")
+            vfilter = view.get("filter")
+            if not vname or not vfilter:
+                continue
+            vtop = [{"id": row["id"], "title": row["title"],
+                     "value": row["primary_val"]}
+                    for row in completed_rows
+                    if _matches_view_filter(self.results_dir, row["id"], vfilter)][:10]
+            if vtop:
+                view_leaderboards[vname] = {
+                    "title": view.get("title", vname), "entries": vtop}
+        return view_leaderboards
+
+    def _recover_overrides(self, idea_id, cfg):
+        """Recover an idea's config OVERRIDES from disk when the in-memory
+        idea record is unavailable (archived/stub rows).
+
+        Prefers ``idea_config.yaml``, which ALREADY IS the overrides dict and
+        hashes identically to the ingest-side ``idea['config']`` (verified
+        400/400 ideas, 0 mismatches). It is therefore returned VERBATIM — no
+        base subtraction (base subtraction is only correct for the full
+        resolved config, not for the already-minimal idea_config.yaml).
+
+        For back-compat, if ``idea_config.yaml`` is absent, it falls back to
+        reading ``resolved_config.yaml`` (the full merged config) and
+        subtracting the project base config to reconstruct the overrides.
+
+        Returns ``None`` only when NEITHER file exists, so the caller can log
+        explicitly instead of silently skipping. Previously this read only
+        ``resolved_config.yaml`` — which exists in 0 of the real idea dirs —
+        so it always returned None and the dedup hash was never stored.
+        """
+        from pathlib import Path as _Path
+        # idea_config.yaml IS the overrides -> return verbatim.
+        icp = self.results_dir / idea_id / "idea_config.yaml"
+        if icp.exists():
+            try:
+                return yaml.safe_load(icp.read_text(encoding="utf-8")) or {}
+            except (OSError, yaml.YAMLError):
+                return None
+        # Back-compat fallback: resolved_config.yaml minus base config.
+        rp = self.results_dir / idea_id / "resolved_config.yaml"
+        if not rp.exists():
+            return None
+        try:
+            rcfg = yaml.safe_load(rp.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            return None
+        base = {}
+        base_path = cfg.get("base_config")
+        if base_path:
+            bp = _Path(base_path)
+            if bp.exists():
+                try:
+                    base = yaml.safe_load(bp.read_text(encoding="utf-8")) or {}
+                except (OSError, yaml.YAMLError):
+                    base = {}
+        # Overrides = keys whose resolved value differs from the base config.
+        return {k: v for k, v in rcfg.items()
+                if k not in base or base.get(k) != v}
+
+    def _notify_finished(self, idea_id, gpu, cfg, primary, row_lookup,
+                         rank_lookup, leaderboard, view_lbs, ideas,
+                         save_config_hash_fn, *, source_event=None):
+        if (not isinstance(idea_id, str) or idea_id in ("", ".", "..")
+                or Path(idea_id).parts != (idea_id,)):
+            return
+        if source_event is not None and source_event[0] != idea_id:
+            return
+        row = row_lookup.get(idea_id, {})
+        m = row.get("metrics")
+        if m is None:
+            m_path = self.results_dir / idea_id / "metrics.json"
+            if m_path.is_symlink() or m_path.parent.is_symlink():
+                return
+            try:
+                m = json.loads(m_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                return
+        if not isinstance(m, dict):
+            return
+
+        status = m.get("status", "UNKNOWN")
+        title = ideas.get(idea_id, {}).get("title", idea_id)
+
+        if status == "COMPLETED":
+            if not row or row.get("primary_val") is None:
+                return
+            self._notify_completed(idea_id, title, m, cfg, primary,
+                                   row_lookup, rank_lookup,
+                                   leaderboard, view_lbs)
+        elif status == "FAILED":
+            error_msg = m.get("error")
+            if not isinstance(error_msg, str):
+                error_msg = "unclassified failure"
+            # Suppress notifications for config/argparse errors (exit code 2)
+            # and fast crashes (<10s, typically import errors). These are
+            # research-agent-generated junk, not worth spamming Telegram.
+            is_config_error = "code 2" in error_msg or "code 1" in error_msg
+            training_time = m.get("training_time")
+            fast_crash = (
+                isinstance(training_time, (int, float))
+                and not isinstance(training_time, bool)
+                and 0 <= training_time < 10
+            )
+            if is_config_error and fast_crash:
+                logger.info("Suppressed notification for %s: config error (%s)",
+                            idea_id, error_msg)
+            else:
+                notify("failed", {"idea_id": idea_id, "title": title,
+                                  "error": error_msg,
+                                  "evidence_scope": "artifact_observed_unverified",
+                                  "leaderboard": leaderboard,
+                                  "view_leaderboards": view_lbs}, cfg)
+
+        if status == "COMPLETED":
+            from contextlib import nullcontext
+            from orze.engine.completion_events import completion_cache_guard
+            from orze.reporting.notification_evidence import refresh_metric_snapshot
+            try:
+                # Config dedup hash MUST be over the same canonical key-set
+                # that ingest checks (engine/phases.py: _config_override_hash
+                # over idea["config"], i.e. user OVERRIDES only). Previously
+                # this hashed the FULL resolved_config.yaml — a different,
+                # much larger key-set — so the stored hash never matched the
+                # ingest-time override hash and dedup NEVER fired. We now hash
+                # the idea's overrides so the two sides agree.
+                overrides = ideas.get(idea_id, {}).get("config")
+                if overrides is None:
+                    # Fallback for archived/stub idea records that don't carry
+                    # the config in memory: recover overrides from the idea's
+                    # resolved_config.yaml minus the base config, so we still
+                    # register the SAME override-keyed hash (no silent skip).
+                    overrides = self._recover_overrides(idea_id, cfg)
+                if overrides is None:
+                    logger.warning(
+                        "Config dedup hash NOT stored for %s: could not "
+                        "resolve config overrides (no in-memory config and "
+                        "no resolved_config.yaml).", idea_id)
+                # External notification and potentially slow config recovery
+                # stay outside this short guard. Native writes retain exact
+                # source ownership, but mirror/dedup remain best-effort caches,
+                # not observations or durable delivery acknowledgements.
+                guard = (completion_cache_guard(source_event, self.lake, self.results_dir)
+                         if source_event is not None else nullcontext())
+                with guard:
+                    refresh_metric_snapshot(self.lake, row)
+                    if overrides is not None:
+                        save_config_hash_fn(idea_id, overrides)
+            except Exception as exc:
+                logger.debug("Completion cache update unavailable for %s: %s",
+                             idea_id, exc)
+
+    def _notify_completed(self, idea_id, title, m, cfg, primary,
+                          row_lookup, rank_lookup, leaderboard, view_lbs):
+        row = row_lookup.get(idea_id, {})
+        metric_val = row.get("primary_val")
+        if metric_val is None:
+            return
+
+        t_time = m.get("training_time") or None
+        fmt_val = (f"{metric_val:.4f}"
+                   if isinstance(metric_val, (int, float)) else metric_val)
+        rank = rank_lookup.get(idea_id, None)
+
+        # notify_top_n: only send "completed" notifications for top-N results.
+        # Default 0 = notify all (backward compat). Set in orze.yaml:
+        #   notifications:
+        #     notify_top_n: 20
+        top_n = (cfg.get("notifications") or {}).get("notify_top_n", 0)
+        summary_only = (top_n > 0 and isinstance(rank, int) and rank > top_n)
+
+        notify("completed", {
+            "idea_id": idea_id, "title": title,
+            "metric_name": primary, "metric_value": fmt_val,
+            "training_time": t_time,
+            "rank": rank if rank is not None else "?",
+            "rank_scope": "local",
+            "evidence_scope": (get_benchmark_contract(cfg) or {}).get(
+                "evidence_scope"),
+            "selection_mode": (get_benchmark_contract(cfg) or {}).get(
+                "selection_mode"),
+            "leaderboard": leaderboard,
+            "view_leaderboards": view_lbs,
+            "summary_only": summary_only,
+        }, cfg)
+
+    def _check_new_best(self, completed_rows, primary, leaderboard,
+                        view_lbs, cfg) -> bool:
+        if not completed_rows:
+            self._best_idea_id = None
+            self._completions_since_best = 0
+            self._plateau_notified = False
+            return False
+        current_best = completed_rows[0]["id"]
+        previous = next((row for row in completed_rows
+                         if row["id"] == self._best_idea_id), None)
+        fired = False
+        # Stable ID breaks display ties but is not measured improvement. An
+        # absent/revoked previous result is not a comparison baseline either.
+        if (previous is not None and current_best != self._best_idea_id
+                and objective_improves(
+                    completed_rows[0].get("primary_val"),
+                    completed_rows[0].get("values", {}),
+                    previous.get("primary_val"), previous.get("values", {}),
+                    cfg.get("report") or {})):
+            best_val = completed_rows[0].get("primary_val")
+            # Qualification is mandatory; anomaly policy is explicit opt-in.
+            # A promotion observer does not implicitly enqueue audit work.
+            if isinstance(best_val, (int, float)):
+                try:
+                    from orze.engine.champion_guard import check_promotion
+                    allow, info = check_promotion(
+                        self.results_dir, current_best, float(best_val), cfg,
+                        notify_fn=lambda k, p, c: notify(k, p, c),
+                        lake=self.lake,
+                    )
+                    if not allow:
+                        logger.warning(
+                            "champion_guard blocked promotion of %s "
+                            "(claimed=%.4f verified=%s z=%s)",
+                            current_best, float(best_val),
+                            info.get("verified"), info.get("z"),
+                        )
+                        return False
+                except Exception as e:
+                    logger.warning("Promotion check unavailable: %s",
+                                   type(e).__name__)
+                    return False
+            fmt = (f"{best_val:.4f}"
+                   if isinstance(best_val, (int, float)) else best_val)
+            prev_val = previous.get("primary_val")
+            prev_fmt = (f"{prev_val:.4f}"
+                        if isinstance(prev_val, (int, float)) else prev_val)
+            notify("new_best", {
+                "idea_id": current_best,
+                "title": completed_rows[0]["title"],
+                "metric_name": primary, "metric_value": fmt,
+                "prev_best_id": self._best_idea_id,
+                "prev_best_val": prev_fmt,
+                "rank_scope": "local",
+                "evidence_scope": (get_benchmark_contract(cfg) or {}).get(
+                    "evidence_scope"),
+                "selection_mode": (get_benchmark_contract(cfg) or {}).get(
+                    "selection_mode"),
+                "leaderboard": leaderboard,
+                "view_leaderboards": view_lbs,
+            }, cfg)
+            fired = True
+        self._best_idea_id = current_best
+        return fired
+
+    def _check_plateau(self, completed_rows, cfg):
+        threshold = cfg.get("plateau_threshold", 50)
+        if (threshold > 0
+                and self._completions_since_best >= threshold
+                and not self._plateau_notified):
+            best_score = (completed_rows[0].get("primary_val")
+                          if completed_rows else None)
+            notify("plateau", {
+                "message": (f"No improvement in {self._completions_since_best}"
+                            f" ideas. Best: {best_score}"
+                            f" ({self._best_idea_id})"),
+                "best_id": self._best_idea_id,
+                "since_best": self._completions_since_best,
+                "threshold": threshold,
+            }, cfg)
+            self._plateau_notified = True
+
+    def _periodic_report(self, ncfg, cfg, primary, counts, active_count,
+                         leaderboard, view_lbs, build_machine_status_fn):
+        interval = ncfg.get("report_interval", 0)
+        if interval <= 0:
+            return
+        if time.time() - self._last_report_notify < interval:
+            return
+        notify("report", {
+            "title": cfg["report"].get("title", "Report"),
+            "completed": counts.get("COMPLETED", 0),
+            "failed": counts.get("FAILED", 0),
+            "active_count": active_count,
+            "queued": counts.get("QUEUED", 0),
+            "metric_name": primary,
+            "leaderboard": leaderboard,
+            "rank_scope": "local",
+            "evidence_scope": (get_benchmark_contract(cfg) or {}).get(
+                "evidence_scope"),
+            "selection_mode": (get_benchmark_contract(cfg) or {}).get(
+                "selection_mode"),
+            "view_leaderboards": view_lbs,
+            "machines": build_machine_status_fn(),
+        }, cfg)
+        self._last_report_notify = time.time()

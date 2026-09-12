@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "title": "S3 independent declared-coverage boundary baseline",
+  "status": "tests frozen; baseline only; no candidate or full-suite claim",
+  "plan": "docs/plans/2026-09-12-s3-declared-coverage.zh-CN.md",
+  "baseline_commit": "69ff7babb57371632fb3048db781b24a3545548a",
+  "observed_head_before": "689cee7b5834637d0c171a31cc8cb28bd22e1c5c",
+  "owned_file": "tests/test_declared_coverage_boundaries.py",
+  "test_sha256": "2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0",
+  "test_counts": {
+    "functions": 15,
+    "parameterized_cases": 42,
+    "literal_assert_nodes": 22,
+    "baseline_failed": 32,
+    "baseline_passed": 10
+  },
+  "source_before": {
+    "src/orze/core/config.py": "9ce77b6a35fd70a72874aad674deb1b764db62343107ddd87ca0d4eff68791f3",
+    "src/orze/engine/champion_history.py": "4133a607390a964a65919a753ef45513c16c357073922e190ab1a5a902b4fc80",
+    "src/orze/reporting/evidence.py": "731b8a0223ed9d752e3b08ac3bd0ebd4f1e3de9f1daac582418dbca95a5598a5",
+    "src/orze/reporting/leaderboard.py": "cd147e31d564d36f427f123aabaf99523980c377406437cde7ff25cff1de7067",
+    "tests/test_declared_coverage_boundaries.py": "2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0"
+  },
+  "source_after": {
+    "src/orze/core/config.py": "9ce77b6a35fd70a72874aad674deb1b764db62343107ddd87ca0d4eff68791f3",
+    "src/orze/engine/champion_history.py": "4133a607390a964a65919a753ef45513c16c357073922e190ab1a5a902b4fc80",
+    "src/orze/reporting/evidence.py": "731b8a0223ed9d752e3b08ac3bd0ebd4f1e3de9f1daac582418dbca95a5598a5",
+    "src/orze/reporting/leaderboard.py": "cd147e31d564d36f427f123aabaf99523980c377406437cde7ff25cff1de7067",
+    "tests/test_declared_coverage_boundaries.py": "2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0"
+  },
+  "source_pre_post_exact": true,
+  "source_baseline_verification": "The post command compared complete bytes of all four listed production files against git show 69ff7babb57371632fb3048db781b24a3545548a:path; all matched.",
+  "executions": [
+    {
+      "purpose": "pre-execution source/test fingerprints and AST counts",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "python3 - <<'PY'\nimport ast,hashlib,json,subprocess\nfrom pathlib import Path\npaths=['src/orze/reporting/evidence.py','src/orze/reporting/leaderboard.py','src/orze/engine/champion_history.py','src/orze/core/config.py','tests/test_declared_coverage_boundaries.py']\ndata={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}\ntree=ast.parse(Path(paths[-1]).read_text())\nprint(json.dumps({'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'sha256':data,'functions':len([n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name.startswith('test_')]),'asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(tree))},sort_keys=True))\nPY",
+      "tool": "functions.exec -> tools.exec_command",
+      "result": {
+        "chunk_id": "6f0325",
+        "wall_time_seconds": 0.000003491,
+        "exit_code": 0,
+        "original_token_count": 155,
+        "output": "{\"asserts\": 22, \"functions\": 15, \"head\": \"689cee7b5834637d0c171a31cc8cb28bd22e1c5c\", \"sha256\": {\"src/orze/core/config.py\": \"9ce77b6a35fd70a72874aad674deb1b764db62343107ddd87ca0d4eff68791f3\", \"src/orze/engine/champion_history.py\": \"4133a607390a964a65919a753ef45513c16c357073922e190ab1a5a902b4fc80\", \"src/orze/reporting/evidence.py\": \"731b8a0223ed9d752e3b08ac3bd0ebd4f1e3de9f1daac582418dbca95a5598a5\", \"src/orze/reporting/leaderboard.py\": \"cd147e31d564d36f427f123aabaf99523980c377406437cde7ff25cff1de7067\", \"tests/test_declared_coverage_boundaries.py\": \"2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0\"}}\n"
+      }
+    },
+    {
+      "purpose": "actual complete independent boundary file on unchanged baseline source",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_declared_coverage_boundaries.py --tb=short",
+      "tool": "functions.exec -> tools.exec_command",
+      "result": {
+        "chunk_id": "24db72",
+        "wall_time_seconds": 0.528099288,
+        "exit_code": 1,
+        "original_token_count": 3536,
+        "output": "FFFFFFFFFFFFF.F.FFFFFFFFFFFFF.....FFFFF...                               [100%]\n=================================== FAILURES ===================================\n____ test_explicit_order_and_primary_membership_are_not_inferred_from_names ____\ntests/test_declared_coverage_boundaries.py:33: in test_explicit_order_and_primary_membership_are_not_inferred_from_names\n    assert selected == [\"plain_part\", \"objective\", \"wer_part\"]\nE   AssertionError: assert ['wer_part'] == ['plain_part'...', 'wer_part']\nE     \nE     At index 0 diff: 'wer_part' != 'plain_part'\nE     Right contains 2 more items, first extra item: 'objective'\nE     Use -v to get more diff\n_________ test_invalid_explicit_declaration_raises_stable_reason[null] _________\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n_______ test_invalid_explicit_declaration_raises_stable_reason[boolean] ________\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n________ test_invalid_explicit_declaration_raises_stable_reason[string] ________\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n________ test_invalid_explicit_declaration_raises_stable_reason[tuple] _________\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n_________ test_invalid_explicit_declaration_raises_stable_reason[set] __________\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n_______ test_invalid_explicit_declaration_raises_stable_reason[mapping] ________\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n____ test_invalid_explicit_declaration_raises_stable_reason[boolean-member] ____\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n____ test_invalid_explicit_declaration_raises_stable_reason[integer-member] ____\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n_____ test_invalid_explicit_declaration_raises_stable_reason[empty-member] _____\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n__ test_invalid_explicit_declaration_raises_stable_reason[whitespace-member] ___\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n___ test_invalid_explicit_declaration_raises_stable_reason[duplicate-member] ___\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n__ test_invalid_explicit_declaration_raises_stable_reason[not-utf8-encodable] __\ntests/test_declared_coverage_boundaries.py:62: in test_invalid_explicit_declaration_raises_stable_reason\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n______________________ test_declaration_count_bound[257] _______________________\ntests/test_declared_coverage_boundaries.py:78: in test_declaration_count_bound\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n_________ test_key_limit_counts_utf8_bytes_not_characters[1025-bytes] __________\ntests/test_declared_coverage_boundaries.py:91: in test_key_limit_counts_utf8_bytes_not_characters\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n__ test_each_declared_key_has_exactly_one_explicit_column[no-explicit-column] __\ntests/test_declared_coverage_boundaries.py:111: in test_each_declared_key_has_exactly_one_explicit_column\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n___ test_each_declared_key_has_exactly_one_explicit_column[duplicate-column] ___\ntests/test_declared_coverage_boundaries.py:111: in test_each_declared_key_has_exactly_one_explicit_column\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n__ test_each_declared_key_has_exactly_one_explicit_column[two-source-columns] __\ntests/test_declared_coverage_boundaries.py:111: in test_each_declared_key_has_exactly_one_explicit_column\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n__ test_each_declared_key_has_exactly_one_explicit_column[not-a-column-list] ___\ntests/test_declared_coverage_boundaries.py:111: in test_each_declared_key_has_exactly_one_explicit_column\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n___________ test_benchmark_required_metrics_are_an_explicit_fallback ___________\ntests/test_declared_coverage_boundaries.py:119: in test_benchmark_required_metrics_are_an_explicit_fallback\n    assert evidence.dataset_metric_keys(report) == [\"b\", \"a\"]\nE   AssertionError: assert ['wer_unrelated'] == ['b', 'a']\nE     \nE     At index 0 diff: 'wer_unrelated' != 'b'\nE     Right contains one more item: 'a'\nE     Use -v to get more diff\n______ test_explicit_superset_preserves_its_order_without_implicit_union _______\ntests/test_declared_coverage_boundaries.py:129: in test_explicit_superset_preserves_its_order_without_implicit_union\n    assert evidence.dataset_metric_keys(report) == [\"c\", \"b\", \"a\"]\nE   AssertionError: assert ['a', 'b', 'c'] == ['c', 'b', 'a']\nE     \nE     At index 0 diff: 'a' != 'c'\nE     Use -v to get more diff\n_ test_explicit_declaration_cannot_erase_benchmark_requirements[missing-required-component] _\ntests/test_declared_coverage_boundaries.py:144: in test_explicit_declaration_cannot_erase_benchmark_requirements\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n_ test_explicit_declaration_cannot_erase_benchmark_requirements[explicit-empty-does-not-fallback] _\ntests/test_declared_coverage_boundaries.py:144: in test_explicit_declaration_cannot_erase_benchmark_requirements\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n_ test_explicit_declaration_cannot_erase_benchmark_requirements[explicit-null-does-not-fallback] _\ntests/test_declared_coverage_boundaries.py:144: in test_explicit_declaration_cannot_erase_benchmark_requirements\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n_____ test_benchmark_fallback_is_validated_before_use[duplicate-required] ______\ntests/test_declared_coverage_boundaries.py:160: in test_benchmark_fallback_is_validated_before_use\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n______ test_benchmark_fallback_is_validated_before_use[required-not-list] ______\ntests/test_declared_coverage_boundaries.py:160: in test_benchmark_fallback_is_validated_before_use\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n___ test_benchmark_fallback_is_validated_before_use[required-column-missing] ___\ntests/test_declared_coverage_boundaries.py:160: in test_benchmark_fallback_is_validated_before_use\n    with pytest.raises(ValueError, match=f\"^{INVALID}$\"):\nE   Failed: DID NOT RAISE ValueError\n_ test_undeclared_zero_coverage_keeps_legacy_no_gate_without_name_inference[absent-minimum] _\ntests/test_declared_coverage_boundaries.py:209: in test_undeclared_zero_coverage_keeps_legacy_no_gate_without_name_inference\n    assert evidence.dataset_metric_keys(report) == []\nE   AssertionError: assert ['wer_part'] == []\nE     \nE     Left contains one more item: 'wer_part'\nE     Use -v to get more diff\n_ test_undeclared_zero_coverage_keeps_legacy_no_gate_without_name_inference[zero-minimum] _\ntests/test_declared_coverage_boundaries.py:209: in test_undeclared_zero_coverage_keeps_legacy_no_gate_without_name_inference\n    assert evidence.dataset_metric_keys(report) == []\nE   AssertionError: assert ['wer_part'] == []\nE     \nE     Left contains one more item: 'wer_part'\nE     Use -v to get more diff\n___ test_positive_minimum_without_any_declaration_is_not_all_display_columns ___\ntests/test_declared_coverage_boundaries.py:220: in test_positive_minimum_without_any_declaration_is_not_all_display_columns\n    assert evidence.dataset_metric_keys(report) == []\nE   AssertionError: assert ['wer_part'] == []\nE     \nE     Left contains one more item: 'wer_part'\nE     Use -v to get more diff\n________ test_explicit_empty_declaration_never_counts_undeclared_wer[0] ________\ntests/test_declared_coverage_boundaries.py:231: in test_explicit_empty_declaration_never_counts_undeclared_wer\n    assert evidence.minimum_dataset_coverage(\nE   assert (True, 2, 0) == (True, 0, 0)\nE     \nE     At index 1 diff: 2 != 0\nE     Use -v to get more diff\n________ test_explicit_empty_declaration_never_counts_undeclared_wer[1] ________\ntests/test_declared_coverage_boundaries.py:231: in test_explicit_empty_declaration_never_counts_undeclared_wer\n    assert evidence.minimum_dataset_coverage(\nE   assert (True, 2, 1) == (False, 0, 1)\nE     \nE     At index 0 diff: True != False\nE     Use -v to get more diff\n=========================== short test summary info ============================\nFAILED tests/test_declared_coverage_boundaries.py::test_explicit_order_and_primary_membership_are_not_inferred_from_names\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[null]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[boolean]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[string]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[tuple]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[set]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[mapping]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[boolean-member]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[integer-member]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[empty-member]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[whitespace-member]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[duplicate-member]\nFAILED tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[not-utf8-encodable]\nFAILED tests/test_declared_coverage_boundaries.py::test_declaration_count_bound[257]\nFAILED tests/test_declared_coverage_boundaries.py::test_key_limit_counts_utf8_bytes_not_characters[1025-bytes]\nFAILED tests/test_declared_coverage_boundaries.py::test_each_declared_key_has_exactly_one_explicit_column[no-explicit-column]\nFAILED tests/test_declared_coverage_boundaries.py::test_each_declared_key_has_exactly_one_explicit_column[duplicate-column]\nFAILED tests/test_declared_coverage_boundaries.py::test_each_declared_key_has_exactly_one_explicit_column[two-source-columns]\nFAILED tests/test_declared_coverage_boundaries.py::test_each_declared_key_has_exactly_one_explicit_column[not-a-column-list]\nFAILED tests/test_declared_coverage_boundaries.py::test_benchmark_required_metrics_are_an_explicit_fallback\nFAILED tests/test_declared_coverage_boundaries.py::test_explicit_superset_preserves_its_order_without_implicit_union\nFAILED tests/test_declared_coverage_boundaries.py::test_explicit_declaration_cannot_erase_benchmark_requirements[missing-required-component]\nFAILED tests/test_declared_coverage_boundaries.py::test_explicit_declaration_cannot_erase_benchmark_requirements[explicit-empty-does-not-fallback]\nFAILED tests/test_declared_coverage_boundaries.py::test_explicit_declaration_cannot_erase_benchmark_requirements[explicit-null-does-not-fallback]\nFAILED tests/test_declared_coverage_boundaries.py::test_benchmark_fallback_is_validated_before_use[duplicate-required]\nFAILED tests/test_declared_coverage_boundaries.py::test_benchmark_fallback_is_validated_before_use[required-not-list]\nFAILED tests/test_declared_coverage_boundaries.py::test_benchmark_fallback_is_validated_before_use[required-column-missing]\nFAILED tests/test_declared_coverage_boundaries.py::test_undeclared_zero_coverage_keeps_legacy_no_gate_without_name_inference[absent-minimum]\nFAILED tests/test_declared_coverage_boundaries.py::test_undeclared_zero_coverage_keeps_legacy_no_gate_without_name_inference[zero-minimum]\nFAILED tests/test_declared_coverage_boundaries.py::test_positive_minimum_without_any_declaration_is_not_all_display_columns\nFAILED tests/test_declared_coverage_boundaries.py::test_explicit_empty_declaration_never_counts_undeclared_wer[0]\nFAILED tests/test_declared_coverage_boundaries.py::test_explicit_empty_declaration_never_counts_undeclared_wer[1]\n32 failed, 10 passed in 0.38s\n"
+      }
+    },
+    {
+      "purpose": "post-execution fingerprints and complete baseline source comparison",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "python3 - <<'PY'\nimport hashlib,json,subprocess\nfrom pathlib import Path\nbaseline='69ff7babb57371632fb3048db781b24a3545548a'\npaths=['src/orze/reporting/evidence.py','src/orze/reporting/leaderboard.py','src/orze/engine/champion_history.py','src/orze/core/config.py','tests/test_declared_coverage_boundaries.py']\nresult={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}\nfor p in paths[:-1]:\n    assert Path(p).read_bytes()==subprocess.check_output(['git','show',baseline+':'+p])\nprint(json.dumps({'baseline':baseline,'sha256':result,'all_four_sources_baseline_byte_exact':True},sort_keys=True))\nPY",
+      "tool": "functions.exec -> tools.exec_command",
+      "result": {
+        "chunk_id": "aac72f",
+        "wall_time_seconds": 0.000004186,
+        "exit_code": 0,
+        "original_token_count": 160,
+        "output": "{\"all_four_sources_baseline_byte_exact\": true, \"baseline\": \"69ff7babb57371632fb3048db781b24a3545548a\", \"sha256\": {\"src/orze/core/config.py\": \"9ce77b6a35fd70a72874aad674deb1b764db62343107ddd87ca0d4eff68791f3\", \"src/orze/engine/champion_history.py\": \"4133a607390a964a65919a753ef45513c16c357073922e190ab1a5a902b4fc80\", \"src/orze/reporting/evidence.py\": \"731b8a0223ed9d752e3b08ac3bd0ebd4f1e3de9f1daac582418dbca95a5598a5\", \"src/orze/reporting/leaderboard.py\": \"cd147e31d564d36f427f123aabaf99523980c377406437cde7ff25cff1de7067\", \"tests/test_declared_coverage_boundaries.py\": \"2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0\"}}\n"
+      }
+    }
+  ],
+  "classifications": {
+    "baseline_failures": {
+      "count": 32,
+      "label": "behavioral requirements fail on existing public helpers",
+      "explanation": "All imports and helper APIs already existed. Failures expose ignored explicit declarations, domain-name/all-column inference, absent declaration validation, benchmark declaration bypass, or undeclared raw-WER fallback. The stricter declaration/type/bound checks are new S3 mechanism requirements, not 32 independently established historical product bugs.",
+      "missing_api_failures": 0,
+      "import_errors": 0,
+      "original_semantic_gap_evidence": "docs/evidence/2026-09-12-domain-coverage-diagnostic.json",
+      "failed_nodeids": [
+        "tests/test_declared_coverage_boundaries.py::test_explicit_order_and_primary_membership_are_not_inferred_from_names",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[null]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[boolean]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[string]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[tuple]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[set]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[mapping]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[boolean-member]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[integer-member]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[empty-member]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[whitespace-member]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[duplicate-member]",
+        "tests/test_declared_coverage_boundaries.py::test_invalid_explicit_declaration_raises_stable_reason[not-utf8-encodable]",
+        "tests/test_declared_coverage_boundaries.py::test_declaration_count_bound[257]",
+        "tests/test_declared_coverage_boundaries.py::test_key_limit_counts_utf8_bytes_not_characters[1025-bytes]",
+        "tests/test_declared_coverage_boundaries.py::test_each_declared_key_has_exactly_one_explicit_column[no-explicit-column]",
+        "tests/test_declared_coverage_boundaries.py::test_each_declared_key_has_exactly_one_explicit_column[duplicate-column]",
+        "tests/test_declared_coverage_boundaries.py::test_each_declared_key_has_exactly_one_explicit_column[two-source-columns]",
+        "tests/test_declared_coverage_boundaries.py::test_each_declared_key_has_exactly_one_explicit_column[not-a-column-list]",
+        "tests/test_declared_coverage_boundaries.py::test_benchmark_required_metrics_are_an_explicit_fallback",
+        "tests/test_declared_coverage_boundaries.py::test_explicit_superset_preserves_its_order_without_implicit_union",
+        "tests/test_declared_coverage_boundaries.py::test_explicit_declaration_cannot_erase_benchmark_requirements[missing-required-component]",
+        "tests/test_declared_coverage_boundaries.py::test_explicit_declaration_cannot_erase_benchmark_requirements[explicit-empty-does-not-fallback]",
+        "tests/test_declared_coverage_boundaries.py::test_explicit_declaration_cannot_erase_benchmark_requirements[explicit-null-does-not-fallback]",
+        "tests/test_declared_coverage_boundaries.py::test_benchmark_fallback_is_validated_before_use[duplicate-required]",
+        "tests/test_declared_coverage_boundaries.py::test_benchmark_fallback_is_validated_before_use[required-not-list]",
+        "tests/test_declared_coverage_boundaries.py::test_benchmark_fallback_is_validated_before_use[required-column-missing]",
+        "tests/test_declared_coverage_boundaries.py::test_undeclared_zero_coverage_keeps_legacy_no_gate_without_name_inference[absent-minimum]",
+        "tests/test_declared_coverage_boundaries.py::test_undeclared_zero_coverage_keeps_legacy_no_gate_without_name_inference[zero-minimum]",
+        "tests/test_declared_coverage_boundaries.py::test_positive_minimum_without_any_declaration_is_not_all_display_columns",
+        "tests/test_declared_coverage_boundaries.py::test_explicit_empty_declaration_never_counts_undeclared_wer[0]",
+        "tests/test_declared_coverage_boundaries.py::test_explicit_empty_declaration_never_counts_undeclared_wer[1]"
+      ]
+    },
+    "passing_controls": {
+      "count": 10,
+      "groups": [
+        {
+          "description": "256 keys accepted",
+          "cases": 1
+        },
+        {
+          "description": "1024 UTF-8 bytes accepted",
+          "cases": 1
+        },
+        {
+          "description": "actual local evidence loader honors source/dotpath for missing, null, zero and negative values instead of a metrics.json proxy",
+          "cases": 4
+        },
+        {
+          "description": "finite non-boolean declared numeric values",
+          "cases": 1
+        },
+        {
+          "description": "existing invalid-minimum return values for True, invalid text and fractional float",
+          "cases": 3
+        }
+      ]
+    },
+    "fixture_corrections": "None after any execution. Before the first file was written, the owner clarified list-only declarations and legal explicit []: zero minimum passes, positive minimum has zero coverage, and nonempty benchmark requirements make [] invalid.",
+    "untested_existing_minimum_quirks": "Existing False-as-zero and negative-required return conventions are outside this slice; no assertion was added that silently changes them."
+  },
+  "scope": {
+    "existing_public_apis": [
+      "dataset_metric_keys",
+      "minimum_dataset_coverage",
+      "load_local_report_evidence"
+    ],
+    "independent_new_tests_only": true,
+    "product_files_edited": false,
+    "old_tests_edited": false,
+    "direct_qualifier_config_cache_history_product_tests": "Owned and run separately by the root agent; not counted here.",
+    "filesystem": "Only pytest-owned tmp_path files are written by the four source-loader controls.",
+    "workers_gpu_provider_network_or_host_process_scans": false,
+    "candidate_results_claimed": false,
+    "full_suite_results_claimed": false
+  }
+}

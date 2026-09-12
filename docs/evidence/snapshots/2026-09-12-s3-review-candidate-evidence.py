@@ -1,0 +1,819 @@
+"""Shared qualification rules for locally comparable metric evidence."""
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import os
+import re
+import sqlite3
+import stat
+from pathlib import Path
+from typing import Mapping, Optional
+
+from orze.reporting.lifecycle_stages import (
+    completed_stage_sql, completed_stages_agree, stage_projection,
+    validate_lifecycle_schema,
+)
+
+
+def report_lifecycle_db_path(results_dir: Path, cfg: Mapping,
+                              override: Path | str | None = None) -> Path:
+    """Resolve a single project's authority without creating or probing DBs."""
+    root = cfg.get("_project_root")
+    if not root and cfg.get("_config_path"):
+        root = Path(cfg["_config_path"]).absolute().parent
+    root = Path(root or Path(results_dir).absolute().parent)
+    database = override or cfg.get("idea_lake_db")
+    if not database:
+        database = Path(cfg.get("_orze_dir") or ".orze") / "idea_lake.db"
+    path = Path(database)
+    return path if path.is_absolute() else root / path
+
+
+def _finite_number(value) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(float(value))
+    )
+
+
+def qualification_is_presentable(qualification) -> bool:
+    """Return whether a qualification summary is safe beside a numeric score."""
+    if not isinstance(qualification, Mapping):
+        return False
+    if qualification.get("mode") not in {
+            "verified_local_artifact", "benchmark_contract"}:
+        return False
+    if qualification.get("fallback_metrics_allowed") is not False:
+        return False
+    primary = qualification.get("primary_metric")
+    if not isinstance(primary, str) or not primary.strip():
+        return False
+    accepted = qualification.get("accepted")
+    if (isinstance(accepted, bool) or not isinstance(accepted, int)
+            or accepted < 0):
+        return False
+    rejected = qualification.get("rejected")
+    if not isinstance(rejected, Mapping):
+        return False
+    if not all(
+        isinstance(reason, str)
+        and not isinstance(count, bool)
+        and isinstance(count, int)
+        and count >= 0
+        for reason, count in rejected.items()
+    ):
+        return False
+    if qualification.get("mode") == "benchmark_contract":
+        return all(
+            isinstance(qualification.get(key), str)
+            and bool(qualification[key].strip())
+            for key in (
+                "benchmark_id", "benchmark_view", "evidence_scope",
+                "selection_mode",
+            )
+        )
+    return True
+
+
+def efficiency_presentation_is_safe(presentation) -> bool:
+    """Return whether a presentation block prevents leaderboard ambiguity."""
+    return (
+        isinstance(presentation, Mapping)
+        and presentation.get("claim_scope") == "internal_research_efficiency"
+        and presentation.get("qualification_applied") is True
+        and isinstance(presentation.get("evidence_label"), str)
+        and bool(presentation["evidence_label"].strip())
+        and presentation.get("leaderboard_rank_comparable") is False
+    )
+
+
+def legacy_archive_metric_value(metrics: dict, primary_metric: str,
+                                min_datasets: int, dataset_keys: list[str]) -> Optional[float]:
+    """Read a legacy archive value, not qualify current research evidence.
+
+    Preserve the historical coverage fallback and input semantics. A value
+    here grants no artifact, lifecycle, benchmark or publication authority;
+    steering must continue to use the current qualified evidence path.
+    """
+    if not isinstance(metrics, dict):
+        return None
+    value = metrics.get(primary_metric)
+    if (not isinstance(value, (int, float)) or isinstance(value, bool)
+            or not math.isfinite(float(value))):
+        return None
+    if min_datasets > 0:
+        count = sum(
+            1 for key in dataset_keys
+            if isinstance(metrics.get(key), (int, float))
+            and not isinstance(metrics.get(key), bool)
+            and math.isfinite(float(metrics[key]))
+        )
+        if count == 0:
+            count = sum(
+                1 for key, item in metrics.items()
+                if key.startswith("wer_")
+                and isinstance(item, (int, float))
+                and not isinstance(item, bool)
+                and math.isfinite(float(item))
+            )
+        if count < min_datasets:
+            return None
+    return float(value)
+
+
+def dataset_metric_keys(report_cfg: Mapping) -> list[str]:
+    """Resolve explicit coverage members; metric names grant no validity.
+
+    Benchmark components are already a declaration, not a naming convention.
+    Each member resolves through exactly one declared report source column.
+    """
+    contract = report_cfg.get("benchmark_contract")
+    has_required = isinstance(contract, Mapping) and "required_metrics" in contract
+    if "dataset_keys" not in report_cfg and not has_required:
+        return []
+
+    def checked(value):
+        invalid = "dataset_coverage_declaration_invalid"
+        if type(value) is not list or len(value) > 256:
+            raise ValueError(invalid)
+        columns = report_cfg.get("columns", [])
+        if type(columns) is not list:
+            raise ValueError(invalid)
+        seen = set()
+        for key in value:
+            if type(key) is not str or not key.strip() or key in seen:
+                raise ValueError(invalid)
+            try:
+                if len(key.encode("utf-8")) > 1024:
+                    raise ValueError(invalid)
+            except UnicodeError as exc:
+                raise ValueError(invalid) from exc
+            if sum(isinstance(column, Mapping) and column.get("key") == key
+                   for column in columns) != 1:
+                raise ValueError(invalid)
+            seen.add(key)
+        return list(value)
+
+    required = checked(contract["required_metrics"]) if has_required else []
+    if has_required and not required:
+        raise ValueError("dataset_coverage_declaration_invalid")
+    keys = checked(report_cfg["dataset_keys"]) if "dataset_keys" in report_cfg else required
+    if not set(required).issubset(keys):
+        raise ValueError("dataset_coverage_declaration_invalid")
+    return keys
+
+
+def count_dataset_metrics(
+    report_cfg: Mapping,
+    *,
+    values: Mapping | None = None,
+    metrics: Mapping | None = None,
+) -> int:
+    """Count finite, non-boolean configured dataset measurements."""
+    values = values if isinstance(values, Mapping) else {}
+    metrics = metrics if isinstance(metrics, Mapping) else {}
+    dataset_keys = dataset_metric_keys(report_cfg)
+    return sum(
+        1 for key in dataset_keys
+        if _finite_number(values[key] if key in values else metrics.get(key))
+    )
+
+
+def minimum_dataset_coverage(
+    report_cfg: Mapping,
+    *,
+    values: Mapping | None = None,
+    metrics: Mapping | None = None,
+) -> tuple[bool, int, int]:
+    """Return ``(qualified, observed, required)`` for report coverage."""
+    raw_required = report_cfg.get("min_datasets", 0) or 0
+    if isinstance(raw_required, bool):
+        return False, 0, -1
+    try:
+        required = int(raw_required)
+    except (TypeError, ValueError):
+        return False, 0, -1
+    if isinstance(raw_required, float) and not raw_required.is_integer():
+        return False, 0, -1
+    if required < 0:
+        return False, 0, required
+    contract = report_cfg.get("benchmark_contract")
+    if (required > 0 and "dataset_keys" not in report_cfg
+            and not (isinstance(contract, Mapping) and "required_metrics" in contract)):
+        raise ValueError("dataset_coverage_not_declared")
+    observed = count_dataset_metrics(
+        report_cfg, values=values, metrics=metrics)
+    return observed >= required, observed, required
+
+
+def _deep_value(document, key: str):
+    if isinstance(document, Mapping) and key in document:
+        return document[key]
+    value = document
+    for part in str(key).split("."):
+        if not isinstance(value, Mapping) or part not in value:
+            return None
+        value = value[part]
+    return value
+
+
+def _safe_source_path(idea_dir: Path, filename: str) -> Path | None:
+    relative = Path(str(filename))
+    if (relative.is_absolute() or relative == Path(".")
+            or ".." in relative.parts):
+        return None
+    path = Path(idea_dir) / relative
+    current = Path(idea_dir)
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            return None
+    return path
+
+
+def load_local_report_evidence(
+    idea_dir: Path,
+    report_cfg: Mapping,
+) -> tuple[dict, dict, str]:
+    """Read current local result artifacts using the report's exact columns.
+
+    IdeaLake is an index, not immutable result evidence.  This loader requires a
+    current completed metrics artifact and rejects redirected source paths.  It
+    returns stable reason codes and never includes artifact content in errors.
+    """
+    idea_dir = Path(idea_dir)
+    if idea_dir.is_symlink():
+        return {}, {}, "local_idea_dir_symlink"
+    metrics_path = idea_dir / "metrics.json"
+    if metrics_path.is_symlink():
+        return {}, {}, "local_metrics_symlink"
+    try:
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}, {}, "local_metrics_missing"
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return {}, {}, "local_metrics_invalid"
+    if not isinstance(metrics, dict):
+        return {}, {}, "local_metrics_invalid"
+    if metrics.get("status") != "COMPLETED":
+        return metrics, {}, "local_metrics_not_completed"
+
+    values = {}
+    for column in report_cfg.get("columns") or []:
+        if not isinstance(column, dict) or not column.get("key"):
+            continue
+        key = str(column["key"])
+        source = column.get("source", "")
+        if source and ":" in str(source):
+            filename, dotpath = str(source).split(":", 1)
+            source_path = _safe_source_path(idea_dir, filename)
+            if source_path is None:
+                return metrics, values, "local_metric_source_path_invalid"
+            try:
+                document = json.loads(source_path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                values[key] = None
+                continue
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                return metrics, values, "local_metric_source_invalid"
+            values[key] = _deep_value(document, dotpath)
+        else:
+            values[key] = _deep_value(metrics, key)
+    # Ranking keys need not be display columns. A declared source, including
+    # a missing or zero source value, always takes precedence over raw metrics.
+    for field in ("primary_metric", "secondary_metric"):
+        key = report_cfg.get(field)
+        if isinstance(key, str) and key and key not in values:
+            values[key] = _deep_value(metrics, key)
+    return metrics, values, "local_evidence_loaded"
+
+
+def _observation_adapter_reason(idea_dir: Path, cfg: Mapping) -> str | None:
+    """Legacy files cannot override a current native observation protocol.
+
+    Routing metadata is not qualification authority. Once a native catalog is
+    declared, failure to inspect it cannot downgrade the task to offline files.
+    This read grants no lifecycle/science claim and performs no schema writes.
+    """
+    if cfg.get("observation_contract") is not None:
+        return "observation_adapter_required"
+    connection = None
+    reason = None
+    try:
+        from orze.engine.execution_catalog import declared_catalog
+        database = declared_catalog(idea_dir)
+        if database is None:
+            return None
+        connection, _ = _open_authoritative_lifecycle(Path(database))
+        if connection is None:
+            return "observation_adapter_source_unverifiable"
+        connection.execute("BEGIN")
+        from orze.core.execution_attempts import current_attempt
+        row = current_attempt(connection, Path(idea_dir).name, "evaluation")
+        if row is not None and "observation_publication" in row["binding"]:
+            reason = "observation_adapter_required"
+    except Exception:
+        reason = "observation_adapter_source_unverifiable"
+    finally:
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                reason = "observation_adapter_source_unverifiable"
+    return reason
+
+
+def qualify_local_report_evidence(
+    idea_dir: Path,
+    cfg: Mapping,
+    *,
+    require_primary: bool = True,
+) -> tuple[dict, dict, float | None, str]:
+    """Qualify one local result against the complete report policy.
+
+    Returns ``(metrics, values, primary_value, reason)``. The reason is a
+    stable token suitable for aggregate reporting; validation messages and
+    artifact contents never cross this boundary.
+    """
+    adapter_reason = _observation_adapter_reason(idea_dir, cfg)
+    if adapter_reason is not None:
+        # This legacy adapter cannot turn task-level files into immutable
+        # observations, even when the task's operational stage is COMPLETE.
+        return {}, {}, None, adapter_reason
+    report = cfg.get("report") or {}
+    metrics, values, reason = load_local_report_evidence(idea_dir, report)
+    if reason != "local_evidence_loaded":
+        return metrics, values, None, reason
+    from orze.reporting.evaluation_output import (
+        evaluation_output_has_contract, validate_evaluation_output,
+    )
+    if evaluation_output_has_contract(cfg):
+        valid, reason = validate_evaluation_output(idea_dir, cfg)
+        if not valid:
+            return metrics, values, None, reason
+    # This optional adapter declaration can veto ranking, never prove validity.
+    # Missing is supported; true still has to pass every other evidence check.
+    if "honest" in metrics:
+        if not isinstance(metrics["honest"], bool):
+            return metrics, values, None, "local_honesty_declaration_invalid"
+        if metrics["honest"] is False:
+            return metrics, values, None, "local_evidence_declared_non_honest"
+    try:
+        from orze.core.integrity import validate_metrics
+        resolved_metrics = dict(metrics)
+        resolved_metrics.update(values)
+        resolved_metrics["status"] = "COMPLETED"
+        valid, _ = validate_metrics(resolved_metrics, dict(cfg))
+    except Exception:
+        valid = False
+    if not valid:
+        return metrics, values, None, "local_metric_validation_failed"
+    primary = report.get("primary_metric", "score" if require_primary else None)
+    value = values.get(primary) if isinstance(primary, str) else None
+    if (require_primary or "primary_metric" in report) and not _finite_number(value):
+        return metrics, values, None, "primary_metric_missing_or_nonfinite"
+    try:
+        coverage_ok, observed, required = minimum_dataset_coverage(
+            report, values=values, metrics=metrics)
+    except ValueError as exc:
+        return metrics, values, None, str(exc)
+    if not coverage_ok:
+        return (
+            metrics,
+            values,
+            None,
+            f"metric_coverage_below_min:{observed}/{required}",
+        )
+    lineage = cfg.get("model_lineage", {})
+    if isinstance(lineage, Mapping) and lineage.get("enabled") is True:
+        try:
+            from orze.core.model_lineage import (
+                validate_model_lineage_for_evaluation,
+            )
+            validate_model_lineage_for_evaluation(Path(idea_dir), cfg)
+        except Exception:
+            return metrics, values, None, "local_model_lineage_invalid"
+    return (metrics, values, float(value) if _finite_number(value) else None,
+            "local_evidence_verified")
+
+
+_SAFE_FAMILY_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+
+_LIFECYCLE_STATUS_STATES = {
+    "queued": frozenset({"QUEUED"}),
+    "pending": frozenset({"QUEUED"}),
+    "claimed": frozenset({"CLAIMED"}),
+    # Framework state becomes CLAIMED before the legacy mirror is changed from
+    # the generic running token to IN_PROGRESS.
+    "running": frozenset({"CLAIMED", "IN_PROGRESS"}),
+    "training": frozenset({"IN_PROGRESS"}),
+    "evaluating": frozenset({"IN_PROGRESS"}),
+    "completed": frozenset({"COMPLETE"}),
+    "partial": frozenset({"FAILED"}),
+    "failed": frozenset({"FAILED"}),
+    "dead": frozenset({"FAILED"}),
+    "skipped": frozenset({"SKIPPED"}),
+    "archived": frozenset({"ARCHIVED"}),
+}
+
+
+def _open_authoritative_lifecycle(
+    db_path: Path,
+) -> tuple[sqlite3.Connection | None, str]:
+    """Open a policy-compliant lifecycle database read-only."""
+    path = Path(db_path)
+    connection = None
+    try:
+        absolute = path.absolute()
+        current = Path(absolute.anchor)
+        for part in absolute.parts[1:]:
+            current = current / part
+            if current.is_symlink():
+                return None, "authoritative_lifecycle_database_redirected"
+        if not path.is_file():
+            return None, "authoritative_lifecycle_database_unavailable"
+        if path.stat().st_nlink != 1:
+            return None, "authoritative_lifecycle_database_redirected"
+        connection = sqlite3.connect(
+            absolute.as_uri() + "?mode=ro",
+            uri=True,
+            timeout=5,
+        )
+        connection.execute("PRAGMA query_only=ON")
+        from orze.core.sqlite_policy import (
+            SQLitePolicyError,
+            inspect_shared_database_policy,
+        )
+        try:
+            policy = inspect_shared_database_policy(connection)
+        except SQLitePolicyError:
+            connection.close()
+            return None, "authoritative_lifecycle_database_invalid"
+        if not policy["compliant"]:
+            connection.close()
+            return None, "authoritative_lifecycle_database_policy_invalid"
+        return connection, "authoritative_lifecycle_loaded"
+    except (OSError, sqlite3.Error):
+        if connection is not None:
+            try:
+                connection.close()
+            except sqlite3.Error:
+                pass
+        return None, "authoritative_lifecycle_database_invalid"
+
+
+def _authoritative_completed_rows(
+    db_path: Path,
+    *,
+    include_family: bool,
+) -> tuple[list[tuple], str]:
+    """Read agreed lifecycle-complete rows under the shared DB policy."""
+    connection, reason = _open_authoritative_lifecycle(db_path)
+    if connection is None:
+        return [], reason
+    try:
+        try:
+            connection.execute("BEGIN")
+            schema = validate_lifecycle_schema(connection)
+            select = (
+                "i.idea_id, i.approach_family"
+                if include_family else "i.idea_id"
+            )
+            rows = connection.execute(
+                f"SELECT {select} FROM ideas AS i "
+                "JOIN idea_state AS s ON s.idea_id = i.idea_id "
+                "WHERE lower(i.status) = 'completed' "
+                "AND s.current_state COLLATE BINARY = 'COMPLETE' AND "
+                + completed_stage_sql(schema, idea_alias="i")
+            ).fetchall()
+        except (sqlite3.Error, ValueError, TypeError):
+            return [], "authoritative_lifecycle_database_invalid"
+    finally:
+        connection.close()
+    return rows, "authoritative_lifecycle_loaded"
+
+
+def authoritative_idea_lifecycle(
+    db_path: Path,
+    idea_ids,
+) -> tuple[dict[str, dict[str, str]], str]:
+    """Load lifecycle state and safe family for an exact bounded ID set.
+
+    The audited FSM and legacy status mirror must agree. Missing rows,
+    malformed IDs, schema drift, redirected databases, and contradictory
+    lifecycle claims fail the entire read rather than being interpreted as
+    pending or failed experiments.
+    """
+    if (not isinstance(idea_ids, (list, tuple, set, frozenset))
+            or not 1 <= len(idea_ids) <= 64):
+        return {}, "authoritative_lifecycle_idea_ids_invalid"
+    normalized = []
+    seen = set()
+    from orze.core.ideas import IDEA_ID_PATTERN
+    idea_re = re.compile(IDEA_ID_PATTERN)
+    for idea_id in idea_ids:
+        if (not isinstance(idea_id, str) or len(idea_id) > 128
+                or idea_re.fullmatch(idea_id) is None
+                or idea_id in seen):
+            return {}, "authoritative_lifecycle_idea_ids_invalid"
+        normalized.append(idea_id)
+        seen.add(idea_id)
+
+    connection, reason = _open_authoritative_lifecycle(db_path)
+    if connection is None:
+        return {}, reason
+    try:
+        try:
+            connection.execute("BEGIN")
+            schema = validate_lifecycle_schema(connection)
+            stages, stage_join = stage_projection(schema)
+            marks = ",".join("?" for _ in normalized)
+            rows = connection.execute(
+                "SELECT i.idea_id, i.status, i.approach_family, "
+                f"s.current_state, {stages} FROM ideas AS i "
+                "JOIN idea_state AS s ON s.idea_id = i.idea_id "
+                + stage_join + f" WHERE i.idea_id IN ({marks})",
+                normalized,
+            ).fetchall()
+        except (sqlite3.Error, ValueError, TypeError):
+            return {}, "authoritative_lifecycle_database_invalid"
+    finally:
+        connection.close()
+
+    if len(rows) != len(normalized):
+        return {}, "authoritative_lifecycle_rows_missing"
+    lifecycle = {}
+    for (idea_id, raw_status, raw_family, state, training_id, training,
+         evaluation_id, evaluation) in rows:
+        status = str(raw_status or "").strip().lower()
+        if (not isinstance(state, str)
+                or state not in _LIFECYCLE_STATUS_STATES.get(
+                    status, frozenset())):
+            return {}, "authoritative_lifecycle_state_conflict"
+        if state == "COMPLETE" and not completed_stages_agree(
+                training_id, training, evaluation_id, evaluation):
+            return {}, "authoritative_lifecycle_stage_conflict"
+        family = str(raw_family or "other").strip().lower()
+        if _SAFE_FAMILY_RE.fullmatch(family) is None:
+            family = "other"
+        lifecycle[str(idea_id)] = {"state": state, "family": family}
+    if set(lifecycle) != set(normalized):
+        return {}, "authoritative_lifecycle_database_invalid"
+    return lifecycle, "authoritative_lifecycle_loaded"
+
+
+def authoritative_completed_idea_ids(
+    db_path: Path,
+) -> tuple[set[str], str]:
+    """Load lifecycle-complete idea IDs from the authoritative lake read-only.
+
+    A metrics artifact is result evidence, not lifecycle authority. Consumers
+    that steer research must require both the audited FSM state and the legacy
+    status mirror to agree on completion. Missing, redirected, hard-linked, or
+    incompatible databases fail closed and never get created by inspection.
+    """
+    rows, reason = _authoritative_completed_rows(
+        db_path, include_family=False)
+    if reason != "authoritative_lifecycle_loaded":
+        return set(), reason
+
+    completed = {
+        str(row[0])
+        for row in rows
+        if row and isinstance(row[0], str)
+        and row[0] not in ("", ".", "..")
+        and Path(row[0]).parts == (row[0],)
+    }
+    return completed, reason
+
+
+def authoritative_completed_idea_families(
+    db_path: Path,
+) -> tuple[dict[str, str], str]:
+    """Load closed, content-safe family labels for lifecycle-complete IDs."""
+    rows, reason = _authoritative_completed_rows(
+        db_path, include_family=True)
+    if reason != "authoritative_lifecycle_loaded":
+        return {}, reason
+    families = {}
+    for row in rows:
+        if (not row or not isinstance(row[0], str)
+                or row[0] in ("", ".", "..")
+                or Path(row[0]).parts != (row[0],)):
+            continue
+        raw_family = row[1] if len(row) > 1 else None
+        family = str(raw_family or "other").strip().lower()
+        if _SAFE_FAMILY_RE.fullmatch(family) is None:
+            family = "other"
+        families[row[0]] = family
+    return families, reason
+
+
+def qualify_authoritative_report_evidence(
+    idea_id: str,
+    results_dir: Path,
+    cfg: Mapping,
+    completed_idea_ids: set[str],
+) -> tuple[dict, dict, float | None, str]:
+    """Qualify one steering result against lifecycle and evidence contracts.
+
+    The caller loads ``completed_idea_ids`` once per scan with
+    :func:`authoritative_completed_idea_ids`. Benchmark-enabled projects also
+    require the current sealed benchmark receipt; local evidence alone cannot
+    spend a benchmark-driven plateau budget.
+    """
+    if (not isinstance(idea_id, str) or idea_id in ("", ".", "..")
+            or Path(idea_id).parts != (idea_id,)):
+        return {}, {}, None, "idea_id_invalid"
+    if idea_id not in completed_idea_ids:
+        return {}, {}, None, "authoritative_lifecycle_not_complete"
+
+    idea_dir = Path(results_dir) / idea_id
+    metrics, values, value, reason = qualify_result_artifacts(idea_dir, cfg)
+    if reason == "local_artifacts_verified":
+        reason = "authoritative_local_evidence_verified"
+    return metrics, values, value, reason
+
+
+def qualify_result_artifacts(
+    idea_dir: Path,
+    cfg: Mapping,
+    *,
+    require_primary: bool = True,
+) -> tuple[dict, dict, float | None, str]:
+    """Validate result contents, NOT lifecycle completion or ranking authority.
+
+    Evaluators may accept zero observations when no primary was declared.
+    Steering consumers must additionally require agreed lifecycle completion.
+    """
+    metrics, values, value, reason = qualify_local_report_evidence(
+        idea_dir, cfg, require_primary=require_primary)
+    if reason != "local_evidence_verified":
+        return metrics, values, None, reason
+    if metrics.get("tainted_leakage"):
+        return metrics, values, None, "local_evidence_tainted_leakage"
+    managed_policy = cfg.get("managed_run") or {}
+    if (isinstance(managed_policy, Mapping)
+            and managed_policy.get("require_clean_training_access_log") is True):
+        from orze.data_boundaries import audit_training_access_log
+        access_log = audit_training_access_log(idea_dir)
+        if access_log.get("status") != "CLEAN":
+            return metrics, values, None, "training_access_log_not_clean"
+
+    report = cfg.get("report") or {}
+    if isinstance(report, Mapping) and report.get("benchmark_contract"):
+        try:
+            from orze.core.benchmark_contract import validate_benchmark_receipt
+            valid, benchmark_reason = validate_benchmark_receipt(
+                idea_dir, cfg, values=values)
+        except Exception:
+            return metrics, values, None, "benchmark_validation_failed"
+        if not valid:
+            return metrics, values, None, str(
+                benchmark_reason or "benchmark_receipt_invalid")
+        return metrics, values, value, "benchmark_evidence_verified"
+
+    return metrics, values, value, "local_artifacts_verified"
+
+
+def local_report_evidence_paths(idea_dir: Path,
+                                report_cfg: Mapping,
+                                cfg: Mapping | None = None) -> list[Path]:
+    """Return only safe paths that can affect local report qualification."""
+    idea_dir = Path(idea_dir)
+    paths = [idea_dir / "metrics.json"]
+    for column in report_cfg.get("columns") or []:
+        if not isinstance(column, dict):
+            continue
+        source = column.get("source", "")
+        if not source or ":" not in str(source):
+            continue
+        filename = str(source).split(":", 1)[0]
+        path = _safe_source_path(idea_dir, filename)
+        if path is not None and path not in paths:
+            paths.append(path)
+    if cfg is not None:
+        from orze.reporting.evaluation_output import evaluation_output_has_contract
+        if evaluation_output_has_contract(cfg):
+            path = _safe_source_path(
+                idea_dir, cfg.get("eval_output") or "eval_report.json")
+            if path is not None and path not in paths:
+                paths.append(path)
+    return paths
+
+
+def report_evidence_paths(
+    idea_id: str,
+    results_dir: Path,
+    cfg: Mapping,
+) -> list[Path]:
+    """Return every content path that can qualify one decision metric."""
+    if (not isinstance(idea_id, str) or idea_id in ("", ".", "..")
+            or Path(idea_id).parts != (idea_id,)):
+        raise ValueError("idea_id_invalid")
+    idea_dir = Path(results_dir) / idea_id
+    report = cfg.get("report") if isinstance(cfg, Mapping) else None
+    if not isinstance(report, Mapping):
+        raise ValueError("report_config_invalid")
+    paths = local_report_evidence_paths(idea_dir, report, cfg)
+    managed_policy = cfg.get("managed_run") or {}
+    if (isinstance(managed_policy, Mapping)
+            and managed_policy.get("require_clean_training_access_log") is True):
+        paths.append(idea_dir / "_access_log.tsv")
+    lineage = cfg.get("model_lineage") if isinstance(cfg, Mapping) else None
+    if isinstance(lineage, Mapping) and lineage.get("enabled") is True:
+        from orze.core.model_lineage import LINEAGE_FILE
+        lineage_receipt = _safe_source_path(idea_dir, LINEAGE_FILE)
+        if lineage_receipt is None:
+            raise ValueError("model_lineage_evidence_path_invalid")
+        # Qualification validates the receipt against the current artifact.
+        # Binding the compact receipt here makes a coherent post-decision
+        # artifact+receipt replacement change the decision input identity
+        # without hashing model bytes again during evidence capture.
+        paths.append(lineage_receipt)
+    contract = report.get("benchmark_contract")
+    if isinstance(contract, Mapping):
+        from orze.core.benchmark_contract import (
+            PROVENANCE_FILE,
+            benchmark_exposure_evidence_paths,
+        )
+        receipt = _safe_source_path(idea_dir, contract.get("receipt", ""))
+        provenance = _safe_source_path(idea_dir, PROVENANCE_FILE)
+        if receipt is None or provenance is None:
+            raise ValueError("benchmark_evidence_path_invalid")
+        paths.extend((receipt, provenance))
+        paths.extend(benchmark_exposure_evidence_paths(results_dir, cfg))
+    if any(_evidence_path_unsafe(path) for path in paths):
+        raise ValueError("report_evidence_path_unsafe")
+    return paths
+
+
+def _evidence_path_unsafe(path: Path) -> bool:
+    absolute = Path(path).absolute()
+    current = Path(absolute.anchor)
+    try:
+        for part in absolute.parts[1:]:
+            current = current / part
+            if current.is_symlink():
+                return True
+        if absolute.exists():
+            info = absolute.stat()
+            return not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+    except OSError:
+        return True
+    return False
+
+
+def evidence_content_sha256(paths) -> str:
+    """Hash regular single-link evidence without following redirects."""
+    digest = hashlib.sha256()
+    for path in sorted(set(map(Path, paths)), key=lambda item: str(item)):
+        digest.update(str(path).encode("utf-8"))
+        if _evidence_path_unsafe(path):
+            digest.update(b"<unsafe-or-redirected>")
+            continue
+        descriptor = None
+        try:
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(path, flags)
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                digest.update(b"<unsafe-or-redirected>")
+                continue
+            with os.fdopen(descriptor, "rb") as handle:
+                descriptor = None
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        except OSError:
+            digest.update(b"<missing-or-unreadable>")
+        finally:
+            if descriptor is not None:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+    return digest.hexdigest()
+
+
+def qualify_authoritative_report_evidence_with_identity(
+    idea_id: str,
+    results_dir: Path,
+    cfg: Mapping,
+    completed_idea_ids: set[str],
+) -> tuple[dict, dict, float | None, str, str | None]:
+    """Qualify one metric and bind the exact stable evidence contents."""
+    try:
+        paths = report_evidence_paths(idea_id, results_dir, cfg)
+        before = evidence_content_sha256(paths)
+        metrics, values, value, reason = qualify_authoritative_report_evidence(
+            idea_id, results_dir, cfg, completed_idea_ids,
+        )
+        after = evidence_content_sha256(paths)
+    except Exception:
+        return {}, {}, None, "report_evidence_identity_unavailable", None
+    if before != after:
+        return {}, {}, None, "report_evidence_changed_during_read", None
+    return metrics, values, value, reason, after

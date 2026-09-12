@@ -1,0 +1,218 @@
+{
+  "schema": 1,
+  "title": "S3 independent candidate consumer review: actual cache/source/type counterexamples",
+  "status": "five real candidate failures preserved; correction and final verification belong to subsequent epochs",
+  "original_baseline_commit": "69ff7babb57371632fb3048db781b24a3545548a",
+  "origin": "S3 first production candidate, not a replay of the original baseline",
+  "plan": "docs/plans/2026-09-12-s3-declared-coverage.zh-CN.md",
+  "test": {
+    "path": "tests/test_declared_coverage_review.py",
+    "sha256": "850c40dc0375ad70f5870c520d166f54a87cd87582ab621febdee9ff65fc547e",
+    "functions": 4,
+    "cases": 5,
+    "literal_asserts": 14,
+    "post_execution_edits": false
+  },
+  "existing_boundary_test": {
+    "path": "tests/test_declared_coverage_boundaries.py",
+    "sha256": "2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0",
+    "changed": false
+  },
+  "source_and_test_before": {
+    "src/orze/core/config.py": "21861491bdbe353e2684c39bc0f923e9999801d5b6ed56e8ce1f289dca15b420",
+    "src/orze/engine/champion_history.py": "77fc804b8217c7195c2a9ecee41c2937ce95cbe91e8b05c564db93a4266ced23",
+    "src/orze/reporting/evidence.py": "2e5147daf97a201ff59b9def101de670654294e16a56f97bde5967028b6035d6",
+    "src/orze/reporting/leaderboard.py": "268f089dd8d11d26ae94760e9da4a808e7e31c2b40ebd3f3a3716a0c9cc3d0ba",
+    "tests/test_declared_coverage_boundaries.py": "2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0",
+    "tests/test_declared_coverage_review.py": "850c40dc0375ad70f5870c520d166f54a87cd87582ab621febdee9ff65fc547e"
+  },
+  "source_and_test_after": {
+    "src/orze/core/config.py": "21861491bdbe353e2684c39bc0f923e9999801d5b6ed56e8ce1f289dca15b420",
+    "src/orze/engine/champion_history.py": "77fc804b8217c7195c2a9ecee41c2937ce95cbe91e8b05c564db93a4266ced23",
+    "src/orze/reporting/evidence.py": "2e5147daf97a201ff59b9def101de670654294e16a56f97bde5967028b6035d6",
+    "src/orze/reporting/leaderboard.py": "268f089dd8d11d26ae94760e9da4a808e7e31c2b40ebd3f3a3716a0c9cc3d0ba",
+    "tests/test_declared_coverage_boundaries.py": "2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0",
+    "tests/test_declared_coverage_review.py": "850c40dc0375ad70f5870c520d166f54a87cd87582ab621febdee9ff65fc547e"
+  },
+  "source_and_test_pre_post_exact": true,
+  "executions": [
+    {
+      "purpose": "candidate source/test pre-fingerprints and independent-test AST counts",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "python3 - <<'PY'\nimport ast,hashlib,json\nfrom pathlib import Path\npaths=['src/orze/reporting/evidence.py','src/orze/reporting/leaderboard.py','src/orze/engine/champion_history.py','src/orze/core/config.py','tests/test_declared_coverage_review.py','tests/test_declared_coverage_boundaries.py']\ntree=ast.parse(Path(paths[-2]).read_text())\nprint(json.dumps({'sha256':{p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths},'functions':sum(isinstance(n,ast.FunctionDef) and n.name.startswith('test_') for n in tree.body),'asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(tree))},sort_keys=True))\nPY",
+      "tool": "functions.exec -> tools.exec_command",
+      "result": {
+        "chunk_id": "0a3ae8",
+        "wall_time_seconds": 0.000004372,
+        "exit_code": 0,
+        "original_token_count": 170,
+        "output": "{\"asserts\": 14, \"functions\": 4, \"sha256\": {\"src/orze/core/config.py\": \"21861491bdbe353e2684c39bc0f923e9999801d5b6ed56e8ce1f289dca15b420\", \"src/orze/engine/champion_history.py\": \"77fc804b8217c7195c2a9ecee41c2937ce95cbe91e8b05c564db93a4266ced23\", \"src/orze/reporting/evidence.py\": \"2e5147daf97a201ff59b9def101de670654294e16a56f97bde5967028b6035d6\", \"src/orze/reporting/leaderboard.py\": \"268f089dd8d11d26ae94760e9da4a808e7e31c2b40ebd3f3a3716a0c9cc3d0ba\", \"tests/test_declared_coverage_boundaries.py\": \"2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0\", \"tests/test_declared_coverage_review.py\": \"850c40dc0375ad70f5870c520d166f54a87cd87582ab621febdee9ff65fc547e\"}}\n"
+      }
+    },
+    {
+      "purpose": "complete independent new review file on actual four-source candidate",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_declared_coverage_review.py --tb=short",
+      "tool": "functions.exec -> tools.exec_command",
+      "result": {
+        "chunk_id": "a28e95",
+        "wall_time_seconds": 0.513376959,
+        "exit_code": 1,
+        "original_token_count": 861,
+        "output": "FFFFF                                                                    [100%]\n=================================== FAILURES ===================================\n_ test_warm_offline_cache_cannot_authorize_an_invalid_declaration[explicit-null] _\ntests/test_declared_coverage_review.py:51: in test_warm_offline_cache_cannot_authorize_an_invalid_declaration\n    assert update_report(tmp_path, ideas, changed) == []\nE   AssertionError: assert [{'id': 'idea...': True, ...}] == []\nE     \nE     Left contains one more item: {'id': 'idea-result', 'title': 'real offline result', 'status': 'COMPLETED', 'lifecycle_completed': True, ...}\nE     Use -v to get more diff\n_ test_warm_offline_cache_cannot_authorize_an_invalid_declaration[tuple-instead-of-list] _\ntests/test_declared_coverage_review.py:51: in test_warm_offline_cache_cannot_authorize_an_invalid_declaration\n    assert update_report(tmp_path, ideas, changed) == []\nE   AssertionError: assert [{'id': 'idea...': True, ...}] == []\nE     \nE     Left contains one more item: {'id': 'idea-result', 'title': 'real offline result', 'status': 'COMPLETED', 'lifecycle_completed': True, ...}\nE     Use -v to get more diff\n_____ test_harvest_columns_cannot_supply_missing_explicit_coverage_columns _____\ntests/test_declared_coverage_review.py:63: in test_harvest_columns_cannot_supply_missing_explicit_coverage_columns\n    assert update_report(tmp_path, ideas, cfg) == []\nE   AssertionError: assert [{'id': 'idea...': True, ...}] == []\nE     \nE     Left contains one more item: {'id': 'idea-result', 'title': 'real offline result', 'status': 'COMPLETED', 'lifecycle_completed': True, ...}\nE     Use -v to get more diff\n____ test_harvest_source_cannot_replace_the_declared_default_column_source _____\ntests/test_declared_coverage_review.py:81: in test_harvest_source_cannot_replace_the_declared_default_column_source\n    assert update_report(tmp_path, ideas, cfg) == []\nE   AssertionError: assert [{'id': 'idea...': True, ...}] == []\nE     \nE     Left contains one more item: {'id': 'idea-result', 'title': 'real offline result', 'status': 'COMPLETED', 'lifecycle_completed': True, ...}\nE     Use -v to get more diff\n_____ test_direct_qualifier_rejects_noniterable_columns_with_stable_reason _____\ntests/test_declared_coverage_review.py:91: in test_direct_qualifier_rejects_noniterable_columns_with_stable_reason\n    assert qualify_local_report_evidence(folder, cfg)[2:] == (None, INVALID)\nsrc/orze/reporting/evidence.py:347: in qualify_local_report_evidence\n    metrics, values, reason = load_local_report_evidence(idea_dir, report)\nsrc/orze/reporting/evidence.py:265: in load_local_report_evidence\n    for column in report_cfg.get(\"columns\") or []:\nE   TypeError: 'int' object is not iterable\n=========================== short test summary info ============================\nFAILED tests/test_declared_coverage_review.py::test_warm_offline_cache_cannot_authorize_an_invalid_declaration[explicit-null]\nFAILED tests/test_declared_coverage_review.py::test_warm_offline_cache_cannot_authorize_an_invalid_declaration[tuple-instead-of-list]\nFAILED tests/test_declared_coverage_review.py::test_harvest_columns_cannot_supply_missing_explicit_coverage_columns\nFAILED tests/test_declared_coverage_review.py::test_harvest_source_cannot_replace_the_declared_default_column_source\nFAILED tests/test_declared_coverage_review.py::test_direct_qualifier_rejects_noniterable_columns_with_stable_reason\n5 failed in 0.37s\n"
+      }
+    },
+    {
+      "purpose": "same source/test post-fingerprints and AST counts",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "python3 - <<'PY'\nimport ast,hashlib,json\nfrom pathlib import Path\npaths=['src/orze/reporting/evidence.py','src/orze/reporting/leaderboard.py','src/orze/engine/champion_history.py','src/orze/core/config.py','tests/test_declared_coverage_review.py','tests/test_declared_coverage_boundaries.py']\ntree=ast.parse(Path(paths[-2]).read_text())\nprint(json.dumps({'sha256':{p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths},'functions':sum(isinstance(n,ast.FunctionDef) and n.name.startswith('test_') for n in tree.body),'asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(tree))},sort_keys=True))\nPY",
+      "tool": "functions.exec -> tools.exec_command",
+      "result": {
+        "chunk_id": "9db19b",
+        "wall_time_seconds": 0.000004178,
+        "exit_code": 0,
+        "original_token_count": 170,
+        "output": "{\"asserts\": 14, \"functions\": 4, \"sha256\": {\"src/orze/core/config.py\": \"21861491bdbe353e2684c39bc0f923e9999801d5b6ed56e8ce1f289dca15b420\", \"src/orze/engine/champion_history.py\": \"77fc804b8217c7195c2a9ecee41c2937ce95cbe91e8b05c564db93a4266ced23\", \"src/orze/reporting/evidence.py\": \"2e5147daf97a201ff59b9def101de670654294e16a56f97bde5967028b6035d6\", \"src/orze/reporting/leaderboard.py\": \"268f089dd8d11d26ae94760e9da4a808e7e31c2b40ebd3f3a3716a0c9cc3d0ba\", \"tests/test_declared_coverage_boundaries.py\": \"2eb87bea2bca133ba604272a20b273f1546eca50dbb8b9a51c455bb3686f73e0\", \"tests/test_declared_coverage_review.py\": \"850c40dc0375ad70f5870c520d166f54a87cd87582ab621febdee9ff65fc547e\"}}\n"
+      }
+    }
+  ],
+  "failures": {
+    "count": 5,
+    "root_cause_classes": 3,
+    "api_absence_or_import_failures": 0,
+    "fixture_corrections": 0,
+    "groups": [
+      {
+        "name": "coverage identity aliases valid and invalid declarations",
+        "cases": 2,
+        "nodeids": [
+          "tests/test_declared_coverage_review.py::test_warm_offline_cache_cannot_authorize_an_invalid_declaration[explicit-null]",
+          "tests/test_declared_coverage_review.py::test_warm_offline_cache_cannot_authorize_an_invalid_declaration[tuple-instead-of-list]"
+        ],
+        "actual": "Each control first wrote a genuinely qualified offline report/cache. The direct qualifier rejected the subsequently invalid declaration, but update_report reused an eligible cached row. Missing versus explicit null used the same get() identity; JSON serialization also equated valid list and invalid tuple.",
+        "scope": "Actual live cache bypass reproduced. The analogous champion-history get() identity collision was read in source, not separately asserted by these tests."
+      },
+      {
+        "name": "presentation/harvest columns can replace qualification declarations",
+        "cases": 2,
+        "nodeids": [
+          "tests/test_declared_coverage_review.py::test_harvest_columns_cannot_supply_missing_explicit_coverage_columns",
+          "tests/test_declared_coverage_review.py::test_harvest_source_cannot_replace_the_declared_default_column_source"
+        ],
+        "actual": "Direct qualification of the original policy rejected the missing explicit column or missing actual metric. The real offline report instead qualified after replacing columns from metric_harvest, including an actual alternate source file.",
+        "scope": "Offline/legacy live reporting route only; the native-authority branch already passed the original policy."
+      },
+      {
+        "name": "declared column validation runs after unsafe iteration",
+        "cases": 1,
+        "nodeids": [
+          "tests/test_declared_coverage_review.py::test_direct_qualifier_rejects_noniterable_columns_with_stable_reason"
+        ],
+        "actual": "The real direct qualifier raised TypeError while iterating columns=1 before its declaration ValueError handling, instead of returning dataset_coverage_declaration_invalid."
+      }
+    ],
+    "interpretation": "These are three incomplete S3 candidate boundary classes with five counterexamples, not five independent historical defects. No whole-application baseline replay or scientific workflow ran."
+  },
+  "snapshots": [
+    {
+      "bytes": 32830,
+      "sha256": "2e5147daf97a201ff59b9def101de670654294e16a56f97bde5967028b6035d6",
+      "snapshot": "docs/evidence/snapshots/2026-09-12-s3-review-candidate-evidence.py",
+      "source": "src/orze/reporting/evidence.py",
+      "whole_file_byte_exact": true,
+      "origin": "complete actual candidate captured after the above failed epoch and before the owner was authorized to patch",
+      "baseline_commit": null
+    },
+    {
+      "bytes": 71613,
+      "sha256": "268f089dd8d11d26ae94760e9da4a808e7e31c2b40ebd3f3a3716a0c9cc3d0ba",
+      "snapshot": "docs/evidence/snapshots/2026-09-12-s3-review-candidate-leaderboard.py",
+      "source": "src/orze/reporting/leaderboard.py",
+      "whole_file_byte_exact": true,
+      "origin": "complete actual candidate captured after the above failed epoch and before the owner was authorized to patch",
+      "baseline_commit": null
+    },
+    {
+      "bytes": 4697,
+      "sha256": "77fc804b8217c7195c2a9ecee41c2937ce95cbe91e8b05c564db93a4266ced23",
+      "snapshot": "docs/evidence/snapshots/2026-09-12-s3-review-candidate-champion-history.py",
+      "source": "src/orze/engine/champion_history.py",
+      "whole_file_byte_exact": true,
+      "origin": "complete actual candidate captured after the above failed epoch and before the owner was authorized to patch",
+      "baseline_commit": null
+    },
+    {
+      "bytes": 61005,
+      "sha256": "21861491bdbe353e2684c39bc0f923e9999801d5b6ed56e8ce1f289dca15b420",
+      "snapshot": "docs/evidence/snapshots/2026-09-12-s3-review-candidate-config.py",
+      "source": "src/orze/core/config.py",
+      "whole_file_byte_exact": true,
+      "origin": "complete actual candidate captured after the above failed epoch and before the owner was authorized to patch",
+      "baseline_commit": null
+    }
+  ],
+  "snapshot_read_operations": [
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "sed -n '1,$p' src/orze/reporting/evidence.py",
+      "result_metadata": {
+        "chunk_id": "ef1340",
+        "wall_time_seconds": 0.000006403,
+        "exit_code": 0,
+        "original_token_count": 8208
+      },
+      "complete_stdout_preserved_at": "docs/evidence/snapshots/2026-09-12-s3-review-candidate-evidence.py"
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "sed -n '1,$p' src/orze/reporting/leaderboard.py",
+      "result_metadata": {
+        "chunk_id": "c26881",
+        "wall_time_seconds": 0.00000246,
+        "exit_code": 0,
+        "original_token_count": 17904
+      },
+      "complete_stdout_preserved_at": "docs/evidence/snapshots/2026-09-12-s3-review-candidate-leaderboard.py"
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "sed -n '1,$p' src/orze/engine/champion_history.py",
+      "result_metadata": {
+        "chunk_id": "ef915a",
+        "wall_time_seconds": 0.000002759,
+        "exit_code": 0,
+        "original_token_count": 1175
+      },
+      "complete_stdout_preserved_at": "docs/evidence/snapshots/2026-09-12-s3-review-candidate-champion-history.py"
+    },
+    {
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "sed -n '1,$p' src/orze/core/config.py",
+      "result_metadata": {
+        "chunk_id": "2b31d3",
+        "wall_time_seconds": 0.000002324,
+        "exit_code": 0,
+        "original_token_count": 15252
+      },
+      "complete_stdout_preserved_at": "docs/evidence/snapshots/2026-09-12-s3-review-candidate-config.py"
+    }
+  ],
+  "snapshot_validation": {
+    "chunk_id": "d338d0",
+    "wall_time_seconds": 0.000003731,
+    "exit_code": 0,
+    "original_token_count": 256,
+    "output": "[{\"bytes\": 32830, \"sha256\": \"2e5147daf97a201ff59b9def101de670654294e16a56f97bde5967028b6035d6\", \"snapshot\": \"docs/evidence/snapshots/2026-09-12-s3-review-candidate-evidence.py\", \"source\": \"src/orze/reporting/evidence.py\", \"whole_file_byte_exact\": true}, {\"bytes\": 71613, \"sha256\": \"268f089dd8d11d26ae94760e9da4a808e7e31c2b40ebd3f3a3716a0c9cc3d0ba\", \"snapshot\": \"docs/evidence/snapshots/2026-09-12-s3-review-candidate-leaderboard.py\", \"source\": \"src/orze/reporting/leaderboard.py\", \"whole_file_byte_exact\": true}, {\"bytes\": 4697, \"sha256\": \"77fc804b8217c7195c2a9ecee41c2937ce95cbe91e8b05c564db93a4266ced23\", \"snapshot\": \"docs/evidence/snapshots/2026-09-12-s3-review-candidate-champion-history.py\", \"source\": \"src/orze/engine/champion_history.py\", \"whole_file_byte_exact\": true}, {\"bytes\": 61005, \"sha256\": \"21861491bdbe353e2684c39bc0f923e9999801d5b6ed56e8ce1f289dca15b420\", \"snapshot\": \"docs/evidence/snapshots/2026-09-12-s3-review-candidate-config.py\", \"source\": \"src/orze/core/config.py\", \"whole_file_byte_exact\": true}]\n"
+  },
+  "safety": {
+    "own_new_test_only": true,
+    "production_changes_by_this_reviewer": false,
+    "old_tests_modified": false,
+    "execution": "Actual pytest execution with temporary result files, local report/cache writes and direct public helper calls.",
+    "mocks_of_core_qualification_or_cache": false,
+    "lake_or_worker_used": false,
+    "gpu_provider_network_or_host_scan": false,
+    "file_writes": "Only pytest tmp_path during tests; subsequently the expressly authorized four complete snapshots and this report."
+  },
+  "pending": "Fix owner must replay these same five frozen cases on its corrected source and run the broader declared-coverage controls; this report makes no passing-candidate or full-suite claim."
+}
