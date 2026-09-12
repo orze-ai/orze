@@ -1,0 +1,460 @@
+{
+  "schema": 1,
+  "title": "C3 isolated original runtime-bound diagnostic",
+  "status": "original behavior reproduced; no runtime-lease implementation or new protocol frozen",
+  "original_plan": "docs/plans/2026-09-10-autoresearch-v1.zh-CN.md",
+  "reopened_scope": "docs/plans/2026-09-12-v1-reopened.zh-CN.md",
+  "original_criterion": "Recovery includes runtime lease expiry and worker loss; declared execution bounds must not depend solely on a later caller poll.",
+  "observed_head": "e449bf89564f869ea38f85d8eec9b098cf624a0a",
+  "diagnostic_test": {
+    "path": "docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py",
+    "bytes": 7508,
+    "sha256": "af8a2a55d179296d4184ad23bad060ff162b819eaab6612c19385a2c7a0a1bcd",
+    "cases": 3,
+    "literal_asserts": 20,
+    "whole_original_test_preserved": true,
+    "outside_tests_directory": true,
+    "post_execution_edits": false,
+    "fixture": "tests/test_native_cpu_action.py::context",
+    "integration_scope": "Real native launch/harvest/stop, SQLite budget/claim/attempt/effect, sealed inputs and actual CPU supervisor; not a full CLI or Orze scheduler-loop acceptance."
+  },
+  "source_and_test_before": {
+    "docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py": {
+      "bytes": 7508,
+      "sha256": "af8a2a55d179296d4184ad23bad060ff162b819eaab6612c19385a2c7a0a1bcd"
+    },
+    "src/orze/core/cpu_action_budget.py": {
+      "bytes": 49307,
+      "sha256": "ab5e009a7bc20554ba4d47b6953b0d6b10da90217d415beecd9e287af0c10674"
+    },
+    "src/orze/engine/native_cpu_action.py": {
+      "bytes": 25470,
+      "sha256": "a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e"
+    },
+    "src/orze/engine/process_supervision.py": {
+      "bytes": 6956,
+      "sha256": "cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053"
+    },
+    "src/orze/engine/scheduler.py": {
+      "bytes": 26588,
+      "sha256": "fd7755b6b649e5adb8909816553120387e8ff9f110387d7898b6d33ea182a1d3"
+    },
+    "src/orze/engine/supervised_process.py": {
+      "bytes": 14984,
+      "sha256": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6"
+    },
+    "src/orze/engine/supervisor_worker.py": {
+      "bytes": 9755,
+      "sha256": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b"
+    },
+    "tests/test_native_cpu_action.py": {
+      "bytes": 10000,
+      "sha256": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b"
+    }
+  },
+  "source_and_test_after": {
+    "docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py": {
+      "bytes": 7508,
+      "sha256": "af8a2a55d179296d4184ad23bad060ff162b819eaab6612c19385a2c7a0a1bcd"
+    },
+    "src/orze/core/cpu_action_budget.py": {
+      "bytes": 49307,
+      "sha256": "ab5e009a7bc20554ba4d47b6953b0d6b10da90217d415beecd9e287af0c10674"
+    },
+    "src/orze/engine/native_cpu_action.py": {
+      "bytes": 25470,
+      "sha256": "a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e"
+    },
+    "src/orze/engine/process_supervision.py": {
+      "bytes": 6956,
+      "sha256": "cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053"
+    },
+    "src/orze/engine/scheduler.py": {
+      "bytes": 26588,
+      "sha256": "fd7755b6b649e5adb8909816553120387e8ff9f110387d7898b6d33ea182a1d3"
+    },
+    "src/orze/engine/supervised_process.py": {
+      "bytes": 14984,
+      "sha256": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6"
+    },
+    "src/orze/engine/supervisor_worker.py": {
+      "bytes": 9755,
+      "sha256": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b"
+    },
+    "tests/test_native_cpu_action.py": {
+      "bytes": 10000,
+      "sha256": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b"
+    }
+  },
+  "source_and_test_pre_post_exact": true,
+  "complete_original_source_refs": [
+    {
+      "baseline_commit": "69ff7babb57371632fb3048db781b24a3545548a",
+      "git_blob": "3940f8e758b8a0ac6c92bbc7a9494a79dc03c7e2",
+      "path": "src/orze/engine/native_cpu_action.py",
+      "sha256": "a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e",
+      "whole_file_byte_exact": true
+    },
+    {
+      "baseline_commit": "69ff7babb57371632fb3048db781b24a3545548a",
+      "git_blob": "fd27d3b308d6fc4fc05819c02dc0e1ec7f5d9769",
+      "path": "src/orze/engine/supervised_process.py",
+      "sha256": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+      "whole_file_byte_exact": true
+    },
+    {
+      "baseline_commit": "69ff7babb57371632fb3048db781b24a3545548a",
+      "git_blob": "5f2bbe5a393a125d9cabfb2f31fa15ca63389aeb",
+      "path": "src/orze/engine/supervisor_worker.py",
+      "sha256": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+      "whole_file_byte_exact": true
+    },
+    {
+      "baseline_commit": "69ff7babb57371632fb3048db781b24a3545548a",
+      "git_blob": "26e78f82e2e14493f94eb5391f8e9b3b84cb595b",
+      "path": "src/orze/engine/process_supervision.py",
+      "sha256": "cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053",
+      "whole_file_byte_exact": true
+    },
+    {
+      "baseline_commit": "69ff7babb57371632fb3048db781b24a3545548a",
+      "git_blob": "4c8db36c0f83e0759dceda4e9e5d1e7f7d540f7a",
+      "path": "src/orze/core/cpu_action_budget.py",
+      "sha256": "ab5e009a7bc20554ba4d47b6953b0d6b10da90217d415beecd9e287af0c10674",
+      "whole_file_byte_exact": true
+    },
+    {
+      "baseline_commit": "69ff7babb57371632fb3048db781b24a3545548a",
+      "git_blob": "ab717b0c72a8ac55a0f66e9a85339a9863cf1010",
+      "path": "src/orze/engine/scheduler.py",
+      "sha256": "fd7755b6b649e5adb8909816553120387e8ff9f110387d7898b6d33ea182a1d3",
+      "whole_file_byte_exact": true
+    },
+    {
+      "baseline_commit": "69ff7babb57371632fb3048db781b24a3545548a",
+      "git_blob": "61d88f2040190f799f9a0104294d47943bcf4f04",
+      "path": "tests/test_native_cpu_action.py",
+      "sha256": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b",
+      "whole_file_byte_exact": true
+    }
+  ],
+  "executions": [
+    {
+      "purpose": "pre-execution source/test hashes and AST counts",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "python3 - <<'PY'\nimport ast,hashlib,json,subprocess\nfrom pathlib import Path\npaths=[\"src/orze/engine/native_cpu_action.py\",\"src/orze/engine/supervised_process.py\",\"src/orze/engine/supervisor_worker.py\",\"src/orze/engine/process_supervision.py\",\"src/orze/core/cpu_action_budget.py\",\"src/orze/engine/scheduler.py\",\"tests/test_native_cpu_action.py\",\"docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py\"]\nt=ast.parse(Path(paths[-1]).read_text())\nprint(json.dumps({'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'files':{p:{'sha256':hashlib.sha256(Path(p).read_bytes()).hexdigest(),'bytes':Path(p).stat().st_size} for p in paths},'cases':sum(isinstance(n,ast.FunctionDef) and n.name.startswith('test_') for n in t.body),'literal_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(t))},sort_keys=True))\nPY",
+      "result": {
+        "chunk_id": "c8c6a9",
+        "wall_time_seconds": 0.000003451,
+        "exit_code": 0,
+        "original_token_count": 302,
+        "output": "{\"cases\": 3, \"files\": {\"docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py\": {\"bytes\": 7508, \"sha256\": \"af8a2a55d179296d4184ad23bad060ff162b819eaab6612c19385a2c7a0a1bcd\"}, \"src/orze/core/cpu_action_budget.py\": {\"bytes\": 49307, \"sha256\": \"ab5e009a7bc20554ba4d47b6953b0d6b10da90217d415beecd9e287af0c10674\"}, \"src/orze/engine/native_cpu_action.py\": {\"bytes\": 25470, \"sha256\": \"a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e\"}, \"src/orze/engine/process_supervision.py\": {\"bytes\": 6956, \"sha256\": \"cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053\"}, \"src/orze/engine/scheduler.py\": {\"bytes\": 26588, \"sha256\": \"fd7755b6b649e5adb8909816553120387e8ff9f110387d7898b6d33ea182a1d3\"}, \"src/orze/engine/supervised_process.py\": {\"bytes\": 14984, \"sha256\": \"ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6\"}, \"src/orze/engine/supervisor_worker.py\": {\"bytes\": 9755, \"sha256\": \"6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b\"}, \"tests/test_native_cpu_action.py\": {\"bytes\": 10000, \"sha256\": \"93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b\"}}, \"head\": \"e449bf89564f869ea38f85d8eec9b098cf624a0a\", \"literal_asserts\": 20}\n"
+      }
+    },
+    {
+      "purpose": "unique task-owned temporary directory",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "mktemp -d /tmp/orze-c3-runtime-lease.XXXXXX",
+      "result": {
+        "chunk_id": "60946f",
+        "wall_time_seconds": 0.000004078,
+        "exit_code": 0,
+        "original_token_count": 9,
+        "output": "/tmp/orze-c3-runtime-lease.aFdVn8\n"
+      }
+    },
+    {
+      "purpose": "actual isolated three-case diagnostic",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:tests CUDA_VISIBLE_DEVICES= python3 -m pytest -q -s -p no:cacheprovider docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py --tb=short --basetemp=/tmp/orze-c3-runtime-lease.aFdVn8/pytest --junitxml=/tmp/orze-c3-runtime-lease.aFdVn8/junit.xml",
+      "chunks": [
+        {
+          "chunk_id": "1befc2",
+          "wall_time_seconds": 1.000868675,
+          "session_id": 24392,
+          "original_token_count": 0,
+          "output": ""
+        },
+        {
+          "chunk_id": "f90694",
+          "wall_time_seconds": 2.433717581,
+          "exit_code": 1,
+          "original_token_count": 1199,
+          "output": "{\"case\": \"normal_control\", \"worker\": {\"pid\": 2753674, \"started\": 10641401.028885448, \"finished\": 10641401.084707404}, \"started_at\": 10641401.006096916, \"deadline\": 10641403.006096916, \"terminal\": {\"outcome\": \"completed\", \"reason_code\": \"cpu_action_completed\", \"return_code\": 0, \"process_tree\": {\"binding\": {\"command_sha256\": \"c8da167d346be63ff72b1b6708a2690f128b99c5e72e857e228173a41e4f4db5\", \"identity\": {\"attempt_ref\": {\"attempt_id\": \"d0d8cbe9ffcf7d0f7daa90887c235778\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-cpu\"}, \"scope\": \"/tmp/orze-c3-runtime-lease.aFdVn8/pytest/test_normal_completion_before_0/results/idea-cpu\"}, \"nonce_sha256\": \"73eac9f5e841d2570b1b6982174fa4efc7863362e22fce181f3b82ee69adeba0\", \"protocol\": \"orze.linux_subreaper.v1\", \"schema\": 1, \"supervisor\": {\"pid\": 2753673, \"start_ticks\": 1064140089}, \"worker\": {\"pid\": 2753674, \"start_ticks\": 1064140092}}, \"event\": \"TREE_CLOSED\", \"forced_cleanup\": false, \"reaped_children\": 1, \"schema\": 1, \"stop_requested\": false, \"wait_proof\": \"ECHILD_WALL\", \"worker_returncode\": 0}, \"artifact_ids\": [], \"observation_ids\": [], \"lifecycle_phase\": \"action\", \"elapsed_wall_seconds\": 0.09801796823740005, \"lifecycle\": {\"legacy_status\": \"completed\", \"global_state\": \"COMPLETE\", \"global_transition_id\": 4, \"phase_state\": \"COMPLETE\", \"phase_transition_id\": 3}, \"effect_receipt_sha256\": \"c8e484375f63a5e4dc919e5b3b04952695551d29c5695ac4f88fa37174da13ba\"}}\n.{\"cleanup\": \"explicit_owned_stop_after_case\", \"supervisor_returncode\": 0, \"worker_pidfd_exited\": true}\n{\"case\": \"over_deadline_natural_zero\", \"worker\": {\"pid\": 2753714, \"started\": 10641401.986192385, \"finished\": 10641404.317029072}, \"started_at\": 10641401.963555736, \"deadline\": 10641403.963555736, \"terminal\": {\"outcome\": \"completed\", \"reason_code\": \"cpu_action_completed\", \"return_code\": 0, \"process_tree\": {\"binding\": {\"command_sha256\": \"c8da167d346be63ff72b1b6708a2690f128b99c5e72e857e228173a41e4f4db5\", \"identity\": {\"attempt_ref\": {\"attempt_id\": \"c49c60a17631b08c0d2635e54734a934\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-cpu\"}, \"scope\": \"/tmp/orze-c3-runtime-lease.aFdVn8/pytest/test_over_deadline_natural_zer0/results/idea-cpu\"}, \"nonce_sha256\": \"5530babe3efd71ee1c3c5db4c283f90ec7dc80e275f3bd0cc315c2a168a78742\", \"protocol\": \"orze.linux_subreaper.v1\", \"schema\": 1, \"supervisor\": {\"pid\": 2753712, \"start_ticks\": 1064140186}, \"worker\": {\"pid\": 2753714, \"start_ticks\": 1064140189}}, \"event\": \"TREE_CLOSED\", \"forced_cleanup\": false, \"reaped_children\": 1, \"schema\": 1, \"stop_requested\": false, \"wait_proof\": \"ECHILD_WALL\", \"worker_returncode\": 0}, \"artifact_ids\": [], \"observation_ids\": [], \"lifecycle_phase\": \"action\", \"elapsed_wall_seconds\": 2.373913958668709, \"lifecycle\": {\"legacy_status\": \"completed\", \"global_state\": \"COMPLETE\", \"global_transition_id\": 4, \"phase_state\": \"COMPLETE\", \"phase_transition_id\": 3}, \"effect_receipt_sha256\": \"987b55b14dd9f54fb86edf17ac639dfeb063efc46dd4ccab550a69a74b1e2cbe\"}}\nF{\"cleanup\": \"explicit_owned_stop_after_case\", \"supervisor_returncode\": 0, \"worker_pidfd_exited\": true}\n{\"case\": \"no_parent_poll\", \"deadline\": 10641407.253797596, \"observed_at\": 10641408.256024016, \"worker_pidfd_exited\": false, \"owner_channel_open\": true, \"supervisor_pidfd_exited\": false, \"state_before_fixture_stop\": \"RUNNING\"}\nF{\"cleanup\": \"explicit_owned_stop_after_case\", \"supervisor_returncode\": 0, \"worker_pidfd_exited\": true}\n\n=================================== FAILURES ===================================\n_______ test_over_deadline_natural_zero_cannot_be_published_as_completed _______\ndocs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py:144: in test_over_deadline_natural_zero_cannot_be_published_as_completed\n    assert terminal[\"outcome\"] != \"completed\", \"actual work exceeded its captured bound before natural exit\"\nE   AssertionError: actual work exceeded its captured bound before natural exit\nE   assert 'completed' != 'completed'\n_ test_supervisor_enforces_deadline_while_parent_keeps_channel_without_polling _\ndocs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py:161: in test_supervisor_enforces_deadline_while_parent_keeps_channel_without_polling\n    assert worker_exited, \"captured worker remained alive after its runtime bound plus one-second cleanup allowance\"\nE   AssertionError: captured worker remained alive after its runtime bound plus one-second cleanup allowance\nE   assert False\n=========================== short test summary info ============================\nFAILED docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py::test_over_deadline_natural_zero_cannot_be_published_as_completed\nFAILED docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py::test_supervisor_enforces_deadline_while_parent_keeps_channel_without_polling\n2 failed, 1 passed in 8.40s\n"
+        }
+      ]
+    },
+    {
+      "purpose": "post-execution source/test hashes and counts",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "python3 - <<'PY'\nimport ast,hashlib,json,subprocess\nfrom pathlib import Path\npaths=[\"src/orze/engine/native_cpu_action.py\",\"src/orze/engine/supervised_process.py\",\"src/orze/engine/supervisor_worker.py\",\"src/orze/engine/process_supervision.py\",\"src/orze/core/cpu_action_budget.py\",\"src/orze/engine/scheduler.py\",\"tests/test_native_cpu_action.py\",\"docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py\"]\nt=ast.parse(Path(paths[-1]).read_text())\nprint(json.dumps({'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'files':{p:{'sha256':hashlib.sha256(Path(p).read_bytes()).hexdigest(),'bytes':Path(p).stat().st_size} for p in paths},'cases':sum(isinstance(n,ast.FunctionDef) and n.name.startswith('test_') for n in t.body),'literal_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(t))},sort_keys=True))\nPY",
+      "result": {
+        "chunk_id": "339db5",
+        "wall_time_seconds": 0.000003881,
+        "exit_code": 0,
+        "original_token_count": 302,
+        "output": "{\"cases\": 3, \"files\": {\"docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py\": {\"bytes\": 7508, \"sha256\": \"af8a2a55d179296d4184ad23bad060ff162b819eaab6612c19385a2c7a0a1bcd\"}, \"src/orze/core/cpu_action_budget.py\": {\"bytes\": 49307, \"sha256\": \"ab5e009a7bc20554ba4d47b6953b0d6b10da90217d415beecd9e287af0c10674\"}, \"src/orze/engine/native_cpu_action.py\": {\"bytes\": 25470, \"sha256\": \"a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e\"}, \"src/orze/engine/process_supervision.py\": {\"bytes\": 6956, \"sha256\": \"cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053\"}, \"src/orze/engine/scheduler.py\": {\"bytes\": 26588, \"sha256\": \"fd7755b6b649e5adb8909816553120387e8ff9f110387d7898b6d33ea182a1d3\"}, \"src/orze/engine/supervised_process.py\": {\"bytes\": 14984, \"sha256\": \"ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6\"}, \"src/orze/engine/supervisor_worker.py\": {\"bytes\": 9755, \"sha256\": \"6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b\"}, \"tests/test_native_cpu_action.py\": {\"bytes\": 10000, \"sha256\": \"93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b\"}}, \"head\": \"e449bf89564f869ea38f85d8eec9b098cf624a0a\", \"literal_asserts\": 20}\n"
+      }
+    },
+    {
+      "purpose": "whole baseline Git byte equality and actual JUnit crosscheck",
+      "cwd": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze",
+      "command": "python3 - <<'PY'\nimport hashlib,json,subprocess,xml.etree.ElementTree as ET\nfrom pathlib import Path\nbaseline='69ff7babb57371632fb3048db781b24a3545548a'\npaths=['src/orze/engine/native_cpu_action.py','src/orze/engine/supervised_process.py','src/orze/engine/supervisor_worker.py','src/orze/engine/process_supervision.py','src/orze/core/cpu_action_budget.py','src/orze/engine/scheduler.py','tests/test_native_cpu_action.py']\nrefs=[]\nfor p in paths:\n    data=subprocess.check_output(['git','show',baseline+':'+p])\n    assert data==Path(p).read_bytes()\n    refs.append({'path':p,'baseline_commit':baseline,'git_blob':subprocess.check_output(['git','rev-parse',baseline+':'+p],text=True).strip(),'sha256':hashlib.sha256(data).hexdigest(),'whole_file_byte_exact':True})\np=Path('/tmp/orze-c3-runtime-lease.aFdVn8/junit.xml')\nroot=ET.fromstring(p.read_bytes())\ncases=root.findall('.//testcase')\nassert len(cases)==3\nassert sum(c.find('failure') is not None for c in cases)==2\nassert not root.findall('.//error')\nprint(json.dumps({'source_baseline_refs':refs,'junit':{'path':str(p),'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'bytes':p.stat().st_size,'cases':len(cases),'failures':2,'errors':0,'passed':1}},sort_keys=True))\nPY",
+      "result": {
+        "chunk_id": "d4601c",
+        "wall_time_seconds": 0.000003379,
+        "exit_code": 0,
+        "original_token_count": 544,
+        "output": "{\"junit\": {\"bytes\": 1857, \"cases\": 3, \"errors\": 0, \"failures\": 2, \"passed\": 1, \"path\": \"/tmp/orze-c3-runtime-lease.aFdVn8/junit.xml\", \"sha256\": \"a09f54ef51d5ea30a63f94685258817e10f7600f9faf2f930adb87ec4d9c2be6\"}, \"source_baseline_refs\": [{\"baseline_commit\": \"69ff7babb57371632fb3048db781b24a3545548a\", \"git_blob\": \"3940f8e758b8a0ac6c92bbc7a9494a79dc03c7e2\", \"path\": \"src/orze/engine/native_cpu_action.py\", \"sha256\": \"a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e\", \"whole_file_byte_exact\": true}, {\"baseline_commit\": \"69ff7babb57371632fb3048db781b24a3545548a\", \"git_blob\": \"fd27d3b308d6fc4fc05819c02dc0e1ec7f5d9769\", \"path\": \"src/orze/engine/supervised_process.py\", \"sha256\": \"ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6\", \"whole_file_byte_exact\": true}, {\"baseline_commit\": \"69ff7babb57371632fb3048db781b24a3545548a\", \"git_blob\": \"5f2bbe5a393a125d9cabfb2f31fa15ca63389aeb\", \"path\": \"src/orze/engine/supervisor_worker.py\", \"sha256\": \"6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b\", \"whole_file_byte_exact\": true}, {\"baseline_commit\": \"69ff7babb57371632fb3048db781b24a3545548a\", \"git_blob\": \"26e78f82e2e14493f94eb5391f8e9b3b84cb595b\", \"path\": \"src/orze/engine/process_supervision.py\", \"sha256\": \"cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053\", \"whole_file_byte_exact\": true}, {\"baseline_commit\": \"69ff7babb57371632fb3048db781b24a3545548a\", \"git_blob\": \"4c8db36c0f83e0759dceda4e9e5d1e7f7d540f7a\", \"path\": \"src/orze/core/cpu_action_budget.py\", \"sha256\": \"ab5e009a7bc20554ba4d47b6953b0d6b10da90217d415beecd9e287af0c10674\", \"whole_file_byte_exact\": true}, {\"baseline_commit\": \"69ff7babb57371632fb3048db781b24a3545548a\", \"git_blob\": \"ab717b0c72a8ac55a0f66e9a85339a9863cf1010\", \"path\": \"src/orze/engine/scheduler.py\", \"sha256\": \"fd7755b6b649e5adb8909816553120387e8ff9f110387d7898b6d33ea182a1d3\", \"whole_file_byte_exact\": true}, {\"baseline_commit\": \"69ff7babb57371632fb3048db781b24a3545548a\", \"git_blob\": \"61d88f2040190f799f9a0104294d47943bcf4f04\", \"path\": \"tests/test_native_cpu_action.py\", \"sha256\": \"93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b\", \"whole_file_byte_exact\": true}]}\n"
+      }
+    }
+  ],
+  "result": {
+    "exit_code": 1,
+    "failed": 2,
+    "passed": 1,
+    "errors": 0,
+    "pytest_seconds": 8.4
+  },
+  "observations": {
+    "actual_emitted_events": [
+      {
+        "case": "normal_control",
+        "worker": {
+          "pid": 2753674,
+          "started": 10641401.028885448,
+          "finished": 10641401.084707404
+        },
+        "started_at": 10641401.006096916,
+        "deadline": 10641403.006096916,
+        "terminal": {
+          "outcome": "completed",
+          "reason_code": "cpu_action_completed",
+          "return_code": 0,
+          "process_tree": {
+            "binding": {
+              "command_sha256": "c8da167d346be63ff72b1b6708a2690f128b99c5e72e857e228173a41e4f4db5",
+              "identity": {
+                "attempt_ref": {
+                  "attempt_id": "d0d8cbe9ffcf7d0f7daa90887c235778",
+                  "generation": 1,
+                  "phase": "action",
+                  "task_id": "idea-cpu"
+                },
+                "scope": "/tmp/orze-c3-runtime-lease.aFdVn8/pytest/test_normal_completion_before_0/results/idea-cpu"
+              },
+              "nonce_sha256": "73eac9f5e841d2570b1b6982174fa4efc7863362e22fce181f3b82ee69adeba0",
+              "protocol": "orze.linux_subreaper.v1",
+              "schema": 1,
+              "supervisor": {
+                "pid": 2753673,
+                "start_ticks": 1064140089
+              },
+              "worker": {
+                "pid": 2753674,
+                "start_ticks": 1064140092
+              }
+            },
+            "event": "TREE_CLOSED",
+            "forced_cleanup": false,
+            "reaped_children": 1,
+            "schema": 1,
+            "stop_requested": false,
+            "wait_proof": "ECHILD_WALL",
+            "worker_returncode": 0
+          },
+          "artifact_ids": [],
+          "observation_ids": [],
+          "lifecycle_phase": "action",
+          "elapsed_wall_seconds": 0.09801796823740005,
+          "lifecycle": {
+            "legacy_status": "completed",
+            "global_state": "COMPLETE",
+            "global_transition_id": 4,
+            "phase_state": "COMPLETE",
+            "phase_transition_id": 3
+          },
+          "effect_receipt_sha256": "c8e484375f63a5e4dc919e5b3b04952695551d29c5695ac4f88fa37174da13ba"
+        }
+      },
+      {
+        "cleanup": "explicit_owned_stop_after_case",
+        "supervisor_returncode": 0,
+        "worker_pidfd_exited": true
+      },
+      {
+        "case": "over_deadline_natural_zero",
+        "worker": {
+          "pid": 2753714,
+          "started": 10641401.986192385,
+          "finished": 10641404.317029072
+        },
+        "started_at": 10641401.963555736,
+        "deadline": 10641403.963555736,
+        "terminal": {
+          "outcome": "completed",
+          "reason_code": "cpu_action_completed",
+          "return_code": 0,
+          "process_tree": {
+            "binding": {
+              "command_sha256": "c8da167d346be63ff72b1b6708a2690f128b99c5e72e857e228173a41e4f4db5",
+              "identity": {
+                "attempt_ref": {
+                  "attempt_id": "c49c60a17631b08c0d2635e54734a934",
+                  "generation": 1,
+                  "phase": "action",
+                  "task_id": "idea-cpu"
+                },
+                "scope": "/tmp/orze-c3-runtime-lease.aFdVn8/pytest/test_over_deadline_natural_zer0/results/idea-cpu"
+              },
+              "nonce_sha256": "5530babe3efd71ee1c3c5db4c283f90ec7dc80e275f3bd0cc315c2a168a78742",
+              "protocol": "orze.linux_subreaper.v1",
+              "schema": 1,
+              "supervisor": {
+                "pid": 2753712,
+                "start_ticks": 1064140186
+              },
+              "worker": {
+                "pid": 2753714,
+                "start_ticks": 1064140189
+              }
+            },
+            "event": "TREE_CLOSED",
+            "forced_cleanup": false,
+            "reaped_children": 1,
+            "schema": 1,
+            "stop_requested": false,
+            "wait_proof": "ECHILD_WALL",
+            "worker_returncode": 0
+          },
+          "artifact_ids": [],
+          "observation_ids": [],
+          "lifecycle_phase": "action",
+          "elapsed_wall_seconds": 2.373913958668709,
+          "lifecycle": {
+            "legacy_status": "completed",
+            "global_state": "COMPLETE",
+            "global_transition_id": 4,
+            "phase_state": "COMPLETE",
+            "phase_transition_id": 3
+          },
+          "effect_receipt_sha256": "987b55b14dd9f54fb86edf17ac639dfeb063efc46dd4ccab550a69a74b1e2cbe"
+        }
+      },
+      {
+        "cleanup": "explicit_owned_stop_after_case",
+        "supervisor_returncode": 0,
+        "worker_pidfd_exited": true
+      },
+      {
+        "case": "no_parent_poll",
+        "deadline": 10641407.253797596,
+        "observed_at": 10641408.256024016,
+        "worker_pidfd_exited": false,
+        "owner_channel_open": true,
+        "supervisor_pidfd_exited": false,
+        "state_before_fixture_stop": "RUNNING"
+      },
+      {
+        "cleanup": "explicit_owned_stop_after_case",
+        "supervisor_returncode": 0,
+        "worker_pidfd_exited": true
+      }
+    ],
+    "normal_control": {
+      "declared_timeout_seconds": 2,
+      "worker_finished_before_deadline": true,
+      "outcome": "completed",
+      "return_code": 0,
+      "real_tree_proof": "ECHILD_WALL",
+      "elapsed_wall_seconds": 0.09801796823740005
+    },
+    "late_natural_completion": {
+      "declared_timeout_seconds": 2,
+      "worker_finished_after_deadline_seconds": 0.35347333550453186,
+      "actual_returned_outcome": "completed",
+      "actual_return_code": 0,
+      "actual_terminal_elapsed_wall_seconds": 2.373913958668709,
+      "actual_tree_stop_requested": false,
+      "actual_lifecycle": {
+        "legacy_status": "completed",
+        "global_state": "COMPLETE",
+        "global_transition_id": 4,
+        "phase_state": "COMPLETE",
+        "phase_transition_id": 3
+      },
+      "interpretation": "The worker itself ran beyond the real captured deadline, then exited naturally with zero. The parent had not polled/harvested. Actual TREE_CLOSED, terminal publication and completed lifecycle were accepted when harvest finally ran. This is not an in-time completion consumed late."
+    },
+    "no_parent_poll": {
+      "observed_after_deadline_seconds": 1.0022264197468758,
+      "worker_pidfd_exited": false,
+      "supervisor_pidfd_exited": false,
+      "owner_channel_open": true,
+      "state_before_fixture_cleanup": "RUNNING",
+      "interpretation": "After the two-second runtime bound plus one-second diagnostic cleanup allowance, both captured processes remained alive and the attempt remained RUNNING while the owning parent retained the channel but did not poll. No autonomous timeout STOP was observed."
+    }
+  },
+  "classification": {
+    "kind": "actual existing behavior counterexamples to the reopened runtime-bound requirement",
+    "missing_api_or_import_failures": 0,
+    "fixture_failures": 0,
+    "post_result_expectation_changes": 0,
+    "not_claimed": [
+      "No claim that an action which genuinely completed within its execution bound must be rejected merely because harvest is delayed.",
+      "A future strict publication deadline would be an explicit new mechanism choice, not a literal requirement inferred from the original sentence.",
+      "No standalone distributed lease, renewal schema, new configuration or recovery adoption policy is designed or approved by this diagnostic.",
+      "One-second allowance is a bounded diagnostic observation window, not a newly promised product cleanup SLA.",
+      "Worker-written monotonic diagnostic timestamps are controlled fixture observations, not product-authoritative runtime evidence."
+    ]
+  },
+  "safety": {
+    "production_files_changed": false,
+    "old_tests_changed": false,
+    "new_tests_directory_files_created": false,
+    "test_root": "/tmp/orze-c3-runtime-lease.aFdVn8",
+    "real_workers": 3,
+    "authority_or_closure_mocked": false,
+    "borrowed_fixture_seam": "The existing fixture wraps actual prepare_supervised only to retain returned handles for cleanup. This diagnostic does not replace admission, budget, attempt, supervisor or closure implementations.",
+    "admission": "An explicit required callback invokes real budget.require_permit and require_no_unconfirmed_stop; this is native integration coverage, not a substituted Orze controller lifecycle.",
+    "ownership": "Immediately capture the actual worker pidfd and duplicate the supervisor's already-owned pidfd, verify the worker birth binding and actual parent, and retain these handles.",
+    "cleanup": "Invoke native.stop on only the captured handle in finally. It is a cached no-op for already-closed normal cases; the still-running case receives explicit cleanup STOP. Only a birth-verified captured worker pidfd can receive the bounded SIGKILL fallback.",
+    "actual_cleanup_events": [
+      {
+        "cleanup": "explicit_owned_stop_after_case",
+        "supervisor_returncode": 0,
+        "worker_pidfd_exited": true
+      },
+      {
+        "cleanup": "explicit_owned_stop_after_case",
+        "supervisor_returncode": 0,
+        "worker_pidfd_exited": true
+      },
+      {
+        "cleanup": "explicit_owned_stop_after_case",
+        "supervisor_returncode": 0,
+        "worker_pidfd_exited": true
+      }
+    ],
+    "actual_cleanup_conclusion": "All three captured supervisor Popen objects returned zero and every captured worker pidfd showed exit. This cleanup is not evidence of autonomous lease expiry.",
+    "gpu_provider_network_or_host_process_scan": false,
+    "raw_pid_signals": false
+  },
+  "junit": {
+    "bytes": 1857,
+    "cases": 3,
+    "errors": 0,
+    "failures": 2,
+    "passed": 1,
+    "path": "/tmp/orze-c3-runtime-lease.aFdVn8/junit.xml",
+    "sha256": "a09f54ef51d5ea30a63f94685258817e10f7600f9faf2f930adb87ec4d9c2be6",
+    "full_xml": "<?xml version=\"1.0\" encoding=\"utf-8\"?><testsuites name=\"pytest tests\"><testsuite name=\"pytest\" errors=\"0\" failures=\"2\" skipped=\"0\" tests=\"3\" time=\"8.402\" timestamp=\"2026-09-12T00:47:35.211798+00:00\" hostname=\"a100-41\"><testcase classname=\"docs.evidence.snapshots.2026-09-12-runtime-lease-original-gap-test\" name=\"test_normal_completion_before_deadline_is_a_positive_control\" time=\"0.983\" /><testcase classname=\"docs.evidence.snapshots.2026-09-12-runtime-lease-original-gap-test\" name=\"test_over_deadline_natural_zero_cannot_be_published_as_completed\" time=\"3.209\"><failure message=\"AssertionError: actual work exceeded its captured bound before natural exit&#10;assert 'completed' != 'completed'\">docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py:144: in test_over_deadline_natural_zero_cannot_be_published_as_completed\n    assert terminal[\"outcome\"] != \"completed\", \"actual work exceeded its captured bound before natural exit\"\nE   AssertionError: actual work exceeded its captured bound before natural exit\nE   assert 'completed' != 'completed'</failure></testcase><testcase classname=\"docs.evidence.snapshots.2026-09-12-runtime-lease-original-gap-test\" name=\"test_supervisor_enforces_deadline_while_parent_keeps_channel_without_polling\" time=\"4.003\"><failure message=\"AssertionError: captured worker remained alive after its runtime bound plus one-second cleanup allowance&#10;assert False\">docs/evidence/snapshots/2026-09-12-runtime-lease-original-gap-test.py:161: in test_supervisor_enforces_deadline_while_parent_keeps_channel_without_polling\n    assert worker_exited, \"captured worker remained alive after its runtime bound plus one-second cleanup allowance\"\nE   AssertionError: captured worker remained alive after its runtime bound plus one-second cleanup allowance\nE   assert False</failure></testcase></testsuite></testsuites>",
+    "read_command": "sed -n '1,$p' /tmp/orze-c3-runtime-lease.aFdVn8/junit.xml",
+    "read_tool_metadata": {
+      "chunk_id": "186007",
+      "wall_time_seconds": 0.00000309,
+      "exit_code": 0,
+      "original_token_count": 465
+    }
+  },
+  "next_step": "Parent-owned C3 design/implementation remains separate. The diagnostic and original-source references are frozen; S3 full-suite collection was not modified."
+}
