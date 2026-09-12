@@ -1,0 +1,336 @@
+{
+  "schema": 1,
+  "slice": "C3 runtime lease",
+  "role": "author of cpu_action_budget v2/F adapter and tests/test_runtime_lease_recovery.py; not an independent review of own implementation",
+  "baseline_core": "5f9637e58615d57b0e2668372082f203785150c5",
+  "scope": {
+    "production": [
+      "src/orze/core/cpu_action_budget.py"
+    ],
+    "tests": [
+      "tests/test_runtime_lease_recovery.py"
+    ],
+    "contract": "docs/plans/2026-09-12-c3-runtime-lease.zh-CN.md",
+    "changes": [
+      "One private historical v2 provenance validator reused by explicit settlement and F; old v1 checks remain on their original branch.",
+      "READY exact8/schema2, descriptor equality, CLOSED exact10/schema2, typed expiry/sample, original fullRef/effect receipt/closure validation.",
+      "v2 terminal exact11 fields, action phase and finite nonnegative elapsed; sample is not before closure; descriptor interval cannot exceed original timeout's exact float-floor nanoseconds.",
+      "Expired terminal requires interrupted/cpu_runtime_lease_expired and empty artifact/observation lists; a naturally closed unexpired tree followed by expired interpretation remains valid.",
+      "Explicit v2 settlement checks the exact prepared plan; new lease NOT_STARTED is refused. Genuine old v1 no-exec explicit settlement remains supported.",
+      "Historical recovery does not read current clock/boot, rebuild Owner, issue GO, rerun Domain, reset budget, refund wall charges or add a namespace/table."
+    ],
+    "unchanged": "All 37 other old function/class ASTs and existing SQL/index schemas are unchanged. F retains its existing source, lifecycle, artifact, observation, same-writer/fresh-read and no-age guard checks."
+  },
+  "classification": {
+    "new_cases": 36,
+    "synthetic_metadata_cases": 31,
+    "genuine_no_exec_cases": 2,
+    "real_fresh_cli_cases": 3,
+    "old_selected_cases": 26,
+    "target_total": 62,
+    "candidate_defects": [
+      {
+        "name": "Decimal spelling versus exact binary float envelope floor",
+        "actual_first_red": "096105",
+        "status": "fixed",
+        "scope": "One pure metadata case, not a running process or pre-C3 historical product red",
+        "example": ".3 seconds is exactly just below 300000000 ns; capture floors to 299999999, but first draft recovery accepted 300000000."
+      }
+    ],
+    "initial_new_fixture": "Complete first35 file a49b50fd was preserved before appending the one envelope regression. It was not run as a whole before append. All original10 function ASTs including all original25 Assert nodes remain unchanged. No fixture correction was required in this author's 36-case group.",
+    "warning": "The existing recovery helper is imported before pytest plugin rewriting, producing one PytestAssertRewriteWarning. Tests and execution still ran; this is not a product failure.",
+    "old_product_reds": 0
+  },
+  "runs": [
+    {
+      "classification": "new candidate pure metadata failure",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_runtime_lease_recovery.py -k historical_envelope --tb=short -rs",
+      "source_sha256": "74bdf73c7dcd46b79476e1a9d23031f585576696208aface982a41c363f278ff",
+      "result": {
+        "chunk_id": "096105",
+        "wall_time_seconds": 0.401404104,
+        "exit_code": 1,
+        "original_token_count": 251,
+        "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n__ test_historical_envelope_uses_the_same_exact_float_floor_as_lease_capture ___\ntests/test_runtime_lease_recovery.py:123: in test_historical_envelope_uses_the_same_exact_float_floor_as_lease_capture\n    with pytest.raises(budget.CpuBudgetHOLD, match=\"runtime_lease_exceeds_envelope\"):\nE   Failed: DID NOT RAISE CpuBudgetHOLD\n=============================== warnings summary ===============================\n../../../../../../home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885\n  /home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; cpu_terminal_recovery_helpers\n    self.import_plugin(import_spec)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 failed, 35 deselected, 1 warning in 0.25s\n"
+      }
+    },
+    {
+      "classification": "same pure case fixed",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_runtime_lease_recovery.py -k historical_envelope --tb=short -rs",
+      "source_sha256": "42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259",
+      "result": {
+        "chunk_id": "533018",
+        "wall_time_seconds": 0.383370585,
+        "exit_code": 0,
+        "original_token_count": 149,
+        "output": ".                                                                        [100%]\n=============================== warnings summary ===============================\n../../../../../../home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885\n  /home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; cpu_terminal_recovery_helpers\n    self.import_plugin(import_spec)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 35 deselected, 1 warning in 0.23s\n"
+      }
+    },
+    {
+      "classification": "complete first-candidate budget module replay, same business failure",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 - <<'PY'\nimport hashlib, pathlib, sys, types\nimport orze.core as package\nsource=pathlib.Path('docs/evidence/snapshots/2026-09-12-c3-before-lease-envelope-budget.py')\nraw=source.read_bytes()\nassert hashlib.sha256(raw).hexdigest()=='74bdf73c7dcd46b79476e1a9d23031f585576696208aface982a41c363f278ff'\nmodule=types.ModuleType('orze.core.cpu_action_budget')\nmodule.__file__=str(source.resolve()); module.__package__='orze.core'\nsys.modules[module.__name__]=module; package.cpu_action_budget=module\nexec(compile(raw,str(source),'exec'),module.__dict__)\nimport pytest\nraise SystemExit(pytest.main(['-q','tests/test_runtime_lease_recovery.py','-k','historical_envelope','--tb=short','-rs']))\nPY",
+      "result": {
+        "chunk_id": "542dea",
+        "wall_time_seconds": 0.398325458,
+        "exit_code": 1,
+        "original_token_count": 251,
+        "output": "F                                                                        [100%]\n=================================== FAILURES ===================================\n__ test_historical_envelope_uses_the_same_exact_float_floor_as_lease_capture ___\ntests/test_runtime_lease_recovery.py:123: in test_historical_envelope_uses_the_same_exact_float_floor_as_lease_capture\n    with pytest.raises(budget.CpuBudgetHOLD, match=\"runtime_lease_exceeds_envelope\"):\nE   Failed: DID NOT RAISE CpuBudgetHOLD\n=============================== warnings summary ===============================\n../../../../../../home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885\n  /home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; cpu_terminal_recovery_helpers\n    self.import_plugin(import_spec)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 failed, 35 deselected, 1 warning in 0.21s\n"
+      }
+    },
+    {
+      "classification": "new36 plus old26 real bounded target",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:../orze-pro/src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_runtime_lease_recovery.py tests/test_cpu_action_budget.py tests/test_cpu_terminal_recovery_controls.py tests/test_cpu_terminal_settlement_recovery.py --tb=short -rs --basetemp=/tmp/orze-c3-recovery-ob5Zaa/tests --junitxml=/tmp/orze-c3-recovery-ob5Zaa/target.junit.xml",
+      "results": [
+        {
+          "chunk_id": "c340bc",
+          "wall_time_seconds": 1.00133716,
+          "session_id": 97668,
+          "original_token_count": 8,
+          "output": "................................"
+        },
+        {
+          "chunk_id": "885436",
+          "wall_time_seconds": 0.000002396,
+          "exit_code": 0,
+          "original_token_count": 558,
+          "output": "..............................           [100%]CPU_RECOVERY_REPORTS=[{\"bytes\": 130301, \"path\": \"/tmp/orze-c3-recovery-ob5Zaa/tests/test_real_v2_confirmed_termina0/project-0/recovery-report.json\", \"sha256\": \"abbdf6a4d2a8c4677f45baeb91a30ae28c03e2028371c38e12a42939b02236dd\", \"test\": \"tests/test_runtime_lease_recovery.py::test_real_v2_confirmed_terminal_crash_recovers_metadata_only[0]\"}, {\"bytes\": 121572, \"path\": \"/tmp/orze-c3-recovery-ob5Zaa/tests/test_real_v2_confirmed_termina1/project-0/recovery-report.json\", \"sha256\": \"2e2df8778512a5590e440147650171e343aaf4752fb5ac2b0c8a1104ec93c7ed\", \"test\": \"tests/test_runtime_lease_recovery.py::test_real_v2_confirmed_terminal_crash_recovers_metadata_only[7]\"}, {\"bytes\": 123112, \"path\": \"/tmp/orze-c3-recovery-ob5Zaa/tests/test_real_historical_v1_termin0/historical-project/recovery-report.json\", \"sha256\": \"d3af4e4406cc2ff80bcfef21393710bfb0650acad0a93cc2f171222cb548c99c\", \"test\": \"tests/test_runtime_lease_recovery.py::test_real_historical_v1_terminal_recovers_without_upgrade_or_reexecution\"}, {\"bytes\": 217474, \"path\": \"/tmp/orze-c3-recovery-ob5Zaa/tests/test_restart_settles_confirmed0/project-0/recovery-report.json\", \"sha256\": \"647a6304200cbfae540f15880a7a2f0549635f0231ac7855f7a3cad46ae16746\", \"test\": \"tests/test_cpu_terminal_settlement_recovery.py::test_restart_settles_confirmed_terminal_without_repeating_original_worker[0]\"}, {\"bytes\": 205426, \"path\": \"/tmp/orze-c3-recovery-ob5Zaa/tests/test_restart_settles_confirmed1/project-0/recovery-report.json\", \"sha256\": \"fc18966a7fde1c4ca71989d9a3d2b1b414f5476f905f4a54b366152db868bda2\", \"test\": \"tests/test_cpu_terminal_settlement_recovery.py::test_restart_settles_confirmed_terminal_without_repeating_original_worker[7]\"}]\n\n=============================== warnings summary ===============================\n../../../../../../home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885\n  /home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; cpu_terminal_recovery_helpers\n    self.import_plugin(import_spec)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n62 passed, 1 warning in 15.40s\n"
+        }
+      ],
+      "result_summary": {
+        "passed": 62,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "warnings": 1,
+        "seconds": 15.4
+      }
+    }
+  ],
+  "source_inventory": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,pathlib\npaths=['src/orze/core/cpu_action_budget.py','src/orze/engine/native_cpu_action.py','src/orze/engine/supervisor_worker.py','src/orze/engine/supervised_process.py','src/orze/engine/process_supervision.py','src/orze/engine/execution_authority.py','src/orze/engine/cpu_phase.py','src/orze/core/cpu_execution.py','src/orze/core/config.py','tests/test_runtime_lease_recovery.py','tests/test_cpu_action_budget.py','tests/test_cpu_terminal_recovery_controls.py','tests/test_cpu_terminal_settlement_recovery.py','tests/cpu_terminal_recovery_helpers.py']\nprint(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths},sort_keys=True))\nPY",
+    "before": {
+      "chunk_id": "38d4f9",
+      "wall_time_seconds": 0.000003841,
+      "exit_code": 0,
+      "original_token_count": 376,
+      "output": "{\"src/orze/core/config.py\": \"9e776bc8403d99385e9dd3f48bee23c854eac090335373e498be7487c41ba367\", \"src/orze/core/cpu_action_budget.py\": \"42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259\", \"src/orze/core/cpu_execution.py\": \"f0f532f658b7fcbf24261a21c6526b668022dbfc97c0e2734b8ec0765a89aed7\", \"src/orze/engine/cpu_phase.py\": \"92cf3640039d86660d511fe6085674356efbffa7d21bfc4a5c2466a46a9a811a\", \"src/orze/engine/execution_authority.py\": \"137bcf0b80a42da216b7710136477cc38ca87a10e60889772564f880f9dc2d11\", \"src/orze/engine/native_cpu_action.py\": \"11497c36447e6deb44f88fad6a867d128fb7e6a0f739332619a86b7a09721452\", \"src/orze/engine/process_supervision.py\": \"772f0a918d7d21ad21f9187ffb39710c52d4b429277f9e2db0e6eddd124cd61e\", \"src/orze/engine/supervised_process.py\": \"d10060e1ec3f6ab5fa154737c9a3333e1c644912ec3a649b6ec19512c350a2e2\", \"src/orze/engine/supervisor_worker.py\": \"03dfcacf3de44f344ec5fb8a6c176005cfefc7547d3d667d0eb34cc65289ef2f\", \"tests/cpu_terminal_recovery_helpers.py\": \"21ff43c3feb5367b9637a5498bc02881005ea777ec6614c4653ee3d7fcc8c1a3\", \"tests/test_cpu_action_budget.py\": \"1e070def2f2af0633dfb9634c83794778c0540a8b376977cd55be23989aa04bb\", \"tests/test_cpu_terminal_recovery_controls.py\": \"d75dff5461d95fc7af60ba096633d0e330bbe3083cf58ddc021f2c478c943c13\", \"tests/test_cpu_terminal_settlement_recovery.py\": \"406a62346e0877a45cdbfbc9b7f7285bc47afe37c5d9dfe879934ced29172c33\", \"tests/test_runtime_lease_recovery.py\": \"2c6df0d3c5809ca7d32ecc05169e5793096154839cc2f3b6adc3f0d9aee7eaa1\"}\n"
+    },
+    "after": {
+      "chunk_id": "12d1a4",
+      "wall_time_seconds": 0.000004327,
+      "exit_code": 0,
+      "original_token_count": 376,
+      "output": "{\"src/orze/core/config.py\": \"9e776bc8403d99385e9dd3f48bee23c854eac090335373e498be7487c41ba367\", \"src/orze/core/cpu_action_budget.py\": \"42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259\", \"src/orze/core/cpu_execution.py\": \"f0f532f658b7fcbf24261a21c6526b668022dbfc97c0e2734b8ec0765a89aed7\", \"src/orze/engine/cpu_phase.py\": \"92cf3640039d86660d511fe6085674356efbffa7d21bfc4a5c2466a46a9a811a\", \"src/orze/engine/execution_authority.py\": \"137bcf0b80a42da216b7710136477cc38ca87a10e60889772564f880f9dc2d11\", \"src/orze/engine/native_cpu_action.py\": \"11497c36447e6deb44f88fad6a867d128fb7e6a0f739332619a86b7a09721452\", \"src/orze/engine/process_supervision.py\": \"772f0a918d7d21ad21f9187ffb39710c52d4b429277f9e2db0e6eddd124cd61e\", \"src/orze/engine/supervised_process.py\": \"d10060e1ec3f6ab5fa154737c9a3333e1c644912ec3a649b6ec19512c350a2e2\", \"src/orze/engine/supervisor_worker.py\": \"03dfcacf3de44f344ec5fb8a6c176005cfefc7547d3d667d0eb34cc65289ef2f\", \"tests/cpu_terminal_recovery_helpers.py\": \"21ff43c3feb5367b9637a5498bc02881005ea777ec6614c4653ee3d7fcc8c1a3\", \"tests/test_cpu_action_budget.py\": \"1e070def2f2af0633dfb9634c83794778c0540a8b376977cd55be23989aa04bb\", \"tests/test_cpu_terminal_recovery_controls.py\": \"d75dff5461d95fc7af60ba096633d0e330bbe3083cf58ddc021f2c478c943c13\", \"tests/test_cpu_terminal_settlement_recovery.py\": \"406a62346e0877a45cdbfbc9b7f7285bc47afe37c5d9dfe879934ced29172c33\", \"tests/test_runtime_lease_recovery.py\": \"2c6df0d3c5809ca7d32ecc05169e5793096154839cc2f3b6adc3f0d9aee7eaa1\"}\n"
+    },
+    "same": true,
+    "count": 14
+  },
+  "raw_reports": [
+    {
+      "bytes": 130301,
+      "path": "/tmp/orze-c3-recovery-ob5Zaa/tests/test_real_v2_confirmed_termina0/project-0/recovery-report.json",
+      "sha256": "abbdf6a4d2a8c4677f45baeb91a30ae28c03e2028371c38e12a42939b02236dd",
+      "test": "tests/test_runtime_lease_recovery.py::test_real_v2_confirmed_terminal_crash_recovers_metadata_only[0]",
+      "archive": "docs/evidence/runs/2026-09-12-c3-recovery-author-00.json"
+    },
+    {
+      "bytes": 121572,
+      "path": "/tmp/orze-c3-recovery-ob5Zaa/tests/test_real_v2_confirmed_termina1/project-0/recovery-report.json",
+      "sha256": "2e2df8778512a5590e440147650171e343aaf4752fb5ac2b0c8a1104ec93c7ed",
+      "test": "tests/test_runtime_lease_recovery.py::test_real_v2_confirmed_terminal_crash_recovers_metadata_only[7]",
+      "archive": "docs/evidence/runs/2026-09-12-c3-recovery-author-01.json"
+    },
+    {
+      "bytes": 123112,
+      "path": "/tmp/orze-c3-recovery-ob5Zaa/tests/test_real_historical_v1_termin0/historical-project/recovery-report.json",
+      "sha256": "d3af4e4406cc2ff80bcfef21393710bfb0650acad0a93cc2f171222cb548c99c",
+      "test": "tests/test_runtime_lease_recovery.py::test_real_historical_v1_terminal_recovers_without_upgrade_or_reexecution",
+      "archive": "docs/evidence/runs/2026-09-12-c3-recovery-author-02.json"
+    },
+    {
+      "bytes": 217474,
+      "path": "/tmp/orze-c3-recovery-ob5Zaa/tests/test_restart_settles_confirmed0/project-0/recovery-report.json",
+      "sha256": "647a6304200cbfae540f15880a7a2f0549635f0231ac7855f7a3cad46ae16746",
+      "test": "tests/test_cpu_terminal_settlement_recovery.py::test_restart_settles_confirmed_terminal_without_repeating_original_worker[0]",
+      "archive": "docs/evidence/runs/2026-09-12-c3-recovery-author-03.json"
+    },
+    {
+      "bytes": 205426,
+      "path": "/tmp/orze-c3-recovery-ob5Zaa/tests/test_restart_settles_confirmed1/project-0/recovery-report.json",
+      "sha256": "fc18966a7fde1c4ca71989d9a3d2b1b414f5476f905f4a54b366152db868bda2",
+      "test": "tests/test_cpu_terminal_settlement_recovery.py::test_restart_settles_confirmed_terminal_without_repeating_original_worker[7]",
+      "archive": "docs/evidence/runs/2026-09-12-c3-recovery-author-04.json"
+    }
+  ],
+  "static": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess,xml.etree.ElementTree as E\nroot=pathlib.Path('.'); base='5f9637e58615d57b0e2668372082f203785150c5'\nsha=lambda b:hashlib.sha256(b).hexdigest()\npaths=['src/orze/core/cpu_action_budget.py','tests/test_runtime_lease_recovery.py']\nresult={'current':{p:{'sha256':sha(root.joinpath(p).read_bytes()),'bytes':root.joinpath(p).stat().st_size,'literal_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(root.joinpath(p).read_bytes())))} for p in paths}}\nsnaps=[('docs/evidence/snapshots/2026-09-12-c3-before-cpu-action-budget.py','src/orze/core/cpu_action_budget.py','baseline'),('docs/evidence/snapshots/2026-09-12-c3-before-native-cpu-action.py','src/orze/engine/native_cpu_action.py','baseline'),('docs/evidence/snapshots/2026-09-12-c3-before-lease-envelope-budget.py','src/orze/core/cpu_action_budget.py','candidate'),('docs/evidence/snapshots/2026-09-12-c3-runtime-lease-recovery-first-tests.py','tests/test_runtime_lease_recovery.py','first_new_tests')]\nresult['snapshots']=[]\nfor p,source,origin in snaps:\n raw=root.joinpath(p).read_bytes(); ast.parse(raw)\n result['snapshots'].append({'path':p,'source':source,'origin':origin,'sha256':sha(raw),'bytes':len(raw),'baseline_byte_exact':raw==subprocess.check_output(['git','show',base+':'+source]) if origin=='baseline' else False})\na=ast.parse(root.joinpath(snaps[0][0]).read_bytes()); b=ast.parse(root.joinpath(paths[0]).read_bytes())\nfuncs=lambda t:{n.name:ast.dump(n,include_attributes=False) for n in t.body if isinstance(n,(ast.FunctionDef,ast.ClassDef))}\nx,y=funcs(a),funcs(b)\nresult['budget_ast']={'added':sorted(set(y)-set(x)),'changed':[k for k in x if x[k]!=y.get(k)],'unchanged':sum(x[k]==y.get(k) for k in x)}\na=funcs(ast.parse(root.joinpath(snaps[3][0]).read_bytes())); b=funcs(ast.parse(root.joinpath(paths[1]).read_bytes()))\nresult['test_append']={'original_functions':len(a),'all_original_function_AST_exact':all(b.get(k)==v for k,v in a.items()),'new_functions':sorted(set(b)-set(a))}\nold=subprocess.check_output(['git','ls-tree','-r','--name-only',base,'--','tests']).decode().splitlines(); old=[p for p in old if p.endswith('.py')]\nchanged=[p for p in old if not root.joinpath(p).exists() or root.joinpath(p).read_bytes()!=subprocess.check_output(['git','show',base+':'+p])]\nresult['old_python_tests']={'total':len(old),'changed':changed}\nresult['archives']=[]\nfor p in sorted(root.glob('docs/evidence/runs/2026-09-12-c3-recovery-author*')):\n raw=p.read_bytes(); item={'path':str(p),'sha256':sha(raw),'bytes':len(raw)}\n if p.suffix=='.json':\n  report=json.loads(raw); private=pathlib.Path(report['root'])/'recovery-report.json'; assert raw==private.read_bytes()\n  db=report['snapshots'][-1]['database']; attempts=db['execution_attempts']; reservations=db['cpu_action_reservations']\n  item.update(native_attempts=len(attempts),fresh_cli_calls=len(report['calls']),reserved_ns=sum(int(json.loads(r['permit_json'])['reserved_nanoseconds']) for r in reservations),protocols=[json.loads(r['binding_json'])['process_supervision_protocol'] for r in attempts])\n  assert all(r['state']=='TERMINAL' for r in attempts) and all(r['state']=='SETTLED' for r in reservations)\n  assert all(json.loads(r['terminal_json'])['process_tree']['wait_proof']=='ECHILD_WALL' for r in attempts)\n if p.suffix=='.xml':\n  xml=E.fromstring(raw); item['cases']=len(xml.findall('.//testcase')); assert not xml.findall('.//failure') and not xml.findall('.//error')\n result['archives'].append(item)\nprint(json.dumps(result,sort_keys=True))\nPY",
+    "result": {
+      "chunk_id": "52986d",
+      "wall_time_seconds": 1.175626317,
+      "exit_code": 0,
+      "original_token_count": 902,
+      "output": "{\"archives\": [{\"bytes\": 130301, \"fresh_cli_calls\": 3, \"native_attempts\": 1, \"path\": \"docs/evidence/runs/2026-09-12-c3-recovery-author-00.json\", \"protocols\": [\"orze.linux_subreaper.v2\"], \"reserved_ns\": 2000000000, \"sha256\": \"abbdf6a4d2a8c4677f45baeb91a30ae28c03e2028371c38e12a42939b02236dd\"}, {\"bytes\": 121572, \"fresh_cli_calls\": 3, \"native_attempts\": 1, \"path\": \"docs/evidence/runs/2026-09-12-c3-recovery-author-01.json\", \"protocols\": [\"orze.linux_subreaper.v2\"], \"reserved_ns\": 2000000000, \"sha256\": \"2e2df8778512a5590e440147650171e343aaf4752fb5ac2b0c8a1104ec93c7ed\"}, {\"bytes\": 123112, \"fresh_cli_calls\": 3, \"native_attempts\": 1, \"path\": \"docs/evidence/runs/2026-09-12-c3-recovery-author-02.json\", \"protocols\": [\"orze.linux_subreaper.v1\"], \"reserved_ns\": 2000000000, \"sha256\": \"d3af4e4406cc2ff80bcfef21393710bfb0650acad0a93cc2f171222cb548c99c\"}, {\"bytes\": 217474, \"fresh_cli_calls\": 3, \"native_attempts\": 2, \"path\": \"docs/evidence/runs/2026-09-12-c3-recovery-author-03.json\", \"protocols\": [\"orze.linux_subreaper.v2\", \"orze.linux_subreaper.v2\"], \"reserved_ns\": 4000000000, \"sha256\": \"647a6304200cbfae540f15880a7a2f0549635f0231ac7855f7a3cad46ae16746\"}, {\"bytes\": 205426, \"fresh_cli_calls\": 3, \"native_attempts\": 2, \"path\": \"docs/evidence/runs/2026-09-12-c3-recovery-author-04.json\", \"protocols\": [\"orze.linux_subreaper.v2\", \"orze.linux_subreaper.v2\"], \"reserved_ns\": 4000000000, \"sha256\": \"fc18966a7fde1c4ca71989d9a3d2b1b414f5476f905f4a54b366152db868bda2\"}, {\"bytes\": 10005, \"cases\": 62, \"path\": \"docs/evidence/runs/2026-09-12-c3-recovery-author.junit.xml\", \"sha256\": \"d3783462cb523644a0f908c34daff085f82c0c3a44d963259eb41275ceac90ac\"}, {\"bytes\": 2264, \"path\": \"docs/evidence/runs/2026-09-12-c3-recovery-author.log\", \"sha256\": \"5c1c2ae68648a15b6af655c010def05596e5e0cfdecce44ce853e2c95369e1ae\"}], \"budget_ast\": {\"added\": [\"_terminal_runtime_lease\"], \"changed\": [\"_terminal\", \"_recovery_terminal\"], \"unchanged\": 37}, \"current\": {\"src/orze/core/cpu_action_budget.py\": {\"bytes\": 56677, \"literal_asserts\": 0, \"sha256\": \"42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259\"}, \"tests/test_runtime_lease_recovery.py\": {\"bytes\": 12977, \"literal_asserts\": 26, \"sha256\": \"2c6df0d3c5809ca7d32ecc05169e5793096154839cc2f3b6adc3f0d9aee7eaa1\"}}, \"old_python_tests\": {\"changed\": [], \"total\": 478}, \"snapshots\": [{\"baseline_byte_exact\": true, \"bytes\": 49307, \"origin\": \"baseline\", \"path\": \"docs/evidence/snapshots/2026-09-12-c3-before-cpu-action-budget.py\", \"sha256\": \"ab5e009a7bc20554ba4d47b6953b0d6b10da90217d415beecd9e287af0c10674\", \"source\": \"src/orze/core/cpu_action_budget.py\"}, {\"baseline_byte_exact\": true, \"bytes\": 25470, \"origin\": \"baseline\", \"path\": \"docs/evidence/snapshots/2026-09-12-c3-before-native-cpu-action.py\", \"sha256\": \"a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e\", \"source\": \"src/orze/engine/native_cpu_action.py\"}, {\"baseline_byte_exact\": false, \"bytes\": 56389, \"origin\": \"candidate\", \"path\": \"docs/evidence/snapshots/2026-09-12-c3-before-lease-envelope-budget.py\", \"sha256\": \"74bdf73c7dcd46b79476e1a9d23031f585576696208aface982a41c363f278ff\", \"source\": \"src/orze/core/cpu_action_budget.py\"}, {\"baseline_byte_exact\": false, \"bytes\": 12049, \"origin\": \"first_new_tests\", \"path\": \"docs/evidence/snapshots/2026-09-12-c3-runtime-lease-recovery-first-tests.py\", \"sha256\": \"a49b50fdc78cbe79b606b7ab05e2c0cb8d6f33d679b76a0e1520742bc69325a7\", \"source\": \"tests/test_runtime_lease_recovery.py\"}], \"test_append\": {\"all_original_function_AST_exact\": true, \"new_functions\": [\"test_historical_envelope_uses_the_same_exact_float_floor_as_lease_capture\"], \"original_functions\": 10}}\n"
+    },
+    "parsed": {
+      "archives": [
+        {
+          "bytes": 130301,
+          "fresh_cli_calls": 3,
+          "native_attempts": 1,
+          "path": "docs/evidence/runs/2026-09-12-c3-recovery-author-00.json",
+          "protocols": [
+            "orze.linux_subreaper.v2"
+          ],
+          "reserved_ns": 2000000000,
+          "sha256": "abbdf6a4d2a8c4677f45baeb91a30ae28c03e2028371c38e12a42939b02236dd"
+        },
+        {
+          "bytes": 121572,
+          "fresh_cli_calls": 3,
+          "native_attempts": 1,
+          "path": "docs/evidence/runs/2026-09-12-c3-recovery-author-01.json",
+          "protocols": [
+            "orze.linux_subreaper.v2"
+          ],
+          "reserved_ns": 2000000000,
+          "sha256": "2e2df8778512a5590e440147650171e343aaf4752fb5ac2b0c8a1104ec93c7ed"
+        },
+        {
+          "bytes": 123112,
+          "fresh_cli_calls": 3,
+          "native_attempts": 1,
+          "path": "docs/evidence/runs/2026-09-12-c3-recovery-author-02.json",
+          "protocols": [
+            "orze.linux_subreaper.v1"
+          ],
+          "reserved_ns": 2000000000,
+          "sha256": "d3af4e4406cc2ff80bcfef21393710bfb0650acad0a93cc2f171222cb548c99c"
+        },
+        {
+          "bytes": 217474,
+          "fresh_cli_calls": 3,
+          "native_attempts": 2,
+          "path": "docs/evidence/runs/2026-09-12-c3-recovery-author-03.json",
+          "protocols": [
+            "orze.linux_subreaper.v2",
+            "orze.linux_subreaper.v2"
+          ],
+          "reserved_ns": 4000000000,
+          "sha256": "647a6304200cbfae540f15880a7a2f0549635f0231ac7855f7a3cad46ae16746"
+        },
+        {
+          "bytes": 205426,
+          "fresh_cli_calls": 3,
+          "native_attempts": 2,
+          "path": "docs/evidence/runs/2026-09-12-c3-recovery-author-04.json",
+          "protocols": [
+            "orze.linux_subreaper.v2",
+            "orze.linux_subreaper.v2"
+          ],
+          "reserved_ns": 4000000000,
+          "sha256": "fc18966a7fde1c4ca71989d9a3d2b1b414f5476f905f4a54b366152db868bda2"
+        },
+        {
+          "bytes": 10005,
+          "cases": 62,
+          "path": "docs/evidence/runs/2026-09-12-c3-recovery-author.junit.xml",
+          "sha256": "d3783462cb523644a0f908c34daff085f82c0c3a44d963259eb41275ceac90ac"
+        },
+        {
+          "bytes": 2264,
+          "path": "docs/evidence/runs/2026-09-12-c3-recovery-author.log",
+          "sha256": "5c1c2ae68648a15b6af655c010def05596e5e0cfdecce44ce853e2c95369e1ae"
+        }
+      ],
+      "budget_ast": {
+        "added": [
+          "_terminal_runtime_lease"
+        ],
+        "changed": [
+          "_terminal",
+          "_recovery_terminal"
+        ],
+        "unchanged": 37
+      },
+      "current": {
+        "src/orze/core/cpu_action_budget.py": {
+          "bytes": 56677,
+          "literal_asserts": 0,
+          "sha256": "42c66283adfbd2979495b8b8f5fa23f24d7703e8ea140b5265cb5a86f4ec5259"
+        },
+        "tests/test_runtime_lease_recovery.py": {
+          "bytes": 12977,
+          "literal_asserts": 26,
+          "sha256": "2c6df0d3c5809ca7d32ecc05169e5793096154839cc2f3b6adc3f0d9aee7eaa1"
+        }
+      },
+      "old_python_tests": {
+        "changed": [],
+        "total": 478
+      },
+      "snapshots": [
+        {
+          "baseline_byte_exact": true,
+          "bytes": 49307,
+          "origin": "baseline",
+          "path": "docs/evidence/snapshots/2026-09-12-c3-before-cpu-action-budget.py",
+          "sha256": "ab5e009a7bc20554ba4d47b6953b0d6b10da90217d415beecd9e287af0c10674",
+          "source": "src/orze/core/cpu_action_budget.py"
+        },
+        {
+          "baseline_byte_exact": true,
+          "bytes": 25470,
+          "origin": "baseline",
+          "path": "docs/evidence/snapshots/2026-09-12-c3-before-native-cpu-action.py",
+          "sha256": "a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e",
+          "source": "src/orze/engine/native_cpu_action.py"
+        },
+        {
+          "baseline_byte_exact": false,
+          "bytes": 56389,
+          "origin": "candidate",
+          "path": "docs/evidence/snapshots/2026-09-12-c3-before-lease-envelope-budget.py",
+          "sha256": "74bdf73c7dcd46b79476e1a9d23031f585576696208aface982a41c363f278ff",
+          "source": "src/orze/core/cpu_action_budget.py"
+        },
+        {
+          "baseline_byte_exact": false,
+          "bytes": 12049,
+          "origin": "first_new_tests",
+          "path": "docs/evidence/snapshots/2026-09-12-c3-runtime-lease-recovery-first-tests.py",
+          "sha256": "a49b50fdc78cbe79b606b7ab05e2c0cb8d6f33d679b76a0e1520742bc69325a7",
+          "source": "tests/test_runtime_lease_recovery.py"
+        }
+      ],
+      "test_append": {
+        "all_original_function_AST_exact": true,
+        "new_functions": [
+          "test_historical_envelope_uses_the_same_exact_float_floor_as_lease_capture"
+        ],
+        "original_functions": 10
+      }
+    }
+  },
+  "runtime_counts": {
+    "all_five_projects": {
+      "native_attempts": 7,
+      "fresh_cli_invocations": 15,
+      "reserved_nanoseconds": 14000000000
+    },
+    "own_three_projects": {
+      "native_attempts": 3,
+      "fresh_cli_invocations": 9,
+      "reserved_nanoseconds": 6000000000
+    },
+    "protocols": "Six actual v2 native attempts, one actual historical v1 native attempt. No new process was launched by the metadata-only checker."
+  },
+  "limitations": [
+    "These are bounded local CPU tests with the existing helper's explicit GPU/provider/legacy-path refusal spies. SQLite, native workers, supervisor/subreaper, TREE_CLOSED, effects and budget transactions are real.",
+    "Historical v1 producer is the complete fixed-baseline native module loaded in one fresh interpreter; dependencies are current with their preserved v1 branches. This is not a whole old stack replay, nor new-default behavior.",
+    "Two fresh recovery CLI calls per own project leave original full attempt, terminal, effect/artifact bytes, worker events and lifecycle rows unchanged; only old BOUND reservation settlement frees capacity without refund.",
+    "Synthetic metadata shapes confer no process/GO/effect authority; they test parser/structural predicates only.",
+    "Actual v2 historical F controls here cover confirmed completed and failed authorized terminals. Expiry shapes are synthetic here; actual runtime expiry and publication/late-confirm HOLD tests belong to other authors.",
+    "No current clock comparisons are made during F. This is historical settlement, not permission to revive a process or bypass an extant guard.",
+    "No full-suite, remote-readback, benchmark benefit, GPU/provider or general external-side-effect exactly-once claim is made by this report."
+  ]
+}

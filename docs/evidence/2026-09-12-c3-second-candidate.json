@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "scope": "C3 second candidate diagnostic; not a stationary final acceptance epoch",
+  "run": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES= python3 -m pytest -q -p no:cacheprovider tests/test_runtime_lease_boundaries.py tests/test_cpu_runtime_lease_config.py tests/test_runtime_lease_cli.py tests/test_runtime_lease_publication.py tests/test_runtime_lease_observation.py --tb=short -rs",
+    "chunks": [
+      {
+        "chunk_id": "5b7e90",
+        "wall_time_seconds": 1.000587619,
+        "session_id": 29551,
+        "original_token_count": 4,
+        "output": "................"
+      },
+      {
+        "chunk_id": "297d2d",
+        "wall_time_seconds": 0.00000339,
+        "exit_code": 1,
+        "original_token_count": 340,
+        "output": "......F.....                                             [100%]\n=================================== FAILURES ===================================\n_ test_expiry_after_actual_registration_retains_prepared_effect_without_second_terminal _\ntests/test_runtime_lease_publication.py:302: in test_expiry_after_actual_registration_retains_prepared_effect_without_second_terminal\n    assert _fresh_recovery(case)[\"held\"] is True\nE   assert False is True\n----------------------------- Captured stdout call -----------------------------\n{\"boundary\": \"actual_clock_expiry\", \"before_ns\": 10643082332245620, \"after_ns\": 10643083599789144, \"lease\": {\"boot_id\": \"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\", \"clock\": \"CLOCK_BOOTTIME\", \"deadline_ns\": 10643083579732314, \"hostname\": \"a100-41\", \"issued_ns\": 10643082079732314, \"schema\": 1}}\n{\"fresh_recovery\": {\"held\": false, \"result\": {\"already_settled\": [], \"examined\": 1, \"retained\": [{\"reason\": \"running\", \"reservation_id\": \"57e3d7224f204f9ac8ad7301d6b0f0d7619290075891912c\"}], \"schema\": 1, \"settled\": []}, \"claimed\": false, \"claim_unchanged\": true, \"before\": 1, \"after\": 1, \"reservations\": [[\"BOUND\", null]]}}\n------------------------------ Captured log call -------------------------------\nERROR    orze:idea_source_lock.py:211 Idea source operation outcome uncertain; retaining owner for recovery\n1 failed, 27 passed in 17.64s\n"
+      }
+    ],
+    "passed": 27,
+    "failed": 1,
+    "seconds": 17.64
+  },
+  "fixes": [
+    "Runtime watch alone accepts its captured LAUNCHING/RUNNING/TERMINAL rows; core require_current defaults unchanged.",
+    "Pass detached lease to prepare and compare READY to original strong owner; RUNNING derives from original captured owner binding.",
+    "Direct native lease configuration captured and rechecked without invoking whole admission during stop.",
+    "Two newly authored empty-artifact assertions corrected from () to public API []. Complete originals retained."
+  ],
+  "remaining": "Fresh F on a still-RUNNING attempt legitimately returns a retained-running summary rather than raising. New publication test incorrectly demanded an exception. Actual poststate BOUND/no new claim/one attempt passed. Correction must assert retained-running/settled empty, not change product F.",
+  "source_epoch_limit": "This was a diagnostic during the separately recorded budget envelope 1ns refinement; no assertion of a stationary all-source epoch or complete regression is made. Final targeted/full tests must recapture matching source fingerprints."
+}

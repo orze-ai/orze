@@ -1,0 +1,143 @@
+{
+  "schema": 1,
+  "slice": "C3 runtime lease supervision",
+  "scope": "Author implementation and bounded source-specific verification of the existing Linux supervisor protocol; not full C3 product/F closure.",
+  "owned_sources": [
+    "src/orze/engine/supervisor_worker.py",
+    "src/orze/engine/supervised_process.py",
+    "src/orze/engine/process_supervision.py"
+  ],
+  "interfaces": {
+    "helpers": "validate_runtime_lease(value) is detached/structural/no OS; runtime_lease_now(descriptor) reads actual host/boot/CLOCK_BOOTTIME even when expired; require_runtime_lease raises RuntimeLeaseExpired(observed_ns); capture floors positive finite TTL into bounded ns; MAX_NS=2**63-1.",
+    "protocol": "Old PROTOCOL v1 and strict schema1 preserved. RUNTIME_LEASE_PROTOCOL v2: READY binding original7 plus runtime_lease; CLOSED original8 plus exact bool lease_expired and exact int lease_observed_ns, schema2.",
+    "execution": "Existing supervisor owns autonomous deadline checks before drain/GO and during loop, original nonce frames and owned TERM/KILL/ECHILD_WALL.",
+    "compatibility": "Optional runtime_lease keyword preserves original five positional constructor arguments and pre-Popen fallback. v2 known-expired start raises known expiry without poisoning process uncertainty; validated CLOSED avoids redundant STOP while awaiting supervisor exit."
+  },
+  "baseline": {
+    "commit": "5f9637e58615d57b0e2668372082f203785150c5",
+    "tool_receipt": "82dbcf exit0",
+    "sources": {
+      "src/orze/engine/supervisor_worker.py": {
+        "sha256": "6d2f7e4491ed5f1b60256e61fb28b6967e3488b74d07f442c94129e85b25b30b",
+        "snapshot": "docs/evidence/snapshots/c3-before-supervisor_worker.py"
+      },
+      "src/orze/engine/supervised_process.py": {
+        "sha256": "ca229eb2f275f486a5ba400389af15d626344149760f557adf7fa25a438378d6",
+        "snapshot": "docs/evidence/snapshots/c3-before-supervised_process.py"
+      },
+      "src/orze/engine/process_supervision.py": {
+        "sha256": "cf1271fe2e8f51dbe588fffc61e3043a4e92648d28c678d59a7bc2bf23cb2053",
+        "snapshot": "docs/evidence/snapshots/c3-before-process_supervision.py"
+      }
+    },
+    "note": "Full original source was captured before edits and archived byte-exact; no old-version missing-helper/import error is classified as a product red."
+  },
+  "tests": {
+    "path": "tests/test_runtime_lease_supervision.py",
+    "sha256": "20161ff5d5cb19db7fc59a82807a3b261bbdb5d84f30586b27a2a0b4061e471f",
+    "cases": 25,
+    "literal_assert_nodes": 33,
+    "classification": {
+      "new_mechanisms": 25,
+      "historical_product_reds": 0,
+      "observed_production_draft_reds": 0
+    },
+    "coverage": [
+      "15 structural/clock/TTL mechanisms with explicit local clock/identity spies; historical validation makes no current OS read.",
+      "Actual v2 normal CPU launch/closure with exact detached descriptor.",
+      "Actual escaped three-process tree, parent poll disabled while waiting only on captured supervisor pidfd: independent deadline closes tree with real zero leader status, no parent STOP.",
+      "Actual pre-GO expiry: no worker exec marker, known expiry not SupervisionUncertain, actual closure.",
+      "Actual valid GO frame delayed across deadline; immediately birth-checked owned worker pidfd SIGSTOP/CONT controls this seam, no raw PID signal. Real supervisor refuses GO and owns closure.",
+      "Actual post-Popen constructor failure carries correctly bound fallback and actual supervisor exit.",
+      "Four malformed wire controls mutate an actually received closure after process exit; these are strict decoder checks, not fresh false-tree reproductions.",
+      "Actual validated closure with explicit waitpid visibility ordering double: no redundant STOP, wait still required."
+    ]
+  },
+  "test_history": [
+    {
+      "stage": "pre-run design",
+      "path": "docs/evidence/snapshots/c3-initial-runtime-lease-supervision-test-design.py",
+      "sha256": "e5e6fa1a0a04d25afb2cf7a3a1a1eea8c4ea5be4beb60bd76cff27fe79ad14ae",
+      "classification": "static fixture correction; not executed",
+      "detail": "Initial late-GO design only slept. Before first execution it gained immediate birth-checked worker pidfd SIGSTOP/CONT so gate EOF could not race straight to worker exit; no production code change."
+    },
+    {
+      "stage": "first actual run",
+      "path": "docs/evidence/snapshots/c3-first-runtime-lease-supervision-tests.py",
+      "sha256": "6ebc0cffe66ec8447023a51d58c42200108174bbd5bd216333631c362f2d123e",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_runtime_lease_supervision.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py",
+      "result": {
+        "chunk_id": "9f26e3",
+        "wall_time_seconds": 4.768646942,
+        "exit_code": 1,
+        "original_token_count": 556,
+        "output": "..................F.............................                         [100%]\n=================================== FAILURES ===================================\n____ test_real_go_crossing_deadline_is_refused_without_protocol_uncertainty ____\n\ntmp_path = PosixPath('/tmp/pytest-of-erik/pytest-5082/test_real_go_crossing_deadline0')\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x150a5fdfb730>\n\n    def test_real_go_crossing_deadline_is_refused_without_protocol_uncertainty(tmp_path, monkeypatch):\n        process, descriptor = _prepare(tmp_path, \"from pathlib import Path;Path('ran').touch()\", ttl=.8)\n        original_send = api.send_frame\n        observed, _ = worker.process_identity(process.pid)\n        owned_fd = os.pidfd_open(process.pid)\n        assert worker.process_identity(process.pid)[0] == observed == process.binding[\"worker\"]\n        signal.pidfd_send_signal(owned_fd, signal.SIGSTOP)\n    \n        def delayed_send(channel, value):\n            if value.get(\"command\") == \"GO\":\n                # The test-owned blocked worker is SIGSTOPped, so closing its GO\n                # pipe cannot race straight to exit before this valid late frame.\n                # The real supervisor still owns TERM/KILL and the closure proof.\n                remaining = (descriptor[\"deadline_ns\"] - worker.runtime_lease_now(descriptor)) / 1e9\n                if remaining > 0:\n                    time.sleep(remaining + .02)\n            return original_send(channel, value)\n    \n        try:\n            with monkeypatch.context() as m:\n                m.setattr(api, \"send_frame\", delayed_send)\n                process.start()\n            signal.pidfd_send_signal(owned_fd, signal.SIGCONT)\n>           assert process.wait(timeout=3) == 125\nE           assert -15 == 125\nE            +  where -15 = wait(timeout=3)\nE            +    where wait = <orze.engine.supervised_process.SupervisedProcess object at 0x150a5fdfada0>.wait\n\ntests/test_runtime_lease_supervision.py:209: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_runtime_lease_supervision.py::test_real_go_crossing_deadline_is_refused_without_protocol_uncertainty\n1 failed, 47 passed in 4.63s\n"
+      },
+      "classification": "one fixture-premise failure, not product draft red",
+      "detail": "Expected gate EOF code125, but actual owned supervisor SIGTERM on the SIGSTOPped worker correctly produced -15 after CONT. Test must allow actual no-exec termination codes. No unknown/GO violation was observed."
+    },
+    {
+      "stage": "corrected fixture first green",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_runtime_lease_supervision.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py",
+      "result": {
+        "chunk_id": "886271",
+        "wall_time_seconds": 4.759564198,
+        "exit_code": 0,
+        "original_token_count": 25,
+        "output": "................................................                         [100%]\n48 passed in 4.61s\n"
+      },
+      "classification": "48 passed = 25 new + 23 unchanged legacy controls",
+      "assert_migration": {
+        "before": 33,
+        "after": 33,
+        "changed_indices": [
+          25
+        ],
+        "change": "Only late-GO wait result ==125 changed to membership in (125,-SIGTERM,-SIGKILL); no-GO/known-closure/identity assertions unchanged."
+      }
+    }
+  ],
+  "collection": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest --collect-only -q -p no:cacheprovider tests/test_runtime_lease_supervision.py",
+    "result": {
+      "chunk_id": "1f217d",
+      "wall_time_seconds": 0.315475524,
+      "exit_code": 0,
+      "original_token_count": 637,
+      "output": "tests/test_runtime_lease_supervision.py::test_descriptor_strict_types_and_identity[schema-True]\ntests/test_runtime_lease_supervision.py::test_descriptor_strict_types_and_identity[issued_ns-0.0]\ntests/test_runtime_lease_supervision.py::test_descriptor_strict_types_and_identity[deadline_ns-True]\ntests/test_runtime_lease_supervision.py::test_descriptor_strict_types_and_identity[hostname-bad/host]\ntests/test_runtime_lease_supervision.py::test_descriptor_strict_types_and_identity[boot_id-12345678-1234-1234-1234-123456789ABC]\ntests/test_runtime_lease_supervision.py::test_descriptor_strict_types_and_identity[deadline_ns-9223372036854775808]\ntests/test_runtime_lease_supervision.py::test_historical_descriptor_is_detached_and_has_no_clock_or_os_read\ntests/test_runtime_lease_supervision.py::test_invalid_ttl_never_reads_clock[True]\ntests/test_runtime_lease_supervision.py::test_invalid_ttl_never_reads_clock[0]\ntests/test_runtime_lease_supervision.py::test_invalid_ttl_never_reads_clock[nan]\ntests/test_runtime_lease_supervision.py::test_invalid_ttl_never_reads_clock[1e-12]\ntests/test_runtime_lease_supervision.py::test_invalid_ttl_never_reads_clock[9223372036854775807]\ntests/test_runtime_lease_supervision.py::test_capture_floors_float_ns_and_expiry_does_not_disable_clock_reader\ntests/test_runtime_lease_supervision.py::test_unknown_clock_identity_is_not_known_expiry[boot]\ntests/test_runtime_lease_supervision.py::test_unknown_clock_identity_is_not_known_expiry[clock_reverse]\ntests/test_runtime_lease_supervision.py::test_real_v2_normal_closure_binds_detached_descriptor\ntests/test_runtime_lease_supervision.py::test_real_autonomous_expiry_without_parent_poll_closes_escaped_tree\ntests/test_runtime_lease_supervision.py::test_real_expired_before_go_is_known_and_still_has_closure\ntests/test_runtime_lease_supervision.py::test_real_go_crossing_deadline_is_refused_without_protocol_uncertainty\ntests/test_runtime_lease_supervision.py::test_real_v2_constructor_failure_preserves_fallback_descriptor\ntests/test_runtime_lease_supervision.py::test_strict_v2_wire_rejects_mutated_real_closure[schema_bool]\ntests/test_runtime_lease_supervision.py::test_strict_v2_wire_rejects_mutated_real_closure[expired_int]\ntests/test_runtime_lease_supervision.py::test_strict_v2_wire_rejects_mutated_real_closure[observed_float]\ntests/test_runtime_lease_supervision.py::test_strict_v2_wire_rejects_mutated_real_closure[descriptor]\ntests/test_runtime_lease_supervision.py::test_validated_closure_waits_for_exit_without_redundant_stop\n\n25 tests collected in 0.17s\n"
+    }
+  },
+  "bounded_verification": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m pytest -q -p no:cacheprovider tests/test_runtime_lease_supervision.py tests/test_supervised_process.py tests/test_supervisor_preparation_handoff.py tests/test_supervised_worker_fds.py",
+    "result": {
+      "chunk_id": "75d4d5",
+      "wall_time_seconds": 4.758805499,
+      "exit_code": 0,
+      "original_token_count": 25,
+      "output": "................................................                         [100%]\n48 passed in 4.61s\n"
+    },
+    "manifest_command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess\npaths=['src/orze/engine/supervisor_worker.py','src/orze/engine/supervised_process.py','src/orze/engine/process_supervision.py','src/orze/engine/controller_members.py','src/orze/engine/controller_control.py','src/orze/engine/attempt_effect_lock.py','tests/conftest.py','tests/test_runtime_lease_supervision.py','tests/test_supervised_process.py','tests/test_supervisor_preparation_handoff.py','tests/test_supervised_worker_fds.py']\nprint(json.dumps({'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'files':{p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths},'new_asserts':sum(isinstance(n,ast.Assert) for n in ast.walk(ast.parse(pathlib.Path(paths[7]).read_bytes())))},indent=2))\nPY",
+    "pre": {
+      "chunk_id": "a3b36e",
+      "wall_time_seconds": 0.000004315,
+      "exit_code": 0,
+      "original_token_count": 331,
+      "output": "{\n  \"head\": \"5f9637e58615d57b0e2668372082f203785150c5\",\n  \"files\": {\n    \"src/orze/engine/supervisor_worker.py\": \"03dfcacf3de44f344ec5fb8a6c176005cfefc7547d3d667d0eb34cc65289ef2f\",\n    \"src/orze/engine/supervised_process.py\": \"d10060e1ec3f6ab5fa154737c9a3333e1c644912ec3a649b6ec19512c350a2e2\",\n    \"src/orze/engine/process_supervision.py\": \"772f0a918d7d21ad21f9187ffb39710c52d4b429277f9e2db0e6eddd124cd61e\",\n    \"src/orze/engine/controller_members.py\": \"4c432af7df0c6bb0bd8742e66866503b1e1f011f98cb13affe5b38bc21fd905d\",\n    \"src/orze/engine/controller_control.py\": \"2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe\",\n    \"src/orze/engine/attempt_effect_lock.py\": \"7b00bd1d3f84dc07f6e6d3f5e1f75f1348f926523ee18109cce4e327a3b5a015\",\n    \"tests/conftest.py\": \"22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641\",\n    \"tests/test_runtime_lease_supervision.py\": \"20161ff5d5cb19db7fc59a82807a3b261bbdb5d84f30586b27a2a0b4061e471f\",\n    \"tests/test_supervised_process.py\": \"dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0\",\n    \"tests/test_supervisor_preparation_handoff.py\": \"20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77\",\n    \"tests/test_supervised_worker_fds.py\": \"3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7\"\n  },\n  \"new_asserts\": 33\n}\n"
+    },
+    "post": {
+      "chunk_id": "212f83",
+      "wall_time_seconds": 0.000005206,
+      "exit_code": 0,
+      "original_token_count": 331,
+      "output": "{\n  \"head\": \"5f9637e58615d57b0e2668372082f203785150c5\",\n  \"files\": {\n    \"src/orze/engine/supervisor_worker.py\": \"03dfcacf3de44f344ec5fb8a6c176005cfefc7547d3d667d0eb34cc65289ef2f\",\n    \"src/orze/engine/supervised_process.py\": \"d10060e1ec3f6ab5fa154737c9a3333e1c644912ec3a649b6ec19512c350a2e2\",\n    \"src/orze/engine/process_supervision.py\": \"772f0a918d7d21ad21f9187ffb39710c52d4b429277f9e2db0e6eddd124cd61e\",\n    \"src/orze/engine/controller_members.py\": \"4c432af7df0c6bb0bd8742e66866503b1e1f011f98cb13affe5b38bc21fd905d\",\n    \"src/orze/engine/controller_control.py\": \"2a70b1314f4455d095db7ff26785266058fb9f939b35cdd857e731e91354cdbe\",\n    \"src/orze/engine/attempt_effect_lock.py\": \"7b00bd1d3f84dc07f6e6d3f5e1f75f1348f926523ee18109cce4e327a3b5a015\",\n    \"tests/conftest.py\": \"22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641\",\n    \"tests/test_runtime_lease_supervision.py\": \"20161ff5d5cb19db7fc59a82807a3b261bbdb5d84f30586b27a2a0b4061e471f\",\n    \"tests/test_supervised_process.py\": \"dba4bb6b7dd593b63c2603c4c3581d52abe1746e0b9638ecbdc70029385334b0\",\n    \"tests/test_supervisor_preparation_handoff.py\": \"20ff1fe13ce9205c9160456ee390884b16e5c91707529dd878e17963e84a8a77\",\n    \"tests/test_supervised_worker_fds.py\": \"3e62a95a11c5e5cdf923110c60ff2b85162d32ca4bb938a2f40401f8fd911ab7\"\n  },\n  \"new_asserts\": 33\n}\n"
+    },
+    "eleven_files_exact": true
+  },
+  "cleanup": "All actual handles reached observed supervisor exit and descriptors were closed by the fixture. The late-GO extra worker pidfd was birth-checked, continued in finally, then closed. No host census or raw PID signal, GPU, provider, worker adoption, full suite, or commits were performed.",
+  "limits": [
+    "Pure helper clock substitutions and malformed-wire/exit-visibility controls are explicitly not complete product-loop evidence.",
+    "Real autonomous expiry is observed through owned supervisor pidfd, not parent harvest or invented closure.",
+    "This author group does not prove native terminal publication, confirmed-effect/F recovery, project config policy, or whole V1 completion; separate root/Pro evidence owns those paths.",
+    "Source-specific candidate verification only; no new source changes occurred between the first implementation and these runs. Root's native mutation defect is separate, not counted here."
+  ]
+}
