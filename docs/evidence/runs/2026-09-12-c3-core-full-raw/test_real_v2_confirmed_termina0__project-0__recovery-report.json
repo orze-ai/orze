@@ -1,0 +1,1767 @@
+{
+  "admissions": [
+    {
+      "after": "1:admit:idea-first:after",
+      "before": "0:admit:idea-first:before",
+      "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+      "result": {
+        "idea_id": "idea-first",
+        "reason": "proposal_admitted",
+        "status": "inserted",
+        "transition_id": 1
+      },
+      "task_id": "idea-first"
+    }
+  ],
+  "calls": [
+    {
+      "after": "3:first_controller_crash:after",
+      "before": "2:first_controller_crash:before",
+      "command": [
+        "/usr/bin/python3",
+        "-m",
+        "cpu_terminal_recovery_helpers",
+        "--crash-before-settle",
+        "-c",
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/orze.yaml",
+        "--once"
+      ],
+      "controller_binding": {
+        "command_sha256": "3d7efbcefef248b1aab6486508a6adb03b0f4ef4d98b9526349e14df6e41a65b",
+        "identity": {
+          "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0",
+          "terminal_recovery_controller": "first_controller_crash"
+        },
+        "nonce_sha256": "ab5b24f833005dc4cdacc8e34323fbaa9899dea8fb741c09dbde935a30d32ece",
+        "protocol": "orze.linux_subreaper.v1",
+        "schema": 1,
+        "supervisor": {
+          "pid": 2845520,
+          "start_ticks": 1064420525
+        },
+        "worker": {
+          "pid": 2845521,
+          "start_ticks": 1064420528
+        }
+      },
+      "controller_closure": {
+        "binding": {
+          "command_sha256": "3d7efbcefef248b1aab6486508a6adb03b0f4ef4d98b9526349e14df6e41a65b",
+          "identity": {
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0",
+            "terminal_recovery_controller": "first_controller_crash"
+          },
+          "nonce_sha256": "ab5b24f833005dc4cdacc8e34323fbaa9899dea8fb741c09dbde935a30d32ece",
+          "protocol": "orze.linux_subreaper.v1",
+          "schema": 1,
+          "supervisor": {
+            "pid": 2845520,
+            "start_ticks": 1064420525
+          },
+          "worker": {
+            "pid": 2845521,
+            "start_ticks": 1064420528
+          }
+        },
+        "event": "TREE_CLOSED",
+        "forced_cleanup": false,
+        "reaped_children": 1,
+        "schema": 1,
+        "stop_requested": false,
+        "wait_proof": "ECHILD_WALL",
+        "worker_returncode": 86
+      },
+      "cwd": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0",
+      "exit_code": 86,
+      "finished_monotonic": 10644206.038979935,
+      "label": "first_controller_crash",
+      "metadata": [
+        {
+          "event": "start",
+          "monotonic": 10644205.540385686,
+          "pid": 2845521,
+          "start_ticks": 1064420528
+        },
+        {
+          "current_row": {
+            "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "binding": {
+              "action_sha256": "a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d",
+              "artifact_publication": {
+                "contract": {
+                  "outputs": {
+                    "answer": {
+                      "max_bytes": 128,
+                      "path": "answer.json"
+                    }
+                  },
+                  "version": 1
+                },
+                "root": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts",
+                "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+                "spec_fingerprint": "a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d"
+              },
+              "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+              "attempt_ref": {
+                "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+                "generation": 1,
+                "phase": "action",
+                "task_id": "idea-first"
+              },
+              "command_sha256": "8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606",
+              "inputs_sha256": "f93de85820457be506fdf4b022025e4834122525c833d19f746ce86ba7d3ff4c",
+              "kind": "native_cpu_action",
+              "lifecycle": {
+                "global_state": "COMPLETE",
+                "global_transition_id": 4,
+                "legacy_status": "completed",
+                "phase_state": "COMPLETE",
+                "phase_transition_id": 3
+              },
+              "lifecycle_phase": "action",
+              "origin": "native_cpu_action",
+              "process_pid": 2845561,
+              "process_supervision_protocol": "orze.linux_subreaper.v2",
+              "reservation_id": "2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d",
+              "resource": "cpu",
+              "runtime_lease": {
+                "boot_id": "50e1fbfb-6bdb-478a-8dbd-1fed33b67397",
+                "clock": "CLOCK_BOOTTIME",
+                "deadline_ns": 10644207723967088,
+                "hostname": "a100-41",
+                "issued_ns": 10644205723967088,
+                "schema": 1
+              },
+              "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first",
+              "source": {
+                "claim_attempt_id": "052683c4529a3dc1b6a85889f2073670",
+                "claim_sha256": "64a4c212df39029d6e23d2219e4e8916a7580969607b59c913f4408754f07560",
+                "config_sha256": "035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e",
+                "database": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db"
+              },
+              "supervision": {
+                "command_sha256": "8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606",
+                "identity": {
+                  "attempt_ref": {
+                    "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+                    "generation": 1,
+                    "phase": "action",
+                    "task_id": "idea-first"
+                  },
+                  "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first"
+                },
+                "nonce_sha256": "57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101",
+                "protocol": "orze.linux_subreaper.v2",
+                "runtime_lease": {
+                  "boot_id": "50e1fbfb-6bdb-478a-8dbd-1fed33b67397",
+                  "clock": "CLOCK_BOOTTIME",
+                  "deadline_ns": 10644207723967088,
+                  "hostname": "a100-41",
+                  "issued_ns": 10644205723967088,
+                  "schema": 1
+                },
+                "schema": 2,
+                "supervisor": {
+                  "pid": 2845559,
+                  "start_ticks": 1064420578
+                },
+                "worker": {
+                  "pid": 2845561,
+                  "start_ticks": 1064420581
+                }
+              },
+              "timeout_seconds": 2,
+              "work_dir": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_action_attempts/8b15944dd7b22d42d3a0c125c8343f8d/work"
+            },
+            "generation": 1,
+            "hold_reason": null,
+            "phase": "action",
+            "state": "TERMINAL",
+            "task_id": "idea-first",
+            "terminal": {
+              "artifact_ids": [
+                "b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0"
+              ],
+              "effect_receipt_sha256": "bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d",
+              "elapsed_wall_seconds": 0.0578457061201334,
+              "lifecycle": {
+                "global_state": "COMPLETE",
+                "global_transition_id": 4,
+                "legacy_status": "completed",
+                "phase_state": "COMPLETE",
+                "phase_transition_id": 3
+              },
+              "lifecycle_phase": "action",
+              "observation_ids": [],
+              "outcome": "completed",
+              "process_tree": {
+                "binding": {
+                  "command_sha256": "8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606",
+                  "identity": {
+                    "attempt_ref": {
+                      "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+                      "generation": 1,
+                      "phase": "action",
+                      "task_id": "idea-first"
+                    },
+                    "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first"
+                  },
+                  "nonce_sha256": "57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101",
+                  "protocol": "orze.linux_subreaper.v2",
+                  "runtime_lease": {
+                    "boot_id": "50e1fbfb-6bdb-478a-8dbd-1fed33b67397",
+                    "clock": "CLOCK_BOOTTIME",
+                    "deadline_ns": 10644207723967088,
+                    "hostname": "a100-41",
+                    "issued_ns": 10644205723967088,
+                    "schema": 1
+                  },
+                  "schema": 2,
+                  "supervisor": {
+                    "pid": 2845559,
+                    "start_ticks": 1064420578
+                  },
+                  "worker": {
+                    "pid": 2845561,
+                    "start_ticks": 1064420581
+                  }
+                },
+                "event": "TREE_CLOSED",
+                "forced_cleanup": false,
+                "lease_expired": false,
+                "lease_observed_ns": 10644205903551727,
+                "reaped_children": 1,
+                "schema": 2,
+                "stop_requested": false,
+                "wait_proof": "ECHILD_WALL",
+                "worker_returncode": 0
+              },
+              "reason_code": "cpu_action_completed",
+              "return_code": 0,
+              "runtime_lease": {
+                "observed_ns": 10644205957292871,
+                "schema": 1,
+                "status": "authorized"
+              }
+            }
+          },
+          "deliberate_exit_code": 86,
+          "effect_confirmed": true,
+          "effect_guard_absent": true,
+          "event": "crash_before_settle",
+          "monotonic": 10644206.024803597,
+          "permit": {
+            "budget_scope": {
+              "database": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db",
+              "database_identity": [
+                66306,
+                50218347
+              ],
+              "declaration": {
+                "resource": "cpu",
+                "slots": 1,
+                "version": 1,
+                "wall_budget_seconds": 6
+              },
+              "directory_identity": [
+                66306,
+                50218349
+              ],
+              "policy_sha256": "7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217",
+              "results_dir": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+              "schema": 1
+            },
+            "reservation_id": "2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d",
+            "reserved_nanoseconds": "2000000000",
+            "schema": 1,
+            "slot": 0,
+            "task_id": "idea-first",
+            "wall_limit_seconds": 2
+          },
+          "pid": 2845521,
+          "ref": {
+            "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "generation": 1,
+            "phase": "action",
+            "task_id": "idea-first"
+          },
+          "start_ticks": 1064420528,
+          "terminal": {
+            "artifact_ids": [
+              "b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0"
+            ],
+            "effect_receipt_sha256": "bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d",
+            "elapsed_wall_seconds": 0.0578457061201334,
+            "lifecycle": {
+              "global_state": "COMPLETE",
+              "global_transition_id": 4,
+              "legacy_status": "completed",
+              "phase_state": "COMPLETE",
+              "phase_transition_id": 3
+            },
+            "lifecycle_phase": "action",
+            "observation_ids": [],
+            "outcome": "completed",
+            "process_tree": {
+              "binding": {
+                "command_sha256": "8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606",
+                "identity": {
+                  "attempt_ref": {
+                    "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+                    "generation": 1,
+                    "phase": "action",
+                    "task_id": "idea-first"
+                  },
+                  "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first"
+                },
+                "nonce_sha256": "57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101",
+                "protocol": "orze.linux_subreaper.v2",
+                "runtime_lease": {
+                  "boot_id": "50e1fbfb-6bdb-478a-8dbd-1fed33b67397",
+                  "clock": "CLOCK_BOOTTIME",
+                  "deadline_ns": 10644207723967088,
+                  "hostname": "a100-41",
+                  "issued_ns": 10644205723967088,
+                  "schema": 1
+                },
+                "schema": 2,
+                "supervisor": {
+                  "pid": 2845559,
+                  "start_ticks": 1064420578
+                },
+                "worker": {
+                  "pid": 2845561,
+                  "start_ticks": 1064420581
+                }
+              },
+              "event": "TREE_CLOSED",
+              "forced_cleanup": false,
+              "lease_expired": false,
+              "lease_observed_ns": 10644205903551727,
+              "reaped_children": 1,
+              "schema": 2,
+              "stop_requested": false,
+              "wait_proof": "ECHILD_WALL",
+              "worker_returncode": 0
+            },
+            "reason_code": "cpu_action_completed",
+            "return_code": 0,
+            "runtime_lease": {
+              "observed_ns": 10644205957292871,
+              "schema": 1,
+              "status": "authorized"
+            }
+          },
+          "transaction_open": false
+        }
+      ],
+      "started_monotonic": 10644205.252138749,
+      "stderr": "\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\norze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n2026-09-12 01:34:20 [INFO] Loaded config from /tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/orze.yaml\n2026-09-12 01:34:20 [INFO] v4.5 migration already applied (both tables have sop_type)\n2026-09-12 01:34:20 [INFO] Orze CPU actions: /tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results, declared slots=1 (no GPU resource allocation)\n2026-09-12 01:34:20 [INFO] [LIFECYCLE_TRANSITION] idea=idea-first QUEUED \u2192 CLAIMED reason=\"claimed by a100-41 on cpu\"\n",
+      "stdout": "CPU_RECOVERY_META={\"event\": \"start\", \"monotonic\": 10644205.540385686, \"pid\": 2845521, \"start_ticks\": 1064420528}\nCPU_RECOVERY_META={\"current_row\": {\"attempt_id\": \"8b15944dd7b22d42d3a0c125c8343f8d\", \"binding\": {\"action_sha256\": \"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\", \"artifact_publication\": {\"contract\": {\"outputs\": {\"answer\": {\"max_bytes\": 128, \"path\": \"answer.json\"}}, \"version\": 1}, \"root\": \"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts\", \"scope\": \"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\", \"spec_fingerprint\": \"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"}, \"attempt_id\": \"8b15944dd7b22d42d3a0c125c8343f8d\", \"attempt_ref\": {\"attempt_id\": \"8b15944dd7b22d42d3a0c125c8343f8d\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-first\"}, \"command_sha256\": \"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\", \"inputs_sha256\": \"f93de85820457be506fdf4b022025e4834122525c833d19f746ce86ba7d3ff4c\", \"kind\": \"native_cpu_action\", \"lifecycle\": {\"global_state\": \"COMPLETE\", \"global_transition_id\": 4, \"legacy_status\": \"completed\", \"phase_state\": \"COMPLETE\", \"phase_transition_id\": 3}, \"lifecycle_phase\": \"action\", \"origin\": \"native_cpu_action\", \"process_pid\": 2845561, \"process_supervision_protocol\": \"orze.linux_subreaper.v2\", \"reservation_id\": \"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\", \"resource\": \"cpu\", \"runtime_lease\": {\"boot_id\": \"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\", \"clock\": \"CLOCK_BOOTTIME\", \"deadline_ns\": 10644207723967088, \"hostname\": \"a100-41\", \"issued_ns\": 10644205723967088, \"schema\": 1}, \"scope\": \"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\", \"source\": {\"claim_attempt_id\": \"052683c4529a3dc1b6a85889f2073670\", \"claim_sha256\": \"64a4c212df39029d6e23d2219e4e8916a7580969607b59c913f4408754f07560\", \"config_sha256\": \"035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e\", \"database\": \"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\"}, \"supervision\": {\"command_sha256\": \"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\", \"identity\": {\"attempt_ref\": {\"attempt_id\": \"8b15944dd7b22d42d3a0c125c8343f8d\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-first\"}, \"scope\": \"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"}, \"nonce_sha256\": \"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\", \"protocol\": \"orze.linux_subreaper.v2\", \"runtime_lease\": {\"boot_id\": \"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\", \"clock\": \"CLOCK_BOOTTIME\", \"deadline_ns\": 10644207723967088, \"hostname\": \"a100-41\", \"issued_ns\": 10644205723967088, \"schema\": 1}, \"schema\": 2, \"supervisor\": {\"pid\": 2845559, \"start_ticks\": 1064420578}, \"worker\": {\"pid\": 2845561, \"start_ticks\": 1064420581}}, \"timeout_seconds\": 2, \"work_dir\": \"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_action_attempts/8b15944dd7b22d42d3a0c125c8343f8d/work\"}, \"generation\": 1, \"hold_reason\": null, \"phase\": \"action\", \"state\": \"TERMINAL\", \"task_id\": \"idea-first\", \"terminal\": {\"artifact_ids\": [\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"], \"effect_receipt_sha256\": \"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\", \"elapsed_wall_seconds\": 0.0578457061201334, \"lifecycle\": {\"global_state\": \"COMPLETE\", \"global_transition_id\": 4, \"legacy_status\": \"completed\", \"phase_state\": \"COMPLETE\", \"phase_transition_id\": 3}, \"lifecycle_phase\": \"action\", \"observation_ids\": [], \"outcome\": \"completed\", \"process_tree\": {\"binding\": {\"command_sha256\": \"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\", \"identity\": {\"attempt_ref\": {\"attempt_id\": \"8b15944dd7b22d42d3a0c125c8343f8d\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-first\"}, \"scope\": \"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"}, \"nonce_sha256\": \"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\", \"protocol\": \"orze.linux_subreaper.v2\", \"runtime_lease\": {\"boot_id\": \"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\", \"clock\": \"CLOCK_BOOTTIME\", \"deadline_ns\": 10644207723967088, \"hostname\": \"a100-41\", \"issued_ns\": 10644205723967088, \"schema\": 1}, \"schema\": 2, \"supervisor\": {\"pid\": 2845559, \"start_ticks\": 1064420578}, \"worker\": {\"pid\": 2845561, \"start_ticks\": 1064420581}}, \"event\": \"TREE_CLOSED\", \"forced_cleanup\": false, \"lease_expired\": false, \"lease_observed_ns\": 10644205903551727, \"reaped_children\": 1, \"schema\": 2, \"stop_requested\": false, \"wait_proof\": \"ECHILD_WALL\", \"worker_returncode\": 0}, \"reason_code\": \"cpu_action_completed\", \"return_code\": 0, \"runtime_lease\": {\"observed_ns\": 10644205957292871, \"schema\": 1, \"status\": \"authorized\"}}}, \"deliberate_exit_code\": 86, \"effect_confirmed\": true, \"effect_guard_absent\": true, \"event\": \"crash_before_settle\", \"monotonic\": 10644206.024803597, \"permit\": {\"budget_scope\": {\"database\": \"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\", \"database_identity\": [66306, 50218347], \"declaration\": {\"resource\": \"cpu\", \"slots\": 1, \"version\": 1, \"wall_budget_seconds\": 6}, \"directory_identity\": [66306, 50218349], \"policy_sha256\": \"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\", \"results_dir\": \"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\", \"schema\": 1}, \"reservation_id\": \"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\", \"reserved_nanoseconds\": \"2000000000\", \"schema\": 1, \"slot\": 0, \"task_id\": \"idea-first\", \"wall_limit_seconds\": 2}, \"pid\": 2845521, \"ref\": {\"attempt_id\": \"8b15944dd7b22d42d3a0c125c8343f8d\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-first\"}, \"start_ticks\": 1064420528, \"terminal\": {\"artifact_ids\": [\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"], \"effect_receipt_sha256\": \"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\", \"elapsed_wall_seconds\": 0.0578457061201334, \"lifecycle\": {\"global_state\": \"COMPLETE\", \"global_transition_id\": 4, \"legacy_status\": \"completed\", \"phase_state\": \"COMPLETE\", \"phase_transition_id\": 3}, \"lifecycle_phase\": \"action\", \"observation_ids\": [], \"outcome\": \"completed\", \"process_tree\": {\"binding\": {\"command_sha256\": \"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\", \"identity\": {\"attempt_ref\": {\"attempt_id\": \"8b15944dd7b22d42d3a0c125c8343f8d\", \"generation\": 1, \"phase\": \"action\", \"task_id\": \"idea-first\"}, \"scope\": \"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"}, \"nonce_sha256\": \"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\", \"protocol\": \"orze.linux_subreaper.v2\", \"runtime_lease\": {\"boot_id\": \"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\", \"clock\": \"CLOCK_BOOTTIME\", \"deadline_ns\": 10644207723967088, \"hostname\": \"a100-41\", \"issued_ns\": 10644205723967088, \"schema\": 1}, \"schema\": 2, \"supervisor\": {\"pid\": 2845559, \"start_ticks\": 1064420578}, \"worker\": {\"pid\": 2845561, \"start_ticks\": 1064420581}}, \"event\": \"TREE_CLOSED\", \"forced_cleanup\": false, \"lease_expired\": false, \"lease_observed_ns\": 10644205903551727, \"reaped_children\": 1, \"schema\": 2, \"stop_requested\": false, \"wait_proof\": \"ECHILD_WALL\", \"worker_returncode\": 0}, \"reason_code\": \"cpu_action_completed\", \"return_code\": 0, \"runtime_lease\": {\"observed_ns\": 10644205957292871, \"schema\": 1, \"status\": \"authorized\"}}, \"transaction_open\": false}\n",
+      "wall_seconds": 0.7868411857634783
+    },
+    {
+      "after": "5:fresh_recovery:after",
+      "before": "4:fresh_recovery:before",
+      "command": [
+        "/usr/bin/python3",
+        "-m",
+        "cpu_terminal_recovery_helpers",
+        "-c",
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/orze.yaml",
+        "--once"
+      ],
+      "controller_binding": {
+        "command_sha256": "20ac2c3195b0b2d06c4257e238b187354d2f03ba0891e1c01f3d6b82114397bd",
+        "identity": {
+          "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0",
+          "terminal_recovery_controller": "fresh_recovery"
+        },
+        "nonce_sha256": "2beb892792e00fc1cf5288b7ec5f67a6c6ee3b9f298e28e49d0405d89014a0d6",
+        "protocol": "orze.linux_subreaper.v1",
+        "schema": 1,
+        "supervisor": {
+          "pid": 2845603,
+          "start_ticks": 1064420604
+        },
+        "worker": {
+          "pid": 2845604,
+          "start_ticks": 1064420607
+        }
+      },
+      "controller_closure": {
+        "binding": {
+          "command_sha256": "20ac2c3195b0b2d06c4257e238b187354d2f03ba0891e1c01f3d6b82114397bd",
+          "identity": {
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0",
+            "terminal_recovery_controller": "fresh_recovery"
+          },
+          "nonce_sha256": "2beb892792e00fc1cf5288b7ec5f67a6c6ee3b9f298e28e49d0405d89014a0d6",
+          "protocol": "orze.linux_subreaper.v1",
+          "schema": 1,
+          "supervisor": {
+            "pid": 2845603,
+            "start_ticks": 1064420604
+          },
+          "worker": {
+            "pid": 2845604,
+            "start_ticks": 1064420607
+          }
+        },
+        "event": "TREE_CLOSED",
+        "forced_cleanup": false,
+        "reaped_children": 1,
+        "schema": 1,
+        "stop_requested": false,
+        "wait_proof": "ECHILD_WALL",
+        "worker_returncode": 0
+      },
+      "cwd": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0",
+      "exit_code": 0,
+      "finished_monotonic": 10644206.548175676,
+      "label": "fresh_recovery",
+      "metadata": [
+        {
+          "event": "start",
+          "monotonic": 10644206.32993795,
+          "pid": 2845604,
+          "start_ticks": 1064420607
+        },
+        {
+          "event": "finish",
+          "exit_code": 0,
+          "monotonic": 10644206.509313224,
+          "pid": 2845604,
+          "start_ticks": 1064420607
+        }
+      ],
+      "started_monotonic": 10644206.0431991,
+      "stderr": "\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\norze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n2026-09-12 01:34:21 [INFO] Loaded config from /tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/orze.yaml\n2026-09-12 01:34:21 [INFO] v4.5 migration already applied (both tables have sop_type)\n2026-09-12 01:34:21 [INFO] Orze CPU actions: /tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results, declared slots=1 (no GPU resource allocation)\n2026-09-12 01:34:21 [INFO] CPU policy Wait: queue_empty\n",
+      "stdout": "CPU_RECOVERY_META={\"event\": \"start\", \"monotonic\": 10644206.32993795, \"pid\": 2845604, \"start_ticks\": 1064420607}\nCPU_RECOVERY_META={\"event\": \"finish\", \"exit_code\": 0, \"monotonic\": 10644206.509313224, \"pid\": 2845604, \"start_ticks\": 1064420607}\n",
+      "wall_seconds": 0.5049765761941671
+    },
+    {
+      "after": "7:fresh_recovery_replay:after",
+      "before": "6:fresh_recovery_replay:before",
+      "command": [
+        "/usr/bin/python3",
+        "-m",
+        "cpu_terminal_recovery_helpers",
+        "-c",
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/orze.yaml",
+        "--once"
+      ],
+      "controller_binding": {
+        "command_sha256": "20ac2c3195b0b2d06c4257e238b187354d2f03ba0891e1c01f3d6b82114397bd",
+        "identity": {
+          "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0",
+          "terminal_recovery_controller": "fresh_recovery_replay"
+        },
+        "nonce_sha256": "3b5df05767079652dd37a9c0cb6944c89c43b3a557d9180371002cbea42990fd",
+        "protocol": "orze.linux_subreaper.v1",
+        "schema": 1,
+        "supervisor": {
+          "pid": 2845605,
+          "start_ticks": 1064420655
+        },
+        "worker": {
+          "pid": 2845606,
+          "start_ticks": 1064420658
+        }
+      },
+      "controller_closure": {
+        "binding": {
+          "command_sha256": "20ac2c3195b0b2d06c4257e238b187354d2f03ba0891e1c01f3d6b82114397bd",
+          "identity": {
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0",
+            "terminal_recovery_controller": "fresh_recovery_replay"
+          },
+          "nonce_sha256": "3b5df05767079652dd37a9c0cb6944c89c43b3a557d9180371002cbea42990fd",
+          "protocol": "orze.linux_subreaper.v1",
+          "schema": 1,
+          "supervisor": {
+            "pid": 2845605,
+            "start_ticks": 1064420655
+          },
+          "worker": {
+            "pid": 2845606,
+            "start_ticks": 1064420658
+          }
+        },
+        "event": "TREE_CLOSED",
+        "forced_cleanup": false,
+        "reaped_children": 1,
+        "schema": 1,
+        "stop_requested": false,
+        "wait_proof": "ECHILD_WALL",
+        "worker_returncode": 0
+      },
+      "cwd": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0",
+      "exit_code": 0,
+      "finished_monotonic": 10644206.957523271,
+      "label": "fresh_recovery_replay",
+      "metadata": [
+        {
+          "event": "start",
+          "monotonic": 10644206.836843075,
+          "pid": 2845606,
+          "start_ticks": 1064420658
+        },
+        {
+          "event": "finish",
+          "exit_code": 0,
+          "monotonic": 10644206.914771384,
+          "pid": 2845606,
+          "start_ticks": 1064420658
+        }
+      ],
+      "started_monotonic": 10644206.552956928,
+      "stderr": "\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\norze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.\n2026-09-12 01:34:21 [INFO] Loaded config from /tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/orze.yaml\n2026-09-12 01:34:21 [INFO] v4.5 migration already applied (both tables have sop_type)\n2026-09-12 01:34:21 [INFO] Orze CPU actions: /tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results, declared slots=1 (no GPU resource allocation)\n2026-09-12 01:34:21 [INFO] CPU policy Wait: queue_empty\n",
+      "stdout": "CPU_RECOVERY_META={\"event\": \"start\", \"monotonic\": 10644206.836843075, \"pid\": 2845606, \"start_ticks\": 1064420658}\nCPU_RECOVERY_META={\"event\": \"finish\", \"exit_code\": 0, \"monotonic\": 10644206.914771384, \"pid\": 2845606, \"start_ticks\": 1064420658}\n",
+      "wall_seconds": 0.40456634387373924
+    }
+  ],
+  "cfg": {
+    "action_policy": {
+      "idle": "wait",
+      "kind": "queue",
+      "version": 1,
+      "wait_seconds": 0.05
+    },
+    "execution": {
+      "resource": "cpu",
+      "slots": 1,
+      "version": 1,
+      "wall_budget_seconds": 6
+    },
+    "idea_lake_db": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db",
+    "ideas_file": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/ideas.md",
+    "min_disk_gb": 0,
+    "results_dir": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results"
+  },
+  "root": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0",
+  "snapshots": [
+    {
+      "database": {
+        "cpu_action_decisions": [],
+        "cpu_action_recovery": [],
+        "cpu_action_reservations": [],
+        "cpu_action_scopes": [],
+        "execution_attempts": [],
+        "idea_stage_state": [],
+        "idea_stage_transitions": [],
+        "idea_state": [],
+        "idea_transitions": [],
+        "ideas": [],
+        "research_artifacts": [],
+        "research_observations": []
+      },
+      "files": {},
+      "label": "0:admit:idea-first:before",
+      "worker_events": []
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [],
+        "cpu_action_recovery": [],
+        "cpu_action_reservations": [],
+        "cpu_action_scopes": [],
+        "execution_attempts": [],
+        "idea_stage_state": [],
+        "idea_stage_transitions": [],
+        "idea_state": [
+          {
+            "claimed_at": null,
+            "completed_at": null,
+            "current_state": "QUEUED",
+            "first_queued_at": "2026-09-12T01:34:20.307Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-12T01:34:20.307Z",
+            "sop_type": "action",
+            "started_at": null,
+            "terminal_at": null,
+            "updated_at": "2026-09-12T01:34:20.307Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2818668
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2818668,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-12T01:34:20.307Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-12T01:34:20.307Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "9300a83e9f2d8793516c6519e21ee3e8d6df99efb67a3dad81a8ce28617d685c",
+            "config_source_sha256": "035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-12T01:34:20.307Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1683967561,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "queued",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [],
+        "research_observations": []
+      },
+      "files": {},
+      "label": "1:admit:idea-first:after",
+      "worker_events": []
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [],
+        "cpu_action_recovery": [],
+        "cpu_action_reservations": [],
+        "cpu_action_scopes": [],
+        "execution_attempts": [],
+        "idea_stage_state": [],
+        "idea_stage_transitions": [],
+        "idea_state": [
+          {
+            "claimed_at": null,
+            "completed_at": null,
+            "current_state": "QUEUED",
+            "first_queued_at": "2026-09-12T01:34:20.307Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-12T01:34:20.307Z",
+            "sop_type": "action",
+            "started_at": null,
+            "terminal_at": null,
+            "updated_at": "2026-09-12T01:34:20.307Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2818668
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2818668,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-12T01:34:20.307Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-12T01:34:20.307Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "9300a83e9f2d8793516c6519e21ee3e8d6df99efb67a3dad81a8ce28617d685c",
+            "config_source_sha256": "035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-12T01:34:20.307Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1683967561,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "queued",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [],
+        "research_observations": []
+      },
+      "files": {},
+      "label": "2:first_controller_crash:before",
+      "worker_events": []
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [],
+        "cpu_action_recovery": [],
+        "cpu_action_reservations": [
+          {
+            "permit_json": "{\"budget_scope\":{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1},\"reservation_id\":\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\",\"reserved_nanoseconds\":\"2000000000\",\"schema\":1,\"slot\":0,\"task_id\":\"idea-first\",\"wall_limit_seconds\":2}",
+            "ref_json": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"}",
+            "reservation_id": "2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "slot": 0,
+            "state": "BOUND",
+            "task_id": "idea-first",
+            "terminal_sha256": null
+          }
+        ],
+        "cpu_action_scopes": [
+          {
+            "binding_json": "{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1}",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "stop_json": null
+          }
+        ],
+        "execution_attempts": [
+          {
+            "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "binding_json": "{\"action_sha256\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\",\"artifact_publication\":{\"contract\":{\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"version\":1},\"root\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts\",\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"spec_fingerprint\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"},\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"inputs_sha256\":\"f93de85820457be506fdf4b022025e4834122525c833d19f746ce86ba7d3ff4c\",\"kind\":\"native_cpu_action\",\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"origin\":\"native_cpu_action\",\"process_pid\":2845561,\"process_supervision_protocol\":\"orze.linux_subreaper.v2\",\"reservation_id\":\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\",\"resource\":\"cpu\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\",\"source\":{\"claim_attempt_id\":\"052683c4529a3dc1b6a85889f2073670\",\"claim_sha256\":\"64a4c212df39029d6e23d2219e4e8916a7580969607b59c913f4408754f07560\",\"config_sha256\":\"035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e\",\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\"},\"supervision\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"timeout_seconds\":2,\"work_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_action_attempts/8b15944dd7b22d42d3a0c125c8343f8d/work\"}",
+            "generation": 1,
+            "hold_reason": null,
+            "phase": "action",
+            "state": "TERMINAL",
+            "task_id": "idea-first",
+            "terminal_json": "{\"artifact_ids\":[\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"],\"effect_receipt_sha256\":\"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\",\"elapsed_wall_seconds\":0.0578457061201334,\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"lease_expired\":false,\"lease_observed_ns\":10644205903551727,\"reaped_children\":1,\"schema\":2,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0,\"runtime_lease\":{\"observed_ns\":10644205957292871,\"schema\":1,\"status\":\"authorized\"}}"
+          }
+        ],
+        "idea_stage_state": [
+          {
+            "current_state": "COMPLETE",
+            "idea_id": "idea-first",
+            "stage": "action",
+            "started_at": "2026-09-12T01:34:20.902Z",
+            "terminal_at": "2026-09-12T01:34:21.046Z",
+            "updated_at": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "idea_stage_transitions": [
+          {
+            "from_state": "NOT_STARTED",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2845521,
+            "reason": "claimed by a100-41 on cpu",
+            "stage": "action",
+            "to_state": "PENDING",
+            "ts": "2026-09-12T01:34:20.734Z"
+          },
+          {
+            "from_state": "PENDING",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_ready",
+            "stage": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-12T01:34:20.902Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_completed",
+            "stage": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "idea_state": [
+          {
+            "claimed_at": "2026-09-12T01:34:20.734Z",
+            "completed_at": "2026-09-12T01:34:21.046Z",
+            "current_state": "COMPLETE",
+            "first_queued_at": "2026-09-12T01:34:20.307Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-12T01:34:20.307Z",
+            "sop_type": "action",
+            "started_at": "2026-09-12T01:34:20.902Z",
+            "terminal_at": "2026-09-12T01:34:21.046Z",
+            "updated_at": "2026-09-12T01:34:21.046Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2845561
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2818668,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-12T01:34:20.307Z"
+          },
+          {
+            "from_state": "QUEUED",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2845521,
+            "reason": "claimed by a100-41 on cpu",
+            "sop_type": "action",
+            "to_state": "CLAIMED",
+            "ts": "2026-09-12T01:34:20.734Z"
+          },
+          {
+            "from_state": "CLAIMED",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_ready",
+            "sop_type": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-12T01:34:20.902Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 4,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_completed",
+            "sop_type": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-12T01:34:20.307Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "9300a83e9f2d8793516c6519e21ee3e8d6df99efb67a3dad81a8ce28617d685c",
+            "config_source_sha256": "035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-12T01:34:20.307Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1683967561,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "completed",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [
+          {
+            "artifact_id": "b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0",
+            "logical_name": "answer",
+            "producer_attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "producer_generation": 1,
+            "producer_phase": "action",
+            "producer_task_id": "idea-first",
+            "record_json": "{\"artifact_id\":\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\",\"content_sha256\":\"e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1\",\"logical_name\":\"answer\",\"path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts/b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0/content\",\"producer\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"schema\":1,\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"size_bytes\":16,\"spec_fingerprint\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"}"
+          }
+        ],
+        "research_observations": []
+      },
+      "files": {
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts/b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0/content": {
+          "bytes": 16,
+          "sha256": "e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1",
+          "utf8": "{\"tag\": \"first\"}"
+        },
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_execution_effects/8b15944dd7b22d42d3a0c125c8343f8d/committed.json": {
+          "bytes": 235,
+          "sha256": "680b5af2bf054b8093ea6270fea3c74f2ba8815344ea6903380029059984a568",
+          "utf8": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"event\":\"effect_committed\",\"generation\":1,\"phase\":\"action\",\"prepared_sha256\":\"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\",\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        },
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_execution_effects/8b15944dd7b22d42d3a0c125c8343f8d/prepared.json": {
+          "bytes": 1505,
+          "sha256": "bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d",
+          "utf8": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"event\":\"effect_prepared\",\"generation\":1,\"phase\":\"action\",\"plan\":{\"artifact_ids\":[\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"],\"elapsed_wall_seconds\":0.0578457061201334,\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"operation\":\"cpu_action_terminal\",\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"lease_expired\":false,\"lease_observed_ns\":10644205903551727,\"reaped_children\":1,\"schema\":2,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0,\"runtime_lease\":{\"observed_ns\":10644205957292871,\"schema\":1,\"status\":\"authorized\"}},\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        }
+      },
+      "label": "3:first_controller_crash:after",
+      "worker_events": [
+        {
+          "pid": 2845561,
+          "start_ticks": 1064420581,
+          "tag": "first"
+        }
+      ]
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [],
+        "cpu_action_recovery": [],
+        "cpu_action_reservations": [
+          {
+            "permit_json": "{\"budget_scope\":{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1},\"reservation_id\":\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\",\"reserved_nanoseconds\":\"2000000000\",\"schema\":1,\"slot\":0,\"task_id\":\"idea-first\",\"wall_limit_seconds\":2}",
+            "ref_json": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"}",
+            "reservation_id": "2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "slot": 0,
+            "state": "BOUND",
+            "task_id": "idea-first",
+            "terminal_sha256": null
+          }
+        ],
+        "cpu_action_scopes": [
+          {
+            "binding_json": "{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1}",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "stop_json": null
+          }
+        ],
+        "execution_attempts": [
+          {
+            "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "binding_json": "{\"action_sha256\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\",\"artifact_publication\":{\"contract\":{\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"version\":1},\"root\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts\",\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"spec_fingerprint\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"},\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"inputs_sha256\":\"f93de85820457be506fdf4b022025e4834122525c833d19f746ce86ba7d3ff4c\",\"kind\":\"native_cpu_action\",\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"origin\":\"native_cpu_action\",\"process_pid\":2845561,\"process_supervision_protocol\":\"orze.linux_subreaper.v2\",\"reservation_id\":\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\",\"resource\":\"cpu\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\",\"source\":{\"claim_attempt_id\":\"052683c4529a3dc1b6a85889f2073670\",\"claim_sha256\":\"64a4c212df39029d6e23d2219e4e8916a7580969607b59c913f4408754f07560\",\"config_sha256\":\"035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e\",\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\"},\"supervision\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"timeout_seconds\":2,\"work_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_action_attempts/8b15944dd7b22d42d3a0c125c8343f8d/work\"}",
+            "generation": 1,
+            "hold_reason": null,
+            "phase": "action",
+            "state": "TERMINAL",
+            "task_id": "idea-first",
+            "terminal_json": "{\"artifact_ids\":[\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"],\"effect_receipt_sha256\":\"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\",\"elapsed_wall_seconds\":0.0578457061201334,\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"lease_expired\":false,\"lease_observed_ns\":10644205903551727,\"reaped_children\":1,\"schema\":2,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0,\"runtime_lease\":{\"observed_ns\":10644205957292871,\"schema\":1,\"status\":\"authorized\"}}"
+          }
+        ],
+        "idea_stage_state": [
+          {
+            "current_state": "COMPLETE",
+            "idea_id": "idea-first",
+            "stage": "action",
+            "started_at": "2026-09-12T01:34:20.902Z",
+            "terminal_at": "2026-09-12T01:34:21.046Z",
+            "updated_at": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "idea_stage_transitions": [
+          {
+            "from_state": "NOT_STARTED",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2845521,
+            "reason": "claimed by a100-41 on cpu",
+            "stage": "action",
+            "to_state": "PENDING",
+            "ts": "2026-09-12T01:34:20.734Z"
+          },
+          {
+            "from_state": "PENDING",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_ready",
+            "stage": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-12T01:34:20.902Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_completed",
+            "stage": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "idea_state": [
+          {
+            "claimed_at": "2026-09-12T01:34:20.734Z",
+            "completed_at": "2026-09-12T01:34:21.046Z",
+            "current_state": "COMPLETE",
+            "first_queued_at": "2026-09-12T01:34:20.307Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-12T01:34:20.307Z",
+            "sop_type": "action",
+            "started_at": "2026-09-12T01:34:20.902Z",
+            "terminal_at": "2026-09-12T01:34:21.046Z",
+            "updated_at": "2026-09-12T01:34:21.046Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2845561
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2818668,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-12T01:34:20.307Z"
+          },
+          {
+            "from_state": "QUEUED",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2845521,
+            "reason": "claimed by a100-41 on cpu",
+            "sop_type": "action",
+            "to_state": "CLAIMED",
+            "ts": "2026-09-12T01:34:20.734Z"
+          },
+          {
+            "from_state": "CLAIMED",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_ready",
+            "sop_type": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-12T01:34:20.902Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 4,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_completed",
+            "sop_type": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-12T01:34:20.307Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "9300a83e9f2d8793516c6519e21ee3e8d6df99efb67a3dad81a8ce28617d685c",
+            "config_source_sha256": "035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-12T01:34:20.307Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1683967561,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "completed",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [
+          {
+            "artifact_id": "b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0",
+            "logical_name": "answer",
+            "producer_attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "producer_generation": 1,
+            "producer_phase": "action",
+            "producer_task_id": "idea-first",
+            "record_json": "{\"artifact_id\":\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\",\"content_sha256\":\"e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1\",\"logical_name\":\"answer\",\"path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts/b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0/content\",\"producer\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"schema\":1,\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"size_bytes\":16,\"spec_fingerprint\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"}"
+          }
+        ],
+        "research_observations": []
+      },
+      "files": {
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts/b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0/content": {
+          "bytes": 16,
+          "sha256": "e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1",
+          "utf8": "{\"tag\": \"first\"}"
+        },
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_execution_effects/8b15944dd7b22d42d3a0c125c8343f8d/committed.json": {
+          "bytes": 235,
+          "sha256": "680b5af2bf054b8093ea6270fea3c74f2ba8815344ea6903380029059984a568",
+          "utf8": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"event\":\"effect_committed\",\"generation\":1,\"phase\":\"action\",\"prepared_sha256\":\"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\",\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        },
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_execution_effects/8b15944dd7b22d42d3a0c125c8343f8d/prepared.json": {
+          "bytes": 1505,
+          "sha256": "bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d",
+          "utf8": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"event\":\"effect_prepared\",\"generation\":1,\"phase\":\"action\",\"plan\":{\"artifact_ids\":[\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"],\"elapsed_wall_seconds\":0.0578457061201334,\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"operation\":\"cpu_action_terminal\",\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"lease_expired\":false,\"lease_observed_ns\":10644205903551727,\"reaped_children\":1,\"schema\":2,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0,\"runtime_lease\":{\"observed_ns\":10644205957292871,\"schema\":1,\"status\":\"authorized\"}},\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        }
+      },
+      "label": "4:fresh_recovery:before",
+      "worker_events": [
+        {
+          "pid": 2845561,
+          "start_ticks": 1064420581,
+          "tag": "first"
+        }
+      ]
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [
+          {
+            "decision_id": "6dfbbf1d1304b24c5e8c81fa7ff753bc785c089229d27fe3",
+            "record_json": "{\"decision_id\":\"6dfbbf1d1304b24c5e8c81fa7ff753bc785c089229d27fe3\",\"kind\":\"Wait\",\"reason\":\"queue_empty\",\"recorded_at\":1789176861.564657,\"wakeup\":1789176861.6127582}",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results"
+          }
+        ],
+        "cpu_action_recovery": [
+          {
+            "binding_json": "{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1}",
+            "nonce": "893292e6d1ad6919365d4f1d85c8a99495dc71b1590c1690",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "state": "COMPLETE",
+            "summary_json": "{\"already_settled\":[],\"examined\":1,\"retained\":[],\"schema\":1,\"settled\":[\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\"]}"
+          }
+        ],
+        "cpu_action_reservations": [
+          {
+            "permit_json": "{\"budget_scope\":{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1},\"reservation_id\":\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\",\"reserved_nanoseconds\":\"2000000000\",\"schema\":1,\"slot\":0,\"task_id\":\"idea-first\",\"wall_limit_seconds\":2}",
+            "ref_json": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"}",
+            "reservation_id": "2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "slot": 0,
+            "state": "SETTLED",
+            "task_id": "idea-first",
+            "terminal_sha256": "35816901f7b557c17a323e1e3dbc40fb0a9137b3ab8916bad18dd904e5e480c7"
+          }
+        ],
+        "cpu_action_scopes": [
+          {
+            "binding_json": "{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1}",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "stop_json": null
+          }
+        ],
+        "execution_attempts": [
+          {
+            "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "binding_json": "{\"action_sha256\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\",\"artifact_publication\":{\"contract\":{\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"version\":1},\"root\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts\",\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"spec_fingerprint\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"},\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"inputs_sha256\":\"f93de85820457be506fdf4b022025e4834122525c833d19f746ce86ba7d3ff4c\",\"kind\":\"native_cpu_action\",\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"origin\":\"native_cpu_action\",\"process_pid\":2845561,\"process_supervision_protocol\":\"orze.linux_subreaper.v2\",\"reservation_id\":\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\",\"resource\":\"cpu\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\",\"source\":{\"claim_attempt_id\":\"052683c4529a3dc1b6a85889f2073670\",\"claim_sha256\":\"64a4c212df39029d6e23d2219e4e8916a7580969607b59c913f4408754f07560\",\"config_sha256\":\"035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e\",\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\"},\"supervision\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"timeout_seconds\":2,\"work_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_action_attempts/8b15944dd7b22d42d3a0c125c8343f8d/work\"}",
+            "generation": 1,
+            "hold_reason": null,
+            "phase": "action",
+            "state": "TERMINAL",
+            "task_id": "idea-first",
+            "terminal_json": "{\"artifact_ids\":[\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"],\"effect_receipt_sha256\":\"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\",\"elapsed_wall_seconds\":0.0578457061201334,\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"lease_expired\":false,\"lease_observed_ns\":10644205903551727,\"reaped_children\":1,\"schema\":2,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0,\"runtime_lease\":{\"observed_ns\":10644205957292871,\"schema\":1,\"status\":\"authorized\"}}"
+          }
+        ],
+        "idea_stage_state": [
+          {
+            "current_state": "COMPLETE",
+            "idea_id": "idea-first",
+            "stage": "action",
+            "started_at": "2026-09-12T01:34:20.902Z",
+            "terminal_at": "2026-09-12T01:34:21.046Z",
+            "updated_at": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "idea_stage_transitions": [
+          {
+            "from_state": "NOT_STARTED",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2845521,
+            "reason": "claimed by a100-41 on cpu",
+            "stage": "action",
+            "to_state": "PENDING",
+            "ts": "2026-09-12T01:34:20.734Z"
+          },
+          {
+            "from_state": "PENDING",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_ready",
+            "stage": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-12T01:34:20.902Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_completed",
+            "stage": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "idea_state": [
+          {
+            "claimed_at": "2026-09-12T01:34:20.734Z",
+            "completed_at": "2026-09-12T01:34:21.046Z",
+            "current_state": "COMPLETE",
+            "first_queued_at": "2026-09-12T01:34:20.307Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-12T01:34:20.307Z",
+            "sop_type": "action",
+            "started_at": "2026-09-12T01:34:20.902Z",
+            "terminal_at": "2026-09-12T01:34:21.046Z",
+            "updated_at": "2026-09-12T01:34:21.046Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2845561
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2818668,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-12T01:34:20.307Z"
+          },
+          {
+            "from_state": "QUEUED",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2845521,
+            "reason": "claimed by a100-41 on cpu",
+            "sop_type": "action",
+            "to_state": "CLAIMED",
+            "ts": "2026-09-12T01:34:20.734Z"
+          },
+          {
+            "from_state": "CLAIMED",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_ready",
+            "sop_type": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-12T01:34:20.902Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 4,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_completed",
+            "sop_type": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-12T01:34:20.307Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "9300a83e9f2d8793516c6519e21ee3e8d6df99efb67a3dad81a8ce28617d685c",
+            "config_source_sha256": "035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-12T01:34:20.307Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1683967561,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "completed",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [
+          {
+            "artifact_id": "b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0",
+            "logical_name": "answer",
+            "producer_attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "producer_generation": 1,
+            "producer_phase": "action",
+            "producer_task_id": "idea-first",
+            "record_json": "{\"artifact_id\":\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\",\"content_sha256\":\"e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1\",\"logical_name\":\"answer\",\"path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts/b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0/content\",\"producer\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"schema\":1,\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"size_bytes\":16,\"spec_fingerprint\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"}"
+          }
+        ],
+        "research_observations": []
+      },
+      "files": {
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts/b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0/content": {
+          "bytes": 16,
+          "sha256": "e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1",
+          "utf8": "{\"tag\": \"first\"}"
+        },
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_execution_effects/8b15944dd7b22d42d3a0c125c8343f8d/committed.json": {
+          "bytes": 235,
+          "sha256": "680b5af2bf054b8093ea6270fea3c74f2ba8815344ea6903380029059984a568",
+          "utf8": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"event\":\"effect_committed\",\"generation\":1,\"phase\":\"action\",\"prepared_sha256\":\"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\",\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        },
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_execution_effects/8b15944dd7b22d42d3a0c125c8343f8d/prepared.json": {
+          "bytes": 1505,
+          "sha256": "bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d",
+          "utf8": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"event\":\"effect_prepared\",\"generation\":1,\"phase\":\"action\",\"plan\":{\"artifact_ids\":[\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"],\"elapsed_wall_seconds\":0.0578457061201334,\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"operation\":\"cpu_action_terminal\",\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"lease_expired\":false,\"lease_observed_ns\":10644205903551727,\"reaped_children\":1,\"schema\":2,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0,\"runtime_lease\":{\"observed_ns\":10644205957292871,\"schema\":1,\"status\":\"authorized\"}},\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        }
+      },
+      "label": "5:fresh_recovery:after",
+      "worker_events": [
+        {
+          "pid": 2845561,
+          "start_ticks": 1064420581,
+          "tag": "first"
+        }
+      ]
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [
+          {
+            "decision_id": "6dfbbf1d1304b24c5e8c81fa7ff753bc785c089229d27fe3",
+            "record_json": "{\"decision_id\":\"6dfbbf1d1304b24c5e8c81fa7ff753bc785c089229d27fe3\",\"kind\":\"Wait\",\"reason\":\"queue_empty\",\"recorded_at\":1789176861.564657,\"wakeup\":1789176861.6127582}",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results"
+          }
+        ],
+        "cpu_action_recovery": [
+          {
+            "binding_json": "{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1}",
+            "nonce": "893292e6d1ad6919365d4f1d85c8a99495dc71b1590c1690",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "state": "COMPLETE",
+            "summary_json": "{\"already_settled\":[],\"examined\":1,\"retained\":[],\"schema\":1,\"settled\":[\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\"]}"
+          }
+        ],
+        "cpu_action_reservations": [
+          {
+            "permit_json": "{\"budget_scope\":{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1},\"reservation_id\":\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\",\"reserved_nanoseconds\":\"2000000000\",\"schema\":1,\"slot\":0,\"task_id\":\"idea-first\",\"wall_limit_seconds\":2}",
+            "ref_json": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"}",
+            "reservation_id": "2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "slot": 0,
+            "state": "SETTLED",
+            "task_id": "idea-first",
+            "terminal_sha256": "35816901f7b557c17a323e1e3dbc40fb0a9137b3ab8916bad18dd904e5e480c7"
+          }
+        ],
+        "cpu_action_scopes": [
+          {
+            "binding_json": "{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1}",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "stop_json": null
+          }
+        ],
+        "execution_attempts": [
+          {
+            "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "binding_json": "{\"action_sha256\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\",\"artifact_publication\":{\"contract\":{\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"version\":1},\"root\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts\",\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"spec_fingerprint\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"},\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"inputs_sha256\":\"f93de85820457be506fdf4b022025e4834122525c833d19f746ce86ba7d3ff4c\",\"kind\":\"native_cpu_action\",\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"origin\":\"native_cpu_action\",\"process_pid\":2845561,\"process_supervision_protocol\":\"orze.linux_subreaper.v2\",\"reservation_id\":\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\",\"resource\":\"cpu\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\",\"source\":{\"claim_attempt_id\":\"052683c4529a3dc1b6a85889f2073670\",\"claim_sha256\":\"64a4c212df39029d6e23d2219e4e8916a7580969607b59c913f4408754f07560\",\"config_sha256\":\"035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e\",\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\"},\"supervision\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"timeout_seconds\":2,\"work_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_action_attempts/8b15944dd7b22d42d3a0c125c8343f8d/work\"}",
+            "generation": 1,
+            "hold_reason": null,
+            "phase": "action",
+            "state": "TERMINAL",
+            "task_id": "idea-first",
+            "terminal_json": "{\"artifact_ids\":[\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"],\"effect_receipt_sha256\":\"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\",\"elapsed_wall_seconds\":0.0578457061201334,\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"lease_expired\":false,\"lease_observed_ns\":10644205903551727,\"reaped_children\":1,\"schema\":2,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0,\"runtime_lease\":{\"observed_ns\":10644205957292871,\"schema\":1,\"status\":\"authorized\"}}"
+          }
+        ],
+        "idea_stage_state": [
+          {
+            "current_state": "COMPLETE",
+            "idea_id": "idea-first",
+            "stage": "action",
+            "started_at": "2026-09-12T01:34:20.902Z",
+            "terminal_at": "2026-09-12T01:34:21.046Z",
+            "updated_at": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "idea_stage_transitions": [
+          {
+            "from_state": "NOT_STARTED",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2845521,
+            "reason": "claimed by a100-41 on cpu",
+            "stage": "action",
+            "to_state": "PENDING",
+            "ts": "2026-09-12T01:34:20.734Z"
+          },
+          {
+            "from_state": "PENDING",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_ready",
+            "stage": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-12T01:34:20.902Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_completed",
+            "stage": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "idea_state": [
+          {
+            "claimed_at": "2026-09-12T01:34:20.734Z",
+            "completed_at": "2026-09-12T01:34:21.046Z",
+            "current_state": "COMPLETE",
+            "first_queued_at": "2026-09-12T01:34:20.307Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-12T01:34:20.307Z",
+            "sop_type": "action",
+            "started_at": "2026-09-12T01:34:20.902Z",
+            "terminal_at": "2026-09-12T01:34:21.046Z",
+            "updated_at": "2026-09-12T01:34:21.046Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2845561
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2818668,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-12T01:34:20.307Z"
+          },
+          {
+            "from_state": "QUEUED",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2845521,
+            "reason": "claimed by a100-41 on cpu",
+            "sop_type": "action",
+            "to_state": "CLAIMED",
+            "ts": "2026-09-12T01:34:20.734Z"
+          },
+          {
+            "from_state": "CLAIMED",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_ready",
+            "sop_type": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-12T01:34:20.902Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 4,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_completed",
+            "sop_type": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-12T01:34:20.307Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "9300a83e9f2d8793516c6519e21ee3e8d6df99efb67a3dad81a8ce28617d685c",
+            "config_source_sha256": "035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-12T01:34:20.307Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1683967561,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "completed",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [
+          {
+            "artifact_id": "b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0",
+            "logical_name": "answer",
+            "producer_attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "producer_generation": 1,
+            "producer_phase": "action",
+            "producer_task_id": "idea-first",
+            "record_json": "{\"artifact_id\":\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\",\"content_sha256\":\"e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1\",\"logical_name\":\"answer\",\"path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts/b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0/content\",\"producer\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"schema\":1,\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"size_bytes\":16,\"spec_fingerprint\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"}"
+          }
+        ],
+        "research_observations": []
+      },
+      "files": {
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts/b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0/content": {
+          "bytes": 16,
+          "sha256": "e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1",
+          "utf8": "{\"tag\": \"first\"}"
+        },
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_execution_effects/8b15944dd7b22d42d3a0c125c8343f8d/committed.json": {
+          "bytes": 235,
+          "sha256": "680b5af2bf054b8093ea6270fea3c74f2ba8815344ea6903380029059984a568",
+          "utf8": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"event\":\"effect_committed\",\"generation\":1,\"phase\":\"action\",\"prepared_sha256\":\"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\",\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        },
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_execution_effects/8b15944dd7b22d42d3a0c125c8343f8d/prepared.json": {
+          "bytes": 1505,
+          "sha256": "bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d",
+          "utf8": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"event\":\"effect_prepared\",\"generation\":1,\"phase\":\"action\",\"plan\":{\"artifact_ids\":[\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"],\"elapsed_wall_seconds\":0.0578457061201334,\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"operation\":\"cpu_action_terminal\",\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"lease_expired\":false,\"lease_observed_ns\":10644205903551727,\"reaped_children\":1,\"schema\":2,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0,\"runtime_lease\":{\"observed_ns\":10644205957292871,\"schema\":1,\"status\":\"authorized\"}},\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        }
+      },
+      "label": "6:fresh_recovery_replay:before",
+      "worker_events": [
+        {
+          "pid": 2845561,
+          "start_ticks": 1064420581,
+          "tag": "first"
+        }
+      ]
+    },
+    {
+      "database": {
+        "cpu_action_decisions": [
+          {
+            "decision_id": "6dfbbf1d1304b24c5e8c81fa7ff753bc785c089229d27fe3",
+            "record_json": "{\"decision_id\":\"6dfbbf1d1304b24c5e8c81fa7ff753bc785c089229d27fe3\",\"kind\":\"Wait\",\"reason\":\"queue_empty\",\"recorded_at\":1789176861.564657,\"wakeup\":1789176861.6127582}",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results"
+          },
+          {
+            "decision_id": "d743bb40913974e3fe743973d8553a0d9ab3457fcb5e19ed",
+            "record_json": "{\"decision_id\":\"d743bb40913974e3fe743973d8553a0d9ab3457fcb5e19ed\",\"kind\":\"Wait\",\"reason\":\"queue_empty\",\"recorded_at\":1789176861.9700716,\"wakeup\":1789176862.018138}",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results"
+          }
+        ],
+        "cpu_action_recovery": [
+          {
+            "binding_json": "{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1}",
+            "nonce": "893292e6d1ad6919365d4f1d85c8a99495dc71b1590c1690",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "state": "COMPLETE",
+            "summary_json": "{\"already_settled\":[],\"examined\":1,\"retained\":[],\"schema\":1,\"settled\":[\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\"]}"
+          }
+        ],
+        "cpu_action_reservations": [
+          {
+            "permit_json": "{\"budget_scope\":{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1},\"reservation_id\":\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\",\"reserved_nanoseconds\":\"2000000000\",\"schema\":1,\"slot\":0,\"task_id\":\"idea-first\",\"wall_limit_seconds\":2}",
+            "ref_json": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"}",
+            "reservation_id": "2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "slot": 0,
+            "state": "SETTLED",
+            "task_id": "idea-first",
+            "terminal_sha256": "35816901f7b557c17a323e1e3dbc40fb0a9137b3ab8916bad18dd904e5e480c7"
+          }
+        ],
+        "cpu_action_scopes": [
+          {
+            "binding_json": "{\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\",\"database_identity\":[66306,50218347],\"declaration\":{\"resource\":\"cpu\",\"slots\":1,\"version\":1,\"wall_budget_seconds\":6},\"directory_identity\":[66306,50218349],\"policy_sha256\":\"7f8400a9945686ecd6bd70fb4a3f825263b572c0cb2ae99ccc431c3233e99217\",\"results_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"schema\":1}",
+            "scope": "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results",
+            "stop_json": null
+          }
+        ],
+        "execution_attempts": [
+          {
+            "attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "binding_json": "{\"action_sha256\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\",\"artifact_publication\":{\"contract\":{\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"version\":1},\"root\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts\",\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"spec_fingerprint\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"},\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"inputs_sha256\":\"f93de85820457be506fdf4b022025e4834122525c833d19f746ce86ba7d3ff4c\",\"kind\":\"native_cpu_action\",\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"origin\":\"native_cpu_action\",\"process_pid\":2845561,\"process_supervision_protocol\":\"orze.linux_subreaper.v2\",\"reservation_id\":\"2ba7b64fa123f60bc260bfc43e45e791643c8763f7174c2d\",\"resource\":\"cpu\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\",\"source\":{\"claim_attempt_id\":\"052683c4529a3dc1b6a85889f2073670\",\"claim_sha256\":\"64a4c212df39029d6e23d2219e4e8916a7580969607b59c913f4408754f07560\",\"config_sha256\":\"035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e\",\"database\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/lake.db\"},\"supervision\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"timeout_seconds\":2,\"work_dir\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_action_attempts/8b15944dd7b22d42d3a0c125c8343f8d/work\"}",
+            "generation": 1,
+            "hold_reason": null,
+            "phase": "action",
+            "state": "TERMINAL",
+            "task_id": "idea-first",
+            "terminal_json": "{\"artifact_ids\":[\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"],\"effect_receipt_sha256\":\"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\",\"elapsed_wall_seconds\":0.0578457061201334,\"lifecycle\":{\"global_state\":\"COMPLETE\",\"global_transition_id\":4,\"legacy_status\":\"completed\",\"phase_state\":\"COMPLETE\",\"phase_transition_id\":3},\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"lease_expired\":false,\"lease_observed_ns\":10644205903551727,\"reaped_children\":1,\"schema\":2,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0,\"runtime_lease\":{\"observed_ns\":10644205957292871,\"schema\":1,\"status\":\"authorized\"}}"
+          }
+        ],
+        "idea_stage_state": [
+          {
+            "current_state": "COMPLETE",
+            "idea_id": "idea-first",
+            "stage": "action",
+            "started_at": "2026-09-12T01:34:20.902Z",
+            "terminal_at": "2026-09-12T01:34:21.046Z",
+            "updated_at": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "idea_stage_transitions": [
+          {
+            "from_state": "NOT_STARTED",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2845521,
+            "reason": "claimed by a100-41 on cpu",
+            "stage": "action",
+            "to_state": "PENDING",
+            "ts": "2026-09-12T01:34:20.734Z"
+          },
+          {
+            "from_state": "PENDING",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_ready",
+            "stage": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-12T01:34:20.902Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_completed",
+            "stage": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "idea_state": [
+          {
+            "claimed_at": "2026-09-12T01:34:20.734Z",
+            "completed_at": "2026-09-12T01:34:21.046Z",
+            "current_state": "COMPLETE",
+            "first_queued_at": "2026-09-12T01:34:20.307Z",
+            "idea_id": "idea-first",
+            "queued_at": "2026-09-12T01:34:20.307Z",
+            "sop_type": "action",
+            "started_at": "2026-09-12T01:34:20.902Z",
+            "terminal_at": "2026-09-12T01:34:21.046Z",
+            "updated_at": "2026-09-12T01:34:21.046Z",
+            "updated_by_host": "a100-41",
+            "updated_by_pid": 2845561
+          }
+        ],
+        "idea_transitions": [
+          {
+            "from_state": "UNKNOWN",
+            "host": "a100-41",
+            "id": 1,
+            "idea_id": "idea-first",
+            "pid": 2818668,
+            "reason": "proposal_admitted",
+            "sop_type": "action",
+            "to_state": "QUEUED",
+            "ts": "2026-09-12T01:34:20.307Z"
+          },
+          {
+            "from_state": "QUEUED",
+            "host": "a100-41",
+            "id": 2,
+            "idea_id": "idea-first",
+            "pid": 2845521,
+            "reason": "claimed by a100-41 on cpu",
+            "sop_type": "action",
+            "to_state": "CLAIMED",
+            "ts": "2026-09-12T01:34:20.734Z"
+          },
+          {
+            "from_state": "CLAIMED",
+            "host": "a100-41",
+            "id": 3,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_ready",
+            "sop_type": "action",
+            "to_state": "IN_PROGRESS",
+            "ts": "2026-09-12T01:34:20.902Z"
+          },
+          {
+            "from_state": "IN_PROGRESS",
+            "host": "a100-41",
+            "id": 4,
+            "idea_id": "idea-first",
+            "pid": 2845561,
+            "reason": "cpu_action_completed",
+            "sop_type": "action",
+            "to_state": "COMPLETE",
+            "ts": "2026-09-12T01:34:21.046Z"
+          }
+        ],
+        "ideas": [
+          {
+            "approach_family": "other",
+            "archived_at": "2026-09-12T01:34:20.307Z",
+            "category": "architecture",
+            "config": "{\"action\":{\"adapter\":\"command\",\"command\":[\"/usr/bin/python3\",\"-c\",\"import json, os\\nfrom pathlib import Path\\nfd = int(os.environ['ORZE_ACTION_INPUT_FD'])\\ndata = json.loads(os.pread(fd, 65536, 0))\\nstat = Path('/proc/self/stat').read_text()\\nbirth = int(stat[stat.rfind(')') + 2:].split()[19])\\nevent = json.dumps({'tag': data['tag'], 'pid': os.getpid(), 'start_ticks': birth}, sort_keys=True)\\nwith open(data['audit_path'], 'a', encoding='utf-8') as stream:\\n    stream.write(event + '\\\\n')\\n    stream.flush()\\n    os.fsync(stream.fileno())\\nPath('answer.json').write_text(json.dumps({'tag': data['tag']}), encoding='utf-8')\\nraise SystemExit(data['exit_code'])\\n\"],\"inputs\":{\"audit_path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/worker-events.jsonl\",\"exit_code\":0,\"tag\":\"first\"},\"outputs\":{\"answer\":{\"max_bytes\":128,\"path\":\"answer.json\"}},\"purpose\":\"CPU terminal recovery control\",\"timeout_seconds\":2,\"version\":1},\"kind\":\"native_cpu_action\"}",
+            "config_hash": "9300a83e9f2d8793516c6519e21ee3e8d6df99efb67a3dad81a8ce28617d685c",
+            "config_source_sha256": "035609730f58e22ede501ef7be735d809ed7a22faa65e4697d31982c52cd427e",
+            "config_summary": "{\"action.adapter\": \"command\", \"action.purpose\": \"CPU terminal recovery control\", \"action.timeout_seconds\": 2, \"action.version\": 1, \"kind\": \"native_cpu_action\"}",
+            "created_at": "2026-09-12T01:34:20.307Z",
+            "eval_metrics": null,
+            "hypothesis": null,
+            "id_num": 1683967561,
+            "idea_id": "idea-first",
+            "kind": "native_cpu_action",
+            "parent": null,
+            "priority": "medium",
+            "raw_markdown": "",
+            "status": "completed",
+            "title": "idea-first",
+            "training_time": null
+          }
+        ],
+        "research_artifacts": [
+          {
+            "artifact_id": "b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0",
+            "logical_name": "answer",
+            "producer_attempt_id": "8b15944dd7b22d42d3a0c125c8343f8d",
+            "producer_generation": 1,
+            "producer_phase": "action",
+            "producer_task_id": "idea-first",
+            "record_json": "{\"artifact_id\":\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\",\"content_sha256\":\"e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1\",\"logical_name\":\"answer\",\"path\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts/b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0/content\",\"producer\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"schema\":1,\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results\",\"size_bytes\":16,\"spec_fingerprint\":\"a07263563905dcf1834fe5a981091494554d2ff8f23dc6c60038ffaa370d152d\"}"
+          }
+        ],
+        "research_observations": []
+      },
+      "files": {
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/.orze/artifacts/b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0/content": {
+          "bytes": 16,
+          "sha256": "e3e37b50ec9891faf499f24e78c88e07cb2c5f5456ac1aa2371f2f05e25213c1",
+          "utf8": "{\"tag\": \"first\"}"
+        },
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_execution_effects/8b15944dd7b22d42d3a0c125c8343f8d/committed.json": {
+          "bytes": 235,
+          "sha256": "680b5af2bf054b8093ea6270fea3c74f2ba8815344ea6903380029059984a568",
+          "utf8": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"event\":\"effect_committed\",\"generation\":1,\"phase\":\"action\",\"prepared_sha256\":\"bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d\",\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        },
+        "/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first/_execution_effects/8b15944dd7b22d42d3a0c125c8343f8d/prepared.json": {
+          "bytes": 1505,
+          "sha256": "bbd1b1c30c7db0bdfcd59d8f5ab31bd577902c9659d5ca72455656c30b90536d",
+          "utf8": "{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"event\":\"effect_prepared\",\"generation\":1,\"phase\":\"action\",\"plan\":{\"artifact_ids\":[\"b66acb7661e76366ca8892dc9ce91119fda24f9bed668e4ae67eeedc7db289a0\"],\"elapsed_wall_seconds\":0.0578457061201334,\"lifecycle_phase\":\"action\",\"observation_ids\":[],\"operation\":\"cpu_action_terminal\",\"outcome\":\"completed\",\"process_tree\":{\"binding\":{\"command_sha256\":\"8722ce18f10d0865801247283eb7d45e3a54170bbb7758b0ccaf481740635606\",\"identity\":{\"attempt_ref\":{\"attempt_id\":\"8b15944dd7b22d42d3a0c125c8343f8d\",\"generation\":1,\"phase\":\"action\",\"task_id\":\"idea-first\"},\"scope\":\"/tmp/orze-c3-core-full.QWvkkW/pytest/test_real_v2_confirmed_termina0/project-0/results/idea-first\"},\"nonce_sha256\":\"57c7735e97f4487d1881ff923c416db5d99dc891632b9558bb69b22fbad81101\",\"protocol\":\"orze.linux_subreaper.v2\",\"runtime_lease\":{\"boot_id\":\"50e1fbfb-6bdb-478a-8dbd-1fed33b67397\",\"clock\":\"CLOCK_BOOTTIME\",\"deadline_ns\":10644207723967088,\"hostname\":\"a100-41\",\"issued_ns\":10644205723967088,\"schema\":1},\"schema\":2,\"supervisor\":{\"pid\":2845559,\"start_ticks\":1064420578},\"worker\":{\"pid\":2845561,\"start_ticks\":1064420581}},\"event\":\"TREE_CLOSED\",\"forced_cleanup\":false,\"lease_expired\":false,\"lease_observed_ns\":10644205903551727,\"reaped_children\":1,\"schema\":2,\"stop_requested\":false,\"wait_proof\":\"ECHILD_WALL\",\"worker_returncode\":0},\"reason_code\":\"cpu_action_completed\",\"return_code\":0,\"runtime_lease\":{\"observed_ns\":10644205957292871,\"schema\":1,\"status\":\"authorized\"}},\"schema_version\":1,\"task_id\":\"idea-first\"}"
+        }
+      },
+      "label": "7:fresh_recovery_replay:after",
+      "worker_events": [
+        {
+          "pid": 2845561,
+          "start_ticks": 1064420581,
+          "tag": "first"
+        }
+      ]
+    }
+  ]
+}

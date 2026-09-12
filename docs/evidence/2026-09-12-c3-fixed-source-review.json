@@ -1,0 +1,314 @@
+{
+  "schema": 1,
+  "date": "2026-09-12",
+  "reviewer": "/root/pro_review",
+  "scope": "Independent bounded fixed-source/full-record consistency review for C3; no worker or test suite was executed by these review commands.",
+  "authorship_disclosure": "Reviewer authored the C3 budget/F adapter and its own recovery tests and Pro full evidence. This report independently cross-checks root's full-record/fixed-source mapping, but is not an independent semantic review of that author's own budget implementation.",
+  "outcome": "pass for the requested fixed-source, inventory, archived full-run and scope checks; final Core evidence push remains pending at this observation.",
+  "references": {
+    "baseline_core": "5f9637e58615d57b0e2668372082f203785150c5",
+    "fixed_core_source": "f62495df9359cb85a128be7ff70ca78dbfcd7f03",
+    "fixed_pro_reference": "da2d7d92da5281ab49362509fad71fc3d78e427a",
+    "pro_production_unchanged_since": "1384c12d40069c98a430d0e25647de102a7e38de",
+    "observed_core_evidence_HEAD": "4b00921cbfd7c93d6aeda4709e8fdf2d35eeb922",
+    "observed_core_remote_feature": "d8c57dfeb8d80c378542a79ec449a6a84734e1bd",
+    "observed_pro_remote_feature": "da2d7d92da5281ab49362509fad71fc3d78e427a",
+    "note": "Source qualification uses f62495d, not the time of later evidence commits. The Pro reference is an evidence-only commit whose source bytes match its prior source point. Local Core HEAD has additional evidence but exactly the same 777 inventoried source/test/example/build blobs."
+  },
+  "checks": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,re,subprocess,sys,xml.etree.ElementTree as ET\nfrom pathlib import Path\ncore=Path.cwd();pro=core.parent/'orze-pro';roots={'core':core,'pro':pro}\nbase={'core':'5f9637e58615d57b0e2668372082f203785150c5','pro':'7e82229847245dc34cac12f77fc899284382aaa7'}\nfixed={'core':'f62495df9359cb85a128be7ff70ca78dbfcd7f03','pro':'da2d7d92da5281ab49362509fad71fc3d78e427a'}\ndef git(repo,*args):return subprocess.check_output(['git',*args],cwd=roots[repo])\ndef blob(repo,commit,path):return git(repo,'show',commit+':'+path)\ndef sha(raw):return hashlib.sha256(raw).hexdigest()\ndef paths(repo,commit):return git(repo,'ls-tree','-r','--name-only',commit).decode().splitlines()\ndef selected(name):return (name.startswith(('src/','tests/','examples/')) or name in {'pyproject.toml','setup.py','setup.cfg','MANIFEST.in','uv.lock','poetry.lock'} or (name.startswith('requirements') and name.endswith('.txt'))) and '__pycache__/' not in name and not name.endswith(('.pyc','.pyo'))\nfull_path=core/'docs/evidence/2026-09-12-c3-core-full.json';full=json.loads(full_path.read_text())\ninv_path=pro/'docs/evidence/2026-09-12-c3-pro-inventory.json';inv=json.loads(inv_path.read_text())\npro_report_path=pro/'docs/evidence/2026-09-12-c3-pro-verification.json';pro_report=json.loads(pro_report_path.read_text())\nassert sha(inv_path.read_bytes())==pro_report['source_point']['inventory']['sha256']=='0afa374590299c8caba8faf676140c02cc3b81ebd7f4abfae93b638e7accdd0e'\nassert full['source_commit']['orze']==fixed['core'] and full['source_commit']['orze-pro']==fixed['pro']\nresult={'refs':{},'inventories':{},'scope':{},'artifacts':[]}\nfor repo,record_key in [('core','orze'),('pro','orze-pro')]:\n a=full['inventory']['before'][record_key]['files'];b=full['inventory']['after'][record_key]['files']\n assert a==b==inv['before'][repo]==inv['after'][repo]\n assert len(a)==(777 if repo=='core' else 226)\n head=git(repo,'rev-parse','HEAD').decode().strip()\n current=set(git(repo,'ls-files','--cached','--others','--exclude-standard','-z').decode().split('\\0'))\n current={p for p in current if p and selected(p) and (roots[repo]/p).is_file()}\n assert current==set(a)\n assert {p for p in paths(repo,fixed[repo]) if selected(p)}==set(a)\n for p,expected in a.items():\n  assert sha(blob(repo,fixed[repo],p))==sha(blob(repo,head,p))==sha((roots[repo]/p).read_bytes())==expected,(repo,p)\n result['refs'][repo]={'fixed_source_commit':fixed[repo],'observed_local_HEAD':head,'baseline':base[repo]}\n result['inventories'][repo]={'count':len(a),'full_before_after_equals_pro_before_after':True,'exact_fixed_commit_HEAD_worktree_keysets_and_bytes':True}\n old=paths(repo,base[repo]);old_tests=[p for p in old if p.startswith('tests/') and p.endswith('.py')]\n assert all(blob(repo,base[repo],p)==blob(repo,fixed[repo],p) for p in old_tests)\n changed=git(repo,'diff','--name-only',base[repo],fixed[repo],'--','src','tests','examples').decode().splitlines()\n build=[p for p in set(old)|set(paths(repo,fixed[repo])) if selected(p) and not p.startswith(('src/','tests/','examples/'))]\n assert all(blob(repo,base[repo],p)==blob(repo,fixed[repo],p) for p in build)\n assert not [p for p in changed if p.startswith('examples/')]\n result['scope'][repo]={'old_tracked_python_test_files_unchanged':len(old_tests),'changed_source_test_example_paths':changed,'build_files_unchanged':build,'examples_unchanged':True}\n if repo=='pro':\n  assert changed==[]\n  prior='1384c12d40069c98a430d0e25647de102a7e38de'\n  assert git(repo,'diff','--name-only',prior,fixed[repo],'--','src').decode()==''\n  result['scope'][repo]['production_unchanged_since']=prior\nassert full['inventory']['total']==1003\nexpected_sources={'src/orze/core/config.py','src/orze/core/cpu_action_budget.py','src/orze/core/cpu_execution.py','src/orze/engine/cpu_phase.py','src/orze/engine/execution_authority.py','src/orze/engine/native_cpu_action.py','src/orze/engine/process_supervision.py','src/orze/engine/supervised_process.py','src/orze/engine/supervisor_worker.py'}\nchanged=result['scope']['core']['changed_source_test_example_paths']\nassert {p for p in changed if p.startswith('src/')}==expected_sources\nassert len([p for p in changed if p.startswith('tests/')])==8\nassert all(p not in paths('core',base['core']) for p in changed if p.startswith('tests/'))\nimports=lambda tree:{(n.level,n.module,tuple(a.name for a in n.names)) if isinstance(n,ast.ImportFrom) else (0,None,tuple(a.name for a in n.names)) for n in ast.walk(tree) if isinstance(n,(ast.Import,ast.ImportFrom))}\nadded_imports={};new_ddl=[]\nfor p in sorted(expected_sources):\n old=ast.parse(blob('core',base['core'],p));new=ast.parse(blob('core',fixed['core'],p))\n added=imports(new)-imports(old)\n for level,module,names in added:\n  for name in ([module] if module else names):\n   assert level or name.split('.')[0]=='orze' or name.split('.')[0] in sys.stdlib_module_names,(p,name)\n added_imports[p]=[{'level':level,'module':module,'names':list(names)} for level,module,names in sorted(added,key=repr)]\n ddl=lambda tree:{n.value for n in ast.walk(tree) if isinstance(n,ast.Constant) and isinstance(n.value,str) and re.search(r'\\bCREATE\\s+(?:TEMP\\s+|TEMPORARY\\s+)?TABLE\\b',n.value,re.I)}\n assert not (ddl(new)-ddl(old)),p\nold=ast.parse(blob('core',base['core'],'src/orze/core/cpu_action_budget.py'));new=ast.parse(blob('core',fixed['core'],'src/orze/core/cpu_action_budget.py'))\nfor name in ('_SQL','_INDEX'):\n get=lambda tree:next(ast.dump(n,include_attributes=False) for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id==name for t in n.targets))\n assert get(old)==get(new)\nresult['scope']['core'].update(added_imports=added_imports,new_third_party_import_roots=[],new_CREATE_TABLE_literal_definitions=[],budget_SQL_and_INDEX_AST_unchanged=True)\nfixture='docs/evidence/snapshots/2026-09-12-c3-before-native-cpu-action.py';expected='a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e'\nassert sha(blob('core',fixed['core'],fixture))==sha((core/fixture).read_bytes())==expected\nassert blob('core',fixed['core'],fixture)==blob('core',base['core'],'src/orze/engine/native_cpu_action.py')\ntest=ast.parse(blob('core',fixed['core'],'tests/test_runtime_lease_recovery.py'));func=next(n for n in test.body if isinstance(n,ast.FunctionDef) and n.name=='_legacy_child')\nneedle=ast.dump(ast.parse('assert hashlib.sha256(raw).hexdigest() == '+repr(expected)).body[0],include_attributes=False)\nindex=next(i for i,n in enumerate(func.body) if ast.dump(n,include_attributes=False)==needle)\nexec_index=next(i for i,n in enumerate(func.body) if isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and isinstance(n.value.func,ast.Name) and n.value.func.id=='exec')\nassert index<exec_index and any(isinstance(n,ast.Constant) and n.value==fixture for n in ast.walk(func))\nresult['supplementary_fixture']={'path':fixture,'sha256':expected,'outside_1003':fixture not in full['inventory']['before']['orze']['files'],'baseline_native_blob_exact':True,'literal_assert_AST_exact':True,'assert_before_exec':True}\nchunks=full['raw_tool_chunks'];assert len(chunks)==12 and chunks[-1]['chunk_id']=='994e9f' and chunks[-1]['exit_code']==full['exit_code']==0\nlog=(core/full['raw_log']).read_bytes();assert log==''.join(c['output'] for c in chunks).encode()\nassert '4456 passed, 7 skipped, 2 warnings in 816.36s' in log.decode()\nassert full['result']=={'passed':4456,'skipped':7,'warnings':2,'seconds':816.36}\nxml_path=core/full['archived_junit'];xml=ET.fromstring(xml_path.read_bytes());cases=xml.findall('.//testcase')\nassert len(cases)==4463 and len(xml.findall('.//skipped'))==7 and not xml.findall('.//failure') and not xml.findall('.//error')\nassert xml_path.read_bytes()==Path(full['original_junit']).read_bytes()\nresult['core_full_record']={'raw_chunks':12,'last_chunk':'994e9f','exit_code':0,'passed':4456,'skipped':7,'warnings':2,'seconds':816.36,'JUnit_cases':len(cases),'raw_log_exact_chunk_concatenation':True,'excluded_test_paths':full['excluded_test_paths'],'selection_filters':full['selection_filters']}\nassert full['excluded_test_paths']==full['selection_filters']==[]\nfor p in [full_path,inv_path,pro_report_path,xml_path,core/full['raw_log']]:\n result['artifacts'].append({'path':str(p),'sha256':sha(p.read_bytes()),'bytes':p.stat().st_size})\nprint(json.dumps(result,sort_keys=True))\nPY",
+      "result": {
+        "chunk_id": "6017ec",
+        "wall_time_seconds": 7.003767224,
+        "exit_code": 0,
+        "original_token_count": 1345,
+        "output": "{\"artifacts\": [{\"bytes\": 267570, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/2026-09-12-c3-core-full.json\", \"sha256\": \"1e3725e60d971abac43f47e61fa5c4912d7897591211ed9e185953180b2255e5\"}, {\"bytes\": 233874, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro/docs/evidence/2026-09-12-c3-pro-inventory.json\", \"sha256\": \"0afa374590299c8caba8faf676140c02cc3b81ebd7f4abfae93b638e7accdd0e\"}, {\"bytes\": 15421, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro/docs/evidence/2026-09-12-c3-pro-verification.json\", \"sha256\": \"6410e821d28714d7298abac0a4e7d38cada146afb560edbd2b0f2254be58ce15\"}, {\"bytes\": 1254958, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/2026-09-12-c3-core-full.junit.xml\", \"sha256\": \"f3e3fe0edb1e755ec0d76dd88e3226963df817260d3c765d6183fe785f3f0daf\"}, {\"bytes\": 22422, \"path\": \"/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/2026-09-12-c3-core-full.log\", \"sha256\": \"6bb886b59717a642a279cf0409db4aa6cc736c6a2568b580689f1449b63712c7\"}], \"core_full_record\": {\"JUnit_cases\": 4463, \"excluded_test_paths\": [], \"exit_code\": 0, \"last_chunk\": \"994e9f\", \"passed\": 4456, \"raw_chunks\": 12, \"raw_log_exact_chunk_concatenation\": true, \"seconds\": 816.36, \"selection_filters\": [], \"skipped\": 7, \"warnings\": 2}, \"inventories\": {\"core\": {\"count\": 777, \"exact_fixed_commit_HEAD_worktree_keysets_and_bytes\": true, \"full_before_after_equals_pro_before_after\": true}, \"pro\": {\"count\": 226, \"exact_fixed_commit_HEAD_worktree_keysets_and_bytes\": true, \"full_before_after_equals_pro_before_after\": true}}, \"refs\": {\"core\": {\"baseline\": \"5f9637e58615d57b0e2668372082f203785150c5\", \"fixed_source_commit\": \"f62495df9359cb85a128be7ff70ca78dbfcd7f03\", \"observed_local_HEAD\": \"4b00921cbfd7c93d6aeda4709e8fdf2d35eeb922\"}, \"pro\": {\"baseline\": \"7e82229847245dc34cac12f77fc899284382aaa7\", \"fixed_source_commit\": \"da2d7d92da5281ab49362509fad71fc3d78e427a\", \"observed_local_HEAD\": \"da2d7d92da5281ab49362509fad71fc3d78e427a\"}}, \"scope\": {\"core\": {\"added_imports\": {\"src/orze/core/config.py\": [], \"src/orze/core/cpu_action_budget.py\": [{\"level\": 0, \"module\": \"orze.engine.supervisor_worker\", \"names\": [\"validate_runtime_lease\"]}], \"src/orze/core/cpu_execution.py\": [], \"src/orze/engine/cpu_phase.py\": [{\"level\": 0, \"module\": \"orze.core.cpu_execution\", \"names\": [\"CPUExecutionError\", \"action_policy\", \"cpu_execution\", \"execution_fingerprint\", \"runtime_lease_seconds\"]}], \"src/orze/engine/execution_authority.py\": [{\"level\": 0, \"module\": \"orze.engine.supervisor_worker\", \"names\": [\"runtime_lease_now\", \"RUNTIME_LEASE_PROTOCOL\"]}, {\"level\": 0, \"module\": \"orze.engine.supervisor_worker\", \"names\": [\"validate_runtime_lease\"]}], \"src/orze/engine/native_cpu_action.py\": [{\"level\": 0, \"module\": \"orze.core.cpu_execution\", \"names\": [\"runtime_lease_config\", \"runtime_lease_seconds\"]}, {\"level\": 0, \"module\": \"orze.core.cpu_execution\", \"names\": [\"runtime_lease_config\"]}, {\"level\": 0, \"module\": \"orze.engine.supervisor_worker\", \"names\": [\"RUNTIME_LEASE_PROTOCOL\", \"RuntimeLeaseExpired\", \"capture_runtime_lease\", \"runtime_lease_now\"]}], \"src/orze/engine/process_supervision.py\": [{\"level\": 0, \"module\": \"orze.engine.supervisor_worker\", \"names\": [\"MAX_NS\", \"RUNTIME_LEASE_PROTOCOL\", \"validate_runtime_lease\"]}], \"src/orze/engine/supervised_process.py\": [{\"level\": 0, \"module\": \"orze.engine.supervisor_worker\", \"names\": [\"MAX_FRAME\", \"PROTOCOL\", \"canonical\", \"process_identity\", \"send_frame\", \"take_frame\", \"MAX_NS\", \"RUNTIME_LEASE_PROTOCOL\", \"RuntimeLeaseExpired\", \"validate_runtime_lease\", \"runtime_lease_now\", \"require_runtime_lease\"]}], \"src/orze/engine/supervisor_worker.py\": [{\"level\": 0, \"module\": null, \"names\": [\"math\"]}, {\"level\": 0, \"module\": null, \"names\": [\"re\"]}]}, \"budget_SQL_and_INDEX_AST_unchanged\": true, \"build_files_unchanged\": [\"pyproject.toml\", \"requirements.txt\"], \"changed_source_test_example_paths\": [\"src/orze/core/config.py\", \"src/orze/core/cpu_action_budget.py\", \"src/orze/core/cpu_execution.py\", \"src/orze/engine/cpu_phase.py\", \"src/orze/engine/execution_authority.py\", \"src/orze/engine/native_cpu_action.py\", \"src/orze/engine/process_supervision.py\", \"src/orze/engine/supervised_process.py\", \"src/orze/engine/supervisor_worker.py\", \"tests/test_cpu_runtime_lease_config.py\", \"tests/test_runtime_lease_boundaries.py\", \"tests/test_runtime_lease_cli.py\", \"tests/test_runtime_lease_config_capture.py\", \"tests/test_runtime_lease_observation.py\", \"tests/test_runtime_lease_publication.py\", \"tests/test_runtime_lease_recovery.py\", \"tests/test_runtime_lease_supervision.py\"], \"examples_unchanged\": true, \"new_CREATE_TABLE_literal_definitions\": [], \"new_third_party_import_roots\": [], \"old_tracked_python_test_files_unchanged\": 478}, \"pro\": {\"build_files_unchanged\": [\"pyproject.toml\"], \"changed_source_test_example_paths\": [], \"examples_unchanged\": true, \"old_tracked_python_test_files_unchanged\": 136, \"production_unchanged_since\": \"1384c12d40069c98a430d0e25647de102a7e38de\"}}, \"supplementary_fixture\": {\"assert_before_exec\": true, \"baseline_native_blob_exact\": true, \"literal_assert_AST_exact\": true, \"outside_1003\": true, \"path\": \"docs/evidence/snapshots/2026-09-12-c3-before-native-cpu-action.py\", \"sha256\": \"a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e\"}}\n"
+      },
+      "parsed": {
+        "artifacts": [
+          {
+            "bytes": 267570,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/2026-09-12-c3-core-full.json",
+            "sha256": "1e3725e60d971abac43f47e61fa5c4912d7897591211ed9e185953180b2255e5"
+          },
+          {
+            "bytes": 233874,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro/docs/evidence/2026-09-12-c3-pro-inventory.json",
+            "sha256": "0afa374590299c8caba8faf676140c02cc3b81ebd7f4abfae93b638e7accdd0e"
+          },
+          {
+            "bytes": 15421,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze-pro/docs/evidence/2026-09-12-c3-pro-verification.json",
+            "sha256": "6410e821d28714d7298abac0a4e7d38cada146afb560edbd2b0f2254be58ce15"
+          },
+          {
+            "bytes": 1254958,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/2026-09-12-c3-core-full.junit.xml",
+            "sha256": "f3e3fe0edb1e755ec0d76dd88e3226963df817260d3c765d6183fe785f3f0daf"
+          },
+          {
+            "bytes": 22422,
+            "path": "/hot-data/fsx/workspace/erik/orze-implementation-2026-09-10.SyXgzC/orze/docs/evidence/runs/2026-09-12-c3-core-full.log",
+            "sha256": "6bb886b59717a642a279cf0409db4aa6cc736c6a2568b580689f1449b63712c7"
+          }
+        ],
+        "core_full_record": {
+          "JUnit_cases": 4463,
+          "excluded_test_paths": [],
+          "exit_code": 0,
+          "last_chunk": "994e9f",
+          "passed": 4456,
+          "raw_chunks": 12,
+          "raw_log_exact_chunk_concatenation": true,
+          "seconds": 816.36,
+          "selection_filters": [],
+          "skipped": 7,
+          "warnings": 2
+        },
+        "inventories": {
+          "core": {
+            "count": 777,
+            "exact_fixed_commit_HEAD_worktree_keysets_and_bytes": true,
+            "full_before_after_equals_pro_before_after": true
+          },
+          "pro": {
+            "count": 226,
+            "exact_fixed_commit_HEAD_worktree_keysets_and_bytes": true,
+            "full_before_after_equals_pro_before_after": true
+          }
+        },
+        "refs": {
+          "core": {
+            "baseline": "5f9637e58615d57b0e2668372082f203785150c5",
+            "fixed_source_commit": "f62495df9359cb85a128be7ff70ca78dbfcd7f03",
+            "observed_local_HEAD": "4b00921cbfd7c93d6aeda4709e8fdf2d35eeb922"
+          },
+          "pro": {
+            "baseline": "7e82229847245dc34cac12f77fc899284382aaa7",
+            "fixed_source_commit": "da2d7d92da5281ab49362509fad71fc3d78e427a",
+            "observed_local_HEAD": "da2d7d92da5281ab49362509fad71fc3d78e427a"
+          }
+        },
+        "scope": {
+          "core": {
+            "added_imports": {
+              "src/orze/core/config.py": [],
+              "src/orze/core/cpu_action_budget.py": [
+                {
+                  "level": 0,
+                  "module": "orze.engine.supervisor_worker",
+                  "names": [
+                    "validate_runtime_lease"
+                  ]
+                }
+              ],
+              "src/orze/core/cpu_execution.py": [],
+              "src/orze/engine/cpu_phase.py": [
+                {
+                  "level": 0,
+                  "module": "orze.core.cpu_execution",
+                  "names": [
+                    "CPUExecutionError",
+                    "action_policy",
+                    "cpu_execution",
+                    "execution_fingerprint",
+                    "runtime_lease_seconds"
+                  ]
+                }
+              ],
+              "src/orze/engine/execution_authority.py": [
+                {
+                  "level": 0,
+                  "module": "orze.engine.supervisor_worker",
+                  "names": [
+                    "runtime_lease_now",
+                    "RUNTIME_LEASE_PROTOCOL"
+                  ]
+                },
+                {
+                  "level": 0,
+                  "module": "orze.engine.supervisor_worker",
+                  "names": [
+                    "validate_runtime_lease"
+                  ]
+                }
+              ],
+              "src/orze/engine/native_cpu_action.py": [
+                {
+                  "level": 0,
+                  "module": "orze.core.cpu_execution",
+                  "names": [
+                    "runtime_lease_config",
+                    "runtime_lease_seconds"
+                  ]
+                },
+                {
+                  "level": 0,
+                  "module": "orze.core.cpu_execution",
+                  "names": [
+                    "runtime_lease_config"
+                  ]
+                },
+                {
+                  "level": 0,
+                  "module": "orze.engine.supervisor_worker",
+                  "names": [
+                    "RUNTIME_LEASE_PROTOCOL",
+                    "RuntimeLeaseExpired",
+                    "capture_runtime_lease",
+                    "runtime_lease_now"
+                  ]
+                }
+              ],
+              "src/orze/engine/process_supervision.py": [
+                {
+                  "level": 0,
+                  "module": "orze.engine.supervisor_worker",
+                  "names": [
+                    "MAX_NS",
+                    "RUNTIME_LEASE_PROTOCOL",
+                    "validate_runtime_lease"
+                  ]
+                }
+              ],
+              "src/orze/engine/supervised_process.py": [
+                {
+                  "level": 0,
+                  "module": "orze.engine.supervisor_worker",
+                  "names": [
+                    "MAX_FRAME",
+                    "PROTOCOL",
+                    "canonical",
+                    "process_identity",
+                    "send_frame",
+                    "take_frame",
+                    "MAX_NS",
+                    "RUNTIME_LEASE_PROTOCOL",
+                    "RuntimeLeaseExpired",
+                    "validate_runtime_lease",
+                    "runtime_lease_now",
+                    "require_runtime_lease"
+                  ]
+                }
+              ],
+              "src/orze/engine/supervisor_worker.py": [
+                {
+                  "level": 0,
+                  "module": null,
+                  "names": [
+                    "math"
+                  ]
+                },
+                {
+                  "level": 0,
+                  "module": null,
+                  "names": [
+                    "re"
+                  ]
+                }
+              ]
+            },
+            "budget_SQL_and_INDEX_AST_unchanged": true,
+            "build_files_unchanged": [
+              "pyproject.toml",
+              "requirements.txt"
+            ],
+            "changed_source_test_example_paths": [
+              "src/orze/core/config.py",
+              "src/orze/core/cpu_action_budget.py",
+              "src/orze/core/cpu_execution.py",
+              "src/orze/engine/cpu_phase.py",
+              "src/orze/engine/execution_authority.py",
+              "src/orze/engine/native_cpu_action.py",
+              "src/orze/engine/process_supervision.py",
+              "src/orze/engine/supervised_process.py",
+              "src/orze/engine/supervisor_worker.py",
+              "tests/test_cpu_runtime_lease_config.py",
+              "tests/test_runtime_lease_boundaries.py",
+              "tests/test_runtime_lease_cli.py",
+              "tests/test_runtime_lease_config_capture.py",
+              "tests/test_runtime_lease_observation.py",
+              "tests/test_runtime_lease_publication.py",
+              "tests/test_runtime_lease_recovery.py",
+              "tests/test_runtime_lease_supervision.py"
+            ],
+            "examples_unchanged": true,
+            "new_CREATE_TABLE_literal_definitions": [],
+            "new_third_party_import_roots": [],
+            "old_tracked_python_test_files_unchanged": 478
+          },
+          "pro": {
+            "build_files_unchanged": [
+              "pyproject.toml"
+            ],
+            "changed_source_test_example_paths": [],
+            "examples_unchanged": true,
+            "old_tracked_python_test_files_unchanged": 136,
+            "production_unchanged_since": "1384c12d40069c98a430d0e25647de102a7e38de"
+          }
+        },
+        "supplementary_fixture": {
+          "assert_before_exec": true,
+          "baseline_native_blob_exact": true,
+          "literal_assert_AST_exact": true,
+          "outside_1003": true,
+          "path": "docs/evidence/snapshots/2026-09-12-c3-before-native-cpu-action.py",
+          "sha256": "a3af30c67e83afb0cc8eb311c26b574a4193a91e24dedd8d3653d1317a38e92e"
+        }
+      }
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport json,subprocess\nfrom pathlib import Path\nroots={'core':Path.cwd(),'pro':Path.cwd().parent/'orze-pro'}\nexpected_main={'core':'5ca2680dbd0139e63cd35a4f83da438b5b47ab99','pro':'57feb6e0af19dcf62a80b1e447f0771936d39afe'}\nresult={}\nfor repo,root in roots.items():\n local={ref:subprocess.check_output(['git','rev-parse',ref],cwd=root,text=True).strip() for ref in ['HEAD','main']}\n raw=subprocess.check_output(['git','ls-remote','origin','refs/heads/feat/autoresearch-v1','refs/heads/main'],cwd=root,text=True)\n remote={name:sha for sha,name in (line.split() for line in raw.splitlines())}\n assert set(remote)=={'refs/heads/feat/autoresearch-v1','refs/heads/main'}\n assert local['main']==remote['refs/heads/main']==expected_main[repo]\n result[repo]={'local':local,'remote':remote,'raw_ls_remote':raw,'feature_matches_observed_HEAD':local['HEAD']==remote['refs/heads/feat/autoresearch-v1']}\nprint(json.dumps(result,sort_keys=True))\nPY",
+      "result": {
+        "chunk_id": "7b1187",
+        "wall_time_seconds": 0.637298772,
+        "exit_code": 0,
+        "original_token_count": 237,
+        "output": "{\"core\": {\"feature_matches_observed_HEAD\": false, \"local\": {\"HEAD\": \"4b00921cbfd7c93d6aeda4709e8fdf2d35eeb922\", \"main\": \"5ca2680dbd0139e63cd35a4f83da438b5b47ab99\"}, \"raw_ls_remote\": \"d8c57dfeb8d80c378542a79ec449a6a84734e1bd\\trefs/heads/feat/autoresearch-v1\\n5ca2680dbd0139e63cd35a4f83da438b5b47ab99\\trefs/heads/main\\n\", \"remote\": {\"refs/heads/feat/autoresearch-v1\": \"d8c57dfeb8d80c378542a79ec449a6a84734e1bd\", \"refs/heads/main\": \"5ca2680dbd0139e63cd35a4f83da438b5b47ab99\"}}, \"pro\": {\"feature_matches_observed_HEAD\": true, \"local\": {\"HEAD\": \"da2d7d92da5281ab49362509fad71fc3d78e427a\", \"main\": \"57feb6e0af19dcf62a80b1e447f0771936d39afe\"}, \"raw_ls_remote\": \"da2d7d92da5281ab49362509fad71fc3d78e427a\\trefs/heads/feat/autoresearch-v1\\n57feb6e0af19dcf62a80b1e447f0771936d39afe\\trefs/heads/main\\n\", \"remote\": {\"refs/heads/feat/autoresearch-v1\": \"da2d7d92da5281ab49362509fad71fc3d78e427a\", \"refs/heads/main\": \"57feb6e0af19dcf62a80b1e447f0771936d39afe\"}}}\n"
+      },
+      "parsed": {
+        "core": {
+          "feature_matches_observed_HEAD": false,
+          "local": {
+            "HEAD": "4b00921cbfd7c93d6aeda4709e8fdf2d35eeb922",
+            "main": "5ca2680dbd0139e63cd35a4f83da438b5b47ab99"
+          },
+          "raw_ls_remote": "d8c57dfeb8d80c378542a79ec449a6a84734e1bd\trefs/heads/feat/autoresearch-v1\n5ca2680dbd0139e63cd35a4f83da438b5b47ab99\trefs/heads/main\n",
+          "remote": {
+            "refs/heads/feat/autoresearch-v1": "d8c57dfeb8d80c378542a79ec449a6a84734e1bd",
+            "refs/heads/main": "5ca2680dbd0139e63cd35a4f83da438b5b47ab99"
+          }
+        },
+        "pro": {
+          "feature_matches_observed_HEAD": true,
+          "local": {
+            "HEAD": "da2d7d92da5281ab49362509fad71fc3d78e427a",
+            "main": "57feb6e0af19dcf62a80b1e447f0771936d39afe"
+          },
+          "raw_ls_remote": "da2d7d92da5281ab49362509fad71fc3d78e427a\trefs/heads/feat/autoresearch-v1\n57feb6e0af19dcf62a80b1e447f0771936d39afe\trefs/heads/main\n",
+          "remote": {
+            "refs/heads/feat/autoresearch-v1": "da2d7d92da5281ab49362509fad71fc3d78e427a",
+            "refs/heads/main": "57feb6e0af19dcf62a80b1e447f0771936d39afe"
+          }
+        }
+      }
+    }
+  ],
+  "conclusions": [
+    "All 777 Core + 226 Pro file paths/hashes agree across Core full before/after, Pro full before/after, selected current keysets, fixed Git blobs, current HEAD blobs and worktree.",
+    "Core baseline478 and Pro baseline136 tracked Python test files are byte-identical. C3 changes exactly9 existing Core source paths plus8 new Core test files; no Pro source/test/example change and no application example change.",
+    "Build/dependency manifests are byte-identical; new import roots are only existing orze modules or stdlib math/re. No new CREATE TABLE literal definitions were added, and the complete CPU budget _SQL/_INDEX ASTs are identical.",
+    "The historical v1 native fixture is an extra file outside the1003 manifest. Its a3af30 SHA matches the baseline complete module, fixed f624 Git blob and worktree; the new test has an exact literal SHA Assert before exec.",
+    "All12 raw Core chunks concatenate byte-exactly to the archived log, whose final994e9f exit0 footer reports4456 passed/7 skipped/2 warnings/816.36s. Archived JUnit is byte-identical to the original temporary XML, with4463 total cases,7 skips and zero failures/errors.",
+    "Core/Pro local and remote main refs remain5ca2680/57feb6e respectively. Pro feature remote exactly matchesda2d7d9. Core feature remote stilld8c57df while local evidence HEAD is4b00921; no final Core evidence-push completion is claimed.",
+    "No source, test, current-status document, Git ref, index, commit or remote was modified by this review. Only this requested new review JSON is written."
+  ],
+  "limitations": [
+    "These commands validate record/source consistency, not cryptographic execution attestation or a proof of all runtime semantics.",
+    "Archive hashes and JUnit counts do not replace the separately recorded actual runtime-lease, publication and recovery cases.",
+    "The no-new-dependency/table conclusion is bounded to the frozen nine-file production diff, exact build manifests/import roots and existing budget schema definitions; it is not a general repository redesign claim.",
+    "Remote refs are point-in-time read-only observations. Root must perform the final Core evidence push and exact readback afterward.",
+    "No scientific improvement, real GPU/provider acceptance, checkpoint/resume or broader deployment capability is asserted."
+  ]
+}

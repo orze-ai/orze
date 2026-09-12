@@ -2,6 +2,8 @@
 
 日期：2026-09-11。2026-09-12 更正：**整版完成结论已撤回，继续实施**。见[重新审计与剩余工作](2026-09-12-v1-reopened.zh-CN.md)。下文保留原验收论证和历史结果，不再作为整个 V1 完成的有效签核。
 
+2026-09-12 后续补缺与完整回归已另外完成，见[新的最终机制验收](2026-09-12-autoresearch-v1-closure.zh-CN.md)。本历史签核及其旧统计不恢复、不改写。
+
 依据：[冻结的原始 V1 方案](2026-09-10-autoresearch-v1.zh-CN.md)与[逐片实施账本](2026-09-10-autoresearch-v1-status.zh-CN.md)。本文只汇总原始 V1-00～07，不新增实施范围。V1-00 的原始命令、两仓 SHA、环境失败与离线替身记录见 [Pro 固定基线入口](https://github.com/orze-ai/orze-pro/blob/1384c12d40069c98a430d0e25647de102a7e38de/docs/plans/2026-09-10-autoresearch-v1.zh-CN.md)。
 
 ## 要求与代表性证据
