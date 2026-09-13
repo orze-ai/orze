@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "date": "2026-09-13",
+  "role": "Independent storage review/test author; not author of storage or GC production fixes.",
+  "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+  "summary": {
+    "candidate1": {
+      "failed": 1,
+      "passed": 5,
+      "seconds": 1.16,
+      "classification": "Actual new-candidate path race; not missing API, setup failure or changed business expectation."
+    },
+    "fixed": {
+      "passed": 10,
+      "failed": 0,
+      "seconds": 1.17,
+      "composition": "Original six requirements plus four new basename/file-descriptor controls."
+    },
+    "blocking_findings_after_fixed_run": []
+  },
+  "finding": {
+    "path": "src/orze/engine/storage_preflight.py",
+    "reason": "Path-based rename reopened a replaced root after the prior captured-route check. A mirrored probe/case/source under the replacement root was really moved before preflight refused.",
+    "reproduction": "Transparent rename seam replaces only temporary owned test roots immediately before delegating the genuine no-replace primitive.",
+    "observed_after_failure": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,xml.etree.ElementTree as ET\nfrom pathlib import Path\nj=Path('/tmp/orze-storage-review.boIWWqDg/review.junit.xml');raw=j.read_bytes();tree=ET.fromstring(raw)\ncase=Path('/tmp/orze-storage-review.boIWWqDg/tests/test_path_replacement_with_sam0')\npaths=list((case/'root').glob('.orze-storage-probe-*/case-00/target'));assert len(paths)==1\np=paths[0];b=p.read_bytes();assert b==b'foreign source must retain its name and inode'\nprint(json.dumps({'junit':{'path':str(j),'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'cases':len(tree.findall('.//testcase')),'failures':len(tree.findall('.//failure')),'errors':len(tree.findall('.//error')),'skipped':len(tree.findall('.//skipped'))},'foreign_after':{'source_exists':p.with_name('source').exists(),'target':str(p),'target_inode':p.stat().st_ino,'target_bytes':len(b),'target_sha256':hashlib.sha256(b).hexdigest(),'target_utf8':b.decode(),'retained_original_root_children':[x.name for x in (case/'retained-original-root').iterdir()]}},sort_keys=True))\nPY",
+      "tool_result": {
+        "chunk_id": "7bf18c",
+        "wall_time_seconds": 0.000004021,
+        "exit_code": 0,
+        "original_token_count": 178,
+        "output": "{\"foreign_after\": {\"retained_original_root_children\": [\".orze-storage-probe-5cd98b6c9bd9d0a246f6cbce0a83dac3\"], \"source_exists\": false, \"target\": \"/tmp/orze-storage-review.boIWWqDg/tests/test_path_replacement_with_sam0/root/.orze-storage-probe-5cd98b6c9bd9d0a246f6cbce0a83dac3/case-00/target\", \"target_bytes\": 45, \"target_inode\": 48272708, \"target_sha256\": \"a9ab4e22555fb5d595d39ab270af4de74963b0d876657ed46133f556800cc1b9\", \"target_utf8\": \"foreign source must retain its name and inode\"}, \"junit\": {\"bytes\": 1989, \"cases\": 6, \"errors\": 0, \"failures\": 1, \"path\": \"/tmp/orze-storage-review.boIWWqDg/review.junit.xml\", \"sha256\": \"282bf691cc75a5c8a38f0b2beaa2cda15c6670d8d38d25d4ad57e729b1fa7d2e\", \"skipped\": 0}}\n"
+      }
+    },
+    "fix_authorship": "Core author added an FD-based rename helper and made preflight use its previously captured parent FDs. Reviewer changed no production source.",
+    "fix_scope": "Final filesystem operation and GC/HOLD authorization remain required; successful preflight is not cached execution or deletion authority."
+  },
+  "snapshots": [
+    {
+      "path": "docs/evidence/snapshots/2026-09-13-storage-preflight-review-before.py",
+      "source": "src/orze/engine/storage_preflight.py",
+      "sha256": "8a174d3576a3b819ffe537c638ad973eabd21959d8345fb319052860f7424f32",
+      "bytes": 11872,
+      "origin": "Complete current candidate before the independent failing test; not claimed as committed baseline."
+    },
+    {
+      "path": "docs/evidence/snapshots/2026-09-13-storage-preflight-review-first-tests.py",
+      "source": "tests/test_storage_preflight_review.py",
+      "sha256": "97ea7bbceed3102c82b6c7c7ca299dde21b08275f5304ecf4ad2cd40d37ba139",
+      "bytes": 6128,
+      "origin": "Complete first six-test file after its actual 1F5P run, before authorized spy adaptation."
+    }
+  ],
+  "candidate1": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_storage_preflight_review.py --tb=short -rs -p no:cacheprovider --basetemp=/tmp/orze-storage-review.boIWWqDg/tests --junitxml=/tmp/orze-storage-review.boIWWqDg/review.junit.xml",
+    "session_id": 4749,
+    "tool_results": [
+      {
+        "chunk_id": "2bcd05",
+        "wall_time_seconds": 1.001131156,
+        "session_id": 4749,
+        "original_token_count": 1,
+        "output": "F..."
+      },
+      {
+        "chunk_id": "cf545d",
+        "wall_time_seconds": 0.00000326,
+        "exit_code": 1,
+        "original_token_count": 197,
+        "output": "..                                                                   [100%]\n=================================== FAILURES ===================================\n____ test_path_replacement_with_same_probe_names_cannot_move_foreign_source ____\ntests/test_storage_preflight_review.py:41: in test_path_replacement_with_same_probe_names_cannot_move_foreign_source\n    assert foreign[\"source\"].is_file(), \"preflight renamed an uncaptured replacement source\"\nE   AssertionError: preflight renamed an uncaptured replacement source\nE   assert False\nE    +  where False = is_file()\nE    +    where is_file = PosixPath('/tmp/orze-storage-review.boIWWqDg/tests/test_path_replacement_with_sam0/root/.orze-storage-probe-5cd98b6c9bd9d0a246f6cbce0a83dac3/case-00/source').is_file\n1 failed, 5 passed in 1.16s\n"
+      }
+    ],
+    "inventory": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json\nfrom pathlib import Path\npaths=['src/orze/engine/storage_preflight.py','src/orze/engine/gc_tree.py','src/orze/engine/gc_safety.py','src/orze/engine/orchestrator.py','../orze-pro/src/orze_pro/engine/role_runner.py','tests/test_storage_preflight.py','tests/test_storage_preflight_review.py','docs/evidence/snapshots/2026-09-13-storage-preflight-review-before.py']\nfiles={p:{'sha256':hashlib.sha256(Path(p).read_bytes()).hexdigest(),'bytes':Path(p).stat().st_size} for p in paths}\ntree=ast.parse(Path('tests/test_storage_preflight_review.py').read_text());assert files[paths[0]]==files[paths[-1]]\nprint(json.dumps({'files':files,'review_functions':sum(isinstance(x,ast.FunctionDef) and x.name.startswith('test_') for x in tree.body),'review_literal_asserts':sum(isinstance(x,ast.Assert) for x in ast.walk(tree))},sort_keys=True))\nPY",
+      "before": {
+        "chunk_id": "dfd99f",
+        "wall_time_seconds": 0.000004148,
+        "exit_code": 0,
+        "original_token_count": 293,
+        "output": "{\"files\": {\"../orze-pro/src/orze_pro/engine/role_runner.py\": {\"bytes\": 118571, \"sha256\": \"650738524d0d60b4e0572d8f09a6faabfeb59378a659289cc86fb74aff2c96df\"}, \"docs/evidence/snapshots/2026-09-13-storage-preflight-review-before.py\": {\"bytes\": 11872, \"sha256\": \"8a174d3576a3b819ffe537c638ad973eabd21959d8345fb319052860f7424f32\"}, \"src/orze/engine/gc_safety.py\": {\"bytes\": 13074, \"sha256\": \"aefb777bbbdae4829930c7291fc98e51be7180c77aa355bc8eb89b86403d4ef8\"}, \"src/orze/engine/gc_tree.py\": {\"bytes\": 8219, \"sha256\": \"9fca08593291f3878b979e8fc6045db9b22c2dcdb52e5dfa5081b40aeff4779e\"}, \"src/orze/engine/orchestrator.py\": {\"bytes\": 85634, \"sha256\": \"209709f36610574ec54efeb9a5cff04ed511780036edb416d477f93b6ad1abc6\"}, \"src/orze/engine/storage_preflight.py\": {\"bytes\": 11872, \"sha256\": \"8a174d3576a3b819ffe537c638ad973eabd21959d8345fb319052860f7424f32\"}, \"tests/test_storage_preflight.py\": {\"bytes\": 11707, \"sha256\": \"1881ce0ad1a67c9ee2ce5797a3e85373abe6d67690622c8c1dcde57be12a80c5\"}, \"tests/test_storage_preflight_review.py\": {\"bytes\": 6128, \"sha256\": \"97ea7bbceed3102c82b6c7c7ca299dde21b08275f5304ecf4ad2cd40d37ba139\"}}, \"review_functions\": 6, \"review_literal_asserts\": 23}\n"
+      },
+      "after": {
+        "chunk_id": "0bc8d3",
+        "wall_time_seconds": 0.000004796,
+        "exit_code": 0,
+        "original_token_count": 293,
+        "output": "{\"files\": {\"../orze-pro/src/orze_pro/engine/role_runner.py\": {\"bytes\": 118571, \"sha256\": \"650738524d0d60b4e0572d8f09a6faabfeb59378a659289cc86fb74aff2c96df\"}, \"docs/evidence/snapshots/2026-09-13-storage-preflight-review-before.py\": {\"bytes\": 11872, \"sha256\": \"8a174d3576a3b819ffe537c638ad973eabd21959d8345fb319052860f7424f32\"}, \"src/orze/engine/gc_safety.py\": {\"bytes\": 13074, \"sha256\": \"aefb777bbbdae4829930c7291fc98e51be7180c77aa355bc8eb89b86403d4ef8\"}, \"src/orze/engine/gc_tree.py\": {\"bytes\": 8219, \"sha256\": \"9fca08593291f3878b979e8fc6045db9b22c2dcdb52e5dfa5081b40aeff4779e\"}, \"src/orze/engine/orchestrator.py\": {\"bytes\": 85634, \"sha256\": \"209709f36610574ec54efeb9a5cff04ed511780036edb416d477f93b6ad1abc6\"}, \"src/orze/engine/storage_preflight.py\": {\"bytes\": 11872, \"sha256\": \"8a174d3576a3b819ffe537c638ad973eabd21959d8345fb319052860f7424f32\"}, \"tests/test_storage_preflight.py\": {\"bytes\": 11707, \"sha256\": \"1881ce0ad1a67c9ee2ce5797a3e85373abe6d67690622c8c1dcde57be12a80c5\"}, \"tests/test_storage_preflight_review.py\": {\"bytes\": 6128, \"sha256\": \"97ea7bbceed3102c82b6c7c7ca299dde21b08275f5304ecf4ad2cd40d37ba139\"}}, \"review_functions\": 6, \"review_literal_asserts\": 23}\n"
+      },
+      "all_eight_file_bytes_exact": true
+    },
+    "archives": {
+      "log": {
+        "path": "docs/evidence/runs/2026-09-13-storage-preflight-review-candidate1.log",
+        "sha256": "ca054a2214f9e3bd72d12331d0e934439b4a48d06362bf5c0f9020b093fed978"
+      },
+      "junit": {
+        "bytes": 1989,
+        "cases": 6,
+        "errors": 0,
+        "failures": 1,
+        "path": "docs/evidence/runs/2026-09-13-storage-preflight-review-candidate1.junit.xml",
+        "sha256": "282bf691cc75a5c8a38f0b2beaa2cda15c6670d8d38d25d4ad57e729b1fa7d2e",
+        "skipped": 0,
+        "original": "/tmp/orze-storage-review.boIWWqDg/review.junit.xml"
+      }
+    }
+  },
+  "fixture_adaptation": {
+    "explicitly_authorized": true,
+    "description": "Only two transparent rename wrappers changed from path arguments to four FD/basename arguments. A transparent _Probe.directory observer records logical path solely to construct/check replacement fixture paths; the operation itself delegates original captured directory FDs.",
+    "old_literal_asserts": 23,
+    "old_assertions_preserved": 23,
+    "new_helper_control_asserts": 4,
+    "total_literal_asserts": 27,
+    "other_four_original_functions_ast_exact": true,
+    "audit": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,xml.etree.ElementTree as ET\nfrom pathlib import Path\noldp=Path('docs/evidence/snapshots/2026-09-13-storage-preflight-review-first-tests.py');p=Path('tests/test_storage_preflight_review.py');old=ast.parse(oldp.read_text());new=ast.parse(p.read_text());of={n.name:n for n in old.body if isinstance(n,ast.FunctionDef)};nf={n.name:n for n in new.body if isinstance(n,ast.FunctionDef)}\nassertions=lambda n:[ast.dump(a,include_attributes=False) for a in ast.walk(n) if isinstance(a,ast.Assert)]\nassert all(assertions(f)==assertions(nf[k]) for k,f in of.items())\nchanged=[k for k,f in of.items() if ast.dump(f)!=ast.dump(nf[k])];assert changed==['test_path_replacement_with_same_probe_names_cannot_move_foreign_source','test_cleanup_retains_untracked_entry_inside_original_probe']\ncounts={}\nfor name in ['candidate1','fixed']:\n jp=Path('docs/evidence/runs/2026-09-13-storage-preflight-review-'+name+'.junit.xml');jr=jp.read_bytes();t=ET.fromstring(jr)\n counts[name]={'path':str(jp),'sha256':hashlib.sha256(jr).hexdigest(),'bytes':len(jr),'cases':len(t.findall('.//testcase')),'failures':len(t.findall('.//failure')),'errors':len(t.findall('.//error')),'skipped':len(t.findall('.//skipped'))}\nassert counts['candidate1']['cases']==6 and counts['candidate1']['failures']==1\nassert counts['fixed']['cases']==10 and counts['fixed']['failures']==counts['fixed']['errors']==counts['fixed']['skipped']==0\nprint(json.dumps({'old_test_sha256':hashlib.sha256(oldp.read_bytes()).hexdigest(),'current_test_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'old_asserts':sum(isinstance(x,ast.Assert) for x in ast.walk(old)),'new_asserts':sum(isinstance(x,ast.Assert) for x in ast.walk(new)),'all_old_assertions_exact':True,'changed_old_functions':changed,'other_old_functions_ast_exact':True,'junit':counts},sort_keys=True))\nPY",
+      "tool_result": {
+        "chunk_id": "2db4e6",
+        "wall_time_seconds": 0.000004181,
+        "exit_code": 0,
+        "original_token_count": 239,
+        "output": "{\"all_old_assertions_exact\": true, \"changed_old_functions\": [\"test_path_replacement_with_same_probe_names_cannot_move_foreign_source\", \"test_cleanup_retains_untracked_entry_inside_original_probe\"], \"current_test_sha256\": \"456251efee058334d9656090e501b4b361030d9f031300b8584eb10ae866cefc\", \"junit\": {\"candidate1\": {\"bytes\": 1989, \"cases\": 6, \"errors\": 0, \"failures\": 1, \"path\": \"docs/evidence/runs/2026-09-13-storage-preflight-review-candidate1.junit.xml\", \"sha256\": \"282bf691cc75a5c8a38f0b2beaa2cda15c6670d8d38d25d4ad57e729b1fa7d2e\", \"skipped\": 0}, \"fixed\": {\"bytes\": 1729, \"cases\": 10, \"errors\": 0, \"failures\": 0, \"path\": \"docs/evidence/runs/2026-09-13-storage-preflight-review-fixed.junit.xml\", \"sha256\": \"37258849b7ae32c4b2bd9299e44cd2548221f35ae218559bc54339b51748ba48\", \"skipped\": 0}}, \"new_asserts\": 27, \"old_asserts\": 23, \"old_test_sha256\": \"97ea7bbceed3102c82b6c7c7ca299dde21b08275f5304ecf4ad2cd40d37ba139\", \"other_old_functions_ast_exact\": true}\n"
+      }
+    }
+  },
+  "fixed": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_storage_preflight_review.py --tb=short -rs -p no:cacheprovider --basetemp=/tmp/orze-storage-fixed.2xRqWLlu/tests --junitxml=/tmp/orze-storage-fixed.2xRqWLlu/review.junit.xml",
+    "session_id": 13265,
+    "tool_results": [
+      {
+        "chunk_id": "d5a4b2",
+        "wall_time_seconds": 1.000943614,
+        "session_id": 13265,
+        "original_token_count": 1,
+        "output": "...."
+      },
+      {
+        "chunk_id": "9e1d11",
+        "wall_time_seconds": 0.000002905,
+        "exit_code": 0,
+        "original_token_count": 24,
+        "output": "......                                                               [100%]\n10 passed in 1.17s\n"
+      }
+    ],
+    "inventory": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json\nfrom pathlib import Path\npaths=['src/orze/engine/storage_preflight.py','src/orze/engine/gc_tree.py','src/orze/engine/gc_safety.py','tests/test_storage_preflight.py','tests/test_gc_scope_mechanisms.py','tests/test_storage_preflight_review.py']\nprint(json.dumps({p:{'sha256':hashlib.sha256(Path(p).read_bytes()).hexdigest(),'bytes':Path(p).stat().st_size} for p in paths},sort_keys=True))\nPY",
+      "before": {
+        "chunk_id": "3efaee",
+        "wall_time_seconds": 0.000005029,
+        "exit_code": 0,
+        "original_token_count": 198,
+        "output": "{\"src/orze/engine/gc_safety.py\": {\"bytes\": 13074, \"sha256\": \"aefb777bbbdae4829930c7291fc98e51be7180c77aa355bc8eb89b86403d4ef8\"}, \"src/orze/engine/gc_tree.py\": {\"bytes\": 8849, \"sha256\": \"2df18aefd003aaf540d521c92052f13ac8c61fe3a789ab01d475e963a019f098\"}, \"src/orze/engine/storage_preflight.py\": {\"bytes\": 11854, \"sha256\": \"a9012efa767e2420b6d67c30117888f3ad9c81bb1772e5c33240afa31f5a90b8\"}, \"tests/test_gc_scope_mechanisms.py\": {\"bytes\": 5453, \"sha256\": \"1b5faec8107a04e8453315498fb471ffb38370b108130e58989cc945e99aa008\"}, \"tests/test_storage_preflight.py\": {\"bytes\": 13720, \"sha256\": \"fdd7833e869a55182218eb8291a14a0bcf219fd1b4173fe3c354804cd2b12679\"}, \"tests/test_storage_preflight_review.py\": {\"bytes\": 8141, \"sha256\": \"456251efee058334d9656090e501b4b361030d9f031300b8584eb10ae866cefc\"}}\n"
+      },
+      "after": {
+        "chunk_id": "35ff13",
+        "wall_time_seconds": 0.000004485,
+        "exit_code": 0,
+        "original_token_count": 198,
+        "output": "{\"src/orze/engine/gc_safety.py\": {\"bytes\": 13074, \"sha256\": \"aefb777bbbdae4829930c7291fc98e51be7180c77aa355bc8eb89b86403d4ef8\"}, \"src/orze/engine/gc_tree.py\": {\"bytes\": 8849, \"sha256\": \"2df18aefd003aaf540d521c92052f13ac8c61fe3a789ab01d475e963a019f098\"}, \"src/orze/engine/storage_preflight.py\": {\"bytes\": 11854, \"sha256\": \"a9012efa767e2420b6d67c30117888f3ad9c81bb1772e5c33240afa31f5a90b8\"}, \"tests/test_gc_scope_mechanisms.py\": {\"bytes\": 5453, \"sha256\": \"1b5faec8107a04e8453315498fb471ffb38370b108130e58989cc945e99aa008\"}, \"tests/test_storage_preflight.py\": {\"bytes\": 13720, \"sha256\": \"fdd7833e869a55182218eb8291a14a0bcf219fd1b4173fe3c354804cd2b12679\"}, \"tests/test_storage_preflight_review.py\": {\"bytes\": 8141, \"sha256\": \"456251efee058334d9656090e501b4b361030d9f031300b8584eb10ae866cefc\"}}\n"
+      },
+      "all_six_file_bytes_exact": true,
+      "note": "Exact files called by this group: storage, gc_tree, gc_safety, the review test and two borrowed fixture files. Parent's unrelated Orchestrator Stop-order follow-up is outside this run's inventory."
+    },
+    "archives": {
+      "log": {
+        "path": "docs/evidence/runs/2026-09-13-storage-preflight-review-fixed.log",
+        "sha256": "6cedf4b7d04fbb5f9a5026a93c778764d52b5f7b7a8aebfcec43fe961ec2c097"
+      },
+      "junit": {
+        "bytes": 1729,
+        "cases": 10,
+        "errors": 0,
+        "failures": 0,
+        "path": "docs/evidence/runs/2026-09-13-storage-preflight-review-fixed.junit.xml",
+        "sha256": "37258849b7ae32c4b2bd9299e44cd2548221f35ae218559bc54339b51748ba48",
+        "skipped": 0,
+        "original": "/tmp/orze-storage-fixed.2xRqWLlu/review.junit.xml"
+      }
+    },
+    "archive_command": "cp /tmp/orze-storage-fixed.2xRqWLlu/review.junit.xml docs/evidence/runs/2026-09-13-storage-preflight-review-fixed.junit.xml\nsha256sum docs/evidence/runs/2026-09-13-storage-preflight-review-fixed.log docs/evidence/runs/2026-09-13-storage-preflight-review-fixed.junit.xml",
+    "archive_tool_result": {
+      "chunk_id": "7d8635",
+      "wall_time_seconds": 0.000006524,
+      "exit_code": 0,
+      "original_token_count": 67,
+      "output": "6cedf4b7d04fbb5f9a5026a93c778764d52b5f7b7a8aebfcec43fe961ec2c097  docs/evidence/runs/2026-09-13-storage-preflight-review-fixed.log\n37258849b7ae32c4b2bd9299e44cd2548221f35ae218559bc54339b51748ba48  docs/evidence/runs/2026-09-13-storage-preflight-review-fixed.junit.xml\n"
+    }
+  },
+  "limits": [
+    "Only actual local filesystems/private fixture paths were checked. The local unsupported-filesystem test ran without skip and correctly refused; no claim of CephFS support or general deployment compatibility.",
+    "No worker, provider, GPU, actual research workload, production environment modification, full suite, commit or push by this reviewer.",
+    "The real effect-owner control proves no archive/quarantine creation while that owner is held; it does not claim a native partial publication was produced in this test.",
+    "The late GC refusal control deliberately substitutes failure at the final primitive after a real successful preflight; it does not claim the real filesystem changed capabilities during that test.",
+    "The same-name replacement failure was a new draft defect, independently reproduced with the original genuine path-based primitive. It is separate from the author's relative-checkpoint and existing-HOLD/archive fixes.",
+    "Successful refusal may leave only explicitly named private diagnostic probe/quarantine objects; no external user files or broad directories were deleted.",
+    "No existing test or production source was changed by this reviewer. All original 23 business assertions were preserved through the explicitly disclosed instrumentation adaptation."
+  ]
+}

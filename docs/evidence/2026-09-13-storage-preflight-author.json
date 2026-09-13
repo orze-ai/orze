@@ -1,0 +1,594 @@
+{
+  "schema": 1,
+  "date": "2026-09-13",
+  "kind": "public_release_index",
+  "author": "core_review",
+  "scope": "Early fail-closed storage admission for actual role/GC no-replace routes; not CephFS support.",
+  "status": "Owned implementation and joint191 accepted; full Pro independently passed1010. Full Core is separately independently reviewed; original author record retained without rewriting history.",
+  "publication_boundary": "Core repository is public; Pro is private. Complete Pro source snapshots and the original author raw record are stored only in the private Pro repository. This index does not change any observed test result.",
+  "original_author_record": {
+    "repository": "private Pro",
+    "path": "docs/evidence/2026-09-13-storage-preflight-author.private.json",
+    "sha256": "46b6f2a79ed2e7cace52b2f10ff8705058b5320479c7b019a5de7e379ffd8035",
+    "bytes": 86475,
+    "note": "Exact original JSON with complete commands/cwd/tool metadata/stdout/pre-post hashes; original historical paths in raw tool output are not rewritten."
+  },
+  "baselines": {
+    "Core": "6e3351f02d9f001decae72cf4543b94cf9b5c102",
+    "Pro": "a59b4a2601a6cf6a9e1bf814a64c3d937d59456c"
+  },
+  "fixed_local_candidate_commits": {
+    "Core": "cce70af569e748f845c5b0286172f87cfbf9ffe4",
+    "Pro": "210fd1b1d7ef2fddd01f47579df050e54f3643b6",
+    "note": "Parent committed unchanged frozen source/tests after joint target; no author commit/push."
+  },
+  "current_source_and_test_sha256": {
+    "../orze-pro/src/orze_pro/engine/role_runner.py": "650738524d0d60b4e0572d8f09a6faabfeb59378a659289cc86fb74aff2c96df",
+    "../orze-pro/tests/test_role_storage_preflight.py": "15a449caefa4a903c636734538b523154ef12952048510a3263872d3afb33c81",
+    "src/orze/engine/gc_safety.py": "aefb777bbbdae4829930c7291fc98e51be7180c77aa355bc8eb89b86403d4ef8",
+    "src/orze/engine/gc_tree.py": "2df18aefd003aaf540d521c92052f13ac8c61fe3a789ab01d475e963a019f098",
+    "src/orze/engine/orchestrator.py": "57013ee0856e112b35457a4976b0bf474f2b79303e2f9c52d8ac6f0ae0b93946",
+    "src/orze/engine/storage_preflight.py": "a9012efa767e2420b6d67c30117888f3ad9c81bb1772e5c33240afa31f5a90b8",
+    "tests/test_storage_preflight.py": "fdd7833e869a55182218eb8291a14a0bcf219fd1b4173fe3c354804cd2b12679",
+    "tests/test_storage_preflight_review.py": "456251efee058334d9656090e501b4b361030d9f031300b8584eb10ae866cefc"
+  },
+  "implementation": [
+    {
+      "path": "src/orze/engine/storage_preflight.py",
+      "changes": "Actual four file/directory move/collision probes, no-follow route identities, captured-directory FD operations, private exact-entry cleanup, fsync/readback refusal, no cache."
+    },
+    {
+      "path": "src/orze/engine/gc_tree.py",
+      "changes": "Shared rename_no_replace_at(fd, basename, fd, basename) actual renameat2 flags=1 kernel primitive; old path wrapper delegates. Reject unsafe basename and non-directory FD; no flags=0 fallback."
+    },
+    {
+      "path": "src/orze/engine/gc_safety.py",
+      "changes": "Non-dryrun preflight before effect/quarantine. Missing archive destination probes nearest existing ancestor without pre-authority archive mkdir; final authority and rename remain."
+    },
+    {
+      "path": "src/orze/engine/orchestrator.py",
+      "changes": "Non-CPU run calls existing start/Stop gate before deployment storage gate; existing later start gate retained. CPU route unchanged."
+    },
+    {
+      "path": "../orze-pro/src/orze_pro/engine/role_runner.py",
+      "changes": "Runnable-role actual lock route checked before receipt/lock/budget/provider, with second captured-lock-parent check before acquisition; final existing release/HOLD remains."
+    }
+  ],
+  "tests": {
+    "own_core": "tests/test_storage_preflight.py",
+    "own_core_cases": 21,
+    "own_core_literal_asserts": 30,
+    "own_pro": "../orze-pro/tests/test_role_storage_preflight.py",
+    "own_pro_cases": 1,
+    "own_pro_literal_asserts": 2,
+    "independent_cases": 10,
+    "independent_literal_asserts": 27,
+    "final_joint_composition": "22 own + 10 independent + 159 unchanged selected old cases = 191",
+    "old_byte_exact": {
+      "Core": {
+        "baseline": "6e3351f02d9f001decae72cf4543b94cf9b5c102",
+        "changed": [],
+        "python_tests": 493
+      },
+      "Pro": {
+        "baseline": "a59b4a2601a6cf6a9e1bf814a64c3d937d59456c",
+        "changed": [],
+        "python_tests": 137
+      }
+    }
+  },
+  "epochs": [
+    {
+      "name": "baseline",
+      "classification": "original entry behavior: 3 failures and 1 control pass; no missing-API red",
+      "failed": 3,
+      "passed": 1,
+      "before_chunk": "672164",
+      "tool_chunks": [
+        "8d9c59"
+      ],
+      "final_exit": 1,
+      "footer": "3 failed, 1 passed in 0.49s",
+      "after_chunk": "56d000",
+      "full_raw_record": "private Pro docs/evidence/2026-09-13-storage-preflight-author.private.json"
+    },
+    {
+      "name": "first_smoke",
+      "classification": "exploratory candidate smoke only; no dedicated pre/post source inventory",
+      "failed": 0,
+      "passed": 4,
+      "before_chunk": null,
+      "tool_chunks": [
+        "1a987d"
+      ],
+      "final_exit": 0,
+      "footer": "4 passed in 0.42s",
+      "after_chunk": null,
+      "full_raw_record": "private Pro docs/evidence/2026-09-13-storage-preflight-author.private.json"
+    },
+    {
+      "name": "mechanisms_first",
+      "classification": "new mechanisms plus original entries",
+      "failed": 0,
+      "passed": 18,
+      "before_chunk": "36c039",
+      "tool_chunks": [
+        "1aba17"
+      ],
+      "final_exit": 0,
+      "footer": "18 passed in 0.82s",
+      "after_chunk": "83ec01",
+      "full_raw_record": "private Pro docs/evidence/2026-09-13-storage-preflight-author.private.json"
+    },
+    {
+      "name": "archive_regression",
+      "classification": "real candidate regression in unchanged legacy native GC HOLD test",
+      "failed": 1,
+      "passed": 158,
+      "before_chunk": null,
+      "tool_chunks": [
+        "08f4e9",
+        "acadeb"
+      ],
+      "final_exit": 1,
+      "footer": "1 failed, 158 passed in 12.67s",
+      "after_chunk": null,
+      "full_raw_record": "private Pro docs/evidence/2026-09-13-storage-preflight-author.private.json"
+    },
+    {
+      "name": "archive_fixed",
+      "classification": "nearest existing archive ancestor replaces pre-authority archive mkdir",
+      "failed": 0,
+      "passed": 177,
+      "before_chunk": "a84e95",
+      "tool_chunks": [
+        "8181ae",
+        "d50a83"
+      ],
+      "final_exit": 0,
+      "footer": "177 passed in 13.11s",
+      "after_chunk": "89bad9",
+      "full_raw_record": "private Pro docs/evidence/2026-09-13-storage-preflight-author.private.json"
+    },
+    {
+      "name": "relative_route_red",
+      "classification": "real candidate wrong-route bug: project-relative Ceph checkpoint was probed on cwd ext4",
+      "failed": 1,
+      "passed": 0,
+      "before_chunk": "0ff8a0",
+      "tool_chunks": [
+        "60c707"
+      ],
+      "final_exit": 1,
+      "footer": "1 failed in 0.43s",
+      "after_chunk": "e16a29",
+      "full_raw_record": "private Pro docs/evidence/2026-09-13-storage-preflight-author.private.json"
+    },
+    {
+      "name": "relative_route_fixed",
+      "classification": "public gc_scope route interpretation reused",
+      "failed": 0,
+      "passed": 178,
+      "before_chunk": "b5deb2",
+      "tool_chunks": [
+        "ef58c1",
+        "558664"
+      ],
+      "final_exit": 0,
+      "footer": "178 passed in 13.35s",
+      "after_chunk": "c4ba23",
+      "full_raw_record": "private Pro docs/evidence/2026-09-13-storage-preflight-author.private.json"
+    },
+    {
+      "name": "stop_order_red",
+      "classification": "real candidate regression: three pre-existing Stop markers allowed administrative directory creation first",
+      "failed": 3,
+      "passed": 0,
+      "before_chunk": "9ac84a",
+      "tool_chunks": [
+        "32d9c9"
+      ],
+      "final_exit": 1,
+      "footer": "3 failed, 18 deselected in 0.72s",
+      "after_chunk": "20a7eb",
+      "full_raw_record": "private Pro docs/evidence/2026-09-13-storage-preflight-author.private.json"
+    },
+    {
+      "name": "joint_final",
+      "classification": "FD-only probe + relative route + archive HOLD + Stop-first; independent review included",
+      "failed": 0,
+      "passed": 191,
+      "before_chunk": "e55107",
+      "tool_chunks": [
+        "670ca2",
+        "2b137a"
+      ],
+      "final_exit": 0,
+      "footer": "191 passed in 14.06s",
+      "after_chunk": "114590",
+      "full_raw_record": "private Pro docs/evidence/2026-09-13-storage-preflight-author.private.json"
+    }
+  ],
+  "candidate_failures": [
+    {
+      "kind": "archive creation before existing native HOLD",
+      "actual": "acadeb 1F158P",
+      "fix": "Probe existing ancestor, leave archive creation to original authorized reclaim; unchanged old test green."
+    },
+    {
+      "kind": "wrong cwd-relative checkpoint probe",
+      "actual": "60c707 1F",
+      "fix": "Use public gc_scope actual project/config-root route."
+    },
+    {
+      "kind": "same-name replacement caused foreign source rename",
+      "actual": "independent cf545d 1F5P",
+      "fix": "Shared fd-relative primitive; probe never reopens replacement pathname.",
+      "independent_report": "docs/evidence/2026-09-13-storage-preflight-independent-review.json",
+      "independent_report_sha256": "d548ebd1139e4114d3dd0eaf0af6f37a4b19d7ebeba7879b7c05bb955933a33f"
+    },
+    {
+      "kind": "known Stop markers preceded by probe/admin mkdir",
+      "actual": "32d9c9 3F",
+      "fix": "Original require_controller_start_allowed before non-CPU storage gate; retain later check."
+    }
+  ],
+  "fixture_corrections": {
+    "own_fd_spies": "Only three transparent instrumentation seams moved from path pair to four FD/basename arguments. Test-only _FdEntry observes captured FD; no /proc reopening. Original 27 literal Assert across 14 original test functions exactly preserved; Stop test adds 3 assertions.",
+    "independent_fd_spies": "Reviewer separately preserved all original 23 Assert, changed two transparent spies, and added four basename/FD controls. Their report is authoritative for their runs.",
+    "diagnostic_audit_correction": "First audit cea7ec scanned only top-level functions and returned zero because tests are class methods; its assertion-preservation subsection is invalid and excluded. Corrected recursive class/function audit 333d2b requires nonempty methods and proves 27/27. Other baseline byte/hash observations in cea7ec remain factual.",
+    "no_old_fixture_changes": true,
+    "stop_red_environment_note": "Core-only stop-red command emitted ambient optional Pro installation instructions on import; no installation/provider/license request was executed. Paired runs used explicit test-only require_license stub."
+  },
+  "snapshots": {
+    "docs/evidence/snapshots/2026-09-13-storage-before-archive-regression-gc_safety.py": {
+      "bytes": 12606,
+      "sha256": "da114c7a0ddf37ca58f5aae4bd97e2832e1f170e2d1115fac7a7ac54c77de07e",
+      "repository": "public Core"
+    },
+    "docs/evidence/snapshots/2026-09-13-storage-before-archive-regression-orchestrator.py": {
+      "bytes": 85634,
+      "sha256": "209709f36610574ec54efeb9a5cff04ed511780036edb416d477f93b6ad1abc6",
+      "repository": "public Core"
+    },
+    "../orze-pro/docs/evidence/snapshots/2026-09-13-storage-before-archive-regression-pro-role_runner.py": {
+      "bytes": 118571,
+      "sha256": "650738524d0d60b4e0572d8f09a6faabfeb59378a659289cc86fb74aff2c96df",
+      "repository": "private Pro",
+      "former_public_worktree_path": "docs/evidence/snapshots/2026-09-13-storage-before-archive-regression-pro-role_runner.py",
+      "publication": "complete bytes moved before any commit/push"
+    },
+    "docs/evidence/snapshots/2026-09-13-storage-before-archive-regression-storage_preflight.py": {
+      "bytes": 11756,
+      "sha256": "c87c9c0906fef8491e784289b893fe7b675eda9737c7ed6392583c46662ff617",
+      "repository": "public Core"
+    },
+    "docs/evidence/snapshots/2026-09-13-storage-before-fd-storage_preflight.py": {
+      "bytes": 11872,
+      "sha256": "8a174d3576a3b819ffe537c638ad973eabd21959d8345fb319052860f7424f32",
+      "repository": "public Core"
+    },
+    "docs/evidence/snapshots/2026-09-13-storage-before-fd-tests.py": {
+      "bytes": 11707,
+      "sha256": "1881ce0ad1a67c9ee2ce5797a3e85373abe6d67690622c8c1dcde57be12a80c5",
+      "repository": "public Core"
+    },
+    "docs/evidence/snapshots/2026-09-13-storage-before-gc_safety.py": {
+      "baseline_commit": "6e3351f02d9f001decae72cf4543b94cf9b5c102",
+      "bytes": 12060,
+      "origin": "whole_git_baseline",
+      "sha256": "0051dc160606df3d3950dfd98273dedc169573a1f5b248f75bd6dcc191d995e6",
+      "source": "src/orze/engine/gc_safety.py",
+      "repository": "public Core"
+    },
+    "docs/evidence/snapshots/2026-09-13-storage-before-gc_tree.py": {
+      "baseline_commit": "6e3351f02d9f001decae72cf4543b94cf9b5c102",
+      "bytes": 8219,
+      "origin": "whole_git_baseline",
+      "sha256": "9fca08593291f3878b979e8fc6045db9b22c2dcdb52e5dfa5081b40aeff4779e",
+      "source": "src/orze/engine/gc_tree.py",
+      "repository": "public Core"
+    },
+    "docs/evidence/snapshots/2026-09-13-storage-before-orchestrator.py": {
+      "baseline_commit": "6e3351f02d9f001decae72cf4543b94cf9b5c102",
+      "bytes": 85412,
+      "origin": "whole_git_baseline",
+      "sha256": "a4fee1b5a2ce4456fece2f6b91722ec3427eb53d931610e54a42aad026c60bcd",
+      "source": "src/orze/engine/orchestrator.py",
+      "repository": "public Core"
+    },
+    "../orze-pro/docs/evidence/snapshots/2026-09-13-storage-before-pro-role_runner.py": {
+      "baseline_commit": "a59b4a2601a6cf6a9e1bf814a64c3d937d59456c",
+      "bytes": 117501,
+      "origin": "whole_git_baseline",
+      "sha256": "029402d8a3222cb15e5d90ca969e6473fe968ec74bd74da30144e5f1c65d08fa",
+      "source": "src/orze_pro/engine/role_runner.py",
+      "repository": "private Pro",
+      "former_public_worktree_path": "docs/evidence/snapshots/2026-09-13-storage-before-pro-role_runner.py",
+      "publication": "complete bytes moved before any commit/push"
+    },
+    "docs/evidence/snapshots/2026-09-13-storage-before-project-route-tests.py": {
+      "bytes": 11057,
+      "sha256": "831163b08c57f3ef29b7d02a841c64c2424e17afa9cdd98d52e0fa0e65db15de",
+      "repository": "public Core"
+    },
+    "docs/evidence/snapshots/2026-09-13-storage-preflight-review-before.py": {
+      "bytes": 11872,
+      "sha256": "8a174d3576a3b819ffe537c638ad973eabd21959d8345fb319052860f7424f32",
+      "repository": "public Core"
+    },
+    "docs/evidence/snapshots/2026-09-13-storage-preflight-review-first-tests.py": {
+      "bytes": 6128,
+      "sha256": "97ea7bbceed3102c82b6c7c7ca299dde21b08275f5304ecf4ad2cd40d37ba139",
+      "repository": "public Core"
+    }
+  },
+  "snapshot_origin_notes": {
+    "whole_git_baselines": "Four original source modules copied whole from fixed baseline commits and byte-compared to git show.",
+    "candidate_sources": "Complete observed candidate modules captured after actual failure and before fix, not historical-release baselines. before-fd source equals review-before snapshot; duplicate content is one candidate, not two defects.",
+    "new_test_snapshots": "before-project-route captures complete mechanisms fixture before route case; before-fd captures complete fixture before FD-spy changes and Stop addition. They are new test version captures, not old tracked-test migrations."
+  },
+  "junit_archives": [
+    {
+      "archive_byte_exact": true,
+      "archive_path": "../orze-pro/docs/evidence/runs/2026-09-13-storage-baseline.junit.xml",
+      "bytes": 2731,
+      "epoch": "baseline",
+      "junit": [
+        {
+          "errors": "0",
+          "failures": "3",
+          "hostname": "a100-41",
+          "name": "pytest",
+          "skipped": "0",
+          "tests": "4",
+          "time": "0.496",
+          "timestamp": "2026-09-13T00:26:50.568577+00:00"
+        }
+      ],
+      "original_path": "/tmp/orze-storage-baseline.tvvi3u/junit.xml",
+      "sha256": "6ef1920257d878529c285bab78ac6537d58ff9cfcee1f5a530177e2ec267efa3",
+      "repository": "private Pro",
+      "former_public_worktree_path": "docs/evidence/runs/2026-09-13-storage-baseline.junit.xml"
+    },
+    {
+      "archive_byte_exact": true,
+      "archive_path": "docs/evidence/runs/2026-09-13-storage-mechanisms-first.junit.xml",
+      "bytes": 2872,
+      "epoch": "mechanisms-first",
+      "junit": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "hostname": "a100-41",
+          "name": "pytest",
+          "skipped": "0",
+          "tests": "18",
+          "time": "0.826",
+          "timestamp": "2026-09-13T00:34:00.981541+00:00"
+        }
+      ],
+      "original_path": "/tmp/orze-storage-candidate2.q8uRzN/junit.xml",
+      "sha256": "69843a689b834eb1eeb9604cffde0d0dcfe4db8b9741e8d6ebc3ddeb2e3588e3"
+    },
+    {
+      "archive_byte_exact": true,
+      "archive_path": "docs/evidence/runs/2026-09-13-storage-archive-regression.junit.xml",
+      "bytes": 22211,
+      "epoch": "archive-regression",
+      "junit": [
+        {
+          "errors": "0",
+          "failures": "1",
+          "hostname": "a100-41",
+          "name": "pytest",
+          "skipped": "0",
+          "tests": "159",
+          "time": "12.669",
+          "timestamp": "2026-09-13T00:34:42.504060+00:00"
+        }
+      ],
+      "original_path": "/tmp/orze-storage-neighborhood.hCPppb/junit.xml",
+      "sha256": "289570f6c8957389efb97be6d3b693529c59aa6594236b9718756664103fa26a"
+    },
+    {
+      "archive_byte_exact": true,
+      "archive_path": "docs/evidence/runs/2026-09-13-storage-archive-fixed.junit.xml",
+      "bytes": 24138,
+      "epoch": "archive-fixed",
+      "junit": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "hostname": "a100-41",
+          "name": "pytest",
+          "skipped": "0",
+          "tests": "177",
+          "time": "13.104",
+          "timestamp": "2026-09-13T00:36:26.175036+00:00"
+        }
+      ],
+      "original_path": "/tmp/orze-storage-final.xe2Rae/junit.xml",
+      "sha256": "333209def2ba275f8ce1135f68148f9bf719bb25476ce9ef573c651b629f6cb6"
+    },
+    {
+      "archive_byte_exact": true,
+      "archive_path": "docs/evidence/runs/2026-09-13-storage-relative-route-red.junit.xml",
+      "bytes": 784,
+      "epoch": "relative-route-red",
+      "junit": [
+        {
+          "errors": "0",
+          "failures": "1",
+          "hostname": "a100-41",
+          "name": "pytest",
+          "skipped": "0",
+          "tests": "1",
+          "time": "0.429",
+          "timestamp": "2026-09-13T00:39:07.158296+00:00"
+        }
+      ],
+      "original_path": "/tmp/orze-storage-route-red.tOTbTw/junit.xml",
+      "sha256": "23409710f74874ca998259409d4f733aee17bfed7d109a436ce6509638066830"
+    },
+    {
+      "archive_byte_exact": true,
+      "archive_path": "docs/evidence/runs/2026-09-13-storage-relative-route-fixed.junit.xml",
+      "bytes": 24286,
+      "epoch": "relative-route-fixed",
+      "junit": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "hostname": "a100-41",
+          "name": "pytest",
+          "skipped": "0",
+          "tests": "178",
+          "time": "13.346",
+          "timestamp": "2026-09-13T00:39:58.346887+00:00"
+        }
+      ],
+      "original_path": "/tmp/orze-storage-route-final.7ZoIpH/junit.xml",
+      "sha256": "e2d5ccb797e5c539dc978e5e5bca04137bcac6625f0d0ac66d127fa1ad6b94b7"
+    },
+    {
+      "archive_byte_exact": true,
+      "archive_path": "docs/evidence/runs/2026-09-13-storage-stop-order-red.junit.xml",
+      "bytes": 2484,
+      "epoch": "stop-order-red",
+      "junit": [
+        {
+          "errors": "0",
+          "failures": "3",
+          "hostname": "a100-41",
+          "name": "pytest",
+          "skipped": "0",
+          "tests": "3",
+          "time": "0.722",
+          "timestamp": "2026-09-13T00:47:07.327398+00:00"
+        }
+      ],
+      "original_path": "/tmp/orze-storage-stop-red.8QMGUl/junit.xml",
+      "sha256": "2bc8294bf65862839069e17a2eedc2fe16b3af880c4631c54f6198a50b35e362"
+    },
+    {
+      "archive_byte_exact": true,
+      "archive_path": "docs/evidence/runs/2026-09-13-storage-final191.junit.xml",
+      "bytes": 26290,
+      "epoch": "final191",
+      "junit": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "hostname": "a100-41",
+          "name": "pytest",
+          "skipped": "0",
+          "tests": "191",
+          "time": "14.057",
+          "timestamp": "2026-09-13T00:48:15.937023+00:00"
+        }
+      ],
+      "original_path": "/tmp/orze-storage-fd-final.wMVcmP/junit.xml",
+      "sha256": "81764bb04985ce3ac5b99865fe588e729bcb7880cd416d6550261e741cda4a2a"
+    }
+  ],
+  "old_test_byte_exact": {
+    "Core": {
+      "baseline": "6e3351f02d9f001decae72cf4543b94cf9b5c102",
+      "changed": [],
+      "python_tests": 493
+    },
+    "Pro": {
+      "baseline": "a59b4a2601a6cf6a9e1bf814a64c3d937d59456c",
+      "changed": [],
+      "python_tests": 137
+    }
+  },
+  "assertion_audit": {
+    "original_test_functions": 14,
+    "original_literal_asserts": 27,
+    "preserved_literal_asserts": 27,
+    "added_literal_asserts": 3,
+    "corrected_tool_chunk": "333d2b",
+    "excluded_empty_scan_chunk": "cea7ec",
+    "full_commands_in_private_original": true
+  },
+  "private_relocations": [
+    {
+      "source": "docs/evidence/snapshots/2026-09-13-storage-before-pro-role_runner.py",
+      "destination": "docs/evidence/snapshots/2026-09-13-storage-before-pro-role_runner.py",
+      "sha256": "029402d8a3222cb15e5d90ca969e6473fe968ec74bd74da30144e5f1c65d08fa",
+      "bytes": 117501,
+      "source_repository": "public Core worktree (uncommitted)",
+      "destination_repository": "private Pro",
+      "verified_backup_chunk": "6937fc",
+      "deleted_public_source": true
+    },
+    {
+      "source": "docs/evidence/snapshots/2026-09-13-storage-before-archive-regression-pro-role_runner.py",
+      "destination": "docs/evidence/snapshots/2026-09-13-storage-before-archive-regression-pro-role_runner.py",
+      "sha256": "650738524d0d60b4e0572d8f09a6faabfeb59378a659289cc86fb74aff2c96df",
+      "bytes": 118571,
+      "source_repository": "public Core worktree (uncommitted)",
+      "destination_repository": "private Pro",
+      "verified_backup_chunk": "6937fc",
+      "deleted_public_source": true
+    },
+    {
+      "source": "docs/evidence/2026-09-13-storage-preflight-author.json",
+      "destination": "docs/evidence/2026-09-13-storage-preflight-author.private.json",
+      "sha256": "46b6f2a79ed2e7cace52b2f10ff8705058b5320479c7b019a5de7e379ffd8035",
+      "bytes": 86475,
+      "source_repository": "public Core worktree (uncommitted)",
+      "destination_repository": "private Pro",
+      "verified_backup_chunk": "6937fc",
+      "deleted_public_source": false
+    },
+    {
+      "source": "docs/evidence/runs/2026-09-13-storage-baseline.junit.xml",
+      "destination": "docs/evidence/runs/2026-09-13-storage-baseline.junit.xml",
+      "sha256": "6ef1920257d878529c285bab78ac6537d58ff9cfcee1f5a530177e2ec267efa3",
+      "bytes": 2731,
+      "source_repository": "public Core worktree (uncommitted)",
+      "destination_repository": "private Pro",
+      "verified_backup_chunk": "6937fc",
+      "deleted_public_source": true
+    }
+  ],
+  "docs": {
+    "../orze-pro/docs/storage-preflight-compatibility.md": {
+      "bytes": 1128,
+      "sha256": "a144ffd99d3e6e66fb67b28ba41e0b02e31229ef05041f88ce8e91772377cd7e"
+    },
+    "../orze-pro/tests/test_role_storage_preflight.py": {
+      "bytes": 1894,
+      "literal_asserts": 2,
+      "sha256": "15a449caefa4a903c636734538b523154ef12952048510a3263872d3afb33c81"
+    },
+    "docs/storage-preflight.md": {
+      "bytes": 4563,
+      "sha256": "be4f0bbdb3139749c121dea5f61f35373acd1e559c19d733d2773e7158004a68"
+    },
+    "tests/test_storage_preflight.py": {
+      "bytes": 13720,
+      "literal_asserts": 30,
+      "sha256": "fdd7833e869a55182218eb8291a14a0bcf219fd1b4173fe3c354804cd2b12679"
+    },
+    "tests/test_storage_preflight_review.py": {
+      "bytes": 8141,
+      "literal_asserts": 27,
+      "sha256": "456251efee058334d9656090e501b4b361030d9f031300b8584eb10ae866cefc"
+    }
+  },
+  "limitations": [
+    "Observed CephFS rejects required no-replace operation. This slice refuses incompatible actual role/GC routes; it does not provide CephFS GC/release support.",
+    "Four probes are bounded and private but involve mkdir/write/fsync/metadata I/O, including early statically runnable idle role checks. No capability cache; success never persists authority.",
+    "Actual later role/GC operations retain no-replace, identity and HOLD checks. Future remount/path/permission/storage failure may still refuse.",
+    "Configured administrative directories may be created; known Stop is checked first at Core non-CPU entry. No user data migration or broad cleanup.",
+    "CPU-only does not use role/GC route admission and is not globally forbidden on CephFS.",
+    "Only task-private test data and supervised test-suite paths were used. No production/provider/GPU/license service, global install, publishing or deployment.",
+    "Pair new Pro with exact new Core commit/wheel, not merely equal package version. No compatibility downgrade or bypass.",
+    "Error objects carry path/probe; some existing caller logs only reason. Uncertain private leftovers remain, no automatic cleanup.",
+    "Finite tests and one actual local CephFS/ext4 environment do not prove all storage implementations or all possible adversarial filesystem behavior."
+  ]
+}

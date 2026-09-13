@@ -1,0 +1,78 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______ test_cli_pages_tail_source_selects_then_analyzes_and_replicates ________
+
+history = {'root': PosixPath('/tmp/orze-page-red-n2rh78sd/pytest/test_cli_pages_tail_source_sel0'), 'cfg': {'execution': {'versi..._tail_source_sel0/.orze/artifacts/9b6b029b40bdd76a8332abef62bd5837a530bdd1490ac491edd81ab660384545/content', ...}, ...}
+
+    def test_cli_pages_tail_source_selects_then_analyzes_and_replicates(history):
+        class Policy:
+            def __init__(self, declaration):
+                self.stage = "source"
+    
+            def decide(self, snapshot, budget):
+                _capture(history, snapshot, budget)
+                view = snapshot["recorded_evidence"]
+                if snapshot["queue"]:
+                    decision = {"kind": "Execute", "task_id": snapshot["queue"][0]["idea_id"]}
+                elif self.stage == "source":
+                    source = next((r for r in view["results"] if r["ref"]["task_id"] == SOURCE), None)
+                    if source is None:
+                        decision = _next(snapshot)
+                    else:
+                        self.stage = "selected_source"
+                        decision = {"kind": "SelectEvidence", "refs": [copy.deepcopy(source["ref"])]}
+                elif self.stage == "selected_source":
+                    assert snapshot["evidence_page"]["mode"] == "selection"
+                    selected, = view["results"]
+                    assert selected["ref"]["task_id"] == SOURCE
+                    self.stage = "analysis"
+                    decision = _propose(selected["artifact_records"][0]["artifact_id"])
+                elif self.stage == "analysis":
+                    result = next((r for r in view["results"] if r["ref"]["task_id"] == ANALYSIS), None)
+                    if result is None:
+                        decision = _next(snapshot)
+                    else:
+                        self.stage = "replica"
+                        decision = {"kind": "Replicate", "request_id": "page-analysis-confirm",
+                                    "source_ref": copy.deepcopy(result["ref"]),
+                                    "reason": "explicit independent analysis occurrence"}
+                else:
+                    replica = next((r for r in view["results"] if r["observation_records"]
+                                    and r["ref"]["task_id"] != ANALYSIS), None)
+                    decision = (_next(snapshot) if replica is None else
+                                {"kind": "Stop", "reason": "tail_analysis_confirmed", "wakeup": None})
+                history["trace"][-1]["decision"] = copy.deepcopy(decision)
+                return decision
+    
+        _register(history, Policy)
+        result = history["run"](once=False)
+        history["outcomes"].append(result)
+        assert result == 0
+        after = _database(history["root"])
+>       assert len(history["processes"]) == 3
+E       assert 1 == 3
+E        +  where 1 = len([<orze.engine.supervised_process.SupervisedProcess object at 0x154dbac5f190>])
+
+/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze/tests/test_cpu_evidence_paging_product.py:214: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+
+orze-pro is distributed via private registry.
+
+To install:
+    1. Get your license key at https://orze.ai/pro
+    2. pip install orze
+    3. export ORZE_PRO_KEY="ORZE-PRO-..."
+    4. orze run  (auto-installs orze-pro)
+
+Or install manually:
+    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/
+
+Questions? support@orze.ai
+
+------------------------------ Captured log setup ------------------------------
+ERROR    orze:extensions.py:68 orze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.
+--------------------------- Captured stdout teardown ---------------------------
+CPU_EVIDENCE_PAGING_REPORT=/tmp/orze-page-red-n2rh78sd/pytest/test_cli_pages_tail_source_sel0/paging-product-report.json
+=========================== short test summary info ============================
+FAILED tests/test_cpu_evidence_paging_product.py::test_cli_pages_tail_source_selects_then_analyzes_and_replicates
+1 failed, 3 deselected in 3.66s

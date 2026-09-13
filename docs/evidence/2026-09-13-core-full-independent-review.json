@@ -1,0 +1,170 @@
+{
+  "schema": 1,
+  "date": "2026-09-13",
+  "reviewer": "core_review",
+  "scope": "Independent read-only verification of parent's completed Core full regression; no pytest/workers or source/test/log edits by this review.",
+  "status": "verified",
+  "origin": "/tmp/orze-f-3rO3pT/core",
+  "archive": "docs/evidence/runs/2026-09-13-validation/core",
+  "source_commit": "cce70af569e748f845c5b0286172f87cfbf9ffe4",
+  "result": {
+    "all_git_blobs_and_current_worktree_exact": true,
+    "archives_byte_exact": {
+      "before.json": {
+        "bytes": 88169,
+        "sha256": "382b2eb34ba69254a52738957678cf8144cb7db77c5a9d261cf6f9f9790c4ccd"
+      },
+      "junit.xml": {
+        "bytes": 1282567,
+        "sha256": "88f6f6a5e37d88063d537ef628951ef5308727c11ac8ab59be324a1662f8ee45"
+      },
+      "run.json": {
+        "bytes": 180662,
+        "sha256": "7c6d07bb3774b94b2b7664ee05cdfd30ac09aec4d8113a4c6a8b917612e4cc8a"
+      },
+      "stderr.log": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout.log": {
+        "bytes": 22062,
+        "sha256": "8d48155882af78e3a11642372976063382219c97fee950292afa690e8736f66f"
+      }
+    },
+    "before_equals_embedded_after": true,
+    "command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "--tb=short",
+      "-rs",
+      "-p",
+      "no:cacheprovider",
+      "--basetemp=/tmp/orze-f-3rO3pT/tests",
+      "--junitxml=/tmp/orze-f-3rO3pT/core/junit.xml"
+    ],
+    "commit": "cce70af569e748f845c5b0286172f87cfbf9ffe4",
+    "environment": {
+      "CUDA_VISIBLE_DEVICES": "",
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "PYTHONPATH": "src"
+    },
+    "errors": 0,
+    "exit_code": 0,
+    "failed": 0,
+    "junit_seconds": "935.110",
+    "passed": 4638,
+    "pytest_seconds": 935.25,
+    "run_elapsed_seconds": 936.2707941532135,
+    "scope_files": 799,
+    "skipped": 7,
+    "skips": [
+      {
+        "classname": "",
+        "message": "collection skipped",
+        "name": "tests.test_sweeper"
+      },
+      {
+        "classname": "tests.test_evolution.TestCodeEvolution",
+        "message": "could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run",
+        "name": "test_build_context"
+      },
+      {
+        "classname": "tests.test_evolution.TestCodeEvolution",
+        "message": "could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run",
+        "name": "test_build_prompt"
+      },
+      {
+        "classname": "tests.test_evolution.TestMetaResearch",
+        "message": "could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run",
+        "name": "test_build_strategy_prompt"
+      },
+      {
+        "classname": "tests.test_fsm_runner_registry",
+        "message": "could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run",
+        "name": "test_packaged_runner_steps_real_verifier_in_the_plugin_registry"
+      },
+      {
+        "classname": "tests.test_skill_registry",
+        "message": "orze-pro not installed",
+        "name": "test_compose_skills_resolves_sop_prefix_via_orze_pro"
+      },
+      {
+        "classname": "tests.test_skill_registry",
+        "message": "orze-pro not installed",
+        "name": "test_compose_skills_unknown_sop_prefix_logs_and_skips"
+      }
+    ],
+    "supplementary_requirements": {
+      "git_current_exact": true,
+      "not_in_original_core_manifest": true,
+      "sha256": "8cfc3197b86bf23f2454918d3a0e212585c9cc70f8eee9ee36518311a93c7eb9"
+    },
+    "verified": true,
+    "warnings_from_stdout": 2
+  },
+  "verification": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,re,subprocess,xml.etree.ElementTree as E\nfrom pathlib import Path\norigin=Path('/tmp/orze-f-3rO3pT/core');archive=Path('docs/evidence/runs/2026-09-13-validation/core')\ncommit='cce70af569e748f845c5b0286172f87cfbf9ffe4'\nr=json.loads((origin/'run.json').read_text());before=json.loads((origin/'before.json').read_text())\nassert r['exit_code']==0 and type(r['exit_code']) is int and r['frozen'] is True\nassert r['repository']==str(Path.cwd())\nexpected_command=['python3','-m','pytest','-q','--tb=short','-rs','-p','no:cacheprovider','--basetemp=/tmp/orze-f-3rO3pT/tests','--junitxml=/tmp/orze-f-3rO3pT/core/junit.xml']\nassert r['command']==expected_command\nassert r['environment']=={'CUDA_VISIBLE_DEVICES':'','PYTHONDONTWRITEBYTECODE':'1','PYTHONPATH':'src'}\nassert before==r['before']==r['after']\n# No testpaths declaration: this exact command uses pytest default repository discovery; pyproject pins source path.\npaths=subprocess.check_output(['git','ls-tree','-r','--name-only',commit],text=True).splitlines()\nexpected=sorted(p for p in paths if (p.startswith(('src/','tests/','examples/')) and '__pycache__' not in Path(p).parts and not p.endswith('.pyc')) or p=='pyproject.toml')\nassert sorted(before)==expected\ncurrent_paths=sorted(str(p) for section in ('src','tests','examples') for p in Path(section).rglob('*') if p.is_file() and '__pycache__' not in p.parts and not p.name.endswith('.pyc'))+['pyproject.toml']\nassert sorted(current_paths)==expected\nraw=subprocess.run(['git','cat-file','--batch'],input=''.join(commit+':'+p+'\\n' for p in expected).encode(),stdout=subprocess.PIPE,check=True).stdout\npos=0\nfor p in expected:\n end=raw.index(b'\\n',pos);header=raw[pos:end].split();assert len(header)==3 and header[1]==b'blob';size=int(header[2]);b=raw[end+1:end+1+size];pos=end+1+size+1\n assert hashlib.sha256(b).hexdigest()==before[p],p\n assert hashlib.sha256(Path(p).read_bytes()).hexdigest()==before[p],p\nassert pos==len(raw)\nfiles={}\nfor name in ['before.json','stdout.log','stderr.log','junit.xml','run.json']:\n b=(origin/name).read_bytes();assert (archive/name).read_bytes()==b,name\n meta={'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()}\n if name!='run.json':assert r['files'][name]==meta\n files[name]=meta\nstdout=(origin/'stdout.log').read_text();stderr=(origin/'stderr.log').read_text();assert stderr==''\nfooters=re.findall(r'^([0-9]+) passed, ([0-9]+) skipped, ([0-9]+) warnings in ([0-9.]+)s \\([^\\n]+\\)$',stdout,re.M)\nassert footers==[('4638','7','2','935.25')],footers\nassert stdout.rstrip().endswith('4638 passed, 7 skipped, 2 warnings in 935.25s (0:15:35)')\nroot=E.fromstring((origin/'junit.xml').read_bytes());suites=list(root.iter('testsuite'));assert len(suites)==1;s=suites[0]\nassert {k:int(s.attrib[k]) for k in ('tests','failures','errors','skipped')}=={'tests':4645,'failures':0,'errors':0,'skipped':7}\ncases=list(root.iter('testcase'));passed=[c for c in cases if not any(c.find(t) is not None for t in ('failure','error','skipped'))]\nskipped=[c for c in cases if c.find('skipped') is not None]\nassert len(cases)==4645 and len(passed)==4638 and len(skipped)==7\nassert len({(c.get('classname'),c.get('name')) for c in cases})==4645\nassert not list(root.iter('failure')) and not list(root.iter('error'))\nassert 0 <= float(s.attrib['time']) <= r['finished_unix']-r['started_unix']\nassert r['finished_unix']-r['started_unix']>=float(s.attrib['time'])\nreq=Path('requirements.txt').read_bytes();assert req==subprocess.check_output(['git','show',commit+':requirements.txt'])\nprint(json.dumps({'verified':True,'command':r['command'],'environment':r['environment'],'exit_code':0,'commit':commit,'scope_files':len(before),'before_equals_embedded_after':True,'all_git_blobs_and_current_worktree_exact':True,'archives_byte_exact':files,'passed':len(passed),'skipped':len(skipped),'failed':0,'errors':0,'warnings_from_stdout':2,'pytest_seconds':935.25,'junit_seconds':s.attrib['time'],'run_elapsed_seconds':r['finished_unix']-r['started_unix'],'skips':[{'classname':c.get('classname'),'name':c.get('name'),'message':c.find('skipped').get('message')} for c in skipped],'supplementary_requirements':{'sha256':hashlib.sha256(req).hexdigest(),'git_current_exact':True,'not_in_original_core_manifest':True}},sort_keys=True))\nPY",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+    "result": {
+      "chunk_id": "bc0555",
+      "wall_time_seconds": 0.157915851,
+      "exit_code": 0,
+      "original_token_count": 697,
+      "output": "{\"all_git_blobs_and_current_worktree_exact\": true, \"archives_byte_exact\": {\"before.json\": {\"bytes\": 88169, \"sha256\": \"382b2eb34ba69254a52738957678cf8144cb7db77c5a9d261cf6f9f9790c4ccd\"}, \"junit.xml\": {\"bytes\": 1282567, \"sha256\": \"88f6f6a5e37d88063d537ef628951ef5308727c11ac8ab59be324a1662f8ee45\"}, \"run.json\": {\"bytes\": 180662, \"sha256\": \"7c6d07bb3774b94b2b7664ee05cdfd30ac09aec4d8113a4c6a8b917612e4cc8a\"}, \"stderr.log\": {\"bytes\": 0, \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}, \"stdout.log\": {\"bytes\": 22062, \"sha256\": \"8d48155882af78e3a11642372976063382219c97fee950292afa690e8736f66f\"}}, \"before_equals_embedded_after\": true, \"command\": [\"python3\", \"-m\", \"pytest\", \"-q\", \"--tb=short\", \"-rs\", \"-p\", \"no:cacheprovider\", \"--basetemp=/tmp/orze-f-3rO3pT/tests\", \"--junitxml=/tmp/orze-f-3rO3pT/core/junit.xml\"], \"commit\": \"cce70af569e748f845c5b0286172f87cfbf9ffe4\", \"environment\": {\"CUDA_VISIBLE_DEVICES\": \"\", \"PYTHONDONTWRITEBYTECODE\": \"1\", \"PYTHONPATH\": \"src\"}, \"errors\": 0, \"exit_code\": 0, \"failed\": 0, \"junit_seconds\": \"935.110\", \"passed\": 4638, \"pytest_seconds\": 935.25, \"run_elapsed_seconds\": 936.2707941532135, \"scope_files\": 799, \"skipped\": 7, \"skips\": [{\"classname\": \"\", \"message\": \"collection skipped\", \"name\": \"tests.test_sweeper\"}, {\"classname\": \"tests.test_evolution.TestCodeEvolution\", \"message\": \"could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\", \"name\": \"test_build_context\"}, {\"classname\": \"tests.test_evolution.TestCodeEvolution\", \"message\": \"could not import 'orze_pro.agents.code_evolution': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\", \"name\": \"test_build_prompt\"}, {\"classname\": \"tests.test_evolution.TestMetaResearch\", \"message\": \"could not import 'orze_pro.agents.meta_research': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\", \"name\": \"test_build_strategy_prompt\"}, {\"classname\": \"tests.test_fsm_runner_registry\", \"message\": \"could not import 'orze_pro': This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run\", \"name\": \"test_packaged_runner_steps_real_verifier_in_the_plugin_registry\"}, {\"classname\": \"tests.test_skill_registry\", \"message\": \"orze-pro not installed\", \"name\": \"test_compose_skills_resolves_sop_prefix_via_orze_pro\"}, {\"classname\": \"tests.test_skill_registry\", \"message\": \"orze-pro not installed\", \"name\": \"test_compose_skills_unknown_sop_prefix_logs_and_skips\"}], \"supplementary_requirements\": {\"git_current_exact\": true, \"not_in_original_core_manifest\": true, \"sha256\": \"8cfc3197b86bf23f2454918d3a0e212585c9cc70f8eee9ee36518311a93c7eb9\"}, \"verified\": true, \"warnings_from_stdout\": 2}\n"
+    }
+  },
+  "pre_git_blob_check": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,subprocess\nfrom pathlib import Path\ncommit='cce70af569e748f845c5b0286172f87cfbf9ffe4'\nrecord=json.loads(Path('/tmp/orze-f-3rO3pT/core/before.json').read_text())\ntracked=subprocess.check_output(['git','ls-tree','-r','--name-only',commit],text=True).splitlines()\nexpected=sorted(p for p in tracked if (p.startswith(('src/','tests/','examples/')) and '__pycache__' not in Path(p).parts and not p.endswith('.pyc')) or p=='pyproject.toml')\nassert sorted(record)==expected,(set(record)-set(expected),set(expected)-set(record))\nrequests=''.join(commit+':'+p+'\\n' for p in expected).encode()\ndata=subprocess.run(['git','cat-file','--batch'],input=requests,stdout=subprocess.PIPE,check=True).stdout\npos=0\nfor p in expected:\n    end=data.index(b'\\n',pos);header=data[pos:end].split();assert len(header)==3 and header[1]==b'blob'\n    size=int(header[2]);body=data[end+1:end+1+size];pos=end+1+size+1\n    assert hashlib.sha256(body).hexdigest()==record[p],p\n    assert hashlib.sha256(Path(p).read_bytes()).hexdigest()==record[p],p\nassert pos==len(data)\np='requirements.txt';baseline=subprocess.check_output(['git','show',commit+':'+p]);current=Path(p).read_bytes();assert baseline==current\nprint(json.dumps({'git_commit':commit,'manifest_files':len(record),'tracked_scope_keyset_exact':True,'every_git_blob_sha256_exact':True,'current_worktree_exact':True,'supplementary_requirements':{'path':p,'sha256':hashlib.sha256(current).hexdigest(),'matches_git_and_current':True,'not_in_core_before_manifest':True}},sort_keys=True))\nPY",
+    "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+    "result": {
+      "chunk_id": "5beb1b",
+      "wall_time_seconds": 0.160090274,
+      "exit_code": 0,
+      "original_token_count": 99,
+      "output": "{\"current_worktree_exact\": true, \"every_git_blob_sha256_exact\": true, \"git_commit\": \"cce70af569e748f845c5b0286172f87cfbf9ffe4\", \"manifest_files\": 799, \"supplementary_requirements\": {\"matches_git_and_current\": true, \"not_in_core_before_manifest\": true, \"path\": \"requirements.txt\", \"sha256\": \"8cfc3197b86bf23f2454918d3a0e212585c9cc70f8eee9ee36518311a93c7eb9\"}, \"tracked_scope_keyset_exact\": true}\n"
+    }
+  },
+  "checker_draft_errors": [
+    {
+      "classification": "review-script precondition error, not test/product failure",
+      "reason": "Assumed explicit testpaths=['tests']; frozen pyproject only pins pythonpath=['src']. Actual exact full command uses pytest default repository discovery, with no test selection/filter argument.",
+      "record": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,re,subprocess,xml.etree.ElementTree as E\nfrom pathlib import Path\norigin=Path('/tmp/orze-f-3rO3pT/core');archive=Path('docs/evidence/runs/2026-09-13-validation/core')\ncommit='cce70af569e748f845c5b0286172f87cfbf9ffe4'\nr=json.loads((origin/'run.json').read_text());before=json.loads((origin/'before.json').read_text())\nassert r['exit_code']==0 and type(r['exit_code']) is int and r['frozen'] is True\nassert r['repository']==str(Path.cwd())\nexpected_command=['python3','-m','pytest','-q','--tb=short','-rs','-p','no:cacheprovider','--basetemp=/tmp/orze-f-3rO3pT/tests','--junitxml=/tmp/orze-f-3rO3pT/core/junit.xml']\nassert r['command']==expected_command\nassert r['environment']=={'CUDA_VISIBLE_DEVICES':'','PYTHONDONTWRITEBYTECODE':'1','PYTHONPATH':'src'}\nassert before==r['before']==r['after']\nassert 'testpaths = [\"tests\"]' in Path('pyproject.toml').read_text()\npaths=subprocess.check_output(['git','ls-tree','-r','--name-only',commit],text=True).splitlines()\nexpected=sorted(p for p in paths if (p.startswith(('src/','tests/','examples/')) and '__pycache__' not in Path(p).parts and not p.endswith('.pyc')) or p=='pyproject.toml')\nassert sorted(before)==expected\ncurrent_paths=sorted(str(p) for section in ('src','tests','examples') for p in Path(section).rglob('*') if p.is_file() and '__pycache__' not in p.parts and not p.name.endswith('.pyc'))+['pyproject.toml']\nassert sorted(current_paths)==expected\nraw=subprocess.run(['git','cat-file','--batch'],input=''.join(commit+':'+p+'\\n' for p in expected).encode(),stdout=subprocess.PIPE,check=True).stdout\npos=0\nfor p in expected:\n end=raw.index(b'\\n',pos);header=raw[pos:end].split();assert len(header)==3 and header[1]==b'blob';size=int(header[2]);b=raw[end+1:end+1+size];pos=end+1+size+1\n assert hashlib.sha256(b).hexdigest()==before[p],p\n assert hashlib.sha256(Path(p).read_bytes()).hexdigest()==before[p],p\nassert pos==len(raw)\nfiles={}\nfor name in ['before.json','stdout.log','stderr.log','junit.xml','run.json']:\n b=(origin/name).read_bytes();assert (archive/name).read_bytes()==b,name\n meta={'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()}\n if name!='run.json':assert r['files'][name]==meta\n files[name]=meta\nstdout=(origin/'stdout.log').read_text();stderr=(origin/'stderr.log').read_text();assert stderr==''\nfooters=re.findall(r'^([0-9]+) passed, ([0-9]+) skipped, ([0-9]+) warnings in ([0-9.]+)s \\([^\\n]+\\)$',stdout,re.M)\nassert footers==[('4638','7','2','935.25')],footers\nassert stdout.rstrip().endswith('4638 passed, 7 skipped, 2 warnings in 935.25s (0:15:35)')\nroot=E.fromstring((origin/'junit.xml').read_bytes());suites=list(root.iter('testsuite'));assert len(suites)==1;s=suites[0]\nassert {k:int(s.attrib[k]) for k in ('tests','failures','errors','skipped')}=={'tests':4645,'failures':0,'errors':0,'skipped':7}\ncases=list(root.iter('testcase'));passed=[c for c in cases if not any(c.find(t) is not None for t in ('failure','error','skipped'))]\nskipped=[c for c in cases if c.find('skipped') is not None]\nassert len(cases)==4645 and len(passed)==4638 and len(skipped)==7\nassert len({(c.get('classname'),c.get('name')) for c in cases})==4645\nassert not list(root.iter('failure')) and not list(root.iter('error'))\nassert abs(float(s.attrib['time'])-935.25)<0.1\nassert r['finished_unix']-r['started_unix']>=float(s.attrib['time'])\nreq=Path('requirements.txt').read_bytes();assert req==subprocess.check_output(['git','show',commit+':requirements.txt'])\nprint(json.dumps({'verified':True,'command':r['command'],'environment':r['environment'],'exit_code':0,'commit':commit,'scope_files':len(before),'before_equals_embedded_after':True,'all_git_blobs_and_current_worktree_exact':True,'archives_byte_exact':files,'passed':len(passed),'skipped':len(skipped),'failed':0,'errors':0,'warnings_from_stdout':2,'pytest_seconds':935.25,'junit_seconds':s.attrib['time'],'run_elapsed_seconds':r['finished_unix']-r['started_unix'],'skips':[{'classname':c.get('classname'),'name':c.get('name'),'message':c.find('skipped').get('message')} for c in skipped],'supplementary_requirements':{'sha256':hashlib.sha256(req).hexdigest(),'git_current_exact':True,'not_in_original_core_manifest':True}},sort_keys=True))\nPY",
+        "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+        "result": {
+          "chunk_id": "78214c",
+          "wall_time_seconds": 0.000006014,
+          "exit_code": 1,
+          "original_token_count": 23,
+          "output": "Traceback (most recent call last):\n  File \"<stdin>\", line 12, in <module>\nAssertionError\n"
+        }
+      }
+    },
+    {
+      "classification": "review-script precondition error, not test/product failure",
+      "reason": "Assumed JUnit suite time and pytest footer differed by less than 0.1s. Actual JUnit935.110, footer935.25, wrapper936.270794 are distinct clocks/measurement envelopes; both lie inside completed wrapper duration. No result/count relaxed.",
+      "record": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,re,subprocess,xml.etree.ElementTree as E\nfrom pathlib import Path\norigin=Path('/tmp/orze-f-3rO3pT/core');archive=Path('docs/evidence/runs/2026-09-13-validation/core')\ncommit='cce70af569e748f845c5b0286172f87cfbf9ffe4'\nr=json.loads((origin/'run.json').read_text());before=json.loads((origin/'before.json').read_text())\nassert r['exit_code']==0 and type(r['exit_code']) is int and r['frozen'] is True\nassert r['repository']==str(Path.cwd())\nexpected_command=['python3','-m','pytest','-q','--tb=short','-rs','-p','no:cacheprovider','--basetemp=/tmp/orze-f-3rO3pT/tests','--junitxml=/tmp/orze-f-3rO3pT/core/junit.xml']\nassert r['command']==expected_command\nassert r['environment']=={'CUDA_VISIBLE_DEVICES':'','PYTHONDONTWRITEBYTECODE':'1','PYTHONPATH':'src'}\nassert before==r['before']==r['after']\n# No testpaths declaration: this exact command uses pytest default repository discovery; pyproject pins source path.\npaths=subprocess.check_output(['git','ls-tree','-r','--name-only',commit],text=True).splitlines()\nexpected=sorted(p for p in paths if (p.startswith(('src/','tests/','examples/')) and '__pycache__' not in Path(p).parts and not p.endswith('.pyc')) or p=='pyproject.toml')\nassert sorted(before)==expected\ncurrent_paths=sorted(str(p) for section in ('src','tests','examples') for p in Path(section).rglob('*') if p.is_file() and '__pycache__' not in p.parts and not p.name.endswith('.pyc'))+['pyproject.toml']\nassert sorted(current_paths)==expected\nraw=subprocess.run(['git','cat-file','--batch'],input=''.join(commit+':'+p+'\\n' for p in expected).encode(),stdout=subprocess.PIPE,check=True).stdout\npos=0\nfor p in expected:\n end=raw.index(b'\\n',pos);header=raw[pos:end].split();assert len(header)==3 and header[1]==b'blob';size=int(header[2]);b=raw[end+1:end+1+size];pos=end+1+size+1\n assert hashlib.sha256(b).hexdigest()==before[p],p\n assert hashlib.sha256(Path(p).read_bytes()).hexdigest()==before[p],p\nassert pos==len(raw)\nfiles={}\nfor name in ['before.json','stdout.log','stderr.log','junit.xml','run.json']:\n b=(origin/name).read_bytes();assert (archive/name).read_bytes()==b,name\n meta={'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()}\n if name!='run.json':assert r['files'][name]==meta\n files[name]=meta\nstdout=(origin/'stdout.log').read_text();stderr=(origin/'stderr.log').read_text();assert stderr==''\nfooters=re.findall(r'^([0-9]+) passed, ([0-9]+) skipped, ([0-9]+) warnings in ([0-9.]+)s \\([^\\n]+\\)$',stdout,re.M)\nassert footers==[('4638','7','2','935.25')],footers\nassert stdout.rstrip().endswith('4638 passed, 7 skipped, 2 warnings in 935.25s (0:15:35)')\nroot=E.fromstring((origin/'junit.xml').read_bytes());suites=list(root.iter('testsuite'));assert len(suites)==1;s=suites[0]\nassert {k:int(s.attrib[k]) for k in ('tests','failures','errors','skipped')}=={'tests':4645,'failures':0,'errors':0,'skipped':7}\ncases=list(root.iter('testcase'));passed=[c for c in cases if not any(c.find(t) is not None for t in ('failure','error','skipped'))]\nskipped=[c for c in cases if c.find('skipped') is not None]\nassert len(cases)==4645 and len(passed)==4638 and len(skipped)==7\nassert len({(c.get('classname'),c.get('name')) for c in cases})==4645\nassert not list(root.iter('failure')) and not list(root.iter('error'))\nassert abs(float(s.attrib['time'])-935.25)<0.1\nassert r['finished_unix']-r['started_unix']>=float(s.attrib['time'])\nreq=Path('requirements.txt').read_bytes();assert req==subprocess.check_output(['git','show',commit+':requirements.txt'])\nprint(json.dumps({'verified':True,'command':r['command'],'environment':r['environment'],'exit_code':0,'commit':commit,'scope_files':len(before),'before_equals_embedded_after':True,'all_git_blobs_and_current_worktree_exact':True,'archives_byte_exact':files,'passed':len(passed),'skipped':len(skipped),'failed':0,'errors':0,'warnings_from_stdout':2,'pytest_seconds':935.25,'junit_seconds':s.attrib['time'],'run_elapsed_seconds':r['finished_unix']-r['started_unix'],'skips':[{'classname':c.get('classname'),'name':c.get('name'),'message':c.find('skipped').get('message')} for c in skipped],'supplementary_requirements':{'sha256':hashlib.sha256(req).hexdigest(),'git_current_exact':True,'not_in_original_core_manifest':True}},sort_keys=True))\nPY",
+        "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+        "result": {
+          "chunk_id": "590ad5",
+          "wall_time_seconds": 0.205103473,
+          "exit_code": 1,
+          "original_token_count": 23,
+          "output": "Traceback (most recent call last):\n  File \"<stdin>\", line 42, in <module>\nAssertionError\n"
+        }
+      }
+    }
+  ],
+  "publication": "Only public Core source inventory is inspected here; Pro API names in optional skip reasons are compatibility metadata, not private implementation bodies.",
+  "limitations": [
+    "The Core original manifest has 799 entries: src/tests/examples plus pyproject. requirements.txt is explicitly outside that original manifest; it matches fixed Git/current and was included in the separate paired Pro full's800-entry Core before/after inventory.",
+    "Seven optional-Pro skips are not counted as passes; paired optional tests and full Pro have separate records.",
+    "Two pytest assertion-rewrite warnings are reported as warnings, not failed tests.",
+    "Archive byte identity proves these original execution artifacts were preserved, not universal correctness of all application behavior or production deployment.",
+    "Short /tmp test storage does not establish CephFS GC/release support.",
+    "A preliminary diagnostic accidentally printed the large run JSON and its display was truncated (7c1f27); it was not used as final stdout/JUnit evidence. Final verification reads/hashes original files directly."
+  ]
+}
