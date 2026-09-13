@@ -89,30 +89,42 @@ def snapshot(path, expected):
     return TreeSnapshot(path, expected, tuple(entries), size)
 
 
-def rename_no_replace(source, destination):
-    """Linux atomic no-replace; unavailable platforms refuse, never fallback."""
+def rename_no_replace_at(source_fd, source_name, target_fd, target_name):
+    """Same primitive through caller-owned directory FDs; never reopen paths."""
+    if (any(type(fd) is not int or fd < 0 for fd in (source_fd, target_fd))
+            or any(type(name) is not str or name in ('', '.', '..')
+                   or '/' in name or '\0' in name for name in (source_name, target_name))):
+        raise GCRefused("gc_rename_argument_invalid")
+    source_info, target_info = os.fstat(source_fd), os.fstat(target_fd)
+    if not stat.S_ISDIR(source_info.st_mode) or not stat.S_ISDIR(target_info.st_mode):
+        raise GCRefused("gc_rename_directory_invalid")
+    if source_info.st_dev != target_info.st_dev:
+        raise GCRefused("gc_cross_device_refused")
     libc = ctypes.CDLL(None, use_errno=True)
     function = getattr(libc, "renameat2", None)
     if function is None:
         raise GCRefused("gc_atomic_rename_unavailable")
     function.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
     function.restype = ctypes.c_int
+    if function(source_fd, os.fsencode(source_name), target_fd,
+                os.fsencode(target_name), 1) != 0:
+        error = ctypes.get_errno()
+        if error == errno.EXDEV:
+            raise GCRefused("gc_cross_device_refused")
+        if error in (errno.ENOSYS, errno.EINVAL, errno.EOPNOTSUPP):
+            raise GCRefused("gc_atomic_rename_unsupported")
+        if error == errno.EEXIST:
+            raise GCRefused("gc_archive_destination_exists")
+        raise OSError(error, os.strerror(error))
+
+
+def rename_no_replace(source, destination):
+    """Linux atomic no-replace; unavailable platforms refuse, never fallback."""
     source_fd = _open_directory(source.parent)
     try:
         target_fd = _open_directory(destination.parent)
         try:
-            if os.fstat(source_fd).st_dev != os.fstat(target_fd).st_dev:
-                raise GCRefused("gc_cross_device_refused")
-            if function(source_fd, os.fsencode(source.name), target_fd,
-                        os.fsencode(destination.name), 1) != 0:
-                error = ctypes.get_errno()
-                if error == errno.EXDEV:
-                    raise GCRefused("gc_cross_device_refused")
-                if error in (errno.ENOSYS, errno.EINVAL, errno.EOPNOTSUPP):
-                    raise GCRefused("gc_atomic_rename_unsupported")
-                if error == errno.EEXIST:
-                    raise GCRefused("gc_archive_destination_exists")
-                raise OSError(error, os.strerror(error))
+            rename_no_replace_at(source_fd, source.name, target_fd, destination.name)
         finally:
             os.close(target_fd)
     finally:

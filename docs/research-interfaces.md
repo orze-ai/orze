@@ -80,6 +80,8 @@ READY 后同内容新 inode 替换、实际注册后 terminal SQL trigger 篡改
 
 ## 策略看到什么，仍缺什么
 
+后续显式 Policy v2 已增加[有界证据分页和定向重读](cpu-evidence-paging.md)。下面的前 32 条描述仍适用于 v1；v2 不改变来源、执行和科学有效性边界。
+
 自定义接口模式的队列窗口最多 32 项；策略同时收到 `recorded_evidence`：`results`、`unavailable`、`more_available`。它从当前持久状态读取，不只依赖这个 controller 的内存完成缓存，因此可看到另一 invocation 的已确认记录。失败、interrupted、invalid、unknown 不被压成零分或成功。
 
 这是有界的已记录元数据视图，不执行大 artifact 内容 hash，不授予来源/GO 权限。实际分析仍在派发时执行上述来源检查。单结果过大显式报告 unavailable/更多结果，不截断一条观察来伪装完整；组合策略输入仍受既有 JSON 边界约束，无法完整容纳时拒绝调用，不默默丢必需声明。顺序窗口不是全局知识库、无限历史遍历或统一信息增益估计器。

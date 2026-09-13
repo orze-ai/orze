@@ -101,6 +101,7 @@ def initialize(engine, gpu_ids, cfg, once):
     engine._cpu_scope = None
     engine._cpu_wait_until = 0.0
     engine._cpu_once_dispatched = False
+    _release_evidence_scan(engine)
     try:
         engine._cpu_interfaces = capture_interfaces(cfg)
         engine._cpu_policy = (QueuePolicy(action_policy(cfg)) if engine._cpu_interfaces is None
@@ -193,10 +194,17 @@ def iteration(engine):
         engine._stop_event.wait(0.05)
         return True
     require_admission(engine)
-    ingest_ideas_source(engine, engine.cfg)
     interfaces = engine._cpu_interfaces
+    paged = interfaces is not None and engine._cpu_policy.declaration["version"] == 2
+    evidence_request = getattr(engine, "_cpu_evidence_request", None) if paged else None
+    if evidence_request is None:
+        ingest_ideas_source(engine, engine.cfg)
+        queue = engine.lake.get_queue(limit=2000 if interfaces is None else 32)
+    else:
+        # A read-only continuation retains only this bounded private queue.
+        # Ingress can write the Lake and must not silently restart a scan.
+        queue = copy.deepcopy(engine._cpu_evidence_queue)
     domain_enabled = engine.cfg.get("action_domain") is not None
-    queue = engine.lake.get_queue(limit=2000 if interfaces is None else 32)
     for queued in queue:
         row = engine.lake.get(queued["idea_id"])
         if row is None or row["kind"] != "native_cpu_action":
@@ -219,19 +227,37 @@ def iteration(engine):
     snapshot = {"queue": queue, "active": bool(engine._cpu_handles), "now": time.time()}
     try:
         if interfaces is not None:
-            from orze.engine.cpu_policy_evidence import recorded_evidence
+            from orze.engine.cpu_policy_evidence import EvidencePager, recorded_evidence
             from orze.engine.cpu_proposals import recorded_proposals
             snapshot["queue"] = [{"idea_id": item["idea_id"],
                 "action": {"timeout_seconds": item["action"]["timeout_seconds"]},
                 "request": item.get("request", item["action"])} for item in queue]
-            snapshot["recorded_evidence"] = recorded_evidence(engine.lake, engine.results_dir)
+            if paged:
+                if evidence_request is None:
+                    engine._cpu_evidence_pager = EvidencePager(engine.lake, engine.results_dir,
+                        limit=engine._cpu_policy.declaration["evidence_page_size"])
+                snapshot.update(engine._cpu_evidence_pager.read(**(evidence_request or {})))
+            else:
+                snapshot["recorded_evidence"] = recorded_evidence(engine.lake, engine.results_dir)
             snapshot["recorded_proposals"] = recorded_proposals(engine.lake, engine.results_dir)
         # This private copy is not passed to a trusted callback. The selected
         # source metadata is still independently verified by normal admission.
         proposal_snapshot = copy.deepcopy(snapshot)
         decision = engine._cpu_policy.decide(snapshot, budget.snapshot(engine.lake, engine._cpu_scope))
+        if paged:
+            # Even a trusted callback cannot turn a changed read revision into
+            # execution, a further page, or a permanent Stop decision.
+            engine._cpu_evidence_pager.verify()
     except Exception as exc:
         raise CPUExecutionError("execution: research policy decision rejected") from exc
+    if decision["kind"] in {"ReadEvidence", "SelectEvidence"}:
+        engine._cpu_evidence_request = ({"cursor": decision["cursor"]}
+            if decision["kind"] == "ReadEvidence" else {"refs": copy.deepcopy(decision["refs"])})
+        engine._cpu_evidence_queue = copy.deepcopy(queue)
+        # No decision ledger entry, permit, claim, worker, or once latch: these
+        # are bounded queries within the same policy decision, not CPU actions.
+        return True
+    _release_evidence_scan(engine)
     if decision["kind"] == "Propose":
         from orze.core.research_interfaces import proposal_sources
         from orze.engine.cpu_proposals import propose
@@ -326,11 +352,18 @@ def iteration(engine):
     return True
 
 
+def _release_evidence_scan(engine):
+    engine._cpu_evidence_pager = None
+    engine._cpu_evidence_request = None
+    engine._cpu_evidence_queue = None
+
+
 def close(engine):
     """Only captured action owners are stopped; no PID discovery or adoption."""
     if engine._cpu_closed:
         return
     engine._cpu_closed = True
+    _release_evidence_scan(engine)
     engine.running = False
     engine._stop_event.set()
     failures = []

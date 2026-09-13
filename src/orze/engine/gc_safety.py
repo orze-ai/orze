@@ -229,6 +229,20 @@ def collect(scope, root, keep_ids, *, mode, dry_run=False):
                         continue
                 stats[key] += 1
                 continue
+            # Detect unsupported storage before creating a task effect owner
+            # or quarantine intent. Final protected renames remain mandatory.
+            from orze.engine.storage_preflight import require_atomic_rename_support
+            require_atomic_rename_support(root)
+            require_atomic_rename_support(path.parent)
+            if destination is not None:
+                # No archive staging before native/effect authorization. The
+                # validated existing ancestor is also _destination's device
+                # witness. Reclaim reopens/creates the exact route and performs
+                # the actual same-device/no-replace operation after detach.
+                archive_parent = destination.parent
+                while not archive_parent.exists():
+                    archive_parent = archive_parent.parent
+                require_atomic_rename_support(archive_parent)
             with attempt_effect_lock(folder) as lease:
                 with _authority(folder, scope.cfg, scope.lake) as conn:
                     bound_exact, bound_trees = _bound_storage(conn, folder)
@@ -256,7 +270,8 @@ def collect(scope, root, keep_ids, *, mode, dry_run=False):
             stats["moved_bytes" if mode == "archive" else "freed_bytes"] += tree.size
         except Exception as exc:
             stats["errors"] += 1
-            reason = str(exc) if isinstance(exc, (GCRefused, AttemptEffectInDoubt)) else "gc_task_unavailable"
+            from orze.engine.storage_preflight import StoragePreflightError
+            reason = str(exc) if isinstance(exc, (GCRefused, AttemptEffectInDoubt, StoragePreflightError)) else "gc_task_unavailable"
             if reason not in stats["reasons"]:
                 stats["reasons"].append(reason)
     return stats

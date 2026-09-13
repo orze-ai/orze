@@ -78,12 +78,17 @@ def cpu_execution(cfg):
 def action_policy(cfg):
     value = cfg.get("action_policy", {"version": 1, "kind": "queue",
                                       "idle": "wait", "wait_seconds": 1})
-    if (type(value) is not dict or set(value) not in (
-            {"version", "kind", "idle", "wait_seconds"},
-            {"version", "kind", "idle", "wait_seconds", "config"})
-            or type(value["version"]) is not int or value["version"] != 1
+    fields = {"version", "kind", "idle", "wait_seconds"}
+    paged = type(value) is dict and type(value.get("version")) is int and value["version"] == 2
+    if paged:
+        fields.add("evidence_page_size")
+    if (type(value) is not dict or set(value) not in (fields, fields | {"config"})
+            or type(value["version"]) is not int or value["version"] not in (1, 2)
             or type(value["kind"]) is not str or value["idle"] not in ("wait", "stop")):
         _fail("action_policy requires version 1, registered kind, idle wait/stop, wait_seconds")
+    if paged and (value["kind"] == "queue" or type(value["evidence_page_size"]) is not int
+                  or not 1 <= value["evidence_page_size"] <= 32):
+        _fail("action_policy version 2 requires a custom policy and evidence_page_size 1..32")
     seconds = value["wait_seconds"]
     if (type(seconds) not in (int, float) or not 0.01 <= seconds <= 3600
             or not math.isfinite(seconds)):

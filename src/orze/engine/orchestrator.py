@@ -1012,6 +1012,11 @@ class Orze(OrzePhaseMixin):
 
     def run(self):
         """Run only while this controller exclusively owns its GPU scope."""
+        if getattr(self, "_cpu_execution", None) is None:
+            from orze.core.control_outcome import require_controller_start_allowed
+            require_controller_start_allowed(self.results_dir)
+            from orze.engine.storage_preflight import require_deployment_storage
+            require_deployment_storage(getattr(self, "cfg", {}), self.results_dir)
         if getattr(self, "_cpu_execution", None) is not None:
             from orze.engine.cpu_phase import close
             try:

@@ -21,7 +21,7 @@ import yaml
 
 from orze.core.artifact_contract import get_artifact_contract
 from orze.core.cpu_action_contract import action_fingerprint, validate_action
-from orze.core.execution_attempts import AttemptAuthorityError, _json
+from orze.core.execution_attempts import AttemptAuthorityError, AttemptRef, _json
 
 
 class ResearchInterfaceError(ValueError):
@@ -277,7 +277,30 @@ class BoundPolicy:
         if type(decision) is not dict:
             _fail("policy must return an explicit decision")
         kind = decision.get("kind")
-        if kind == "Execute":
+        if kind in ("ReadEvidence", "SelectEvidence"):
+            if state["policy"]["version"] != 2:
+                _fail("evidence queries require explicit Policy version 2")
+            if kind == "ReadEvidence":
+                cursor = decision.get("cursor")
+                if (set(decision) != {"kind", "cursor"} or type(cursor) is not str or not cursor
+                        or cursor != captured.get("evidence_page", {}).get("next_cursor")):
+                    _fail("ReadEvidence must use this captured page's next cursor")
+            else:
+                refs = decision.get("refs")
+                if set(decision) != {"kind", "refs"} or type(refs) is not list or not 1 <= len(refs) <= 32:
+                    _fail("SelectEvidence requires 1..32 exact action references")
+                seen = set()
+                for value in refs:
+                    if type(value) is not dict or set(value) != {"task_id", "phase", "attempt_id", "generation"}:
+                        _fail("SelectEvidence requires exact references, not supplied records")
+                    try:
+                        ref = AttemptRef(**value)
+                    except (ValueError, TypeError, RuntimeError) as exc:
+                        raise ResearchInterfaceError("research_interface: invalid evidence reference") from exc
+                    if ref.phase != "action" or ref in seen:
+                        _fail("SelectEvidence requires unique action references")
+                    seen.add(ref)
+        elif kind == "Execute":
             if (set(decision) != {"kind", "task_id"}
                     or decision["task_id"] not in {r["idea_id"] for r in captured["queue"]}):
                 _fail("Execute must select a task in this captured queue")
