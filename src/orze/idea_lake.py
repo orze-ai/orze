@@ -1663,6 +1663,30 @@ class IdeaLake:
         rows = _retry_on_busy(_do_counts)
         return {r[0]: r[1] for r in rows}
 
+    def find_existing_ids(self, idea_ids: Iterable[str]) -> Set[str]:
+        """Return membership for at most 128 IDs, across all lifecycle states.
+
+        This is an advisory snapshot, never admission/ACK authority. The
+        normal insert boundary still resolves any concurrent same-ID writer.
+        Empty input performs no SQL; invalid/oversized input fails before SQL.
+        """
+        if isinstance(idea_ids, (str, bytes)) or idea_ids is None:
+            raise ValueError("idea_id_batch_invalid")
+        requested = []
+        for index, idea_id in enumerate(idea_ids):
+            if index >= 128 or type(idea_id) is not str or not idea_id:
+                raise ValueError("idea_id_batch_invalid")
+            requested.append(idea_id)
+        if not requested:
+            return set()
+        requested = tuple(dict.fromkeys(requested))
+        placeholders = ",".join("?" for _ in requested)
+        rows = _retry_on_busy(lambda: self.conn.execute(
+            f"SELECT idea_id FROM main.ideas WHERE idea_id IN ({placeholders})",
+            requested,
+        ).fetchall())
+        return {row[0] for row in rows}
+
     def get_all_ids(self, status: Optional[str] = None) -> Set[str]:
         """Return set of all idea IDs in the lake, optionally filtered by status."""
         query = "SELECT idea_id FROM ideas"

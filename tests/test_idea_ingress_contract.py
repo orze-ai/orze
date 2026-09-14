@@ -110,12 +110,12 @@ def test_producer_finalizer_rollback_cannot_leave_a_queued_task(engine):
 def test_stale_id_snapshot_cannot_replace_a_concurrent_winner(engine, monkeypatch):
     instance, cfg, ideas_file = engine
     ideas_file.write_text("# Ideas\n\n" + _block("idea-shared", 1), encoding="utf-8")
-    original_get_ids = instance.lake.get_all_ids
+    original_get_ids = instance.lake.find_existing_ids
     competing = IdeaLake(cfg["idea_lake_db"])
     winner = []
 
-    def stale_ids_then_competing_admission():
-        old_ids = original_get_ids()
+    def stale_ids_then_competing_admission(idea_ids):
+        old_ids = original_get_ids(idea_ids)
         if not winner:
             competing.insert(
                 "idea-shared", "Concurrent winner", "seed: 99\n", "winner raw",
@@ -126,7 +126,7 @@ def test_stale_id_snapshot_cannot_replace_a_concurrent_winner(engine, monkeypatc
             winner.append(competing.get("idea-shared"))
         return old_ids
 
-    monkeypatch.setattr(instance.lake, "get_all_ids", stale_ids_then_competing_admission)
+    monkeypatch.setattr(instance.lake, "find_existing_ids", stale_ids_then_competing_admission)
     try:
         instance._sync_ideas(cfg)
         assert len(winner) == 1, "second connection must commit after the old snapshot"

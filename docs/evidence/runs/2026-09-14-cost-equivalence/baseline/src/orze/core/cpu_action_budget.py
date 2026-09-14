@@ -338,22 +338,16 @@ def _bound_current(conn, permit, ref, *, states):
     return row
 
 
-_RESERVATION_COLUMNS = (
-    "CASE WHEN typeof(reservation_id)='text' AND length(CAST(reservation_id AS BLOB))=48 "
-    "THEN reservation_id END,scope,task_id,slot,"
-    "CASE WHEN length(CAST(permit_json AS BLOB))<=16384 THEN permit_json END,"
-    "CASE WHEN ref_json IS NULL OR length(CAST(ref_json AS BLOB))<=16384 THEN ref_json ELSE '' END,"
-    "state,terminal_sha256"
-)
-
-
-def _reservation_row(row, permit):
-    """Validate one captured SQL row and retain the legacy seven-column result."""
-    if tuple(row[:5]) != (
-            permit["reservation_id"], permit["budget_scope"]["results_dir"],
-            permit["task_id"], permit["slot"], _json(permit)):
+def _reservation(conn, permit):
+    rows = conn.execute("SELECT scope,task_id,slot,"
+        "CASE WHEN length(CAST(permit_json AS BLOB))<=16384 THEN permit_json END,"
+        "CASE WHEN ref_json IS NULL OR length(CAST(ref_json AS BLOB))<=16384 THEN ref_json ELSE '' END,"
+        "state,terminal_sha256 FROM main.cpu_action_reservations WHERE reservation_id=?",
+        (permit["reservation_id"],)).fetchall()
+    if len(rows) != 1 or tuple(rows[0][:4]) != (
+            permit["budget_scope"]["results_dir"], permit["task_id"], permit["slot"], _json(permit)):
         _fail("permit_changed")
-    row = tuple(row[1:])
+    row = tuple(rows[0])
     if row[5] not in {"RESERVED", "BOUND", "SETTLED"} or (
             (row[5] == "RESERVED") != (row[4] is None)) or (
             (row[5] == "SETTLED") != (row[6] is not None)):
@@ -365,25 +359,16 @@ def _reservation_row(row, permit):
     return row
 
 
-def _reservation(conn, permit):
-    rows = conn.execute("SELECT " + _RESERVATION_COLUMNS +
-                        " FROM main.cpu_action_reservations WHERE reservation_id=?",
-                        (permit["reservation_id"],)).fetchall()
-    if len(rows) != 1:
-        _fail("permit_changed")
-    return _reservation_row(rows[0], permit)
-
-
 def _totals(conn, scope):
     charged, active = 0, {}
-    rows = conn.execute("SELECT " + _RESERVATION_COLUMNS +
-                        " FROM main.cpu_action_reservations WHERE scope=? ORDER BY reservation_id",
+    rows = conn.execute("SELECT CASE WHEN length(CAST(permit_json AS BLOB))<=16384 THEN permit_json END "
+                        "FROM main.cpu_action_reservations WHERE scope=? ORDER BY reservation_id",
                         (scope["results_dir"],))
-    for stored in rows:
-        permit = _permit(_decode(stored[4]))
+    for raw, in rows:
+        permit = _permit(_decode(raw))
         if _json(permit["budget_scope"]) != _json(scope):
             _fail("reservation_scope_changed")
-        row = _reservation_row(stored, permit)
+        row = _reservation(conn, permit)
         charged += int(permit["reserved_nanoseconds"])
         if row[5] != "SETTLED":
             if permit["slot"] in active:

@@ -173,7 +173,15 @@ def ingest_ideas_source(engine, cfg):
                     raw_ideas.update(parse_ideas_text(text[start:end]))
                 except (ValueError, TypeError, AttributeError, RecursionError, yaml.YAMLError) as exc:
                     logger.warning("Retaining unparsed proposal %s: %s", idea_id, type(exc).__name__)
-            db_ids = engine.lake.get_all_ids()
+            if not raw_ideas:
+                return raw_ideas, inserted
+            find_ids = getattr(engine.lake, "find_existing_ids", None)
+            if callable(find_ids):
+                db_ids = find_ids(raw_ideas)
+            else:
+                # Lightweight lake adapters retain the existing public get()
+                # contract; never fall back to enumerating all historical IDs.
+                db_ids = {key for key in raw_ideas if engine.lake.get(key) is not None}
             config_hashes = engine._load_config_hashes()
             pending = {key: engine._config_override_hash(value.get("config", {}))
                        for key, value in raw_ideas.items() if key not in db_ids}
