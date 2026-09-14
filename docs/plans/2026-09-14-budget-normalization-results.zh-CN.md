@@ -4,6 +4,8 @@
 
 起点为 Core `558f8c69db03eb7a5087d8200f54d4ce0fe46dcd`，配对 Pro `ac937e4`。工作分支为两仓的 `codex/p1-history-validation`。Pro 本片仅增加验证记录，不改源码和测试。
 
+固定实现提交为 Core `7b6e0b8b950365beffae717865b368b5bb2a3e27`；[提交后制品复核](../evidence/runs/2026-09-14-budget-normalization/verification-committed.json)再次从 Git 读取所有 wheel 包文件，比对实际安装与原始验证记录，结果通过。
+
 ## 实现边界
 
 预算的 declaration、scope、permit 字段检查与生成独立 canonical 副本分开。扫描先解析真实 SQL 行中的完整 permit JSON，再校验其字段，不再为了丢弃的副本而重复编码／解析同一对象。对外归一化入口继续返回独立 canonical 对象。
