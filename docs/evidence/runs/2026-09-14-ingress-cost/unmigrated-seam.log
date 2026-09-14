@@ -1,0 +1,29 @@
+
+orze-pro is distributed via private registry.
+
+To install:
+    1. Get your license key at https://orze.ai/pro
+    2. pip install orze
+    3. export ORZE_PRO_KEY="ORZE-PRO-..."
+    4. orze run  (auto-installs orze-pro)
+
+Or install manually:
+    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/
+
+Questions? support@orze.ai
+
+INGRESS_EMPTY={"sql": [], "cache_loads": 0}
+.INGRESS_EMPTY={"sql": [], "cache_loads": 0}
+.INGRESS_EMPTY={"sql": [], "cache_loads": 0}
+.INGRESS_EMPTY={"sql": [], "cache_loads": 0}
+.INGRESS_BATCH={"history_rows": 0, "id_selects": ["select idea_id from main.ideas where idea_id in ('idea-fresh')"], "total_sql": 21, "cache_loads": 1}
+.INGRESS_BATCH={"history_rows": 1000, "id_selects": ["select idea_id from main.ideas where idea_id in ('idea-fresh')"], "total_sql": 21, "cache_loads": 1}
+.........F
+=================================== FAILURES ===================================
+__________ test_stale_id_snapshot_cannot_replace_a_concurrent_winner ___________
+tests/test_idea_ingress_contract.py:132: in test_stale_id_snapshot_cannot_replace_a_concurrent_winner
+    assert len(winner) == 1, "second connection must commit after the old snapshot"
+E   AssertionError: second connection must commit after the old snapshot
+E   assert 0 == 1
+E    +  where 0 = len([])
+1 failed, 14 passed in 2.79s

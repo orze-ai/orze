@@ -1,0 +1,719 @@
+
+orze-pro is distributed via private registry.
+
+To install:
+    1. Get your license key at https://orze.ai/pro
+    2. pip install orze
+    3. export ORZE_PRO_KEY="ORZE-PRO-..."
+    4. orze run  (auto-installs orze-pro)
+
+Or install manually:
+    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/
+
+Questions? support@orze.ai
+
+INGRESS_EMPTY={"sql": ["SELECT idea_id FROM ideas"], "cache_loads": 1}
+FINGRESS_EMPTY={"sql": ["SELECT idea_id FROM ideas"], "cache_loads": 1}
+FINGRESS_EMPTY={"sql": ["SELECT idea_id FROM ideas"], "cache_loads": 1}
+FINGRESS_EMPTY={"sql": ["SELECT idea_id FROM ideas"], "cache_loads": 1}
+FINGRESS_BATCH={"history_rows": 0, "id_selects": ["select idea_id from ideas"], "total_sql": 21, "cache_loads": 1}
+FINGRESS_BATCH={"history_rows": 1000, "id_selects": ["select idea_id from ideas"], "total_sql": 21, "cache_loads": 1}
+FF........
+=================================== FAILURES ===================================
+_________ test_empty_parsed_batch_reads_no_lake_ids_or_config_cache[] __________
+tests/test_idea_ingress_cost.py:56: in test_empty_parsed_batch_reads_no_lake_ids_or_config_cache
+    assert queries == [], "an already empty parsed batch must not read historical IDs"
+E   AssertionError: an already empty parsed batch must not read historical IDs
+E   assert ['SELECT idea_id FROM ideas'] == []
+E     
+E     Left contains one more item: 'SELECT idea_id FROM ideas'
+E     Use -v to get more diff
+_____ test_empty_parsed_batch_reads_no_lake_ids_or_config_cache[# Ideas\n] _____
+tests/test_idea_ingress_cost.py:56: in test_empty_parsed_batch_reads_no_lake_ids_or_config_cache
+    assert queries == [], "an already empty parsed batch must not read historical IDs"
+E   AssertionError: an already empty parsed batch must not read historical IDs
+E   assert ['SELECT idea_id FROM ideas'] == []
+E     
+E     Left contains one more item: 'SELECT idea_id FROM ideas'
+E     Use -v to get more diff
+_ test_empty_parsed_batch_reads_no_lake_ids_or_config_cache[## idea-bad: Invalid\n```yaml\nseed: [\n```\n] _
+tests/test_idea_ingress_cost.py:56: in test_empty_parsed_batch_reads_no_lake_ids_or_config_cache
+    assert queries == [], "an already empty parsed batch must not read historical IDs"
+E   AssertionError: an already empty parsed batch must not read historical IDs
+E   assert ['SELECT idea_id FROM ideas'] == []
+E     
+E     Left contains one more item: 'SELECT idea_id FROM ideas'
+E     Use -v to get more diff
+------------------------------ Captured log call -------------------------------
+WARNING  orze:ideas.py:175 Skipping idea-bad: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+_ test_empty_parsed_batch_reads_no_lake_ids_or_config_cache[## idea-duplicate: Proposal\n```yaml\nseed: 1\n```\n\n## idea-duplicate: Proposal\n```yaml\nseed: 2\n```\n\n] _
+tests/test_idea_ingress_cost.py:56: in test_empty_parsed_batch_reads_no_lake_ids_or_config_cache
+    assert queries == [], "an already empty parsed batch must not read historical IDs"
+E   AssertionError: an already empty parsed batch must not read historical IDs
+E   assert ['SELECT idea_id FROM ideas'] == []
+E     
+E     Left contains one more item: 'SELECT idea_id FROM ideas'
+E     Use -v to get more diff
+____ test_nonempty_batch_uses_only_targeted_id_query_and_real_admission[0] _____
+tests/test_idea_ingress_cost.py:75: in test_nonempty_batch_uses_only_targeted_id_query_and_real_admission
+    assert not any(q == "select idea_id from ideas" for q in selects)
+E   assert not True
+E    +  where True = any(<generator object test_nonempty_batch_uses_only_targeted_id_query_and_real_admission.<locals>.<genexpr> at 0x149c4d592180>)
+___ test_nonempty_batch_uses_only_targeted_id_query_and_real_admission[1000] ___
+tests/test_idea_ingress_cost.py:75: in test_nonempty_batch_uses_only_targeted_id_query_and_real_admission
+    assert not any(q == "select idea_id from ideas" for q in selects)
+E   assert not True
+E    +  where True = any(<generator object test_nonempty_batch_uses_only_targeted_id_query_and_real_admission.<locals>.<genexpr> at 0x149c4dda7e60>)
+_ test_empty_first_page_advances_to_real_later_proposal_without_loading_history _
+tests/test_idea_ingress_cost.py:93: in test_empty_first_page_advances_to_real_later_proposal_without_loading_history
+    assert first_queries == [] and first_loads == []
+E   AssertionError: assert (['SELECT idea_id FROM ideas'] == []
+E     
+E     Left contains one more item: 'SELECT idea_id FROM ideas'
+E     Use -v to get more diff)
+------------------------------ Captured log call -------------------------------
+WARNING  orze:ideas.py:175 Skipping idea-invalid-000: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-001: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-002: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-003: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-004: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-005: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-006: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-007: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-008: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-009: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-010: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-011: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-012: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-013: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-014: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-015: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-016: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-017: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-018: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-019: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-020: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-021: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-022: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-023: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-024: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-025: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-026: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-027: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-028: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-029: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-030: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-031: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-032: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-033: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-034: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-035: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-036: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-037: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-038: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-039: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-040: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-041: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-042: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-043: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-044: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-045: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-046: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-047: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-048: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-049: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-050: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-051: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-052: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-053: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-054: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-055: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-056: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-057: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-058: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-059: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-060: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-061: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-062: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-063: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-064: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-065: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-066: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-067: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-068: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-069: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-070: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-071: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-072: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-073: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-074: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-075: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-076: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-077: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-078: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-079: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-080: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-081: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-082: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-083: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-084: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-085: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-086: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-087: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-088: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-089: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-090: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-091: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-092: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-093: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-094: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-095: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-096: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-097: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-098: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-099: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-100: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-101: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-102: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-103: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-104: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-105: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-106: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-107: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-108: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-109: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-110: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-111: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-112: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-113: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-114: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-115: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-116: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-117: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-118: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-119: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-120: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-121: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-122: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-123: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-124: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-125: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-126: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+WARNING  orze:ideas.py:175 Skipping idea-invalid-127: YAML parse error in config block: while parsing a flow node
+expected the node content, but found '<stream end>'
+  in "<unicode string>", line 2, column 1:
+    
+    ^
+7 failed, 8 passed in 3.39s
