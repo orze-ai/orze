@@ -1,0 +1,82 @@
+.......................FFF................                               [100%]
+=================================== FAILURES ===================================
+_____________ test_scan_decodes_only_stored_documents[RESERVED-1] ______________
+
+ledger = (<sqlite3.Connection object at 0x145a03923d40>, {'database': '/tmp/pytest-of-erik/pytest-5096/test_scan_decodes_only_s...esource': 'cpu', 'slots': 2, 'version': 2, 'wall_budget_seconds': None}, 'directory_identity': [66306, 44190598], ...})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x145a03b770d0>
+state = 'RESERVED', decodes = 1
+
+    @pytest.mark.parametrize("state,decodes", [("RESERVED", 1), ("BOUND", 2), ("SETTLED", 2)])
+    def test_scan_decodes_only_stored_documents(ledger, monkeypatch, state, decodes):
+        conn, scope = ledger
+        add_row(conn, scope, 1, state=state)
+        original = budget._decode
+        calls = []
+    
+        def counted(raw):
+            calls.append(raw)
+            return original(raw)
+    
+        monkeypatch.setattr(budget, "_decode", counted)
+        expected_active = {} if state == "SETTLED" else {0: "task-1"}
+        assert budget._totals(conn, scope) == (1_000_000_000, expected_active)
+>       assert len(calls) == decodes
+E       assert 4 == 1
+E        +  where 4 = len(['{"budget_scope":{"database":"/tmp/pytest-of-erik/pytest-5096/test_scan_decodes_only_stored_0/lake.db","database_iden...00000000000000001","reserved_nanoseconds":"1000000000","schema":1,"slot":0,"task_id":"task-1","wall_limit_seconds":1}'])
+
+tests/test_cpu_budget_normalization.py:63: AssertionError
+_______________ test_scan_decodes_only_stored_documents[BOUND-2] _______________
+
+ledger = (<sqlite3.Connection object at 0x145a03440840>, {'database': '/tmp/pytest-of-erik/pytest-5096/test_scan_decodes_only_s...esource': 'cpu', 'slots': 2, 'version': 2, 'wall_budget_seconds': None}, 'directory_identity': [66306, 44190601], ...})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x145a03a0cbb0>
+state = 'BOUND', decodes = 2
+
+    @pytest.mark.parametrize("state,decodes", [("RESERVED", 1), ("BOUND", 2), ("SETTLED", 2)])
+    def test_scan_decodes_only_stored_documents(ledger, monkeypatch, state, decodes):
+        conn, scope = ledger
+        add_row(conn, scope, 1, state=state)
+        original = budget._decode
+        calls = []
+    
+        def counted(raw):
+            calls.append(raw)
+            return original(raw)
+    
+        monkeypatch.setattr(budget, "_decode", counted)
+        expected_active = {} if state == "SETTLED" else {0: "task-1"}
+        assert budget._totals(conn, scope) == (1_000_000_000, expected_active)
+>       assert len(calls) == decodes
+E       assert 5 == 2
+E        +  where 5 = len(['{"budget_scope":{"database":"/tmp/pytest-of-erik/pytest-5096/test_scan_decodes_only_stored_1/lake.db","database_iden...id":"task-1","wall_limit_seconds":1}', '{"attempt_id":"attempt-1","generation":1,"phase":"action","task_id":"task-1"}'])
+
+tests/test_cpu_budget_normalization.py:63: AssertionError
+______________ test_scan_decodes_only_stored_documents[SETTLED-2] ______________
+
+ledger = (<sqlite3.Connection object at 0x145a03923d40>, {'database': '/tmp/pytest-of-erik/pytest-5096/test_scan_decodes_only_s...esource': 'cpu', 'slots': 2, 'version': 2, 'wall_budget_seconds': None}, 'directory_identity': [66306, 44190604], ...})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x145a03661210>
+state = 'SETTLED', decodes = 2
+
+    @pytest.mark.parametrize("state,decodes", [("RESERVED", 1), ("BOUND", 2), ("SETTLED", 2)])
+    def test_scan_decodes_only_stored_documents(ledger, monkeypatch, state, decodes):
+        conn, scope = ledger
+        add_row(conn, scope, 1, state=state)
+        original = budget._decode
+        calls = []
+    
+        def counted(raw):
+            calls.append(raw)
+            return original(raw)
+    
+        monkeypatch.setattr(budget, "_decode", counted)
+        expected_active = {} if state == "SETTLED" else {0: "task-1"}
+        assert budget._totals(conn, scope) == (1_000_000_000, expected_active)
+>       assert len(calls) == decodes
+E       assert 5 == 2
+E        +  where 5 = len(['{"budget_scope":{"database":"/tmp/pytest-of-erik/pytest-5096/test_scan_decodes_only_stored_2/lake.db","database_iden...id":"task-1","wall_limit_seconds":1}', '{"attempt_id":"attempt-1","generation":1,"phase":"action","task_id":"task-1"}'])
+
+tests/test_cpu_budget_normalization.py:63: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cpu_budget_normalization.py::test_scan_decodes_only_stored_documents[RESERVED-1]
+FAILED tests/test_cpu_budget_normalization.py::test_scan_decodes_only_stored_documents[BOUND-2]
+FAILED tests/test_cpu_budget_normalization.py::test_scan_decodes_only_stored_documents[SETTLED-2]
+3 failed, 39 passed in 6.64s

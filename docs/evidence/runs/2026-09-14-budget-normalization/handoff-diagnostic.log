@@ -1,0 +1,47 @@
+F
+=================================== FAILURES ===================================
+_ test_real_api_handoff_requires_old_tree_exit_and_live_successor_resources[normal] _
+
+handoff_process = <function handoff_process.<locals>.spawn at 0x149d83b90550>
+mode = 'normal'
+
+    @pytest.mark.parametrize('mode', ['normal', 'escaped'])
+    def test_real_api_handoff_requires_old_tree_exit_and_live_successor_resources(handoff_process, mode):
+>       controller = _prepare_old(handoff_process, mode)
+
+tests/test_controller_handoff_product.py:426: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_controller_handoff_product.py:388: in _prepare_old
+    assert controller.event('constructed')['lake'] == 'IdeaLake'
+tests/test_controller_product_boundaries.py:339: in event
+    self.wait(lambda: any(x["event"] == name for x in self.events))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <test_controller_handoff_product.HandoffProcess object at 0x149d83d61db0>
+predicate = <function ProductProcess.event.<locals>.<lambda> at 0x149d841dfa30>
+timeout = 15
+
+    def wait(self, predicate, timeout=15):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if predicate():
+                return
+            if not _alive(self.controller_fd):
+                break
+            self.pump()
+>       assert predicate(), (self.events, (self.root / "controller.log").read_text()[-16000:])
+E       AssertionError: ([], "
+E         orze-pro is distributed via private registry.
+E         
+E         To install:
+E             1. Get your license key at https://orze.ai/p...rtError(
+E         ImportError: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run
+E         ")
+E       assert False
+E        +  where False = <function ProductProcess.event.<locals>.<lambda> at 0x149d841dfa30>()
+
+tests/test_controller_product_boundaries.py:336: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_controller_handoff_product.py::test_real_api_handoff_requires_old_tree_exit_and_live_successor_resources[normal]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.33s

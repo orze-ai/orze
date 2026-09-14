@@ -159,7 +159,7 @@ def _route(lake):
     return actual
 
 
-def _validate_declaration(value):
+def _declaration(value):
     if (type(value) is not dict or set(value) != {
             "version", "resource", "slots", "wall_budget_seconds"}
             or type(value["version"]) is not int or value["version"] not in (1, 2)
@@ -171,10 +171,6 @@ def _validate_declaration(value):
             _fail("declaration_invalid")
     else:
         _number(value["wall_budget_seconds"])
-
-
-def _declaration(value):
-    _validate_declaration(value)
     return _decode(_json(value))
 
 
@@ -185,21 +181,17 @@ def _wall_limit_ns(scope):
     return _ns(scope["declaration"]["wall_budget_seconds"])
 
 
-def _validate_scope(value):
+def _scope(value):
     if type(value) is not dict or set(value) != {
             "schema", "results_dir", "database", "database_identity",
             "directory_identity", "declaration", "policy_sha256"}:
         _fail("scope_invalid")
     if type(value["schema"]) is not int or value["schema"] != 1:
         _fail("scope_invalid")
-    _validate_declaration(value["declaration"])
+    _declaration(value["declaration"])
     original = {k: v for k, v in value.items() if k != "policy_sha256"}
     if hashlib.sha256(_json(original).encode()).hexdigest() != value["policy_sha256"]:
         _fail("scope_invalid")
-
-
-def _scope(value):
-    _validate_scope(value)
     return _decode(_json(value))
 
 
@@ -317,13 +309,12 @@ def _recovery_owned(conn, scope, nonce, lease):
     return expected
 
 
-def _validate_permit(value):
+def _permit(value):
     if type(value) is not dict or set(value) != {
             "schema", "budget_scope", "reservation_id", "task_id", "slot",
             "wall_limit_seconds", "reserved_nanoseconds"}:
         _fail("permit_invalid")
-    scope = value["budget_scope"]
-    _validate_scope(scope)
+    scope = _scope(value["budget_scope"])
     _token(value["task_id"])
     if (type(value["schema"]) is not int or value["schema"] != 1
             or type(value["reservation_id"]) is not str or not _HEX.fullmatch(value["reservation_id"])
@@ -331,10 +322,6 @@ def _validate_permit(value):
             or type(value["reserved_nanoseconds"]) is not str
             or value["reserved_nanoseconds"] != str(_ns(value["wall_limit_seconds"], reservation=True))):
         _fail("permit_invalid")
-
-
-def _permit(value):
-    _validate_permit(value)
     return _decode(_json(value))
 
 
@@ -393,13 +380,7 @@ def _totals(conn, scope):
                         " FROM main.cpu_action_reservations WHERE scope=? ORDER BY reservation_id",
                         (scope["results_dir"],))
     for stored in rows:
-        # _decode has already checked the complete stored document's byte
-        # limit, duplicate keys and canonical form, and owns a fresh object.
-        # Validate every nested field without serializing and reparsing that
-        # same object just to make further defensive copies. Nothing survives
-        # this row or this audit; admission and GO still read current history.
-        permit = _decode(stored[4])
-        _validate_permit(permit)
+        permit = _permit(_decode(stored[4]))
         if _json(permit["budget_scope"]) != _json(scope):
             _fail("reservation_scope_changed")
         row = _reservation_row(stored, permit)
