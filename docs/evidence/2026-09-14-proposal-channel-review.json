@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "scope": "Independent proposal/evidence channel switching validation, separate explicitly invoked docs check rather than default test collection",
+  "probe": {
+    "path": "docs/evidence/checks/2026-09-14-proposal-channel-review.py",
+    "sha256": "631958a02819a7dc461bbe092ed4952c18653ad0f72354d74b13258b191d8ea5",
+    "parameters": 3,
+    "literal_asserts": 34,
+    "production_and_test_files_unchanged": 784
+  },
+  "epochs": {
+    "first": {
+      "classification": "Two actual green controls plus one failed fault injection; not a product red",
+      "result": "1 failed, 2 passed in 18.31s",
+      "command": "python3 -B - <<'PY'\nimport hashlib,json,pathlib,subprocess,tempfile,time,sys\nrepo=pathlib.Path('/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze'); probe='docs/evidence/checks/2026-09-14-proposal-channel-review.py'\nout=pathlib.Path(tempfile.mkdtemp(prefix='orze-proposal-channel-',dir='/tmp'))\ndef hashes():\n names=subprocess.check_output(['git','ls-files','-co','--exclude-standard','--','src','tests'],cwd=repo,text=True).splitlines()\n return {p:hashlib.sha256((repo/p).read_bytes()).hexdigest() for p in sorted(set(names)) if (repo/p).is_file()}\nbefore=hashes(); probe_sha=hashlib.sha256((repo/probe).read_bytes()).hexdigest(); (out/'probe.py').write_bytes((repo/probe).read_bytes())\nargv=[sys.executable,'-B','-m','pytest','-q',probe,'--basetemp',str(out/'pytest'),'--junitxml',str(out/'junit.xml')]\nenv={'PATH':'/usr/local/bin:/usr/bin:/bin','LANG':'C.UTF-8','PYTHONPATH':str(repo/'src')+':'+str(repo/'tests'),'PYTHONDONTWRITEBYTECODE':'1','PYTEST_DISABLE_PLUGIN_AUTOLOAD':'1'}\nstart=time.monotonic(); r=subprocess.run(argv,cwd=repo,env=env,capture_output=True); wall=time.monotonic()-start\n(out/'stdout.log').write_bytes(r.stdout); (out/'stderr.log').write_bytes(r.stderr)\nreport={'argv':argv,'cwd':str(repo),'environment':env,'exit_code':r.returncode,'wall_seconds':wall,'before':before,'after':hashes(),'probe_sha256_before':probe_sha,'probe_sha256_after':hashlib.sha256((repo/probe).read_bytes()).hexdigest(),'stdout_sha256':hashlib.sha256(r.stdout).hexdigest(),'stderr_sha256':hashlib.sha256(r.stderr).hexdigest(),'out':str(out)}\n(out/'run.json').write_text(json.dumps(report,sort_keys=True,indent=2)+'\\n')\nprint(r.stdout.decode()); print(r.stderr.decode()); print(json.dumps({'out':str(out),'exit_code':r.returncode,'wall_seconds':wall,'source_test_count':len(before),'source_tests_prepost_exact':before==report['after'],'probe_sha256':probe_sha,'probe_prepost_exact':probe_sha==report['probe_sha256_after'],'report_sha256':hashlib.sha256((out/'run.json').read_bytes()).hexdigest()},sort_keys=True)); sys.exit(r.returncode)\nPY",
+      "first_tool": {
+        "chunk_id": "bca559",
+        "wall_time_seconds": 1.000927203,
+        "session_id": 33936,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "final_tool": {
+        "chunk_id": "1e9064",
+        "wall_time_seconds": 0.000002805,
+        "exit_code": 1,
+        "original_token_count": 1491,
+        "output": "..F                                                                      [100%]\n=================================== FAILURES ===================================\n_ test_proposal_selection_rechecks_selected_evidence_without_consuming_scan[content_changed] _\n\nhistory = {'root': PosixPath('/tmp/orze-proposal-channel-5_5rzjqw/pytest/test_proposal_selection_rechec2'), 'cfg': {'execution':...selection_rechec2/.orze/artifacts/8fe00c78519d731b3cf49089e2c58fb4dd243053b47e7395281edc16d72aeb7b/content', ...}, ...}\nfault = 'content_changed'\n\n    @pytest.mark.parametrize(\"fault\", [\"unchanged\", \"effect_changed\", \"content_changed\"])\n    def test_proposal_selection_rechecks_selected_evidence_without_consuming_scan(history, fault):\n        history[\"cfg\"][\"action_policy\"][\"proposal_page_size\"] = 8\n        source = history[\"source\"]\n        ref = copy.deepcopy(source[\"producer\"])\n        state = {\"fault\": fault, \"stage\": 0, \"mutation\": None}\n        before = _database(history[\"root\"])\n    \n        class Policy:\n            def __init__(self, declaration):\n                pass\n    \n            def decide(self, snapshot, budget):\n                _capture(history, snapshot, budget)\n                stage = state[\"stage\"]\n                state[\"stage\"] += 1\n                assert state[\"stage\"] <= 3\n                page = snapshot[\"evidence_page\"]\n                view = snapshot[\"recorded_evidence\"]\n                if stage == 0:\n                    assert page[\"mode\"] == \"scan\" and page[\"page\"] == 1\n                    assert isinstance(page[\"next_cursor\"], str)\n                    assert all(row[\"ref\"] != ref for row in view[\"results\"])\n                    state[\"scan\"] = {k: copy.deepcopy(page[k]) for k in\n                                     (\"scan_id\", \"next_cursor\", \"page\", \"seen\", \"traversal_end\")}\n                    decision = {\"kind\": \"SelectEvidence\", \"refs\": [copy.deepcopy(ref)]}\n                elif stage == 1:\n                    assert page[\"mode\"] == \"selection\"\n                    assert {k: page[k] for k in state[\"scan\"]} == state[\"scan\"]\n                    assert [row[\"ref\"] for row in view[\"results\"]] == [ref]\n                    assert view[\"results\"][0][\"artifact_records\"] == [source]\n                    if fault != \"unchanged\":\n                        path = (history[\"root\"] / \"results\" / SOURCE / \"_execution_effects\" /\n                                ref[\"attempt_id\"] / \"committed.json\"\n                                if fault == \"effect_changed\" else Path(source[\"path\"]))\n                        original = path.read_bytes()\n                        (history[\"root\"] / (\"channel-original-\" + path.name)).write_bytes(original)\n                        replacement = b\"not a committed receipt\\n\" if fault == \"effect_changed\" else b\"19\"\n                        path.write_bytes(replacement)\n                        state[\"mutation\"] = {\"path\": str(path),\n                            \"original_sha256\": hashlib.sha256(original).hexdigest(),\n                            \"replacement_sha256\": hashlib.sha256(replacement).hexdigest()}\n                    decision = {\"kind\": \"SelectProposals\", \"request_ids\": [\"absent-channel-request\"]}\n                else:\n                    assert page[\"mode\"] == \"selection\"\n                    assert {k: page[k] for k in state[\"scan\"]} == state[\"scan\"]\n                    assert snapshot[\"proposal_page\"][\"mode\"] == \"selection\"\n                    assert snapshot[\"proposal_page\"][\"missing_request_ids\"] == [\"absent-channel-request\"]\n                    assert snapshot[\"recorded_proposals\"][\"results\"] == []\n                    if fault == \"effect_changed\":\n                        assert view[\"results\"] == []\n                        assert [row[\"ref\"] for row in view[\"unavailable\"]] == [ref]\n                        assert view[\"unavailable\"][0][\"reason\"]\n                    else:\n                        assert [row[\"ref\"] for row in view[\"results\"]] == [ref]\n                        assert view[\"results\"][0][\"artifact_records\"] == [source]\n                        assert view[\"unavailable\"] == []\n                    decision = ({\"kind\": \"Stop\", \"reason\": \"unchanged_cross_channel_evidence\", \"wakeup\": None}\n                                if fault == \"unchanged\" else _propose(source[\"artifact_id\"]))\n                history[\"trace\"][-1][\"decision\"] = copy.deepcopy(decision)\n                return decision\n    \n        _register(history, Policy)\n        try:\n            code = history[\"run\"](once=False)\n            history[\"outcomes\"].append(code)\n            assert code == (0 if fault == \"unchanged\" else 75)\n>           assert state[\"stage\"] == 3\nE           assert 2 == 3\n\n/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze/docs/evidence/checks/2026-09-14-proposal-channel-review.py:87: AssertionError\n----------------------------- Captured stdout call -----------------------------\nHOLD: CPU action execution unconfirmed: execution: research policy decision rejected\nCPU_PROPOSAL_CHANNEL_REPORT=/tmp/orze-proposal-channel-5_5rzjqw/pytest/test_proposal_selection_rechec2/proposal-channel-review.json\n--------------------------- Captured stdout teardown ---------------------------\nCPU_EVIDENCE_PAGING_REPORT=/tmp/orze-proposal-channel-5_5rzjqw/pytest/test_proposal_selection_rechec2/paging-product-report.json\n=========================== short test summary info ============================\nFAILED docs/evidence/checks/2026-09-14-proposal-channel-review.py::test_proposal_selection_rechecks_selected_evidence_without_consuming_scan[content_changed]\n1 failed, 2 passed in 18.31s\n\n\n{\"exit_code\": 1, \"out\": \"/tmp/orze-proposal-channel-5_5rzjqw\", \"probe_prepost_exact\": true, \"probe_sha256\": \"87edb6811cb2543d0b425a543c41eb7fcec0629a3ec1fd7b80cb2bbf7c875bfc\", \"report_sha256\": \"02ca716f29034cffba282bc153da6024d645deb472cda42083130edc8b5e9d70\", \"source_test_count\": 784, \"source_tests_prepost_exact\": true, \"wall_seconds\": 18.52739608846605}\n"
+      },
+      "index": "docs/evidence/runs/2026-09-14-proposal-channel-review/first-injection/index.json",
+      "cause": "Content mutation attempted Path.write_bytes on the actual published owner-read-only artifact. It stopped at stage 1 (stage counter 2), mutation remained null and archived actual content stayed 17/mode0400. This did not reach the desired downstream source validation boundary."
+    },
+    "corrected": {
+      "result": "3 passed in 19.06s",
+      "command": "python3 -B - <<'PY'\nimport hashlib,json,pathlib,subprocess,tempfile,time,sys\nrepo=pathlib.Path('/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze'); probe='docs/evidence/checks/2026-09-14-proposal-channel-review.py'\nout=pathlib.Path(tempfile.mkdtemp(prefix='orze-proposal-channel-corrected-',dir='/tmp'))\ndef hashes():\n names=subprocess.check_output(['git','ls-files','-co','--exclude-standard','--','src','tests'],cwd=repo,text=True).splitlines()\n return {p:hashlib.sha256((repo/p).read_bytes()).hexdigest() for p in sorted(set(names)) if (repo/p).is_file()}\nbefore=hashes(); probe_sha=hashlib.sha256((repo/probe).read_bytes()).hexdigest(); (out/'probe.py').write_bytes((repo/probe).read_bytes())\nargv=[sys.executable,'-B','-m','pytest','-q',probe,'--basetemp',str(out/'pytest'),'--junitxml',str(out/'junit.xml')]\nenv={'PATH':'/usr/local/bin:/usr/bin:/bin','LANG':'C.UTF-8','PYTHONPATH':str(repo/'src')+':'+str(repo/'tests'),'PYTHONDONTWRITEBYTECODE':'1','PYTEST_DISABLE_PLUGIN_AUTOLOAD':'1'}\nstart=time.monotonic(); r=subprocess.run(argv,cwd=repo,env=env,capture_output=True); wall=time.monotonic()-start\n(out/'stdout.log').write_bytes(r.stdout); (out/'stderr.log').write_bytes(r.stderr)\nreport={'argv':argv,'cwd':str(repo),'environment':env,'exit_code':r.returncode,'wall_seconds':wall,'before':before,'after':hashes(),'probe_sha256_before':probe_sha,'probe_sha256_after':hashlib.sha256((repo/probe).read_bytes()).hexdigest(),'stdout_sha256':hashlib.sha256(r.stdout).hexdigest(),'stderr_sha256':hashlib.sha256(r.stderr).hexdigest(),'out':str(out)}\n(out/'run.json').write_text(json.dumps(report,sort_keys=True,indent=2)+'\\n')\nprint(r.stdout.decode()); print(r.stderr.decode()); print(json.dumps({'out':str(out),'exit_code':r.returncode,'wall_seconds':wall,'source_test_count':len(before),'source_tests_prepost_exact':before==report['after'],'probe_sha256':probe_sha,'probe_prepost_exact':probe_sha==report['probe_sha256_after'],'report_sha256':hashlib.sha256((out/'run.json').read_bytes()).hexdigest()},sort_keys=True)); sys.exit(r.returncode)\nPY",
+      "first_tool": {
+        "chunk_id": "f2c245",
+        "wall_time_seconds": 1.001653334,
+        "session_id": 86908,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "final_tool": {
+        "chunk_id": "5abccb",
+        "wall_time_seconds": 0.000003047,
+        "exit_code": 0,
+        "original_token_count": 118,
+        "output": "...                                                                      [100%]\n3 passed in 19.06s\n\n\n{\"exit_code\": 0, \"out\": \"/tmp/orze-proposal-channel-corrected-7vde0bws\", \"probe_prepost_exact\": true, \"probe_sha256\": \"631958a02819a7dc461bbe092ed4952c18653ad0f72354d74b13258b191d8ea5\", \"report_sha256\": \"cbcf2c9ef4108683364d06130e6100ecd51e745af912b6ea7c056c678d08423b\", \"source_test_count\": 784, \"source_tests_prepost_exact\": true, \"wall_seconds\": 19.26664881594479}\n"
+      },
+      "index": "docs/evidence/runs/2026-09-14-proposal-channel-review/corrected/index.json",
+      "correction": "Only the isolated probe enables owner write on the exact test-owned artifact, recording original mode/hash and replacement hash. Original 34 asserts unchanged. Actual artifact after injection is 19/mode0600; the first script and every failure artifact remain preserved."
+    }
+  },
+  "behavior": [
+    "Each parameter creates one actual supervised source producing bytes17 through the unchanged fixture CLI, plus 33 explicitly metadata-only terminal prefixes with no worker/permit/TREE claim.",
+    "Stage0 selects the actual source full Ref. Stage1 receives a true evidence selection and requests a genuinely missing proposal ID. Stage2 receives proposal missing_request_ids explicitly.",
+    "Unchanged control: source remains visible, Policy returns explicit Stop and CLI0; source is still the only TREE_CLOSED/ECHILD_WALL/SETTLED native occurrence.",
+    "Changed actual committed effect receipt: next channel switch marks that actual Ref unavailable, and Propose of its known artifact is refused with CLI75 and no added reservation, claim, attempt, observation or worker.",
+    "Changed actual artifact bytes: metadata page still contains its old artifact metadata at stage2. The Policy then returns the ordinary Propose; normal coordinator/source checks reject CLI75 before durable admission/charge/worker. No claim is made that EvidencePager hashes artifact content.",
+    "Selection mode remains explicit and original evidence scan_id, next_cursor, page, seen and traversal_end are unchanged across both selections. No selection consumes the scan cursor.",
+    "All callback-time budget/decision rows remain the original ones; only unchanged control writes one final Stop."
+  ],
+  "counts": {
+    "corrected_cli_invocations": 6,
+    "corrected_actual_source_workers": 3,
+    "corrected_metadata_only_prefixes": 99,
+    "first_cli_invocations": 6,
+    "first_actual_source_workers": 3,
+    "first_metadata_only_prefixes": 99,
+    "post_fixture_workers_started": 0
+  },
+  "limitations": [
+    "The full main source/test suite is not rerun or modified. The docs probe is outside testpaths and is invoked explicitly.",
+    "The corrected content case proves metadata remains visible followed by refusal of actual ordinary Propose; no separate exception-catching spy identifies the precise nested source-check function that raises.",
+    "Both real CLI invocations per parameter run in one pytest interpreter with fresh Orze/Lake lifecycles, not two exec interpreters.",
+    "The effect/content faults modify only new private fixture files, with original bytes retained in the generated project. This grants no real source adoption or production authority.",
+    "No GPU/provider/license or user ASR state is accessed; no public Pro implementation is archived.",
+    "No product defect or scientific benefit is inferred from this supplemental first-green boundary proof."
+  ]
+}

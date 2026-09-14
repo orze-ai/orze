@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "all_copies_and_tar_members_byte_exact": true,
+  "archive": null,
+  "copies": {
+    "command.json": {
+      "original": "/tmp/orze-proposal-installed-WFsYsCRe/command.json",
+      "sha256": "7d601bd682d3603c1724d441d448bafa8304078b6a0ec4f70e376bd177f1d923",
+      "size": 691
+    },
+    "launcher.py": {
+      "original": "/tmp/orze-proposal-installed-WFsYsCRe/launcher.py",
+      "sha256": "63e8e4c619128d35d6093ab2dcd45da8e0a6df04d1c8c8f4e777145c81355a13",
+      "size": 5505
+    },
+    "stderr.log": {
+      "original": "/tmp/orze-proposal-installed-WFsYsCRe/stderr.log",
+      "sha256": "5c82f8123fbd6e81cd795c1126511f9466b1a770c6758127989e866c734ebc60",
+      "size": 280
+    },
+    "stdout.log": {
+      "original": "/tmp/orze-proposal-installed-WFsYsCRe/stdout.log",
+      "sha256": "1887e5bc57057461de3268125bef0c4d90fd26e1cb8edd95c5662852a612b396",
+      "size": 1607
+    }
+  },
+  "destination": "docs/evidence/runs/2026-09-14-proposal-installed-review/first-harness",
+  "no_symlinks_or_private_Pro_implementation_in_generated_projects": true,
+  "original": "/tmp/orze-proposal-installed-WFsYsCRe",
+  "project_files": {},
+  "reports": [],
+  "mechanical_archive": {
+    "command": "python3 -B - <<'PY'\nfrom pathlib import Path\nimport hashlib,json,shutil,tarfile,subprocess,stat\nrepo=Path('/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze')\nepochs=[('proposal-channel-review/first-injection','/tmp/orze-proposal-channel-5_5rzjqw','proposal-channel-review.json'),('proposal-channel-review/corrected','/tmp/orze-proposal-channel-corrected-7vde0bws','proposal-channel-review.json'),('proposal-installed-review/first-harness','/tmp/orze-proposal-installed-WFsYsCRe',None),('proposal-installed-review/corrected','/tmp/orze-proposal-installed-corrected-QJUa8Cr8','proposal-paging-review.json')]\nsha=lambda raw:hashlib.sha256(raw).hexdigest()\nresult={}\nfor label,path,marker in epochs:\n original=Path(path); dest=repo/'docs/evidence/runs'/('2026-09-14-'+label); dest.mkdir(parents=True,exist_ok=False)\n copies={}; members={}; reports=[]\n for p in sorted(original.iterdir()):\n  if p.is_file():\n   assert not p.is_symlink(); shutil.copyfile(p,dest/p.name); assert p.read_bytes()==(dest/p.name).read_bytes()\n   copies[p.name]={'original':str(p),'size':p.stat().st_size,'sha256':sha(p.read_bytes())}\n projects=[] if marker is None else sorted(p.parent for p in (original/'pytest').glob('*/'+marker) if not p.parent.is_symlink())\n assert len(projects)==(0 if marker is None else 4 if 'installed' in label else 3)\n for project in projects:\n  assert not any(p.is_symlink() for p in project.rglob('*'))\n  for p in sorted(project.rglob('*')):\n   if p.is_file(): members[project.name+'/'+str(p.relative_to(project))]={'size':p.stat().st_size,'mode':stat.S_IMODE(p.stat().st_mode),'sha256':sha(p.read_bytes())}\n  r=json.loads((project/marker).read_bytes()); name=project.name+'-report.json'; shutil.copyfile(project/marker,dest/name)\n  records={'original':str(project/marker),'archive_report':name,'size':(project/marker).stat().st_size,'sha256':sha((project/marker).read_bytes()),'actual_workers':r['actual_native_workers']}\n  if 'proposal-channel' in label:\n   fault=r['probe']['fault']; records.update(fault=fault,stage=r['probe']['stage'],codes=r['followup_cli_codes'],metadata_only_prefixes=r['metadata_only_prefixes'],mutation=r['probe']['mutation'])\n   if fault=='content_changed': records['actual_final_content']=Path(r['source']['path']).read_text(); records['actual_final_mode']=stat.S_IMODE(Path(r['source']['path']).stat().st_mode)\n   assert (project/'paging-product-report.json').exists()\n  else: records.update(codes=r['outcomes'],metadata_only_prefixes=r['metadata_evidence_prefixes'])\n  reports.append(records)\n archive_meta=None\n if projects:\n  archive=dest/'private-projects.tar.gz'\n  with tarfile.open(archive,'w:gz') as t:\n   for project in projects: t.add(project,arcname=project.name,recursive=True)\n  with tarfile.open(archive,'r:gz') as t:\n   actual={m.name:{'size':m.size,'mode':m.mode,'sha256':sha(t.extractfile(m).read())} for m in t.getmembers() if m.isfile()}\n  assert actual==members\n  archive_meta={'path':str(archive.relative_to(repo)),'size':archive.stat().st_size,'sha256':sha(archive.read_bytes())}\n result[label]={'destination':str(dest.relative_to(repo)),'original':path,'copies':copies,'reports':reports,'project_files':members,'archive':archive_meta,'all_copies_and_tar_members_byte_exact':True,'no_symlinks_or_private_Pro_implementation_in_generated_projects':True}\nroot_conftest=(repo/'conftest.py').read_bytes(); blob=subprocess.check_output(['git','show','26643ed7d6fa42e1d72939c61eb6fc8d249ffa66:conftest.py'],cwd=repo); assert root_conftest==blob\nresult['root_conftest']={'path':'conftest.py','source':root_conftest.decode(),'sha256':sha(root_conftest),'git_commit':'26643ed7d6fa42e1d72939c61eb6fc8d249ffa66','byte_exact_git':True,'tests_conftest_sha256':sha((repo/'tests/conftest.py').read_bytes())}\nprint(json.dumps(result,sort_keys=True))\nPY",
+    "tool_chunk": "efe6c3",
+    "exit_code": 0,
+    "verification": "Every regular generated project file was hashed and compared with its exact tar member, including original failure projects. Every copied top-level raw file was byte-compared with its original."
+  },
+  "limits": [
+    "Only fixed private fixture project directories selected by their actual generated report marker are archived; pytest convenience symlinks are not project data and were not archived.",
+    "No source/test/package/installation/production state is modified by this mechanical archive."
+  ]
+}

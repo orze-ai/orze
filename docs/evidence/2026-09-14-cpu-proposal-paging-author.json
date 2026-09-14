@@ -1,0 +1,707 @@
+{
+  "schema": 1,
+  "title": "CPU proposal-history pagination: author implementation evidence",
+  "date": "2026-09-14",
+  "author": "core_review",
+  "status": "target_passed_source_and_tests_frozen; full suites and final release verification owned by root and not claimed here",
+  "repository": "Core (public)",
+  "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+  "baseline_commit": "94dd2f7e2e30e31fe4a1740906abb7add5bf4bae",
+  "source_commit_at_metadata_audit": "26643ed7d6fa42e1d72939c61eb6fc8d249ffa66",
+  "plan": {
+    "path": "docs/plans/2026-09-14-long-history-implementation.zh-CN.md",
+    "sha256": "1cda45d4d60b884ecedf97112eb8153e4e6bfa4b86be301b29cd68a8fc9c4190",
+    "plan_commit": "46ab332",
+    "full_read_chunk": "83ae54"
+  },
+  "files": {
+    "docs/cpu-evidence-paging.md": {
+      "bytes": 4105,
+      "sha256": "febbcb6fd50c80c2bc9845de2c42318d052204e445cef11044b61537c78abfcb"
+    },
+    "docs/cpu-proposal-paging.md": {
+      "bytes": 4580,
+      "sha256": "e227c442f7f5d25d54dbfbb71aeddd27adbb7778dfa536c63616052ac4ddc8af"
+    },
+    "src/orze/core/cpu_execution.py": {
+      "bytes": 8031,
+      "sha256": "7a7c8d37996dca5576d332c3da8b94c08ec23888f08524bc658ec9963531847e"
+    },
+    "src/orze/core/cpu_proposal_requests.py": {
+      "bytes": 15522,
+      "sha256": "0ce2ce1df3bf130433a1f60417de3d949b5e87d1df174cb8c931fffce0af10da"
+    },
+    "src/orze/core/research_interfaces.py": {
+      "bytes": 22937,
+      "sha256": "893bc4cc76dffd5f397dbd77b00aee2332bd97909662f7feeb9a7c772b363793"
+    },
+    "src/orze/engine/cpu_phase.py": {
+      "bytes": 22533,
+      "sha256": "921c75948d0f6dc66f46187229af14610e37a20baf18dc9cc446a6c9e86d6722"
+    },
+    "src/orze/engine/cpu_proposals.py": {
+      "bytes": 17946,
+      "sha256": "38329fb87c10c9b5e160090460f2d8e1ced37f6dcd8e097a7e632ec0425f5518"
+    },
+    "tests/test_cpu_proposal_paging.py": {
+      "bytes": 8339,
+      "sha256": "77a0a7e3a7abc2e5e5f0c85d92e8961887bc96070117d48a448c55f0cfff7e77"
+    },
+    "tests/test_cpu_proposal_paging_policy.py": {
+      "bytes": 3632,
+      "sha256": "7da8a84ee4e4c86bfab5fd7de5d2f1a27a4df02333e090a96ad928b4dc73924a"
+    },
+    "tests/test_cpu_proposal_paging_product_review.py": {
+      "bytes": 11968,
+      "sha256": "6abe2328b1252a4035c987ff6ff6995d41b39c76c8f2ecebcc1c3b89acc3e2dd"
+    }
+  },
+  "implementation": {
+    "src/orze/core/cpu_execution.py": "Only optional exact-int 1..32 proposal_page_size in explicitly version-2 custom policy declarations; omitted v1/old-v2 declarations retain their existing shapes. Existing policy fingerprint binds the opt-in.",
+    "src/orze/core/research_interfaces.py": "BoundPolicy recognizes exact ReadProposals{kind,cursor} and SelectProposals{kind,request_ids} only with explicit opt-in, checks against its private pre-callback capture, accepts bounded unique request IDs rather than callback-supplied results.",
+    "src/orze/core/cpu_proposal_requests.py": "New read-only records_page uses one schema check, scope-bound BINARY request_id keyset LIMIT n+1, fully decodes every returned row including lookahead, and performs one bounded IN query for selection. Returns requested order and explicit missing IDs; internal database identity is not exposed to Policy. Legacy records_view/schema unchanged.",
+    "src/orze/engine/cpu_proposals.py": "ProposalPager shares the invocation's exact existing EvidencePager revision guard but owns independent cursor/position and bounded page state. Historical outcomes are not revalidated as current authority. Legacy recorded_proposals remains unchanged.",
+    "src/orze/engine/cpu_phase.py": "Opt-in pager integration in the same loop; all four read decisions continue without ingress, budget reservation, claim, worker, or --once dispatch consumption. Proposal continuations re-read the currently displayed evidence result/unavailable fullRefs through EvidencePager selection; empty evidence pages verify the guard. Normal decisions release both bounded scan states."
+  },
+  "forbidden_changes_not_made": [
+    "No database schema/new table change",
+    "No admission/dedup/request-outcome semantics change",
+    "No worker/runner or budget grant/refund/reset change",
+    "No current input-source authority granted by historical records",
+    "No legacy test edits",
+    "No Pro source/test edits by this author",
+    "No provider/GPU/live account calls",
+    "No author commit/push"
+  ],
+  "chronology": [
+    {
+      "order": 1,
+      "event": "Complete five baseline modules archived before edits",
+      "classification": "baseline provenance",
+      "snapshots": "5 whole files byte-exact to baseline Git blobs"
+    },
+    {
+      "order": 2,
+      "event": "New opt-in parser tests on old source",
+      "classification": "new configuration requirement, not old product regression and not missing-API red",
+      "raw_key": "proposal_paging_config_baseline",
+      "result": "2 failed, 2 passed, 15 deselected in 0.31s",
+      "exit_code": 1,
+      "chunk": "180a2c"
+    },
+    {
+      "order": 3,
+      "event": "First four-module reader/config candidate; old phase still unchanged",
+      "classification": "new-fixture premise errors, not product failures",
+      "raw_key": "proposal_paging_reader_first",
+      "result": "6 failed, 31 passed in 3.16s",
+      "exit_code": 1,
+      "chunks": [
+        "a84cfd",
+        "06a4a4"
+      ],
+      "failures": {
+        "five_cases": "Fixture expected ValueError but the declared engine rejection is ProposalHOLD.",
+        "one_case": "Same-value SQLite UPDATE/commit did not change peer data_version, so the fixture had not created the revision change it asserted."
+      }
+    },
+    {
+      "order": 4,
+      "event": "Preserved whole first four candidate sources and both new test files; root authorized narrow new-fixture corrections",
+      "classification": "transparent instrumentation/expectation corrections",
+      "raw_key": "proposal_paging_noop_diagnostic",
+      "chunk": "dcc630",
+      "actual_versions": {
+        "before": [
+          1,
+          1
+        ],
+        "same_value_commit": [
+          1,
+          1
+        ],
+        "actual_changed_commit": [
+          1,
+          2
+        ],
+        "restored_commit": [
+          1,
+          3
+        ]
+      },
+      "correction": "Require exact ProposalHOLD; commit an actual valid metadata change, then restore the original row in a second commit; assert actual data_version advanced. No old Assert removed."
+    },
+    {
+      "order": 5,
+      "event": "Corrected new reader/config tests, product still same first candidate",
+      "classification": "historical intermediate candidate pass",
+      "raw_key": "proposal_paging_reader_second",
+      "result": "37 passed in 3.10s",
+      "exit_code": 0,
+      "chunks": [
+        "a78e0d",
+        "322f12"
+      ]
+    },
+    {
+      "order": 6,
+      "event": "New bounded selected-row query-count requirement",
+      "classification": "new candidate N+1 cost failure, not old released reader regression",
+      "raw_key": "proposal_paging_query_count_red",
+      "result": "1 failed in 0.71s",
+      "exit_code": 1,
+      "chunk": "023da8",
+      "actual": "32 SELECT statements for 32 requested IDs; expected one bounded SELECT",
+      "remedy": "Only new records_page/ProposalPager simplified: one schema check and one IN query; compact internal database binding eliminates second engine get_request pass. Full pre-fix candidate and full query-test file preserved."
+    },
+    {
+      "order": 7,
+      "event": "Independent real CLI old-phase behavioral baseline",
+      "classification": "real opt-in integration gap at existing CPU loop, not missing API",
+      "independent_report": "docs/evidence/2026-09-14-proposal-paging-product-review.json",
+      "chunk": "6fb5ea",
+      "result": "1 failed in 1.54s; actual workers 0 != 1 after 35 real proposal admission receipts and normal Stop",
+      "note": "Configuration/Bound new entry was available; whole old phase remained 254098c9. Run belongs to runtime_evidence, not this author."
+    },
+    {
+      "order": 8,
+      "event": "CPU loop pagination implemented, five source and three new test files frozen",
+      "classification": "candidate implementation"
+    },
+    {
+      "order": 9,
+      "event": "Independent original four CLI tests pass unchanged",
+      "classification": "independent real product validation",
+      "independent_report": "docs/evidence/2026-09-14-proposal-paging-product-review.json",
+      "chunk": "8eeb52",
+      "result": "4 passed in 7.30s",
+      "note": "Exactly one real worker in --once paging positive; tail conflict, cross-channel cursor, and peer revision negative controls. Do not add these four to this author's 147."
+    },
+    {
+      "order": 10,
+      "event": "Author 13-file target neighborhood on frozen five-source candidate",
+      "classification": "final author target epoch, not full suite",
+      "raw_key": "proposal_paging_target_run",
+      "result": "147 passed in 66.69s (0:01:06)",
+      "exit_code": 0,
+      "session_id": 15706,
+      "chunks": [
+        "eee590",
+        "8479b2",
+        "cf5907"
+      ],
+      "before_chunk": "ac2273",
+      "after_chunk": "3d486a",
+      "fingerprint_files": 803,
+      "fingerprints_exact": true
+    }
+  ],
+  "test_provenance": {
+    "new_author_files": 2,
+    "new_author_cases": 38,
+    "new_author_literal_asserts": 33,
+    "old_unchanged": {
+      "all_byte_exact": true,
+      "changed": [],
+      "python_files": 500,
+      "tracked_files": 502
+    },
+    "fixture_ast_audit": {
+      "test_cpu_proposal_paging.py": {
+        "final_literal_asserts": 26,
+        "final_test_functions": 11,
+        "first_literal_asserts": 23,
+        "first_test_functions": 10,
+        "new_functions": [
+          "test_selected_store_page_uses_one_bounded_row_query"
+        ],
+        "original_functions": [
+          {
+            "full_function_ast_exact": true,
+            "function": "test_65_historical_outcomes_traverse_without_growing_window_or_writes",
+            "new_asserts": 9,
+            "old_asserts": 9,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_empty_scan_and_missing_selection_do_not_create_schema",
+            "new_asserts": 4,
+            "old_asserts": 4,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_selection_preserves_scan_position_and_cursors_are_channel_specific",
+            "new_asserts": 4,
+            "old_asserts": 4,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": false,
+            "function": "test_shared_revision_rejects_sql_change_even_if_records_are_equal",
+            "new_asserts": 2,
+            "old_asserts": 1,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": false,
+            "function": "test_reader_limits_are_exact",
+            "new_asserts": 0,
+            "old_asserts": 0,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_bad_selected_keys_do_not_change_scan",
+            "new_asserts": 1,
+            "old_asserts": 1,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_lookahead_is_fully_decoded_not_hidden_as_more_available",
+            "new_asserts": 1,
+            "old_asserts": 1,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_actual_database_binding_cannot_be_replaced_by_historical_record",
+            "new_asserts": 0,
+            "old_asserts": 0,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_history_does_not_revalidate_old_sources_or_authorize_new_ones",
+            "new_asserts": 3,
+            "old_asserts": 3,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_forged_guard_does_not_authorize_a_page",
+            "new_asserts": 0,
+            "old_asserts": 0,
+            "old_asserts_ordered_subsequence": true
+          }
+        ]
+      },
+      "test_cpu_proposal_paging_policy.py": {
+        "final_literal_asserts": 7,
+        "final_test_functions": 7,
+        "first_literal_asserts": 7,
+        "first_test_functions": 7,
+        "new_functions": [],
+        "original_functions": [
+          {
+            "full_function_ast_exact": true,
+            "function": "test_explicit_proposal_page_size_is_accepted_and_fingerprinted",
+            "new_asserts": 2,
+            "old_asserts": 2,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_legacy_policy_shape_does_not_gain_proposal_fields",
+            "new_asserts": 2,
+            "old_asserts": 2,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_proposal_page_size_is_exact_and_bounded",
+            "new_asserts": 0,
+            "old_asserts": 0,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_omitted_opt_in_cannot_gain_query_permission",
+            "new_asserts": 0,
+            "old_asserts": 0,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_cursor_is_checked_against_private_snapshot",
+            "new_asserts": 2,
+            "old_asserts": 2,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_selection_requires_unique_bounded_request_ids",
+            "new_asserts": 0,
+            "old_asserts": 0,
+            "old_asserts_ordered_subsequence": true
+          },
+          {
+            "full_function_ast_exact": true,
+            "function": "test_selection_accepts_ids_not_supplied_outcomes",
+            "new_asserts": 1,
+            "old_asserts": 1,
+            "old_asserts_ordered_subsequence": true
+          }
+        ]
+      }
+    },
+    "explanation": "The first two author files had 30 literal Assert nodes; all remain ordered per original function. The reader fixture adds one explicit data_version Assert and the new query-cost test adds two Asserts (final 33). Two new fixture functions change non-Assert setup/raises expectations; they are not full-function AST exact. The policy file is byte-exact throughout.",
+    "independent_product_test": {
+      "path": "tests/test_cpu_proposal_paging_product_review.py",
+      "sha256": "6abe2328b1252a4035c987ff6ff6995d41b39c76c8f2ecebcc1c3b89acc3e2dd",
+      "cases": 4,
+      "literal_asserts": 47,
+      "owner": "runtime_evidence"
+    }
+  },
+  "final_target": {
+    "passed": 147,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "new_author_cases": 38,
+    "old_neighborhood_cases": 109,
+    "seconds": 66.69,
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cpu_proposal_paging.py tests/test_cpu_proposal_paging_policy.py tests/test_cpu_proposal_requests.py tests/test_cpu_proposals.py tests/test_cpu_proposals_transaction_review.py tests/test_cpu_proposals_interfaces_review.py tests/test_cpu_proposal_legacy_exact.py tests/test_cpu_proposal_product.py tests/test_cpu_proposal_policy.py tests/test_cpu_evidence_paging.py tests/test_cpu_evidence_paging_policy.py tests/test_cpu_evidence_paging_product.py tests/test_cpu_evidence_paging_loop_review.py --tb=short -p no:cacheprovider --basetemp=/tmp/orze-proposal-paging-target.go3vuv/pytest --junitxml=/tmp/orze-proposal-paging-target.go3vuv/junit.xml",
+    "raw_execution_key": "proposal_paging_target_run",
+    "junit": {
+      "bytes": 86685,
+      "counts": {
+        "error": 0,
+        "failure": 0,
+        "skipped": 0
+      },
+      "ends_newline": false,
+      "new_cases": [
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_65_historical_outcomes_traverse_without_growing_window_or_writes"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_empty_scan_and_missing_selection_do_not_create_schema"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_selection_preserves_scan_position_and_cursors_are_channel_specific"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_shared_revision_rejects_sql_change_even_if_records_are_equal[peer_commit]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_shared_revision_rejects_sql_change_even_if_records_are_equal[local_rollback]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_reader_limits_are_exact[None]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_reader_limits_are_exact[True]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_reader_limits_are_exact[0]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_reader_limits_are_exact[33]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_reader_limits_are_exact[1.0]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_bad_selected_keys_do_not_change_scan[ids0]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_bad_selected_keys_do_not_change_scan[ids1]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_bad_selected_keys_do_not_change_scan[ids2]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_bad_selected_keys_do_not_change_scan[ids3]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_lookahead_is_fully_decoded_not_hidden_as_more_available"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_actual_database_binding_cannot_be_replaced_by_historical_record"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_history_does_not_revalidate_old_sources_or_authorize_new_ones"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_forged_guard_does_not_authorize_a_page"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging",
+          "name": "test_selected_store_page_uses_one_bounded_row_query"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_explicit_proposal_page_size_is_accepted_and_fingerprinted[1]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_explicit_proposal_page_size_is_accepted_and_fingerprinted[32]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_legacy_policy_shape_does_not_gain_proposal_fields[1]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_legacy_policy_shape_does_not_gain_proposal_fields[2]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_proposal_page_size_is_exact_and_bounded[None]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_proposal_page_size_is_exact_and_bounded[True]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_proposal_page_size_is_exact_and_bounded[0]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_proposal_page_size_is_exact_and_bounded[33]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_proposal_page_size_is_exact_and_bounded[1.0]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_proposal_page_size_is_exact_and_bounded[1]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_omitted_opt_in_cannot_gain_query_permission[ReadProposals]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_omitted_opt_in_cannot_gain_query_permission[SelectProposals]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_cursor_is_checked_against_private_snapshot"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_selection_requires_unique_bounded_request_ids[ids0]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_selection_requires_unique_bounded_request_ids[ids1]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_selection_requires_unique_bounded_request_ids[ids2]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_selection_requires_unique_bounded_request_ids[ids3]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_selection_requires_unique_bounded_request_ids[ids4]"
+        },
+        {
+          "classname": "tests.test_cpu_proposal_paging_policy",
+          "name": "test_selection_accepts_ids_not_supplied_outcomes"
+        }
+      ],
+      "path": "docs/evidence/runs/2026-09-14-proposal-paging-author/target.junit.xml",
+      "sha256": "624caafcce4c68c1d84a9989b31cb68939c6a601d1e14781a08bdd7559cd5c8e",
+      "suite_attributes": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "hostname": "a100-41",
+          "name": "pytest",
+          "skipped": "0",
+          "tests": "147",
+          "time": "66.694",
+          "timestamp": "2026-09-14T01:16:13.374629+00:00"
+        }
+      ],
+      "testcases": 147,
+      "original_path": "/tmp/orze-proposal-paging-target.go3vuv/junit.xml"
+    },
+    "manifest": {
+      "count": 803,
+      "scope": "all Core src/tests/examples files plus pyproject.toml and requirements.txt as enumerated in raw before/after commands",
+      "before_raw_key": "proposal_paging_target_pre",
+      "after_raw_key": "proposal_paging_target_post",
+      "exact": true
+    },
+    "later_metadata_change": "Root subsequently added pytest testpaths=['tests'] after full-suite discovery collected archived candidate tests under docs. This targeted run precedes that pyproject change and is not evidence that the first full or paired epoch stayed frozen. No author source/test changes followed this target."
+  },
+  "snapshots": [
+    {
+      "baseline_byte_exact": true,
+      "baseline_commit": "94dd2f7e2e30e31fe4a1740906abb7add5bf4bae",
+      "bytes": 7690,
+      "origin": "whole_baseline_git_blob",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-before-cpu-execution.py",
+      "python_ast_valid": true,
+      "sha256": "cc70b8347200a6354b3095a97b822253a521367e7db8fdf254928d482f15ef93",
+      "source": "src/orze/core/cpu_execution.py",
+      "current_source_sha256": "7a7c8d37996dca5576d332c3da8b94c08ec23888f08524bc658ec9963531847e"
+    },
+    {
+      "baseline_byte_exact": true,
+      "baseline_commit": "94dd2f7e2e30e31fe4a1740906abb7add5bf4bae",
+      "bytes": 20100,
+      "origin": "whole_baseline_git_blob",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-before-cpu-phase.py",
+      "python_ast_valid": true,
+      "sha256": "254098c975f6e6cb8d57a7269b4c1e4afc08ce262f0f82808e267ef2e4d94d0a",
+      "source": "src/orze/engine/cpu_phase.py",
+      "current_source_sha256": "921c75948d0f6dc66f46187229af14610e37a20baf18dc9cc446a6c9e86d6722"
+    },
+    {
+      "baseline_byte_exact": true,
+      "baseline_commit": "94dd2f7e2e30e31fe4a1740906abb7add5bf4bae",
+      "bytes": 13114,
+      "origin": "whole_baseline_git_blob",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-before-cpu-proposal-requests.py",
+      "python_ast_valid": true,
+      "sha256": "cec4875247a7f6790d0055448eb4bf2d4893956bcab339c6046aee5ffa030af1",
+      "source": "src/orze/core/cpu_proposal_requests.py",
+      "current_source_sha256": "0ce2ce1df3bf130433a1f60417de3d949b5e87d1df174cb8c931fffce0af10da"
+    },
+    {
+      "baseline_byte_exact": true,
+      "baseline_commit": "94dd2f7e2e30e31fe4a1740906abb7add5bf4bae",
+      "bytes": 14396,
+      "origin": "whole_baseline_git_blob",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-before-cpu-proposals.py",
+      "python_ast_valid": true,
+      "sha256": "cdc80f5c98ffc4e20b90d45965093411d3eb9993ce55197265ed174929abcff2",
+      "source": "src/orze/engine/cpu_proposals.py",
+      "current_source_sha256": "38329fb87c10c9b5e160090460f2d8e1ced37f6dcd8e097a7e632ec0425f5518"
+    },
+    {
+      "bytes": 8339,
+      "origin": "whole_corrected_new_fixture_with_query_count_regression_before_store_optimization",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-before-query-fix-tests.py",
+      "python_ast_valid": true,
+      "sha256": "77a0a7e3a7abc2e5e5f0c85d92e8961887bc96070117d48a448c55f0cfff7e77",
+      "source": "tests/test_cpu_proposal_paging.py",
+      "current_source_sha256": "77a0a7e3a7abc2e5e5f0c85d92e8961887bc96070117d48a448c55f0cfff7e77",
+      "byte_exact_current_source": true
+    },
+    {
+      "baseline_byte_exact": true,
+      "baseline_commit": "94dd2f7e2e30e31fe4a1740906abb7add5bf4bae",
+      "bytes": 21830,
+      "origin": "whole_baseline_git_blob",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-before-research-interfaces.py",
+      "python_ast_valid": true,
+      "sha256": "0989820b218f877a5406f13105ec1eb6b5aabf2a15030e296053c7a6153742b7",
+      "source": "src/orze/core/research_interfaces.py",
+      "current_source_sha256": "893bc4cc76dffd5f397dbd77b00aee2332bd97909662f7feeb9a7c772b363793"
+    },
+    {
+      "bytes": 8031,
+      "origin": "whole_first_candidate_or_new_fixture_capture_after_6F31P_before_correction",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-first-cpu_execution.py",
+      "python_ast_valid": true,
+      "sha256": "7a7c8d37996dca5576d332c3da8b94c08ec23888f08524bc658ec9963531847e",
+      "source": "src/orze/core/cpu_execution.py",
+      "current_source_sha256": "7a7c8d37996dca5576d332c3da8b94c08ec23888f08524bc658ec9963531847e"
+    },
+    {
+      "bytes": 15122,
+      "origin": "whole_first_candidate_or_new_fixture_capture_after_6F31P_before_correction",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-first-cpu_proposal_requests.py",
+      "python_ast_valid": true,
+      "sha256": "c571b8ef0c887c4ca93514b94d91c0a2c1911a10955ffb0c231f7a072072f643",
+      "source": "src/orze/core/cpu_proposal_requests.py",
+      "current_source_sha256": "0ce2ce1df3bf130433a1f60417de3d949b5e87d1df174cb8c931fffce0af10da"
+    },
+    {
+      "bytes": 18037,
+      "origin": "whole_first_candidate_or_new_fixture_capture_after_6F31P_before_correction",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-first-cpu_proposals.py",
+      "python_ast_valid": true,
+      "sha256": "50ff2e8adfa80dcbcb109655a9a92f1b6c5fcd5be88a2c985aa199afd562b0bd",
+      "source": "src/orze/engine/cpu_proposals.py",
+      "current_source_sha256": "38329fb87c10c9b5e160090460f2d8e1ced37f6dcd8e097a7e632ec0425f5518"
+    },
+    {
+      "bytes": 22937,
+      "origin": "whole_first_candidate_or_new_fixture_capture_after_6F31P_before_correction",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-first-research_interfaces.py",
+      "python_ast_valid": true,
+      "sha256": "893bc4cc76dffd5f397dbd77b00aee2332bd97909662f7feeb9a7c772b363793",
+      "source": "src/orze/core/research_interfaces.py",
+      "current_source_sha256": "893bc4cc76dffd5f397dbd77b00aee2332bd97909662f7feeb9a7c772b363793"
+    },
+    {
+      "bytes": 7065,
+      "origin": "whole_first_candidate_or_new_fixture_capture_after_6F31P_before_correction",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-first-test_cpu_proposal_paging.py",
+      "python_ast_valid": true,
+      "sha256": "28c2d6c4518905485dd1d41d37e3ffbc8c5551bbe086bde731825d0ae2b8de6f",
+      "source": "tests/test_cpu_proposal_paging.py",
+      "current_source_sha256": "77a0a7e3a7abc2e5e5f0c85d92e8961887bc96070117d48a448c55f0cfff7e77"
+    },
+    {
+      "bytes": 3632,
+      "origin": "whole_first_candidate_or_new_fixture_capture_after_6F31P_before_correction",
+      "path": "docs/evidence/snapshots/2026-09-14-proposal-paging-first-test_cpu_proposal_paging_policy.py",
+      "python_ast_valid": true,
+      "sha256": "7da8a84ee4e4c86bfab5fd7de5d2f1a27a4df02333e090a96ad928b4dc73924a",
+      "source": "tests/test_cpu_proposal_paging_policy.py",
+      "current_source_sha256": "7da8a84ee4e4c86bfab5fd7de5d2f1a27a4df02333e090a96ad928b4dc73924a"
+    }
+  ],
+  "independent_report": {
+    "path": "docs/evidence/2026-09-14-proposal-paging-product-review.json",
+    "sha256": "ca099f9a7db27342e25b6bcc36201353f1e09532bf0819f91b68d596ebd1a511"
+  },
+  "raw_tool_results": {
+    "path": "docs/evidence/runs/2026-09-14-proposal-paging-author/tool-results.json",
+    "sha256": "b7b1da24fd71376b2326d55f83aae12897f5294ae513fe71623fe7f8ad50eb1e",
+    "bytes": 215814,
+    "contents": "Original command, cwd, unedited tool metadata and stdout for all author test/diagnostic runs and final 803-file pre/post manifests. The first short runs had no JUnit/full pre-post inventory; complete candidate snapshots establish their source point, not an invented full epoch."
+  },
+  "selfcheck": {
+  "command": "python3 - <<'PY'\nimport ast,hashlib,json,subprocess\nfrom pathlib import Path\nr=json.loads(Path('docs/evidence/2026-09-14-cpu-proposal-paging-author.json').read_text())\nrawpath=Path(r['raw_tool_results']['path']);raw=json.loads(rawpath.read_text())\nsha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()\nfor p,m in r['files'].items():assert sha(p)==m['sha256'],p\nfor m in r['snapshots']:assert sha(m['path'])==m['sha256'],m['path']\nj=r['final_target']['junit'];assert Path(j['path']).read_bytes()==Path(j['original_path']).read_bytes();assert sha(j['path'])==j['sha256']\npre=json.loads(raw['executions']['proposal_paging_target_pre']['result']['output']);post=json.loads(raw['executions']['proposal_paging_target_post']['result']['output']);assert pre==post\nfor path,name in [('src/orze/core/cpu_proposal_requests.py','records_view'),('src/orze/engine/cpu_proposals.py','recorded_proposals')]:\n before=ast.parse(subprocess.check_output(['git','show',r['baseline_commit']+':'+path]));after=ast.parse(Path(path).read_text())\n find=lambda m:next(n for n in m.body if isinstance(n,ast.FunctionDef) and n.name==name)\n assert ast.dump(find(before),include_attributes=False)==ast.dump(find(after),include_attributes=False),name\nprint(json.dumps({'valid':True,'file_references':len(r['files']),'snapshots':len(r['snapshots']),'legacy_reader_functions_AST_exact':True,'junit_byte_exact':True,'target_inventory_count':len(pre),'target_inventory_before_after_exact':True,'new_tests':r['test_provenance']['new_author_cases'],'old_tests':r['test_provenance']['old_unchanged'],'raw_tool_results_sha256':sha(rawpath),'raw_tool_results_bytes':rawpath.stat().st_size,'report_sha256_before_selfcheck_metadata':sha('docs/evidence/2026-09-14-cpu-proposal-paging-author.json')},sort_keys=True))\nPY",
+  "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+  "result": {
+    "chunk_id": "ea7101",
+    "wall_time_seconds": 0.000003851,
+    "exit_code": 0,
+    "original_token_count": 139,
+    "output": "{\"file_references\": 10, \"junit_byte_exact\": true, \"legacy_reader_functions_AST_exact\": true, \"new_tests\": 38, \"old_tests\": {\"all_byte_exact\": true, \"changed\": [], \"python_files\": 500, \"tracked_files\": 502}, \"raw_tool_results_bytes\": 215814, \"raw_tool_results_sha256\": \"b7b1da24fd71376b2326d55f83aae12897f5294ae513fe71623fe7f8ad50eb1e\", \"report_sha256_before_selfcheck_metadata\": \"19eda394fd0f0527f1cd76306011367c386278cdf069d3c643e743aa25558dfd\", \"snapshots\": 12, \"target_inventory_before_after_exact\": true, \"target_inventory_count\": 803, \"valid\": true}\n"
+  }
+},
+  "limitations": [
+    "Both page sizes bound record counts, not arbitrary JSON bytes. BoundPolicy's existing overall 64 KiB / 2048-node snapshot limit remains; oversized combined evidence/proposal/queue views fail closed rather than silently drop outcomes.",
+    "Request IDs are scanned in BINARY lexical order, not chronological order. A page is not the whole history; missing selected IDs remain explicit and are not fabricated rejected proposals.",
+    "This is invocation-local read traversal, not a durable resume cursor, current source authorization, snapshot isolation against every external side effect, new benchmark throughput proof, or evidence of long-term scientific convergence.",
+    "SQLite same-value commits need not advance data_version; real dirty-page peer commits and local write/rollback are exercised. No stronger any-SQL-statement revision claim.",
+    "No full-suite/release/remote verification claim in this author record. Parent owns those subsequent epochs.",
+    "Only Core artifacts are embedded; private Pro originals/inventories remain outside this public report."
+  ]
+}

@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orze"
+version = "4.6.2"
+description = "orze.ai"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+authors = [
+    {name = "orze contributors"},
+]
+keywords = ["gpu", "experiment", "orchestrator", "machine-learning", "research-automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
+]
+
+[project.urls]
+Homepage = "https://orze.ai"
+Documentation = "https://orze.ai/docs"
+Repository = "https://github.com/orze-ai/orze"
+Issues = "https://github.com/orze-ai/orze/issues"
+
+[project.scripts]
+orze = "orze.cli:main"
+# Drop-in LLM-CLI wrappers. All entries route to the same dispatcher in
+# orze.shims.llm:main — it resolves the backend from the script's own
+# basename (e.g. `orze-claude` -> the "claude" BackendSpec). Add a new
+# backend by (1) extending orze.shims.llm.BACKENDS and (2) adding an
+# `orze-<name>` line below. See orze/shims/llm.py for the full contract.
+orze-claude = "orze.shims.llm:main"
+orze-gemini = "orze.shims.llm:main"
+orze-codex = "orze.shims.llm:main"
+orze-kimi = "orze.shims.llm:main"
+orze-deepseek = "orze.shims.llm:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+# Keep repository tests bound to the checked-out source instead of whichever
+# Orze version happens to be installed in the invoking environment.
+pythonpath = ["src"]
+
+[tool.setuptools.package-data]
+orze = [
+    "AGENT.md",
+    "RULES.md",
+    "SKILL.md",
+    "skills/*.skill.md",
+    "admin/ui/dist/**/*",
+    "admin/ui/dist/*",
+]

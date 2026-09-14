@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "scope": "Same unchanged four product tests against the installed fixed Core wheel using an external global pytest harness",
+  "fixed_core_commit": "26643ed7d6fa42e1d72939c61eb6fc8d249ffa66",
+  "wheel_sha256": "0501beda118b0300f89a756ce5636c21b326876c00f83cb8be175c943687fc50",
+  "package_root": "/hot-data/fsx/workspace/erik/orze-long-history-package-2026-09-14.dxa7jzhz",
+  "installed_core_only_site": "/hot-data/fsx/workspace/erik/orze-long-history-package-2026-09-14.dxa7jzhz/core-only-venv/lib/python3.10/site-packages",
+  "first": {
+    "classification": "Harness path-contamination guard fired before test collection/worker, not a product failure",
+    "index": "docs/evidence/runs/2026-09-14-proposal-installed-review/first-harness/index.json",
+    "command": "python3 -B - <<'PY'\nimport hashlib,json,pathlib,subprocess,time\nout=pathlib.Path('/tmp/orze-proposal-installed-WFsYsCRe'); repo=pathlib.Path('/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze')\nargv=['/usr/bin/python3','-B',str(out/'launcher.py')]\nenv={'PATH':'/usr/local/bin:/usr/bin:/bin','LANG':'C.UTF-8','PYTHONDONTWRITEBYTECODE':'1','PYTEST_DISABLE_PLUGIN_AUTOLOAD':'1'}\nstarted=time.monotonic(); r=subprocess.run(argv,cwd=repo,env=env,capture_output=True); elapsed=time.monotonic()-started\n(out/'stdout.log').write_bytes(r.stdout); (out/'stderr.log').write_bytes(r.stderr)\nreceipt={'argv':argv,'cwd':str(repo),'environment':env,'exit_code':r.returncode,'elapsed_seconds':elapsed,'stdout_sha256':hashlib.sha256(r.stdout).hexdigest(),'stderr_sha256':hashlib.sha256(r.stderr).hexdigest(),'launcher_sha256':hashlib.sha256((out/'launcher.py').read_bytes()).hexdigest()}\n(out/'command.json').write_text(json.dumps(receipt,sort_keys=True,indent=2)+'\\n'); print(r.stdout.decode()); print(r.stderr.decode()); print(json.dumps(receipt,sort_keys=True)); raise SystemExit(r.returncode)\nPY",
+    "actual_tool": {
+      "chunk_id": "c9f03d",
+      "wall_time_seconds": 0.218121728,
+      "exit_code": 1,
+      "original_token_count": 632,
+      "output": "INTERNALERROR> Traceback (most recent call last):\nINTERNALERROR>   File \"/home/erik/.local/lib/python3.10/site-packages/_pytest/main.py\", line 328, in wrap_session\nINTERNALERROR>     config.hook.pytest_sessionstart(session=session)\nINTERNALERROR>   File \"/home/erik/.local/lib/python3.10/site-packages/pluggy/_hooks.py\", line 512, in __call__\nINTERNALERROR>     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)\nINTERNALERROR>   File \"/home/erik/.local/lib/python3.10/site-packages/pluggy/_manager.py\", line 120, in _hookexec\nINTERNALERROR>     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)\nINTERNALERROR>   File \"/home/erik/.local/lib/python3.10/site-packages/pluggy/_callers.py\", line 167, in _multicall\nINTERNALERROR>     raise exception\nINTERNALERROR>   File \"/home/erik/.local/lib/python3.10/site-packages/pluggy/_callers.py\", line 139, in _multicall\nINTERNALERROR>     teardown.throw(exception)\nINTERNALERROR>   File \"/home/erik/.local/lib/python3.10/site-packages/_pytest/logging.py\", line 795, in pytest_sessionstart\nINTERNALERROR>     return (yield)\nINTERNALERROR>   File \"/home/erik/.local/lib/python3.10/site-packages/pluggy/_callers.py\", line 121, in _multicall\nINTERNALERROR>     res = hook_impl.function(*args)\nINTERNALERROR>   File \"/tmp/orze-proposal-installed-WFsYsCRe/launcher.py\", line 62, in pytest_sessionstart\nINTERNALERROR>     audit(\"sessionstart\")\nINTERNALERROR>   File \"/tmp/orze-proposal-installed-WFsYsCRe/launcher.py\", line 38, in audit\nINTERNALERROR>     assert str(REPO / \"src\") not in sys.path\nINTERNALERROR> AssertionError\n\nTraceback (most recent call last):\n  File \"/tmp/orze-proposal-installed-WFsYsCRe/launcher.py\", line 89, in <module>\n    audit(\"after_pytest\")\n  File \"/tmp/orze-proposal-installed-WFsYsCRe/launcher.py\", line 38, in audit\n    assert str(REPO / \"src\") not in sys.path\nAssertionError\n\n{\"argv\": [\"/usr/bin/python3\", \"-B\", \"/tmp/orze-proposal-installed-WFsYsCRe/launcher.py\"], \"cwd\": \"/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze\", \"elapsed_seconds\": 0.332082225009799, \"environment\": {\"LANG\": \"C.UTF-8\", \"PATH\": \"/usr/local/bin:/usr/bin:/bin\", \"PYTEST_DISABLE_PLUGIN_AUTOLOAD\": \"1\", \"PYTHONDONTWRITEBYTECODE\": \"1\"}, \"exit_code\": 1, \"launcher_sha256\": \"63e8e4c619128d35d6093ab2dcd45da8e0a6df04d1c8c8f4e777145c81355a13\", \"stderr_sha256\": \"5c82f8123fbd6e81cd795c1126511f9466b1a770c6758127989e866c734ebc60\", \"stdout_sha256\": \"1887e5bc57057461de3268125bef0c4d90fd26e1cb8edd95c5662852a612b396\"}\n"
+    },
+    "cause": "Root conftest unconditionally inserts checkout src even when pytest -o pythonpath is set. The independent guard rejected that sys.path at pytest_sessionstart; no product result from this attempt is claimed."
+  },
+  "corrected": {
+    "result": "4 passed in 8.53s",
+    "index": "docs/evidence/runs/2026-09-14-proposal-installed-review/corrected/index.json",
+    "command": "python3 -B - <<'PY'\nimport hashlib,json,pathlib,subprocess,time\nout=pathlib.Path('/tmp/orze-proposal-installed-corrected-QJUa8Cr8'); repo=pathlib.Path('/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze')\nargv=['/usr/bin/python3','-B',str(out/'launcher.py')]\nenv={'PATH':'/usr/local/bin:/usr/bin:/bin','LANG':'C.UTF-8','PYTHONDONTWRITEBYTECODE':'1','PYTEST_DISABLE_PLUGIN_AUTOLOAD':'1'}\nstarted=time.monotonic(); r=subprocess.run(argv,cwd=repo,env=env,capture_output=True); elapsed=time.monotonic()-started\n(out/'stdout.log').write_bytes(r.stdout); (out/'stderr.log').write_bytes(r.stderr)\nreceipt={'argv':argv,'cwd':str(repo),'environment':env,'exit_code':r.returncode,'elapsed_seconds':elapsed,'stdout_sha256':hashlib.sha256(r.stdout).hexdigest(),'stderr_sha256':hashlib.sha256(r.stderr).hexdigest(),'launcher_sha256':hashlib.sha256((out/'launcher.py').read_bytes()).hexdigest()}\n(out/'command.json').write_text(json.dumps(receipt,sort_keys=True,indent=2)+'\\n'); print(r.stdout.decode()); print(r.stderr.decode()); print(json.dumps(receipt,sort_keys=True)); raise SystemExit(r.returncode)\nPY",
+    "first_tool": {
+      "chunk_id": "559da7",
+      "wall_time_seconds": 1.001187736,
+      "session_id": 53052,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "final_tool": {
+      "chunk_id": "d17870",
+      "wall_time_seconds": 0.000003136,
+      "exit_code": 0,
+      "original_token_count": 320,
+      "output": "....                                                                     [100%]\n4 passed in 8.53s\n{\"exit_code\": 0, \"loaded_orze_modules\": 111, \"orze_file\": \"/hot-data/fsx/workspace/erik/orze-long-history-package-2026-09-14.dxa7jzhz/core-only-venv/lib/python3.10/site-packages/orze/__init__.py\", \"report\": \"/tmp/orze-proposal-installed-corrected-QJUa8Cr8/report.json\", \"report_sha256\": \"9fd7d6b81647b067589a556c9daf80f56a23ffec5019f14a94a4f804eeb0c400\", \"source_test_count\": 784, \"source_tests_prepost_exact\": true, \"unique_loaded_orze_files\": 111, \"wheel_sha256\": \"0501beda118b0300f89a756ce5636c21b326876c00f83cb8be175c943687fc50\"}\n\n\n{\"argv\": [\"/usr/bin/python3\", \"-B\", \"/tmp/orze-proposal-installed-corrected-QJUa8Cr8/launcher.py\"], \"cwd\": \"/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze\", \"elapsed_seconds\": 8.90470128878951, \"environment\": {\"LANG\": \"C.UTF-8\", \"PATH\": \"/usr/local/bin:/usr/bin:/bin\", \"PYTEST_DISABLE_PLUGIN_AUTOLOAD\": \"1\", \"PYTHONDONTWRITEBYTECODE\": \"1\"}, \"exit_code\": 0, \"launcher_sha256\": \"29e5cc7bed880f407aa3e3d3ee466bfcfeabf19c0fcef7082f539023343edebe\", \"stderr_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"stdout_sha256\": \"9cb80469492c9e881964da83bd6c9a2cf830aacefad7361b74bb37d1c92470c7\"}\n"
+    },
+    "report_sha256": "9fd7d6b81647b067589a556c9daf80f56a23ffec5019f14a94a4f804eeb0c400",
+    "actual_interpreter": "/usr/bin/python3",
+    "harness": "Existing global pytest; installed payload dependency site prepended, -o pythonpath=that site and --confcutdir=checkout/tests. Unchanged tests/conftest remains active.",
+    "loaded_orze_modules": 111,
+    "loaded_orze_files": 111,
+    "module_verification": "At before/sessionstart/setup/call/teardown/sessionfinish/after hooks every observed orze.* module file is required under the installed site, hashed against the wheel member and fixed Core Git blob; no checkout src in sys.path. Full module files/hashes and sys.path observations are in report.json.",
+    "source_test_files": 784,
+    "source_tests_prepost_exact": true,
+    "test_path": "tests/test_cpu_proposal_paging_product_review.py",
+    "test_sha256": "6abe2328b1252a4035c987ff6ff6995d41b39c76c8f2ecebcc1c3b89acc3e2dd",
+    "counts": {
+      "actual_cli_invocations": 4,
+      "actual_native_workers": 1,
+      "proposal_coordinator_outcomes": 140,
+      "metadata_only_prefixes": 33
+    }
+  },
+  "root_conftest": {
+    "byte_exact_git": true,
+    "git_commit": "26643ed7d6fa42e1d72939c61eb6fc8d249ffa66",
+    "path": "conftest.py",
+    "sha256": "5e3cd02b3666447afd68ea0fefe7241b469e65b8dbebc519c82c3c38d3aee2cf",
+    "source": "import sys, os\nsys.path.insert(0, os.path.join(os.path.dirname(__file__), \"src\"))\n",
+    "tests_conftest_sha256": "22ac3687fb04106a28efc1d44b982c0d4615889d15eb5e41cd98bb3d7b73c641"
+  },
+  "limits": [
+    "This is installed payload validation under an external test harness, not a pure venv interpreter or an independent CLI exec deployment test.",
+    "Original Core-only/paired installations, package reports, old candidates and production source/tests remain unchanged; no pytest was installed globally or into the candidate env.",
+    "Root conftest is deliberately excluded solely because its two lines inject local src; the exact full body/SHA/Git match is retained above. It is not claimed that the entire default conftest stack ran unchanged.",
+    "Existing tests/conftest and CPU project fail-fast GPU/provider/legacy protections remain active.",
+    "All raw initial harness failures and corrected stdout/stderr/JUnit/launcher/command/module evidence plus generated real project DB/artifact files are preserved byte-for-byte.",
+    "No private Pro wheel/source/README is included. No real Pro license verification, GPU/provider use, scientific convergence or production deployment is claimed."
+  ]
+}

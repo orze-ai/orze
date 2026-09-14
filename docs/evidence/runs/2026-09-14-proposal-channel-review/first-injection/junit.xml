@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="3" time="18.313" timestamp="2026-09-14T01:23:15.176471+00:00" hostname="a100-41"><testcase classname="docs.evidence.checks.2026-09-14-proposal-channel-review" name="test_proposal_selection_rechecks_selected_evidence_without_consuming_scan[unchanged]" time="6.309" /><testcase classname="docs.evidence.checks.2026-09-14-proposal-channel-review" name="test_proposal_selection_rechecks_selected_evidence_without_consuming_scan[effect_changed]" time="5.732" /><testcase classname="docs.evidence.checks.2026-09-14-proposal-channel-review" name="test_proposal_selection_rechecks_selected_evidence_without_consuming_scan[content_changed]" time="6.090"><failure message="assert 2 == 3">history = {'root': PosixPath('/tmp/orze-proposal-channel-5_5rzjqw/pytest/test_proposal_selection_rechec2'), 'cfg': {'execution':...selection_rechec2/.orze/artifacts/8fe00c78519d731b3cf49089e2c58fb4dd243053b47e7395281edc16d72aeb7b/content', ...}, ...}
+fault = 'content_changed'
+
+    @pytest.mark.parametrize("fault", ["unchanged", "effect_changed", "content_changed"])
+    def test_proposal_selection_rechecks_selected_evidence_without_consuming_scan(history, fault):
+        history["cfg"]["action_policy"]["proposal_page_size"] = 8
+        source = history["source"]
+        ref = copy.deepcopy(source["producer"])
+        state = {"fault": fault, "stage": 0, "mutation": None}
+        before = _database(history["root"])
+    
+        class Policy:
+            def __init__(self, declaration):
+                pass
+    
+            def decide(self, snapshot, budget):
+                _capture(history, snapshot, budget)
+                stage = state["stage"]
+                state["stage"] += 1
+                assert state["stage"] &lt;= 3
+                page = snapshot["evidence_page"]
+                view = snapshot["recorded_evidence"]
+                if stage == 0:
+                    assert page["mode"] == "scan" and page["page"] == 1
+                    assert isinstance(page["next_cursor"], str)
+                    assert all(row["ref"] != ref for row in view["results"])
+                    state["scan"] = {k: copy.deepcopy(page[k]) for k in
+                                     ("scan_id", "next_cursor", "page", "seen", "traversal_end")}
+                    decision = {"kind": "SelectEvidence", "refs": [copy.deepcopy(ref)]}
+                elif stage == 1:
+                    assert page["mode"] == "selection"
+                    assert {k: page[k] for k in state["scan"]} == state["scan"]
+                    assert [row["ref"] for row in view["results"]] == [ref]
+                    assert view["results"][0]["artifact_records"] == [source]
+                    if fault != "unchanged":
+                        path = (history["root"] / "results" / SOURCE / "_execution_effects" /
+                                ref["attempt_id"] / "committed.json"
+                                if fault == "effect_changed" else Path(source["path"]))
+                        original = path.read_bytes()
+                        (history["root"] / ("channel-original-" + path.name)).write_bytes(original)
+                        replacement = b"not a committed receipt\n" if fault == "effect_changed" else b"19"
+                        path.write_bytes(replacement)
+                        state["mutation"] = {"path": str(path),
+                            "original_sha256": hashlib.sha256(original).hexdigest(),
+                            "replacement_sha256": hashlib.sha256(replacement).hexdigest()}
+                    decision = {"kind": "SelectProposals", "request_ids": ["absent-channel-request"]}
+                else:
+                    assert page["mode"] == "selection"
+                    assert {k: page[k] for k in state["scan"]} == state["scan"]
+                    assert snapshot["proposal_page"]["mode"] == "selection"
+                    assert snapshot["proposal_page"]["missing_request_ids"] == ["absent-channel-request"]
+                    assert snapshot["recorded_proposals"]["results"] == []
+                    if fault == "effect_changed":
+                        assert view["results"] == []
+                        assert [row["ref"] for row in view["unavailable"]] == [ref]
+                        assert view["unavailable"][0]["reason"]
+                    else:
+                        assert [row["ref"] for row in view["results"]] == [ref]
+                        assert view["results"][0]["artifact_records"] == [source]
+                        assert view["unavailable"] == []
+                    decision = ({"kind": "Stop", "reason": "unchanged_cross_channel_evidence", "wakeup": None}
+                                if fault == "unchanged" else _propose(source["artifact_id"]))
+                history["trace"][-1]["decision"] = copy.deepcopy(decision)
+                return decision
+    
+        _register(history, Policy)
+        try:
+            code = history["run"](once=False)
+            history["outcomes"].append(code)
+            assert code == (0 if fault == "unchanged" else 75)
+&gt;           assert state["stage"] == 3
+E           assert 2 == 3
+
+/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze/docs/evidence/checks/2026-09-14-proposal-channel-review.py:87: AssertionError</failure></testcase></testsuite></testsuites>

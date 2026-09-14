@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.542" timestamp="2026-09-14T01:13:05.063764+00:00" hostname="a100-41"><testcase classname="tests.test_cpu_proposal_paging_product_review" name="test_tail_exact_and_conflict_page_selects_then_once_executes_real_task" time="1.324"><failure message="assert 0 == 1&#10; +  where 0 = len([])">proposals = {'root': PosixPath('/tmp/orze-proposal-product-baseline-iifykgec/pytest/test_tail_exact_and_conflict_p0'), 'results': ...c/pytest/test_tail_exact_and_conflict_p0/lake.db', ...}, 'run': &lt;function project.&lt;locals&gt;.run at 0x153d2e5691b0&gt;, ...}
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x153d2ec3eaa0&gt;
+
+    def test_tail_exact_and_conflict_page_selects_then_once_executes_real_task(proposals, monkeypatch):
+        from orze.engine import idea_ingress
+        real_ingest = idea_ingress.ingest_ideas_source
+        ingress_calls = []
+    
+        def ingest(*args, **kwargs):
+            ingress_calls.append(len(proposals["trace"]))
+            return real_ingest(*args, **kwargs)
+    
+        monkeypatch.setattr(idea_ingress, "ingest_ideas_source", ingest)
+    
+        class Policy:
+            def __init__(self, declaration):
+                self.selected = False
+    
+            def decide(self, snapshot, budget):
+                capture(proposals, snapshot, budget)
+                found = {r["request_id"]: r for r in snapshot["recorded_proposals"]["results"]}
+                if not self.selected and EXACT in found and CONFLICT in found:
+                    self.selected = True
+                    decision = {"kind": "SelectProposals", "request_ids": [EXACT, CONFLICT]}
+                elif self.selected:
+                    assert snapshot["proposal_page"]["mode"] == "selection"
+                    assert set(found) == {EXACT, CONFLICT}
+                    assert found[EXACT]["status"] == "already_present_exact"
+                    assert found[CONFLICT]["status"] == "conflict"
+                    decision = {"kind": "Execute", "task_id": TASK}
+                else:
+                    decision = advance(snapshot)
+                proposals["trace"][-1]["decision"] = copy.deepcopy(decision)
+                return decision
+    
+        register(Policy)
+        code = proposals["run"](once=True)
+        proposals["outcomes"].append(code)
+        assert code == 0
+        after = _database(proposals["root"])
+&gt;       assert len(proposals["processes"]) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze/tests/test_cpu_proposal_paging_product_review.py:151: AssertionError</failure></testcase></testsuite></testsuites>
