@@ -291,3 +291,52 @@ def records_view(conn, scope, *, limit=MAX_VIEW_RECORDS):
     return json.loads(canonical({"requests": [
         {key: record[key] for key in ("request_id", "task_id", "outcome", "record_sha256")}
         for record in records], "more_available": len(rows) > limit}))
+
+
+def records_page(conn, scope, *, limit=MAX_VIEW_RECORDS, after=None, request_ids=None):
+    """Bounded historical keyset/selection read; no current-source authority.
+
+    The invocation coordinator owns revision and opaque cursor checks. Missing
+    selected keys are explicit, never synthetic rejection outcomes. Schema and
+    every fetched row (including the lookahead) are validated without writes.
+    """
+    _path(scope)
+    if type(limit) is not int or not 1 <= limit <= MAX_VIEW_RECORDS:
+        _fail("view_limit_invalid")
+    if after is not None:
+        token(after)
+    selection = request_ids is not None
+    if selection:
+        if after is not None or type(request_ids) is not list or not 1 <= len(request_ids) <= 32:
+            _fail("selection_invalid")
+        for identity in request_ids:
+            token(identity)
+        if len(set(request_ids)) != len(request_ids):
+            _fail("selection_invalid")
+    records, missing, more = [], [], False
+    present = _schema(conn)
+    if selection:
+        found = {}
+        if present:
+            placeholders = ",".join("?" for _ in request_ids)
+            rows = conn.execute(_SELECT + " WHERE scope=? COLLATE BINARY AND "
+                "request_id COLLATE BINARY IN (" + placeholders + ")",
+                (scope, *request_ids)).fetchall()
+            for row in rows:
+                record = _decode(row)
+                found[record["request_id"]] = record
+        records = [found[identity] for identity in request_ids if identity in found]
+        missing = [identity for identity in request_ids if identity not in found]
+    elif present:
+        clause = "" if after is None else " AND request_id>? COLLATE BINARY"
+        args = (scope, limit + 1) if after is None else (scope, after, limit + 1)
+        rows = conn.execute(_SELECT + " WHERE scope=? COLLATE BINARY" + clause
+            + " ORDER BY request_id COLLATE BINARY LIMIT ?", args).fetchall()
+        decoded = [_decode(row) for row in rows]
+        more = len(decoded) > limit
+        records = decoded[:limit]
+    return json.loads(canonical({"requests": [
+        {key: record[key] for key in ("request_id", "task_id", "outcome", "record_sha256", "database")}
+        for record in records], "more_available": more,
+        "last_request_id": records[-1]["request_id"] if records and not selection else after,
+        "missing_request_ids": missing}))

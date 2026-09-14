@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import secrets
 import sqlite3
 from types import SimpleNamespace
 
@@ -284,3 +285,76 @@ def recorded_proposals(lake, results_dir, *, limit=32):
         raise
     except Exception as exc:
         raise ProposalHOLD("cpu_proposal_view_unavailable") from exc
+
+
+class ProposalPager:
+    """Historical metadata pages sharing an invocation's evidence revision.
+
+    Only compact detached outcomes reach Policy. No source revalidation,
+    durable cursor, admission, budget event, or all-history cache is created.
+    """
+
+    def __init__(self, lake, results_dir, *, limit=32, guard):
+        from orze.engine.cpu_policy_evidence import EvidencePager
+        if type(limit) is not int or not 1 <= limit <= 32:
+            _fail("page_limit_invalid")
+        if type(guard) is not EvidencePager or guard._lake is not lake or guard._conn is not lake.conn:
+            _fail("page_guard_invalid")
+        self._lake, self._results, self._guard = lake, results_dir, guard
+        self._route = sources._route(lake, results_dir)
+        if self._route != guard._route:
+            _fail("page_scope_invalid")
+        self._limit, self._scan_id = limit, secrets.token_hex(24)
+        self._after = self._cursor = None
+        self._page = self._seen = 0
+        self._end = False
+        self.verify()
+
+    def verify(self):
+        try:
+            self._guard.verify()
+            _namespace(self._lake.conn)
+            if sources._route(self._lake, self._results) != self._route:
+                _fail("page_scope_changed")
+        except ProposalHOLD:
+            raise
+        except Exception as exc:
+            raise ProposalHOLD("cpu_proposal_page_unconfirmed") from exc
+
+    def read(self, *, cursor=None, request_ids=None):
+        self.verify()
+        selection = request_ids is not None
+        if selection:
+            if cursor is not None or self._page == 0:
+                _fail("page_selection_invalid")
+        elif ((self._page == 0 and cursor is not None)
+              or (self._page > 0 and (type(cursor) is not str or self._cursor is None
+                                      or cursor != self._cursor))):
+            _fail("page_cursor_invalid")
+        try:
+            with _readonly(self._route[1]) as conn:
+                view = store.records_page(conn, self._route[0], limit=self._limit,
+                    after=None if selection else self._after, request_ids=request_ids)
+                for row in view["requests"]:
+                    if row["database"] != self._route[1]:
+                        _fail("historical_database_changed")
+            self.verify()
+            page = self._page if selection else self._page + 1
+            seen = self._seen if selection else self._seen + len(view["requests"])
+            end = self._end if selection else not view["more_available"]
+            next_cursor = self._cursor if selection else (None if end else secrets.token_hex(24))
+            output = json.loads(store.canonical({
+                "recorded_proposals": {"results": [row["outcome"] for row in view["requests"]],
+                    "more_available": selection or page > 1 or not end},
+                "proposal_page": {"schema": 1, "scan_id": self._scan_id,
+                    "mode": "selection" if selection else "scan", "page": page, "seen": seen,
+                    "traversal_end": end, "next_cursor": next_cursor,
+                    "missing_request_ids": view["missing_request_ids"]}}))
+            if not selection:
+                self._after = view["last_request_id"]
+            self._cursor, self._page, self._seen, self._end = next_cursor, page, seen, end
+            return output
+        except ProposalHOLD:
+            raise
+        except Exception as exc:
+            raise ProposalHOLD("cpu_proposal_page_unavailable") from exc

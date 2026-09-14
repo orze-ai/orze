@@ -82,13 +82,17 @@ def action_policy(cfg):
     paged = type(value) is dict and type(value.get("version")) is int and value["version"] == 2
     if paged:
         fields.add("evidence_page_size")
-    if (type(value) is not dict or set(value) not in (fields, fields | {"config"})
+    optional = {"config"} | ({"proposal_page_size"} if paged else set())
+    if (type(value) is not dict or not fields.issubset(value) or set(value) - fields - optional
             or type(value["version"]) is not int or value["version"] not in (1, 2)
             or type(value["kind"]) is not str or value["idle"] not in ("wait", "stop")):
         _fail("action_policy requires version 1, registered kind, idle wait/stop, wait_seconds")
     if paged and (value["kind"] == "queue" or type(value["evidence_page_size"]) is not int
                   or not 1 <= value["evidence_page_size"] <= 32):
         _fail("action_policy version 2 requires a custom policy and evidence_page_size 1..32")
+    if "proposal_page_size" in value and (type(value["proposal_page_size"]) is not int
+                                          or not 1 <= value["proposal_page_size"] <= 32):
+        _fail("action_policy.proposal_page_size must be an integer in 1..32")
     seconds = value["wait_seconds"]
     if (type(seconds) not in (int, float) or not 0.01 <= seconds <= 3600
             or not math.isfinite(seconds)):

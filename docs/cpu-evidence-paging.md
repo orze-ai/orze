@@ -53,7 +53,7 @@ return {"kind": "SelectEvidence", "refs": selected_full_refs}
 每页仍受条数、字节和 JSON 节点上限约束，整份回调输入也仍受原有限额约束。
 
 游标绑定当前进程、Lake 连接、数据库与 results 路径身份及 SQLite 读版本。
-本连接写入（包括回滚）、其他连接提交、schema 或路径身份变化都会使扫描明确
+本连接写入（包括回滚）、使 SQLite 读版本变化的其他连接提交、schema 或路径身份变化会使扫描明确
 失效/HOLD，不静默重启后跳过结果。回调之后、任何正常决定之前再次核验读版本。
 正常 Execute/Propose/Replicate/Wait/Pause/Stop 后释放扫描；下一轮或新 invocation
 从新 `scan_id` 开始，不能拿旧 token 续权。并发执行完成也可能使正在翻页的扫描失效。
@@ -67,5 +67,6 @@ invalid、unknown 和 unavailable 原样保留；旧页的文件不会因遍历�
 
 这不是任意历史代恢复、持久研究摘要或全局信息增益算法。Policy 仍是受信任 Python
 代码，不是资源沙箱；读取本身不受 action timeout 约束。Pro 自己的研究上下文、
-CPU `recorded_proposals` 前 32 条窗口、累计预算与首次 ingress 的历史扫描成本
-尚未在此消除，因此不能声称整个长程循环已变成恒定时间或自动获得科学收敛能力。
+CPU 未启用 `proposal_page_size` 时的 `recorded_proposals` 前 32 条窗口仍保持兼容；
+显式启用方式见[提案历史分页](cpu-proposal-paging.md)。累计预算与首次 ingress 的
+历史扫描成本尚未在此消除，因此不能声称整个长程循环已变成恒定时间或自动获得科学收敛能力。

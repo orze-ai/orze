@@ -277,7 +277,24 @@ class BoundPolicy:
         if type(decision) is not dict:
             _fail("policy must return an explicit decision")
         kind = decision.get("kind")
-        if kind in ("ReadEvidence", "SelectEvidence"):
+        if kind in ("ReadProposals", "SelectProposals"):
+            if state["policy"]["version"] != 2 or "proposal_page_size" not in state["policy"]:
+                _fail("proposal queries require explicit proposal_page_size on Policy version 2")
+            if kind == "ReadProposals":
+                cursor = decision.get("cursor")
+                if (set(decision) != {"kind", "cursor"} or type(cursor) is not str or not cursor
+                        or cursor != captured.get("proposal_page", {}).get("next_cursor")):
+                    _fail("ReadProposals must use this captured page's next cursor")
+            else:
+                ids = decision.get("request_ids")
+                if (set(decision) != {"kind", "request_ids"} or type(ids) is not list
+                        or not 1 <= len(ids) <= 32):
+                    _fail("SelectProposals requires 1..32 unique request identities")
+                for identity in ids:
+                    _token(identity)
+                if len(set(ids)) != len(ids):
+                    _fail("SelectProposals requires unique request identities")
+        elif kind in ("ReadEvidence", "SelectEvidence"):
             if state["policy"]["version"] != 2:
                 _fail("evidence queries require explicit Policy version 2")
             if kind == "ReadEvidence":

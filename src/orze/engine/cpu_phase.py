@@ -196,8 +196,11 @@ def iteration(engine):
     require_admission(engine)
     interfaces = engine._cpu_interfaces
     paged = interfaces is not None and engine._cpu_policy.declaration["version"] == 2
+    proposal_paged = paged and "proposal_page_size" in engine._cpu_policy.declaration
     evidence_request = getattr(engine, "_cpu_evidence_request", None) if paged else None
-    if evidence_request is None:
+    proposal_request = getattr(engine, "_cpu_proposal_request", None) if proposal_paged else None
+    continuing = evidence_request is not None or proposal_request is not None
+    if not continuing:
         ingest_ideas_source(engine, engine.cfg)
         queue = engine.lake.get_queue(limit=2000 if interfaces is None else 32)
     else:
@@ -228,18 +231,44 @@ def iteration(engine):
     try:
         if interfaces is not None:
             from orze.engine.cpu_policy_evidence import EvidencePager, recorded_evidence
-            from orze.engine.cpu_proposals import recorded_proposals
+            from orze.engine.cpu_proposals import ProposalPager, recorded_proposals
             snapshot["queue"] = [{"idea_id": item["idea_id"],
                 "action": {"timeout_seconds": item["action"]["timeout_seconds"]},
                 "request": item.get("request", item["action"])} for item in queue]
             if paged:
-                if evidence_request is None:
+                if not continuing:
                     engine._cpu_evidence_pager = EvidencePager(engine.lake, engine.results_dir,
                         limit=engine._cpu_policy.declaration["evidence_page_size"])
-                snapshot.update(engine._cpu_evidence_pager.read(**(evidence_request or {})))
+                if proposal_request is not None:
+                    # Switching channels must not present cached artifact state
+                    # as newly checked evidence. Reselect the exact bounded refs
+                    # (including unavailable refs), without consuming its cursor.
+                    previous = engine._cpu_evidence_view
+                    recorded = previous["recorded_evidence"]
+                    refs = [item["ref"] for item in recorded["results"] + recorded["unavailable"]]
+                    if refs:
+                        evidence_view = engine._cpu_evidence_pager.read(refs=copy.deepcopy(refs))
+                    else:
+                        engine._cpu_evidence_pager.verify()
+                        evidence_view = copy.deepcopy(previous)
+                else:
+                    evidence_view = engine._cpu_evidence_pager.read(**(evidence_request or {}))
+                engine._cpu_evidence_view = copy.deepcopy(evidence_view)
+                snapshot.update(evidence_view)
             else:
                 snapshot["recorded_evidence"] = recorded_evidence(engine.lake, engine.results_dir)
-            snapshot["recorded_proposals"] = recorded_proposals(engine.lake, engine.results_dir)
+            if proposal_paged:
+                if not continuing:
+                    engine._cpu_proposal_pager = ProposalPager(engine.lake, engine.results_dir,
+                        limit=engine._cpu_policy.declaration["proposal_page_size"],
+                        guard=engine._cpu_evidence_pager)
+                if not continuing or proposal_request is not None:
+                    engine._cpu_proposal_view = engine._cpu_proposal_pager.read(**(proposal_request or {}))
+                else:
+                    engine._cpu_proposal_pager.verify()
+                snapshot.update(copy.deepcopy(engine._cpu_proposal_view))
+            else:
+                snapshot["recorded_proposals"] = recorded_proposals(engine.lake, engine.results_dir)
         # This private copy is not passed to a trusted callback. The selected
         # source metadata is still independently verified by normal admission.
         proposal_snapshot = copy.deepcopy(snapshot)
@@ -248,11 +277,18 @@ def iteration(engine):
             # Even a trusted callback cannot turn a changed read revision into
             # execution, a further page, or a permanent Stop decision.
             engine._cpu_evidence_pager.verify()
+            if proposal_paged:
+                engine._cpu_proposal_pager.verify()
     except Exception as exc:
         raise CPUExecutionError("execution: research policy decision rejected") from exc
-    if decision["kind"] in {"ReadEvidence", "SelectEvidence"}:
+    if decision["kind"] in {"ReadEvidence", "SelectEvidence", "ReadProposals", "SelectProposals"}:
         engine._cpu_evidence_request = ({"cursor": decision["cursor"]}
-            if decision["kind"] == "ReadEvidence" else {"refs": copy.deepcopy(decision["refs"])})
+            if decision["kind"] == "ReadEvidence" else
+            {"refs": copy.deepcopy(decision["refs"])} if decision["kind"] == "SelectEvidence" else None)
+        engine._cpu_proposal_request = ({"cursor": decision["cursor"]}
+            if decision["kind"] == "ReadProposals" else
+            {"request_ids": copy.deepcopy(decision["request_ids"])}
+            if decision["kind"] == "SelectProposals" else None)
         engine._cpu_evidence_queue = copy.deepcopy(queue)
         # No decision ledger entry, permit, claim, worker, or once latch: these
         # are bounded queries within the same policy decision, not CPU actions.
@@ -356,6 +392,10 @@ def _release_evidence_scan(engine):
     engine._cpu_evidence_pager = None
     engine._cpu_evidence_request = None
     engine._cpu_evidence_queue = None
+    engine._cpu_evidence_view = None
+    engine._cpu_proposal_pager = None
+    engine._cpu_proposal_request = None
+    engine._cpu_proposal_view = None
 
 
 def close(engine):
