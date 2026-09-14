@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "date": "2026-09-14",
+  "classification": "Independent public-snapshot differential on synthetic SETTLED metadata, with normal SQL schema/CHECK/indexes retained.",
+  "fixed_current_commit": "df446ab35e745daf02cc7c4a19cadffd57518103",
+  "baseline_commit": "e606ba6688b4e1972e26a08617821a427668dd24",
+  "baseline_whole_budget_sha256": "71bc89977cb582aa86a218003398431bb975ce11410f1df0d43b385ae4667169",
+  "script": {
+    "path": "docs/evidence/checks/2026-09-14-budget-public-alias-probe.py",
+    "sha256": "a9bd807f08f0fc15040bd75c146c74febaf23f570c4c349e9f07af8c7986745a"
+  },
+  "results": {
+    "normal_A_seconds": 2,
+    "normal_B_seconds": 3,
+    "old_and_new_normal_reserved_seconds": 5,
+    "only_mutation": "A.permit_json becomes exact B.permit_json; original A SQL ID/task/full Ref/state/terminal marker unchanged.",
+    "old_public_snapshot_alias": {
+      "accepted": true,
+      "reserved_wall_seconds": 6,
+      "remaining_wall_seconds": 4,
+      "stopped": false
+    },
+    "current_public_snapshot_alias": {
+      "accepted": false,
+      "exception": "CpuBudgetHOLD",
+      "reason": "cpu_budget_permit_changed"
+    },
+    "check_enforcement": "Actual invalid state write rejected by IntegrityError, then savepoint rolled back.",
+    "ignore_check_constraints": 0,
+    "integrity_check": "ok",
+    "three_explicit_indexes_retained": true,
+    "schema_and_database_unchanged_by_snapshot_reads": true
+  },
+  "execution": {
+    "command_record": "command.json",
+    "tool_chunk": "d176a1",
+    "exit_code": 0,
+    "wall_time_seconds": 0.397050949,
+    "raw_stdout_bytes": 11879,
+    "raw_stderr_bytes": 0
+  },
+  "original_artifacts": {
+    "lake.db": {
+      "byte_exact": true,
+      "bytes": 200704,
+      "sha256": "d2cb1588e04a062c3aa48ecd7b135f1a27033803184578bf99baf2f77815671e",
+      "source": "/tmp/orze-budget-public-alias.8UkWCd/project/lake.db"
+    },
+    "report.json": {
+      "byte_exact": true,
+      "bytes": 11715,
+      "sha256": "e70afd0395642fcf2ddd208ceae4ab4a181ef85e625026252f3b9f96c3a8932e",
+      "source": "/tmp/orze-budget-public-alias.8UkWCd/project/report.json"
+    },
+    "stderr.log": {
+      "byte_exact": true,
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/tmp/orze-budget-public-alias.8UkWCd/stderr.log"
+    },
+    "stdout.log": {
+      "byte_exact": true,
+      "bytes": 11879,
+      "sha256": "631ad16ead763f45636ac309832b2ea773a4ca6f68d357c1092a4ea0140edef5",
+      "source": "/tmp/orze-budget-public-alias.8UkWCd/stdout.log"
+    }
+  },
+  "verification": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport hashlib,json,pathlib,sqlite3\nsource=pathlib.Path('/tmp/orze-budget-public-alias.8UkWCd')\ndest=pathlib.Path('docs/evidence/runs/2026-09-14-budget-public-alias')\nfiles={}\nfor name,original in [('stdout.log',source/'stdout.log'),('stderr.log',source/'stderr.log'),('report.json',source/'project/report.json'),('lake.db',source/'project/lake.db')]:\n    a,b=original.read_bytes(),(dest/name).read_bytes()\n    assert a==b\n    files[name]={'source':str(original),'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest(),'byte_exact':True}\nreport=json.loads((dest/'report.json').read_bytes())\nwith sqlite3.connect((dest/'lake.db').resolve().as_uri()+'?mode=ro',uri=True) as conn:\n    conn.row_factory=sqlite3.Row\n    actual=[dict(r) for r in conn.execute('SELECT * FROM main.cpu_action_reservations ORDER BY reservation_id')]\n    schema=[dict(r) for r in conn.execute(\"SELECT type,name,tbl_name,sql FROM main.sqlite_master WHERE name LIKE 'cpu_action_%' ORDER BY type,name\")]\n    assert actual==report['alias_rows'] and schema==report['schema_rows']\n    assert [r[0] for r in conn.execute('PRAGMA integrity_check')]==['ok']\nassert (dest/'lake.db').read_bytes()==(source/'project/lake.db').read_bytes()\nassert report['normal']['old']==report['normal']['new']\nassert report['normal']['old']['value']['reserved_wall_seconds']==5\nassert report['alias']['old']['accepted'] and report['alias']['old']['value']['reserved_wall_seconds']==6\nassert report['alias']['new']=={'accepted':False,'exception':'CpuBudgetHOLD','reason':'cpu_budget_permit_changed'}\nassert report['ignore_check_constraints']==0 and report['check_enforcement']['exception']=='IntegrityError'\nassert report['source_test_before']==report['source_test_after']\nfor p,h in report['source_test_after'].items():\n    assert hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()==h\nprint(json.dumps({'files':files,'copied_database_rows_schema_exact':True,'archive_read_only_no_byte_mutation':True,'eight_source_test_files_still_exact':True,'normal_charge_seconds':5,'aliased_old_charge_seconds':6,'current_alias_hold':'cpu_budget_permit_changed'},sort_keys=True))\nPY",
+    "actual_tool_result": {
+      "chunk_id": "5006b8",
+      "wall_time_seconds": 0.000004329,
+      "exit_code": 0,
+      "original_token_count": 258,
+      "output": "{\"aliased_old_charge_seconds\": 6, \"archive_read_only_no_byte_mutation\": true, \"copied_database_rows_schema_exact\": true, \"current_alias_hold\": \"cpu_budget_permit_changed\", \"eight_source_test_files_still_exact\": true, \"files\": {\"lake.db\": {\"byte_exact\": true, \"bytes\": 200704, \"sha256\": \"d2cb1588e04a062c3aa48ecd7b135f1a27033803184578bf99baf2f77815671e\", \"source\": \"/tmp/orze-budget-public-alias.8UkWCd/project/lake.db\"}, \"report.json\": {\"byte_exact\": true, \"bytes\": 11715, \"sha256\": \"e70afd0395642fcf2ddd208ceae4ab4a181ef85e625026252f3b9f96c3a8932e\", \"source\": \"/tmp/orze-budget-public-alias.8UkWCd/project/report.json\"}, \"stderr.log\": {\"byte_exact\": true, \"bytes\": 0, \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"source\": \"/tmp/orze-budget-public-alias.8UkWCd/stderr.log\"}, \"stdout.log\": {\"byte_exact\": true, \"bytes\": 11879, \"sha256\": \"631ad16ead763f45636ac309832b2ea773a4ca6f68d357c1092a4ea0140edef5\", \"source\": \"/tmp/orze-budget-public-alias.8UkWCd/stdout.log\"}}, \"normal_charge_seconds\": 5}\n"
+    }
+  },
+  "limits": [
+    "The two SETTLED rows are synthetic metadata; no actual worker, execution attempt, settlement, process TREE, effect receipt, provider/GPU or paid authorization was created.",
+    "This establishes the public snapshot reader discrepancy, not that ordinary public reserve/bind/settle can generate the corrupted row or that unknown execution can resume.",
+    "No CHECK bypass or index drop and no replaced product function. Current initialize created the normal schema; old implementation is the complete Git-byte-exact budget module with otherwise current dependencies.",
+    "The copied database is an archival byte witness, not a resumable project: its recorded scope path/inode identity refers to the original scratch database and must not be re-signed.",
+    "Only the new probe script and fresh scratch/this archive were written; eight listed source/test hashes remain exact. No whole-suite success claim is made here."
+  ]
+}

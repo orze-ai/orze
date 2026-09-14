@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "kind": "actual_candidate_with_unmigrated_legacy_instrumentation",
+  "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -s tests/test_idea_ingress_cost.py tests/test_idea_ingress_contract.py::test_stale_id_snapshot_cannot_replace_a_concurrent_winner --tb=short -rs -p no:cacheprovider --basetemp=/tmp/orze-ingress-candidate.gRBN7M/tests --junitxml=/tmp/orze-ingress-candidate.gRBN7M/result.junit.xml",
+  "tool_result": {
+    "chunk_id": "c8b347",
+    "wall_time_seconds": 2.9363989090000002,
+    "exit_code": 1,
+    "original_token_count": 340,
+    "output": "\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\nINGRESS_EMPTY={\"sql\": [], \"cache_loads\": 0}\n.INGRESS_EMPTY={\"sql\": [], \"cache_loads\": 0}\n.INGRESS_EMPTY={\"sql\": [], \"cache_loads\": 0}\n.INGRESS_EMPTY={\"sql\": [], \"cache_loads\": 0}\n.INGRESS_BATCH={\"history_rows\": 0, \"id_selects\": [\"select idea_id from main.ideas where idea_id in ('idea-fresh')\"], \"total_sql\": 21, \"cache_loads\": 1}\n.INGRESS_BATCH={\"history_rows\": 1000, \"id_selects\": [\"select idea_id from main.ideas where idea_id in ('idea-fresh')\"], \"total_sql\": 21, \"cache_loads\": 1}\n.........F\n=================================== FAILURES ===================================\n__________ test_stale_id_snapshot_cannot_replace_a_concurrent_winner ___________\ntests/test_idea_ingress_contract.py:132: in test_stale_id_snapshot_cannot_replace_a_concurrent_winner\n    assert len(winner) == 1, \"second connection must commit after the old snapshot\"\nE   AssertionError: second connection must commit after the old snapshot\nE   assert 0 == 1\nE    +  where 0 = len([])\n1 failed, 14 passed in 2.79s\n"
+  },
+  "source_sha256": {
+    "idea_ingress": "ab39d54b430af773564bc8a34a9da85cb093da07bbbba6b59a0d743c177e433e",
+    "idea_lake": "0854930a23eddcea2400711bc6641e348681e76360c3c326241ccf2231e35847"
+  },
+  "test_sha256": {
+    "new_first14": "ae88fad69aefe7826c71f3a73ba991b42e7f5bf2ce60d74b56685cef42a4a20f",
+    "legacy": "8a767615506ad2a59d93e88384b866ba81501d940d4c30a9a3a87c2c7f228e61"
+  },
+  "classification": "14 original new tests pass; the one old concurrency test fails because its old get_all_ids instrumentation no longer runs (winner list empty). This is a disclosed seam migration, not a production data-loss failure; baseline ran the same legacy fixture successfully.",
+  "junit_original": "/tmp/orze-ingress-candidate.gRBN7M/result.junit.xml",
+  "migration": [
+    "instance.lake.get_all_ids -> instance.lake.find_existing_ids",
+    "def stale_ids_then_competing_admission(): -> def stale_ids_then_competing_admission(idea_ids):",
+    "old_ids = original_get_ids() -> old_ids = original_get_ids(idea_ids)",
+    "monkeypatch.setattr(instance.lake, \"get_all_ids\", stale_ids_then_competing_admission) -> monkeypatch.setattr(instance.lake, \"find_existing_ids\", stale_ids_then_competing_admission)"
+  ]
+}

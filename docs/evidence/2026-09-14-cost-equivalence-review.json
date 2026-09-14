@@ -1,0 +1,449 @@
+{
+  "schema": 1,
+  "date": "2026-09-14",
+  "title": "独立历史扫描差分、同机局部成本测量及真实 native/recovery 回归",
+  "status": "bounded independent work complete; parent-owned full suites/package work is not claimed here",
+  "plan": {
+    "path": "docs/plans/2026-09-14-history-cost-next.zh-CN.md",
+    "sha256": "0169f863f1e56a5875117ad37535a5e38e4c004530e6068193263ad0112a5b6a"
+  },
+  "baseline_commit": "e606ba6688b4e1972e26a08617821a427668dd24",
+  "candidate_code_commit": "df446ab35e745daf02cc7c4a19cadffd57518103",
+  "boundaries": [
+    "仅作者新 tests/test_cpu_budget_scan_review.py 与独立 docs/checks/evidence；未编辑生产源码、任何旧测试、安装环境或生产项目。",
+    "另一个作者按根授权迁移旧 tests/test_idea_ingress_contract.py 的4个透明 hook 字符串；本报告不宣称全仓旧测试逐字节未变，迁移断言审计由根报告负责。",
+    "合成账本比较/规模计时与真实进程证据严格分开。SETTLED 字样及0哈希仅私有metadata fixture，不是有效TREE/effect/settlement。",
+    "无GPU/provider/Pro运行、许可读取、宿主PID扫描、生产ASR、研究对照/收益或部署支持声明。"
+  ],
+  "baseline": {
+    "directory": "docs/evidence/runs/2026-09-14-cost-equivalence/baseline",
+    "files": {
+      "src/orze/core/cpu_action_budget.py": {
+        "bytes": 57555,
+        "sha256": "71bc89977cb582aa86a218003398431bb975ce11410f1df0d43b385ae4667169"
+      },
+      "src/orze/engine/idea_ingress.py": {
+        "bytes": 11525,
+        "sha256": "9361e034b8cce04583bdd6fce6a5d9662b1ba38fc369141916c63d2f7a6932ce"
+      },
+      "src/orze/idea_lake.py": {
+        "bytes": 132133,
+        "sha256": "cdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928"
+      }
+    },
+    "archive": {
+      "path": "docs/evidence/runs/2026-09-14-cost-equivalence/baseline/source.tar",
+      "sha256": "f1f14b4cad9be22c68b30aeaf5f12b2a5dc09807def6f4195069a8350e4a765c"
+    },
+    "method": "git archive提取完整3模块；独立a2d56f再次逐字节对照固定git show。whole old modules保留相对import，不用重写旧算法冒充baseline。"
+  },
+  "differential": {
+    "path": "tests/test_cpu_budget_scan_review.py",
+    "literal_asserts": 10,
+    "sha256": "4ea8191ceeebbf1d7f5dac373f0e7ec5b2cebe0c6e895e672e7489d1aefb410d",
+    "case_count": 23,
+    "execution": {
+      "exit": 0,
+      "footer": "23 passed in 5.12s",
+      "session_id": 41463,
+      "first_chunk": "6ff9ca",
+      "final_chunk": "dd6d0e",
+      "raw": "docs/evidence/runs/2026-09-14-cost-equivalence/metadata-equivalence",
+      "run": {
+        "after": {
+          "src/orze/core/cpu_action_budget.py": "5101beae489135f1162035da8483232a186faac4af5555012f7edb5acc21b23c",
+          "src/orze/idea_lake.py": "cdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928",
+          "tests/test_cpu_budget_scan_review.py": "4ea8191ceeebbf1d7f5dac373f0e7ec5b2cebe0c6e895e672e7489d1aefb410d"
+        },
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_cpu_budget_scan_review.py",
+          "--basetemp",
+          "/tmp/orze-budget-equivalence-q0qhx9zr/pytest",
+          "--junitxml",
+          "/tmp/orze-budget-equivalence-q0qhx9zr/junit.xml"
+        ],
+        "before": {
+          "src/orze/core/cpu_action_budget.py": "5101beae489135f1162035da8483232a186faac4af5555012f7edb5acc21b23c",
+          "src/orze/idea_lake.py": "cdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928",
+          "tests/test_cpu_budget_scan_review.py": "4ea8191ceeebbf1d7f5dac373f0e7ec5b2cebe0c6e895e672e7489d1aefb410d"
+        },
+        "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+        "environment": {
+          "LANG": "C.UTF-8",
+          "PATH": "/usr/local/bin:/usr/bin:/bin",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "PYTHONPATH": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze/src"
+        },
+        "exit_code": 0,
+        "out": "/tmp/orze-budget-equivalence-q0qhx9zr",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "5e5437c4c4ecb1494d6989c01c0ce9fb87b7f545f1dc3f9aaa667e56ec35c08b",
+        "wall_seconds": 5.328213255852461
+      }
+    },
+    "comparison": {
+      "all_point_reads_exact": true,
+      "cases": 23,
+      "exact_nonalias_totals_including_errors": 22,
+      "intentional_safety_fix": {
+        "new": {
+          "accepted": false,
+          "exception": "CpuBudgetHOLD",
+          "reason": "cpu_budget_permit_changed"
+        },
+        "old": {
+          "accepted": true,
+          "value": [
+            4000000000,
+            {}
+          ]
+        }
+      }
+    },
+    "cases": [
+      "empty",
+      "mixed_states",
+      "huge_exact_integers",
+      "other_scope_excluded",
+      "noncanonical_permit",
+      "duplicate_permit_key",
+      "scope_hash_invalid",
+      "permit_scope_changed",
+      "sql_id_missing_target",
+      "sql_ids_swapped",
+      "sql_task_changed",
+      "sql_slot_changed",
+      "wrong_ref_task",
+      "bool_ref_generation",
+      "unknown_state",
+      "reserved_has_ref",
+      "bound_missing_ref",
+      "settled_missing_terminal",
+      "bound_has_terminal",
+      "live_slot_conflict",
+      "oversized_permit",
+      "finite_budget_exceeded",
+      "alias_existing_target"
+    ],
+    "full_comparison": "测试对合法返回值/拒绝行为与只读dump不变作断言；随后a2d56f对已存23份完整JSON额外比较22例totals和全部point reads，异常type/message也完全相同。不是证明所有可能输入等价。",
+    "huge_integer_control": "10**300 与 10**300+1 的wall envelope之和保持Python exact整数纳秒，不用SQLite SUM/float汇总。",
+    "deliberate_fixture_layer": "直接私有row-reader；PRAGMA ignore_check_constraints允许损坏状态；仅live_slot_conflict删除live-slot唯一索引以抵达reader。未声称这些行通过公开准入/资格门。",
+    "real_old_alias_gap": {
+      "classification": "旧完整模块在明确损坏SQLite metadata上实测放行，新候选收紧拒绝；这是审计正确性修复，不纳入无差别等价宣称。首次新测试23P不是缺API红。",
+      "construction": "A的实际SQL ID/task保留不同，permit_json完全复制有效B；A.ref为无效文本、state INVALID、terminal NULL。旧_totals按A携带的permit ID再次读B，计B两次且跳过A真实字段。",
+      "old_result": [
+        4000000000,
+        {}
+      ],
+      "new_result": {
+        "exception": "CpuBudgetHOLD",
+        "reason": "cpu_budget_permit_changed"
+      },
+      "authority_limit": "只证明私有累计reader漏洞；未声称外部未授权写者能绕过SQLite/源锁获得修改资格，也未运行任何真实篡改生产账本。"
+    }
+  },
+  "scale": {
+    "script": {
+      "path": "docs/evidence/checks/2026-09-14-cost-equivalence-scale.py",
+      "sha256": "bd79ae0f21255309cacc26ede97fad3fe34169f50b33087e6a128c6fd5f1ded9"
+    },
+    "adapted_from": {
+      "path": "docs/evidence/runs/2026-09-14-history-cost-diagnostic/diagnose.py",
+      "sha256": "532e13c5457f3a77be0ee1136d570000112c37f7776d459d64e51563b0ad1b53"
+    },
+    "first_run": {
+      "exit": 0,
+      "session_id": 88404,
+      "first_chunk": "e97e1f",
+      "final_chunk": "537095",
+      "wrapper_wall_seconds": 32.71740088239312,
+      "raw": "docs/evidence/runs/2026-09-14-cost-equivalence/scale"
+    },
+    "methodology": "One warmup per arm then five paired repetitions, alternating arm order; traces/parser spies outside timing.",
+    "details": [
+      "100/1000/5000每scope，并各有等量另scope；同一真实私有IdeaLake/同source字节，whole old/new budget/ingress/IdeaLake加载。",
+      "各arm先warmup一次，再5轮交替次序；trace和_decode透明计数另跑，未置于计时区间。",
+      "实际空source ingress仍走原完整SourceLock/source/sidecar/batch逻辑；N个idea metadata和完整legacy cache均保留。",
+      "本机/tmp热数据测量，不是CephFS部署吞吐；共享宿主非空闲保证。主测期间本组未与自己的pytest/两仓full并发，不能排除其他用户负载。"
+    ],
+    "rows": [
+      {
+        "decode_calls_per_arm": 500,
+        "ingress_seconds": [
+          0.015816327184438705,
+          0.015640469267964363
+        ],
+        "n": 100,
+        "snapshot_seconds": [
+          0.020746806636452675,
+          0.019543219357728958
+        ],
+        "totals_seconds": [
+          0.019808048382401466,
+          0.018350452184677124
+        ],
+        "totals_sql": [
+          101,
+          1
+        ]
+      },
+      {
+        "decode_calls_per_arm": 5000,
+        "ingress_seconds": [
+          0.016607344150543213,
+          0.01564396731555462
+        ],
+        "n": 1000,
+        "snapshot_seconds": [
+          0.19442736357450485,
+          0.18423831276595592
+        ],
+        "totals_seconds": [
+          0.19607716612517834,
+          0.18316439539194107
+        ],
+        "totals_sql": [
+          1001,
+          1
+        ]
+      },
+      {
+        "decode_calls_per_arm": 25000,
+        "ingress_seconds": [
+          0.02018248662352562,
+          0.01565411686897278
+        ],
+        "n": 5000,
+        "snapshot_seconds": [
+          0.9782698322087526,
+          0.9241271167993546
+        ],
+        "totals_seconds": [
+          0.9994145631790161,
+          0.9312004037201405
+        ],
+        "totals_sql": [
+          5001,
+          1
+        ]
+      }
+    ],
+    "all_five_samples_and_queries": "docs/evidence/runs/2026-09-14-cost-equivalence/scale/reports/00-report.json",
+    "source_before": {
+      "src/orze/core/cpu_action_budget.py": "5101beae489135f1162035da8483232a186faac4af5555012f7edb5acc21b23c",
+      "src/orze/core/ideas.py": "aae9b20e5b249dd7416287dba53adf1225619d570f892998a466adae57923c2f",
+      "src/orze/core/integrity.py": "009a955fa2dfce47ebfcaeabadad870fc21febb62f20d0a77ac4042865eec4f4",
+      "src/orze/core/proposal_admission.py": "28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659",
+      "src/orze/engine/cpu_phase.py": "921c75948d0f6dc66f46187229af14610e37a20baf18dc9cc446a6c9e86d6722",
+      "src/orze/engine/idea_ingress.py": "ab39d54b430af773564bc8a34a9da85cb093da07bbbba6b59a0d743c177e433e",
+      "src/orze/engine/native_cpu_action.py": "11497c36447e6deb44f88fad6a867d128fb7e6a0f739332619a86b7a09721452",
+      "src/orze/idea_lake.py": "0854930a23eddcea2400711bc6641e348681e76360c3c326241ccf2231e35847"
+    },
+    "source_after": {
+      "src/orze/core/cpu_action_budget.py": "5101beae489135f1162035da8483232a186faac4af5555012f7edb5acc21b23c",
+      "src/orze/core/ideas.py": "aae9b20e5b249dd7416287dba53adf1225619d570f892998a466adae57923c2f",
+      "src/orze/core/integrity.py": "009a955fa2dfce47ebfcaeabadad870fc21febb62f20d0a77ac4042865eec4f4",
+      "src/orze/core/proposal_admission.py": "28c3bed45a9ef06d33333a24ed9895c66fa0717fda1bc10df99349e5d69f9659",
+      "src/orze/engine/cpu_phase.py": "921c75948d0f6dc66f46187229af14610e37a20baf18dc9cc446a6c9e86d6722",
+      "src/orze/engine/idea_ingress.py": "ab39d54b430af773564bc8a34a9da85cb093da07bbbba6b59a0d743c177e433e",
+      "src/orze/engine/native_cpu_action.py": "11497c36447e6deb44f88fad6a867d128fb7e6a0f739332619a86b7a09721452",
+      "src/orze/idea_lake.py": "0854930a23eddcea2400711bc6641e348681e76360c3c326241ccf2231e35847"
+    },
+    "interpretation": "消除逐row SQL往返，但仍严格逐行完整校验。5000行_totals中位数约.9994s→.9312s，而非数量级提速；snapshot .9783s→.9241s。5N decode仍为25000。SQLite计划仍是reservation全局PK索引SCAN，未增scope索引/汇总表/cache；总历史扫描结构没有消失。",
+    "empty_ingress": "旧1个全历史ID SELECT→新0；5000条idea/cache中位.02018s→.01565s。不能据空source推断任意大source或全调度循环为O(1)。",
+    "conservation": "全3规模old/new合法返回值一致、reservation完整ledger SHA前后不变，未新增退款/预算总期限/跳过坏行。",
+    "caveat": "这仅局部机制成本实测，不是研究效率、有效证据延迟、算法质量或生产端到端收益实验。"
+  },
+  "real_regression": {
+    "existing_cases": [
+      "tests/test_native_cpu_action.py (9 cases)",
+      "tests/test_cpu_terminal_recovery_domain.py (2 cases)",
+      "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_current_lifecycle (1 case)"
+    ],
+    "execution": {
+      "exit": 0,
+      "footer": "12 passed, 1 warning in 16.93s",
+      "session_id": 59912,
+      "first_chunk": "1beb0e",
+      "final_chunk": "e4904c",
+      "raw": "docs/evidence/runs/2026-09-14-cost-equivalence/real-regression",
+      "run": {
+        "after": {
+          "src/orze/core/cpu_action_budget.py": "5101beae489135f1162035da8483232a186faac4af5555012f7edb5acc21b23c",
+          "src/orze/engine/claim_authority.py": "a034f585c5cd25c32f26ea9b233ff1d7e170698d01fc703926c9c4417174659b",
+          "src/orze/engine/cpu_phase.py": "921c75948d0f6dc66f46187229af14610e37a20baf18dc9cc446a6c9e86d6722",
+          "src/orze/engine/execution_authority.py": "137bcf0b80a42da216b7710136477cc38ca87a10e60889772564f880f9dc2d11",
+          "src/orze/engine/idea_ingress.py": "ab39d54b430af773564bc8a34a9da85cb093da07bbbba6b59a0d743c177e433e",
+          "src/orze/engine/native_cpu_action.py": "11497c36447e6deb44f88fad6a867d128fb7e6a0f739332619a86b7a09721452",
+          "src/orze/engine/supervised_process.py": "d10060e1ec3f6ab5fa154737c9a3333e1c644912ec3a649b6ec19512c350a2e2",
+          "src/orze/engine/supervisor_worker.py": "03dfcacf3de44f344ec5fb8a6c176005cfefc7547d3d667d0eb34cc65289ef2f",
+          "src/orze/idea_lake.py": "0854930a23eddcea2400711bc6641e348681e76360c3c326241ccf2231e35847",
+          "tests/cpu_terminal_recovery_helpers.py": "21ff43c3feb5367b9637a5498bc02881005ea777ec6614c4653ee3d7fcc8c1a3",
+          "tests/test_cpu_terminal_recovery_domain.py": "9b57766a9e55e2cd5e19e6f9c2e8a1d75b16d687766b048b9dbba37165b05522",
+          "tests/test_cpu_terminal_recovery_guards.py": "324ac530f37b82b0409fab2486acfb4a01d75b12ee9d2ec7a7f60ed8f9b1fd1c",
+          "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b"
+        },
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_native_cpu_action.py",
+          "tests/test_cpu_terminal_recovery_domain.py",
+          "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_current_lifecycle",
+          "--basetemp",
+          "/tmp/orze-costr-h0wsdkyn/pytest",
+          "--junitxml",
+          "/tmp/orze-costr-h0wsdkyn/junit.xml"
+        ],
+        "before": {
+          "src/orze/core/cpu_action_budget.py": "5101beae489135f1162035da8483232a186faac4af5555012f7edb5acc21b23c",
+          "src/orze/engine/claim_authority.py": "a034f585c5cd25c32f26ea9b233ff1d7e170698d01fc703926c9c4417174659b",
+          "src/orze/engine/cpu_phase.py": "921c75948d0f6dc66f46187229af14610e37a20baf18dc9cc446a6c9e86d6722",
+          "src/orze/engine/execution_authority.py": "137bcf0b80a42da216b7710136477cc38ca87a10e60889772564f880f9dc2d11",
+          "src/orze/engine/idea_ingress.py": "ab39d54b430af773564bc8a34a9da85cb093da07bbbba6b59a0d743c177e433e",
+          "src/orze/engine/native_cpu_action.py": "11497c36447e6deb44f88fad6a867d128fb7e6a0f739332619a86b7a09721452",
+          "src/orze/engine/supervised_process.py": "d10060e1ec3f6ab5fa154737c9a3333e1c644912ec3a649b6ec19512c350a2e2",
+          "src/orze/engine/supervisor_worker.py": "03dfcacf3de44f344ec5fb8a6c176005cfefc7547d3d667d0eb34cc65289ef2f",
+          "src/orze/idea_lake.py": "0854930a23eddcea2400711bc6641e348681e76360c3c326241ccf2231e35847",
+          "tests/cpu_terminal_recovery_helpers.py": "21ff43c3feb5367b9637a5498bc02881005ea777ec6614c4653ee3d7fcc8c1a3",
+          "tests/test_cpu_terminal_recovery_domain.py": "9b57766a9e55e2cd5e19e6f9c2e8a1d75b16d687766b048b9dbba37165b05522",
+          "tests/test_cpu_terminal_recovery_guards.py": "324ac530f37b82b0409fab2486acfb4a01d75b12ee9d2ec7a7f60ed8f9b1fd1c",
+          "tests/test_native_cpu_action.py": "93154642d90df25150d9a509cba4d50154b4d474047ffbf5e7b1076d64fc7c9b"
+        },
+        "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+        "environment": {
+          "LANG": "C.UTF-8",
+          "PATH": "/usr/local/bin:/usr/bin:/bin",
+          "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "PYTHONPATH": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze/src"
+        },
+        "exit_code": 0,
+        "out": "/tmp/orze-costr-h0wsdkyn",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "e344e60ecf6c369646addbdc81ec31874fb0ea9453144e8998ae1046d8535b3e",
+        "wall_seconds": 17.160966677591205
+      }
+    },
+    "warning": "PytestAssertRewriteWarning: cpu_terminal_recovery_helpers already imported; full text/JUnit retained, no skip/error.",
+    "scope": "原测试体/断言不变：native正常/失败/中断、sealed输入/产物、escaped writer闭合、READY拒绝占槽；真实Domain有效/无效观察在已确认effect后crash86，fresh CLI恢复不重解释/不新GO；改变current lifecycle拒绝恢复。",
+    "counts_do_not_equal_actions": "12为测试case数，含不启动worker的准入/metadata控制；不把12称为12个实际动作。",
+    "domain_subset": [
+      {
+        "business_rows_and_files_unchanged": true,
+        "charge_ns": 4000000000,
+        "cli_exits": [
+          0,
+          86,
+          0,
+          0
+        ],
+        "interpret": 2,
+        "native_ready": 2,
+        "observation_status": "valid",
+        "path": "docs/evidence/runs/2026-09-14-cost-equivalence/real-regression/reports/00-recovery-report.json",
+        "post_recovery_settled": 2,
+        "sha256": "1b6f7a762cbd7d1a2c8b26c197c2b6b4d8dd618e37d8a0950838bd36fcfbcbb4"
+      },
+      {
+        "business_rows_and_files_unchanged": true,
+        "charge_ns": 4000000000,
+        "cli_exits": [
+          0,
+          86,
+          0,
+          0
+        ],
+        "interpret": 2,
+        "native_ready": 2,
+        "observation_status": "invalid",
+        "path": "docs/evidence/runs/2026-09-14-cost-equivalence/real-regression/reports/01-recovery-report.json",
+        "post_recovery_settled": 2,
+        "sha256": "c0a94c8df4eb6d82eed75547823a2bcefdbf5d35c2e86381872a0d13c3e25adf"
+      }
+    ],
+    "guard_subset": {
+      "cli_exits": [
+        86,
+        75
+      ],
+      "no_retry_admission": true,
+      "path": "docs/evidence/runs/2026-09-14-cost-equivalence/real-regression/reports/02-recovery-report.json",
+      "retained_bound": 1,
+      "sha256": "ace6307858100e2f5a4852879f6ce848deec7fa848297d175119e61c56281306",
+      "unchanged_worker_events": 1,
+      "clarification": "原second idea先由fixture公开admit为QUEUED；fresh拒绝期间不增加attempt/reservation/worker，不表示整个夹具从未有第二次proposal admission。"
+    },
+    "proof_readback": "a2d56f对3完整raw逐项核controller TREE_CLOSED/ECHILD_WALL、native terminal与supervision/fullRef一致、prepared SHA及committed prepared_sha256/fullRef，两个Domain businessrows/files不变、charge4e9保留且两SETTLED；guard保BOUND。历史record核对不替代live权限检查。",
+    "first_wrapper_failure": {
+      "chunk": "abb24f",
+      "exit": 1,
+      "classification": "hash清单把execution_authority/claim_authority误列core目录；实际engine。在启动pytest/worker之前FileNotFoundError，纠正清单后首次产品运行12P。完整失败command/tool原样保留，不算产品red。"
+    }
+  },
+  "archive": {
+    "archives": [
+      {
+        "archive_bytes": 173099,
+        "archive_sha256": "e84c82aecb3b28abd1058e7e16bb8d85a4aa380348bb0067c54f6f004318e766",
+        "files": 53,
+        "index": "docs/evidence/runs/2026-09-14-cost-equivalence/metadata-equivalence/index.json",
+        "index_sha256": "e569ff894fafacbc39c892bf7d607183107b1d169cab70baa606bbd58215baa7",
+        "label": "metadata-equivalence",
+        "report_copies": 23,
+        "symlinks": 1
+      },
+      {
+        "archive_bytes": 2877185,
+        "archive_sha256": "4a7be50d26915c8441325e2ebf164a0ebe570410ff4dd0b9c913defe5769b819",
+        "files": 29,
+        "index": "docs/evidence/runs/2026-09-14-cost-equivalence/scale/index.json",
+        "index_sha256": "b8c8dd863fb8eb9cfe5fecf603b8cbdb4da71086c6368bf3a166a5a4e4652a10",
+        "label": "scale",
+        "report_copies": 1,
+        "symlinks": 0
+      },
+      {
+        "archive_bytes": 242009,
+        "archive_sha256": "84b8ca12bbed30a03c15b647759d0728b691d6871bcfa126a7a8b21e4ce703fc",
+        "files": 117,
+        "index": "docs/evidence/runs/2026-09-14-cost-equivalence/real-regression/index.json",
+        "index_sha256": "6a272155c10a662ecd80827b366b07a3ff596021840ba38632996ee380b2a48d",
+        "label": "real-regression",
+        "report_copies": 3,
+        "symlinks": 9
+      }
+    ],
+    "limits": [
+      "Only three named owned private /tmp fixture trees are archived; no user projects or account paths.",
+      "Sources copied before runs are Core-only; no Pro implementation, authorization, environment dump or dependency binaries.",
+      "Symlinks are retained as link metadata without dereferencing, and must resolve within the original private fixture.",
+      "Synthetic metadata ledger artifacts do not prove native process, TREE, effect or SETTLED authority.",
+      "The real-regression directory separately contains unmodified native/recovery fixtures, their real DBs and exported reports."
+    ],
+    "schema": 1,
+    "tool_transcripts": {
+      "path": "docs/evidence/runs/2026-09-14-cost-equivalence/tool-transcripts.json",
+      "sha256": "6f60afa3b5fb0f3be5d989e95346797a6750231f079ca02849e5f2f3f0016fc4"
+    },
+    "verification": {
+      "path": "docs/evidence/runs/2026-09-14-cost-equivalence/verification.json",
+      "tool_chunk": "a2d56f",
+      "exit": 0,
+      "byte_exact": {
+        "copied_files": 55,
+        "files": 199,
+        "symlinks": 10
+      }
+    }
+  },
+  "next": "该有限改动保留完整行审计，结构性长历史O(N)剩余成本未被掩盖。进一步优化需单独证明scope索引/完整校验契约；本报告不授权缓存或新账本。父任务单独收全量、唯一旧fixture迁移与新制品。"
+}

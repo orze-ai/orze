@@ -1,0 +1,143 @@
+{
+  "schema": 1,
+  "date": "2026-09-14",
+  "author_role": "Implementation author of bounded ingress lookup and its tests; not an independent timing reviewer.",
+  "status": "Owned source/tests frozen; targeted verification complete. Parent owns whole-suite and commit/release claims.",
+  "baseline": "e606ba6688b4e1972e26a08617821a427668dd24",
+  "implementation": {
+    "src/orze/engine/idea_ingress.py": "After the unchanged lock/fresh source read/sidecar overlay/cursor/batch parse, empty raw_ideas returns without database ID or global config-cache reads. Nonempty batches use find_existing_ids; old lightweight adapters use at most 128 public get calls.",
+    "src/orze/idea_lake.py": "find_existing_ids(iterable) returns advisory membership across statuses, at most 128 inputs, empty no SQL, one parameterized main.ideas WHERE IN lookup, duplicate IDs deduplicated, busy retry retained. get_all_ids is untouched.",
+    "authority": "Membership is not admission or ACK authority: known same-ID entries still reach the real atomic insert for exact replay/conflict; a real second connection tests stale lookup conflict. Original source locks, config-domain dedup and commit-before-ACK remain."
+  },
+  "final_sha256": {
+    "src/orze/engine/idea_ingress.py": "ab39d54b430af773564bc8a34a9da85cb093da07bbbba6b59a0d743c177e433e",
+    "src/orze/idea_lake.py": "0854930a23eddcea2400711bc6641e348681e76360c3c326241ccf2231e35847",
+    "tests/test_idea_ingress_contract.py": "650963b6ed45cf8c37cad1f4f2430dafac0d729d0c3aadb8d9d3d27792e6476e",
+    "tests/test_idea_ingress_cost.py": "c3181dbe2fcddefa43de906840bfcee9d06135f57112ffbf7b8df30e3fd4db16"
+  },
+  "epochs": [
+    {
+      "kind": "baseline_local_cost_requirements",
+      "record": "docs/evidence/2026-09-14-ingress-cost-baseline.json",
+      "tool_chunk": "932a3c",
+      "exit_code": 1,
+      "passed": 8,
+      "failed": 7,
+      "seconds": 3.39,
+      "classification": "Original new14: seven actual SQL/loader cost failures and seven positive safety controls; unchanged legacy concurrent-winner control passed additionally. These are the requested cost requirements, not missing-API or scientific-execution failures."
+    },
+    {
+      "kind": "candidate_with_original_old_test_seam",
+      "record": "docs/evidence/2026-09-14-ingress-cost-seam-history.json",
+      "tool_chunk": "c8b347",
+      "exit_code": 1,
+      "passed": 14,
+      "failed": 1,
+      "seconds": 2.79,
+      "classification": "All original new14 pass. Old concurrent-winner fixture never injected because it hooked get_all_ids, now unused. Fully retained before the authorized four-string instrumentation migration; not counted as a product defect."
+    },
+    {
+      "kind": "final_target",
+      "record": "docs/evidence/runs/2026-09-14-ingress-cost/final.json",
+      "tool_chunks": [
+        "d7613c",
+        "4e3641"
+      ],
+      "session_id": 26016,
+      "exit_code": 0,
+      "passed": 103,
+      "failed": 0,
+      "seconds": 15.52,
+      "new_cost_cases": 22,
+      "old_neighborhood_cases": 81,
+      "four_owned_files_before_after_exact": true
+    }
+  ],
+  "old_tests": {
+    "baseline_python_files": 503,
+    "byte_exact": 502,
+    "only_changed": "tests/test_idea_ingress_contract.py",
+    "exception": "Whole file equals baseline bytes after exactly four complete assignment/def/call/setattr replacements. Real second SQLite connection, winner metadata/COMPLETE assertions and ordering are unchanged. Not an all-old-tests-byte-zero claim.",
+    "original_new_tests": "First14 retained: all 11 top-level functions (including helpers) and 34 literal AST Assert nodes unchanged; only eight new API/adapter mechanism cases appended. Final new22 has 47 literal Assert nodes.",
+    "legacy_get_all_ids_ast_exact": true,
+    "audit": "docs/evidence/runs/2026-09-14-ingress-cost/static-audit.json",
+    "audit_tooling_diagnostic": "38c0d7 exit1 was an overly broad substring count in the audit script (bare get_all_ids appears in other retained business assertions). Corrected complete-assignment audit 5827ec exit0. No source/test change or product failure caused by this tooling correction."
+  },
+  "scope_and_limits": [
+    "Real local source files/locks/SQLite; historical 0/1000 background rows are synthetic archived metadata, not completed experiments. The new controls do not execute their declared command.",
+    "SQL trace records empty parsed batches at zero SQL/cache-loader calls; actual nonempty admission uses one targeted ID query at both 0 and 1000 rows. This is not an end-to-end throughput result.",
+    "Sidecar enumeration, full source parsing, global config-cache/dedup lookups, other Lake scans and broader engine maintenance are not made O(batch). No persistent cache, storage schema/table, runner or dependency added.",
+    "No provider, paid-license/account operation or GPU. The Core-only import stub's public installation guidance in raw logs is not a provider call or Pro implementation disclosure.",
+    "This author report does not claim the complete Core/Pro suite passed, deployment happened or native execution semantics were measured. Independent scale data and full-suite evidence are owned by parent/runtime agents.",
+    "Peer cpu_action_budget.py was outside this ownership; final pre/post claim covers the four listed ingress/test files only."
+  ],
+  "artifacts": {
+    "docs/evidence/2026-09-14-ingress-cost-baseline.json": {
+      "bytes": 35491,
+      "sha256": "8294f6a3f1bc935884ed88b411b63ac5811d01fb631300d464f90abc4831be08"
+    },
+    "docs/evidence/2026-09-14-ingress-cost-seam-history.json": {
+      "bytes": 3273,
+      "sha256": "cd62e8eacb4eac35e2303429ab7b5e82751caace2bb2ca74f359263714b106cf"
+    },
+    "docs/evidence/runs/2026-09-14-ingress-cost/baseline.junit.xml": {
+      "bytes": 6884,
+      "sha256": "e73d720e0262369532ad99f609aab378a9aa149847a16e871d56aacd74fee346"
+    },
+    "docs/evidence/runs/2026-09-14-ingress-cost/baseline.log": {
+      "bytes": 32894,
+      "sha256": "6c05a47a26f129d1b10dce93189104ad7d26c59a50568818f59cc40c0b4085ed"
+    },
+    "docs/evidence/runs/2026-09-14-ingress-cost/final.json": {
+      "bytes": 9209,
+      "sha256": "eaba726d0b64d81bac69ef172059aa5607cc1fdb3dd6fa27db886b68545b01b1"
+    },
+    "docs/evidence/runs/2026-09-14-ingress-cost/final.junit.xml": {
+      "bytes": 15400,
+      "sha256": "b96a344db27a568be9ba4b229a50a7d556f48a857c39dec1020ad6d7e0976247"
+    },
+    "docs/evidence/runs/2026-09-14-ingress-cost/final.log": {
+      "bytes": 1710,
+      "sha256": "5242794734746497fafc7fd2421aa1dab16732523e335abf23d180cc31095f86"
+    },
+    "docs/evidence/runs/2026-09-14-ingress-cost/static-audit.json": {
+      "bytes": 7634,
+      "sha256": "fa9ee6d50d9dbfde4935e44209ca7eb43ec669e28cba84e4ef788b9117a44832"
+    },
+    "docs/evidence/runs/2026-09-14-ingress-cost/unmigrated-seam.junit.xml": {
+      "bytes": 2962,
+      "sha256": "fa70bf80110fa5a05dbb69120676b87b14214ba6a30c795f40e5dfbdaa6281e3"
+    },
+    "docs/evidence/runs/2026-09-14-ingress-cost/unmigrated-seam.log": {
+      "bytes": 1359,
+      "sha256": "e00ee7c02814ec7e9aa5ead79036f2e374487604fe4f716385983b95e3335ade"
+    },
+    "docs/evidence/snapshots/2026-09-14-ingress-cost-before-idea-ingress.py": {
+      "bytes": 11525,
+      "sha256": "9361e034b8cce04583bdd6fce6a5d9662b1ba38fc369141916c63d2f7a6932ce"
+    },
+    "docs/evidence/snapshots/2026-09-14-ingress-cost-before-idea-lake.py": {
+      "bytes": 132133,
+      "sha256": "cdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928"
+    },
+    "docs/evidence/snapshots/2026-09-14-ingress-cost-before-legacy-contract-tests.py": {
+      "bytes": 8809,
+      "sha256": "8a767615506ad2a59d93e88384b866ba81501d940d4c30a9a3a87c2c7f228e61"
+    },
+    "docs/evidence/snapshots/2026-09-14-ingress-cost-first-tests.py": {
+      "bytes": 8343,
+      "sha256": "ae88fad69aefe7826c71f3a73ba991b42e7f5bf2ce60d74b56685cef42a4a20f"
+    }
+  },
+  "archive_verification": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast,hashlib,json,pathlib,subprocess,xml.etree.ElementTree as E\nroot=pathlib.Path('.'); d=root/'docs/evidence'; runs=d/'runs/2026-09-14-ingress-cost'\nbase=json.loads((d/'2026-09-14-ingress-cost-baseline.json').read_text())\nseam=json.loads((d/'2026-09-14-ingress-cost-seam-history.json').read_text())\nfinal=json.loads((runs/'final.json').read_text())\nexpected=[('baseline',base['tool_result']['output'],base['junit_original'],15,7),('unmigrated-seam',seam['tool_result']['output'],seam['junit_original'],15,1),('final',''.join(c['output'] for c in final['tool_results']),'/tmp/orze-ingress-final.yZoUO9/result.junit.xml',103,0)]\nresults=[]\nfor name,raw,original,count,failed in expected:\n    log=runs/(name+'.log'); xml=runs/(name+'.junit.xml')\n    assert log.read_bytes()==raw.encode('utf-8')\n    assert xml.read_bytes()==pathlib.Path(original).read_bytes()\n    tree=E.fromstring(xml.read_bytes())\n    cases=list(tree.iter('testcase')); fs=list(tree.iter('failure')); errors=list(tree.iter('error'))\n    assert len(cases)==count and len(fs)==failed and not errors\n    results.append({'name':name,'tests':count,'failures':failed,'errors':0,'raw_exact':True,'junit_original_exact':True})\nsnapshots=[('before-idea-ingress','src/orze/engine/idea_ingress.py'),('before-idea-lake','src/orze/idea_lake.py'),('before-legacy-contract-tests','tests/test_idea_ingress_contract.py')]\nfor name,source in snapshots:\n    p=d/'snapshots'/('2026-09-14-ingress-cost-'+name+'.py')\n    assert p.read_bytes()==subprocess.check_output(['git','show',base['baseline']+':'+source])\n    ast.parse(p.read_bytes())\npaths=[d/'2026-09-14-ingress-cost-baseline.json',d/'2026-09-14-ingress-cost-seam-history.json',*sorted(runs.iterdir()),*sorted((d/'snapshots').glob('2026-09-14-ingress-cost-*.py'))]\nfiles={str(p):{'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'bytes':p.stat().st_size} for p in paths if p.is_file()}\nprint(json.dumps({'epochs':results,'baseline_snapshot_exact':3,'first_new_test_snapshot_sha256':hashlib.sha256((d/'snapshots/2026-09-14-ingress-cost-first-tests.py').read_bytes()).hexdigest(),'files':files},sort_keys=True))\nPY",
+    "tool_result": {
+      "chunk_id": "0eecbc",
+      "wall_time_seconds": 0.000004472,
+      "exit_code": 0,
+      "original_token_count": 686,
+      "output": "{\"baseline_snapshot_exact\": 3, \"epochs\": [{\"errors\": 0, \"failures\": 7, \"junit_original_exact\": true, \"name\": \"baseline\", \"raw_exact\": true, \"tests\": 15}, {\"errors\": 0, \"failures\": 1, \"junit_original_exact\": true, \"name\": \"unmigrated-seam\", \"raw_exact\": true, \"tests\": 15}, {\"errors\": 0, \"failures\": 0, \"junit_original_exact\": true, \"name\": \"final\", \"raw_exact\": true, \"tests\": 103}], \"files\": {\"docs/evidence/2026-09-14-ingress-cost-baseline.json\": {\"bytes\": 35491, \"sha256\": \"8294f6a3f1bc935884ed88b411b63ac5811d01fb631300d464f90abc4831be08\"}, \"docs/evidence/2026-09-14-ingress-cost-seam-history.json\": {\"bytes\": 3273, \"sha256\": \"cd62e8eacb4eac35e2303429ab7b5e82751caace2bb2ca74f359263714b106cf\"}, \"docs/evidence/runs/2026-09-14-ingress-cost/baseline.junit.xml\": {\"bytes\": 6884, \"sha256\": \"e73d720e0262369532ad99f609aab378a9aa149847a16e871d56aacd74fee346\"}, \"docs/evidence/runs/2026-09-14-ingress-cost/baseline.log\": {\"bytes\": 32894, \"sha256\": \"6c05a47a26f129d1b10dce93189104ad7d26c59a50568818f59cc40c0b4085ed\"}, \"docs/evidence/runs/2026-09-14-ingress-cost/final.json\": {\"bytes\": 9209, \"sha256\": \"eaba726d0b64d81bac69ef172059aa5607cc1fdb3dd6fa27db886b68545b01b1\"}, \"docs/evidence/runs/2026-09-14-ingress-cost/final.junit.xml\": {\"bytes\": 15400, \"sha256\": \"b96a344db27a568be9ba4b229a50a7d556f48a857c39dec1020ad6d7e0976247\"}, \"docs/evidence/runs/2026-09-14-ingress-cost/final.log\": {\"bytes\": 1710, \"sha256\": \"5242794734746497fafc7fd2421aa1dab16732523e335abf23d180cc31095f86\"}, \"docs/evidence/runs/2026-09-14-ingress-cost/static-audit.json\": {\"bytes\": 7634, \"sha256\": \"fa9ee6d50d9dbfde4935e44209ca7eb43ec669e28cba84e4ef788b9117a44832\"}, \"docs/evidence/runs/2026-09-14-ingress-cost/unmigrated-seam.junit.xml\": {\"bytes\": 2962, \"sha256\": \"fa70bf80110fa5a05dbb69120676b87b14214ba6a30c795f40e5dfbdaa6281e3\"}, \"docs/evidence/runs/2026-09-14-ingress-cost/unmigrated-seam.log\": {\"bytes\": 1359, \"sha256\": \"e00ee7c02814ec7e9aa5ead79036f2e374487604fe4f716385983b95e3335ade\"}, \"docs/evidence/snapshots/2026-09-14-ingress-cost-before-idea-ingress.py\": {\"bytes\": 11525, \"sha256\": \"9361e034b8cce04583bdd6fce6a5d9662b1ba38fc369141916c63d2f7a6932ce\"}, \"docs/evidence/snapshots/2026-09-14-ingress-cost-before-idea-lake.py\": {\"bytes\": 132133, \"sha256\": \"cdaa8243827eb0370ef1db0d3d2c76677791ecca7a49093bc246120a4051a928\"}, \"docs/evidence/snapshots/2026-09-14-ingress-cost-before-legacy-contract-tests.py\": {\"bytes\": 8809, \"sha256\": \"8a767615506ad2a59d93e88384b866ba81501d940d4c30a9a3a87c2c7f228e61\"}, \"docs/evidence/snapshots/2026-09-14-ingress-cost-first-tests.py\": {\"bytes\": 8343, \"sha256\": \"ae88fad69aefe7826c71f3a73ba991b42e7f5bf2ce60d74b56685cef42a4a20f\"}}, \"first_new_test_snapshot_sha256\": \"ae88fad69aefe7826c71f3a73ba991b42e7f5bf2ce60d74b56685cef42a4a20f\"}\n"
+    }
+  },
+  "commit_and_push_by_this_author": false
+}

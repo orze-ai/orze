@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q -s tests/test_idea_ingress_cost.py tests/test_idea_ingress_contract.py tests/test_idea_ingress_source_boundaries.py tests/test_idea_ingress_lock_contract.py tests/test_config_dedup_rebuild_and_recover.py tests/test_config_dedup_keyset.py tests/test_config_dedup_pending.py tests/test_config_dedup_wiring.py tests/test_proposal_admission.py tests/test_proposal_admission_identity_boundary.py tests/test_proposal_admission_transactions.py tests/test_idea_lake_schema_cache.py --tb=short -rs -p no:cacheprovider --basetemp=/tmp/orze-ingress-final.yZoUO9/tests --junitxml=/tmp/orze-ingress-final.yZoUO9/result.junit.xml",
+  "cwd": "/hot-data/fsx/workspace/erik/orze-production-validation-2026-09-12.UgS3uV/orze",
+  "tool_results": [
+    {
+      "chunk_id": "d7613c",
+      "wall_time_seconds": 10.000519128,
+      "session_id": 26016,
+      "original_token_count": 411,
+      "output": "\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\nINGRESS_EMPTY={\"sql\": [], \"cache_loads\": 0}\n.INGRESS_EMPTY={\"sql\": [], \"cache_loads\": 0}\n.INGRESS_EMPTY={\"sql\": [], \"cache_loads\": 0}\n.INGRESS_EMPTY={\"sql\": [], \"cache_loads\": 0}\n.INGRESS_BATCH={\"history_rows\": 0, \"id_selects\": [\"select idea_id from main.ideas where idea_id in ('idea-fresh')\"], \"total_sql\": 21, \"cache_loads\": 1}\n.INGRESS_BATCH={\"history_rows\": 1000, \"id_selects\": [\"select idea_id from main.ideas where idea_id in ('idea-fresh')\"], \"total_sql\": 21, \"cache_loads\": 1}\n...............................................\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\n\norze-pro is distributed via private registry.\n\nTo install:\n    1. Get your license key at https://orze.ai/pro\n    2. pip install orze\n    3. export ORZE_PRO_KEY=\"ORZE-PRO-...\"\n    4. orze run  (auto-installs orze-pro)\n\nOr install manually:\n    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/\n\nQuestions? support@orze.ai\n\n......."
+    },
+    {
+      "chunk_id": "4e3641",
+      "wall_time_seconds": 0.000002883,
+      "exit_code": 0,
+      "original_token_count": 17,
+      "output": "............................................\n103 passed in 15.52s\n"
+    }
+  ],
+  "before": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport ast, hashlib, json, pathlib, subprocess\nroot=pathlib.Path('.')\nbase='e606ba6688b4e1972e26a08617821a427668dd24'\npaths=['src/orze/engine/idea_ingress.py','src/orze/idea_lake.py','tests/test_idea_ingress_cost.py','tests/test_idea_ingress_contract.py']\nresult={'baseline':base,'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'files':{p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths}}\nlegacy='tests/test_idea_ingress_contract.py'\nold=subprocess.check_output(['git','show',base+':'+legacy]); new=(root/legacy).read_bytes()\nreplacements=[(b'original_get_ids = instance.lake.get_all_ids',b'original_get_ids = instance.lake.find_existing_ids'),(b'def stale_ids_then_competing_admission():',b'def stale_ids_then_competing_admission(idea_ids):'),(b'old_ids = original_get_ids()',b'old_ids = original_get_ids(idea_ids)'),(b'monkeypatch.setattr(instance.lake, \"get_all_ids\", stale_ids_then_competing_admission)',b'monkeypatch.setattr(instance.lake, \"find_existing_ids\", stale_ids_then_competing_admission)')]\nexpected=old\nfor before,after in replacements:\n    assert expected.count(before)==1\n    expected=expected.replace(before,after)\nassert expected==new\nresult['legacy_exact_four_replacements']=True\ntracked=subprocess.check_output(['git','ls-tree','-r','--name-only',base,'tests'],text=True).splitlines()\npy=[p for p in tracked if p.endswith('.py')]\nchanged=[p for p in py if (root/p).read_bytes()!=subprocess.check_output(['git','show',base+':'+p])]\nassert changed==[legacy]\nresult.update(old_python_tests=len(py),old_python_tests_byte_exact=len(py)-1,changed_old_tests=changed)\nfirst=(root/'docs/evidence/snapshots/2026-09-14-ingress-cost-first-tests.py').read_bytes()\nfinal=(root/paths[2]).read_bytes()\noldtree,newtree=ast.parse(first),ast.parse(final)\noldfuncs=[n for n in oldtree.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))]\nnewfuncs={n.name:n for n in newtree.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}\nassert all(ast.dump(n,include_attributes=False)==ast.dump(newfuncs[n.name],include_attributes=False) for n in oldfuncs)\nresult.update(first_test_sha256=hashlib.sha256(first).hexdigest(),first_functions_preserved=len(oldfuncs),first_literal_asserts=sum(isinstance(n,ast.Assert) for n in ast.walk(oldtree)),final_literal_asserts=sum(isinstance(n,ast.Assert) for n in ast.walk(newtree)))\noldlake=ast.parse(subprocess.check_output(['git','show',base+':src/orze/idea_lake.py']))\nnewlake=ast.parse((root/'src/orze/idea_lake.py').read_bytes())\ndef method(tree,name):\n    cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='IdeaLake')\n    return next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name==name)\nassert ast.dump(method(oldlake,'get_all_ids'))==ast.dump(method(newlake,'get_all_ids'))\nresult['legacy_get_all_ids_ast_exact']=True\nprint(json.dumps(result,sort_keys=True))\nPY",
+    "tool_result": {
+      "chunk_id": "5827ec",
+      "wall_time_seconds": 1.110620369,
+      "exit_code": 0,
+      "original_token_count": 227,
+      "output": "{\"baseline\": \"e606ba6688b4e1972e26a08617821a427668dd24\", \"changed_old_tests\": [\"tests/test_idea_ingress_contract.py\"], \"files\": {\"src/orze/engine/idea_ingress.py\": \"ab39d54b430af773564bc8a34a9da85cb093da07bbbba6b59a0d743c177e433e\", \"src/orze/idea_lake.py\": \"0854930a23eddcea2400711bc6641e348681e76360c3c326241ccf2231e35847\", \"tests/test_idea_ingress_contract.py\": \"650963b6ed45cf8c37cad1f4f2430dafac0d729d0c3aadb8d9d3d27792e6476e\", \"tests/test_idea_ingress_cost.py\": \"c3181dbe2fcddefa43de906840bfcee9d06135f57112ffbf7b8df30e3fd4db16\"}, \"final_literal_asserts\": 47, \"first_functions_preserved\": 11, \"first_literal_asserts\": 34, \"first_test_sha256\": \"ae88fad69aefe7826c71f3a73ba991b42e7f5bf2ce60d74b56685cef42a4a20f\", \"head\": \"89b933e4703b3902a53211f0514cca3770c24a3f\", \"legacy_exact_four_replacements\": true, \"legacy_get_all_ids_ast_exact\": true, \"old_python_tests\": 503, \"old_python_tests_byte_exact\": 502}\n"
+    }
+  },
+  "after": {
+    "command": "sha256sum src/orze/engine/idea_ingress.py src/orze/idea_lake.py tests/test_idea_ingress_cost.py tests/test_idea_ingress_contract.py\nPYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport collections,json,xml.etree.ElementTree as E\nr=E.parse('/tmp/orze-ingress-final.yZoUO9/result.junit.xml').getroot()\nc=collections.Counter(t.get('classname') for t in r.iter('testcase'))\nprint(json.dumps({'tests':sum(c.values()),'by_module':dict(c),'failures':len(list(r.iter('failure'))),'errors':len(list(r.iter('error')))},sort_keys=True))\nPY",
+    "tool_result": {
+      "chunk_id": "d47a63",
+      "wall_time_seconds": 0.000004116,
+      "exit_code": 0,
+      "original_token_count": 239,
+      "output": "ab39d54b430af773564bc8a34a9da85cb093da07bbbba6b59a0d743c177e433e  src/orze/engine/idea_ingress.py\n0854930a23eddcea2400711bc6641e348681e76360c3c326241ccf2231e35847  src/orze/idea_lake.py\nc3181dbe2fcddefa43de906840bfcee9d06135f57112ffbf7b8df30e3fd4db16  tests/test_idea_ingress_cost.py\n650963b6ed45cf8c37cad1f4f2430dafac0d729d0c3aadb8d9d3d27792e6476e  tests/test_idea_ingress_contract.py\n{\"by_module\": {\"tests.test_config_dedup_keyset\": 2, \"tests.test_config_dedup_pending\": 2, \"tests.test_config_dedup_rebuild_and_recover\": 6, \"tests.test_config_dedup_wiring\": 2, \"tests.test_idea_ingress_contract\": 7, \"tests.test_idea_ingress_cost\": 22, \"tests.test_idea_ingress_lock_contract\": 5, \"tests.test_idea_ingress_source_boundaries\": 10, \"tests.test_idea_lake_schema_cache\": 7, \"tests.test_proposal_admission\": 20, \"tests.test_proposal_admission_identity_boundary\": 2, \"tests.test_proposal_admission_transactions\": 18}, \"errors\": 0, \"failures\": 0, \"tests\": 103}\n"
+    }
+  },
+  "result": {
+    "passed": 103,
+    "failed": 0,
+    "errors": 0,
+    "seconds": 15.52,
+    "new_cost_cases": 22,
+    "existing_neighborhood_cases": 81
+  },
+  "scope": "Metadata/lock/SQLite bounded tests. No research worker, paid license/provider/GPU or full suite. Real child processes in existing source-lock tests are not experiment-execution evidence."
+}

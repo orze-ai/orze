@@ -1,0 +1,366 @@
+{
+  "schema": 1,
+  "date": "2026-09-14",
+  "author": "core_review",
+  "status": "budget candidate and author tests frozen after targeted verification; whole-slice full regression and release not claimed",
+  "plan": {
+    "path": "docs/plans/2026-09-14-history-cost-next.zh-CN.md",
+    "full_read_chunk": "9853be"
+  },
+  "source": {
+    "path": "src/orze/core/cpu_action_budget.py",
+    "baseline_commit": "e606ba6688b4e1972e26a08617821a427668dd24",
+    "baseline_sha256": "71bc89977cb582aa86a218003398431bb975ce11410f1df0d43b385ae4667169",
+    "baseline_bytes": 57555,
+    "baseline_snapshot": "docs/evidence/snapshots/2026-09-14-budget-scan-before-cpu-action-budget.py",
+    "baseline_git_byte_exact": true,
+    "candidate_sha256": "5101beae489135f1162035da8483232a186faac4af5555012f7edb5acc21b23c"
+  },
+  "owned_new_test": {
+    "path": "tests/test_cpu_budget_scan.py",
+    "sha256": "3a58a866ae41d4d0e537de6975e8322970d9609c1d2ea5f03f1135fd576c86ed",
+    "cases": 8,
+    "functions": 5,
+    "literal_asserts": 11,
+    "unchanged_between_baseline_and_candidate": true
+  },
+  "implementation": {
+    "shared_projection": "The same bounded SQL projection is used by both readers. Newly exposed SQL reservation_id is returned only for exact TEXT/48-byte values; oversized/non-text IDs become NULL and fail identity comparison.",
+    "shared_validator": "_reservation_row(row8, permit) compares SQL reservation_id/scope/task/slot/permit canonical bytes, then retains the exact prior state/ref/terminal-presence checks and returns the original seven-column tuple.",
+    "point_lookup": "_reservation still looks up exactly the requested primary key, requires exactly one row, and uses the shared pure validator.",
+    "totals": "_totals uses one scope-filtered ordered SELECT and iterates its cursor. It validates every captured permit and row, accumulates reserved nanoseconds with exact Python integers, preserves active-slot conflict and scope/budget checks, and never re-queries by the permit's claimed ID.",
+    "unchanged": "No schema/index/transaction/Stop/HOLD/recovery/lease/settlement/refund changes. No SQL SUM, floating aggregation, cache, fetchall of history, new runner, or audit-row skipping. Ingress and IdeaLake are outside this author's edits."
+  },
+  "baseline": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cpu_budget_scan.py --tb=short -p no:cacheprovider --basetemp=/tmp/orze-budget-scan-baseline.iH15XX/pytest --junitxml=/tmp/orze-budget-scan-baseline.iH15XX/junit.xml",
+    "chunks": [
+      "0b037a",
+      "34be11"
+    ],
+    "session_id": 42281,
+    "exit_code": 1,
+    "result": "2 failed, 6 passed in 2.42s",
+    "classification": "The two expected failures are the explicit new one-SELECT performance requirement at an existing API, not missing-API errors. At 2/100 valid synthetic metadata rows, actual SELECT counts were 3/101. Correct integer totals, empty active set and unchanged SQLite data were already asserted before each failing query-count assertion.",
+    "source_test_hash_check_chunks": {
+      "before": "e2696c",
+      "after": "4cc189"
+    },
+    "unchanged_source_sha256": "71bc89977cb582aa86a218003398431bb975ce11410f1df0d43b385ae4667169",
+    "unchanged_test_sha256": "3a58a866ae41d4d0e537de6975e8322970d9609c1d2ea5f03f1135fd576c86ed",
+    "junit": {
+      "path": "docs/evidence/runs/2026-09-14-budget-scan/baseline.junit.xml",
+      "sha256": "a85deb7ca3b19acfd34cb90fd4e88a7e50bde6589d34f21f48234c3269128860",
+      "bytes": 2736,
+      "ends_newline": false,
+      "counts": {
+        "failure": 2,
+        "error": 0,
+        "skipped": 0,
+        "passed": 6
+      },
+      "original_path": "/tmp/orze-budget-scan-baseline.iH15XX/junit.xml"
+    }
+  },
+  "candidate": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES= python3 -m pytest -q tests/test_cpu_budget_scan.py tests/test_cpu_action_budget.py tests/test_cpu_continuous_execution.py tests/test_research_pause_review.py tests/test_native_cpu_action.py tests/test_cpu_terminal_recovery_guards.py tests/test_cpu_terminal_recovery_barrier.py tests/test_cpu_terminal_recovery_domain.py tests/test_runtime_lease_recovery.py --tb=short -p no:cacheprovider --basetemp=/tmp/orze-budget-scan-target.BjGOGL/pytest --junitxml=/tmp/orze-budget-scan-target.BjGOGL/junit.xml",
+    "chunks": [
+      "48c8fd",
+      "b8bdc2",
+      "54bf2b"
+    ],
+    "session_id": 80412,
+    "exit_code": 0,
+    "result": "141 passed, 1 warning in 82.87s (0:01:22)",
+    "passed": 141,
+    "new_author_cases": 8,
+    "old_neighborhood_cases": 133,
+    "warning": "Existing PytestAssertRewriteWarning for cpu_terminal_recovery_helpers; not a skipped or failed test.",
+    "pre_chunk": "a8ca4e",
+    "post_chunk": "bd57e3",
+    "fingerprint_files": 16,
+    "listed_source_test_fingerprints_exact": true,
+    "fingerprint_scope_note": "These are the 16 explicitly listed budget/native/recovery source and test files, not a claim that every concurrently developed Core file was frozen for this author run.",
+    "junit": {
+      "path": "docs/evidence/runs/2026-09-14-budget-scan/target.junit.xml",
+      "sha256": "ec26303de388e423d9c6135078866fe54f99025b85998989373c1daedfe3e56d",
+      "bytes": 21585,
+      "ends_newline": false,
+      "counts": {
+        "failure": 0,
+        "error": 0,
+        "skipped": 0,
+        "passed": 141
+      },
+      "original_path": "/tmp/orze-budget-scan-target.BjGOGL/junit.xml"
+    },
+    "coverage": "Existing public debit/bind/settle, concurrent peer admission, commit uncertainty, Stop/Pause, v2 continuous budget, actual native CPU execution, real controller-crash/F recovery, historical v1 and runtime-lease v2 recovery neighbors.",
+    "actual_recovery_reports": {
+      "all_original_hashes_and_tar_member_bytes_exact": true,
+      "archive": "docs/evidence/runs/2026-09-14-budget-scan/recovery-reports.tar.gz",
+      "bytes": 300208,
+      "reports": 37,
+      "sha256": "d0f92ba79237d35085bdd498058e20faf483ce41732ff284dace1436b632f948",
+      "manifest": [
+        {
+          "bytes": 152797,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_0/project-0/recovery-report.json",
+          "sha256": "f1be54a1940f3308cb13c1651f857ae1cafd997a4d205e7f31e9b45b6474861a",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[origin]"
+        },
+        {
+          "bytes": 152760,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_1/project-0/recovery-report.json",
+          "sha256": "fe84fd8c868e96b9a622e9d6b2578e9ad9d18c0b99820bc4849ab4c4b9145d94",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[kind]"
+        },
+        {
+          "bytes": 152823,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_2/project-0/recovery-report.json",
+          "sha256": "2839290caa44947cec0b13baa2d92fe6d11e03dd9f011839def37558de821e5c",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[resource]"
+        },
+        {
+          "bytes": 152869,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_3/project-0/recovery-report.json",
+          "sha256": "2c10f7cf6bd5477b1fb8c1e21cb959ba75eaff39fdedc652887ae65bfa4eeabc",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[attempt_ref]"
+        },
+        {
+          "bytes": 152851,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_4/project-0/recovery-report.json",
+          "sha256": "dbf5429b843878424a5d1941bf3f3347a2ed20928de9cbe39df0524dfc7d9b4c",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[process_pid]"
+        },
+        {
+          "bytes": 152867,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_5/project-0/recovery-report.json",
+          "sha256": "eda3e1899e474a806650e90377baf87e7655bf7bd3713d70149275cbe9244231",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[command_sha256]"
+        },
+        {
+          "bytes": 152878,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_6/project-0/recovery-report.json",
+          "sha256": "a963db33eb0a2e30ddf79448bd0367a71f1b1eb59948aef5f5ed05890b5ac6cb",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_native_binding[timeout_seconds]"
+        },
+        {
+          "bytes": 152810,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_7/project-0/recovery-report.json",
+          "sha256": "501df4a86159f063eade711e82a0e307cd84f8c87e39295ba2afe487c2c8600f",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[database]"
+        },
+        {
+          "bytes": 152834,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_8/project-0/recovery-report.json",
+          "sha256": "8d4931a9c6f3cb2b7ec9659d908537d89163260aa012b64dc3e1d818495de1be",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[claim_sha256]"
+        },
+        {
+          "bytes": 152847,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_9/project-0/recovery-report.json",
+          "sha256": "36868094a605e76b6d56020759a70473f66878507c64a1002e96262e042058e7",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_captured_source[config_sha256]"
+        },
+        {
+          "bytes": 153046,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_10/project-0/recovery-report.json",
+          "sha256": "40b7245111e7ef444c5f7e533a064a2013349307aa74ed2760fd39615a1d8c5e",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_current_lifecycle"
+        },
+        {
+          "bytes": 152886,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_rehashed0/project-0/recovery-report.json",
+          "sha256": "99c951d9de47fdb58551e1381f4d36a161eb19f69965634d49a638c76bdc811b",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_rehashed_non_cpu_prepared_plan"
+        },
+        {
+          "bytes": 153036,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_11/project-0/recovery-report.json",
+          "sha256": "d635b76f71fcfedc92b619b6458895fc5db23d957741ddde4db87b9d6c596cf0",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_catalog_route"
+        },
+        {
+          "bytes": 153092,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_changed_12/project-0/recovery-report.json",
+          "sha256": "0ba1ca9aa824a4fb6614131e3e1619c6f81e9c32b30316d860bad53ab539e39b",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_changed_ready_member_identity"
+        },
+        {
+          "bytes": 197094,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_rechecks_source_0/project-0/recovery-report.json",
+          "sha256": "3c39927ba570ff208e933cf15d2aebbf0710dfea6f7e729e0f2e2c476e4eaae6",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_rechecks_source_after_enumeration_before_settlement"
+        },
+        {
+          "bytes": 154435,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_preexisting_stop_never_au0/project-0/recovery-report.json",
+          "sha256": "0f80c6de3bac0687de905acefe8b40b453bd2a19cf8224a13573e59e249802b8",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[ordinary_stop]"
+        },
+        {
+          "bytes": 154342,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_preexisting_stop_never_au1/project-0/recovery-report.json",
+          "sha256": "6cd5b6495479510d3db8b84b473d05fbdf20625bd08414385c2e1ec13bb936f8",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[storage_hold]"
+        },
+        {
+          "bytes": 154518,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_preexisting_stop_never_au2/project-0/recovery-report.json",
+          "sha256": "5c3478e585f7114b3ca790be9c78603d3f6393a88c1fa5ea5988f03cda0d2467",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_preexisting_stop_never_authorizes_automatic_settlement[masked_storage_hold]"
+        },
+        {
+          "bytes": 153010,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_unbound_0/project-0/recovery-report.json",
+          "sha256": "3a472a76a281de1e7240eaf4bb2946e2c021f156011d88dc845bcbb716780581",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_unbound_replication_request_field"
+        },
+        {
+          "bytes": 152945,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_artifact0/project-0/recovery-report.json",
+          "sha256": "316b184ac12846ebee801b024063dc5c53b59ffd70889665e0d27b0b94af9e6e",
+          "test": "tests/test_cpu_terminal_recovery_guards.py::test_recovery_refuses_artifact_root_unrelated_to_published_records"
+        },
+        {
+          "bytes": 108326,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_post_delete_fsync_uncerta0/project-0/recovery-report.json",
+          "sha256": "d16d25b0f01fece24538cc176c021939a97bc99302dfc2bc83aca29efb6bfa1c",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_post_delete_fsync_uncertainty_blocks_fresh_restart_with_zero_bound[effect]"
+        },
+        {
+          "bytes": 108330,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_post_delete_fsync_uncerta1/project-0/recovery-report.json",
+          "sha256": "29d2cbde61ddade234a1d65a8614c4aff7870b2a1f6258194b9cc97b98a11904",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_post_delete_fsync_uncertainty_blocks_fresh_restart_with_zero_bound[recovery]"
+        },
+        {
+          "bytes": 69724,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_in_progress_denies_alread0/project-0/recovery-report.json",
+          "sha256": "fc0944c95a537cab13b2616bf8513e8b691b479315c3f3476d599ec525e37bdc",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_in_progress_denies_already_running_peer_admission[reserve]"
+        },
+        {
+          "bytes": 69726,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_in_progress_denies_alread1/project-0/recovery-report.json",
+          "sha256": "db84ac60cf815f6fcc1aad88528e21d19eba49fe0ed1c19648475cc72e925222",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_in_progress_denies_already_running_peer_admission[require_permit]"
+        },
+        {
+          "bytes": 68507,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_two_recovery_consumers_do0/project-0/recovery-report.json",
+          "sha256": "870c0589a4aa2e787c4e445a4f36da2acf3432ffeac257078acf6d17eed7926a",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_two_recovery_consumers_do_not_repeat_settlement_or_poison_owner"
+        },
+        {
+          "bytes": 68955,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_legal_peer_decision_after0/project-0/recovery-report.json",
+          "sha256": "8ae390e03909ade59c5831f96db64cb04f50e39ba2cf29847ad01220ef831daf",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_legal_peer_decision_after_complete_commit_preserves_exact_owner_result"
+        },
+        {
+          "bytes": 105871,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_transaction_unkn0/project-0/recovery-report.json",
+          "sha256": "f66efff36018b4edc18183faed0fecd9815a149a2f0c5dbd94bcf0d62be0b9f3",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_recovery_transaction_unknown_is_not_an_ordinary_success[IN_PROGRESS-rollback]"
+        },
+        {
+          "bytes": 108248,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_transaction_unkn1/project-0/recovery-report.json",
+          "sha256": "29b8e84488fb745c643f199cd4ae3b4bb8cbaf6e261e80143a078083a285914f",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_recovery_transaction_unknown_is_not_an_ordinary_success[COMPLETE-rollback]"
+        },
+        {
+          "bytes": 109734,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_transaction_unkn2/project-0/recovery-report.json",
+          "sha256": "fde977345a4c5ebed7b2d7017d4b7af7657784558e8c38251b64e55b46c7d81f",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_recovery_transaction_unknown_is_not_an_ordinary_success[COMPLETE-committed_raise]"
+        },
+        {
+          "bytes": 67497,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_existing_unqualified_gate0/project-0/recovery-report.json",
+          "sha256": "aab9c9a1143907882f570c4b1324cc81dc88f467b6c4d9725e706f19968164c7",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_existing_unqualified_gate_owner_is_preserved"
+        },
+        {
+          "bytes": 67493,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_recovery_refuses_caller_t0/project-0/recovery-report.json",
+          "sha256": "da2417c56aae0540d1f592ae27687640c003349d72eb3994c53877169be18e8d",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_recovery_refuses_caller_transaction_without_consuming_it"
+        },
+        {
+          "bytes": 68386,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_actual_peer_nonce_replace0/project-0/recovery-report.json",
+          "sha256": "ee54f85af19cd3e58d697480dd5ea4aebb885a9f1e3549e462ab1def8d1b7d87",
+          "test": "tests/test_cpu_terminal_recovery_barrier.py::test_actual_peer_nonce_replacement_cannot_be_completed_by_old_owner"
+        },
+        {
+          "bytes": 326227,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_fresh_cli_resumes_confirm0/domain-project/recovery-report.json",
+          "sha256": "2e23a6b0631fb10f28eab03873d62d92892c38a153b290c808ae816c8645b391",
+          "test": "tests/test_cpu_terminal_recovery_domain.py::test_fresh_cli_resumes_confirmed_domain_without_reinterpretation[schedule-feasibility-v1-valid]"
+        },
+        {
+          "bytes": 326153,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_fresh_cli_resumes_confirm1/domain-project/recovery-report.json",
+          "sha256": "0f5a16c343c17ef52ee1d602d3c7fd51f4de25ab33649f968a05a3a523288f55",
+          "test": "tests/test_cpu_terminal_recovery_domain.py::test_fresh_cli_resumes_confirmed_domain_without_reinterpretation[schedule-feasibility-v2-invalid]"
+        },
+        {
+          "bytes": 131554,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_real_v2_confirmed_termina0/project-0/recovery-report.json",
+          "sha256": "43c01783a5d99f1b7d469b4488c329e7b9a3db96cc99a4223940c0545d418691",
+          "test": "tests/test_runtime_lease_recovery.py::test_real_v2_confirmed_terminal_crash_recovers_metadata_only[0]"
+        },
+        {
+          "bytes": 122719,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_real_v2_confirmed_termina1/project-0/recovery-report.json",
+          "sha256": "236f92e3e0dada96659de963364841214849b1821710cba71071637a739babf5",
+          "test": "tests/test_runtime_lease_recovery.py::test_real_v2_confirmed_terminal_crash_recovers_metadata_only[7]"
+        },
+        {
+          "bytes": 124374,
+          "path": "/tmp/orze-budget-scan-target.BjGOGL/pytest/test_real_historical_v1_termin0/historical-project/recovery-report.json",
+          "sha256": "f8e99b8eb106b82a098d0ef80262217ab46240606742662e207bda4024309714",
+          "test": "tests/test_runtime_lease_recovery.py::test_real_historical_v1_terminal_recovers_without_upgrade_or_reexecution"
+        }
+      ],
+      "tool_chunk": "b202e5"
+    }
+  },
+  "compatibility_and_tightening": {
+    "ast_check_chunk": "277cc3",
+    "all_unowned_module_nodes_AST_exact": true,
+    "prior_state_and_reference_validation_AST_exact": true,
+    "seven_column_point_result_preserved": true,
+    "baseline_alias_edge": "A deliberate old/new difference is independently reproduced: SQL row A can contain a complete permit naming existing valid row B. The old _totals follows that permit to _reservation(B), potentially ignoring A's own corrupt state/ref. The new captured-row SQL-ID comparison refuses A. This is an explicit identity-audit tightening, not claimed complete behavioral equivalence on all corrupt databases.",
+    "independent_confirmation": {
+      "author": "runtime_evidence",
+      "chunk": "dd6d0e",
+      "result": "23 passed in 5.12s",
+      "scope": "Whole old module versus candidate on the same private metadata databases; alias edge old accepts 4e9/{} and new refuses, other 22 accept/refuse and lawful values agree. Not this author's test execution; final independent report is separately owned."
+    },
+    "no_fixture_corrections": "The author test file remained byte-exact from first baseline through target. There were no author fixture errors or post-baseline assertion changes.",
+    "pre_first_run_static_revision": "Root reviewed the initial unexecuted refactor and requested bounded SQL-ID projection. The CASE check landed before the first candidate test run; this is not an observed candidate failure.",
+    "old_test_audit": {
+      "baseline": "e606ba6688b4e1972e26a08617821a427668dd24",
+      "changed": [],
+      "junit_archives_byte_exact": true,
+      "old_python_test_files": 503,
+      "old_tests_all_byte_exact": true,
+      "old_tracked_test_files": 505,
+      "source_sha256": "5101beae489135f1162035da8483232a186faac4af5555012f7edb5acc21b23c",
+      "test_sha256": "3a58a866ae41d4d0e537de6975e8322970d9609c1d2ea5f03f1135fd576c86ed"
+    }
+  },
+  "raw_tool_results": {
+    "path": "docs/evidence/runs/2026-09-14-budget-scan/author-tool-results.json",
+    "sha256": "80829b1b53d11cef1429d35c3eb10a640536d20885036a0b931cd1121824a1c3"
+  },
+  "limitations": [
+    "The new eight tests' manually inserted RESERVED/BOUND/SETTLED rows are ledger metadata fixtures only, not claimed process authority, real TREE/effect receipts or authorized settlement.",
+    "The actual native/recovery neighbors are separately identified by their existing test bodies and 37 raw recovery reports; their real execution proof is not inferred from synthetic metadata tests.",
+    "One SELECT eliminates local N+1 SQL dispatch; all history still incurs O(N) row validation, and no history index/migration or total-loop O(1) guarantee is introduced.",
+    "Nanosecond charges remain permanent, including SETTLED reservations; continuous v2 authorization does not clear prior charges or change per-action/slot limits.",
+    "No scientific research-speed, provider/LLM benefit, GPU validation, live deployment, whole-suite final acceptance or remote publication claim is made here."
+  ]
+}
