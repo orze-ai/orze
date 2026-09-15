@@ -1,0 +1,28 @@
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+______________ test_partial_resume_does_not_reparse_consumed_yaml ______________
+
+engine = (<orze.engine.orchestrator.Orze object at 0x14db78e6ea40>, {'ideas_file': '/tmp/ospp-r/test_partial_resume_does_not_r0...ospp-r/test_partial_resume_does_not_r0/.orze', ...}, PosixPath('/tmp/ospp-r/test_partial_resume_does_not_r0/ideas.md'))
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x14db79be0130>
+
+    def test_partial_resume_does_not_reparse_consumed_yaml(engine, monkeypatch):
+        instance, cfg, source = engine
+        populate(source)
+        idea_ingress.ingest_ideas_source(instance, cfg)
+        calls = []
+        original = sidecar_prefix._iter_sidecar_text
+        def observe(text, seen):
+            calls.append(len(seen))
+            yield from original(text, seen)
+        monkeypatch.setattr(sidecar_prefix, "_iter_sidecar_text", observe)
+        raw, inserted = idea_ingress.ingest_ideas_source(instance, cfg)
+>       assert calls == [128]
+E       assert [0] == [128]
+E         
+E         At index 0 diff: 0 != 128
+E         Use -v to get more diff
+
+tests/test_sidecar_partial_prefix.py:25: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_sidecar_partial_prefix.py::test_partial_resume_does_not_reparse_consumed_yaml
+1 failed, 1 passed, 20 deselected in 4.12s

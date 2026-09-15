@@ -2,15 +2,11 @@
 
 Only file identities, first-valid IDs and one namespace-bound name window
 survive a controller tick. No YAML, raw source, admission result or execution
-right is cached. Complete files and at most one partial file share the file,
-ID and ID-byte capacities. Partial hints include only consumed records, never
-an unconsumed page lookahead, and require a fresh nonempty read of the same
-file identity before skipping the old prefix's YAML.
-
-Every preceding file and the directory namespace are still rechecked. A new
-traversal, changed primary source, PID, directory or file discards the hints.
-Oversized prefixes continue via fresh parsing. These hints do not bound the
-whole traversal's seen set, repeated file checks, source reads or YAML work.
+right is cached. A hinted prefix is
+used only to skip records before the current inspection offset, after checking
+every preceding file and the directory namespace. Selected files are read and
+parsed again. A new traversal, changed primary source, PID, directory or file
+discards the hints. Oversized prefixes continue via fresh parsing.
 """
 from __future__ import annotations
 
@@ -74,8 +70,6 @@ class SidecarPrefix:
     def __init__(self):
         self.scope = self.directory = self.revision = None
         self.files = []
-        self.partial = None
-        self.generation = object()
         self.id_count = self.id_bytes = 0
         self.extend = True
         self.name_window = ()
@@ -117,8 +111,6 @@ class SidecarPrefix:
                     or _directory_stamp(self.directory) != self.revision
                     or any(_file_stamp(self.directory / name) != identity
                            for name, identity, _ in self.files)
-                    or (self.partial is not None and
-                        _file_stamp(self.directory / self.partial[0]) != self.partial[1])
                     or _directory_stamp(self.directory) != self.revision):
                 raise ValueError("sidecar_prefix_changed")
         except (OSError, ValueError):
@@ -163,49 +155,13 @@ class SidecarPrefix:
                 except (OSError, ValueError):
                     before = None
                 text = read_text(path)
-                generation = self.generation
-                cached = ()
-                if self.partial is not None:
-                    prior_name, identity, prior_ids = self.partial
-                    if (text and prior_name == name and identity == before
-                            and len(prior_ids) <= remaining
-                            and _file_stamp(path) == identity):
-                        cached = prior_ids
-                    else:
-                        self.partial = None
-                ids = list(cached)
-                consumed = 0
-                complete = False
-                try:
-                    seen.update(cached)
-                    for idea_id in cached:
-                        remaining = max(0, remaining - 1)
-                        yield idea_id, None
-                        consumed += 1
-                    for idea_id, idea in _iter_sidecar_text(text, seen):
-                        ids.append(idea_id)
-                        remaining = max(0, remaining - 1)
-                        yield idea_id, idea
-                        consumed += 1
-                    complete = True
-                finally:
-                    # The lookahead record is yielded but never resumed. Only
-                    # records actually consumed by the page enter the hint.
-                    # clear() before stream.close() must not resurrect state.
-                    if not complete and self.generation is generation:
-                        self.partial = None
-                        if consumed and self.extend and text and before is not None:
-                            prefix = tuple(ids[:consumed])
-                            amount = sum(len(key.encode()) for key in prefix)
-                            if (len(self.files) < MAX_FILES
-                                    and self.id_count + len(prefix) <= MAX_IDS
-                                    and self.id_bytes + amount <= MAX_ID_BYTES):
-                                if _file_stamp(path) != before:
-                                    raise ValueError("sidecar_partial_file_changed")
-                                self.partial = (name, before, prefix)
-                            else:
-                                self.extend = False
-                self.partial = None
+                ids = []
+                for idea_id, idea in _iter_sidecar_text(text, seen):
+                    ids.append(idea_id)
+                    remaining = max(0, remaining - 1)
+                    yield idea_id, idea
+                # A partially yielded file never reaches this publication.
+                # Empty/error reads do not authorize a cached empty prefix.
                 amount = sum(len(key.encode()) for key in ids)
                 if (not self.extend or not text or before is None
                         or len(self.files) >= MAX_FILES

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="2" time="4.118" timestamp="2026-09-15T10:40:07.259278+00:00" hostname="a100-41"><testcase classname="tests.test_sidecar_partial_prefix" name="test_partial_resume_does_not_reparse_consumed_yaml" time="2.542"><failure message="assert [0] == [128]&#10;  &#10;  At index 0 diff: 0 != 128&#10;  Use -v to get more diff">engine = (&lt;orze.engine.orchestrator.Orze object at 0x14db78e6ea40&gt;, {'ideas_file': '/tmp/ospp-r/test_partial_resume_does_not_r0...ospp-r/test_partial_resume_does_not_r0/.orze', ...}, PosixPath('/tmp/ospp-r/test_partial_resume_does_not_r0/ideas.md'))
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x14db79be0130&gt;
+
+    def test_partial_resume_does_not_reparse_consumed_yaml(engine, monkeypatch):
+        instance, cfg, source = engine
+        populate(source)
+        idea_ingress.ingest_ideas_source(instance, cfg)
+        calls = []
+        original = sidecar_prefix._iter_sidecar_text
+        def observe(text, seen):
+            calls.append(len(seen))
+            yield from original(text, seen)
+        monkeypatch.setattr(sidecar_prefix, "_iter_sidecar_text", observe)
+        raw, inserted = idea_ingress.ingest_ideas_source(instance, cfg)
+&gt;       assert calls == [128]
+E       assert [0] == [128]
+E         
+E         At index 0 diff: 0 != 128
+E         Use -v to get more diff
+
+tests/test_sidecar_partial_prefix.py:25: AssertionError</failure></testcase><testcase classname="tests.test_sidecar_partial_prefix" name="test_read_failure_does_not_grant_precedence_to_cached_ids" time="1.302" /></testsuite></testsuites>
