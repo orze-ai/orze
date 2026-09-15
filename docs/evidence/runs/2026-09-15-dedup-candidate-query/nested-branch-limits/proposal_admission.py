@@ -24,7 +24,6 @@ no transaction supplied by the caller is committed or rolled back.
 from __future__ import annotations
 
 import hashlib
-from heapq import merge
 import os
 import re
 import socket
@@ -77,28 +76,26 @@ def _dedup_owner(connection, prepared):
     )
     parameters = (_MAX_CONFIG_BYTES, *_ADMITTED_STATUSES,
                   prepared["kind"], prepared["kind"], prepared["config_hash"])
-    # Both admission entries hold the same writer transaction across these
-    # reads. Each group uses its existing index; no snapshot/cache is reused.
-    # A matching hash with absent source identity belongs only in the first.
-    # Share the capacity+1 allowance, rejecting overflow before qualifying any
-    # record. Below capacity both groups are complete, so merging their rowid
-    # order preserves the original first-owner and unavailable-record policy.
+    # Keep one current statement, using the existing hash and missing-identity
+    # indexes independently. Exclude matching hashes from the second branch:
+    # a row with a matching hash and absent source identity is one candidate.
+    # The global order/limit preserves first-owner and capacity refusal policy.
+    # Each branch only needs its own first capacity+1 rows to contribute the
+    # global first capacity+1. Do not merge every matching historical payload.
     limit = _MAX_DEDUP_CANDIDATES + 1
     rows = connection.execute(
-        candidate + "AND config_hash=? ORDER BY candidate_order LIMIT ?",
-        (*parameters, limit),
+        "SELECT idea_id, config FROM (SELECT * FROM ("
+        + candidate + "AND config_hash=? ORDER BY candidate_order LIMIT ?) "
+        "UNION ALL SELECT * FROM ("
+        + candidate + "AND (config_hash IS NULL OR config_source_sha256 IS NULL) "
+        "AND (config_hash IS NULL OR config_hash != ?) "
+        "ORDER BY candidate_order LIMIT ?)) "
+        "ORDER BY candidate_order LIMIT ?",
+        (*parameters, limit, *parameters, limit, limit),
     ).fetchall()
     if len(rows) > _MAX_DEDUP_CANDIDATES:
         raise _Rejected("proposal_dedup_capacity")
-    missing = connection.execute(
-        candidate + "AND (config_hash IS NULL OR config_source_sha256 IS NULL) "
-        "AND (config_hash IS NULL OR config_hash != ?) "
-        "ORDER BY candidate_order LIMIT ?",
-        (*parameters, limit - len(rows)),
-    ).fetchall()
-    if len(rows) + len(missing) > _MAX_DEDUP_CANDIDATES:
-        raise _Rejected("proposal_dedup_capacity")
-    for row in merge(rows, missing, key=lambda row: row["candidate_order"]):
+    for row in rows:
         if row["config"] is None:
             raise _Rejected("proposal_dedup_config_unavailable")
         # Preparation has already parsed and hashed this exact configuration;
