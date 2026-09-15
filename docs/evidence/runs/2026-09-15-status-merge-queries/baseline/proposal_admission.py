@@ -63,36 +63,20 @@ def _result(prepared, status, reason, **extra):
     return {"status": status, "reason": reason, "idea_id": prepared["idea_id"], **extra}
 
 
-def _candidate_rows(connection, prepared, predicate, limit):
-    """Read one current group in rowid order with a single global limit.
-
-    The four NOCASE statuses are disjoint. Their indexed rowid streams can be
-    merged before LIMIT without sorting the entire group's config payloads.
-    Optional index absence changes cost, not rows or transaction ownership.
-    ``predicate`` is one of the two fixed SQL fragments in _dedup_owner.
-    """
-    candidate = (
-        "SELECT rowid AS candidate_order, idea_id, CASE WHEN typeof(config)='text' "
-        "AND length(CAST(config AS BLOB)) <= ? THEN config ELSE NULL END AS config "
-        "FROM ideas WHERE status COLLATE NOCASE = ? "
-        "AND ((? = 'native_cpu_action' AND kind = 'native_cpu_action') "
-        "OR (? != 'native_cpu_action' AND kind != 'native_cpu_action')) "
-    )
-    parameters = []
-    for status in _ADMITTED_STATUSES:
-        parameters.extend((_MAX_CONFIG_BYTES, status, prepared["kind"],
-                           prepared["kind"], prepared["config_hash"]))
-    return connection.execute(
-        " UNION ALL ".join(candidate + predicate for _ in _ADMITTED_STATUSES)
-        + " ORDER BY candidate_order LIMIT ?", (*parameters, limit),
-    ).fetchall()
-
-
 def _dedup_owner(connection, prepared):
     # Native config-update triggers invalidate derived hashes. Read their null
     # entries in this transaction without calling the repair API (which commits).
     # Check matching cached rows against actual YAML as well, so stale matching
     # hashes cannot authorize a false duplicate. Do not migrate/cache old rows.
+    candidate = (
+        "SELECT rowid AS candidate_order, idea_id, CASE WHEN typeof(config)='text' "
+        "AND length(CAST(config AS BLOB)) <= ? THEN config ELSE NULL END AS config "
+        "FROM ideas WHERE status COLLATE NOCASE IN (?, ?, ?, ?) "
+        "AND ((? = 'native_cpu_action' AND kind = 'native_cpu_action') "
+        "OR (? != 'native_cpu_action' AND kind != 'native_cpu_action')) "
+    )
+    parameters = (_MAX_CONFIG_BYTES, *_ADMITTED_STATUSES,
+                  prepared["kind"], prepared["kind"], prepared["config_hash"])
     # Both admission entries hold the same writer transaction across these
     # reads. Each group uses its existing index; no snapshot/cache is reused.
     # A matching hash with absent source identity belongs only in the first.
@@ -100,14 +84,18 @@ def _dedup_owner(connection, prepared):
     # record. Below capacity both groups are complete, so merging their rowid
     # order preserves the original first-owner and unavailable-record policy.
     limit = _MAX_DEDUP_CANDIDATES + 1
-    rows = _candidate_rows(connection, prepared, "AND config_hash=?", limit)
+    rows = connection.execute(
+        candidate + "AND config_hash=? ORDER BY candidate_order LIMIT ?",
+        (*parameters, limit),
+    ).fetchall()
     if len(rows) > _MAX_DEDUP_CANDIDATES:
         raise _Rejected("proposal_dedup_capacity")
-    missing = _candidate_rows(
-        connection, prepared,
-        "AND (config_hash IS NULL OR config_source_sha256 IS NULL) "
-        "AND (config_hash IS NULL OR config_hash != ?)", limit - len(rows),
-    )
+    missing = connection.execute(
+        candidate + "AND (config_hash IS NULL OR config_source_sha256 IS NULL) "
+        "AND (config_hash IS NULL OR config_hash != ?) "
+        "ORDER BY candidate_order LIMIT ?",
+        (*parameters, limit - len(rows)),
+    ).fetchall()
     if len(rows) + len(missing) > _MAX_DEDUP_CANDIDATES:
         raise _Rejected("proposal_dedup_capacity")
     for row in merge(rows, missing, key=lambda row: row["candidate_order"]):

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="21" time="3.316" timestamp="2026-09-15T08:39:47.200685+00:00" hostname="a100-41"><testcase classname="tests.test_status_merge_queries" name="test_first_source_batch_does_not_require_sorting_whole_dense_history" time="0.236"><failure message="AssertionError: first_source_batch_sorts_dense_history&#10;assert 40600 &lt; 20000">tests/test_status_merge_queries.py:59: in test_first_source_batch_does_not_require_sorting_whole_dense_history
+    assert lake._repair_admitted_config_hashes() == 5000
+src/orze/idea_lake.py:1534: in _repair_admitted_config_hashes
+    return repair_admitted_identities(
+src/orze/core/config_identity_repair.py:112: in repair_admitted_identities
+    retry(lambda: _copy_snapshot(lake.conn, stage))
+src/orze/idea_lake.py:350: in _retry_on_busy
+    return func()
+src/orze/core/config_identity_repair.py:112: in &lt;lambda&gt;
+    retry(lambda: _copy_snapshot(lake.conn, stage))
+src/orze/core/config_identity_repair.py:46: in _copy_snapshot
+    rows = cursor.fetchmany(BATCH_ROWS)
+tests/test_status_merge_queries.py:39: in fetchmany
+    assert steps[0] &lt; 20000, "first_source_batch_sorts_dense_history"
+E   AssertionError: first_source_batch_sorts_dense_history
+E   assert 40600 &lt; 20000</failure></testcase><testcase classname="tests.test_status_merge_queries" name="test_capacity_probe_can_produce_first_row_without_sorting_all_candidates[matching]" time="0.169"><failure message="AssertionError: candidate_first_row_sorts_dense_history&#10;assert 50400 &lt; 20000">tests/test_status_merge_queries.py:111: in test_capacity_probe_can_produce_first_row_without_sorting_all_candidates
+    result = admit_proposal(lake, prepared)
+src/orze/core/proposal_admission.py:279: in admit_proposal
+    result = _admit_rows(lake, prepared)
+src/orze/core/proposal_admission.py:208: in _admit_rows
+    owner = _dedup_owner(connection, prepared)
+src/orze/core/proposal_admission.py:87: in _dedup_owner
+    rows = connection.execute(
+tests/test_status_merge_queries.py:100: in execute
+    assert steps[0] &lt; 20000, "candidate_first_row_sorts_dense_history"
+E   AssertionError: candidate_first_row_sorts_dense_history
+E   assert 50400 &lt; 20000</failure></testcase><testcase classname="tests.test_status_merge_queries" name="test_capacity_probe_can_produce_first_row_without_sorting_all_candidates[missing]" time="0.184"><failure message="AssertionError: candidate_first_row_sorts_dense_history&#10;assert 54700 &lt; 20000">tests/test_status_merge_queries.py:111: in test_capacity_probe_can_produce_first_row_without_sorting_all_candidates
+    result = admit_proposal(lake, prepared)
+src/orze/core/proposal_admission.py:279: in admit_proposal
+    result = _admit_rows(lake, prepared)
+src/orze/core/proposal_admission.py:208: in _admit_rows
+    owner = _dedup_owner(connection, prepared)
+src/orze/core/proposal_admission.py:93: in _dedup_owner
+    missing = connection.execute(
+tests/test_status_merge_queries.py:100: in execute
+    assert steps[0] &lt; 20000, "candidate_first_row_sorts_dense_history"
+E   AssertionError: candidate_first_row_sorts_dense_history
+E   assert 54700 &lt; 20000</failure></testcase><testcase classname="tests.test_status_merge_queries" name="test_repair_keeps_rowid_order_status_and_missing_filters_with_gaps[False]" time="0.216" /><testcase classname="tests.test_status_merge_queries" name="test_repair_keeps_rowid_order_status_and_missing_filters_with_gaps[True]" time="0.211" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[False-False-queued]" time="0.123" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[False-False-PENDING]" time="0.124" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[False-False-running]" time="0.123" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[False-False-COMPLETED]" time="0.124" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[False-True-queued]" time="0.138" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[False-True-PENDING]" time="0.123" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[False-True-running]" time="0.123" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[False-True-COMPLETED]" time="0.123" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[True-False-queued]" time="0.127" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[True-False-PENDING]" time="0.131" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[True-False-running]" time="0.132" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[True-False-COMPLETED]" time="0.126" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[True-True-queued]" time="0.127" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[True-True-PENDING]" time="0.126" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[True-True-running]" time="0.126" /><testcase classname="tests.test_status_merge_queries" name="test_first_owner_and_unavailable_precedence_cross_status_and_hash_groups[True-True-COMPLETED]" time="0.127" /></testsuite></testsuites>

@@ -30,16 +30,6 @@ STAGE_CACHE_KIB = 512
 _STATUSES = ("queued", "pending", "running", "completed")
 _MISSING = ("FROM ideas WHERE status COLLATE NOCASE IN (?, ?, ?, ?) "
             "AND (config_hash IS NULL OR config_source_sha256 IS NULL) ")
-# Each disjoint status can use the existing partial index in rowid order.
-# One compound SELECT preserves the source snapshot and global order while
-# allowing SQLite to merge indexed streams instead of sorting config payloads.
-# An absent optional index may change the plan, never the source semantics.
-_ORDERED_MISSING = " UNION ALL ".join(
-    "SELECT idea_id, config, rowid AS source_rowid FROM ideas "
-    "WHERE status COLLATE NOCASE = ? "
-    "AND (config_hash IS NULL OR config_source_sha256 IS NULL)"
-    for _ in _STATUSES
-) + " ORDER BY source_rowid"
 
 
 def _has_missing(connection):
@@ -51,7 +41,7 @@ def _copy_snapshot(connection, stage):
     """Keep the source SELECT consistent; release it before parsing or syncing."""
     try:
         stage.execute("DELETE FROM inputs")
-        with closing(connection.execute(_ORDERED_MISSING, _STATUSES)) as cursor:
+        with closing(connection.execute("SELECT idea_id, config " + _MISSING + "ORDER BY rowid", _STATUSES)) as cursor:
             while True:
                 rows = cursor.fetchmany(BATCH_ROWS)
                 if not rows:

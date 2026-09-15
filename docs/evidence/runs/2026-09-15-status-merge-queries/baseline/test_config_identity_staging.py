@@ -70,7 +70,7 @@ class SourceConnection:
 
     def execute(self, sql, *args):
         cursor = self.connection.execute(sql, *args)
-        if " ".join(sql.split()).startswith("SELECT idea_id, config") and "FROM ideas" in sql:
+        if "SELECT idea_id, config FROM ideas" in " ".join(sql.split()):
             return SourceCursor(cursor, self)
         return cursor
 
