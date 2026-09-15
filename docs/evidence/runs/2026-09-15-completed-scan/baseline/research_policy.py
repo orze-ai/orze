@@ -302,25 +302,9 @@ def validate_idea_against_research_policy(
         # Implicit Cartesian expansion would turn one receipt-bound proposal
         # into unbound ``-ht-N`` executions and silently exceed its declared
         # experiment count. Contract-governed batches must spell out each arm.
-        if idea_cfg.get("kind") == "native_cpu_action":
-            # Native tasks enter the CPU queue without Cartesian expansion.
-            # Their argv, inline inputs and source references are data for one
-            # task. A kind label alone must not exempt arbitrary sweep configs.
-            try:
-                if set(idea_cfg) == {"kind", "action"}:
-                    from orze.core.cpu_action_contract import validate_action
-                    validate_action(idea_cfg["action"])
-                elif set(idea_cfg) == {"kind", "domain_request"}:
-                    from orze.core.research_interfaces import validate_domain_request
-                    validate_domain_request(idea_cfg["domain_request"])
-                else:
-                    return "batch_decision_contract_native_cpu_config_invalid"
-            except (ValueError, TypeError, OverflowError, RecursionError):
-                return "batch_decision_contract_native_cpu_config_invalid"
-        else:
-            from orze.core.ideas import config_has_implicit_sweep
-            if config_has_implicit_sweep(idea_cfg):
-                return "batch_decision_contract_implicit_sweep_forbidden"
+        from orze.core.ideas import config_has_implicit_sweep
+        if config_has_implicit_sweep(idea_cfg):
+            return "batch_decision_contract_implicit_sweep_forbidden"
     if not single_model_required(cfg):
         return None
 

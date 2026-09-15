@@ -35,6 +35,8 @@
 
 最新候选索引片：Core 短路径一次全量 4,840 通过、7 可选跳过、2 既有 warning；Pro 全量 1,066、配对 31、定向 138 项通过。保留首轮路径过长／中断影响的失败、两版未采用 SQL 的退化、最终 256 次 admission 差分与真实 CPU 重启重放。两轮 5,000 条稀疏历史完整 ingress 批次约 425→113／407→98 ms；小规模与 1,000 条密集候选仍有轻微退化。见[候选索引结果](2026-09-15-dedup-candidate-query-results.zh-CN.md)。
 
+最新全局基线／CPU 合约片：Core 一次最终全量 4,893 通过、7 可选跳过、2 既有 warning；Pro 全量 1,074、配对 31、Core 定向 172／Pro 定向 69 通过，输入冻结。原有 513 个 Core／141 个 Pro 测试文件保持原件；机械核验关联全部版本、27,852 个归档文件、两个带合约 CPU 执行及重放，另两个无合约对照分别保留。见[全局基线与 CPU 合约结果](2026-09-15-completed-scan-results.zh-CN.md)。
+
 ## P1：降低长历史开销
 
 - [x] 分别量化预算校验中的重复 JSON 解析／规范化，以及一次 Policy 只读决策中的重复全历史审计。
@@ -58,7 +60,9 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 ## P1：Pro 长程合格证据检索与上下文容量
 
 - [x] 以显式 `research_evidence.version: 1` 将分页／定向检索接入实际 research CLI／consumer；普通分页路径不先 qualification 全历史再截断。
-- [ ] 继续治理其他 Pro consumer，以及 prospective decision-contract 全局最佳基线等仍需完整 qualification 的调用；不能用页面最佳值降低原基线。
+- [x] prospective decision-contract 全局最佳基线与 scalar evolution 调用分批读取生命周期，只保留 best/count；仍 qualification 全部候选，家族统计保留完整映射，不用页面最佳替代全局值。
+- [x] 修复真实 CLI 暴露的 decision contract／CPU command argv 被误判为 implicit sweep 的兼容问题；严格 action／domain envelope 校验，保留真正 sweep 拒绝及执行授权。原失败 harness 重跑完成两次带合约 CPU 执行、结算及重启重放。
+- [ ] 继续治理其他 Pro consumer、全历史 qualification 耗时及家族统计映射。聚合模式内存下降不代表时间改善；首版慢约 20%，最终已改为 ID 顺序读取，密集完成历史接近旧版，小／稀疏历史仍更慢。
 - [x] 分页块保留完整报告 Objective、比较／覆盖范围、策略／来源版本与当前 attempt 引用；invalid／unknown、原生 observation 协议和不可用记录不回退为 valid。
 - [ ] 设计 evidence／proposal／预算联合 snapshot 的总载荷控制，明确大记录、跨页遗漏和不可用证据的处理，不靠无限增加 prompt 上限。
 - [x] 用确定性离线 provider 通过真实 consumer 验证关键后页、taint／反例、来源变化、定向选择、请求／token 额度及实际 CPU 提案执行；枚举结束不代表收敛。
@@ -67,6 +71,8 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 验收：真实策略能找到并使用关键历史证据，仍保持资格与来源校验。Core 已有分页不等于 Pro 消费链已经完成。
 
 最新 Pro 分页结果：显式协议已进入实际研究消费链，并修复 CLI 的证据／谱系数据库作用域不一致。两轮 5,000 条合成历史旧全量排序约 3.46／3.44 秒，新首个 16 候选页约 32 ms，新完整遍历约 9.56／9.51 秒。首视图信息量不同，完整遍历更慢；模型调用与科研收益仍需单独验证。见[Pro 分页结果及未关闭边界](2026-09-15-pro-research-paging-results.zh-CN.md)。
+
+最新全局基线聚合片：最终 5,000 个完成候选 Python traced peak 约 1.61 MB→69–74 KB，完整扫描约 659–660→660–663 ms；5,000 条历史仅一个完成项时约 1.14→3.14 ms。已修复 CPU command／decision-contract 拒绝，两次真实带合约 worker 完成关闭、结算及重启重放。首版约慢 20% 的查询计划、产品拒绝及普通提案／无合约对照均保留。见[全局基线聚合与 CPU 合约结果](2026-09-15-completed-scan-results.zh-CN.md)。
 
 ## P2：持久研究摘要与记忆
 
@@ -105,6 +111,8 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 保留原始记录，不覆盖失败，不弱化业务断言；元数据测试与真实执行、局部性能与研究收益分别报告。涉及真实账户、费用、设备或现有服务的变更，先明确必要授权。
 
 ## 参考证据
+
+- [本次全局基线分批聚合、内存收益与时间退化](2026-09-15-completed-scan-results.zh-CN.md)
 
 - [本次候选索引读取、未采用方案与最终对照](2026-09-15-dedup-candidate-query-results.zh-CN.md)
 - [本次当前相同配置解析复用与保留的负对照](2026-09-15-dedup-exact-config-results.zh-CN.md)
