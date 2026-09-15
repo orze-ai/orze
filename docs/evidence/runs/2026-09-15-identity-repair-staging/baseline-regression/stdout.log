@@ -1,0 +1,17 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_source_rows_are_bounded_but_main_write_is_one_atomic_transaction _____
+tests/test_config_identity_staging.py:84: in test_source_rows_are_bounded_but_main_write_is_one_atomic_transaction
+    assert lake._repair_admitted_config_hashes() == 600
+docs/evidence/runs/2026-09-15-identity-repair-staging/baseline/idea_lake.py:1544: in _repair_admitted_config_hashes
+    rows = _retry_on_busy(_read_missing)
+docs/evidence/runs/2026-09-15-identity-repair-staging/baseline/idea_lake.py:350: in _retry_on_busy
+    return func()
+docs/evidence/runs/2026-09-15-identity-repair-staging/baseline/idea_lake.py:1542: in _read_missing
+    ).fetchall()
+tests/test_config_identity_staging.py:45: in fetchall
+    raise AssertionError("unbounded_legacy_source_read")
+E   AssertionError: unbounded_legacy_source_read
+=========================== short test summary info ============================
+FAILED tests/test_config_identity_staging.py::test_source_rows_are_bounded_but_main_write_is_one_atomic_transaction
+1 failed in 0.44s

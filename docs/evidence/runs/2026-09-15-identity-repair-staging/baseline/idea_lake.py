@@ -1529,21 +1529,77 @@ class IdeaLake:
         return row is not None
 
     def _repair_admitted_config_hashes(self) -> int:
-        """Stage legacy identities in bounded collections; atomically compare/write."""
-        from orze.core.config_identity_repair import repair_admitted_identities
-        return repair_admitted_identities(
-            self, retry=_retry_on_busy, hasher=hash_config, logger=logger,
-        )
+        """Backfill only missing admitted identities and return repair count."""
+        statuses = ("queued", "pending", "running", "completed")
+
+        def _read_missing():
+            return self.conn.execute(
+                "SELECT idea_id, config FROM ideas "
+                "WHERE status COLLATE NOCASE IN (?, ?, ?, ?) "
+                "AND (config_hash IS NULL OR config_source_sha256 IS NULL) "
+                "ORDER BY rowid",
+                statuses,
+            ).fetchall()
+
+        rows = _retry_on_busy(_read_missing)
+        repairs = []
+        for row in rows:
+            idea_id = row["idea_id"]
+            config_yaml = row["config"] or ""
+            source_sha256 = hashlib.sha256(
+                config_yaml.encode("utf-8")
+            ).hexdigest()
+            try:
+                config_obj = yaml.safe_load(config_yaml) or {}
+            except yaml.YAMLError:
+                logger.warning(
+                    "Cannot derive config identity for %s: invalid YAML",
+                    idea_id,
+                )
+                continue
+            if not isinstance(config_obj, dict):
+                logger.warning(
+                    "Cannot derive config identity for %s: config is not a mapping",
+                    idea_id,
+                )
+                continue
+            repairs.append((
+                hash_config(config_obj), source_sha256, idea_id, config_yaml,
+            ))
+
+        if repairs:
+            def _repair_rows():
+                self.conn.execute("BEGIN IMMEDIATE")
+                try:
+                    for identity, source_sha256, idea_id, config_yaml in repairs:
+                        # Compare the source text so a concurrent config edit
+                        # cannot receive an identity derived from older bytes.
+                        self.conn.execute(
+                            "UPDATE ideas SET config_hash = ?, "
+                            "config_source_sha256 = ? "
+                            "WHERE idea_id = ? AND config = ?",
+                            (identity, source_sha256, idea_id, config_yaml),
+                        )
+                    self.conn.commit()
+                except Exception:
+                    self.conn.rollback()
+                    raise
+
+            _retry_on_busy(_repair_rows)
+            logger.info(
+                "Backfilled %d admitted config identities", len(repairs)
+            )
+        return len(repairs)
 
     def find_admitted_config_hashes(
         self, identities: Iterable[str],
     ) -> Dict[str, str]:
         """Resolve only proposal identities needed by the current ingest batch.
 
-        An empty proposal batch performs no SQL. The final lookup uses the
-        status/config-hash index, but legacy preparation can still read every
-        missing identity. Preparation uses bounded row collections and private
-        disk staging; the config-update trigger makes edits re-enter that path.
+        This is O(batch), not O(lake): an empty proposal batch performs no SQL;
+        a non-empty batch uses the status/config-hash index. Legacy identities
+        are backfilled once, and the config-update trigger makes later edits
+        re-enter that repair path.
         """
         requested = list(dict.fromkeys(
             identity for identity in identities
