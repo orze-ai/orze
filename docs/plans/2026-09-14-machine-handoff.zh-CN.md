@@ -57,6 +57,8 @@
 
 最新失败名称窗口片：Core 一次全量 5,021 通过、7 可选跳过、2 既有 warning；Pro 1,180、配对 31，输入冻结。52,685 个归档文件保留双方旧成本失败、观察器失误、50 对完整差分和两个回退边界的真实 CPU 动作／回放。两轮 20,000 目录完整演进上下文约快 10%，读取量不变；小规模与 5,000 目录回退研究路径有退化，正常字符串驻留造成的峰值上升保留。见[失败名称窗口结果](2026-09-15-failure-name-window-results.zh-CN.md)。
 
+最新家族标签片：Core 一次全量 5,046 通过、7 可选跳过、2 既有 warning；Pro 1,194、配对 31，输入冻结。69,801 个归档文件保留旧成本／兼容失败、探索／观察器失误、完整输出和五个实际 CPU 动作；最终两个场景验证不合格结果改变家族选择及重放。5,000 条密集家族统计 Python peak 约 2.26→1.05 MB，完整演进上下文两轮慢约 47–53 ms；稀疏历史略快，guard／完整上下文并非每次降峰，正常驻留波动保留。见[合格家族标签分页结果](2026-09-15-family-label-pages-results.zh-CN.md)。
+
 ## P1：降低长历史开销
 
 - [x] 分别量化预算校验中的重复 JSON 解析／规范化，以及一次 Policy 只读决策中的重复全历史审计。
@@ -87,11 +89,13 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 ## P1：Pro 长程合格证据检索与上下文容量
 
 - [x] 以显式 `research_evidence.version: 1` 将分页／定向检索接入实际 research CLI／consumer；普通分页路径不先 qualification 全历史再截断。
-- [x] prospective decision-contract 全局最佳基线与 scalar evolution 调用分批读取生命周期，只保留 best/count；仍 qualification 全部候选，家族统计保留完整映射，不用页面最佳替代全局值。
+- [x] prospective decision-contract 全局最佳基线与 scalar evolution 调用分批读取生命周期，只保留 best/count；仍 qualification 全部候选，家族统计保留逐条合格值，标签分页见后项，不用页面最佳替代全局值。
 - [x] 修复真实 CLI 暴露的 decision contract／CPU command argv 被误判为 implicit sweep 的兼容问题；严格 action／domain envelope 校验，保留真正 sweep 拒绝及执行授权。原失败 harness 重跑完成两次带合约 CPU 执行、结算及重启重放。
 - [x] 代码演进上下文分批读取生命周期，只保留完整 Objective 排序前十；每个候选仍核验当前资格与来源身份，扫描期间变化丢弃全部临时排名。公共全量入口、家族统计和其他消费者保留；完整上下文峰值下降，耗时无稳定改善，读取略增。
 - [x] Core 近期失败与 Pro 模式分析在普通 1–4,096 整数上限下只保留末尾名称，原升序读取、特殊上限及晚期枚举失败行为保留；实际研究的 200 条失败为空时仍回退至 2,000 条模式窗口。目录仍全部枚举，大／特殊上限不受新容量限制。
-- [ ] 继续治理其他 Pro consumer、全历史 qualification 耗时及家族统计映射。聚合模式内存下降不代表时间改善；首版慢约 20%，最终已改为 ID 顺序读取，密集完成历史接近旧版，小／稀疏历史仍更慢。
+- [x] 家族统计与失衡 guard 仅按当前合格 ID 每页查询最多 128 个标签，完整退出才发布；保留全局身份结构检查、原求和／并列顺序、特殊生命周期与标签规范化，缺失／变化拒绝整个结果。旧 Core 缺少新 API 时明确不可用；公共全量入口保留。
+- [ ] 继续治理其他 Pro consumer、全历史 qualification 耗时，以及家族聚合保留的合格 ID／值、分组列表与排序。聚合模式内存下降不代表时间改善；首版慢约 20%，最终已改为 ID 顺序读取，密集完成历史接近旧版，小／稀疏历史仍更慢。
+- [ ] 当前 research 配置维度分析即使收到有限的合格页面，仍读取全库 config_summary；继续按实际样本范围限制元数据读取，保留排序、事务一致性与旧输入兼容。
 - [x] 分页块保留完整报告 Objective、比较／覆盖范围、策略／来源版本与当前 attempt 引用；invalid／unknown、原生 observation 协议和不可用记录不回退为 valid。
 - [x] 完成当前 research v2 的 evidence／proposal／预算联合 snapshot 总载荷控制，明确大记录、跨页遗漏和不可用证据处理，不增加 prompt 上限。
 - [x] 4–32 KiB 必需块包含 CPU／请求、角色 attempts／token／费用与 provider token 预留及共同失效。缺失 baseline／角色、未配置 envelope 或不适用执行组明确标记；fallback 失败不退款，provider 支出位于角色预留 envelope 内，不重复计费。完整历史审计与上游读取成本仍另列。
@@ -141,6 +145,8 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 保留原始记录，不覆盖失败，不弱化业务断言；元数据测试与真实执行、局部性能与研究收益分别报告。涉及真实账户、费用、设备或现有服务的变更，先明确必要授权。
 
 ## 参考证据
+
+- [本次家族标签分页、完整上下文负对照与实际选择](2026-09-15-family-label-pages-results.zh-CN.md)
 
 - [本次失败名称窗口、实际回退与负成本对照](2026-09-15-failure-name-window-results.zh-CN.md)
 

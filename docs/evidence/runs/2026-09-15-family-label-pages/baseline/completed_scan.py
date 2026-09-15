@@ -1,18 +1,15 @@
-"""Bounded lifecycle enumeration and requested family-label reads.
+"""Bounded lifecycle enumeration for a complete report aggregate.
 
 CALLING SPEC:
     with CompletedIdeaScan(db_path, page_size=128) as scan:
         for page in scan.pages(): ... qualify each ID; retain an aggregate ...
-    Alternatively, iterate scan.family_pages(frozenset(ids)) for ordered
-    mappings of requested, lifecycle-complete family labels.
-    Consume either aggregate only AFTER normal context exit. A peer commit,
+    Consume the aggregate only AFTER normal context exit. A peer commit,
     schema/path change or reader error invalidates the whole scan. Pages are
     provisional lifecycle candidates, not qualified evidence or execution rights.
 
 Each query releases its read transaction before artifact qualification. Schema
-validation still covers all identities. ID enumeration reads every completed
-candidate; family lookup reads every requested ID and refuses missing labels.
-There is no cached champion or persistent cursor. Temporary page retention is
+validation still covers all identities, and every completed candidate is read;
+there is no cached champion or persistent cursor. Python candidate retention is
 O(page_size); SQLite work and individual ID/artifact sizes are not bounded.
 """
 from __future__ import annotations
@@ -130,58 +127,6 @@ class CompletedIdeaScan:
                 break
         self.verify()
         self._finished = True
-
-    def family_pages(self, idea_ids: frozenset[str]):
-        """Yield requested complete labels in input order, then verify all pages.
-
-        This is an alternative to ``pages()``, not a second pass on one scan.
-        Each mapping is provisional until normal exhausted context exit.
-        Only an immutable ID set is accepted; IDs retain legacy path rules.
-        """
-        from itertools import islice
-        from orze.reporting.evidence import _SAFE_FAMILY_RE
-
-        if self._started:
-            raise CompletedScanUnavailable("authoritative_lifecycle_scan_reused")
-        self._started = True
-        if type(idea_ids) is not frozenset:
-            raise CompletedScanUnavailable("authoritative_lifecycle_idea_ids_invalid")
-        pending = iter(idea_ids)
-        while True:
-            selected = tuple(islice(pending, self._size))
-            if not selected:
-                break
-            if any(not isinstance(key, str) or key in ("", ".", "..")
-                   or Path(key).parts != (key,) for key in selected):
-                raise CompletedScanUnavailable("authoritative_lifecycle_idea_ids_invalid")
-            self.verify()
-            try:
-                self._conn.execute("BEGIN")
-                marks = ",".join("?" for _ in selected)
-                rows = self._conn.execute(
-                    "SELECT i.idea_id, i.approach_family FROM ideas AS i "
-                    "JOIN idea_state AS s ON s.idea_id=i.idea_id "
-                    "WHERE lower(i.status)='completed' "
-                    "AND s.current_state COLLATE BINARY='COMPLETE' AND "
-                    + self._predicate + f" AND i.idea_id IN ({marks})",
-                    selected,
-                ).fetchall()
-            except sqlite3.Error as exc:
-                raise CompletedScanUnavailable("authoritative_lifecycle_database_invalid") from exc
-            finally:
-                if self._conn is not None and self._conn.in_transaction:
-                    self._conn.rollback()
-            self.verify()
-            families = {}
-            for key, raw_family in rows:
-                family = str(raw_family or "other").strip().lower()
-                families[key] = family if _SAFE_FAMILY_RE.fullmatch(family) else "other"
-            if families.keys() != set(selected):
-                raise CompletedScanUnavailable("authoritative_family_evidence_incomplete")
-            yield {key: families[key] for key in selected}
-        self.verify()
-        self._finished = True
-
 
     def close(self):
         if self._conn is not None:
