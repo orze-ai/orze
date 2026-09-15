@@ -53,6 +53,8 @@
 
 最新单文件已消费 ID 片：Core 一次全量 5,005 通过、7 可选跳过、2 既有 warning；Pro 1,152、配对 31、定向 126 通过，输入冻结。26,183 个归档文件保留原件成本失败、原型空读错误与修正、64 对完整 ingress 差分、两个第三页 CPU 动作及回放。5,000 条单文件完整遍历两轮约 17.58→3.81 秒、17.81→3.84 秒，YAML 109,879→10,039；完整读取仍为 40 次，文件身份检查 42→197，Python peak 约 4.24→4.58 MB，独立文件基本持平且有轻微退化。见[单文件已消费 ID 结果](2026-09-15-sidecar-partial-results.zh-CN.md)。
 
+最新 Pro 排名前十片：Core 一次全量 5,005 通过、7 可选跳过、2 既有 warning；Pro 1,163、配对 31、定向 134 通过，输入冻结。26,652 个归档文件保留旧成本失败、产品夹具配置拒绝、64 对完整排名差分、两个真实 CPU worker 及回放。5,000 条完整演进上下文两轮约 4.186→4.190／4.147→4.143 秒，无稳定提速；两次 Python peak 约 7.92→4.63／9.37→3.31 MB，正常驻留波动及读取增加保留。见[排名头部读取结果](2026-09-15-ranked-evidence-head-results.zh-CN.md)。
+
 ## P1：降低长历史开销
 
 - [x] 分别量化预算校验中的重复 JSON 解析／规范化，以及一次 Policy 只读决策中的重复全历史审计。
@@ -85,6 +87,7 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 - [x] 以显式 `research_evidence.version: 1` 将分页／定向检索接入实际 research CLI／consumer；普通分页路径不先 qualification 全历史再截断。
 - [x] prospective decision-contract 全局最佳基线与 scalar evolution 调用分批读取生命周期，只保留 best/count；仍 qualification 全部候选，家族统计保留完整映射，不用页面最佳替代全局值。
 - [x] 修复真实 CLI 暴露的 decision contract／CPU command argv 被误判为 implicit sweep 的兼容问题；严格 action／domain envelope 校验，保留真正 sweep 拒绝及执行授权。原失败 harness 重跑完成两次带合约 CPU 执行、结算及重启重放。
+- [x] 代码演进上下文分批读取生命周期，只保留完整 Objective 排序前十；每个候选仍核验当前资格与来源身份，扫描期间变化丢弃全部临时排名。公共全量入口、家族统计和其他消费者保留；完整上下文峰值下降，耗时无稳定改善，读取略增。
 - [ ] 继续治理其他 Pro consumer、全历史 qualification 耗时及家族统计映射。聚合模式内存下降不代表时间改善；首版慢约 20%，最终已改为 ID 顺序读取，密集完成历史接近旧版，小／稀疏历史仍更慢。
 - [x] 分页块保留完整报告 Objective、比较／覆盖范围、策略／来源版本与当前 attempt 引用；invalid／unknown、原生 observation 协议和不可用记录不回退为 valid。
 - [x] 完成当前 research v2 的 evidence／proposal／预算联合 snapshot 总载荷控制，明确大记录、跨页遗漏和不可用证据处理，不增加 prompt 上限。
@@ -135,6 +138,8 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 保留原始记录，不覆盖失败，不弱化业务断言；元数据测试与真实执行、局部性能与研究收益分别报告。涉及真实账户、费用、设备或现有服务的变更，先明确必要授权。
 
 ## 参考证据
+
+- [本次 Pro 排名头部、完整上下文与运行时分配记录](2026-09-15-ranked-evidence-head-results.zh-CN.md)
 
 - [本次单文件已消费 ID、解析收益与读取／分配代价](2026-09-15-sidecar-partial-results.zh-CN.md)
 
