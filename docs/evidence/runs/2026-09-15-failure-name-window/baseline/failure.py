@@ -624,15 +624,12 @@ def load_recent_failures(results_dir: Path,
                          limit: int = 200) -> _Dict[str, _List[_Dict[str, _Any]]]:
     if not results_dir.exists():
         return {}
-    import heapq
-    # Preserve legacy slicing for large or unusual limits.
-    bounded = type(limit) is int and 0 < limit <= 4096
+    idea_names = []
     try:
         with os.scandir(results_dir) as it:
-            names = (entry.name for entry in it
-                     if entry.is_dir(follow_symlinks=False)
-                     and entry.name.startswith("idea-"))
-            idea_names = heapq.nlargest(limit, names) if bounded else list(names)
+            for entry in it:
+                if entry.is_dir(follow_symlinks=False) and entry.name.startswith("idea-"):
+                    idea_names.append(entry.name)
     except OSError:
         return {}
     idea_names.sort()
