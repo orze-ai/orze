@@ -121,6 +121,8 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 
 最新全局基线聚合片：最终 5,000 个完成候选 Python traced peak 约 1.61 MB→69–74 KB，完整扫描约 659–660→660–663 ms；5,000 条历史仅一个完成项时约 1.14→3.14 ms。已修复 CPU command／decision-contract 拒绝，两次真实带合约 worker 完成关闭、结算及重启重放。首版约慢 20% 的查询计划、产品拒绝及普通提案／无合约对照均保留。见[全局基线聚合与 CPU 合约结果](2026-09-15-completed-scan-results.zh-CN.md)。
 
+家族前 10% 堆选取原型本次暂不采用：40 组选择与 24 组完整消费者输出一致，但 5,000 条密集统计峰值两次均升高，完整上下文未显示稳定收益。与回归重叠的计时只作探索；现有源码保留，4 份归档、24,906 个文件已机械核验。见[家族前十分位负面评估](2026-09-15-family-decile-evaluation.zh-CN.md)。
+
 ## P2：持久研究摘要与记忆
 
 - [ ] 定义有版本、有容量限制、可失效的研究记忆：问题、假设、决策理由、已证实／被反驳／未确认事项及原始来源。
@@ -163,6 +165,7 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 - [本次已有 ID 展示摘要、完整去重保留与实际定向选择](2026-09-15-existing-summary-results.zh-CN.md)
 - [本次默认上下文摘要、数据库作用域修复与实际 HTTP／CPU 选择](2026-09-15-default-summary-results.zh-CN.md)
 - [本次谱系 20 条窗口、完整过滤与实际父节点变化](2026-09-15-genealogy-window-results.zh-CN.md)
+- [家族前 10% 堆选取的未采用评估](2026-09-15-family-decile-evaluation.zh-CN.md)
 
 - [本次家族标签分页、完整上下文负对照与实际选择](2026-09-15-family-label-pages-results.zh-CN.md)
 
