@@ -84,26 +84,17 @@ def _iter_sidecar_ideas(ideas_md_path: str, excluded=(), *, read_text=None):
         yield from _iter_sidecar_text(st, seen)
 
 
-def _sidecar_sections(matches, end):
-    """Keep one following heading to preserve each original raw section end."""
-    previous = None
-    for current in matches:
-        if previous is not None:
-            yield previous, current.start()
-        previous = current
-    if previous is not None:
-        yield previous, end
-
-
 def _iter_sidecar_text(st, seen):
     """Parse one freshly read sidecar with the caller's precedence set."""
     sp = re.compile(rf"^## ({IDEA_ID_PATTERN}):\s*(.+?)$", re.MULTILINE)
-    for sm, se in _sidecar_sections(sp.finditer(st), len(st)):
+    sm_list = list(sp.finditer(st))
+    for j, sm in enumerate(sm_list):
         sid = sm.group(1)
         if sid in seen:
             continue
         stitle = sm.group(2).strip()
         ss = sm.end()
+        se = sm_list[j + 1].start() if j + 1 < len(sm_list) else len(st)
         sraw = st[ss:se]
         spri = re.search(r"\*\*Priority\*\*:\s*(\w+)", sraw)
         sfam = re.search(r"\*\*Approach Family\*\*:\s*(\w+)", sraw)

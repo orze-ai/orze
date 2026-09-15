@@ -1,8 +1,7 @@
 """Bounded, process-local hints for already inspected sidecar prefixes.
 
-Only file identities, first-valid IDs and one namespace-bound name window
-survive a controller tick. No YAML, raw source, admission result or execution
-right is cached. A hinted prefix is
+Only file identities and first-valid IDs survive a controller tick. No YAML,
+raw source, admission result or execution right is cached. A hinted prefix is
 used only to skip records before the current inspection offset, after checking
 every preceding file and the directory namespace. Selected files are read and
 parsed again. A new traversal, changed primary source, PID, directory or file
@@ -72,33 +71,6 @@ class SidecarPrefix:
         self.files = []
         self.id_count = self.id_bytes = 0
         self.extend = True
-        self.name_window = ()
-        self.name_window_after = self.name_window_capacity = None
-
-    def _names(self, directory, *, after=""):
-        """Reuse one ordered name window under this stream's namespace checks.
-
-        Retain at most NAME_WINDOW candidate names, one starting key and the
-        window capacity. A backward seek or changed capacity needs a new scan.
-        Payloads and preceding file identities are still verified separately.
-        """
-        while True:
-            if (self.name_window_capacity != NAME_WINDOW
-                    or self.name_window_after is None or after < self.name_window_after
-                    or (len(self.name_window) == NAME_WINDOW
-                        and after >= self.name_window[-1])):
-                with os.scandir(directory) as entries:
-                    names = heapq.nsmallest(NAME_WINDOW, (entry.name for entry in entries
-                        if entry.name > after and entry.name.endswith(".md")))
-                self.name_window = tuple(names)
-                self.name_window_after = after
-                self.name_window_capacity = NAME_WINDOW
-            for name in self.name_window:
-                if name > after:
-                    yield name
-            if len(self.name_window) < NAME_WINDOW:
-                return
-            after = self.name_window[-1]
 
     def clear(self):
         self.__init__()
@@ -148,7 +120,7 @@ class SidecarPrefix:
                 after = name
                 for idea_id in ids:
                     yield idea_id, None  # Only consumed by islice's skip.
-            for name in self._names(directory, after=after):
+            for name in _names(directory, after=after):
                 path = directory / name
                 try:
                     before = _file_stamp(path)
