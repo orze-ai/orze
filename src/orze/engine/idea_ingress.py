@@ -27,7 +27,7 @@ import uuid
 import yaml
 
 from orze.core.ideas import (
-    IDEA_ID_PATTERN, _iter_sidecar_ideas, parse_ideas_text,
+    IDEA_ID_PATTERN, _iter_sidecar_ideas, _sidecar_sections, parse_ideas_text,
 )
 from orze.core.idea_source_lock import (
     idea_source_lock, idea_source_lock_owned,
@@ -77,10 +77,8 @@ def _read_source(path):
 
 def _blocks(text):
     """Unknown/malformed section headings delimit retained bytes too."""
-    headings = list(_HEADINGS.finditer(text))
     blocks = []
-    for index, heading in enumerate(headings):
-        end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+    for heading, end in _sidecar_sections(_HEADINGS.finditer(text), len(text)):
         match = _IDEA.fullmatch(heading.group())
         blocks.append((match.group(1) if match else None, heading.start(), end))
     return blocks
