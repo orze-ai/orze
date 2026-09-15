@@ -1,0 +1,65 @@
+F..FFFFFFF.                                                              [100%]
+=================================== FAILURES ===================================
+_____ test_each_read_only_page_audits_once_without_reusing_previous_budget _____
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_policy_audit_boundary.py:65: in test_each_read_only_page_audits_once_without_reusing_previous_budget
+    assert len(audits) == 1
+E   AssertionError: assert 2 == 1
+E    +  where 2 = len([{'database': '/tmp/pytest-of-erik/pytest-5098/test_each_read_only_page_audit0/lake.db', 'database_identity': [66306, ...{'resource': 'cpu', 'slots': 1, 'version': 1, 'wall_budget_seconds': 5}, 'directory_identity': [66306, 42362972], ...}])
+---------------------------- Captured stderr setup -----------------------------
+
+orze-pro is distributed via private registry.
+
+To install:
+    1. Get your license key at https://orze.ai/pro
+    2. pip install orze
+    3. export ORZE_PRO_KEY="ORZE-PRO-..."
+    4. orze run  (auto-installs orze-pro)
+
+Or install manually:
+    pip install orze-pro --extra-index-url https://__token__:${ORZE_PRO_KEY}@pypi.orze.ai/simple/
+
+Questions? support@orze.ai
+
+------------------------------ Captured log setup ------------------------------
+ERROR    orze:extensions.py:68 orze-pro license check failed: This is a stub package. Install the real orze-pro via: export ORZE_PRO_KEY='...' && orze run. Roles will not run.
+____ test_change_during_continuation_read_refuses_before_callback[rollback] ____
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_policy_audit_boundary.py:107: in test_change_during_continuation_read_refuses_before_callback
+    assert len(calls) == 1
+E   AssertionError: assert 2 == 1
+E    +  where 2 = len([({'active': False, 'evidence_page': {'mode': 'scan', 'next_cursor': '8e8ce1dd7c3e3c3dff6de97281f762539b73cb0d9346c768..., ...}, {'active_reservations': 0, 'free_slots': 1, 'remaining_wall_seconds': 5.0, 'reserved_wall_seconds': 0.0, ...})])
+_____ test_change_during_continuation_read_refuses_before_callback[schema] _____
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_policy_audit_boundary.py:107: in test_change_during_continuation_read_refuses_before_callback
+    assert len(calls) == 1
+E   AssertionError: assert 2 == 1
+E    +  where 2 = len([({'active': False, 'evidence_page': {'mode': 'scan', 'next_cursor': '23892f90d727da76a356931bcd456cc75e5385e29ea389d0..., ...}, {'active_reservations': 0, 'free_slots': 1, 'remaining_wall_seconds': 5.0, 'reserved_wall_seconds': 0.0, ...})])
+______ test_change_during_continuation_read_refuses_before_callback[stop] ______
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_policy_audit_boundary.py:107: in test_change_during_continuation_read_refuses_before_callback
+    assert len(calls) == 1
+E   AssertionError: assert 2 == 1
+E    +  where 2 = len([({'active': False, 'evidence_page': {'mode': 'scan', 'next_cursor': '80222a8c3d2896352771dcc7f0dc8ecf3a39a0efb616209e..., ...}, {'active_reservations': 0, 'free_slots': 1, 'remaining_wall_seconds': 5.0, 'reserved_wall_seconds': 0.0, ...})])
+______ test_change_during_continuation_read_refuses_before_callback[held] ______
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_policy_audit_boundary.py:105: in test_change_during_continuation_read_refuses_before_callback
+    with pytest.raises(CPUExecutionError):
+E   Failed: DID NOT RAISE CPUExecutionError
+_____ test_change_during_continuation_read_refuses_before_callback[signal] _____
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_policy_audit_boundary.py:105: in test_change_during_continuation_read_refuses_before_callback
+    with pytest.raises(CPUExecutionError):
+E   Failed: DID NOT RAISE CPUExecutionError
+_____ test_change_during_continuation_read_refuses_before_callback[config] _____
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_policy_audit_boundary.py:105: in test_change_during_continuation_read_refuses_before_callback
+    with pytest.raises(CPUExecutionError):
+E   Failed: DID NOT RAISE CPUExecutionError
+____ test_change_during_continuation_read_refuses_before_callback[operator] ____
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_policy_audit_boundary.py:105: in test_change_during_continuation_read_refuses_before_callback
+    with pytest.raises(CPUExecutionError):
+E   Failed: DID NOT RAISE CPUExecutionError
+=========================== short test summary info ============================
+FAILED tests/test_cpu_policy_audit_boundary.py::test_each_read_only_page_audits_once_without_reusing_previous_budget
+FAILED tests/test_cpu_policy_audit_boundary.py::test_change_during_continuation_read_refuses_before_callback[rollback]
+FAILED tests/test_cpu_policy_audit_boundary.py::test_change_during_continuation_read_refuses_before_callback[schema]
+FAILED tests/test_cpu_policy_audit_boundary.py::test_change_during_continuation_read_refuses_before_callback[stop]
+FAILED tests/test_cpu_policy_audit_boundary.py::test_change_during_continuation_read_refuses_before_callback[held]
+FAILED tests/test_cpu_policy_audit_boundary.py::test_change_during_continuation_read_refuses_before_callback[signal]
+FAILED tests/test_cpu_policy_audit_boundary.py::test_change_during_continuation_read_refuses_before_callback[config]
+FAILED tests/test_cpu_policy_audit_boundary.py::test_change_during_continuation_read_refuses_before_callback[operator]
+8 failed, 3 passed in 28.46s

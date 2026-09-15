@@ -129,26 +129,17 @@ def initialize(engine, gpu_ids, cfg, once):
     atexit.register(cleanup)
 
 
-def _require_invocation(engine):
-    """Check live controller/config controls without granting admission."""
+def require_admission(engine):
     from orze.core.control_outcome import require_controller_start_allowed
+    from orze.core.cpu_action_budget import snapshot
     if not engine.running or engine._stop_event.is_set():
         raise CPUExecutionError("execution: controller is stopping")
     if (cpu_execution(engine.cfg) is None or execution_fingerprint(engine.cfg)
             != engine._cpu_cfg_fingerprint):
         raise CPUExecutionError("execution: CPU invocation changed")
     require_controller_start_allowed(engine.results_dir)
-
-
-def require_admission(engine):
-    """Perform a fresh complete budget audit and return its detached view."""
-    from orze.core.cpu_action_budget import snapshot
-    _require_invocation(engine)
-    if engine._cpu_scope is not None:
-        view = snapshot(engine.lake, engine._cpu_scope)
-        if view["stopped"]:
-            raise CPUExecutionError("execution: CPU policy has stopped this scope")
-        return view
+    if engine._cpu_scope is not None and snapshot(engine.lake, engine._cpu_scope)["stopped"]:
+        raise CPUExecutionError("execution: CPU policy has stopped this scope")
 
 
 def start(engine):
@@ -202,6 +193,7 @@ def iteration(engine):
     if len(engine._cpu_handles) >= engine._cpu_execution["slots"]:
         engine._stop_event.wait(0.05)
         return True
+    require_admission(engine)
     interfaces = engine._cpu_interfaces
     paged = interfaces is not None and engine._cpu_policy.declaration["version"] == 2
     proposal_paged = paged and "proposal_page_size" in engine._cpu_policy.declaration
@@ -209,15 +201,11 @@ def iteration(engine):
     proposal_request = getattr(engine, "_cpu_proposal_request", None) if proposal_paged else None
     continuing = evidence_request is not None or proposal_request is not None
     if not continuing:
-        require_admission(engine)
         ingest_ideas_source(engine, engine.cfg)
         queue = engine.lake.get_queue(limit=2000 if interfaces is None else 32)
     else:
-        _require_invocation(engine)
         # A read-only continuation retains only this bounded private queue.
         # Ingress can write the Lake and must not silently restart a scan.
-        # It has no side effects requiring an earlier budget audit: perform
-        # that complete audit below, immediately before the Policy callback.
         queue = copy.deepcopy(engine._cpu_evidence_queue)
     domain_enabled = engine.cfg.get("action_domain") is not None
     for queued in queue:
@@ -284,15 +272,7 @@ def iteration(engine):
         # This private copy is not passed to a trusted callback. The selected
         # source metadata is still independently verified by normal admission.
         proposal_snapshot = copy.deepcopy(snapshot)
-        allowance = require_admission(engine)
-        if paged:
-            # The complete audit uses its own read transaction. Refuse a SQL
-            # revision change across evidence/proposal/budget reads before
-            # exposing the combined view to Policy, as well as after callback.
-            engine._cpu_evidence_pager.verify()
-            if proposal_paged:
-                engine._cpu_proposal_pager.verify()
-        decision = engine._cpu_policy.decide(snapshot, allowance)
+        decision = engine._cpu_policy.decide(snapshot, budget.snapshot(engine.lake, engine._cpu_scope))
         if paged:
             # Even a trusted callback cannot turn a changed read revision into
             # execution, a further page, or a permanent Stop decision.
