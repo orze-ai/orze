@@ -1,0 +1,22 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+____ test_ingress_avoids_unused_owner_mapping_with_same_real_result[False] _____
+tests/test_ingress_identity_preparation.py:52: in test_ingress_avoids_unused_owner_mapping_with_same_real_result
+    assert not mapping_queries(statements), "ingress discarded this full matching-history result"
+E   AssertionError: ingress discarded this full matching-history result
+E   assert not ["SELECT config_hash, idea_id FROM ideas WHERE status COLLATE NOCASE IN ('queued', 'pending', 'running', 'completed') AND config_hash IN ('1f0d9288d54b652276ff8c398b4cf1b68c43506885154ffe931cf48bc8f93a6e') ORDER BY rowid"]
+E    +  where ["SELECT config_hash, idea_id FROM ideas WHERE status COLLATE NOCASE IN ('queued', 'pending', 'running', 'completed') AND config_hash IN ('1f0d9288d54b652276ff8c398b4cf1b68c43506885154ffe931cf48bc8f93a6e') ORDER BY rowid"] = mapping_queries(["SELECT idea_id FROM main.ideas WHERE idea_id IN ('idea-copy')", "SELECT 1 FROM ideas WHERE status COLLATE NOCASE IN ...885154ffe931cf48bc8f93a6e') ORDER BY rowid", 'PRAGMA busy_timeout', 'PRAGMA busy_timeout=1000', 'BEGIN IMMEDIATE', ...])
+------------------------------ Captured log call -------------------------------
+WARNING  orze:idea_ingress.py:263 Retaining proposal idea-copy: config_duplicate
+_____ test_ingress_avoids_unused_owner_mapping_with_same_real_result[True] _____
+tests/test_ingress_identity_preparation.py:52: in test_ingress_avoids_unused_owner_mapping_with_same_real_result
+    assert not mapping_queries(statements), "ingress discarded this full matching-history result"
+E   AssertionError: ingress discarded this full matching-history result
+E   assert not ["SELECT config_hash, idea_id FROM ideas WHERE status COLLATE NOCASE IN ('queued', 'pending', 'running', 'completed') AND config_hash IN ('1f0d9288d54b652276ff8c398b4cf1b68c43506885154ffe931cf48bc8f93a6e') ORDER BY rowid"]
+E    +  where ["SELECT config_hash, idea_id FROM ideas WHERE status COLLATE NOCASE IN ('queued', 'pending', 'running', 'completed') AND config_hash IN ('1f0d9288d54b652276ff8c398b4cf1b68c43506885154ffe931cf48bc8f93a6e') ORDER BY rowid"] = mapping_queries(["SELECT idea_id FROM main.ideas WHERE idea_id IN ('idea-copy')", "SELECT 1 FROM ideas WHERE status COLLATE NOCASE IN ...885154ffe931cf48bc8f93a6e') ORDER BY rowid", 'PRAGMA busy_timeout', 'PRAGMA busy_timeout=1000', 'BEGIN IMMEDIATE', ...])
+------------------------------ Captured log call -------------------------------
+WARNING  orze:idea_ingress.py:263 Retaining proposal idea-copy: rejected
+=========================== short test summary info ============================
+FAILED tests/test_ingress_identity_preparation.py::test_ingress_avoids_unused_owner_mapping_with_same_real_result[False]
+FAILED tests/test_ingress_identity_preparation.py::test_ingress_avoids_unused_owner_mapping_with_same_real_result[True]
+2 failed, 13 deselected in 0.76s

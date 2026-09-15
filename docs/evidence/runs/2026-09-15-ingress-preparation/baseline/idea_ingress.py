@@ -231,14 +231,10 @@ def ingest_ideas_source(engine, cfg):
             pending = {key: engine._config_override_hash(value.get("config", {}))
                        for key, value in raw_ideas.items() if key not in db_ids}
             try:
-                # Prepare legacy hashes without constructing an unused owner
-                # map. Lightweight adapters may expose only the old lookup API.
-                # Normal insert still checks current status/kind/YAML in its
-                # own writer transaction; neither API grants duplicate or ACK.
-                prepare = getattr(engine.lake, "prepare_admitted_config_hashes", None)
-                if not callable(prepare):
-                    prepare = engine.lake.find_admitted_config_hashes
-                prepare(set(pending.values()))
+                # Keep the existing legacy hash preparation. Derived lookup
+                # answers are not duplicate authority: normal insert below
+                # checks current status/kind/YAML in its own writer transaction.
+                engine.lake.find_admitted_config_hashes(set(pending.values()))
             except Exception as exc:
                 logger.warning("Proposal dedup index unavailable: %s", type(exc).__name__)
             acknowledged = set()

@@ -1535,23 +1535,6 @@ class IdeaLake:
             self, retry=_retry_on_busy, hasher=hash_config, logger=logger,
         )
 
-    def prepare_admitted_config_hashes(self, identities: Iterable[str]) -> None:
-        """Prepare legacy identities without building an owner lookup result.
-
-        Ingress needs preparation before normal admission, but ignores the
-        advisory owner map. Consume and validate the whole input before SQL,
-        as the lookup API does; no valid identities means no database access.
-        Any nonempty valid request can still repair all missing admitted rows.
-        This grants no duplicate/ACK authority and returns no retained view.
-        """
-        requested = list(dict.fromkeys(
-            identity for identity in identities
-            if isinstance(identity, str)
-            and re.fullmatch(r"[0-9a-f]{64}", identity)
-        ))
-        if requested:
-            self._repair_admitted_config_hashes()
-
     def find_admitted_config_hashes(
         self, identities: Iterable[str],
     ) -> Dict[str, str]:

@@ -143,7 +143,7 @@ def test_config_change_after_lookup_is_decided_by_current_transaction(engine, mo
                          "", status="completed")
     source.write_text(_block("idea-new", 1))
     peer = IdeaLake(cfg["idea_lake_db"])
-    original = instance.lake.prepare_admitted_config_hashes
+    original = instance.lake.find_admitted_config_hashes
     changed = []
     def lookup(identities):
         result = original(identities)
@@ -152,7 +152,7 @@ def test_config_change_after_lookup_is_decided_by_current_transaction(engine, mo
         peer.conn.commit()
         changed.append(True)
         return result
-    monkeypatch.setattr(instance.lake, "prepare_admitted_config_hashes", lookup)
+    monkeypatch.setattr(instance.lake, "find_admitted_config_hashes", lookup)
     try:
         _, inserted = idea_ingress.ingest_ideas_source(instance, cfg)
         assert changed == [True]

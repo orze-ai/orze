@@ -162,7 +162,7 @@ def test_actual_source_lock_loss_after_lookup_never_admits_or_acknowledges(engin
     instance, cfg, source = engine
     original = _block("idea-lost-lock", 23)
     source.write_text(original, encoding="utf-8")
-    real_lookup = instance.lake.prepare_admitted_config_hashes
+    real_lookup = instance.lake.find_admitted_config_hashes
     observed = []
 
     def lookup_and_move_lock(identities):
@@ -172,7 +172,7 @@ def test_actual_source_lock_loss_after_lookup_never_admits_or_acknowledges(engin
         observed.append("actual_directory_replaced")
         return result
 
-    monkeypatch.setattr(instance.lake, "prepare_admitted_config_hashes", lookup_and_move_lock)
+    monkeypatch.setattr(instance.lake, "find_admitted_config_hashes", lookup_and_move_lock)
     raw, inserted = idea_ingress.ingest_ideas_source(instance, cfg)
     assert observed == ["actual_directory_replaced"]
     assert set(raw) == {"idea-lost-lock"} and inserted == []
