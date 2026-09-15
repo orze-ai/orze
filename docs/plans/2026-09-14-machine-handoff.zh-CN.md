@@ -18,6 +18,7 @@
 - [x] Policy 只读 evidence／proposal 续页完整预算审计 2→1，每页重新审计；增加 callback 前控制与分页 revision 复核。
 - [x] ingress 空批次跳过历史读取，非空批次最多查询 128 个 ID。
 - [x] ingress 删除全局配置 cache 判定，当前写事务核实去重；sidecar 延迟分批，每批最多 128 条／4 MiB，单文件应用新鲜读取边界。
+- [x] Pro 显式报告分页接入实际 research CLI／consumer，支持续页、定向选择和跨页保留重验；完整联合预算与其余 consumer 仍待完成。
 - [x] 不兼容存储的提前拒绝、真实 CPU 执行及安装验证；这不等于角色／GC 存储兼容或生产上线完成。
 
 最近验收：Core 4,733 通过、7 个可选 Pro 跳过、2 个既有 warning；Pro 1,037 通过；配对 31 项、安装验证 35 项通过。各集合有重叠，不能相加。
@@ -27,6 +28,8 @@
 最新续页审计片：Core 一次全量 4,786 通过、7 可选跳过、2 既有 warning；Pro 全量 1,037、可选配对 31、定向 261 项通过。完整回归输入指纹一致，原有源码／测试按 Git 原件核对；保留了四次续页后真实执行、关闭与结算的完整项目。见[续页审计结果](2026-09-15-policy-audit-results.zh-CN.md)。
 
 最新 ingress 片：Core 一次全量 4,799 通过、7 可选跳过、2 既有 warning；Pro 全量 1,037、配对 31、定向 132 项通过，回归输入指纹一致。保留旧 cache 压制合法提案的失败基线、成本夹具迁移、错误 CLI harness 记录、真实 CPU 重启重放与负性能对照。见[ingress 结果](2026-09-15-ingress-bounds-results.zh-CN.md)。
+
+最新 Pro 分页片：Core 全量 4,799 通过、7 可选跳过、2 既有 warning；Pro 最终全量 1,066、配对 31、定向 189 项通过。保留基线、真实 CLI 暴露的数据库作用域失败及修正后完整重跑。两个实际 CPU worker 的关闭、结算和八份离线 provider prompt 清单已机械关联核验；真实模型与生产验收仍未完成。
 
 ## P1：降低长历史开销
 
@@ -48,12 +51,16 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 
 ## P1：Pro 长程合格证据检索与上下文容量
 
-- [ ] 将有界查询／分页／定向检索接入真实 research consumer，避免全历史 qualification 后再简单截断。
-- [ ] 保留 Objective、比较范围、覆盖声明、协议／来源版本和当前 attempt 身份；invalid／unknown 不能被排序或缓存变成 valid。
+- [x] 以显式 `research_evidence.version: 1` 将分页／定向检索接入实际 research CLI／consumer；普通分页路径不先 qualification 全历史再截断。
+- [ ] 继续治理其他 Pro consumer，以及 prospective decision-contract 全局最佳基线等仍需完整 qualification 的调用；不能用页面最佳值降低原基线。
+- [x] 分页块保留完整报告 Objective、比较／覆盖范围、策略／来源版本与当前 attempt 引用；invalid／unknown、原生 observation 协议和不可用记录不回退为 valid。
 - [ ] 设计 evidence／proposal／预算联合 snapshot 的总载荷控制，明确大记录、跨页遗漏和不可用证据的处理，不靠无限增加 prompt 上限。
-- [ ] 用关键证据位于后页、后页存在反例／冲突、来源变化等场景验证策略决定；分页结束不能当作研究收敛。
+- [x] 用确定性离线 provider 通过真实 consumer 验证关键后页、taint／反例、来源变化、定向选择、请求／token 额度及实际 CPU 提案执行；枚举结束不代表收敛。
+- [ ] 用真实模型与长程研究继续验证信息利用和成本；单次请求额度、32 KiB 必需证据块不等于完整执行预算联合 snapshot，上游大文件／历史步骤也仍待治理。
 
 验收：真实策略能找到并使用关键历史证据，仍保持资格与来源校验。Core 已有分页不等于 Pro 消费链已经完成。
+
+最新 Pro 分页结果：显式协议已进入实际研究消费链，并修复 CLI 的证据／谱系数据库作用域不一致。两轮 5,000 条合成历史旧全量排序约 3.46／3.44 秒，新首个 16 候选页约 32 ms，新完整遍历约 9.56／9.51 秒。首视图信息量不同，完整遍历更慢；模型调用与科研收益仍需单独验证。见[Pro 分页结果及未关闭边界](2026-09-15-pro-research-paging-results.zh-CN.md)。
 
 ## P2：持久研究摘要与记忆
 
@@ -91,6 +98,7 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 
 ## 参考证据
 
+- [本次 Pro research consumer 分页与实际执行验收](2026-09-15-pro-research-paging-results.zh-CN.md)
 - [本次 ingress 分批、正确性与正负成本结果](2026-09-15-ingress-bounds-results.zh-CN.md)
 - [本次只读续页审计结果与完整原件](2026-09-15-policy-audit-results.zh-CN.md)
 - [本次预算规范化结果与完整原件](2026-09-14-budget-normalization-results.zh-CN.md)
