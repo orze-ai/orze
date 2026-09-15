@@ -64,28 +64,25 @@ logger = logging.getLogger("orze")
 _parse_ideas_cache: Dict[str, Any] = {"mtime": 0.0, "result": {}, "path": ""}
 
 
-def _iter_sidecar_ideas(ideas_md_path: str, excluded=(), *, read_text=None):
-    """Yield first valid definitions in file order without retaining configs.
-
-    The optional fresh reader lets ingress apply its existing source boundary.
-    Stopping iteration does not read or parse the remaining files. No cursor,
-    source contents or parsed result survives this invocation.
+def _overlay_sidecar_ideas(ideas_md_path: str, ideas: dict) -> dict:
+    """Merge ideas from ideas.d/*.md that are absent from ideas.md.
+    This is an additive overlay — ideas.md entries take precedence.
+    Immune to research-agent strip because ideas.d/ is never consumed.
     """
     ideas_d = Path(ideas_md_path).parent / "ideas.d"
     if not ideas_d.is_dir():
-        return
-    seen = set(excluded)
+        return ideas
+    result = dict(ideas)
     sp = re.compile(rf"^## ({IDEA_ID_PATTERN}):\s*(.+?)$", re.MULTILINE)
     for sidecar in sorted(ideas_d.glob("*.md")):
         try:
-            st = (sidecar.read_text(encoding="utf-8") if read_text is None
-                  else read_text(sidecar))
+            st = sidecar.read_text(encoding="utf-8")
         except OSError:
             continue
         sm_list = list(sp.finditer(st))
         for j, sm in enumerate(sm_list):
             sid = sm.group(1)
-            if sid in seen:
+            if sid in result:
                 continue
             stitle = sm.group(2).strip()
             ss = sm.end()
@@ -103,8 +100,7 @@ def _iter_sidecar_ideas(ideas_md_path: str, excluded=(), *, read_text=None):
             scfg = _sanitize_config(scfg)
             if _is_prompt_injection(sid, stitle):
                 continue
-            seen.add(sid)
-            yield sid, {
+            result[sid] = {
                 "title": stitle,
                 "priority": spri.group(1).lower() if spri else "medium",
                 "approach_family": sfam.group(1).lower() if sfam else "other",
@@ -112,14 +108,6 @@ def _iter_sidecar_ideas(ideas_md_path: str, excluded=(), *, read_text=None):
                 "raw": sraw.strip(),
                 "_overlay_source": "sidecar",
             }
-
-
-def _overlay_sidecar_ideas(ideas_md_path: str, ideas: dict) -> dict:
-    """Complete legacy overlay; ingress consumes the iterator in batches."""
-    if not (Path(ideas_md_path).parent / "ideas.d").is_dir():
-        return ideas
-    result = dict(ideas)
-    result.update(_iter_sidecar_ideas(ideas_md_path, ideas))
     return result
 
 

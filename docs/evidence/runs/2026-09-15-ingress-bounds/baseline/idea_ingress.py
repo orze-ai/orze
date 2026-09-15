@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from collections import Counter
 import hashlib
-from itertools import islice
 import logging
 import os
 from pathlib import Path
@@ -27,7 +26,7 @@ import uuid
 import yaml
 
 from orze.core.ideas import (
-    IDEA_ID_PATTERN, _iter_sidecar_ideas, parse_ideas_text,
+    IDEA_ID_PATTERN, _overlay_sidecar_ideas, parse_ideas_text,
 )
 from orze.core.idea_source_lock import (
     idea_source_lock, idea_source_lock_owned,
@@ -84,43 +83,6 @@ def _blocks(text):
         match = _IDEA.fullmatch(heading.group())
         blocks.append((match.group(1) if match else None, heading.start(), end))
     return blocks
-
-
-def _read_sidecar(path):
-    """Same fresh/regular/size boundary as primary; never consume a sidecar."""
-    try:
-        return _read_source(path)[0]
-    except (OSError, ValueError, UnicodeError) as exc:
-        logger.warning("Sidecar %s not admitted: %s", path.name, type(exc).__name__)
-        return ""
-
-
-def _batch(path, text, candidates, occurrences, offset):
-    """Bound decoded records and raw payload; offset is only an inspection hint.
-
-    Primary pages need no sidecar scan. Sidecar continuation re-reads its
-    prefix to preserve first-valid-definition precedence under source edits;
-    there is no stale iterator, cached YAML, or metadata-derived admission.
-    """
-    batch = candidates[offset:offset + _MAX_ADMISSIONS]
-    sidecars = {}
-    if len(batch) == _MAX_ADMISSIONS:
-        # A full primary page leaves possible sidecars for the next tick. An
-        # empty extra tick can reset the hint; enumeration is not convergence.
-        return batch, sidecars, offset + len(batch)
-    size = sum(len(text[start:end].encode("utf-8")) for _, start, end in batch)
-    skip = max(0, offset - len(candidates))
-    stream = _iter_sidecar_ideas(str(path), occurrences, read_text=_read_sidecar)
-    more = False
-    for idea_id, idea in islice(stream, skip, None):
-        amount = len(idea["raw"].encode("utf-8"))
-        if len(batch) == _MAX_ADMISSIONS or size + amount > _MAX_SOURCE_BYTES:
-            more = True
-            break
-        batch.append((idea_id, None, None))
-        sidecars[idea_id] = idea
-        size += amount
-    return batch, sidecars, offset + len(batch) if more else 0
 
 
 def _publish_ack(path, original, original_identity, mode, updated, lease):
@@ -190,14 +152,19 @@ def ingest_ideas_source(engine, cfg):
             occurrences = Counter(block[0] for block in blocks if block[0])
             candidates = [block for block in blocks if block[0]
                           and occurrences[block[0]] == 1]
+            sidecars = {key: value for key, value in
+                        _overlay_sidecar_ideas(str(path), {}).items()
+                        if key not in occurrences}
+            candidates.extend((key, None, None) for key in sidecars)
             # This cursor only rotates a bounded inspection batch; it grants no
-            # admission/ACK authority. Primary changes reset it, while retained
+            # admission/ACK authority. Source changes reset it, while retained
             # conflicts cannot permanently starve later proposals in a live run.
             scope = (str(path.absolute()), hashlib.sha256(text.encode("utf-8")).hexdigest())
             cursor = getattr(engine, "_idea_ingress_cursor", None)
             offset = cursor[2] if cursor and cursor[:2] == scope else 0
-            batch, sidecars, next_offset = _batch(path, text, candidates, occurrences, offset)
-            engine._idea_ingress_cursor = (*scope, next_offset)
+            batch = candidates[offset:offset + _MAX_ADMISSIONS]
+            engine._idea_ingress_cursor = (*scope, (
+                offset + _MAX_ADMISSIONS if offset + _MAX_ADMISSIONS < len(candidates) else 0))
             for idea_id, start, end in batch:
                 if start is None:
                     raw_ideas[idea_id] = sidecars[idea_id]
@@ -215,22 +182,34 @@ def ingest_ideas_source(engine, cfg):
                 # Lightweight lake adapters retain the existing public get()
                 # contract; never fall back to enumerating all historical IDs.
                 db_ids = {key for key in raw_ideas if engine.lake.get(key) is not None}
+            config_hashes = engine._load_config_hashes()
             pending = {key: engine._config_override_hash(value.get("config", {}))
                        for key, value in raw_ideas.items() if key not in db_ids}
             try:
-                # Keep the existing legacy hash preparation. Derived lookup
-                # answers are not duplicate authority: normal insert below
-                # checks current status/kind/YAML in its own writer transaction.
-                engine.lake.find_admitted_config_hashes(set(pending.values()))
+                known = engine.lake.find_admitted_config_hashes(set(pending.values()))
+                for fingerprint, idea_id in known.items():
+                    config_hashes.setdefault(fingerprint, idea_id)
             except Exception as exc:
                 logger.warning("Proposal dedup index unavailable: %s", type(exc).__name__)
             acknowledged = set()
             for idea_id, idea in list(raw_ideas.items())[:_MAX_ADMISSIONS]:
                 if not idea_source_lock_owned(lease):
                     break
-                # Both same-ID identity and cross-ID config duplicates reach
-                # the atomic boundary. An old JSON cache cannot suppress a
-                # legal retry or select a stale/different-config "winner".
+                # A known same-ID task always reaches the atomic identity
+                # boundary. Legacy cross-ID config dedup is retained, but is
+                # not a durable rejection authorizing deletion of its source.
+                fingerprint = pending.get(idea_id)
+                if (fingerprint and config_hashes.get(fingerprint)
+                        and config_hashes[fingerprint] != idea_id):
+                    # CPU and legacy executable kinds have different admission
+                    # domains even when their raw config happens to hash alike.
+                    winner = engine.lake.get(config_hashes[fingerprint])
+                    try:
+                        cpu = _proposal_fields(idea)["kind"] == "native_cpu_action"
+                    except ValueError:
+                        continue
+                    if winner and (winner.get("kind") == "native_cpu_action") == cpu:
+                        continue
                 try:
                     outcome = engine.lake.insert(
                         idea_id, idea["title"], yaml.dump(idea.get("config", {})),
@@ -244,6 +223,8 @@ def ingest_ideas_source(engine, cfg):
                 result = outcome.get("status")
                 if result == "inserted":
                     inserted.append(idea_id)
+                    if fingerprint:
+                        config_hashes[fingerprint] = idea_id
                 if result in ("inserted", "already_present_exact"):
                     acknowledged.add(idea_id)
                 else:

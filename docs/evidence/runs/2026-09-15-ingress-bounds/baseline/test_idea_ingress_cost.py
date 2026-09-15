@@ -75,7 +75,7 @@ def test_nonempty_batch_uses_only_targeted_id_query_and_real_admission(engine, m
     assert not any(q == "select idea_id from ideas" for q in selects)
     assert len(selects) == 1 and "where idea_id in (" in selects[0]
     assert "'idea-fresh'" in selects[0] and "idea-history-" not in selects[0]
-    assert loads == []
+    assert loads == ["actual_cache_loader"]
 
 
 def test_empty_first_page_advances_to_real_later_proposal_without_loading_history(engine, monkeypatch):
@@ -91,7 +91,7 @@ def test_empty_first_page_advances_to_real_later_proposal_without_loading_histor
     assert second[1] == ["idea-late"]
     assert source.read_text(encoding="utf-8") == "# Ideas\n" + malformed
     assert first_queries == [] and first_loads == []
-    assert loads == []
+    assert loads == ["actual_cache_loader"]
 
 
 def test_empty_primary_still_reads_and_admits_additive_sidecar(engine, monkeypatch):
@@ -105,7 +105,7 @@ def test_empty_primary_still_reads_and_admits_additive_sidecar(engine, monkeypat
     raw, inserted = idea_ingress.ingest_ideas_source(instance, cfg)
     assert inserted == ["idea-side"] and raw["idea-side"]["_overlay_source"] == "sidecar"
     assert source.read_bytes() == b"" and sidecar.read_text(encoding="utf-8") == content
-    assert loads == []
+    assert loads == ["actual_cache_loader"]
     assert any("idea-side" in q for q in queries)
 
 
@@ -162,17 +162,17 @@ def test_actual_source_lock_loss_after_lookup_never_admits_or_acknowledges(engin
     instance, cfg, source = engine
     original = _block("idea-lost-lock", 23)
     source.write_text(original, encoding="utf-8")
-    real_lookup = instance.lake.find_admitted_config_hashes
+    real_load = instance._load_config_hashes
     observed = []
 
-    def lookup_and_move_lock(identities):
-        result = real_lookup(identities)
+    def load_and_move_lock():
+        result = real_load()
         lock = instance.results_dir / ".ideas_md.lock"
         lock.rename(instance.results_dir / "displaced-source-lock")
         observed.append("actual_directory_replaced")
         return result
 
-    monkeypatch.setattr(instance.lake, "find_admitted_config_hashes", lookup_and_move_lock)
+    monkeypatch.setattr(instance, "_load_config_hashes", load_and_move_lock)
     raw, inserted = idea_ingress.ingest_ideas_source(instance, cfg)
     assert observed == ["actual_directory_replaced"]
     assert set(raw) == {"idea-lost-lock"} and inserted == []

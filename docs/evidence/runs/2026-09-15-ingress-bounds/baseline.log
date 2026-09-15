@@ -1,0 +1,68 @@
+FFFFFF.FF                                                                [100%]
+=================================== FAILURES ===================================
+__ test_stale_config_cache_does_not_suppress_a_legal_proposal[completed-True] __
+tests/test_ingress_bounded_sources.py:18: in test_stale_config_cache_does_not_suppress_a_legal_proposal
+    assert inserted == ["idea-new"]
+E   AssertionError: assert [] == ['idea-new']
+E     
+E     Right contains one more item: 'idea-new'
+E     Use -v to get more diff
+___ test_stale_config_cache_does_not_suppress_a_legal_proposal[failed-False] ___
+tests/test_ingress_bounded_sources.py:18: in test_stale_config_cache_does_not_suppress_a_legal_proposal
+    assert inserted == ["idea-new"]
+E   AssertionError: assert [] == ['idea-new']
+E     
+E     Right contains one more item: 'idea-new'
+E     Use -v to get more diff
+__ test_stale_config_cache_does_not_suppress_a_legal_proposal[archived-False] __
+tests/test_ingress_bounded_sources.py:18: in test_stale_config_cache_does_not_suppress_a_legal_proposal
+    assert inserted == ["idea-new"]
+E   AssertionError: assert [] == ['idea-new']
+E     
+E     Right contains one more item: 'idea-new'
+E     Use -v to get more diff
+____ test_large_global_cache_is_never_loaded_but_real_duplicate_is_retained ____
+tests/test_ingress_bounded_sources.py:30: in test_large_global_cache_is_never_loaded_but_real_duplicate_is_retained
+    _, inserted = idea_ingress.ingest_ideas_source(instance, cfg)
+src/orze/engine/idea_ingress.py:185: in ingest_ideas_source
+    config_hashes = engine._load_config_hashes()
+tests/test_ingress_bounded_sources.py:27: in <lambda>
+    monkeypatch.setattr(instance, "_load_config_hashes", lambda: pytest.fail("global cache read"))
+E   Failed: global cache read
+_________ test_sidecars_only_parse_the_requested_window_and_reach_tail _________
+tests/test_ingress_bounded_sources.py:62: in test_sidecars_only_parse_the_requested_window_and_reach_tail
+    assert seen[0] <= 129
+E   assert 300 <= 129
+_______________ test_full_primary_window_does_not_read_sidecars ________________
+tests/test_ingress_bounded_sources.py:87: in test_full_primary_window_does_not_read_sidecars
+    assert len(idea_ingress.ingest_ideas_source(instance, cfg)[1]) == 128
+src/orze/engine/idea_ingress.py:156: in ingest_ideas_source
+    _overlay_sidecar_ideas(str(path), {}).items()
+src/orze/core/ideas.py:79: in _overlay_sidecar_ideas
+    st = sidecar.read_text(encoding="utf-8")
+tests/test_ingress_bounded_sources.py:83: in read
+    pytest.fail("off-page sidecar read")
+E   Failed: off-page sidecar read
+______ test_large_sidecar_batch_is_split_without_losing_the_delayed_entry ______
+tests/test_ingress_bounded_sources.py:115: in test_large_sidecar_batch_is_split_without_losing_the_delayed_entry
+    assert len(inserted) == 1
+E   AssertionError: assert 3 == 1
+E    +  where 3 = len(['idea-large-0', 'idea-large-1', 'idea-large-2'])
+____ test_oversized_sidecar_is_retained_and_does_not_hide_valid_other_file _____
+tests/test_ingress_bounded_sources.py:130: in test_oversized_sidecar_is_retained_and_does_not_hide_valid_other_file
+    assert inserted == ["idea-valid"]
+E   AssertionError: assert ['idea-too-la... 'idea-valid'] == ['idea-valid']
+E     
+E     At index 0 diff: 'idea-too-large' != 'idea-valid'
+E     Left contains one more item: 'idea-valid'
+E     Use -v to get more diff
+=========================== short test summary info ============================
+FAILED tests/test_ingress_bounded_sources.py::test_stale_config_cache_does_not_suppress_a_legal_proposal[completed-True]
+FAILED tests/test_ingress_bounded_sources.py::test_stale_config_cache_does_not_suppress_a_legal_proposal[failed-False]
+FAILED tests/test_ingress_bounded_sources.py::test_stale_config_cache_does_not_suppress_a_legal_proposal[archived-False]
+FAILED tests/test_ingress_bounded_sources.py::test_large_global_cache_is_never_loaded_but_real_duplicate_is_retained
+FAILED tests/test_ingress_bounded_sources.py::test_sidecars_only_parse_the_requested_window_and_reach_tail
+FAILED tests/test_ingress_bounded_sources.py::test_full_primary_window_does_not_read_sidecars
+FAILED tests/test_ingress_bounded_sources.py::test_large_sidecar_batch_is_split_without_losing_the_delayed_entry
+FAILED tests/test_ingress_bounded_sources.py::test_oversized_sidecar_is_retained_and_does_not_hide_valid_other_file
+8 failed, 1 passed in 3.05s
