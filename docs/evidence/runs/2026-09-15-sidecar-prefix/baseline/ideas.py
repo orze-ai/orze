@@ -75,48 +75,43 @@ def _iter_sidecar_ideas(ideas_md_path: str, excluded=(), *, read_text=None):
     if not ideas_d.is_dir():
         return
     seen = set(excluded)
+    sp = re.compile(rf"^## ({IDEA_ID_PATTERN}):\s*(.+?)$", re.MULTILINE)
     for sidecar in sorted(ideas_d.glob("*.md")):
         try:
             st = (sidecar.read_text(encoding="utf-8") if read_text is None
                   else read_text(sidecar))
         except OSError:
             continue
-        yield from _iter_sidecar_text(st, seen)
-
-
-def _iter_sidecar_text(st, seen):
-    """Parse one freshly read sidecar with the caller's precedence set."""
-    sp = re.compile(rf"^## ({IDEA_ID_PATTERN}):\s*(.+?)$", re.MULTILINE)
-    sm_list = list(sp.finditer(st))
-    for j, sm in enumerate(sm_list):
-        sid = sm.group(1)
-        if sid in seen:
-            continue
-        stitle = sm.group(2).strip()
-        ss = sm.end()
-        se = sm_list[j + 1].start() if j + 1 < len(sm_list) else len(st)
-        sraw = st[ss:se]
-        spri = re.search(r"\*\*Priority\*\*:\s*(\w+)", sraw)
-        sfam = re.search(r"\*\*Approach Family\*\*:\s*(\w+)", sraw)
-        syml = re.search(r"```ya?ml\s*\n(.*?)```", sraw, re.DOTALL)
-        if not syml:
-            continue
-        try:
-            scfg = yaml.safe_load(syml.group(1)) or {}
-        except yaml.YAMLError:
-            continue
-        scfg = _sanitize_config(scfg)
-        if _is_prompt_injection(sid, stitle):
-            continue
-        seen.add(sid)
-        yield sid, {
-            "title": stitle,
-            "priority": spri.group(1).lower() if spri else "medium",
-            "approach_family": sfam.group(1).lower() if sfam else "other",
-            "config": scfg,
-            "raw": sraw.strip(),
-            "_overlay_source": "sidecar",
-        }
+        sm_list = list(sp.finditer(st))
+        for j, sm in enumerate(sm_list):
+            sid = sm.group(1)
+            if sid in seen:
+                continue
+            stitle = sm.group(2).strip()
+            ss = sm.end()
+            se = sm_list[j + 1].start() if j + 1 < len(sm_list) else len(st)
+            sraw = st[ss:se]
+            spri = re.search(r"\*\*Priority\*\*:\s*(\w+)", sraw)
+            sfam = re.search(r"\*\*Approach Family\*\*:\s*(\w+)", sraw)
+            syml = re.search(r"```ya?ml\s*\n(.*?)```", sraw, re.DOTALL)
+            if not syml:
+                continue
+            try:
+                scfg = yaml.safe_load(syml.group(1)) or {}
+            except yaml.YAMLError:
+                continue
+            scfg = _sanitize_config(scfg)
+            if _is_prompt_injection(sid, stitle):
+                continue
+            seen.add(sid)
+            yield sid, {
+                "title": stitle,
+                "priority": spri.group(1).lower() if spri else "medium",
+                "approach_family": sfam.group(1).lower() if sfam else "other",
+                "config": scfg,
+                "raw": sraw.strip(),
+                "_overlay_source": "sidecar",
+            }
 
 
 def _overlay_sidecar_ideas(ideas_md_path: str, ideas: dict) -> dict:

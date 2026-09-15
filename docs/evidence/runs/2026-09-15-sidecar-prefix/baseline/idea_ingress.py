@@ -95,11 +95,12 @@ def _read_sidecar(path):
         return ""
 
 
-def _batch(path, text, candidates, occurrences, offset, *, prefix=None):
+def _batch(path, text, candidates, occurrences, offset):
     """Bound decoded records and raw payload; offset is only an inspection hint.
 
-    Primary pages need no sidecar scan. Continuation may skip an identity-pinned
-    prefix; selected sidecars are freshly read. No cached YAML or admission.
+    Primary pages need no sidecar scan. Sidecar continuation re-reads its
+    prefix to preserve first-valid-definition precedence under source edits;
+    there is no stale iterator, cached YAML, or metadata-derived admission.
     """
     batch = candidates[offset:offset + _MAX_ADMISSIONS]
     sidecars = {}
@@ -109,26 +110,16 @@ def _batch(path, text, candidates, occurrences, offset, *, prefix=None):
         return batch, sidecars, offset + len(batch)
     size = sum(len(text[start:end].encode("utf-8")) for _, start, end in batch)
     skip = max(0, offset - len(candidates))
-    stream = (_iter_sidecar_ideas(str(path), occurrences, read_text=_read_sidecar)
-              if prefix is None else prefix.stream(path, occurrences, skip, read_text=_read_sidecar))
+    stream = _iter_sidecar_ideas(str(path), occurrences, read_text=_read_sidecar)
     more = False
-    try:
-        for idea_id, idea in islice(stream, skip, None):
-            amount = len(idea["raw"].encode("utf-8"))
-            if len(batch) == _MAX_ADMISSIONS or size + amount > _MAX_SOURCE_BYTES:
-                more = True
-                break
-            batch.append((idea_id, None, None))
-            sidecars[idea_id] = idea
-            size += amount
-        if prefix is not None:
-            prefix.verify()
-    except BaseException:
-        if prefix is not None:
-            prefix.clear()
-        raise
-    finally:
-        stream.close()
+    for idea_id, idea in islice(stream, skip, None):
+        amount = len(idea["raw"].encode("utf-8"))
+        if len(batch) == _MAX_ADMISSIONS or size + amount > _MAX_SOURCE_BYTES:
+            more = True
+            break
+        batch.append((idea_id, None, None))
+        sidecars[idea_id] = idea
+        size += amount
     return batch, sidecars, offset + len(batch) if more else 0
 
 
@@ -205,11 +196,7 @@ def ingest_ideas_source(engine, cfg):
             scope = (str(path.absolute()), hashlib.sha256(text.encode("utf-8")).hexdigest())
             cursor = getattr(engine, "_idea_ingress_cursor", None)
             offset = cursor[2] if cursor and cursor[:2] == scope else 0
-            from orze.engine.sidecar_prefix import SidecarPrefix
-            prefix = getattr(engine, "_idea_sidecar_prefix", None)
-            if prefix is None or not cursor or cursor[:2] != scope or not offset:
-                prefix = engine._idea_sidecar_prefix = SidecarPrefix()
-            batch, sidecars, next_offset = _batch(path, text, candidates, occurrences, offset, prefix=prefix)
+            batch, sidecars, next_offset = _batch(path, text, candidates, occurrences, offset)
             engine._idea_ingress_cursor = (*scope, next_offset)
             for idea_id, start, end in batch:
                 if start is None:

@@ -123,10 +123,6 @@ def _batch(path, text, candidates, occurrences, offset, *, prefix=None):
             size += amount
         if prefix is not None:
             prefix.verify()
-    except BaseException:
-        if prefix is not None:
-            prefix.clear()
-        raise
     finally:
         stream.close()
     return batch, sidecars, offset + len(batch) if more else 0
