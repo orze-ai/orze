@@ -1,0 +1,101 @@
+{
+  "candidate_parameters": [
+    65536,
+    "queued",
+    "pending",
+    "running",
+    "completed",
+    "train",
+    "train",
+    "1f0d9288d54b652276ff8c398b4cf1b68c43506885154ffe931cf48bc8f93a6e",
+    65536,
+    "queued",
+    "pending",
+    "running",
+    "completed",
+    "train",
+    "train",
+    "1f0d9288d54b652276ff8c398b4cf1b68c43506885154ffe931cf48bc8f93a6e",
+    1025
+  ],
+  "candidate_plan": [
+    [
+      2,
+      0,
+      0,
+      "CO-ROUTINE SUBQUERY 2"
+    ],
+    [
+      3,
+      2,
+      0,
+      "COMPOUND QUERY"
+    ],
+    [
+      4,
+      3,
+      0,
+      "LEFT-MOST SUBQUERY"
+    ],
+    [
+      7,
+      4,
+      0,
+      "SEARCH ideas USING INDEX idx_status_config_hash_nocase (status=? AND config_hash=?)"
+    ],
+    [
+      54,
+      3,
+      0,
+      "UNION ALL"
+    ],
+    [
+      57,
+      54,
+      0,
+      "SEARCH ideas USING INDEX idx_missing_config_identity (status=?)"
+    ],
+    [
+      111,
+      0,
+      0,
+      "SCAN SUBQUERY 2"
+    ],
+    [
+      125,
+      0,
+      0,
+      "USE TEMP B-TREE FOR ORDER BY"
+    ]
+  ],
+  "candidate_query": "SELECT idea_id, config FROM (\nSELECT rowid AS position, idea_id, CASE WHEN typeof(config)='text' AND length(CAST(config AS BLOB)) <= ? THEN config ELSE NULL END AS config\nFROM ideas WHERE status COLLATE NOCASE IN (?, ?, ?, ?) AND ((? = 'native_cpu_action' AND kind = 'native_cpu_action') OR (? != 'native_cpu_action' AND kind != 'native_cpu_action')) AND config_hash=?\nUNION ALL\nSELECT rowid AS position, idea_id, CASE WHEN typeof(config)='text' AND length(CAST(config AS BLOB)) <= ? THEN config ELSE NULL END AS config\nFROM ideas WHERE status COLLATE NOCASE IN (?, ?, ?, ?) AND ((? = 'native_cpu_action' AND kind = 'native_cpu_action') OR (? != 'native_cpu_action' AND kind != 'native_cpu_action')) AND (config_hash IS NULL OR config_source_sha256 IS NULL) AND (config_hash IS NULL OR config_hash != ?)\n) ORDER BY position LIMIT ?",
+  "limits": [
+    "Read-only exploratory SQL probe on one synthetic 5000-history database. No product query changed.",
+    "No claim of admission equivalence: concurrent mutations, malformed indexes/catalogs, capacity, status/kind and null cases require a separate implementation slice.",
+    "No parser, source/lock/ACK/transaction/qualification time; this is not a complete ingress measurement."
+  ],
+  "median_ms": {
+    "candidate": 2.4718865752220154,
+    "current": 296.49689607322216
+  },
+  "seconds": {
+    "candidate": [
+      0.0026802420616149902,
+      0.0024609696120023727,
+      0.002491828054189682,
+      0.0024718865752220154,
+      0.002490624785423279,
+      0.002459978684782982,
+      0.0024675708264112473
+    ],
+    "current": [
+      0.2980010360479355,
+      0.29648975282907486,
+      0.29651023633778095,
+      0.31405963376164436,
+      0.296322837471962,
+      0.2962670177221298,
+      0.29649689607322216
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "history": 5000,
+  "indexes": [
+    [
+      "sqlite_autoindex_ideas_1",
+      null
+    ],
+    [
+      "idx_status",
+      "CREATE INDEX idx_status ON ideas(status)"
+    ],
+    [
+      "idx_status_config_hash_nocase",
+      "CREATE INDEX idx_status_config_hash_nocase ON ideas(status COLLATE NOCASE, config_hash)"
+    ],
+    [
+      "idx_missing_config_identity",
+      "CREATE INDEX idx_missing_config_identity ON ideas(status COLLATE NOCASE) WHERE config_hash IS NULL OR config_source_sha256 IS NULL"
+    ]
+  ],
+  "limits": [
+    "Read-only explain on synthetic benchmark; query/index optimization is not implemented in this slice."
+  ],
+  "parameters": [
+    65536,
+    "queued",
+    "pending",
+    "running",
+    "completed",
+    "train",
+    "train",
+    "1f0d9288d54b652276ff8c398b4cf1b68c43506885154ffe931cf48bc8f93a6e",
+    1025
+  ],
+  "plan": [
+    [
+      7,
+      0,
+      0,
+      "SEARCH ideas USING INDEX idx_status_config_hash_nocase (status=?)"
+    ],
+    [
+      64,
+      0,
+      0,
+      "USE TEMP B-TREE FOR ORDER BY"
+    ]
+  ],
+  "query": "SELECT idea_id, CASE WHEN typeof(config)='text' AND length(CAST(config AS BLOB)) <= ? THEN config ELSE NULL END AS config FROM ideas WHERE status COLLATE NOCASE IN (?, ?, ?, ?) AND ((? = 'native_cpu_action' AND kind = 'native_cpu_action') OR (? != 'native_cpu_action' AND kind != 'native_cpu_action')) AND (config_hash=? OR config_hash IS NULL OR config_source_sha256 IS NULL) ORDER BY rowid LIMIT ?"
+}

@@ -83,13 +83,6 @@ def _dedup_owner(connection, prepared):
     for row in rows:
         if row["config"] is None:
             raise _Rejected("proposal_dedup_config_unavailable")
-        # Preparation has already parsed and hashed this exact configuration;
-        # the caller-owned entry also verifies its supplied identities. Reuse
-        # that result only for equal text freshly read in this transaction.
-        # Status/kind filtering, capacity and earlier unavailable rows still
-        # apply; differently formatted YAML keeps the normal semantic check.
-        if row["config"] == prepared["config"]:
-            return row["idea_id"]
         try:
             parsed = yaml.safe_load(row["config"])
             if isinstance(parsed, dict) and hash_config(parsed) == prepared["config_hash"]:

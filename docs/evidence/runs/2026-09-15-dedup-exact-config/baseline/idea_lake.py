@@ -1,0 +1,3129 @@
+"""Idea Lake — SQLite archive for completed/failed ideas.
+
+Provides a queryable store so ideas.md can stay small (~500 hot ideas)
+while all historical ideas remain accessible for config lookups, dedup,
+and leaderboard queries.
+
+Usage:
+    lake = IdeaLake("idea_lake.db")
+    lake.insert("idea-001", "Zipformer", config_yaml, raw_md, eval_metrics={...})
+    idea = lake.get("idea-001")
+    top = lake.get_top_models(metric="test_accuracy", n=10)
+"""
+
+import datetime
+import hashlib
+import json
+import logging
+import os
+import re
+import sqlite3
+import threading
+import time
+from collections import OrderedDict
+from typing import Any, Dict, Iterable, List, Optional, Set
+
+import yaml
+
+from orze.core.integrity import hash_config
+from orze.core.sqlite_policy import apply_shared_database_policy
+
+logger = logging.getLogger("idea_lake")
+
+
+# A daemon opens the same lake through several production boundaries. Replaying
+# every idempotent CREATE/ALTER/migration statement on every connection is both
+# unnecessary and expensive on a shared filesystem. This cache is deliberately
+# process-local: a new process or code deployment always performs one complete
+# bootstrap. Entries are accepted only when the database file identity and a
+# digest of its complete schema plus content-bearing bootstrap invariants still
+# match. The bound prevents long-lived administrative processes from retaining
+# an unbounded set of one-off database paths.
+_SCHEMA_BOOTSTRAP_CACHE_MAX = 128
+_schema_bootstrap_cache = OrderedDict()
+_schema_bootstrap_cache_lock = threading.Lock()
+
+
+def _schema_bootstrap_cache_key(db_path: str):
+    if db_path == ":memory:" or db_path.startswith("file:"):
+        return None
+    try:
+        resolved = os.path.realpath(db_path)
+        info = os.stat(resolved)
+    except OSError:
+        return None
+    return (resolved, info.st_dev, info.st_ino)
+
+
+def _schema_bootstrap_identity(conn: sqlite3.Connection):
+    """Hash schema and the few data rows whose absence triggers bootstrap."""
+    try:
+        schema_rows = [
+            tuple(row) for row in conn.execute(
+                "SELECT type, name, tbl_name, sql FROM sqlite_master "
+                "WHERE type IN ('table', 'index', 'trigger') "
+                "ORDER BY type, name, tbl_name"
+            ).fetchall()
+        ]
+        migration_names = [
+            row[0] for row in conn.execute(
+                "SELECT name FROM schema_migrations ORDER BY name"
+            ).fetchall()
+        ]
+        sequence_rows = conn.execute(
+            "SELECT COUNT(*) FROM id_sequence"
+        ).fetchone()[0]
+    except (sqlite3.DatabaseError, TypeError):
+        return None
+    payload = json.dumps(
+        {
+            "schema": schema_rows,
+            "migration_names": migration_names,
+            "id_sequence_rows": sequence_rows,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _schema_bootstrap_cache_hit(key, identity) -> bool:
+    if key is None or identity is None:
+        return False
+    with _schema_bootstrap_cache_lock:
+        if _schema_bootstrap_cache.get(key) != identity:
+            return False
+        _schema_bootstrap_cache.move_to_end(key)
+        return True
+
+
+def _remember_schema_bootstrap(key, identity) -> None:
+    if key is None or identity is None:
+        return
+    with _schema_bootstrap_cache_lock:
+        _schema_bootstrap_cache[key] = identity
+        _schema_bootstrap_cache.move_to_end(key)
+        while len(_schema_bootstrap_cache) > _SCHEMA_BOOTSTRAP_CACHE_MAX:
+            _schema_bootstrap_cache.popitem(last=False)
+
+
+def flatten_config(config: dict, prefix: str = "", max_depth: int = 2) -> Dict[str, Any]:
+    """Flatten a nested config dict into dot-separated keys.
+    Only keeps leaf scalar values (str, int, float, bool).
+    """
+    result = {}
+    if not isinstance(config, dict) or max_depth <= 0:
+        return result
+
+    for key, val in config.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(val, dict):
+            result.update(flatten_config(val, full_key, max_depth - 1))
+        elif not isinstance(val, (dict, list)) and val is not None:
+            result[full_key] = val
+    return result
+
+_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS ideas (
+    idea_id TEXT PRIMARY KEY,
+    id_num INTEGER,
+    title TEXT NOT NULL,
+    priority TEXT DEFAULT 'medium',
+    category TEXT DEFAULT 'architecture',
+    parent TEXT,
+    hypothesis TEXT,
+    config TEXT NOT NULL,
+    config_hash TEXT,
+    config_source_sha256 TEXT,
+    raw_markdown TEXT NOT NULL,
+    config_summary TEXT,
+    eval_metrics TEXT,
+    status TEXT DEFAULT 'archived',
+    training_time REAL,
+    archived_at TEXT,
+    created_at TEXT,
+    approach_family TEXT DEFAULT 'other',
+    kind TEXT NOT NULL DEFAULT 'train'
+);
+
+CREATE INDEX IF NOT EXISTS idx_status ON ideas(status);
+
+CREATE TABLE IF NOT EXISTS id_sequence (
+    next_id INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS idea_state (
+    idea_id TEXT PRIMARY KEY,
+    current_state TEXT NOT NULL DEFAULT 'QUEUED',
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    first_queued_at TEXT,
+    queued_at TEXT,
+    claimed_at TEXT,
+    started_at TEXT,
+    terminal_at TEXT,
+    completed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_idea_state_current ON idea_state(current_state);
+
+CREATE TABLE IF NOT EXISTS idea_transitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    idea_id TEXT NOT NULL,
+    from_state TEXT NOT NULL,
+    to_state TEXT NOT NULL,
+    sop_type TEXT DEFAULT 'training',
+    reason TEXT,
+    host TEXT,
+    pid INTEGER,
+    ts TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_idea_transitions_idea_id ON idea_transitions(idea_id);
+CREATE INDEX IF NOT EXISTS idx_idea_transitions_to_state ON idea_transitions(to_state);
+
+CREATE TABLE IF NOT EXISTS idea_stage_state (
+    idea_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    current_state TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    started_at TEXT,
+    terminal_at TEXT,
+    PRIMARY KEY (idea_id, stage)
+);
+
+CREATE INDEX IF NOT EXISTS idx_idea_stage_state_current
+ON idea_stage_state(stage, current_state);
+
+CREATE TABLE IF NOT EXISTS idea_stage_transitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    idea_id TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    from_state TEXT NOT NULL,
+    to_state TEXT NOT NULL,
+    reason TEXT,
+    host TEXT,
+    pid INTEGER,
+    ts TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_idea_stage_transitions_idea
+ON idea_stage_transitions(idea_id, stage, id);
+
+CREATE TABLE IF NOT EXISTS harness_efficiency_samples (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id TEXT,
+    controller_id TEXT NOT NULL,
+    host TEXT NOT NULL,
+    iteration INTEGER NOT NULL,
+    observed_at_epoch REAL NOT NULL,
+    observed_at TEXT NOT NULL,
+    poll_seconds REAL NOT NULL,
+    physical_scope_json TEXT NOT NULL,
+    gpu_telemetry_json TEXT NOT NULL,
+    telemetry_complete INTEGER NOT NULL,
+    active_training_gpus_json TEXT NOT NULL,
+    active_evaluation_gpus_json TEXT NOT NULL,
+    remaining_training INTEGER NOT NULL,
+    remaining_evaluation INTEGER NOT NULL,
+    demand_membership_json TEXT,
+    launcher_paused INTEGER NOT NULL,
+    disk_ok INTEGER NOT NULL,
+    UNIQUE(controller_id, iteration)
+);
+
+CREATE INDEX IF NOT EXISTS idx_harness_efficiency_observed
+ON harness_efficiency_samples(observed_at_epoch);
+
+CREATE TABLE IF NOT EXISTS harness_campaign_registrations (
+    campaign_id TEXT PRIMARY KEY,
+    manifest_sha256 TEXT NOT NULL,
+    manifest_json TEXT NOT NULL,
+    registered_at_epoch REAL NOT NULL,
+    registered_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS harness_campaign_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id TEXT NOT NULL,
+    controller_id TEXT NOT NULL,
+    host TEXT NOT NULL,
+    iteration INTEGER NOT NULL,
+    observed_at_epoch REAL NOT NULL,
+    observed_at TEXT NOT NULL,
+    last_valid_artifact_sha256 TEXT,
+    last_valid_artifact_idea_id TEXT,
+    last_valid_artifact_at_epoch REAL,
+    blocker_code TEXT NOT NULL,
+    next_deadline_epoch REAL NOT NULL,
+    UNIQUE(campaign_id, controller_id, iteration)
+);
+
+CREATE INDEX IF NOT EXISTS idx_harness_campaign_progress_observed
+ON harness_campaign_progress(campaign_id, observed_at_epoch);
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    name TEXT PRIMARY KEY,
+    applied_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+# Legacy fixed-metric columns from pre-1.5 schema.
+# Auto-detected from PRAGMA table_info during migration.
+_KNOWN_META_COLS = {
+    "idea_id", "id_num", "title", "priority", "category", "parent",
+    "hypothesis", "config", "raw_markdown", "config_summary",
+    "config_hash", "config_source_sha256",
+    "eval_metrics", "status", "training_time", "archived_at", "created_at",
+    "approach_family", "kind",
+}
+
+# F8: closed vocabulary of idea kinds. Anything else is a hard error so the
+# launcher / scheduler can safely dispatch on kind.
+ALLOWED_KINDS = {
+    "native_cpu_action",  # explicit CPU action; never the training/eval pipeline
+    "train",           # legacy / default: run train_script
+    "posthoc_eval",    # inference-only job on an existing ckpt/npz
+    "tta_sweep",       # generate a TTA view (subclass of posthoc_eval)
+    "agg_search",      # sweep aggregations/calibrators on a bundle
+    "bundle_combine",  # combine N views of ONE ckpt
+    "audit",           # F14: champion-promotion audit
+}
+
+
+# ``ideas.status`` predates the audited FSM and is still consumed by reports
+# and older integrations. Keep the two representations in one transaction;
+# otherwise a crash or a legacy ``set_status`` caller can advertise work as
+# queued after it has already been claimed or rejected.
+STATE_TO_STATUS = {
+    "QUEUED": "queued",
+    "CLAIMED": "running",
+    "IN_PROGRESS": "running",
+    "COMPLETE": "completed",
+    "FAILED": "failed",
+    "SKIPPED": "skipped",
+    "ARCHIVED": "archived",
+}
+
+STATUS_TO_STATE = {
+    "queued": "QUEUED",
+    "pending": "QUEUED",
+    "claimed": "CLAIMED",
+    "running": "IN_PROGRESS",
+    "training": "IN_PROGRESS",
+    "evaluating": "IN_PROGRESS",
+    "completed": "COMPLETE",
+    # A partial run may retain useful diagnostics, but it has not satisfied
+    # the completed-run contract and must never be advertised as complete.
+    "partial": "FAILED",
+    "failed": "FAILED",
+    "dead": "FAILED",
+    "skipped": "SKIPPED",
+    "archived": "ARCHIVED",
+}
+
+VALID_STATE_TRANSITIONS = {
+    "QUEUED": {"CLAIMED", "SKIPPED"},
+    "CLAIMED": {"IN_PROGRESS", "FAILED", "QUEUED", "SKIPPED"},
+    "IN_PROGRESS": {"COMPLETE", "FAILED", "QUEUED"},
+    "COMPLETE": {"ARCHIVED"},
+    "FAILED": {"QUEUED", "SKIPPED"},
+    "SKIPPED": {"QUEUED", "ARCHIVED"},
+    "ARCHIVED": set(),
+}
+
+PIPELINE_STAGES = ("training", "evaluation")
+STAGE_TERMINALS = {"COMPLETE", "FAILED", "SKIPPED"}
+VALID_STAGE_TRANSITIONS = {
+    "NOT_STARTED": {"PENDING", "IN_PROGRESS", "COMPLETE", "FAILED", "SKIPPED"},
+    "PENDING": {"IN_PROGRESS", "COMPLETE", "FAILED", "SKIPPED"},
+    "IN_PROGRESS": {"PENDING", "COMPLETE", "FAILED"},
+    "COMPLETE": {"PENDING"},
+    "FAILED": {"PENDING"},
+    "SKIPPED": {"PENDING"},
+}
+
+
+def _retry_on_busy(func, max_retries=10, base_delay=1.0):
+    """Retry a callable on SQLITE_BUSY / OperationalError with exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                delay = min(base_delay * (2 ** attempt), 30)
+                logger.warning("SQLite busy (attempt %d/%d), retrying in %.1fs",
+                               attempt + 1, max_retries, delay)
+                time.sleep(delay)
+            else:
+                raise
+
+
+_MEDAL_ORDER = ("none", "below_median", "above_median", "bronze", "silver", "gold")
+
+
+def _medal_rank(medal) -> int:
+    """Rank a medal label so higher == better. Unknown/None -> 0."""
+    try:
+        return _MEDAL_ORDER.index(medal)
+    except (ValueError, TypeError):
+        return 0
+
+
+class IdeaLake:
+    """SQLite-backed archive for ideas."""
+
+    def __init__(self, db_path: str):
+        self.db_path = str(db_path)
+        self.schema_bootstrap_cache_hit = False
+        self.conn = sqlite3.connect(self.db_path, timeout=30)
+        self.conn.row_factory = sqlite3.Row
+        # Multi-host Orze supports only verified rollback journaling. WAL needs
+        # shared-memory VFS semantics and is not supported on shared/network
+        # filesystems such as CephFS, Lustre, NFS, or EFS.
+        try:
+            apply_shared_database_policy(self.conn)
+            self.conn.execute("PRAGMA busy_timeout=60000")
+            self._ensure_schema()
+        except Exception:
+            self.conn.close()
+            raise
+
+    def _ensure_schema(self):
+        cache_key = _schema_bootstrap_cache_key(self.db_path)
+        identity = _schema_bootstrap_identity(self.conn)
+        if _schema_bootstrap_cache_hit(cache_key, identity):
+            self.schema_bootstrap_cache_hit = True
+            return
+
+        try:
+            self.conn.executescript(
+                "BEGIN IMMEDIATE;\n" + _SCHEMA_SQL + "\nCOMMIT;"
+            )
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+        # Normalize the original audited-FSM column names before any index or
+        # writer assumes the current schema. Some deployed databases use
+        # transitioned_at/transitioned_by_* with NOT NULL constraints.
+        self._normalize_transition_schema()
+        # Ensure id_sequence has a row
+        row = self.conn.execute("SELECT next_id FROM id_sequence LIMIT 1").fetchone()
+        if row is None:
+            self.conn.execute("INSERT INTO id_sequence (next_id) VALUES (1)")
+            self.conn.commit()
+        self._migrate_if_needed()
+        self._ensure_harness_efficiency_schema()
+        # Trigger consumption ledger (resolves c1005 / DEC-009). Owned by
+        # orze.engine.trigger_ledger but the table is materialised here
+        # so it exists from first connect, before any consumer runs.
+        trigger_schema_complete = True
+        try:
+            from orze.engine.trigger_ledger import init_schema as _init_trig
+            _init_trig(self.conn)
+        except Exception as e:
+            trigger_schema_complete = False
+            logger.warning("trigger_ledger schema init failed: %s", e)
+        if trigger_schema_complete:
+            _remember_schema_bootstrap(
+                _schema_bootstrap_cache_key(self.db_path),
+                _schema_bootstrap_identity(self.conn),
+            )
+
+    def _ensure_harness_efficiency_schema(self) -> None:
+        """Add exact scheduler-demand evidence without rewriting old rows."""
+        columns = {
+            row[1] for row in self.conn.execute(
+                "PRAGMA table_info(harness_efficiency_samples)"
+            ).fetchall()
+        }
+        if "demand_membership_json" in columns:
+            return
+        self.conn.execute(
+            "ALTER TABLE harness_efficiency_samples "
+            "ADD COLUMN demand_membership_json TEXT"
+        )
+        self.conn.commit()
+
+    def _normalize_transition_schema(self) -> None:
+        """Losslessly rename the original transition receipt columns.
+
+        Renaming, rather than copying into newly added columns, preserves both
+        historical values and legacy NOT NULL constraints without requiring
+        future writers to maintain two timestamp columns.
+        """
+        aliases = {
+            "transitioned_at": "ts",
+            "transitioned_by_host": "host",
+            "transitioned_by_pid": "pid",
+        }
+        existing_columns = {
+            row[1] for row in self.conn.execute(
+                "PRAGMA table_info(idea_transitions)"
+            ).fetchall()
+        }
+        has_index = self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
+            ("idx_idea_transitions_ts",),
+        ).fetchone()
+        if {"ts", "host", "pid"}.issubset(existing_columns) and has_index:
+            return
+
+        def _do_migrate():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                columns = {
+                    row[1] for row in self.conn.execute(
+                        "PRAGMA table_info(idea_transitions)"
+                    ).fetchall()
+                }
+                for old, new in aliases.items():
+                    if new not in columns and old in columns:
+                        self.conn.execute(
+                            f"ALTER TABLE idea_transitions "
+                            f"RENAME COLUMN {old} TO {new}"
+                        )
+                        columns.remove(old)
+                        columns.add(new)
+                # Extremely old/custom tables may have neither spelling. Keep
+                # their existing rows explicitly unknown rather than deriving
+                # timestamps from row IDs or filesystem metadata.
+                for name, declaration in (
+                    ("ts", "TEXT"), ("host", "TEXT"), ("pid", "INTEGER")
+                ):
+                    if name not in columns:
+                        self.conn.execute(
+                            f"ALTER TABLE idea_transitions "
+                            f"ADD COLUMN {name} {declaration}"
+                        )
+                        columns.add(name)
+                self.conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_idea_transitions_ts "
+                    "ON idea_transitions(ts)"
+                )
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        _retry_on_busy(_do_migrate)
+
+    def _migrate_if_needed(self):
+        """Migrate from old fixed-column schema to generic JSON blobs."""
+        cols = {
+            r[1] for r in self.conn.execute("PRAGMA table_info(ideas)").fetchall()
+        }
+        # Detect legacy schema: any column not in _KNOWN_META_COLS is an old metric/config column
+        extra_cols = cols - _KNOWN_META_COLS
+        has_old = bool(extra_cols)
+        has_new = "eval_metrics" in cols
+
+        # CREATE TABLE IF NOT EXISTS does not add columns to a legacy table.
+        # Complete the metadata schema before creating indexes or opening the
+        # audited FSM; minimal historical databases otherwise failed halfway
+        # through migration (for example, idx_status_priority_id referenced a
+        # missing priority column).
+        metadata_columns = {
+            "priority": "TEXT DEFAULT 'medium'",
+            "category": "TEXT DEFAULT 'architecture'",
+            "parent": "TEXT",
+            "hypothesis": "TEXT",
+            "config_summary": "TEXT",
+            "training_time": "REAL",
+            "archived_at": "TEXT",
+            "created_at": "TEXT",
+            "config_hash": "TEXT",
+            "config_source_sha256": "TEXT",
+        }
+        added_metadata = False
+        for column, declaration in metadata_columns.items():
+            if column not in cols:
+                logger.info(
+                    "Migrating idea_lake schema: adding %s column", column)
+                self.conn.execute(
+                    f"ALTER TABLE ideas ADD COLUMN {column} {declaration}"
+                )
+                cols.add(column)
+                added_metadata = True
+        if added_metadata:
+            self.conn.commit()
+
+        if "id_num" not in cols:
+            logger.info("Migrating idea_lake schema: adding id_num column")
+            self.conn.execute("ALTER TABLE ideas ADD COLUMN id_num INTEGER")
+            # Backfill
+            rows = self.conn.execute("SELECT idea_id FROM ideas").fetchall()
+            for r in rows:
+                match = re.search(r"idea-([a-z0-9]+)", r["idea_id"])
+                if match:
+                    try:
+                        num = int(match.group(1))
+                    except ValueError:
+                        hex_part = re.sub(r"^[^0-9a-f]+", "", match.group(1))
+                        try:
+                            num = int(hex_part, 16) % (2**31) if hex_part else hash(r["idea_id"]) % (2**31)
+                        except ValueError:
+                            num = hash(r["idea_id"]) % (2**31)
+                    self.conn.execute(
+                        "UPDATE ideas SET id_num = ? WHERE idea_id = ?",
+                        (num, r["idea_id"])
+                    )
+            self.conn.commit()
+            logger.info("Backfilled id_num for %d ideas", len(rows))
+            # Create indexes that need id_num
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_status_priority_id ON ideas(status, priority, id_num)")
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_id_num ON ideas(id_num)")
+            self.conn.commit()
+
+        if has_old and not has_new:
+            logger.info("Migrating idea_lake schema: fixed columns → JSON blobs (extra: %s)", extra_cols)
+            self.conn.execute("ALTER TABLE ideas ADD COLUMN eval_metrics TEXT")
+            self.conn.execute("ALTER TABLE ideas ADD COLUMN config_summary TEXT")
+
+            # Build JSON blobs from old columns
+            rows = self.conn.execute("SELECT idea_id, * FROM ideas").fetchall()
+            for row in rows:
+                rd = dict(row)
+                merged = {}
+                for c in extra_cols:
+                    if c in rd and rd[c] is not None:
+                        merged[c] = rd[c]
+
+                self.conn.execute(
+                    "UPDATE ideas SET eval_metrics = ? WHERE idea_id = ?",
+                    (json.dumps(merged) if merged else None, rd["idea_id"]),
+                )
+            self.conn.commit()
+            logger.info("Migration complete for %d ideas", len(rows))
+
+        elif not has_new:
+            # Fresh DB, columns already correct from _SCHEMA_SQL
+            pass
+
+        # Add approach_family column if missing
+        if "approach_family" not in cols:
+            logger.info("Migrating idea_lake schema: adding approach_family column")
+            self.conn.execute(
+                "ALTER TABLE ideas ADD COLUMN approach_family TEXT DEFAULT 'other'"
+            )
+            self.conn.commit()
+
+        # F8: add kind column if missing (defaults to 'train' for back-compat).
+        if "kind" not in cols:
+            logger.info("Migrating idea_lake schema: adding kind column (F8)")
+            self.conn.execute(
+                "ALTER TABLE ideas ADD COLUMN kind TEXT NOT NULL DEFAULT 'train'"
+            )
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_kind ON ideas(kind)")
+            self.conn.commit()
+
+        # Config identities make exact experiment dedup a cheap indexed read
+        # instead of reparsing every admitted YAML document on every scheduler
+        # tick. Existing rows are backfilled lazily by
+        # get_admitted_config_hashes(), keeping database open bounded.
+        # Every production config-hash probe also constrains admitted status,
+        # so the compound index below covers the hot path. Keeping the earlier
+        # single-column index doubled large-import write amplification with no
+        # read gain for that path.
+        self.conn.execute("DROP INDEX IF EXISTS idx_config_hash")
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_status_config_hash_nocase "
+            "ON ideas(status COLLATE NOCASE, config_hash)"
+        )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_missing_config_identity "
+            "ON ideas(status COLLATE NOCASE) "
+            "WHERE config_hash IS NULL OR config_source_sha256 IS NULL"
+        )
+        self.conn.execute(
+            "CREATE TRIGGER IF NOT EXISTS invalidate_config_identity "
+            "AFTER UPDATE OF config ON ideas "
+            "WHEN NEW.config IS NOT OLD.config "
+            "BEGIN "
+            "UPDATE ideas SET config_hash = NULL, "
+            "config_source_sha256 = NULL WHERE idea_id = NEW.idea_id; "
+            "END"
+        )
+        self.conn.commit()
+
+        # v4.5: Genericize FSM (orthogonal to SOP type)
+        try:
+            from orze.migrations.v45_genericize_fsm import migrate_v45
+            migrate_v45(self.conn)
+        except Exception as e:
+            logger.warning("v4.5 FSM migration failed: %s (will retry next init)", e)
+
+        self._ensure_lifecycle_timestamp_schema()
+        self._reconcile_lifecycle_columns()
+        self._reconcile_partial_states()
+
+    def _ensure_lifecycle_timestamp_schema(self) -> None:
+        """Add current-attempt lifecycle clocks without inventing history.
+
+        Existing rows remain NULL: ``updated_at`` or filesystem mtimes are not
+        evidence of when an old attempt was queued, claimed, started, or
+        finished.  New values are written only by an accepted lifecycle edge.
+        """
+        columns = {
+            row[1]
+            for row in self.conn.execute("PRAGMA table_info(idea_state)").fetchall()
+        }
+        missing = [
+            name for name in (
+                "first_queued_at", "queued_at", "claimed_at", "started_at",
+                "terminal_at", "completed_at",
+            )
+            if name not in columns
+        ]
+        if not missing:
+            return
+
+        def _do_migrate():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                # Re-read under the write lock in case another opener migrated
+                # the shared database while this connection was waiting.
+                current = {
+                    row[1] for row in self.conn.execute(
+                        "PRAGMA table_info(idea_state)"
+                    ).fetchall()
+                }
+                for name in missing:
+                    if name not in current:
+                        self.conn.execute(
+                            f"ALTER TABLE idea_state ADD COLUMN {name} TEXT"
+                        )
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        _retry_on_busy(_do_migrate)
+
+    @staticmethod
+    def _transition_time(conn: sqlite3.Connection) -> str:
+        """Return one framework-owned UTC timestamp for an atomic edge."""
+        return conn.execute(
+            "SELECT strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
+        ).fetchone()[0]
+
+    @staticmethod
+    def _lifecycle_timestamp_sql(to_state: str) -> tuple:
+        """Return SQL assignments/values for the current attempt.
+
+        The clocks describe when the database accepted each lifecycle edge,
+        not an unverified timestamp supplied by a worker.  Requeue starts a
+        fresh current attempt; the immutable transition ledger retains prior
+        attempts.
+        """
+        if to_state == "QUEUED":
+            return (
+                "first_queued_at = COALESCE(first_queued_at, ?), "
+                "queued_at = ?, claimed_at = NULL, started_at = NULL, "
+                "terminal_at = NULL, completed_at = NULL",
+                2,
+            )
+        if to_state == "CLAIMED":
+            return (
+                "claimed_at = ?, started_at = NULL, terminal_at = NULL, "
+                "completed_at = NULL",
+                1,
+            )
+        if to_state == "IN_PROGRESS":
+            return (
+                "started_at = ?, terminal_at = NULL, "
+                "completed_at = NULL",
+                1,
+            )
+        if to_state == "COMPLETE":
+            return (
+                "terminal_at = ?, completed_at = ?",
+                2,
+            )
+        if to_state in ("FAILED", "SKIPPED"):
+            return (
+                "terminal_at = ?, completed_at = NULL",
+                1,
+            )
+        return ("", 0)
+
+    @classmethod
+    def _state_timestamp_clause(cls, to_state: str, at: str) -> tuple:
+        sql, marker_count = cls._lifecycle_timestamp_sql(to_state)
+        return sql, tuple(at for _ in range(marker_count))
+
+    @classmethod
+    def _write_state_row(
+        cls,
+        conn: sqlite3.Connection,
+        idea_id: str,
+        to_state: str,
+        host: str,
+        pid: int,
+        sop_type: str,
+        at: str,
+        *,
+        expected_state: Optional[str] = None,
+    ) -> bool:
+        """Write state and its clocks together; optionally compare-and-swap."""
+        timestamp_sql, timestamp_values = cls._state_timestamp_clause(to_state, at)
+        assignments = (
+            "current_state = ?, updated_by_host = ?, updated_by_pid = ?, "
+            "sop_type = ?, updated_at = ?"
+        )
+        if timestamp_sql:
+            assignments += ", " + timestamp_sql
+        params = [to_state, host, pid, sop_type, at, *timestamp_values, idea_id]
+        where = "idea_id = ?"
+        if expected_state is not None:
+            where += " AND current_state = ?"
+            params.append(expected_state)
+        cursor = conn.execute(
+            f"UPDATE idea_state SET {assignments} WHERE {where}", params
+        )
+        return cursor.rowcount == 1
+
+    @staticmethod
+    def _insert_state_row(
+        conn: sqlite3.Connection,
+        idea_id: str,
+        state: str,
+        host: str,
+        pid: int,
+        sop_type: str,
+        at: str,
+        *,
+        known_queued_at: bool = False,
+        record_lifecycle: bool = True,
+    ) -> bool:
+        """Insert a newly observed state with only timestamps actually known."""
+        queued_at = (
+            at if record_lifecycle and (known_queued_at or state == "QUEUED")
+            else None
+        )
+        claimed_at = at if record_lifecycle and state == "CLAIMED" else None
+        started_at = at if record_lifecycle and state == "IN_PROGRESS" else None
+        terminal_at = (
+            at if record_lifecycle and state in ("COMPLETE", "FAILED", "SKIPPED")
+            else None
+        )
+        completed_at = at if record_lifecycle and state == "COMPLETE" else None
+        cursor = conn.execute(
+            "INSERT INTO idea_state "
+            "(idea_id, current_state, updated_by_host, updated_by_pid, sop_type, "
+            "updated_at, first_queued_at, queued_at, claimed_at, started_at, "
+            "terminal_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                idea_id, state, host, pid, sop_type, at, queued_at, queued_at,
+                claimed_at, started_at, terminal_at, completed_at,
+            ),
+        )
+        return cursor.rowcount == 1
+
+    def _reconcile_lifecycle_columns(self) -> None:
+        """Idempotently repair legacy/FSM lifecycle divergence.
+
+        Older Orze releases wrote ``ideas.status`` and ``idea_state`` through
+        independent paths. Preserve an active FSM claim, but import terminal
+        legacy decisions and backfill rows that predate the FSM. Finally make
+        the legacy column reflect audited non-queued FSM states. This is a
+        bounded startup migration; repeated opens produce no new transitions.
+        """
+        migration_name = "lifecycle_columns_v1"
+        if self.conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE name = ?",
+            (migration_name,),
+        ).fetchone():
+            return
+
+        def _do_reconcile():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                # A second process may have completed the migration while this
+                # connection waited for the write lock.
+                if self.conn.execute(
+                    "SELECT 1 FROM schema_migrations WHERE name = ?",
+                    (migration_name,),
+                ).fetchone():
+                    self.conn.rollback()
+                    return
+
+                # Rows created before the FSM get a state derived from their
+                # legacy status. Unknown statuses remain legacy-only rather
+                # than being invented into the audited lifecycle.
+                for status, state in STATUS_TO_STATE.items():
+                    self.conn.execute(
+                        "INSERT OR IGNORE INTO idea_state (idea_id, current_state) "
+                        "SELECT idea_id, ? FROM ideas WHERE lower(status) = ?",
+                        (state, status),
+                    )
+
+                # Historical admission and terminal writes updated only the
+                # legacy column. Import them when the FSM still says QUEUED;
+                # SKIPPED also supersedes FAILED because launch validation in
+                # older versions wrote a failure marker before classifying the
+                # zero-compute rejection as skipped.
+                repairs = (
+                    ("SKIPPED", ("skipped",), ("QUEUED", "FAILED")),
+                    ("COMPLETE", ("completed",),
+                     ("QUEUED", "IN_PROGRESS")),
+                    ("FAILED", ("failed", "dead", "partial"),
+                     ("QUEUED", "IN_PROGRESS")),
+                )
+                for target, statuses, sources in repairs:
+                    status_marks = ",".join("?" for _ in statuses)
+                    state_marks = ",".join("?" for _ in sources)
+                    self.conn.execute(
+                        f"UPDATE idea_state SET current_state = ?, "
+                        "updated_at = datetime('now') "
+                        f"WHERE current_state IN ({state_marks}) AND idea_id IN ("
+                        "SELECT idea_id FROM ideas "
+                        f"WHERE lower(status) IN ({status_marks}))",
+                        (target, *sources, *statuses),
+                    )
+
+                # FSM ownership wins for active work and for terminal states
+                # when the legacy row still claims the idea is dispatchable.
+                for state, status in STATE_TO_STATUS.items():
+                    if state == "QUEUED":
+                        continue
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ? WHERE idea_id IN ("
+                        "SELECT idea_id FROM idea_state WHERE current_state = ?) "
+                        "AND lower(status) IN ('queued', 'pending', 'running')",
+                        (status, state),
+                    )
+                self.conn.execute(
+                    "INSERT INTO schema_migrations (name) VALUES (?)",
+                    (migration_name,),
+                )
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        _retry_on_busy(_do_reconcile)
+
+    def _reconcile_partial_states(self) -> None:
+        """One-time repair for legacy PARTIAL rows classified COMPLETE.
+
+        PARTIAL output can be retained for diagnosis, but it is not proof of
+        a completed run. Older FSM imports mapped it to COMPLETE; repair that
+        classification with an explicit migration edge so the correction is
+        visible rather than silently rewriting history.
+        """
+        migration_name = "partial_is_failed_v1"
+
+        def _do_reconcile():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                if self.conn.execute(
+                    "SELECT 1 FROM schema_migrations WHERE name = ?",
+                    (migration_name,),
+                ).fetchone():
+                    self.conn.rollback()
+                    return
+
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO idea_state (idea_id, current_state) "
+                    "SELECT idea_id, 'FAILED' FROM ideas "
+                    "WHERE lower(status) = 'partial'"
+                )
+                rows = self.conn.execute(
+                    "SELECT s.idea_id, s.current_state FROM idea_state s "
+                    "JOIN ideas i ON i.idea_id = s.idea_id "
+                    "WHERE lower(i.status) = 'partial' "
+                    "AND s.current_state IN ('QUEUED', 'CLAIMED', "
+                    "'IN_PROGRESS', 'COMPLETE')"
+                ).fetchall()
+                for idea_id, current in rows:
+                    transition_at = self._transition_time(self.conn)
+                    self.conn.execute(
+                        "UPDATE idea_state SET current_state = 'FAILED', "
+                        "updated_by_host = 'migration', updated_by_pid = ?, "
+                        "updated_at = datetime('now') WHERE idea_id = ?",
+                        (os.getpid(), idea_id),
+                    )
+                    self.conn.execute(
+                        "INSERT INTO idea_transitions "
+                        "(idea_id, from_state, to_state, reason, host, pid, "
+                        "sop_type, ts) VALUES (?, ?, 'FAILED', "
+                        "'migration_partial_not_complete', 'migration', ?, "
+                        "'training', ?)",
+                        (idea_id, current, os.getpid(), transition_at),
+                    )
+                self.conn.execute(
+                    "INSERT INTO schema_migrations (name) VALUES (?)",
+                    (migration_name,),
+                )
+                self.conn.commit()
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        _retry_on_busy(_do_reconcile)
+
+    def prepare_proposal(
+        self,
+        idea_id: str,
+        title: str,
+        config_yaml: str,
+        raw_markdown: str,
+        eval_metrics: Optional[Dict[str, Any]] = None,
+        config_summary: Optional[Dict[str, Any]] = None,
+        status: str = "queued",
+        priority: str = "medium",
+        category: str = "architecture",
+        parent: Optional[str] = None,
+        hypothesis: Optional[str] = None,
+        training_time: Optional[float] = None,
+        created_at: Optional[str] = None,
+        approach_family: str = "other",
+        kind: str = "train",
+    ):
+        """Prepare ordinary admission metadata without accessing the database.
+
+        Derived config identities use the same normalization as legacy insert.
+        The returned dictionary grants no admission or transaction authority.
+        """
+        if kind not in ALLOWED_KINDS:
+            raise ValueError(
+                f"idea kind={kind!r} not in {sorted(ALLOWED_KINDS)}"
+            )
+        # Evolution contract (soft): a child that declares a parent should also
+        # record a rationale (the hypothesis behind the change). We do not reject
+        # it — we log the violation so the gap is visible and the search-path
+        # visualizer can flag it — but every evolution edge is expected to be
+        # justified.
+        _real_parent = parent and str(parent).lower() not in ("", "none")
+        if _real_parent and not (hypothesis and hypothesis.strip()):
+            logger.warning(
+                "idea %s declares parent=%s but has no rationale/hypothesis "
+                "(unjustified evolution edge)", idea_id, parent
+            )
+        # Extract numeric ID for indexed sorting (supports both numeric and hex IDs)
+        id_num = None
+        match = re.search(r"idea-([a-z0-9]+)", idea_id)
+        if match:
+            try:
+                id_num = int(match.group(1))
+            except ValueError:
+                # Strip non-hex prefix (e.g., "v", "ss") then parse as hex
+                hex_part = re.sub(r"^[^0-9a-f]+", "", match.group(1))
+                try:
+                    id_num = int(hex_part, 16) % (2**31) if hex_part else hash(idea_id) % (2**31)
+                except ValueError:
+                    id_num = hash(idea_id) % (2**31)
+
+        # Parse once for both the flattened summary and the canonical dedup
+        # identity. The source digest lets readers detect unsupported direct
+        # SQL edits that changed config without updating its derived hash.
+        config_obj = None
+        if config_yaml:
+            try:
+                config_obj = yaml.safe_load(config_yaml)
+            except yaml.YAMLError:
+                pass
+        if not config_summary and isinstance(config_obj, dict):
+            config_summary = flatten_config(config_obj)
+        config_source_sha256 = hashlib.sha256(
+            config_yaml.encode("utf-8")
+        ).hexdigest()
+        config_hash = (
+            hash_config(config_obj) if isinstance(config_obj, dict) else None
+        )
+
+        return {
+            "idea_id": idea_id, "id_num": id_num, "title": title,
+            "priority": priority, "category": category, "parent": parent,
+            "hypothesis": hypothesis, "config": config_yaml,
+            "config_hash": config_hash,
+            "config_source_sha256": config_source_sha256,
+            "raw_markdown": raw_markdown,
+            "config_summary": json.dumps(config_summary) if config_summary else None,
+            "eval_metrics": json.dumps(eval_metrics) if eval_metrics else None,
+            "status": status, "training_time": training_time,
+            "created_at": created_at, "approach_family": approach_family,
+            "kind": kind,
+        }
+
+    def insert(
+        self,
+        idea_id: str,
+        title: str,
+        config_yaml: str,
+        raw_markdown: str,
+        eval_metrics: Optional[Dict[str, Any]] = None,
+        config_summary: Optional[Dict[str, Any]] = None,
+        status: str = "archived",
+        priority: str = "medium",
+        category: str = "architecture",
+        parent: Optional[str] = None,
+        hypothesis: Optional[str] = None,
+        training_time: Optional[float] = None,
+        created_at: Optional[str] = None,
+        approach_family: str = "other",
+        kind: str = "train",
+        *,
+        if_absent: bool = False,
+    ):
+        """Insert/update legacy records, or atomically admit an immutable proposal.
+
+        ``if_absent=True`` only admits queued proposals and returns a structured
+        result; it never replaces a same-ID record or owns a caller transaction.
+        The default retains the historical import/update behavior and return.
+        """
+        if not isinstance(if_absent, bool):
+            raise ValueError("proposal_if_absent_invalid")
+        prepared = self.prepare_proposal(
+            idea_id, title, config_yaml, raw_markdown,
+            eval_metrics=eval_metrics, config_summary=config_summary,
+            status=status, priority=priority, category=category, parent=parent,
+            hypothesis=hypothesis, training_time=training_time,
+            created_at=created_at, approach_family=approach_family, kind=kind,
+        )
+        if if_absent:
+            from orze.core.proposal_admission import admit_proposal
+
+            return admit_proposal(self, prepared)
+        id_num = prepared["id_num"]
+        config_hash = prepared["config_hash"]
+        config_source_sha256 = prepared["config_source_sha256"]
+
+        def _do_insert():
+            recorded_at = self._transition_time(self.conn)
+            self.conn.execute(
+                """INSERT OR REPLACE INTO ideas (
+                    idea_id, id_num, title, priority, category, parent, hypothesis,
+                    config, config_hash, config_source_sha256, raw_markdown,
+                    config_summary, eval_metrics,
+                    status, training_time, archived_at, created_at,
+                    approach_family, kind
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?
+                )""",
+                (
+                    idea_id,
+                    id_num,
+                    title,
+                    priority,
+                    category,
+                    parent,
+                    hypothesis,
+                    config_yaml,
+                    config_hash,
+                    config_source_sha256,
+                    raw_markdown,
+                    prepared["config_summary"],
+                    prepared["eval_metrics"],
+                    status,
+                    training_time,
+                    recorded_at,
+                    created_at or recorded_at,
+                    approach_family,
+                    kind,
+                ),
+            )
+            # Initialize audited state for every known imported status. The
+            # one-time startup migration cannot backfill rows inserted after it
+            # has already run; leaving those rows absent made set_status()
+            # assume QUEUED and reject valid running -> terminal recovery.
+            # Imports still carry no invented transition history: this records
+            # their declared initial state only.
+            initial_state = STATUS_TO_STATE.get(str(status).lower())
+            if initial_state is not None:
+                existing = self.conn.execute(
+                    "SELECT 1 FROM idea_state WHERE idea_id = ?", (idea_id,)
+                ).fetchone()
+                if existing is None:
+                    self._insert_state_row(
+                        self.conn,
+                        idea_id,
+                        initial_state,
+                        "idea_insert",
+                        os.getpid(),
+                        "action" if kind == "native_cpu_action" else "training",
+                        recorded_at,
+                        # Only queue admission is a lifecycle event observed by
+                        # this writer. Imported terminal/archive statuses retain
+                        # NULL clocks instead of fabricated historical times.
+                        known_queued_at=initial_state == "QUEUED",
+                        record_lifecycle=initial_state == "QUEUED",
+                    )
+            self.conn.commit()
+        _retry_on_busy(_do_insert)
+
+    def get(self, idea_id: str) -> Optional[dict]:
+        """Get a single idea by ID."""
+        # SQLITE_BUSY here had been bubbling up through update_report() into
+        # cli.main() and crashing the daemon (observed 2026-04-30). Writes in
+        # this class are wrapped in _retry_on_busy; reads are not, but they
+        # are equally exposed when a competing writer holds the lock past
+        # busy_timeout. Wrap the read so a transient lock contention is
+        # retried instead of being raised into the orchestrator main loop.
+        def _do_get():
+            return self.conn.execute(
+                "SELECT * FROM ideas WHERE idea_id = ?", (idea_id,)
+            ).fetchone()
+        row = _retry_on_busy(_do_get)
+        if row is None:
+            return None
+        d = dict(row)
+        # Parse JSON blobs for convenience
+        for key in ("eval_metrics", "config_summary"):
+            if d.get(key) and isinstance(d[key], str):
+                try:
+                    d[key] = json.loads(d[key])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        return d
+
+    def set_status(self, idea_id: str, status: str) -> bool:
+        """Update legacy status and audited state atomically.
+
+        Known lifecycle statuses follow the same transition contract as
+        :meth:`record_state_transition`. Repeating an already-applied status is
+        idempotent and does not append another audit event. Unknown statuses
+        retain the historical legacy-only behavior for compatibility.
+        """
+        def _do():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                idea = self.conn.execute(
+                    "SELECT 1 FROM ideas WHERE idea_id = ?", (idea_id,),
+                ).fetchone()
+                if idea is None:
+                    self.conn.rollback()
+                    return False
+
+                target = STATUS_TO_STATE.get(str(status).lower())
+                sop_type = self._sop_for_idea(idea_id)
+                if target is None:
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                        (status, idea_id),
+                    )
+                    self.conn.commit()
+                    return True
+
+                row = self.conn.execute(
+                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                    (idea_id,),
+                ).fetchone()
+                current = row[0] if row else "QUEUED"
+                if current == target:
+                    if row is None:
+                        self._insert_state_row(
+                            self.conn,
+                            idea_id,
+                            target,
+                            "legacy_status",
+                            os.getpid(),
+                            sop_type,
+                            self._transition_time(self.conn),
+                            record_lifecycle=False,
+                        )
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                        (status, idea_id),
+                    )
+                    self.conn.commit()
+                    return True
+
+                if target not in VALID_STATE_TRANSITIONS.get(current, set()):
+                    logger.warning(
+                        "Invalid lifecycle status update: %s %s -> %s (%s)",
+                        idea_id, current, target, status,
+                    )
+                    self.conn.rollback()
+                    return False
+
+                transition_at = self._transition_time(self.conn)
+                if row:
+                    if not self._write_state_row(
+                        self.conn,
+                        idea_id,
+                        target,
+                        "legacy_status",
+                        os.getpid(),
+                        sop_type,
+                        transition_at,
+                        expected_state=current,
+                    ):
+                        self.conn.rollback()
+                        return False
+                else:
+                    self._insert_state_row(
+                        self.conn,
+                        idea_id,
+                        target,
+                        "legacy_status",
+                        os.getpid(),
+                        sop_type,
+                        transition_at,
+                    )
+
+                if not self._sync_pipeline_for_global_transition(
+                    idea_id,
+                    current,
+                    target,
+                    f"set_status:{str(status).lower()}",
+                    "legacy_status",
+                    os.getpid(),
+                    sop_type,
+                    transition_at,
+                ):
+                    self.conn.rollback()
+                    return False
+
+                self.conn.execute(
+                    "INSERT INTO idea_transitions "
+                    "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
+                    "VALUES (?, ?, ?, ?, 'legacy_status', ?, ?, ?)",
+                    (idea_id, current, target,
+                     f"set_status:{str(status).lower()}", os.getpid(), sop_type,
+                     transition_at),
+                )
+                self.conn.execute(
+                    "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                    (status, idea_id),
+                )
+                self.conn.commit()
+                return True
+            except Exception:
+                self.conn.rollback()
+                raise
+        return bool(_retry_on_busy(_do))
+
+    def reconcile_terminal_state(
+        self,
+        idea_id: str,
+        state: str,
+        reason: str,
+        eval_metrics: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Atomically repair an active/queued row from terminal evidence.
+
+        Recovery sometimes discovers a terminal metrics file after the normal
+        transition writer was interrupted. Record that direct catch-up edge
+        explicitly instead of mutating only ``ideas.status`` or inventing
+        intermediate CLAIMED/IN_PROGRESS history. Conflicting terminal states
+        remain immutable and fail closed.
+        """
+        if state not in ("COMPLETE", "FAILED", "SKIPPED"):
+            raise ValueError("reconciliation target must be terminal")
+        if not isinstance(reason, str) or not reason.startswith("reconcile_"):
+            raise ValueError("reconciliation reason must start with reconcile_")
+
+        def _do():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                idea = self.conn.execute(
+                    "SELECT 1 FROM ideas WHERE idea_id = ?", (idea_id,),
+                ).fetchone()
+                if idea is None:
+                    self.conn.rollback()
+                    return False
+                row = self.conn.execute(
+                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                    (idea_id,),
+                ).fetchone()
+                current = row[0] if row else "QUEUED"
+                if current in ("COMPLETE", "FAILED", "SKIPPED", "ARCHIVED"):
+                    if current != state:
+                        logger.warning(
+                            "Conflicting terminal reconciliation rejected: "
+                            "%s %s -> %s", idea_id, current, state)
+                        self.conn.rollback()
+                        return False
+                    if eval_metrics is None:
+                        self.conn.execute(
+                            "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                            (STATE_TO_STATUS[state], idea_id),
+                        )
+                    else:
+                        self.conn.execute(
+                            "UPDATE ideas SET status = ?, eval_metrics = ? "
+                            "WHERE idea_id = ?",
+                            (STATE_TO_STATUS[state], json.dumps(eval_metrics),
+                             idea_id),
+                        )
+                    self.conn.commit()
+                    return True
+                if current not in ("QUEUED", "CLAIMED", "IN_PROGRESS"):
+                    self.conn.rollback()
+                    return False
+                transition_at = self._transition_time(self.conn)
+                if row:
+                    if not self._write_state_row(
+                        self.conn,
+                        idea_id,
+                        state,
+                        "reconciler",
+                        os.getpid(),
+                        "training",
+                        transition_at,
+                        expected_state=current,
+                    ):
+                        self.conn.rollback()
+                        return False
+                else:
+                    self._insert_state_row(
+                        self.conn,
+                        idea_id,
+                        state,
+                        "reconciler",
+                        os.getpid(),
+                        "training",
+                        transition_at,
+                    )
+                if not self._sync_pipeline_for_global_transition(
+                    idea_id,
+                    current,
+                    state,
+                    reason,
+                    "reconciler",
+                    os.getpid(),
+                    "training",
+                    transition_at,
+                ):
+                    self.conn.rollback()
+                    return False
+                self.conn.execute(
+                    "INSERT INTO idea_transitions "
+                    "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
+                    "VALUES (?, ?, ?, ?, 'reconciler', ?, 'training', ?)",
+                    (idea_id, current, state, reason, os.getpid(), transition_at),
+                )
+                if eval_metrics is None:
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ? WHERE idea_id = ?",
+                        (STATE_TO_STATUS[state], idea_id),
+                    )
+                else:
+                    self.conn.execute(
+                        "UPDATE ideas SET status = ?, eval_metrics = ? "
+                        "WHERE idea_id = ?",
+                        (STATE_TO_STATUS[state], json.dumps(eval_metrics),
+                         idea_id),
+                    )
+                self.conn.commit()
+                return True
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        return bool(_retry_on_busy(_do))
+
+    def reconcile_training_complete(
+        self,
+        idea_id: str,
+        reason: str,
+    ) -> bool:
+        """Recover completed training while leaving required evaluation open.
+
+        This direct recovery edge is intentionally separate from ordinary FSM
+        admission. It is accepted only from a non-terminal lifecycle and keeps
+        the legacy row ``running`` until evaluation is independently closed.
+        """
+        if not isinstance(reason, str) or not reason.startswith("reconcile_"):
+            raise ValueError("reconciliation reason must start with reconcile_")
+
+        def _do():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                idea = self.conn.execute(
+                    "SELECT 1 FROM ideas WHERE idea_id = ?", (idea_id,),
+                ).fetchone()
+                if idea is None:
+                    self.conn.rollback()
+                    return False
+                row = self.conn.execute(
+                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                    (idea_id,),
+                ).fetchone()
+                current = row[0] if row else "QUEUED"
+                if current not in ("QUEUED", "CLAIMED", "IN_PROGRESS"):
+                    self.conn.rollback()
+                    return False
+                at = self._transition_time(self.conn)
+                if current != "IN_PROGRESS":
+                    if row:
+                        if not self._write_state_row(
+                            self.conn, idea_id, "IN_PROGRESS", "reconciler",
+                            os.getpid(), "training", at,
+                            expected_state=current,
+                        ):
+                            self.conn.rollback()
+                            return False
+                    else:
+                        self._insert_state_row(
+                            self.conn, idea_id, "IN_PROGRESS", "reconciler",
+                            os.getpid(), "training", at,
+                        )
+                    self.conn.execute(
+                        "INSERT INTO idea_transitions "
+                        "(idea_id, from_state, to_state, reason, host, pid, "
+                        "sop_type, ts) VALUES (?, ?, 'IN_PROGRESS', ?, "
+                        "'reconciler', ?, 'training', ?)",
+                        (idea_id, current, reason, os.getpid(), at),
+                    )
+                training = self._stage_state_in_tx(idea_id, "training")
+                if training != "COMPLETE" and not (
+                        training in ("NOT_STARTED", "PENDING", "IN_PROGRESS")
+                        and self._record_stage_transition_in_tx(
+                            idea_id, "training", training, "COMPLETE", reason,
+                            "reconciler", os.getpid(), at)):
+                    self.conn.rollback()
+                    return False
+                evaluation = self._stage_state_in_tx(idea_id, "evaluation")
+                if evaluation == "NOT_STARTED":
+                    if not self._record_stage_transition_in_tx(
+                            idea_id, "evaluation", "NOT_STARTED", "PENDING",
+                            "reconcile_evaluation_pending", "reconciler",
+                            os.getpid(), at):
+                        self.conn.rollback()
+                        return False
+                elif evaluation != "PENDING":
+                    self.conn.rollback()
+                    return False
+                self.conn.execute(
+                    "UPDATE ideas SET status = 'running' WHERE idea_id = ?",
+                    (idea_id,),
+                )
+                self.conn.commit()
+                return True
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        return bool(_retry_on_busy(_do))
+
+    def retry_evaluation(
+        self, idea_id: str, reason: str = "evaluation_retry_requested", *,
+        prepare_artifacts=None,
+    ) -> bool:
+        """Atomically retry failed evaluation without resetting completed training.
+
+        The optional internal coordinator callback runs under the DB write lock
+        before state changes. It receives the failed global transition ID and
+        must prepare artifacts recoverably/idempotently without changing the DB.
+        """
+        from orze.core.evaluation_retry_state import retry_evaluation
+        return retry_evaluation(
+            self, idea_id, reason, prepare_artifacts=prepare_artifacts,
+        )
+
+    def has(self, idea_id: str) -> bool:
+        # SQLITE_BUSY exposure: same as get(). Wrap the read so a transient
+        # lock contention is retried instead of raised into the orchestrator.
+        def _do_has():
+            return self.conn.execute(
+                "SELECT 1 FROM ideas WHERE idea_id = ?", (idea_id,)
+            ).fetchone()
+        row = _retry_on_busy(_do_has)
+        return row is not None
+
+    def _repair_admitted_config_hashes(self) -> int:
+        """Backfill only missing admitted identities and return repair count."""
+        statuses = ("queued", "pending", "running", "completed")
+
+        def _read_missing():
+            return self.conn.execute(
+                "SELECT idea_id, config FROM ideas "
+                "WHERE status COLLATE NOCASE IN (?, ?, ?, ?) "
+                "AND (config_hash IS NULL OR config_source_sha256 IS NULL) "
+                "ORDER BY rowid",
+                statuses,
+            ).fetchall()
+
+        rows = _retry_on_busy(_read_missing)
+        repairs = []
+        for row in rows:
+            idea_id = row["idea_id"]
+            config_yaml = row["config"] or ""
+            source_sha256 = hashlib.sha256(
+                config_yaml.encode("utf-8")
+            ).hexdigest()
+            try:
+                config_obj = yaml.safe_load(config_yaml) or {}
+            except yaml.YAMLError:
+                logger.warning(
+                    "Cannot derive config identity for %s: invalid YAML",
+                    idea_id,
+                )
+                continue
+            if not isinstance(config_obj, dict):
+                logger.warning(
+                    "Cannot derive config identity for %s: config is not a mapping",
+                    idea_id,
+                )
+                continue
+            repairs.append((
+                hash_config(config_obj), source_sha256, idea_id, config_yaml,
+            ))
+
+        if repairs:
+            def _repair_rows():
+                self.conn.execute("BEGIN IMMEDIATE")
+                try:
+                    for identity, source_sha256, idea_id, config_yaml in repairs:
+                        # Compare the source text so a concurrent config edit
+                        # cannot receive an identity derived from older bytes.
+                        self.conn.execute(
+                            "UPDATE ideas SET config_hash = ?, "
+                            "config_source_sha256 = ? "
+                            "WHERE idea_id = ? AND config = ?",
+                            (identity, source_sha256, idea_id, config_yaml),
+                        )
+                    self.conn.commit()
+                except Exception:
+                    self.conn.rollback()
+                    raise
+
+            _retry_on_busy(_repair_rows)
+            logger.info(
+                "Backfilled %d admitted config identities", len(repairs)
+            )
+        return len(repairs)
+
+    def find_admitted_config_hashes(
+        self, identities: Iterable[str],
+    ) -> Dict[str, str]:
+        """Resolve only proposal identities needed by the current ingest batch.
+
+        This is O(batch), not O(lake): an empty proposal batch performs no SQL;
+        a non-empty batch uses the status/config-hash index. Legacy identities
+        are backfilled once, and the config-update trigger makes later edits
+        re-enter that repair path.
+        """
+        requested = list(dict.fromkeys(
+            identity for identity in identities
+            if isinstance(identity, str)
+            and re.fullmatch(r"[0-9a-f]{64}", identity)
+        ))
+        if not requested:
+            return {}
+        self._repair_admitted_config_hashes()
+        statuses = ("queued", "pending", "running", "completed")
+        found: Dict[str, str] = {}
+        for offset in range(0, len(requested), 400):
+            batch = requested[offset:offset + 400]
+            placeholders = ",".join("?" for _ in batch)
+            rows = _retry_on_busy(
+                lambda batch=batch, placeholders=placeholders:
+                self.conn.execute(
+                    "SELECT config_hash, idea_id FROM ideas "
+                    "WHERE status COLLATE NOCASE IN (?, ?, ?, ?) "
+                    f"AND config_hash IN ({placeholders}) ORDER BY rowid",
+                    (*statuses, *batch),
+                ).fetchall()
+            )
+            for row in rows:
+                found.setdefault(row["config_hash"], row["idea_id"])
+        return found
+
+    def get_admitted_config_hashes(self) -> Dict[str, str]:
+        """Return all admitted identities; prefer targeted lookup in hot paths."""
+        self._repair_admitted_config_hashes()
+        statuses = ("queued", "pending", "running", "completed")
+        rows = _retry_on_busy(lambda: self.conn.execute(
+            "SELECT config_hash, idea_id FROM ideas "
+            "WHERE status COLLATE NOCASE IN (?, ?, ?, ?) "
+            "AND config_hash IS NOT NULL ORDER BY rowid",
+            statuses,
+        ).fetchall())
+        identities: Dict[str, str] = {}
+        for row in rows:
+            identities.setdefault(row["config_hash"], row["idea_id"])
+        return identities
+
+    def count(self) -> int:
+        def _do_count():
+            return self.conn.execute("SELECT COUNT(*) FROM ideas").fetchone()
+        row = _retry_on_busy(_do_count)
+        return row[0]
+
+    def child_counts(self) -> Dict[str, int]:
+        """Return {parent_id: number_of_children} over all parented ideas.
+
+        Used by the free research loop to cap a single parent's fan-out so
+        search branches broadly and deepens winning lineages instead of
+        spraying every variation off one champion hub (research efficiency)."""
+        def _do_counts():
+            return self.conn.execute(
+                "SELECT parent, COUNT(*) FROM ideas "
+                "WHERE parent IS NOT NULL AND parent != '' "
+                "AND lower(parent) != 'none' GROUP BY parent"
+            ).fetchall()
+        rows = _retry_on_busy(_do_counts)
+        return {r[0]: r[1] for r in rows}
+
+    def find_existing_ids(self, idea_ids: Iterable[str]) -> Set[str]:
+        """Return membership for at most 128 IDs, across all lifecycle states.
+
+        This is an advisory snapshot, never admission/ACK authority. The
+        normal insert boundary still resolves any concurrent same-ID writer.
+        Empty input performs no SQL; invalid/oversized input fails before SQL.
+        """
+        if isinstance(idea_ids, (str, bytes)) or idea_ids is None:
+            raise ValueError("idea_id_batch_invalid")
+        requested = []
+        for index, idea_id in enumerate(idea_ids):
+            if index >= 128 or type(idea_id) is not str or not idea_id:
+                raise ValueError("idea_id_batch_invalid")
+            requested.append(idea_id)
+        if not requested:
+            return set()
+        requested = tuple(dict.fromkeys(requested))
+        placeholders = ",".join("?" for _ in requested)
+        rows = _retry_on_busy(lambda: self.conn.execute(
+            f"SELECT idea_id FROM main.ideas WHERE idea_id IN ({placeholders})",
+            requested,
+        ).fetchall())
+        return {row[0] for row in rows}
+
+    def get_all_ids(self, status: Optional[str] = None) -> Set[str]:
+        """Return set of all idea IDs in the lake, optionally filtered by status."""
+        query = "SELECT idea_id FROM ideas"
+        params = []
+        if status:
+            query += " WHERE status = ?"
+            params.append(status)
+        def _do_all_ids():
+            return self.conn.execute(query, params).fetchall()
+        rows = _retry_on_busy(_do_all_ids)
+        return {r[0] for r in rows}
+
+    def get_metadata_index(self) -> Dict[str, Dict[str, Any]]:
+        """Return lightweight lifecycle metadata keyed by idea ID."""
+        def _do_metadata_index():
+            return self.conn.execute(
+                "SELECT i.idea_id, i.title, i.status, s.current_state "
+                "FROM ideas i LEFT JOIN idea_state s ON s.idea_id = i.idea_id"
+            ).fetchall()
+        rows = _retry_on_busy(_do_metadata_index)
+        return {
+            row["idea_id"]: {
+                "idea_id": row["idea_id"],
+                "title": row["title"],
+                "status": row["status"],
+                "fsm_state": row["current_state"],
+            }
+            for row in rows
+        }
+
+    def get_lifecycle_counts(self) -> Dict[str, int]:
+        """Return report-facing counts from the audited FSM.
+
+        Legacy status is consulted only for rows predating the FSM. Unknown
+        values remain visible as UNKNOWN instead of being guessed into a
+        healthy lifecycle bucket.
+        """
+        def _do_counts():
+            return self.conn.execute(
+                "SELECT i.status, s.current_state "
+                "FROM ideas i LEFT JOIN idea_state s ON s.idea_id = i.idea_id"
+            ).fetchall()
+
+        display_state = {
+            "QUEUED": "QUEUED",
+            "CLAIMED": "IN_PROGRESS",
+            "IN_PROGRESS": "IN_PROGRESS",
+            "COMPLETE": "COMPLETED",
+            "FAILED": "FAILED",
+            "SKIPPED": "SKIPPED",
+            "ARCHIVED": "ARCHIVED",
+        }
+        counts: Dict[str, int] = {}
+        for row in _retry_on_busy(_do_counts):
+            state = row["current_state"] or STATUS_TO_STATE.get(
+                str(row["status"]).lower()
+            )
+            key = display_state.get(state, "UNKNOWN")
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    def get_queue(self, limit: int = 1000) -> List[Dict[str, Any]]:
+        """Return ideas that both lifecycle representations say are queued."""
+        def _do_get_queue():
+            return self.conn.execute(
+                """SELECT i.idea_id, i.title, i.priority, i.config, i.created_at
+                   FROM ideas AS i
+                   LEFT JOIN idea_state AS s ON s.idea_id = i.idea_id
+                   WHERE (i.status = 'queued' OR i.status = 'pending')
+                     AND COALESCE(s.current_state, 'QUEUED') = 'QUEUED'
+                   ORDER BY
+                     CASE i.priority
+                       WHEN 'critical' THEN 0
+                       WHEN 'high' THEN 1
+                       WHEN 'medium' THEN 2
+                       WHEN 'low' THEN 3
+                       ELSE 2
+                     END,
+                     i.id_num ASC
+                   LIMIT ?""",
+                (limit,)
+            ).fetchall()
+        rows = _retry_on_busy(_do_get_queue)
+        return [dict(r) for r in rows]
+
+    def reconcile_statuses(
+        self,
+        results_dir: str,
+        limit: int = 0,
+        *,
+        evaluation_required: bool = False,
+    ) -> int:
+        """Reconcile DB queue with filesystem: mark queued ideas that already
+        have results dirs as completed/failed. Returns count of updates.
+
+        This prevents stale 'queued' rows from blocking the queue after a
+        restart when a previous Orze instance already ran those ideas.
+
+        Args:
+            results_dir: path to the results directory
+            limit: max rows to scan (0 = all queued ideas)
+        """
+        import glob
+        from pathlib import Path
+        rd = Path(results_dir)
+        query = """SELECT idea_id FROM ideas
+                   WHERE status = 'queued' OR status = 'pending'
+                   ORDER BY id_num ASC"""
+        if limit > 0:
+            query += f" LIMIT {limit}"
+        def _do_reconcile_select():
+            return self.conn.execute(query).fetchall()
+        rows = _retry_on_busy(_do_reconcile_select)
+        updated = 0
+        for (idea_id,) in rows:
+            idea_dir = rd / idea_id
+            has_dir = idea_dir.exists()
+            has_subs = bool(glob.glob(str(rd / f"{idea_id}-ht-*")))
+            if not has_dir and not has_subs:
+                continue
+            # Determine final status from filesystem
+            metrics_path = idea_dir / "metrics.json" if has_dir else None
+            terminal_metrics: Optional[Dict[str, Any]] = None
+            if metrics_path and metrics_path.exists():
+                try:
+                    m = json.loads(metrics_path.read_text(encoding="utf-8"))
+                    if isinstance(m, dict):
+                        terminal_metrics = m
+                    new_status = (
+                        "completed"
+                        if isinstance(m, dict) and m.get("status") == "COMPLETED"
+                        else "failed"
+                    )
+                except (json.JSONDecodeError, OSError):
+                    new_status = "failed"
+            elif has_subs:
+                # Sweep parent: sub-runs (-ht-*) are the real experiments.
+                # Two gaps the original logic missed:
+                #   1. We marked the parent 'completed' even when every sub-run
+                #      was PARTIAL/failed — the leaderboard then showed a green
+                #      row that had no real metrics behind it.
+                #   2. We never copied the best sub-run's metrics into the
+                #      parent's eval_metrics, so downstream consumers
+                #      (report.md, status.json top_results, the campaign-side
+                #      "did anything land?" queries) saw NULL even when one
+                #      sub-run finished cleanly.
+                # Fix: treat parent as completed iff ≥1 sub-run reached
+                # status=COMPLETED on disk, and lift that sub-run's metrics
+                # onto the parent. Otherwise mark failed.
+                sub_dirs = sorted(glob.glob(str(rd / f"{idea_id}-ht-*")))
+                best_sub_metrics: Optional[Dict[str, Any]] = None
+                any_completed = False
+                for sd in sub_dirs:
+                    sm_path = Path(sd) / "metrics.json"
+                    if not sm_path.exists():
+                        continue
+                    try:
+                        sm = json.loads(sm_path.read_text(encoding="utf-8"))
+                    except (json.JSONDecodeError, OSError):
+                        continue
+                    if not isinstance(sm, dict):
+                        continue
+                    if sm.get("status") != "COMPLETED":
+                        continue
+                    any_completed = True
+                    # Pick the sub-run with the best primary score we can
+                    # see. We don't know the project's primary_metric here,
+                    # so prefer common ones in priority order: avg_wer (ASR),
+                    # score (generic), test_accuracy (classification). Lower-
+                    # is-better for *_wer / *_loss, higher otherwise.
+                    if best_sub_metrics is None:
+                        best_sub_metrics = sm
+                    else:
+                        for k, lower_better in (
+                            ("avg_wer", True), ("wer", True),
+                            ("test_loss", True), ("loss", True),
+                            ("score", False), ("test_accuracy", False),
+                            ("accuracy", False),
+                        ):
+                            if k in sm and k in best_sub_metrics:
+                                try:
+                                    a = float(sm[k])
+                                    b = float(best_sub_metrics[k])
+                                except (TypeError, ValueError):
+                                    continue
+                                if (lower_better and a < b) or (
+                                        not lower_better and a > b):
+                                    best_sub_metrics = sm
+                                break
+                new_status = "completed" if any_completed else "failed"
+                if best_sub_metrics is not None:
+                    em = dict(best_sub_metrics)
+                    em["_aggregated_from"] = "sweep_sub_runs"
+                    terminal_metrics = em
+            elif has_dir:
+                # Orphan dir (no metrics, no sweep subs).
+                # Filesystem artifacts are evidence, not disposable queue
+                # locks. A directory with no claim is already reclaimable by
+                # scheduler.claim(). A directory with a claim may still be
+                # live locally or remotely, so preserve it for the dedicated
+                # liveness/startup recovery path to adjudicate.
+                claim_path = idea_dir / "claim.json"
+                # Crash recovery intentionally releases claim.json while
+                # retaining recovery.json, the prior claim, logs, and attempt
+                # ledger. Preserve that evidence; scheduler.claim() can reuse
+                # a directory with no live claim and no terminal metrics.
+                if ((idea_dir / "recovery.json").exists()
+                        or any(idea_dir.glob("claim.recovered.*.json"))):
+                    logger.info(
+                        "Preserving recovered retry directory for %s", idea_id)
+                    continue
+                if claim_path.exists():
+                    try:
+                        json.loads(claim_path.read_text(encoding="utf-8"))
+                    except (json.JSONDecodeError, OSError):
+                        logger.warning(
+                            "Preserving %s: claim ownership is unreadable",
+                            idea_id,
+                        )
+                continue  # leave as queued for retry
+            else:
+                continue
+            if new_status == "completed" and evaluation_required:
+                if self.reconcile_training_complete(
+                    idea_id, "reconcile_filesystem_training_completed"
+                ):
+                    updated += 1
+                continue
+            target_state = (
+                "COMPLETE" if new_status == "completed" else "FAILED"
+            )
+            if self.reconcile_terminal_state(
+                idea_id,
+                target_state,
+                f"reconcile_filesystem_{new_status}",
+                eval_metrics=terminal_metrics,
+            ):
+                updated += 1
+        if updated:
+            logger.info("Reconciled %d stale queued ideas with filesystem", updated)
+        return updated
+
+    def get_max_id_num(self) -> int:
+        """Return the highest numeric idea ID in the lake."""
+        def _do_max_id():
+            return self.conn.execute(
+                "SELECT MAX(id_num) FROM ideas WHERE id_num IS NOT NULL"
+            ).fetchone()
+        row = _retry_on_busy(_do_max_id)
+        if row is None or row[0] is None:
+            return 0
+        return int(row[0])
+
+    def query(
+        self,
+        filters: Optional[Dict[str, Any]] = None,
+        min_metric: Optional[tuple] = None,
+        sort_metric: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[dict]:
+        """Filtered query with optional constraints.
+
+        Args:
+            filters: dict of {json_path: value} to match in config_summary.
+                     e.g. {"backbone_name": "dinov2_vitl14"}
+            min_metric: (metric_key, min_value) to filter eval_metrics.
+                        e.g. ("test_accuracy", 0.8)
+            sort_metric: key in eval_metrics to sort by (descending).
+            limit: max results.
+        """
+        _safe_key = re.compile(r"^[a-zA-Z0-9_.]+$")
+        clauses = []
+        params = []
+
+        if filters:
+            for key, val in filters.items():
+                if not _safe_key.match(key):
+                    continue
+                clauses.append(
+                    f"json_extract(config_summary, '$.{key}') = ?"
+                )
+                params.append(val)
+
+        if min_metric:
+            metric_key, min_val = min_metric
+            if _safe_key.match(metric_key):
+                clauses.append(
+                    f"json_extract(eval_metrics, '$.{metric_key}') >= ?"
+                )
+                params.append(min_val)
+
+        where = " AND ".join(clauses) if clauses else "1=1"
+        if sort_metric and _safe_key.match(sort_metric):
+            sort_col = f"json_extract(eval_metrics, '$.{sort_metric}')"
+        else:
+            sort_col = "archived_at"
+        params.append(limit)
+        def _do_query():
+            return self.conn.execute(
+                f"SELECT * FROM ideas WHERE {where} "
+                f"ORDER BY {sort_col} DESC NULLS LAST LIMIT ?",
+                params,
+            ).fetchall()
+        rows = _retry_on_busy(_do_query)
+        return [dict(r) for r in rows]
+
+    def get_top_models(
+        self, metric: str = "test_accuracy", n: int = 20
+    ) -> List[dict]:
+        """Return top N models, ordered by medal tier then raw score (both desc).
+
+        Medal tier sidesteps per-competition metric-direction issues: gold means
+        "good" regardless of whether the metric is maximized or minimized.
+        Within a tier, rows are sorted by raw `metric` value descending.
+        """
+        def _do_top():
+            return self.conn.execute(
+                "SELECT idea_id, title, config_summary, eval_metrics, status "
+                "FROM ideas "
+                "WHERE json_extract(eval_metrics, ?) IS NOT NULL",
+                (f"$.{metric}",),
+            ).fetchall()
+        rows = _retry_on_busy(_do_top)
+        results = []
+        for r in rows:
+            d = dict(r)
+            for key in ("eval_metrics", "config_summary"):
+                if d.get(key) and isinstance(d[key], str):
+                    try:
+                        d[key] = json.loads(d[key])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+            results.append(d)
+        def _key(d):
+            em = d.get("eval_metrics") or {}
+            if not isinstance(em, dict):
+                em = {}
+            try:
+                score = float(em.get(metric))
+            except (TypeError, ValueError):
+                score = float("-inf")
+            return (_medal_rank(em.get("medal")), score)
+        results.sort(key=_key, reverse=True)
+        return results[:n]
+
+    def get_next_id(self) -> int:
+        """Atomically get and increment the next idea ID number.
+        Uses BEGIN IMMEDIATE to prevent concurrent readers from getting the same ID.
+        Retries on SQLITE_BUSY for network filesystem safety."""
+        def _do_get_next():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                cur = self.conn.execute("SELECT next_id FROM id_sequence LIMIT 1")
+                row = cur.fetchone()
+                next_id = row[0] if row else 1
+                self.conn.execute(
+                    "UPDATE id_sequence SET next_id = ?", (next_id + 1,)
+                )
+                self.conn.commit()
+                return next_id
+            except Exception:
+                self.conn.rollback()
+                raise
+        return _retry_on_busy(_do_get_next)
+
+    def set_next_id(self, n: int):
+        """Set the next ID sequence value."""
+        self.conn.execute("UPDATE id_sequence SET next_id = ?", (n,))
+        self.conn.commit()
+
+    def bulk_insert(self, ideas: List[Dict[str, Any]]):
+        """Insert many ideas in a single transaction."""
+        for idea in ideas:
+            eval_metrics = idea.get("eval_metrics") or idea.get("metrics")
+            config_summary = idea.get("config_summary")
+            config_yaml = idea.get("config_yaml", "")
+
+            config_obj = None
+            if config_yaml:
+                try:
+                    config_obj = yaml.safe_load(config_yaml)
+                except yaml.YAMLError:
+                    pass
+            if not config_summary and isinstance(config_obj, dict):
+                config_summary = flatten_config(config_obj)
+            config_source_sha256 = hashlib.sha256(
+                config_yaml.encode("utf-8")
+            ).hexdigest()
+            config_hash = (
+                hash_config(config_obj)
+                if isinstance(config_obj, dict) else None
+            )
+
+            # Extract numeric ID for sorting (supports both numeric and hex IDs)
+            id_num = None
+            try:
+                match = re.search(r"idea-([a-z0-9]+)", idea["idea_id"])
+                if match:
+                    try:
+                        id_num = int(match.group(1))
+                    except ValueError:
+                        hex_part = re.sub(r"^[^0-9a-f]+", "", match.group(1))
+                        try:
+                            id_num = int(hex_part, 16) % (2**31) if hex_part else hash(idea["idea_id"]) % (2**31)
+                        except ValueError:
+                            id_num = hash(idea["idea_id"]) % (2**31)
+            except (AttributeError, ValueError):
+                pass
+
+            self.conn.execute(
+                """INSERT OR IGNORE INTO ideas (
+                    idea_id, id_num, title, priority, category, parent, hypothesis,
+                    config, config_hash, config_source_sha256, raw_markdown,
+                    config_summary, eval_metrics,
+                    status, training_time, archived_at, created_at,
+                    approach_family
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?,
+                    ?, ?, ?, ?,
+                    ?
+                )""",
+                (
+                    idea["idea_id"],
+                    id_num,
+                    idea["title"],
+                    idea.get("priority", "medium"),
+                    idea.get("category", "architecture"),
+                    idea.get("parent"),
+                    idea.get("hypothesis"),
+                    config_yaml,
+                    config_hash,
+                    config_source_sha256,
+                    idea.get("raw_markdown", ""),
+                    json.dumps(config_summary) if config_summary else None,
+                    json.dumps(eval_metrics) if eval_metrics else None,
+                    idea.get("status", "archived"),
+                    (eval_metrics or {}).get("training_time"),
+                    datetime.datetime.now().isoformat(),
+                    (eval_metrics or {}).get("created_at"),
+                    idea.get("approach_family", "other"),
+                ),
+            )
+        _retry_on_busy(self.conn.commit)
+        logger.info("Bulk inserted %d ideas", len(ideas))
+
+    def ensure_config_summaries(self, force: bool = False):
+        """Backfill missing config_summary for all rows by parsing config YAML.
+        Highly recommended for performance on large databases.
+        """
+        query = "SELECT idea_id, config FROM ideas WHERE config IS NOT NULL AND config != ''"
+        if not force:
+            query += " AND config_summary IS NULL"
+
+        rows = self.conn.execute(query).fetchall()
+        if not rows:
+            return
+
+        logger.info("Updating config_summary for %d ideas (force=%s)...", len(rows), force)
+        count = 0
+        for r in rows:
+            try:
+                cfg_obj = yaml.safe_load(r["config"])
+                if isinstance(cfg_obj, dict):
+                    summary = flatten_config(cfg_obj)
+                    self.conn.execute(
+                        "UPDATE ideas SET config_summary = ? WHERE idea_id = ?",
+                        (json.dumps(summary), r["idea_id"]),
+                    )
+                    count += 1
+                    if count % 500 == 0:
+                        self.conn.commit()
+            except Exception:
+                continue
+        self.conn.commit()
+        logger.info("Successfully updated %d config summaries.", count)
+
+    def _stages_for_idea(self, idea_id: str):
+        row = self.conn.execute(
+            "SELECT kind FROM main.ideas WHERE idea_id COLLATE BINARY = ?", (idea_id,),
+        ).fetchone()
+        return ("action",) if row and row[0] == "native_cpu_action" else PIPELINE_STAGES
+
+    def _sop_for_idea(self, idea_id: str, requested=None):
+        if self._stages_for_idea(idea_id) == ("action",):
+            if requested not in (None, "action"):
+                raise ValueError("cpu_action_lifecycle_phase_mismatch")
+            return "action"
+        if requested == "action":
+            raise ValueError("cpu_action_kind_required")
+        return requested or "training"
+
+    def _stage_state_in_tx(self, idea_id: str, stage: str) -> str:
+        rows = self.conn.execute(
+            "SELECT idea_id, stage, current_state FROM idea_stage_state "
+            "WHERE idea_id = ? AND stage = ?",
+            (idea_id, stage),
+        ).fetchmany(2)
+        if not rows:
+            return "NOT_STARTED"
+        if len(rows) != 1 or tuple(rows[0][:2]) != (idea_id, stage):
+            return "INVALID"
+        return rows[0][2]
+
+    def _lifecycle_identity_exists_in_tx(self, idea_id: str) -> bool:
+        # Native attempt authority is main-schema scoped. These legacy SQL
+        # helpers use unqualified lifecycle names; reject TEMP tables/views
+        # that could make an acknowledged edge refer to a different catalog.
+        if self.conn.execute(
+            "SELECT 1 FROM temp.sqlite_master WHERE type IN ('table','view') "
+            "AND name COLLATE NOCASE IN "
+            "('ideas','idea_state','idea_transitions',"
+            "'idea_stage_state','idea_stage_transitions') LIMIT 1",
+        ).fetchone() is not None:
+            return False
+        rows = self.conn.execute(
+            "SELECT idea_id FROM ideas WHERE idea_id = ?", (idea_id,),
+        ).fetchmany(2)
+        return len(rows) == 1 and rows[0][0] == idea_id
+
+    def _record_stage_transition_in_tx(
+        self,
+        idea_id: str,
+        stage: str,
+        from_state: str,
+        to_state: str,
+        reason: str,
+        host: str,
+        pid: int,
+        at: str,
+    ) -> bool:
+        """Compare-and-swap one pipeline stage inside the caller's transaction."""
+        if (not self.conn.in_transaction or stage not in self._stages_for_idea(idea_id)
+                or not self._lifecycle_identity_exists_in_tx(idea_id)):
+            return False
+        actual = self._stage_state_in_tx(idea_id, stage)
+        if actual != from_state:
+            logger.warning(
+                "Stale stage transition rejected: %s stage=%s expected=%s "
+                "actual=%s to=%s", idea_id, stage, from_state, actual,
+                to_state,
+            )
+            return False
+        if to_state not in VALID_STAGE_TRANSITIONS.get(from_state, set()):
+            logger.warning(
+                "Invalid stage transition: %s stage=%s %s -> %s",
+                idea_id, stage, from_state, to_state,
+            )
+            return False
+
+        previous = self.conn.execute(
+            "SELECT started_at FROM idea_stage_state "
+            "WHERE idea_id COLLATE BINARY = ? AND stage COLLATE BINARY = ?",
+            (idea_id, stage),
+        ).fetchone()
+        started_at = (at if to_state == "IN_PROGRESS" else
+                      None if to_state == "PENDING" or previous is None else previous[0])
+        terminal_at = at if to_state in STAGE_TERMINALS else None
+        if previous is None:
+            cursor = self.conn.execute(
+                "INSERT INTO idea_stage_state "
+                "(idea_id, stage, current_state, updated_at, started_at, "
+                "terminal_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (idea_id, stage, to_state, at, started_at, terminal_at),
+            )
+            if cursor.rowcount != 1:
+                return False
+        else:
+            cursor = self.conn.execute(
+                "UPDATE idea_stage_state SET current_state = ?, "
+                "updated_at = ?, started_at = CASE "
+                "WHEN ? = 'PENDING' THEN NULL "
+                "WHEN ? = 'IN_PROGRESS' THEN ? ELSE started_at END, "
+                "terminal_at = ? WHERE idea_id COLLATE BINARY = ? "
+                "AND stage COLLATE BINARY = ? AND current_state COLLATE BINARY = ?",
+                (
+                    to_state, at, to_state, to_state, at, terminal_at,
+                    idea_id, stage, from_state,
+                ),
+            )
+            if cursor.rowcount != 1:
+                return False
+        cursor = self.conn.execute(
+            "INSERT INTO idea_stage_transitions "
+            "(idea_id, stage, from_state, to_state, reason, host, pid, ts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (idea_id, stage, from_state, to_state, reason, host, pid, at),
+        )
+        if cursor.rowcount != 1:
+            return False
+        audit = self.conn.execute(
+            "SELECT idea_id, stage, from_state, to_state, reason, host, pid, ts "
+            "FROM idea_stage_transitions WHERE id = ?", (cursor.lastrowid,),
+        ).fetchmany(2)
+        state = self.conn.execute(
+            "SELECT idea_id, stage, current_state, updated_at, started_at, terminal_at "
+            "FROM idea_stage_state WHERE idea_id = ? AND stage = ?",
+            (idea_id, stage),
+        ).fetchmany(2)
+        return (len(audit) == 1 and tuple(audit[0]) ==
+                (idea_id, stage, from_state, to_state, reason, host, pid, at)
+                and len(state) == 1 and tuple(state[0]) ==
+                (idea_id, stage, to_state, at, started_at, terminal_at))
+
+    def _stage_receipt_in_tx(self, idea_id: str, stage: str):
+        """Bounded stage/current-audit receipt, for final same-transaction checks."""
+        state = self.conn.execute(
+            "SELECT * FROM idea_stage_state WHERE idea_id COLLATE BINARY = ? "
+            "AND stage COLLATE BINARY = ?", (idea_id, stage),
+        ).fetchmany(2)
+        audit = self.conn.execute(
+            "SELECT * FROM idea_stage_transitions WHERE idea_id COLLATE BINARY = ? "
+            "AND stage COLLATE BINARY = ? ORDER BY id DESC LIMIT 1", (idea_id, stage),
+        ).fetchall()
+        return tuple(tuple(row) for row in state), tuple(tuple(row) for row in audit)
+
+    def _sync_pipeline_for_global_transition(
+        self,
+        idea_id: str,
+        from_state: str,
+        to_state: str,
+        reason: str,
+        host: str,
+        pid: int,
+        sop_type: str,
+        at: str,
+        *,
+        receipts: Optional[dict] = None,
+    ) -> bool:
+        """Keep stage truth atomic with lifecycle launch/terminal/retry edges."""
+        def move(stage: str, target: str, stage_reason: str) -> bool:
+            current = self._stage_state_in_tx(idea_id, stage)
+            if current != target and not self._record_stage_transition_in_tx(
+                    idea_id, stage, current, target, stage_reason, host, pid, at):
+                return False
+            if receipts is not None:
+                # Capture immediately: a later stage's trigger may corrupt a
+                # previously accepted stage before the whole sync returns.
+                receipts[stage] = self._stage_receipt_in_tx(idea_id, stage)
+            return True
+
+        if self._stages_for_idea(idea_id) == ("action",):
+            if sop_type != "action":
+                return False
+            target = {"CLAIMED": "PENDING", "QUEUED": "PENDING",
+                      "IN_PROGRESS": "IN_PROGRESS", "COMPLETE": "COMPLETE",
+                      "FAILED": "FAILED", "SKIPPED": "SKIPPED"}.get(to_state)
+            return target is None or move("action", target, reason)
+        if sop_type != "training":
+            return True
+        if from_state == "CLAIMED" and to_state == "IN_PROGRESS":
+            return (
+                move("training", "IN_PROGRESS", reason)
+                and move("evaluation", "PENDING", "pipeline_initialized")
+            )
+        if to_state == "QUEUED":
+            return all(
+                move(stage, "PENDING", "pipeline_reset_for_retry")
+                for stage in PIPELINE_STAGES
+                if self._stage_state_in_tx(idea_id, stage) != "NOT_STARTED"
+            )
+        if to_state == "FAILED":
+            evaluation = self._stage_state_in_tx(idea_id, "evaluation")
+            if evaluation == "IN_PROGRESS":
+                return move("evaluation", "FAILED", reason)
+            training = self._stage_state_in_tx(idea_id, "training")
+            ok = True
+            if training not in ("COMPLETE", "FAILED"):
+                ok = move("training", "FAILED", reason)
+            evaluation = self._stage_state_in_tx(idea_id, "evaluation")
+            if evaluation not in ("COMPLETE", "FAILED", "SKIPPED"):
+                ok = move(
+                    "evaluation", "SKIPPED", "training_did_not_complete") and ok
+            return ok
+        if to_state == "COMPLETE":
+            evaluation = self._stage_state_in_tx(idea_id, "evaluation")
+            if evaluation == "IN_PROGRESS":
+                return move("evaluation", "COMPLETE", reason)
+            training = self._stage_state_in_tx(idea_id, "training")
+            ok = True
+            if training == "IN_PROGRESS":
+                ok = move("training", "COMPLETE", reason)
+            evaluation = self._stage_state_in_tx(idea_id, "evaluation")
+            if evaluation in ("NOT_STARTED", "PENDING"):
+                ok = move(
+                    "evaluation", "SKIPPED", "no_evaluation_configured") and ok
+            return ok
+        return True
+
+    def record_stage_transition(
+        self,
+        idea_id: str,
+        stage: str,
+        from_state: str,
+        to_state: str,
+        reason: str,
+        host: Optional[str] = None,
+        pid: Optional[int] = None,
+    ) -> bool:
+        """Atomically record one non-global training/evaluation stage edge."""
+        import socket as _socket
+        host = host or _socket.gethostname()
+        pid = pid or os.getpid()
+
+        def _do_transition():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                global_row = self.conn.execute(
+                    "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                    (idea_id,),
+                ).fetchone()
+                global_state = global_row[0] if global_row else "UNKNOWN"
+                if global_state not in ("CLAIMED", "IN_PROGRESS"):
+                    self.conn.rollback()
+                    return False
+                at = self._transition_time(self.conn)
+                if not self._record_stage_transition_in_tx(
+                    idea_id, stage, from_state, to_state, reason, host, pid, at,
+                ):
+                    self.conn.rollback()
+                    return False
+                self.conn.commit()
+                logger.info(
+                    "[PIPELINE_TRANSITION] idea=%s stage=%s %s -> %s "
+                    "reason=\"%s\"", idea_id, stage, from_state, to_state,
+                    reason,
+                )
+                return True
+            except Exception:
+                self.conn.rollback()
+                raise
+
+        return bool(_retry_on_busy(_do_transition))
+
+    def get_stage_state(self, idea_id: str, stage: str) -> str:
+        if stage not in self._stages_for_idea(idea_id):
+            raise ValueError(f"unknown pipeline stage: {stage}")
+        row = _retry_on_busy(lambda: self.conn.execute(
+            "SELECT current_state FROM idea_stage_state "
+            "WHERE idea_id = ? AND stage = ?", (idea_id, stage),
+        ).fetchone())
+        return row[0] if row else "NOT_STARTED"
+
+    def get_stage_history(self, idea_id: str) -> List[Dict[str, Any]]:
+        rows = _retry_on_busy(lambda: self.conn.execute(
+            "SELECT stage, from_state, to_state, reason, host, pid, ts "
+            "FROM idea_stage_transitions WHERE idea_id = ? ORDER BY id ASC",
+            (idea_id,),
+        ).fetchall())
+        return [dict(row) for row in rows]
+
+    def _record_state_transition_in_tx(
+        self, idea_id: str, from_state: str, to_state: str,
+        reason: Optional[str] = None, host: Optional[str] = None,
+        pid: Optional[int] = None, sop_type: Optional[str] = None,
+        at: Optional[str] = None,
+    ) -> bool:
+        """Write one exact lifecycle edge in a transaction owned by the caller.
+
+        Never begins, commits or rolls back. False may follow tentative SQL
+        writes: the owning caller MUST roll back its transaction on rejection.
+        Database exceptions likewise belong to the caller's rollback boundary.
+        """
+        if not self.conn.in_transaction:
+            return False
+        if to_state not in VALID_STATE_TRANSITIONS.get(from_state, set()):
+            logger.warning("Invalid FSM transition: %s %s → %s", idea_id, from_state, to_state)
+            return False
+        if not self._lifecycle_identity_exists_in_tx(idea_id):
+            return False
+        rows = self.conn.execute(
+            "SELECT * FROM idea_state WHERE idea_id = ?", (idea_id,),
+        ).fetchmany(2)
+        if len(rows) > 1 or (rows and rows[0]["idea_id"] != idea_id):
+            return False
+        before = dict(rows[0]) if rows else {}
+        actual_state = before.get("current_state", "QUEUED")
+        if actual_state != from_state:
+            logger.warning(
+                "Stale FSM transition rejected: %s expected=%s actual=%s to=%s",
+                idea_id, from_state, actual_state, to_state)
+            return False
+        import socket as _socket
+        host = host or _socket.gethostname()
+        pid = pid or os.getpid()
+        sop_type = self._sop_for_idea(idea_id, sop_type)
+        reason = reason or ""
+        at = self._transition_time(self.conn) if at is None else at
+
+        # Derive exact postconditions from the existing current-attempt clock
+        # policy, including fields that this edge must leave unchanged.
+        clocks = ("first_queued_at", "queued_at", "claimed_at", "started_at",
+                  "terminal_at", "completed_at")
+        expected = {name: before.get(name) for name in clocks}
+        expected.update(idea_id=idea_id, current_state=to_state,
+                        updated_by_host=host, updated_by_pid=pid,
+                        sop_type=sop_type, updated_at=at)
+        if to_state == "QUEUED":
+            expected.update(first_queued_at=(before.get("first_queued_at")
+                                            if before.get("first_queued_at") is not None else at),
+                            queued_at=at, claimed_at=None, started_at=None,
+                            terminal_at=None, completed_at=None)
+        elif to_state == "CLAIMED":
+            expected.update(claimed_at=at, started_at=None, terminal_at=None, completed_at=None)
+        elif to_state == "IN_PROGRESS":
+            expected.update(started_at=at, terminal_at=None, completed_at=None)
+        elif to_state == "COMPLETE":
+            expected.update(terminal_at=at, completed_at=at)
+        elif to_state in ("FAILED", "SKIPPED"):
+            expected.update(terminal_at=at, completed_at=None)
+
+        if rows:
+            accepted = self._write_state_row(
+                self.conn, idea_id, to_state, host, pid, sop_type, at,
+                expected_state=from_state)
+        else:
+            accepted = self._insert_state_row(
+                self.conn, idea_id, to_state, host, pid, sop_type, at)
+        pipeline = {}
+        if not accepted or not self._sync_pipeline_for_global_transition(
+                idea_id, from_state, to_state, reason, host, pid, sop_type, at,
+                receipts=pipeline):
+            return False
+        # Keep already captured per-write receipts, and also ensure subsequent
+        # global/legacy writes cannot change an untouched stage.
+        for stage in self._stages_for_idea(idea_id):
+            if stage not in pipeline:
+                pipeline[stage] = self._stage_receipt_in_tx(idea_id, stage)
+        cursor = self.conn.execute(
+            "INSERT INTO idea_transitions "
+            "(idea_id, from_state, to_state, reason, host, pid, sop_type, ts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (idea_id, from_state, to_state, reason, host, pid, sop_type, at),
+        )
+        if cursor.rowcount != 1:
+            return False
+        audit_id = cursor.lastrowid
+        legacy_status = STATE_TO_STATUS.get(to_state)
+        if legacy_status:
+            cursor = self.conn.execute(
+                "UPDATE ideas SET status = ? WHERE idea_id COLLATE BINARY = ?",
+                (legacy_status, idea_id),
+            )
+            if cursor.rowcount != 1:
+                return False
+
+        # Read back after ALL writes: an AFTER trigger on the compatibility
+        # update must not invalidate a state/stage already checked earlier.
+        state = self.conn.execute(
+            "SELECT * FROM idea_state WHERE idea_id = ?", (idea_id,),
+        ).fetchmany(2)
+        audit = self.conn.execute(
+            "SELECT idea_id, from_state, to_state, reason, host, pid, sop_type, ts "
+            "FROM idea_transitions WHERE id = ?", (audit_id,),
+        ).fetchmany(2)
+        legacy = self.conn.execute(
+            "SELECT idea_id, status FROM ideas WHERE idea_id = ?", (idea_id,),
+        ).fetchmany(2)
+        return (len(state) == 1 and all(state[0][key] == value for key, value in expected.items())
+                and len(audit) == 1 and tuple(audit[0]) ==
+                (idea_id, from_state, to_state, reason, host, pid, sop_type, at)
+                and len(legacy) == 1 and tuple(legacy[0]) == (idea_id, legacy_status)
+                and all(self._stage_receipt_in_tx(idea_id, stage) == receipt
+                        for stage, receipt in pipeline.items()))
+
+    def record_state_transition(self, idea_id: str, from_state: str, to_state: str,
+                                reason: Optional[str] = None,
+                                host: Optional[str] = None,
+                                pid: Optional[int] = None,
+                                sop_type: Optional[str] = None) -> bool:
+        """Atomically record an FSM state transition with audit trail.
+
+        v4.5+: Generic FSM orthogonal to SOP type.
+        Valid transitions regardless of workflow:
+          QUEUED → CLAIMED (scheduler claims work)
+          QUEUED → SKIPPED (admission rejects work before compute)
+          CLAIMED → IN_PROGRESS (launcher starts work)
+          CLAIMED → FAILED (pre-launch validation or setup fails)
+          IN_PROGRESS → COMPLETE (work succeeds)
+          IN_PROGRESS → FAILED (work fails)
+          COMPLETE → ARCHIVED (idea retired)
+          FAILED → QUEUED (retry)
+          FAILED → SKIPPED (classify a zero-compute validation failure)
+          CLAIMED → QUEUED (stale recovery)
+          SKIPPED → QUEUED (explicit re-admission)
+        """
+        import socket as _socket
+        host = host or _socket.gethostname()
+        pid = pid or os.getpid()
+        sop_type = self._sop_for_idea(idea_id, sop_type)
+
+        def _do_transition():
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                if not self._record_state_transition_in_tx(
+                        idea_id, from_state, to_state, reason, host, pid, sop_type):
+                    self.conn.rollback()
+                    return False
+                self.conn.commit()
+                logger.info(
+                    "[LIFECYCLE_TRANSITION] idea=%s %s → %s reason=\"%s\"",
+                    idea_id, from_state, to_state, reason or "")
+                return True
+            except Exception as e:
+                try:
+                    self.conn.rollback()
+                except Exception:
+                    pass
+                logger.error("FSM transition error for %s: %s", idea_id, e)
+                raise
+
+        return bool(_retry_on_busy(_do_transition))
+
+    def get_fsm_state(self, idea_id: str) -> str:
+        """Get current FSM state for an idea."""
+        def _do_get():
+            return self.conn.execute(
+                "SELECT current_state FROM idea_state WHERE idea_id = ?",
+                (idea_id,)
+            ).fetchone()
+        row = _retry_on_busy(_do_get)
+        return row[0] if row else "UNKNOWN"
+
+    def get_fsm_history(self, idea_id: str) -> List[Dict[str, any]]:
+        """Get complete audit trail for an idea."""
+        def _do_history():
+            return self.conn.execute(
+                "SELECT from_state, to_state, reason, host, pid, ts "
+                "FROM idea_transitions WHERE idea_id = ? ORDER BY id ASC",
+                (idea_id,)
+            ).fetchall()
+        rows = _retry_on_busy(_do_history)
+        return [dict(row) for row in rows]
+
+    def detect_stale_claims(self, timeout_hours: int = 6) -> List[tuple]:
+        """Detect ideas stuck in CLAIMED state beyond timeout."""
+        def _do_detect():
+            return self.conn.execute(
+                "SELECT idea_id, current_state, updated_at FROM idea_state "
+                "WHERE current_state = 'CLAIMED' "
+                "AND datetime(updated_at, '+' || ? || ' hours') < datetime('now')",
+                (timeout_hours,)
+            ).fetchall()
+        rows = _retry_on_busy(_do_detect)
+        return [(r[0], r[1], r[2]) for r in rows]
+
+    def catch_up_missing_terminals(
+        self, results_dir, *, evaluation_required: bool = False,
+    ) -> int:
+        """Reconcile completed training without overstating pipeline success.
+
+        With a configured evaluator, completed training advances only the
+        training stage; the global lifecycle stays IN_PROGRESS until a valid
+        evaluation terminal is recorded. Without evaluation it closes the
+        global lifecycle as before.
+
+        Returns count of transitions recorded.
+        """
+        from pathlib import Path
+        import json
+
+        def _do_catch_up():
+            rows = self.conn.execute(
+                "SELECT idea_id FROM idea_state WHERE current_state = 'IN_PROGRESS'"
+            ).fetchall()
+            return [r[0] for r in rows]
+
+        in_progress_ids = _retry_on_busy(_do_catch_up)
+        if not in_progress_ids:
+            return 0
+
+        results_dir = Path(results_dir)
+        recorded = 0
+
+        for idea_id in in_progress_ids:
+            metrics_path = results_dir / idea_id / "metrics.json"
+            if metrics_path.exists():
+                try:
+                    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+                    if metrics.get("status") == "COMPLETED":
+                        try:
+                            if evaluation_required:
+                                stage = self.get_stage_state(
+                                    idea_id, "training")
+                                training_ok = stage == "COMPLETE" or (
+                                        stage in (
+                                            "NOT_STARTED", "PENDING",
+                                            "IN_PROGRESS",
+                                        ) and self.record_stage_transition(
+                                            idea_id,
+                                            stage="training",
+                                            from_state=stage,
+                                            to_state="COMPLETE",
+                                            reason=(
+                                                "reconcile_training_completed_"
+                                                "evaluation_pending"
+                                            ),
+                                            host="catch_up",
+                                            pid=None,
+                                        ))
+                                evaluation_stage = self.get_stage_state(
+                                    idea_id, "evaluation")
+                                evaluation_ok = evaluation_stage == "PENDING"
+                                if (training_ok
+                                        and evaluation_stage == "NOT_STARTED"):
+                                    evaluation_ok = self.record_stage_transition(
+                                        idea_id,
+                                        stage="evaluation",
+                                        from_state="NOT_STARTED",
+                                        to_state="PENDING",
+                                        reason="reconcile_evaluation_pending",
+                                        host="catch_up",
+                                        pid=None,
+                                    )
+                                if training_ok and evaluation_ok:
+                                    recorded += 1
+                            elif self.record_state_transition(
+                                    idea_id,
+                                    from_state="IN_PROGRESS",
+                                    to_state="COMPLETE",
+                                    reason="catch_up_training_completed",
+                                    host="catch_up",
+                                    pid=None,
+                                    sop_type="training",
+                            ):
+                                recorded += 1
+                        except Exception:
+                            pass
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+        if recorded > 0:
+            logger.info(
+                "Catch-up: reconciled %d completed training outputs", recorded)
+        return recorded
+
+    def reap_dead_claims(self, max_age_minutes: int = 15) -> int:
+        """Requeue ideas with dead PIDs in CLAIMED/IN_PROGRESS.
+
+        Returns count of ideas requeued.
+        """
+        def _is_pid_alive(pid):
+            if not pid or pid <= 0:
+                return False
+            try:
+                os.kill(pid, 0)
+                return True
+            except (OSError, ProcessLookupError):
+                return False
+
+        def _do_reap():
+            # Find ideas in CLAIMED or IN_PROGRESS older than max_age_minutes
+            rows = self.conn.execute(
+                "SELECT idea_id, current_state, updated_by_pid FROM idea_state "
+                "WHERE current_state IN ('CLAIMED', 'IN_PROGRESS') "
+                "AND datetime(updated_at, '+' || ? || ' minutes') < datetime('now')",
+                (max_age_minutes,)
+            ).fetchall()
+            return [(r[0], r[1], r[2]) for r in rows]
+
+        stale = _retry_on_busy(_do_reap)
+        if not stale:
+            return 0
+
+        requeued = 0
+        for idea_id, current_state, pid in stale:
+            if not _is_pid_alive(pid):
+                try:
+                    self.record_state_transition(
+                        idea_id,
+                        from_state=current_state,
+                        to_state="QUEUED",
+                        reason=f"reap_dead_pid_{pid}",
+                        host="reaper",
+                        pid=None,
+                    )
+                    requeued += 1
+                except Exception as e:
+                    logger.warning("Failed to reap idea %s (pid %s): %s", idea_id, pid, e)
+
+        if requeued > 0:
+            logger.info("Reaped %d ideas with dead PIDs", requeued)
+        return requeued
+
+    def _recover_fsm_from_crash(self):
+        """Detect and recover ideas stuck in CLAIMED >6h."""
+        stale = self.detect_stale_claims(timeout_hours=6)
+        if not stale:
+            return
+
+        logger.info("FSM crash recovery: found %d stale claims, resetting to QUEUED", len(stale))
+        for idea_id, _, _ in stale:
+            try:
+                self.record_state_transition(
+                    idea_id,
+                    from_state="CLAIMED",
+                    to_state="QUEUED",
+                    reason="crash_recovery_timeout_6h",
+                    host="recovery",
+                    pid=None,
+                )
+            except Exception as e:
+                logger.warning("Failed to recover idea %s: %s", idea_id, e)
+
+    def close(self):
+        self.conn.close()
+
+    def record_harness_efficiency_sample(
+        self,
+        *,
+        campaign_id: Optional[str],
+        controller_id: str,
+        host: str,
+        iteration: int,
+        observed_at_epoch: float,
+        poll_seconds: float,
+        physical_scope: List[int],
+        gpu_telemetry: List[Dict[str, Any]],
+        active_training_gpus: List[int],
+        active_evaluation_gpus: List[int],
+        remaining_training: int,
+        remaining_evaluation: int,
+        launcher_paused: bool,
+        disk_ok: bool,
+        demand_membership: Optional[Dict[str, List[str]]] = None,
+    ) -> bool:
+        """Persist one local, source-bound scheduler-efficiency observation.
+
+        Campaign rows bind aggregate demand to an exact partition of the
+        preregistered idea IDs.  They contain no configs, metrics, or model
+        outputs.  GPU telemetry is accepted only for the explicitly supplied
+        physical scope.  Missing/malformed telemetry is retained as an
+        incomplete observation so downstream verification fails closed rather
+        than silently dropping inconvenient samples.
+        """
+        import math
+
+        if campaign_id is not None and (
+                not isinstance(campaign_id, str) or not campaign_id.strip()):
+            raise ValueError("campaign_id must be null or a non-empty string")
+        if not isinstance(controller_id, str) or not controller_id.strip():
+            raise ValueError("controller_id must be a non-empty string")
+        if not isinstance(host, str) or not host.strip():
+            raise ValueError("host must be a non-empty string")
+        if isinstance(iteration, bool) or not isinstance(iteration, int) or iteration < 0:
+            raise ValueError("iteration must be a non-negative integer")
+        if (isinstance(observed_at_epoch, bool)
+                or not isinstance(observed_at_epoch, (int, float))
+                or not math.isfinite(float(observed_at_epoch))
+                or float(observed_at_epoch) <= 0):
+            raise ValueError("observed_at_epoch must be finite and positive")
+        if (isinstance(poll_seconds, bool)
+                or not isinstance(poll_seconds, (int, float))
+                or not math.isfinite(float(poll_seconds))
+                or float(poll_seconds) <= 0):
+            raise ValueError("poll_seconds must be finite and positive")
+
+        def _gpu_set(name: str, values: List[int], *, nonempty: bool = False):
+            if not isinstance(values, list):
+                raise ValueError(f"{name} must be a list")
+            if any(isinstance(value, bool) or not isinstance(value, int)
+                   or value < 0 for value in values):
+                raise ValueError(f"{name} must contain non-negative integers")
+            normalized = sorted(set(values))
+            if len(normalized) != len(values):
+                raise ValueError(f"{name} must not contain duplicates")
+            if nonempty and not normalized:
+                raise ValueError(f"{name} must not be empty")
+            return normalized
+
+        scope = _gpu_set("physical_scope", physical_scope, nonempty=True)
+        training = _gpu_set("active_training_gpus", active_training_gpus)
+        evaluation = _gpu_set("active_evaluation_gpus", active_evaluation_gpus)
+        if not set(training + evaluation).issubset(scope):
+            raise ValueError("active GPUs must be inside physical_scope")
+        if set(training) & set(evaluation):
+            raise ValueError("training and evaluation GPU sets must be disjoint")
+        for name, value in (
+            ("remaining_training", remaining_training),
+            ("remaining_evaluation", remaining_evaluation),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+
+        membership_categories = (
+            "active_training", "active_evaluation", "remaining_training",
+            "remaining_evaluation", "inactive",
+        )
+        normalized_membership = None
+        if demand_membership is not None:
+            if (not isinstance(demand_membership, dict)
+                    or set(demand_membership) != set(membership_categories)):
+                raise ValueError(
+                    "demand_membership must contain the exact categories")
+            normalized_membership = {}
+            seen_ideas = set()
+            for category in membership_categories:
+                idea_ids = demand_membership[category]
+                if (not isinstance(idea_ids, list)
+                        or any(not isinstance(idea_id, str) or not idea_id
+                               for idea_id in idea_ids)
+                        or len(idea_ids) != len(set(idea_ids))):
+                    raise ValueError(
+                        f"demand_membership.{category} must be a unique "
+                        "non-empty-string list")
+                if seen_ideas & set(idea_ids):
+                    raise ValueError(
+                        "demand_membership categories must be disjoint")
+                seen_ideas.update(idea_ids)
+                normalized_membership[category] = sorted(idea_ids)
+            if remaining_training != len(
+                    normalized_membership["remaining_training"]):
+                raise ValueError(
+                    "remaining_training does not match demand_membership")
+            if remaining_evaluation != len(
+                    normalized_membership["remaining_evaluation"]):
+                raise ValueError(
+                    "remaining_evaluation does not match demand_membership")
+            if bool(training) != bool(
+                    normalized_membership["active_training"]):
+                raise ValueError(
+                    "active training GPUs do not match demand_membership")
+            if bool(evaluation) != bool(
+                    normalized_membership["active_evaluation"]):
+                raise ValueError(
+                    "active evaluation GPUs do not match demand_membership")
+        if not isinstance(launcher_paused, bool) or not isinstance(disk_ok, bool):
+            raise ValueError("launcher_paused and disk_ok must be booleans")
+        if not isinstance(gpu_telemetry, list):
+            raise ValueError("gpu_telemetry must be a list")
+
+        clean_telemetry = []
+        telemetry_indexes = []
+        telemetry_valid = True
+        required = (
+            "index", "memory_used_mib", "memory_total_mib",
+            "utilization_pct", "temperature_c",
+        )
+        for item in gpu_telemetry:
+            if not isinstance(item, dict) or any(key not in item for key in required):
+                telemetry_valid = False
+                continue
+            try:
+                index = item["index"]
+                used = item["memory_used_mib"]
+                total = item["memory_total_mib"]
+                utilization = item["utilization_pct"]
+                temperature = item["temperature_c"]
+                numeric = (index, used, total, utilization, temperature)
+                if any(isinstance(value, bool) or not isinstance(value, (int, float))
+                       or not math.isfinite(float(value)) for value in numeric):
+                    raise ValueError
+                index = int(index)
+                if (float(index) != float(item["index"]) or index not in scope
+                        or used < 0 or total <= 0 or used > total
+                        or utilization < 0 or utilization > 100
+                        or temperature < -100 or temperature > 200):
+                    raise ValueError
+                telemetry_indexes.append(index)
+                clean_telemetry.append({
+                    "index": index,
+                    "memory_used_mib": int(used),
+                    "memory_total_mib": int(total),
+                    "utilization_pct": float(utilization),
+                    "temperature_c": float(temperature),
+                })
+            except (TypeError, ValueError):
+                telemetry_valid = False
+        telemetry_complete = (
+            telemetry_valid
+            and len(telemetry_indexes) == len(set(telemetry_indexes))
+            and sorted(telemetry_indexes) == scope
+        )
+        clean_telemetry.sort(key=lambda item: item["index"])
+        observed_at = datetime.datetime.fromtimestamp(
+            float(observed_at_epoch), datetime.timezone.utc
+        ).isoformat()
+        canonical = lambda value: json.dumps(
+            value, sort_keys=True, separators=(",", ":"))
+
+        normalized_campaign_id = campaign_id.strip() if campaign_id else None
+        if normalized_campaign_id:
+            registration = self.conn.execute(
+                "SELECT manifest_json FROM harness_campaign_registrations "
+                "WHERE campaign_id = ?", (normalized_campaign_id,),
+            ).fetchone()
+            if registration is not None:
+                if normalized_membership is None:
+                    raise ValueError(
+                        "registered campaign requires demand_membership")
+                try:
+                    expected_ids = set(json.loads(
+                        registration["manifest_json"]
+                    )["expected_idea_ids"])
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    raise ValueError("registered campaign manifest is invalid")
+                observed_ids = {
+                    idea_id
+                    for values in normalized_membership.values()
+                    for idea_id in values
+                }
+                if observed_ids != expected_ids:
+                    raise ValueError(
+                        "demand_membership must exactly partition the "
+                        "preregistered idea universe")
+        values = (
+            normalized_campaign_id,
+            controller_id.strip(), host.strip(), iteration,
+            float(observed_at_epoch), observed_at, float(poll_seconds),
+            canonical(scope), canonical(clean_telemetry),
+            int(telemetry_complete), canonical(training),
+            canonical(evaluation), remaining_training,
+            remaining_evaluation,
+            (canonical(normalized_membership)
+             if normalized_membership is not None else None),
+            int(launcher_paused), int(disk_ok),
+        )
+
+        def _insert():
+            cursor = self.conn.execute(
+                "INSERT OR IGNORE INTO harness_efficiency_samples "
+                "(campaign_id, controller_id, host, iteration, "
+                "observed_at_epoch, observed_at, "
+                "poll_seconds, physical_scope_json, gpu_telemetry_json, "
+                "telemetry_complete, active_training_gpus_json, "
+                "active_evaluation_gpus_json, remaining_training, "
+                "remaining_evaluation, demand_membership_json, "
+                "launcher_paused, disk_ok) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                values,
+            )
+            self.conn.commit()
+            if cursor.rowcount == 1:
+                return True
+            existing = self.conn.execute(
+                "SELECT campaign_id, controller_id, host, iteration, "
+                "observed_at_epoch, observed_at, poll_seconds, "
+                "physical_scope_json, gpu_telemetry_json, "
+                "telemetry_complete, active_training_gpus_json, "
+                "active_evaluation_gpus_json, remaining_training, "
+                "remaining_evaluation, demand_membership_json, "
+                "launcher_paused, disk_ok "
+                "FROM harness_efficiency_samples "
+                "WHERE campaign_id IS ? AND controller_id = ? "
+                "AND iteration = ?",
+                (normalized_campaign_id, controller_id.strip(), iteration),
+            ).fetchone()
+            if existing is None or tuple(existing) != values:
+                raise OSError(
+                    "campaign_efficiency_database_identity_conflict")
+            return True
+
+        return bool(_retry_on_busy(_insert))
+
+    def record_harness_campaign_progress(
+        self,
+        *,
+        campaign_id: str,
+        controller_id: str,
+        host: str,
+        iteration: int,
+        observed_at_epoch: float,
+        last_valid_artifact_sha256: Optional[str],
+        last_valid_artifact_idea_id: Optional[str],
+        last_valid_artifact_at_epoch: Optional[float],
+        blocker_code: str,
+        next_deadline_epoch: float,
+    ) -> bool:
+        """Persist one content-safe operator progress update."""
+        import math
+
+        text_fields = {
+            "campaign_id": campaign_id,
+            "controller_id": controller_id,
+            "host": host,
+            "blocker_code": blocker_code,
+        }
+        if any(not isinstance(value, str) or not value.strip()
+               or any(ord(char) < 32 for char in value)
+               for value in text_fields.values()):
+            raise ValueError("campaign progress text fields must be non-empty")
+        if (isinstance(iteration, bool) or not isinstance(iteration, int)
+                or iteration < 0):
+            raise ValueError("campaign progress iteration must be non-negative")
+        numeric = (observed_at_epoch, next_deadline_epoch)
+        if any(isinstance(value, bool) or not isinstance(value, (int, float))
+               or not math.isfinite(float(value)) for value in numeric):
+            raise ValueError("campaign progress timestamps must be finite")
+        if observed_at_epoch <= 0 or next_deadline_epoch < observed_at_epoch:
+            raise ValueError("campaign progress deadline is invalid")
+        artifact_values = (
+            last_valid_artifact_sha256,
+            last_valid_artifact_idea_id,
+            last_valid_artifact_at_epoch,
+        )
+        if any(value is None for value in artifact_values):
+            if not all(value is None for value in artifact_values):
+                raise ValueError("campaign progress artifact fields must be paired")
+        else:
+            if (not isinstance(last_valid_artifact_sha256, str)
+                    or re.fullmatch(r"[0-9a-f]{64}",
+                                    last_valid_artifact_sha256) is None
+                    or not isinstance(last_valid_artifact_idea_id, str)
+                    or re.fullmatch(r"idea-[a-z0-9][a-z0-9-]*",
+                                    last_valid_artifact_idea_id) is None
+                    or isinstance(last_valid_artifact_at_epoch, bool)
+                    or not isinstance(last_valid_artifact_at_epoch, (int, float))
+                    or not math.isfinite(float(last_valid_artifact_at_epoch))
+                    or not 0 < last_valid_artifact_at_epoch <= observed_at_epoch):
+                raise ValueError("campaign progress artifact identity is invalid")
+        if re.fullmatch(r"[a-z][a-z0-9_]{0,63}", blocker_code) is None:
+            raise ValueError("campaign progress blocker code is invalid")
+
+        observed_at = datetime.datetime.fromtimestamp(
+            float(observed_at_epoch), datetime.timezone.utc
+        ).isoformat()
+
+        def _insert():
+            cursor = self.conn.execute(
+                "INSERT OR IGNORE INTO harness_campaign_progress "
+                "(campaign_id, controller_id, host, iteration, "
+                "observed_at_epoch, observed_at, "
+                "last_valid_artifact_sha256, last_valid_artifact_idea_id, "
+                "last_valid_artifact_at_epoch, blocker_code, "
+                "next_deadline_epoch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    campaign_id.strip(), controller_id.strip(), host.strip(),
+                    iteration, float(observed_at_epoch), observed_at,
+                    last_valid_artifact_sha256,
+                    last_valid_artifact_idea_id,
+                    (float(last_valid_artifact_at_epoch)
+                     if last_valid_artifact_at_epoch is not None else None),
+                    blocker_code, float(next_deadline_epoch),
+                ),
+            )
+            self.conn.commit()
+            return cursor.rowcount == 1
+
+        return bool(_retry_on_busy(_insert))
