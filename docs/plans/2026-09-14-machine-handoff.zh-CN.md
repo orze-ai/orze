@@ -18,8 +18,8 @@
 - [x] Policy 只读 evidence／proposal 续页完整预算审计 2→1，每页重新审计；增加 callback 前控制与分页 revision 复核。
 - [x] ingress 空批次跳过历史读取，非空批次最多查询 128 个 ID。
 - [x] ingress 删除全局配置 cache 判定，当前写事务核实去重；sidecar 延迟分批，每批最多 128 条／4 MiB，单文件应用新鲜读取边界。
-- [x] Pro 显式报告分页接入实际 research CLI／consumer，支持续页、定向选择和跨页保留重验；完整联合预算与其余 consumer 仍待完成。
-- [x] Pro v2 将报告、Idea Lake 提案定义、CPU 账本观察和本次请求次数放入同一有界 JSON；不可用 ID 与跨页覆盖明确。角色 attempts／token／费用和 provider token 预留尚未联合。
+- [x] Pro 显式报告分页接入实际 research CLI／consumer，支持续页、定向选择和跨页保留重验；其余 consumer 仍待完成。
+- [x] Pro v2 将报告、Idea Lake 提案定义、CPU 账本观察、本次请求次数、角色 attempts／token／费用与 provider token 预留放入同一有界 JSON；未知／不适用、不可用 ID 与跨页覆盖明确。
 - [x] 不兼容存储的提前拒绝、真实 CPU 执行及安装验证；这不等于角色／GC 存储兼容或生产上线完成。
 
 最近验收：Core 4,733 通过、7 个可选 Pro 跳过、2 个既有 warning；Pro 1,037 通过；配对 31 项、安装验证 35 项通过。各集合有重叠，不能相加。
@@ -39,6 +39,8 @@
 最新全局基线／CPU 合约片：Core 一次最终全量 4,893 通过、7 可选跳过、2 既有 warning；Pro 全量 1,074、配对 31、Core 定向 172／Pro 定向 69 通过，输入冻结。原有 513 个 Core／141 个 Pro 测试文件保持原件；机械核验关联全部版本、27,852 个归档文件、两个带合约 CPU 执行及重放，另两个无合约对照分别保留。见[全局基线与 CPU 合约结果](2026-09-15-completed-scan-results.zh-CN.md)。
 
 最新联合快照片：Core 一次全量 4,905 通过、7 可选跳过、2 既有 warning；Pro 全量 1,111、配对 31、Core 定向 31／Pro 定向 77 通过，输入冻结。机械核验关联 6,887 个归档文件、22 份离线 prompt、两个带合约 CPU 执行与无重复扣记的重启回放。包含内容恢复后，1,024 条 v2 两频道完整读取约 14.31／14.43 秒，共 246 个视图；额外开销保留，不作科研提速结论。见[联合快照结果及剩余预算范围](2026-09-15-joint-snapshot-results.zh-CN.md)。
+
+最新完整预算观察片：Core 全量 4,905 通过、7 可选跳过、2 既有 warning；Pro 全量 1,152、配对 31、定向 92 通过。3,382 个归档文件关联真实角色启动／关闭、失败 fallback 的预留链、四次 CPU 执行与无重复扣记的重放；另一个新进程重启被持久 attempts 上限拒绝。角色与 CPU 使用两个预先固定的合法配置顺序执行，未放松 CPU queue 对 provider roles 的限制。16,384 条角色账本下，首次读取／打包加五次复核约 178→314–316 ms；保留额外成本。见[完整预算联合结果](2026-09-15-research-budget-snapshot-results.zh-CN.md)。
 
 ## P1：降低长历史开销
 
@@ -67,10 +69,10 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 - [x] 修复真实 CLI 暴露的 decision contract／CPU command argv 被误判为 implicit sweep 的兼容问题；严格 action／domain envelope 校验，保留真正 sweep 拒绝及执行授权。原失败 harness 重跑完成两次带合约 CPU 执行、结算及重启重放。
 - [ ] 继续治理其他 Pro consumer、全历史 qualification 耗时及家族统计映射。聚合模式内存下降不代表时间改善；首版慢约 20%，最终已改为 ID 顺序读取，密集完成历史接近旧版，小／稀疏历史仍更慢。
 - [x] 分页块保留完整报告 Objective、比较／覆盖范围、策略／来源版本与当前 attempt 引用；invalid／unknown、原生 observation 协议和不可用记录不回退为 valid。
-- [ ] 设计 evidence／proposal／预算联合 snapshot 的总载荷控制，明确大记录、跨页遗漏和不可用证据的处理，不靠无限增加 prompt 上限。
-- [x] 本项已完成 CPU 账本＋本次请求次数的 v2 联合块：4–32 KiB 上限、完整必需元数据、所有可见 ID、容量省略恢复及共同来源重验。仍须将角色 attempts／token／费用账本、provider 进程内 token 预留与其失效条件纳入，不能用请求次数代替全部研究预算；上面的完整联合项保持未关闭。
+- [x] 完成当前 research v2 的 evidence／proposal／预算联合 snapshot 总载荷控制，明确大记录、跨页遗漏和不可用证据处理，不增加 prompt 上限。
+- [x] 4–32 KiB 必需块包含 CPU／请求、角色 attempts／token／费用与 provider token 预留及共同失效。缺失 baseline／角色、未配置 envelope 或不适用执行组明确标记；fallback 失败不退款，provider 支出位于角色预留 envelope 内，不重复计费。完整历史审计与上游读取成本仍另列。
 - [x] 用确定性离线 provider 通过真实 consumer 验证关键后页、taint／反例、来源变化、定向选择、请求／token 额度及实际 CPU 提案执行；枚举结束不代表收敛。
-- [ ] 用真实模型与长程研究继续验证信息利用和成本；单次请求额度、32 KiB 必需证据块不等于完整执行预算联合 snapshot，上游大文件／历史步骤也仍待治理。
+- [ ] 用真实模型与长程研究继续验证信息利用和成本；预算联合只反映当前可核实的预留，32 KiB 必需块不等于完整研究的 I/O／内存或成本上限，上游大文件／历史步骤仍待治理。
 
 验收：真实策略能找到并使用关键历史证据，仍保持资格与来源校验。Core 已有分页不等于 Pro 消费链已经完成。
 
@@ -115,6 +117,8 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 保留原始记录，不覆盖失败，不弱化业务断言；元数据测试与真实执行、局部性能与研究收益分别报告。涉及真实账户、费用、设备或现有服务的变更，先明确必要授权。
 
 ## 参考证据
+
+- [本次角色／provider 预算、fallback 预留和新进程重启](2026-09-15-research-budget-snapshot-results.zh-CN.md)
 
 - [本次联合快照容量、额外恢复成本与 CPU 执行](2026-09-15-joint-snapshot-results.zh-CN.md)
 
