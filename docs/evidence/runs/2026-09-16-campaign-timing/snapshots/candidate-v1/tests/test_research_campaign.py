@@ -234,7 +234,6 @@ assert m['status']=='failed' and not m['quality']['valid'] and m['quality']['sco
 assert m['metrics']['native_actions']==0 and m['metrics']['reserved_seconds']==0
 assert m['metrics']['provider_calls'] is None and m['metrics']['provider_tokens'] is None
 assert m['metrics']['provider_cost_usd'] is None and m['metrics']['cli_wall_seconds']==r['wall_seconds']
-assert m['metrics']['confirmed_selection_seconds'] is None
 print(json.dumps(m,sort_keys=True))'''
     checked = subprocess.run([sys.executable, '-c', script, str(root / 'provider-failed/run.json')], env=env,
                              cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=30)
@@ -298,14 +297,6 @@ def test_fixed_batch_runs_both_arms_two_rounds_and_keeps_missing_costs(finished_
             assert row['metrics']['provider_calls'] == 2 and row['metrics']['provider_tokens'] == 10
             assert row['budget_checks']['provider_cost_usd'] == 'unknown'
             assert row['budget_checks']['gpu_seconds'] == 'unknown'
-            timing = row['metrics']['confirmed_selection_seconds']
-            if invalid:
-                assert timing is None
-            else:
-                actual = json.loads((directory / index[i]['path']).read_bytes())
-                capture = json.loads((Path(actual['output']) / 'capture.json').read_bytes())
-                assert timing == capture['campaign']['confirmation']['observed_monotonic'] - actual['started_monotonic']
-                assert 0 < timing <= row['metrics']['cli_wall_seconds']
     with pytest.raises(FileExistsError):
         batch.execute(spec, directory, env=env)
     changed = copy.deepcopy(spec)
@@ -331,7 +322,6 @@ t=next(t for t in p['tasks'] if t['id']==r['task_id'])
 m=verify(r,t,r['arm'],plan=p)
 assert m['status']=='failed' and not m['quality']['confirmed']
 assert m['metrics']['native_actions']==2 and m['metrics']['reserved_seconds']==4
-assert m['metrics']['confirmed_selection_seconds'] is None
 assert m['metrics']['provider_calls'] is None and m['metrics']['provider_tokens'] is None
 print(json.dumps(m,sort_keys=True))'''
     checked = subprocess.run([sys.executable, '-c', script, str(root / 'late-failed/run.json')], env=env,
@@ -353,86 +343,3 @@ def test_outer_deadline_closes_its_own_child_and_retains_unknown_result(finished
     assert 'request.json' in timed['files']
     with pytest.raises(ValueError):
         campaign.verify(timed, plan['tasks'][0], record['arm'], plan=plan)
-
-
-def test_confirmation_receipt_and_clock_boundaries_use_real_capture(finished_campaign):
-    """Re-audit real closed products, including consistent but misplaced clocks."""
-    root, plan, inputs, runtime, env, record, measured, trace, invalid = finished_campaign
-    capture = json.loads((root / 'run/capture.json').read_bytes())
-    worker = json.loads((root / 'run/worker.json').read_bytes())
-    folder = root / 'timing-boundaries'
-    folder.mkdir()
-    for name, data in [('record', record), ('capture', capture), ('worker', worker)]:
-        (folder / (name + '.json')).write_text(json.dumps(data))
-    script = '''import copy,json,sys
-from pathlib import Path
-from examples.research_comparison.scheduling_campaign import verify
-r=json.loads(Path(sys.argv[1]).read_bytes());p=r['request']['protocol']
-t=next(t for t in p['tasks'] if t['id']==r['task_id'])
-c=json.loads(Path(sys.argv[2]).read_bytes());w=json.loads(Path(sys.argv[3]).read_bytes())
-window={'outer_started':r['started_monotonic'],'worker_started':w['started_monotonic'],
-        'worker_finished':w['finished_monotonic'],'outer_finished':r['finished_monotonic']}
-folder=Path(sys.argv[1]).parent
-results={}
-def check(name,capture,expected,clock=window):
- (folder/(name+'.json')).write_text(json.dumps({'capture':capture,'window':clock},sort_keys=True))
- try:
-  result=verify(capture,t,request=r['request'],clock_window=clock)
- except ValueError as exc:
-  assert expected=='reject',(name,str(exc))
-  results[name]={'status':'rejected','reason':str(exc)}
- else:
-  assert expected!='reject',name+' unexpectedly accepted'
-  timing=result['metrics']['confirmed_selection_seconds']
-  assert (timing is None) if expected=='unknown' else (timing is not None and 0<timing<=r['wall_seconds'])
-  results[name]={'status':expected,'metrics':result['metrics']}
-valid=bool(c['campaign'].get('confirmation'))
-check('original',c,'measured' if valid else 'unknown')
-missing=copy.deepcopy(c);missing['campaign'].pop('confirmation',None)
-check('missing-receipt',missing,'unknown')
-check('missing-outer-clock',c,'unknown',None)
-for label,delta in [('before-worker',-r['wall_seconds']-100),('after-worker',r['wall_seconds']+100)]:
- changed=copy.deepcopy(c)
- for call in changed['calls']:
-  call['started_monotonic']+=delta;call['finished_monotonic']+=delta
-  call['wall_seconds']=call['finished_monotonic']-call['started_monotonic']
- check(label,changed,'reject')
-for name,value in [('before-confirmation',c['calls'][-1]['started_monotonic']),
-                   ('after-worker-receipt',window['worker_finished']+1),('boolean-clock',True)]:
- changed=copy.deepcopy(c)
- changed['campaign']['confirmation']={'schema':1,'event':'selection_confirmed',
-     'selected_ref':c['campaign']['scope']['selected_ref'],
-     'confirmation_ref':c['campaign']['scope']['confirmation_ref'],'observed_monotonic':value}
- check(name,changed,'reject')
-changed=copy.deepcopy(c)
-changed['campaign']['confirmation']={'schema':1,'event':'selection_confirmed',
-     'selected_ref':c['campaign']['scope']['selected_ref'],
-     'confirmation_ref':c['campaign']['scope']['selected_ref'],
-     'observed_monotonic':window['worker_finished']}
-check('self-confirmation-receipt',changed,'reject')
-if valid:
- changed=copy.deepcopy(c);changed['campaign']['confirmation']['confirmation_ref']['generation']=False
- check('boolean-reference',changed,'reject')
-else:
- changed=copy.deepcopy(c)
- changed['campaign']['confirmation']={'schema':1,'event':'selection_confirmed',
-     'selected_ref':c['campaign']['scope']['selected_ref'],
-     'confirmation_ref':c['campaign']['scope']['confirmation_ref'],
-     'observed_monotonic':window['worker_finished']}
- check('invalid-quality-receipt',changed,'reject')
-(folder/'results.json').write_text(json.dumps(results,sort_keys=True,indent=2))
-print(json.dumps({'cases':len(results),'valid':valid}))'''
-    (folder / 'verify.py').write_text(script)
-    checked = subprocess.run([sys.executable, str(folder / 'verify.py'), str(folder / 'record.json'),
-        str(folder / 'capture.json'), str(folder / 'worker.json')], env=env,
-        cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=60)
-    (folder / 'stdout.log').write_text(checked.stdout)
-    (folder / 'stderr.log').write_text(checked.stderr)
-    assert checked.returncode == 0, checked.stderr
-    assert json.loads(checked.stdout)['cases'] == 10
-    if invalid:
-        assert 'confirmation' not in capture['campaign']
-    else:
-        moment = capture['campaign']['confirmation']['observed_monotonic']
-        assert capture['calls'][-1]['finished_monotonic'] <= moment <= worker['finished_monotonic']
-        assert measured['metrics']['confirmed_selection_seconds'] == moment - record['started_monotonic']

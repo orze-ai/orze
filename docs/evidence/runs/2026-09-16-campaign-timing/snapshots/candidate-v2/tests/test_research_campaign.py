@@ -234,7 +234,6 @@ assert m['status']=='failed' and not m['quality']['valid'] and m['quality']['sco
 assert m['metrics']['native_actions']==0 and m['metrics']['reserved_seconds']==0
 assert m['metrics']['provider_calls'] is None and m['metrics']['provider_tokens'] is None
 assert m['metrics']['provider_cost_usd'] is None and m['metrics']['cli_wall_seconds']==r['wall_seconds']
-assert m['metrics']['confirmed_selection_seconds'] is None
 print(json.dumps(m,sort_keys=True))'''
     checked = subprocess.run([sys.executable, '-c', script, str(root / 'provider-failed/run.json')], env=env,
                              cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=30)
@@ -298,14 +297,6 @@ def test_fixed_batch_runs_both_arms_two_rounds_and_keeps_missing_costs(finished_
             assert row['metrics']['provider_calls'] == 2 and row['metrics']['provider_tokens'] == 10
             assert row['budget_checks']['provider_cost_usd'] == 'unknown'
             assert row['budget_checks']['gpu_seconds'] == 'unknown'
-            timing = row['metrics']['confirmed_selection_seconds']
-            if invalid:
-                assert timing is None
-            else:
-                actual = json.loads((directory / index[i]['path']).read_bytes())
-                capture = json.loads((Path(actual['output']) / 'capture.json').read_bytes())
-                assert timing == capture['campaign']['confirmation']['observed_monotonic'] - actual['started_monotonic']
-                assert 0 < timing <= row['metrics']['cli_wall_seconds']
     with pytest.raises(FileExistsError):
         batch.execute(spec, directory, env=env)
     changed = copy.deepcopy(spec)
@@ -331,7 +322,6 @@ t=next(t for t in p['tasks'] if t['id']==r['task_id'])
 m=verify(r,t,r['arm'],plan=p)
 assert m['status']=='failed' and not m['quality']['confirmed']
 assert m['metrics']['native_actions']==2 and m['metrics']['reserved_seconds']==4
-assert m['metrics']['confirmed_selection_seconds'] is None
 assert m['metrics']['provider_calls'] is None and m['metrics']['provider_tokens'] is None
 print(json.dumps(m,sort_keys=True))'''
     checked = subprocess.run([sys.executable, '-c', script, str(root / 'late-failed/run.json')], env=env,

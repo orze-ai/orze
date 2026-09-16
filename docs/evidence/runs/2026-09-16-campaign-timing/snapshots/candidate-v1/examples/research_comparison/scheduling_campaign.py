@@ -17,7 +17,7 @@ import time
 import yaml
 
 from .campaign import _copy, _sha, _write
-from .protocol import digest, keys, number, read_json
+from .protocol import digest, keys, read_json
 from .scheduling import audit_scheduling, audit_scheduling_cost, evaluator_identity, verify_scheduling
 from examples.holdout import scheduling as domain
 
@@ -263,15 +263,6 @@ def run(request, output):
         # Audit now, but retain originals; verification must recompute both reports.
         run['campaign'].update(scope=scope, usage_scope=usage_scope,
                                usage_audit=audit_usage(**usage_scope), task_audit=audit_scheduling(run, **scope))
-        # The independent evaluator audit has consumed the closed replica and
-        # established confirmation. A terminal file or provider assertion
-        # alone never creates this timing receipt.
-        if run['campaign']['task_audit']['measurement']['quality']['confirmed']:
-            run['campaign']['confirmation'] = {
-                'schema': 1, 'event': 'selection_confirmed',
-                'selected_ref': scope['selected_ref'], 'confirmation_ref': scope['confirmation_ref'],
-                'observed_monotonic': time.monotonic(),
-            }
         return run
     finally:
         # Preserve partial state even if a proposal, transport, worker or audit fails.
@@ -339,43 +330,7 @@ def _verify_workflow(capture, request):
             raise ValueError('native command differs from the declared workflow')
 
 
-def _timing(capture, measured, *, complete, clock_window):
-    """Check nested local clocks; missing confirmation evidence stays unknown."""
-    calls = capture['calls']
-    receipt = capture['campaign'].get('confirmation')
-    if clock_window is not None:
-        keys(clock_window, ('outer_started', 'worker_started', 'worker_finished', 'outer_finished'),
-             'campaign clock window')
-        times = [clock_window[key] for key in ('outer_started', 'worker_started', 'worker_finished', 'outer_finished')]
-        if not all(number(value) for value in times) or times != sorted(times):
-            raise ValueError('campaign clock window is invalid')
-        if any(not clock_window['worker_started'] <= call['started_monotonic']
-               <= call['finished_monotonic'] <= clock_window['worker_finished'] for call in calls):
-            raise ValueError('campaign step is outside the worker clock window')
-        measured['metrics']['cli_wall_seconds'] = times[-1] - times[0]
-    # Partial costs remain useful if execution or capture failed after an
-    # apparent selection. Only the complete independently checked workflow
-    # can turn a confirmation receipt into a measurement.
-    if not complete or receipt is None:
-        return
-    keys(receipt, ('schema', 'event', 'selected_ref', 'confirmation_ref', 'observed_monotonic'),
-         'confirmation receipt')
-    scope = capture['campaign']['scope']
-    moment = receipt['observed_monotonic']
-    if (type(receipt['schema']) is not int or receipt['schema'] != 1
-            or receipt['event'] != 'selection_confirmed'
-            or digest(receipt['selected_ref']) != digest(scope['selected_ref'])
-            or digest(receipt['confirmation_ref']) != digest(scope['confirmation_ref'])
-            or not measured['quality']['valid'] or not measured['quality']['confirmed']
-            or not number(moment) or moment < calls[-1]['finished_monotonic']):
-        raise ValueError('confirmation receipt does not match the verified selection')
-    if clock_window is not None:
-        if not clock_window['worker_started'] <= moment <= clock_window['worker_finished']:
-            raise ValueError('confirmation is outside the worker clock window')
-        measured['metrics']['confirmed_selection_seconds'] = moment - clock_window['outer_started']
-
-
-def verify(capture, task, *, request, complete=True, clock_window=None):
+def verify(capture, task, *, request, complete=True):
     from orze_pro.agents.prompt_manifest import _validate_manifest
     from orze_pro.agents.usage_report import audit_usage
     capture = _copy(capture)
@@ -448,5 +403,4 @@ def verify(capture, task, *, request, complete=True, clock_window=None):
         measured = audit_scheduling_cost(capture, **scope)['measurement']
     usage = audit_usage(**usage_scope)
     measured['metrics'].update(usage['comparison_metrics'])
-    _timing(capture, measured, complete=complete, clock_window=clock_window)
     return measured

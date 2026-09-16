@@ -14,7 +14,7 @@ import platform
 import sys
 import time
 
-from .protocol import digest, keys, number, read_json, schedule
+from .protocol import digest, keys, read_json, schedule
 
 SETTINGS = {'ORZE_OPENAI_STREAM': '0', 'ORZE_LLM_FALLBACK': '', 'ORZE_CLAUDE_FALLBACK': ''}
 INPUT_NAMES = ('model', 'tools', 'environment', 'treatment', 'data', 'evaluator',
@@ -221,13 +221,10 @@ def verify(record, task, arm, *, plan):
         raise ValueError('workload runtime or inputs changed')
     capture = read_capture(folder / capture_name, capture_sha)
     start, finish = record['started_monotonic'], record['finished_monotonic']
-    if (not all(number(value) for value in (start, finish, worker['started_monotonic'],
-                                          worker['finished_monotonic'], record['wall_seconds']))
+    if (type(start) not in (int, float) or type(finish) not in (int, float)
             or not 0 <= start <= worker['started_monotonic'] <= worker['finished_monotonic'] <= finish
             or abs(finish - start - record['wall_seconds']) > 1e-8):
         raise ValueError('campaign clocks are inconsistent')
-    result = verify_workload(capture, task, request=request, complete=complete,
-        clock_window={'outer_started': start, 'worker_started': worker['started_monotonic'],
-                      'worker_finished': worker['finished_monotonic'], 'outer_finished': finish})
+    result = verify_workload(capture, task, request=request, complete=complete)
     result['metrics']['cli_wall_seconds'] = record['wall_seconds']
     return result
