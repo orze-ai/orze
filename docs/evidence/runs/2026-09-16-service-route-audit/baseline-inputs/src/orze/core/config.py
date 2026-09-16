@@ -96,17 +96,16 @@ CANONICAL_CLAUDE_SKILL_DEFAULTS: dict = {
 }
 
 
-def _expand_env_vars(obj, environ=None):
-    """Expand ${VAR} values, optionally against a private environment mapping."""
-    environ = os.environ if environ is None else environ
+def _expand_env_vars(obj):
+    """Recursively expand ${VAR} references in string values using os.environ."""
     if isinstance(obj, str):
         def _replace(m):
-            return environ.get(m.group(1), m.group(0))
+            return os.environ.get(m.group(1), m.group(0))
         return _ENV_VAR_RE.sub(_replace, obj)
     if isinstance(obj, dict):
-        return {k: _expand_env_vars(v, environ) for k, v in obj.items()}
+        return {k: _expand_env_vars(v) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [_expand_env_vars(item, environ) for item in obj]
+        return [_expand_env_vars(item) for item in obj]
     return obj
 
 
@@ -139,13 +138,12 @@ def _find_unresolved_env_vars(obj, path: str = "") -> list:
     return found
 
 
-def find_dotenv(config_path: Optional[str] = None, *, cwd=None) -> Optional[Path]:
+def find_dotenv(config_path: Optional[str] = None) -> Optional[Path]:
     """Find .env file: next to config or CWD. Returns path or None."""
-    workdir = Path.cwd() if cwd is None else Path(cwd)
     candidates = []
     if config_path:
-        candidates.append((workdir / config_path).resolve().parent / ".env")
-    candidates.append(workdir / ".env")
+        candidates.append(Path(config_path).resolve().parent / ".env")
+    candidates.append(Path.cwd() / ".env")
     for c in candidates:
         if c.is_file():
             return c
@@ -171,52 +169,21 @@ def _parse_dotenv(env_file: Path) -> dict:
     return result
 
 
-def _apply_dotenv(values, environ):
-    """Keep the loader's precedence, including its empty-variable fallback."""
-    loaded = 0
-    for key, value in values.items():
-        if not environ.get(key):
-            environ[key] = value
-            loaded += 1
-    return loaded
-
-
 def _load_dotenv(config_path: Optional[str] = None) -> int:
     """Load .env file. Only sets vars NOT already in os.environ. Returns count loaded."""
     env_file = find_dotenv(config_path)
     if not env_file:
         return 0
 
-    loaded = _apply_dotenv(_parse_dotenv(env_file), os.environ)
+    loaded = 0
+    for key, value in _parse_dotenv(env_file).items():
+        if not os.environ.get(key):
+            os.environ[key] = value
+            loaded += 1
 
     if loaded:
         logger.info("Loaded %d env var(s) from %s", loaded, env_file)
     return loaded
-
-
-def resolve_project_results(path, *, workdir, environ=None) -> Path:
-    """Read the current results route without loading roles or changing globals.
-
-    Use the same YAML, defaults, dotenv precedence and substitution as the
-    controller loader, interpreted in its service working directory. This is
-    a route projection, not full configuration validation or an ownership pin.
-    Callers that require a stable read must check the input identities too.
-    """
-    workdir = Path(workdir).resolve(strict=True)
-    config_path = workdir / path
-    if not config_path.is_file():
-        raise ValueError("project_config_unavailable")
-    environment = dict(os.environ if environ is None else environ)
-    env_file = find_dotenv(config_path, cwd=workdir)
-    if env_file is not None:
-        _apply_dotenv(_parse_dotenv(env_file), environment)
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    if not isinstance(raw, dict):
-        raise ValueError("project_config_invalid")
-    value = _expand_env_vars(raw.get("results_dir", DEFAULT_CONFIG["results_dir"]), environment)
-    if not isinstance(value, str):
-        raise ValueError("project_results_invalid")
-    return (workdir / value).resolve()
 
 
 def reload_dotenv(config_path: Optional[str] = None) -> int:

@@ -5,14 +5,11 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import os
 import re
-import stat
 import subprocess
 import sys
 from pathlib import Path
 from typing import Iterable, Optional
-import yaml
 
 from orze.service.watchdog import load_service_config
 
@@ -338,44 +335,6 @@ def _unit_errors(svc_cfg: dict, properties: dict) -> list[str]:
     return errors
 
 
-def _route_path_identity(path: Path, *, content: bool) -> tuple:
-    """Observe lexical and resolved parents as well as the route input itself."""
-    resolved = path.resolve(strict=True)
-    entries = []
-    for item in sorted({path, resolved, *path.parents, *resolved.parents}, key=str):
-        observed = item.lstat()
-        identity = (observed.st_dev, observed.st_ino, observed.st_mode)
-        if content and item in (path, resolved):
-            identity += (observed.st_size, observed.st_mtime_ns, observed.st_ctime_ns)
-        if stat.S_ISLNK(observed.st_mode):
-            identity += (os.readlink(item),)
-        entries.append((str(item), identity))
-    return tuple(entries)
-
-
-def _service_route_state(svc_cfg: dict, environment: dict) -> tuple:
-    from orze.core.config import find_dotenv, resolve_project_results
-
-    paths = {name: Path(svc_cfg[name]) for name in ('workdir', 'config_file', 'results_dir')}
-    if any(not path.is_absolute() for path in paths.values()):
-        raise ValueError('service_route_paths_not_absolute')
-
-    def identity():
-        env_file = find_dotenv(paths['config_file'], cwd=paths['workdir'])
-        return (
-            tuple((name, _route_path_identity(path, content=name == 'config_file'))
-                  for name, path in paths.items()),
-            None if env_file is None else _route_path_identity(env_file, content=True),
-        )
-
-    before = identity()
-    current = resolve_project_results(paths['config_file'], workdir=paths['workdir'],
-                                      environ=environment)
-    if identity() != before:
-        raise RuntimeContractError('service_results_route_changed')
-    return current, paths['results_dir'].resolve(strict=True), before
-
-
 def audit_runtime_contract(
     svc_cfg: dict,
     *,
@@ -394,16 +353,6 @@ def audit_runtime_contract(
         }
     if svc_cfg.get("runtime_contract_version") != CONTRACT_VERSION:
         errors.append("runtime_contract_version_missing_or_unsupported")
-    route_before = None
-    environment = dict(os.environ)
-    try:
-        route_before = _service_route_state(svc_cfg, environment)
-        if route_before[0] != route_before[1]:
-            errors.append("service_results_route_drift")
-    except RuntimeContractError:
-        errors.append("service_results_route_changed")
-    except (KeyError, TypeError, ValueError, OSError, RuntimeError, yaml.YAMLError):
-        errors.append("service_results_route_unavailable")
     try:
         configured_python = Path(svc_cfg["python"]).resolve(strict=True)
         if configured_python != Path(sys.executable).resolve(strict=True):
@@ -450,14 +399,6 @@ def audit_runtime_contract(
             errors.append("latched_systemd_unit_active")
         if effective.get("UnitFileState") in {"enabled", "enabled-runtime"}:
             errors.append("latched_systemd_unit_enabled")
-
-    if route_before is not None:
-        try:
-            if (dict(os.environ) != environment
-                    or _service_route_state(svc_cfg, environment) != route_before):
-                errors.append("service_results_route_changed")
-        except (KeyError, TypeError, ValueError, OSError, RuntimeError, yaml.YAMLError):
-            errors.append("service_results_route_changed")
 
     errors = sorted(set(errors))
     return {
