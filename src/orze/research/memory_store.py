@@ -215,6 +215,37 @@ def read_stored_memory(results_dir, *, database):
     return _session(database, write=False, action=action)
 
 
+def inspect_pending_memory(results_dir, *, database):
+    """Read an unverified prepared intent, preserving its exact JSON text.
+
+    This does not publish, repair, qualify sources or grant execution rights.
+    A recovery caller must explicitly authorize publication and pass the same
+    predecessor, operation ID and digest to publish_memory_update.
+    """
+    try:
+        scope = project_scope(results_dir)
+    except (MemoryUnavailable, OSError, ValueError, TypeError):
+        return _unavailable(False, 'memory_scope_invalid')
+    def action(connection, fence, state):
+        connection.execute('BEGIN')
+        if not _schema(connection):
+            fence()
+            return _unavailable(False, 'memory_pending_absent')
+        pending = _row(connection, _PENDING, scope)
+        current = _row(connection, _CURRENT, scope)
+        if pending is not None:
+            if pending['predecessor'] != (current['revision'] if current else None):
+                raise MemoryUnavailable('memory_pending_predecessor_mismatch')
+            if current is not None:
+                _preserve_records(current['document'], pending['document'])
+        fence()
+        if pending is None:
+            return _unavailable(False, 'memory_pending_absent')
+        return {key: pending[key] for key in ('revision', 'operation_id', 'predecessor',
+                'document_sha256', 'document_json')} | {'availability': 'prepared_update'}
+    return _session(database, write=False, action=action)
+
+
 def prepare_memory_update(results_dir, raw, *, database, operation_id, expected_revision):
     """Persist a bounded intent; replay only the same predecessor/ID/bytes.
 
