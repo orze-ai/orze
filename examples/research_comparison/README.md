@@ -1,8 +1,11 @@
-# Paired research comparison preparation
+# Paired research comparison
 
-This offline application separates a fixed comparison plan from the workload
-adapter that verifies actual research evidence. It does not run experiments,
-call a model, authorize spending, or change Orze's autonomous stopping policy.
+This application separates a fixed comparison plan from the workload
+adapter that verifies actual research evidence. Check/replay/audit commands
+are read-only. The explicit `execute-campaign` command can run a frozen
+scheduling campaign through normal Pro model calls and native CPU workers;
+see the [execution and collection guide](../../docs/research-campaign.md).
+No command authorizes spending or changes Orze's autonomous stopping policy.
 The legacy adapter reads the **already published** 24 CPU pairs from
 2026-09-12. The scheduling auditor verifies the task-quality and native-ledger
 portion of a captured run. Neither reanalysis creates new research evidence.
