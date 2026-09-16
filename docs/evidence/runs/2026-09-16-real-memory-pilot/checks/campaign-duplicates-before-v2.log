@@ -1,0 +1,46 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+____ test_duplicate_configuration_does_not_abort_remaining_research[valid] _____
+
+finished_campaign = (PosixPath('/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/campaign-duplicates-before-v2/campaign-valid0')...', ...}, {'run_id': 'scheduling-target-0000-A', 'task_id': 'scheduling-target', 'repetition': 0, 'seed': 17, ...}, ...)
+
+    def test_duplicate_configuration_does_not_abort_remaining_research(finished_campaign):
+        from examples.research_comparison.scheduling_campaign import _verify_workflow
+        root, plan, inputs, runtime, env, record, measured, trace, invalid = finished_campaign
+        plan, inputs = copy.deepcopy(plan), copy.deepcopy(inputs)
+        inputs['model']['model'] = 'offline-config-duplicate'
+        inputs['tools']['rounds'] = 2
+        plan['shared']['model'] = digest(inputs['model'])
+        plan['shared']['tools'] = digest(inputs['tools'])
+        output = root / 'config-duplicate'
+        result = campaign.execute(plan, record['run_id'], inputs, output, runtime=runtime, env=env)
+>       assert result['exit_code'] == 0, (output / 'stderr.log').read_text()
+E       AssertionError: campaign workload failed: ValueError
+E         
+E       assert 1 == 0
+
+tests/test_research_campaign.py:187: AssertionError
+___ test_duplicate_configuration_does_not_abort_remaining_research[invalid] ____
+
+finished_campaign = (PosixPath('/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/campaign-duplicates-before-v2/campaign-invalid0...', ...}, {'run_id': 'scheduling-target-0000-A', 'task_id': 'scheduling-target', 'repetition': 0, 'seed': 17, ...}, ...)
+
+    def test_duplicate_configuration_does_not_abort_remaining_research(finished_campaign):
+        from examples.research_comparison.scheduling_campaign import _verify_workflow
+        root, plan, inputs, runtime, env, record, measured, trace, invalid = finished_campaign
+        plan, inputs = copy.deepcopy(plan), copy.deepcopy(inputs)
+        inputs['model']['model'] = 'offline-config-duplicate'
+        inputs['tools']['rounds'] = 2
+        plan['shared']['model'] = digest(inputs['model'])
+        plan['shared']['tools'] = digest(inputs['tools'])
+        output = root / 'config-duplicate'
+        result = campaign.execute(plan, record['run_id'], inputs, output, runtime=runtime, env=env)
+>       assert result['exit_code'] == 0, (output / 'stderr.log').read_text()
+E       AssertionError: campaign workload failed: ValueError
+E         
+E       assert 1 == 0
+
+tests/test_research_campaign.py:187: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_research_campaign.py::test_duplicate_configuration_does_not_abort_remaining_research[valid]
+FAILED tests/test_research_campaign.py::test_duplicate_configuration_does_not_abort_remaining_research[invalid]
+2 failed, 29 deselected in 26.30s
