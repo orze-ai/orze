@@ -149,7 +149,6 @@ def main(argv=None):
     parser.add_argument('--request-id', required=True)
     parser.add_argument('--backup', required=True)
     parser.add_argument('--manifest-sha256', required=True)
-    parser.add_argument('--install', action='store_true', help='Also install/start the new systemd service')
     args = parser.parse_args(argv)
     from orze.service.host import _service
     previous = Path.cwd()
@@ -157,17 +156,8 @@ def main(argv=None):
         source, destination, backup = (Path(p).absolute() for p in
                                       (args.source_service_config, args.service_config, args.backup))
         _, _, _, svc = _service(source)
-        if args.install and svc['method'] != 'systemd':
-            raise ControllerHOLD('service_upgrade_install_requires_systemd')
         os.chdir(svc['workdir'])
-        result = prepare(source, destination, args.request_id, backup, args.manifest_sha256)
-        if args.install:
-            from orze.service.install import _SYSTEMD_DIR
-            from orze.service.scoped import install_units
-            _, _, _, prepared = _service(destination)
-            install_units(prepared, _SYSTEMD_DIR)
-            result['kind'] = 'installed_upgrade'
-        print(json.dumps(result, sort_keys=True))
+        print(json.dumps(prepare(source, destination, args.request_id, backup, args.manifest_sha256), sort_keys=True))
         return 0
     except Exception:
         print('HOLD: service_upgrade_unconfirmed', file=sys.stderr)

@@ -388,7 +388,6 @@ Examples:
     svc_upgrade = svc_sub.add_parser('upgrade', help='Prepare a compatible runtime from a closed CPU service and backup')
     for option in ('source-service-config', 'service-config', 'request-id', 'backup', 'manifest-sha256'):
         svc_upgrade.add_argument('--' + option, required=True)
-    svc_upgrade.add_argument('--install', action='store_true', help='Also install/start the new systemd service')
 
     svc_backup = svc_sub.add_parser('backup', help='Back up or restore inactive data from a closed CPU service')
     backup_sub = svc_backup.add_subparsers(dest='backup_operation', required=True)
@@ -1274,10 +1273,9 @@ Examples:
             return recover_main(options + (['--install'] if args.install else []))
         elif action == 'upgrade':
             from orze.service.upgrade import main as upgrade_main
-            options = ['--source-service-config', args.source_service_config,
+            return upgrade_main(['--source-service-config', args.source_service_config,
                 '--service-config', args.service_config, '--request-id', args.request_id,
-                '--backup', args.backup, '--manifest-sha256', args.manifest_sha256]
-            return upgrade_main(options + (['--install'] if args.install else []))
+                '--backup', args.backup, '--manifest-sha256', args.manifest_sha256])
         elif action == 'backup':
             from orze.service.backup import main as backup_main
             if args.backup_operation == 'create':
