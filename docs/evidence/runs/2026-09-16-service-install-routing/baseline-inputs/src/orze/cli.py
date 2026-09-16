@@ -1,0 +1,1490 @@
+#!/usr/bin/env python3
+"""Orze CLI — GPU experiment orchestrator.
+
+Calling spec:
+    orze                                        # all GPUs, continuous
+    orze -c orze.yaml --gpus 0,1                # with project config
+    orze init [path]                            # initialize new project
+    orze start / stop / restart                 # daemon management
+    orze retry-eval IDEA_ID -c orze.yaml         # admit evaluation-only retry
+    orze replicate SOURCE --request-id KEY      # admit one explicit repeat task
+    orze --check                                # validate config
+    orze --launch-status                        # fast stop/pause policy JSON
+    orze --admin                                # launch admin panel
+
+This module contains only:
+    setup_logging()  — configure log format
+    main()           — argparse + dispatch (imports from cli_* modules)
+
+Extracted modules:
+    cli_star.py   — star prompt (maybe_star)
+    cli_demo.py   — template strings (BASELINE_TRAIN_PY, RESEARCH_RULES_TEMPLATE)
+    cli_setup.py  — install/uninstall/upgrade helpers
+    cli_pro.py    — pro license management
+"""
+
+import argparse
+import logging
+import os
+import re
+import sys
+from pathlib import Path
+
+from orze import __version__
+from orze.cli_pro import pro_activate, pro_status, pro_deactivate
+from orze.cli_setup import (
+    do_uninstall, stop_running_instance, do_upgrade, do_reinstall,
+    do_init, do_check, do_launch_status,
+)
+from orze.cli_star import maybe_star
+from orze.core.config import load_project_config
+from orze.core.controller_profile import (
+    ControllerProfileError, controller_profile, validate_profile_cli,
+    validate_successor_cli,
+)
+from orze.hardware.gpu import detect_all_gpus
+from orze.core.cpu_execution import CPUExecutionError, cpu_execution, validate_cpu_cli
+
+logger = logging.getLogger("orze")
+
+
+def _load_controller_config(args):
+    try:
+        cfg = load_project_config(args.config_file)
+        validate_cpu_cli(cfg, args)
+    except CPUExecutionError as exc:
+        raise ControllerProfileError(str(exc)) from exc
+    validate_profile_cli(cfg, args)
+    return cfg
+
+
+def _stop_controller_command(cfg, timeout):
+    if controller_profile(cfg) is None:
+        from orze.lifecycle import do_stop
+        do_stop(cfg, timeout=timeout)
+        return 75
+    try:
+        from orze.engine.controller_session import CompletedControllerStop, stop_controller
+        outcome = stop_controller(cfg, timeout=timeout)
+    except Exception:
+        print("HOLD: registered controller stop is unconfirmed")
+        return 75
+    if type(outcome) is CompletedControllerStop:
+        return 0
+    print("HOLD: registered controller stop is unconfirmed")
+    return 75
+
+
+def _restart_controller_command(cfg, request_id, timeout):
+    """Consume only the exact result of the Core-owned one-shot operation."""
+    try:
+        if controller_profile(cfg) != {"version": 2, "profile": "local_handoff_v1"}:
+            raise ValueError("controller_handoff_profile_required")
+        if type(request_id) is not str or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", request_id):
+            raise ValueError("controller_handoff_request_id_required")
+        from orze.engine.controller_handoff import CompletedControllerHandoff, restart_controller
+        outcome = restart_controller(cfg, request_id=request_id,
+                                     timeout=60 if timeout is None else timeout)
+    except Exception:
+        print("HOLD: registered controller handoff is unconfirmed; a stable --request-id is required")
+        return 75
+    if type(outcome) is CompletedControllerHandoff:
+        return 0
+    print("HOLD: registered controller handoff is unconfirmed")
+    return 75
+
+
+def _require_controller_runtime(cfg: dict) -> None:
+    """Fail before GPU discovery when an opt-in runtime pin drifts."""
+    from orze.service.runtime_contract import (
+        RuntimeContractError,
+        require_controller_runtime_contract,
+    )
+    try:
+        require_controller_runtime_contract(cfg.get("controller_runtime"))
+    except RuntimeContractError as exc:
+        raise SystemExit(f"Controller runtime contract rejected: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+def setup_logging(verbose: bool = False):
+    """Configure logging with timestamps."""
+    level = logging.DEBUG if verbose else logging.INFO
+    fmt = "%(asctime)s [%(levelname)s] %(message)s"
+    datefmt = "%Y-%m-%d %H:%M:%S"
+    logging.basicConfig(level=level, format=fmt, datefmt=datefmt)
+
+
+# ---------------------------------------------------------------------------
+# sop subcommand (delegates to orze-pro; SOPs are a pro feature)
+# ---------------------------------------------------------------------------
+
+def _run_sop_subcommand(args) -> int:
+    try:
+        from orze_pro.cli_sop import run_sop_subcommand
+    except ImportError:
+        print("The 'sop' subcommand requires orze-pro. Install orze-pro "
+              "to use SOP registry, wiring validation, and execution "
+              "status commands.")
+        return 2
+    return run_sop_subcommand(args)
+
+
+def _run_retry_eval_subcommand(args) -> int:
+    """Admit evaluation-only work without GPU discovery or paid extensions."""
+    import json
+    import sqlite3
+
+    from orze.core.evaluation_retry_state import open_existing_lake
+    from orze.engine.evaluation_retry import request_evaluation_retry
+    from orze.reporting.evidence import report_lifecycle_db_path
+
+    lake = None
+    try:
+        config_path = Path(args.config_file or "orze.yaml").absolute()
+        if not config_path.is_file():
+            raise ValueError("evaluation_retry_config_missing")
+        # The shared loader interprets relative paths from cwd. This early,
+        # single-threaded CLI branch scopes that interpretation to the selected
+        # project, then restores the caller's cwd before invoking the service.
+        caller_cwd = Path.cwd()
+        try:
+            os.chdir(config_path.parent)
+            cfg = load_project_config(str(config_path))
+            cfg["_config_path"] = str(config_path)
+            results_dir = Path(cfg["results_dir"]).absolute()
+            cfg["results_dir"] = str(results_dir)
+            cfg["_env_ORZE_RESULTS_DIR"] = str(results_dir)
+            db_path = report_lifecycle_db_path(results_dir, cfg).absolute()
+            cfg["idea_lake_db"] = str(db_path)
+        finally:
+            os.chdir(caller_cwd)
+        # The existing-only opener rejects missing/invalid project authority
+        # without SQLite's normal create/bootstrap behavior.
+        lake = open_existing_lake(db_path)
+        result = request_evaluation_retry(args.idea_id, results_dir, cfg, lake)
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return 0
+    except (ValueError, OSError, sqlite3.Error) as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False))
+        return 2
+    finally:
+        if lake is not None:
+            lake.close()
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main():
+    from orze.extensions import _find_pro_key
+
+    parser = argparse.ArgumentParser(
+        description="orze: GPU experiment orchestrator",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python -m orze.cli                             # all GPUs, continuous
+  python -m orze.cli -c orze.yaml --gpus 0,1     # with project config
+  python -m orze.cli --once                      # one cycle then exit
+  python -m orze.cli --report-only               # regenerate report
+        """,
+    )
+    parser.add_argument("-V", "--version", action="version",
+                        version=f"orze {__version__}")
+    parser.add_argument("-c", "--config-file", type=str, default=None,
+                        help="Path to orze.yaml project config")
+    parser.add_argument("--gpus", type=str, default=None,
+                        help="Comma-separated GPU IDs (default: auto-detect)")
+    parser.add_argument("--timeout", type=int, default=None,
+                        help="Max training time in seconds")
+    parser.add_argument("--poll", type=int, default=None,
+                        help="Seconds between iterations")
+    parser.add_argument("--once", action="store_true",
+                        help="Run one cycle and exit")
+    parser.add_argument("--stop", action="store_true",
+                        help="Request cooperative stop; unconfirmed closure returns 75")
+    parser.add_argument("--restart", action="store_true",
+                        help="Request stop; v2 one-shot handoff requires --request-id")
+    parser.add_argument("--request-id", dest="controller_request_id", default=None,
+                        help="Stable one-shot controller restart key (not a replication key)")
+    parser.add_argument("--disable", action="store_true",
+                        help="Stop and persistently disable Orze (survives restarts)")
+    parser.add_argument("--enable", action="store_true",
+                        help="Check enable admission; pending stop markers are preserved")
+    parser.add_argument("--report-only", action="store_true",
+                        help="Only regenerate report")
+    parser.add_argument("--role-only", type=str, default=None, metavar="NAME",
+                        help="Run a single agent role once and exit")
+    parser.add_argument("--research-only", action="store_true",
+                        help="Alias for --role-only research")
+    parser.add_argument("--ideas-md", type=str, default=None,
+                        help="Path to ideas markdown file")
+    parser.add_argument("--base-config", type=str, default=None,
+                        help="Path to base config YAML")
+    parser.add_argument("--results-dir", type=str, default=None,
+                        help="Directory for results")
+    parser.add_argument("--train-script", type=str, default=None,
+                        help="Training script to run per idea")
+    parser.add_argument("--init", nargs="?", const="__ask__", default=None, metavar="PATH",
+                        help="(deprecated — use 'orze init [path]') Initialize a new project")
+    parser.add_argument("--admin", action="store_true",
+                        help="Launch admin panel instead of farm loop")
+    parser.add_argument("--no-admin", action="store_true",
+                        help="Do not start the background admin panel")
+    parser.add_argument("--upgrade", action="store_true",
+                        help="Request upgrade; installation requires confirmed stop (75)")
+    parser.add_argument("--reinstall", action="store_true",
+                        help="Request reinstall; confirmed stop is required before "
+                             "package changes or restart (75 while unconfirmed)")
+    parser.add_argument("--reinstall-orze-version", type=str, default=None,
+                        metavar="VER", help="Pin orze version for --reinstall")
+    parser.add_argument("--reinstall-pro-version", type=str, default=None,
+                        metavar="VER", help="Pin orze-pro version for --reinstall")
+    parser.add_argument("--reinstall-extra-index-url", type=str, default=None,
+                        metavar="URL",
+                        help="Extra pip index URL for --reinstall (e.g. private PyPI)")
+    parser.add_argument("--no-restart", action="store_true",
+                        help="Compatibility option; does not bypass confirmed-stop admission")
+    parser.add_argument("--check", action="store_true",
+                        help="Validate config, check files, API keys, GPUs, .env — then exit")
+    parser.add_argument(
+        "--launch-status", action="store_true",
+        help="Report stop/pause launch policy as JSON without GPU access, then exit",
+    )
+    parser.add_argument("--uninstall", action="store_true",
+                        help="Full uninstall: stop orze, remove runtime files, "
+                             "pip uninstall — keeps only research results")
+    parser.add_argument("-v", "--verbose", action="store_true",
+                        help="Debug logging")
+
+    # --- subcommands ---
+    subparsers = parser.add_subparsers(dest="command")
+
+    # stop
+    stop_parser = subparsers.add_parser(
+        "stop", help="Request cooperative stop; closure remains unconfirmed (75)")
+    stop_parser.add_argument("-c", "--config-file", type=str, default=None,
+                             help="Path to orze.yaml")
+    stop_parser.add_argument("--timeout", type=int, default=60,
+                             help="Compatibility timeout; request-only stop does not wait")
+
+    # resume — explicit, hash-validated checkpoint re-admission
+    resume_parser = subparsers.add_parser(
+        "resume", help="Re-admit one interrupted trainer checkpoint")
+    resume_parser.add_argument("idea_id", help="Interrupted idea ID")
+    resume_parser.add_argument(
+        "--resume-from", required=True, dest="resume_from",
+        help="Exact checkpoint path attested by interruption.json",
+    )
+    resume_parser.add_argument("-c", "--config-file", type=str, default=None,
+                               help="Path to orze.yaml")
+
+    # Evaluation retry is explicit admission, never training reset/resume.
+    retry_eval_parser = subparsers.add_parser(
+        "retry-eval", help="Admit one failed evaluation for retry without retraining")
+    retry_eval_parser.add_argument("idea_id", help="Exact evaluation-failed idea ID")
+    retry_eval_parser.add_argument(
+        "-c", "--config-file", type=str, default=argparse.SUPPRESS,
+        help="Path to orze.yaml (also accepts the global -c option)",
+    )
+
+    replicate_parser = subparsers.add_parser(
+        "replicate", help="Explicitly admit a same-configuration repeat task")
+    replicate_parser.add_argument("source_task_id", help="Confirmed native source task ID")
+    replicate_parser.add_argument(
+        "--request-id", required=True,
+        help="Stable idempotency key; reuse it after an uncertain response",
+    )
+    replicate_parser.add_argument(
+        "--reason", default="explicit_replication", help="Recorded control-plane rationale")
+    replicate_parser.add_argument(
+        "-c", "--config-file", type=str, default=argparse.SUPPRESS,
+        help="Path to orze.yaml (also accepts the global -c option)",
+    )
+
+    # run-idea — one exact queued idea through the ordinary hardened pipeline
+    run_idea_parser = subparsers.add_parser(
+        "run-idea",
+        help="Run one exact queued idea on one physical GPU",
+    )
+    run_idea_parser.add_argument("idea_id", help="Exact queued idea ID")
+    run_idea_parser.add_argument(
+        "--gpu", type=int, required=True,
+        help="One physical GPU ID (must satisfy the project allowlist)",
+    )
+    run_idea_parser.add_argument("-c", "--config-file", type=str, default=None,
+                                 help="Path to orze.yaml")
+    run_idea_parser.add_argument(
+        "--timeout", type=int, default=None,
+        help="Max training time for this idea",
+    )
+
+    # gpu-lease-run — make external schedulers participate in the same
+    # physical-GPU exclusion locks as every Orze controller/child.
+    lease_run_parser = subparsers.add_parser(
+        "gpu-lease-run",
+        help="Run an external command under exclusive physical-GPU leases",
+    )
+    lease_run_parser.add_argument(
+        "--gpus", required=True,
+        help="Explicit comma-separated physical GPU IDs",
+    )
+    lease_run_parser.add_argument(
+        "lease_command", nargs=argparse.REMAINDER,
+        help="Command and arguments, conventionally after --",
+    )
+
+    # start
+    start_parser = subparsers.add_parser(
+        "start", help="Start orze as a background daemon")
+    start_parser.add_argument("-c", "--config-file", type=str, default=None,
+                              help="Path to orze.yaml")
+    start_parser.add_argument("--gpus", type=str, default=None,
+                              help="Comma-separated GPU IDs (default: auto-detect)")
+    start_parser.add_argument("--timeout", type=int, default=None,
+                              help="Max training time per job in seconds")
+    start_parser.add_argument("--foreground", action="store_true",
+                              help="Run in foreground instead of daemonizing")
+
+    # restart
+    restart_parser = subparsers.add_parser(
+        "restart", help="Request stop; v2 permits source-qualified one-shot handoff")
+    restart_parser.add_argument("-c", "--config-file", type=str, default=argparse.SUPPRESS,
+                                help="Path to orze.yaml")
+    restart_parser.add_argument("--gpus", type=str, default=None,
+                                help="Comma-separated GPU IDs (default: auto-detect)")
+    restart_parser.add_argument("--timeout", type=int, default=60,
+                                help="Controller stop/handoff wait budget in seconds")
+    restart_parser.add_argument("--request-id", dest="controller_request_id",
+                                default=argparse.SUPPRESS,
+                                help="Required stable request key for the v2 handoff profile")
+    restart_parser.add_argument("--foreground", action="store_true",
+                                help="Run in foreground after restart")
+
+    # service
+    svc_parser = subparsers.add_parser("service", help="Manage orze watchdog service")
+    svc_sub = svc_parser.add_subparsers(dest="service_action")
+
+    svc_install = svc_sub.add_parser("install", help="Install watchdog service")
+    svc_install.add_argument("-c", "--config-file", type=str, default="orze.yaml",
+                             help="Path to orze.yaml")
+    svc_install.add_argument("--method", choices=["auto", "crontab", "systemd"],
+                             default="auto", help="Service method (default: auto)")
+    svc_install.add_argument("--stall-threshold", type=int, default=1800,
+                             help="Seconds before heartbeat considered stale (default: 1800)")
+
+    svc_sub.add_parser("uninstall", help="Uninstall watchdog service")
+    svc_sub.add_parser("status", help="Show watchdog service status")
+    svc_sub.add_parser(
+        "audit", help="Verify installed runtime and effective service policy")
+    svc_sub.add_parser(
+        "capture-runtime",
+        help="Print a project controller_runtime identity pin")
+
+    svc_logs = svc_sub.add_parser("logs", help="Show watchdog logs")
+    svc_logs.add_argument("-n", type=int, default=50,
+                          help="Number of log lines (default: 50)")
+
+    # pro
+    # reset
+    reset_parser = subparsers.add_parser(
+        "reset", help="Reset idea lake: purge failed/stale ideas for a fresh start")
+    reset_parser.add_argument("-c", "--config-file", type=str, default=None)
+    reset_parser.add_argument("--failed", action="store_true",
+                              help="Purge all failed ideas")
+    reset_parser.add_argument("--all", action="store_true",
+                              help="Purge ALL non-completed ideas (queued + failed + partial)")
+    reset_parser.add_argument("--full", action="store_true",
+                              help="Snapshot and reset .orze/ while preserving benchmark exposure history")
+    reset_parser.add_argument("--scratch", action="store_true",
+                              help="Wipe .orze/ but preserve idea lake and benchmark exposure history")
+    reset_parser.add_argument("-y", "--yes", action="store_true",
+                              help="Skip confirmation prompt")
+    reset_parser.add_argument("--force", action="store_true",
+                              help="Force reset even if daemon is running")
+
+    # result — register external/manual experiment results
+    result_parser = subparsers.add_parser(
+        "result", help="Register external experiment results so professor/research agents see them")
+    result_sub = result_parser.add_subparsers(dest="result_action")
+    result_add = result_sub.add_parser("add", help="Add a manual result")
+    result_add.add_argument("--name", required=True, help="Experiment name (e.g. riskprop_repro_ep10)")
+    result_add.add_argument("--map", type=float, required=True, help="mAP score")
+    result_add.add_argument("--epoch", type=int, default=None, help="Best epoch")
+    result_add.add_argument("--pipeline", type=str, default="manual", help="Pipeline name")
+    result_add.add_argument("--notes", type=str, default="", help="Notes about the result")
+    result_add.add_argument("--source-dir", type=str, default=None,
+                            help="Source code directory for method analysis (writes _methods/<name>.yaml)")
+    result_add.add_argument("-c", "--config-file", type=str, default=None)
+    result_sub.add_parser("list", help="List all manual results")
+    result_rm = result_sub.add_parser("rm", help="Remove a manual result by name")
+    result_rm.add_argument("name", help="Experiment name to remove")
+    result_rm.add_argument("-c", "--config-file", type=str, default=None)
+
+    pro_parser = subparsers.add_parser("pro", help="Manage orze-pro license")
+    pro_sub = pro_parser.add_subparsers(dest="pro_action")
+    pro_activate_parser = pro_sub.add_parser("activate", help="Activate orze-pro with a license key")
+    pro_activate_parser.add_argument("key", nargs="?", default=None, help="License key (or enter interactively)")
+    pro_sub.add_parser("status", help="Show orze-pro license status")
+    pro_deactivate_parser = pro_sub.add_parser("deactivate", help="Remove saved license key")
+    pro_deactivate_parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
+
+    # --- sop: inspect and validate SOP skills ---
+    sop_parser = subparsers.add_parser(
+        "sop", help="Inspect SOP skills")
+    sop_sub = sop_parser.add_subparsers(dest="sop_command")
+    sop_list_p = sop_sub.add_parser(
+        "list", help="List all SOPs (skills + validators + methods + portfolios)")
+    sop_list_p.add_argument("--project-root", default=".",
+                            help="Project root (default: cwd)")
+    sop_list_p.add_argument("--results-dir", default="orze_results",
+                            help="Results dir for Tier 2 YAML SOPs "
+                                 "(default: orze_results)")
+    sop_check_p = sop_sub.add_parser(
+        "check", help="Validate SOP wiring (requires/consumed_by/overrides)")
+    sop_check_p.add_argument("--project-root", default=".")
+    sop_status_p = sop_sub.add_parser(
+        "status",
+        help="Show last-run execution evidence per SOP from receipts")
+    sop_status_p.add_argument("--project-root", default=".")
+    sop_status_p.add_argument("--results-dir", default="orze_results")
+
+    # --- rebuild-state: rebuild best_idea_id from idea_lake.db ---
+    rebuild_parser = subparsers.add_parser(
+        "rebuild-state",
+        help="Rebuild best_idea_id + completions_since_best from idea_lake.db",
+    )
+    rebuild_parser.add_argument("-c", "--config-file", type=str, default=None)
+    rebuild_parser.add_argument("--results", type=str, default=None,
+                                help="Results dir (default: from config)")
+    rebuild_parser.add_argument("--overwrite", action="store_true",
+                                help="Overwrite even if best_idea_id is set")
+    rebuild_parser.add_argument("--all-hosts", action="store_true",
+                                help="Update .orze_state_*.json for every "
+                                     "host (shared FSx multi-daemon case)")
+
+    # --- catalog: artifact catalog (F9) ---
+    catalog_parser = subparsers.add_parser(
+        "catalog",
+        help="Manage the ArtifactCatalog (ckpts / preds NPZs index)",
+    )
+    catalog_sub = catalog_parser.add_subparsers(dest="catalog_action")
+    catalog_scan = catalog_sub.add_parser("scan", help="Scan a results dir")
+    catalog_scan.add_argument("--results-dir", required=True,
+                              help="Root directory to walk for artifacts")
+    catalog_scan.add_argument("--db", default=None,
+                              help="Artifact DB path "
+                                   "(default: <results>/idea_lake_artifacts.db)")
+    catalog_scan.add_argument("--no-hash", action="store_true",
+                              help="Skip ckpt hashing (faster, but ckpt_sha "
+                                   "won't be available for bundling)")
+    catalog_scan.add_argument("--limit", type=int, default=None,
+                              help="Stop after N files (debug)")
+    catalog_ls = catalog_sub.add_parser("list", help="List artifacts")
+    catalog_ls.add_argument("--db", required=True)
+    catalog_ls.add_argument("--kind", default=None)
+    catalog_ls.add_argument("--ckpt-sha", default=None)
+
+    # --- ingest-champion (F16): retroactive champion record ---
+    ingest_parser = subparsers.add_parser(
+        "ingest-champion",
+        help="Retroactively ingest a manual champion bundle into idea_lake"
+    )
+    ingest_parser.add_argument("--results-dir", required=True)
+    ingest_parser.add_argument("--idea-id", default="idea-champion-0905")
+    ingest_parser.add_argument("--config", default=None,
+        help="Path to _champion_config.json "
+             "(defaults to <results_dir>/_champion_config.json)")
+    ingest_parser.add_argument("--project-root", default=None)
+    # Round-2 D2: pgmAP-specific behavior is opt-in. Default reads
+    # report.primary_metric / report.columns from orze.yaml.
+    ingest_parser.add_argument(
+        "--legacy-pgmap", action="store_true",
+        help="Use the original pgmAP_ALL/ckpt_sha schema (pre-round-2). "
+             "Default behavior is project-agnostic and reads "
+             "report.primary_metric from orze.yaml.")
+
+    # --- rebuild-lake (v4.0): rebuild idea_lake.db from results dirs ---
+    rl_parser = subparsers.add_parser(
+        "rebuild-lake",
+        help="Rebuild idea_lake.db from existing results directories")
+    rl_parser.add_argument("--results-dir", default="orze_results")
+    rl_parser.add_argument("--db", default="idea_lake.db")
+
+    # --- manual-notify (v4.0): send a manual report ---
+    mn_parser = subparsers.add_parser(
+        "manual-notify",
+        help="Send a manual status notification report")
+    mn_parser.add_argument("-c", "--config", default="orze.yaml")
+
+    # --- hf-discover (v4.0): query HuggingFace Hub for models ---
+    hf_parser = subparsers.add_parser(
+        "hf-discover",
+        help="Query the HuggingFace Hub for models matching criteria")
+    hf_parser.add_argument("--pipeline-tag", default="image-feature-extraction")
+    hf_parser.add_argument("--min-downloads", type=int, default=50000)
+    hf_parser.add_argument("--limit", type=int, default=20)
+
+    # --- admin: administrative utilities ---
+    admin_parser = subparsers.add_parser("admin", help="Administrative utilities")
+    admin_sub = admin_parser.add_subparsers(dest="admin_action")
+    
+    admin_migrate = admin_sub.add_parser("migrate", help="Migrate .orze/ layout to current version")
+    admin_migrate.add_argument("-c", "--config-file", type=str, default=None,
+                               help="Path to orze.yaml")
+    admin_migrate.add_argument("--dry-run", action="store_true",
+                               help="Show what would be migrated without applying changes")
+
+    # Round-2 E1: first-class command to clear role circuit-breaker state
+    # across one or all hosts (replaces the project-local
+    # scripts/reset_local_role_state.sh workaround).
+    admin_reset = admin_sub.add_parser(
+        "reset-role-state",
+        help="Clear stale role circuit-breaker state "
+             "(cooldown_override + consecutive_failures)")
+    admin_reset.add_argument("-c", "--config-file", type=str, default=None)
+    admin_reset.add_argument("--role", type=str, default=None,
+                             help="Only clear state for this role (default: all)")
+    admin_reset.add_argument("--all-hosts", action="store_true",
+                             help="Drop a marker on shared FSx so every host's "
+                                  "running daemon clears its own state on the "
+                                  "next iteration. Marker self-deletes once "
+                                  "every host has seen it.")
+    admin_reset.add_argument("--force", action="store_true",
+                             help="Skip the running-daemon safety check")
+
+    # Round-2 D1: first-class `orze ideas inject` to write a row into
+    # idea_lake.db (replaces project-local scripts/inject_idea.py shims).
+    ideas_parser = subparsers.add_parser(
+        "ideas", help="Manage rows in idea_lake.db")
+    ideas_sub = ideas_parser.add_subparsers(dest="ideas_action")
+    ideas_inject = ideas_sub.add_parser(
+        "inject",
+        help="Inject a single idea row into idea_lake.db (manual import)")
+    ideas_inject.add_argument("-c", "--config-file", type=str, default=None)
+    ideas_inject.add_argument("--idea-id", required=True,
+                              help="Idea ID (e.g. idea-02e83b)")
+    ideas_inject.add_argument("--title", required=True,
+                              help="Human-readable idea title")
+    ideas_inject.add_argument("--priority", default="medium",
+                              choices=["low", "medium", "high", "critical"])
+    ideas_inject.add_argument("--category", default="architecture")
+    ideas_inject.add_argument("--parent", default=None,
+                              help="Parent idea ID")
+    ideas_inject.add_argument("--hypothesis", default=None)
+    ideas_inject.add_argument("--config-file-yaml", dest="config_file_yaml",
+                              default=None,
+                              help="YAML file to embed as the idea's config")
+    ideas_inject.add_argument("--status", default="queued",
+                              choices=["queued", "running", "completed",
+                                       "failed", "archived"])
+    ideas_inject.add_argument("--metrics-json", default=None,
+                              help="metrics.json to embed as eval_metrics "
+                                   "(used with --status completed)")
+    ideas_inject.add_argument("--approach-family", default="other")
+    ideas_inject.add_argument("--force", action="store_true",
+                              help="Replace an existing row with the same idea-id")
+
+    # --- init: initialize new orze project ---
+    init_parser = subparsers.add_parser("init", help="Initialize a new orze project")
+    init_parser.add_argument("path", nargs="?", default=None,
+                             help="Project directory (default: current directory)")
+
+    # --- upgrade: package changes require qualified controller closure ---
+    upgrade_parser = subparsers.add_parser(
+        "upgrade",
+        help="Request upgrade; package changes and restart await confirmed stop (75)"
+    )
+    upgrade_parser.add_argument("-c", "--config-file", type=str, default=None,
+                                help="Path to orze.yaml")
+    upgrade_parser.add_argument("--no-reinstall", action="store_true",
+                                help="Compatibility option; cannot bypass confirmed-stop admission")
+    upgrade_parser.add_argument("--no-restart", action="store_true",
+                                help="Compatibility option; cannot authorize an unconfirmed package change")
+
+    args = parser.parse_args()
+
+    try:
+        validate_successor_cli(args)
+    except ControllerProfileError as exc:
+        print(f"HOLD: successor entry rejected: {exc}")
+        return 75
+
+    setup_logging(args.verbose)
+
+    # A blocked operator needs a conclusive answer without the network prompt,
+    # migration, idea parsing, filesystem writes, or GPU inventory performed by
+    # broader CLI paths.  This is intentionally a policy-only result: an
+    # allowed result still requires the ordinary full preflight at launch.
+    if args.launch_status:
+        cfg = load_project_config(args.config_file)
+        cfg["_config_path"] = args.config_file or "orze.yaml"
+        return do_launch_status(cfg)
+
+    if args.command == "retry-eval":
+        return _run_retry_eval_subcommand(args)
+
+    if args.command == "replicate":
+        from orze.cli_replication import run_replication
+        return run_replication(args)
+
+    # Report inspection must not probe credentials, install extensions, or
+    # enter runtime setup. An explicit subcommand keeps its existing priority.
+    if args.report_only and args.command is None:
+        from orze.reporting.report_cli import run_report_only
+        return run_report_only(args)
+
+    # --- subcommand dispatch ---
+    command = getattr(args, "command", None)
+
+    if command == "sop":
+        return _run_sop_subcommand(args)
+
+    if command == "catalog":
+        from orze.artifact_catalog import ArtifactCatalog, cli_scan
+        action = getattr(args, "catalog_action", None)
+        if action == "scan":
+            return cli_scan(args)
+        if action == "list":
+            cat = ArtifactCatalog(args.db)
+            rows = (cat.by_ckpt_sha(args.ckpt_sha) if args.ckpt_sha
+                    else cat.list_by_kind(args.kind) if args.kind
+                    else [cat.get(r[0]) for r in cat.conn.execute(
+                        "SELECT path FROM artifacts ORDER BY created_at DESC")])
+            for r in rows:
+                if not r:
+                    continue
+                print(f"[{r['kind']:10s}] sha={r.get('ckpt_sha') or '-':>16s} "
+                      f"val={r.get('metric_val')} {r['path']}")
+            cat.close()
+            return 0
+        print("usage: orze catalog {scan,list} …")
+        return 2
+
+    if command == "ingest-champion":
+        from orze.agents.ingest_champion import ingest
+        info = ingest(
+            Path(args.results_dir),
+            idea_id=args.idea_id,
+            config_path=Path(args.config) if args.config else None,
+            project_root=Path(args.project_root) if args.project_root else None,
+            legacy_pgmap=getattr(args, "legacy_pgmap", False),
+        )
+        import json as _json
+        print(_json.dumps(info, indent=2))
+        return 0
+
+    if command == "rebuild-lake":
+        from orze.rebuild_lake import rebuild
+        rebuild(Path(args.results_dir), Path(args.db))
+        return 0
+
+    if command == "manual-notify":
+        from orze.manual_notify import main as _mn_main
+        import sys as _sys
+        _sys.argv = ["orze manual-notify", "-c", args.config]
+        _mn_main()
+        return 0
+
+    if command == "hf-discover":
+        from orze.hf_discover import search_models
+        import json as _json
+        models = search_models(pipeline_tag=args.pipeline_tag,
+                               min_downloads=args.min_downloads,
+                               limit=args.limit)
+        print(_json.dumps(models, indent=2))
+        return 0
+
+    if command == "init":
+        do_init(args.path or "__ask__")
+        return 0
+
+    if command == "upgrade":
+        # The public subcommand has its own historical package/daemon path.
+        # Neither skipping reinstall nor skipping restart proves that the old
+        # controller and its writers are closed. Do not mutate the installation
+        # or signal/relaunch a daemon until a qualified closure consumer exists.
+        from orze.lifecycle import do_stop
+        cfg = load_project_config(args.config_file)
+        do_stop(cfg)
+        print("HOLD: upgrade requires confirmed controller stop; no packages changed")
+        return 75
+
+    if command == "admin":
+        from orze.engine.migrate import migrate_v0_to_v1, write_layout_version
+        action = getattr(args, "admin_action", None)
+        if action == "migrate":
+            cfg = load_project_config(args.config_file)
+            project_root = Path(cfg["_project_root"])
+            orze_dir = Path(cfg["_orze_dir"])
+            results_dir = Path(cfg["_env_ORZE_RESULTS_DIR"])
+            
+            actions = migrate_v0_to_v1(project_root, orze_dir, results_dir, dry_run=args.dry_run)
+            
+            if not actions:
+                print("No migration actions needed — layout is already current.")
+            else:
+                for action_msg in actions:
+                    print(action_msg)
+                print(f"\nTotal actions: {len(actions)}")
+                
+                if not args.dry_run:
+                    write_layout_version(orze_dir, 1)
+                    print(f"Migration complete. Layout version: 1")
+                else:
+                    print("\nDry-run complete. Use 'orze admin migrate' without --dry-run to apply.")
+            return 0
+        if action == "reset-role-state":
+            from orze.admin.reset_role_state import reset_role_state
+            cfg = load_project_config(args.config_file)
+            return reset_role_state(
+                cfg, role=args.role, all_hosts=args.all_hosts,
+                force=args.force,
+            )
+        print("usage: orze admin {migrate, reset-role-state} …")
+        return 2
+
+    if command == "ideas":
+        action = getattr(args, "ideas_action", None)
+        if action == "inject":
+            from orze.admin.ideas_inject import inject_idea
+            cfg = load_project_config(args.config_file)
+            return inject_idea(
+                cfg,
+                idea_id=args.idea_id,
+                title=args.title,
+                priority=args.priority,
+                category=args.category,
+                parent=args.parent,
+                hypothesis=args.hypothesis,
+                config_yaml_path=args.config_file_yaml,
+                status=args.status,
+                metrics_json=args.metrics_json,
+                approach_family=args.approach_family,
+                force=args.force,
+            )
+        print("usage: orze ideas {inject} …")
+        return 2
+
+    if command == "rebuild-state":
+        from orze.engine.rebuild_state import rebuild_state_file
+        cfg = load_project_config(args.config_file)
+        results_dir = Path(args.results or cfg.get("results_dir", "orze_results"))
+        summary = rebuild_state_file(results_dir, cfg,
+                                     overwrite=args.overwrite,
+                                     all_hosts=args.all_hosts)
+        print(f"primary_metric: {summary['primary_metric']}")
+        print(f"best_idea_id: {summary['best_idea_id']}")
+        print(f"completions_since_best: {summary['completions_since_best']}")
+        print(f"previous_best_idea_id: {summary['previous_best_idea_id']}")
+        if summary['wrote_state_file']:
+            print(f"Wrote: {summary['state_file']}")
+            if summary.get("updated_hosts"):
+                print(f"Updated hosts: {', '.join(summary['updated_hosts'])}")
+        else:
+            print("(state file already had best_idea_id; "
+                  "pass --overwrite to force)")
+        return
+
+    if command == "resume":
+        from orze.engine.resume import admit_resume, ResumeValidationError
+        try:
+            cfg = _load_controller_config(args)
+        except ControllerProfileError as exc:
+            print(f"ERROR: {exc}")
+            return 2
+        results_dir = Path(cfg.get("results_dir", "orze_results"))
+        if not results_dir.is_absolute():
+            results_dir = Path.cwd() / results_dir
+        try:
+            admit_resume(
+                args.idea_id, results_dir, cfg, args.resume_from)
+        except ResumeValidationError as exc:
+            print(f"ERROR: resume rejected: {exc}")
+            return 2
+        print(
+            f"Resume admitted for {args.idea_id}; checkpoint and all declared "
+            f"inputs will be revalidated again before GPU launch."
+        )
+        print(f"Request: {results_dir / args.idea_id / 'resume_request.json'}")
+        return 0
+
+    if command == "run-idea":
+        from orze.core.managed_run import (
+            ManagedRunError,
+            prepare_managed_idea_run,
+            verify_managed_idea_outcome,
+        )
+        try:
+            cfg = _load_controller_config(args)
+        except ControllerProfileError as exc:
+            print(f"ERROR: {exc}")
+            return 2
+        if args.timeout is not None:
+            cfg["timeout"] = args.timeout
+        try:
+            report = prepare_managed_idea_run(cfg, args.idea_id, args.gpu)
+        except ManagedRunError as exc:
+            print(f"ERROR: managed idea run rejected: {exc}")
+            return 2
+        # Runtime-only selectors: they are never written into trainer config.
+        cfg["_managed_idea_id"] = args.idea_id
+        cfg["_managed_idea_gpu"] = args.gpu
+        cfg["auto_upgrade"] = False
+        cfg["max_fix_attempts"] = 0
+        cfg["notifications"] = {
+            **(cfg.get("notifications") or {}),
+            "enabled": False,
+        }
+        from orze.engine.orchestrator import Orze
+        from orze.core.gpu_lease import (
+            GpuLeaseError, safe_gpu_lease_reason,
+        )
+        print(
+            f"Managed run admitted: {report['idea_id']} on physical GPU "
+            f"{report['gpu']}"
+        )
+        runner = Orze([args.gpu], cfg, once=True)
+        try:
+            runner.run()
+        except GpuLeaseError as exc:
+            try:
+                runner._graceful_shutdown(kill_all=True)
+            except Exception:
+                runner._remove_pid_file()
+            print(
+                "ERROR: managed idea run rejected: "
+                f"{safe_gpu_lease_reason(exc)}"
+            )
+            return 2
+        except Exception as exc:
+            try:
+                runner._graceful_shutdown(kill_all=True)
+            except Exception:
+                runner._remove_pid_file()
+            print(
+                "ERROR: managed idea run aborted: "
+                f"{type(exc).__name__}"
+            )
+            return 1
+        try:
+            outcome = verify_managed_idea_outcome(cfg, args.idea_id)
+        except ManagedRunError as exc:
+            print(f"ERROR: managed idea run did not complete: {exc}")
+            return 1
+        print(
+            f"Managed run completed: {outcome['idea_id']} "
+            f"lifecycle={outcome['lifecycle_state']}"
+        )
+        return 0
+
+    if command == "gpu-lease-run":
+        from orze.core.gpu_lease import (
+            GpuLeaseError,
+            run_with_gpu_leases,
+            safe_gpu_lease_reason,
+        )
+        try:
+            raw_ids = [part.strip() for part in args.gpus.split(",")]
+            if not raw_ids or any(not part for part in raw_ids):
+                raise ValueError
+            gpu_ids = [int(part) for part in raw_ids]
+            if any(gpu < 0 for gpu in gpu_ids):
+                raise ValueError
+        except ValueError:
+            print("ERROR: --gpus must be explicit non-negative integer IDs")
+            return 2
+        lease_command = list(args.lease_command)
+        if lease_command[:1] == ["--"]:
+            lease_command = lease_command[1:]
+        if not lease_command:
+            print("ERROR: gpu-lease-run requires a command after --")
+            return 2
+        try:
+            return run_with_gpu_leases(gpu_ids, lease_command)
+        except GpuLeaseError as exc:
+            print(
+                "ERROR: external GPU ownership rejected: "
+                f"{safe_gpu_lease_reason(exc)}"
+            )
+            # EX_TEMPFAIL: an external scheduler should retry contention but
+            # must not run the unleased command.
+            return 75
+
+    if command == "stop":
+        try:
+            cfg = _load_controller_config(args)
+        except ControllerProfileError as exc:
+            print(f"ERROR: {exc}")
+            return 2
+        return _stop_controller_command(cfg, args.timeout)
+
+    if command == "start":
+        from orze.lifecycle import do_start
+        from orze.core.control_outcome import ControllerStopHOLD
+        from orze.service.runtime_contract import RuntimeContractError
+        try:
+            cfg = _load_controller_config(args)
+        except ControllerProfileError as exc:
+            print(f"ERROR: {exc}")
+            return 2
+        if args.timeout is not None:
+            cfg["timeout"] = args.timeout
+        config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
+        try:
+            do_start(cfg, foreground=args.foreground, config_path=config_path,
+                     gpus=args.gpus, timeout=args.timeout)
+        except RuntimeContractError as exc:
+            print(f"ERROR: start rejected: {exc}")
+            return 2
+        except ControllerStopHOLD as exc:
+            print(f"HOLD: start rejected: {exc}")
+            return 75
+        return
+
+    if command == "restart":
+        from orze.lifecycle import do_restart
+        from orze.service.runtime_contract import RuntimeContractError
+        try:
+            cfg = _load_controller_config(args)
+        except ControllerProfileError as exc:
+            print(f"ERROR: {exc}")
+            return 2
+        if controller_profile(cfg) == {"version": 2, "profile": "local_handoff_v1"}:
+            return _restart_controller_command(cfg, args.controller_request_id, args.timeout)
+        config_path = args.config_file or cfg.get("_config_path", "orze.yaml")
+        try:
+            do_restart(cfg, timeout=args.timeout, foreground=args.foreground,
+                       config_path=config_path, gpus=args.gpus)
+        except RuntimeContractError as exc:
+            print(f"ERROR: restart requested stop, but runtime rejected: {exc}")
+            return 2
+        return 75
+
+    if command == "reset":
+        import sqlite3
+        import shutil
+        import tempfile
+        import time
+        import glob as glob_module
+        
+        cfg = load_project_config(args.config_file)
+        orze_dir = Path(cfg.get("_orze_dir", ".orze"))
+        results_dir = Path(cfg.get("results_dir", "orze_results"))
+        project_root = Path(cfg.get("_project_root", "."))
+        from orze.core.benchmark_contract import (
+            EXPOSURE_LEDGER_FILE,
+            BenchmarkContractError,
+            benchmark_exposure_ledger_path,
+        )
+        try:
+            exposure_path = benchmark_exposure_ledger_path(cfg)
+        except BenchmarkContractError as exc:
+            print(f"ERROR: reset rejected: {exc}")
+            return 2
+        if exposure_path.is_symlink():
+            print("ERROR: reset rejected: benchmark exposure ledger is a symlink")
+            return 2
+
+        def preserve_exposure_history():
+            if not exposure_path.exists():
+                return None
+            with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".benchmark-exposures") as handle:
+                temporary = Path(handle.name)
+            shutil.copy2(exposure_path, temporary)
+            return temporary
+
+        def restore_exposure_history(temporary):
+            if temporary is None:
+                return
+            orze_dir.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(temporary), str(orze_dir / EXPOSURE_LEDGER_FILE))
+            os.chmod(orze_dir / EXPOSURE_LEDGER_FILE, 0o600)
+        
+        # New behavior: db lives in .orze/ now (after migration)
+        db_path = orze_dir / "idea_lake.db"
+        # Fallback for legacy layout
+        if not db_path.exists():
+            db_path = Path(cfg.get("idea_lake_db") or results_dir / "idea_lake.db")
+        
+        # --full or --scratch: check for running daemon
+        if (args.full or args.scratch) and not args.force:
+            daemon_pid_file = orze_dir / "state" / "daemon.pid"
+            if daemon_pid_file.exists():
+                try:
+                    pid = int(daemon_pid_file.read_text().strip())
+                    # Check if process is alive
+                    try:
+                        os.kill(pid, 0)  # Signal 0 just checks liveness
+                        print(f"ERROR: Orze daemon (PID {pid}) is running.")
+                        print(f"       Stop the daemon first or use --force to override.")
+                        return 1
+                    except (ProcessLookupError, PermissionError):
+                        # Process doesn't exist or we can't check — proceed
+                        pass
+                except (ValueError, FileNotFoundError, OSError):
+                    pass
+        
+        if args.full:
+            # --full: reset operational state but never erase benchmark looks.
+            if not orze_dir.exists():
+                print("No .orze/ directory to reset.")
+                return 0
+            
+            # Count what will be wiped
+            file_count = sum(1 for _ in orze_dir.rglob("*") if _.is_file())
+            
+            if not args.yes:
+                resp = input(f"Snapshot .orze/ ({file_count} files) to backup and wipe? [y/N] ")
+                if resp.lower() != "y":
+                    print("Aborted.")
+                    return 0
+            
+            # Create backup
+            ts = int(time.time())
+            backup_dir = project_root / f".orze.bak-{ts}"
+            shutil.copytree(orze_dir, backup_dir)
+            print(f"Backup created: {backup_dir}")
+            
+            # Remove older .orze.bak-* (keep only the most recent)
+            for old_bak in sorted(glob_module.glob(str(project_root / ".orze.bak-*")))[:-1]:
+                shutil.rmtree(old_bak, ignore_errors=True)
+                print(f"Removed old backup: {old_bak}")
+
+            exposure_tmp = preserve_exposure_history()
+            # Wipe .orze/
+            shutil.rmtree(orze_dir)
+            restore_exposure_history(exposure_tmp)
+            print(f"Reset .orze/ ({file_count} files); preserved benchmark exposure history")
+            print("\nReset complete. Run 'orze init' to reinitialize.")
+            return 0
+        
+        elif args.scratch:
+            # --scratch: wipe .orze/ but preserve idea_lake.db
+            if not orze_dir.exists():
+                print("No .orze/ directory to reset.")
+                return 0
+            
+            if not args.yes:
+                resp = input(f"Wipe .orze/ but preserve idea_lake.db? [y/N] ")
+                if resp.lower() != "y":
+                    print("Aborted.")
+                    return 0
+            
+            # Save durable history to temp.
+            db_tmp = None
+            if db_path.exists():
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tf:
+                    db_tmp = Path(tf.name)
+                shutil.copy2(db_path, db_tmp)
+            exposure_tmp = preserve_exposure_history()
+            
+            # Wipe .orze/
+            shutil.rmtree(orze_dir)
+            print(f"Wiped .orze/")
+            
+            # Restore db
+            if db_tmp:
+                orze_dir.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(db_tmp), str(db_path))
+                print(f"Restored idea_lake.db")
+            restore_exposure_history(exposure_tmp)
+
+            print("\nReset complete. Idea lake and benchmark exposure history preserved.")
+            return 0
+        
+        # Legacy behavior: partial wipes of idea lake DB
+        if not db_path.exists():
+            print("No idea_lake.db found.")
+            return 0
+
+        conn = sqlite3.connect(str(db_path))
+        from orze.core.sqlite_policy import apply_shared_database_policy
+        try:
+            apply_shared_database_policy(conn)
+        except Exception:
+            conn.close()
+            raise
+        c = conn.cursor()
+
+        if args.all:
+            c.execute("DELETE FROM ideas WHERE status IN ('queued', 'failed', 'partial', 'running')")
+            print(f"Purged {c.rowcount} non-completed ideas.")
+        elif args.failed:
+            c.execute("DELETE FROM ideas WHERE status = 'failed'")
+            print(f"Purged {c.rowcount} failed ideas.")
+        else:
+            # Default: show status summary
+            c.execute("SELECT status, COUNT(*) FROM ideas GROUP BY status")
+            for row in c.fetchall():
+                print(f"  {row[0]}: {row[1]}")
+            print("\nUse --failed, --all, --full, or --scratch to reset.")
+
+        conn.commit()
+        conn.close()
+
+        # Also clear pause sentinel — stale failures shouldn't block research
+        pause_file = results_dir / ".pause_research"
+        if pause_file.exists():
+            pause_file.unlink()
+            print("Cleared .pause_research sentinel.")
+
+        return 0
+
+    if command == "result":
+        import json as _json
+        action = getattr(args, "result_action", None)
+        cfg = load_project_config(getattr(args, "config_file", None))
+        results_dir = Path(cfg.get("results_dir", "orze_results"))
+        manual_path = results_dir / "_manual_results.json"
+
+        if action == "add":
+            entries = []
+            if manual_path.exists():
+                try:
+                    entries = _json.loads(manual_path.read_text(encoding="utf-8"))
+                except (ValueError, OSError):
+                    pass
+            # Remove existing entry with same name (update)
+            entries = [e for e in entries if e.get("name") != args.name]
+            entry = {"name": args.name, "map": args.map, "source": "manual"}
+            if args.epoch is not None:
+                entry["epoch"] = args.epoch
+            if args.pipeline != "manual":
+                entry["pipeline"] = args.pipeline
+            if args.notes:
+                entry["notes"] = args.notes
+            entries.append(entry)
+            entries.sort(key=lambda e: float(e.get("map", 0) or 0), reverse=True)
+            manual_path.write_text(_json.dumps(entries, indent=2) + "\n",
+                                   encoding="utf-8")
+            print(f"Registered: {args.name} (mAP={args.map})")
+            print(f"  Saved to {manual_path}")
+            # SOP: extract method spec from source code (orze-pro)
+            if getattr(args, "source_dir", None):
+                from orze.extensions import get_extension
+                _sops = get_extension("sops")
+                if _sops:
+                    method_path = _sops.analyze_method(args.name, Path(args.source_dir),
+                                                        results_dir)
+                else:
+                    method_path = None
+                    print("  (Install orze-pro for method analysis)")
+                if method_path:
+                    print(f"  Method spec written to {method_path}")
+            # SOP: trigger professor to analyze the new result and create portfolio
+            trigger_path = results_dir / "_trigger_professor"
+            trigger_path.write_text(
+                f"new_external_result: {args.name} (mAP={args.map}). "
+                f"Read the method spec at results/_methods/{args.name}.yaml, "
+                f"enrich it with exact loss formulas from the source code, "
+                f"then write a portfolio to results/_portfolios/ that ports "
+                f"this method to all viable backbones.",
+                encoding="utf-8")
+            print(f"  Professor triggered to analyze and create portfolio.")
+        elif action == "rm":
+            if manual_path.exists():
+                entries = _json.loads(manual_path.read_text(encoding="utf-8"))
+                before = len(entries)
+                entries = [e for e in entries if e.get("name") != args.name]
+                if len(entries) < before:
+                    manual_path.write_text(_json.dumps(entries, indent=2) + "\n",
+                                           encoding="utf-8")
+                    print(f"Removed: {args.name}")
+                else:
+                    print(f"Not found: {args.name}")
+            else:
+                print("No manual results registered.")
+        else:
+            # list
+            if manual_path.exists():
+                entries = _json.loads(manual_path.read_text(encoding="utf-8"))
+                if entries:
+                    print(f"{'Name':<35} {'mAP':>8}  {'Notes'}")
+                    print("-" * 80)
+                    for e in entries:
+                        print(f"{e.get('name','?'):<35} {e.get('map','?'):>8}  {e.get('notes','')[:40]}")
+                else:
+                    print("No manual results.")
+            else:
+                print("No manual results registered yet.")
+                print(f"  Use: orze result add --name <name> --map <score>")
+        return
+
+    if command == "pro":
+        action = getattr(args, "pro_action", None)
+        if action == "activate":
+            pro_activate(getattr(args, "key", None))
+        elif action == "status":
+            pro_status()
+        elif action == "deactivate":
+            pro_deactivate(force=getattr(args, "yes", False))
+        else:
+            parser.parse_args(["pro", "--help"])
+        return
+
+    if command == "service":
+        action = getattr(args, "service_action", None)
+        if action == "install":
+            from orze.service.install import install
+            install(args.config_file, method=args.method,
+                    stall_threshold=args.stall_threshold)
+        elif action == "uninstall":
+            from orze.service.install import uninstall
+            uninstall()
+        elif action == "status":
+            from orze.service.status import show_status
+            show_status()
+        elif action == "audit":
+            from orze.service.runtime_contract import main as audit_main
+            return audit_main([])
+        elif action == "capture-runtime":
+            from orze.service.runtime_contract import main as audit_main
+            return audit_main(["--capture-controller"])
+        elif action == "logs":
+            from orze.service.status import show_logs
+            show_logs(n=args.n)
+        else:
+            parser.parse_args(["service", "--help"])
+        return
+
+    # --init: deprecated, use `orze init` subcommand (check before config load)
+    if args.init is not None:
+        print("\033[33mNote:\033[0m --init is deprecated. Use: orze init [path]")
+        do_init(args.init)
+        return
+
+    # Load project config, then apply CLI overrides
+    try:
+        cfg = _load_controller_config(args)
+    except ControllerProfileError as exc:
+        print(f"ERROR: {exc}")
+        return 2
+    local_stop_profile = controller_profile(cfg) is not None
+    cfg["_config_path"] = args.config_file or "orze.yaml"  # stored for mode: research
+
+    # Auto-migrate layout if needed (fast path via version check)
+    # Only run for subcommands that actually need it, skip for --help, --version, etc.
+    if command not in (None, "service"):
+        try:
+            from orze.engine.migrate import _ensure_migrated
+            _ensure_migrated(
+                cfg.get("_project_root"),
+                cfg.get("_orze_dir"),
+                cfg.get("_env_ORZE_RESULTS_DIR")
+            )
+        except Exception as e:
+            logger.warning("Auto-migration failed (non-fatal): %s", e)
+
+    # --admin: launch web panel
+    if args.admin:
+        from orze.admin.server import run_admin
+        admin_port = int(cfg.get("admin_port") or os.environ.get("ORZE_ADMIN_PORT", "8787"))
+        run_admin(cfg, port=admin_port)
+        return
+
+    # --upgrade: upgrade orze from PyPI (stops + restarts if running)
+    if args.upgrade:
+        from orze.core.control_outcome import ControllerStopHOLD
+        try:
+            return do_upgrade(cfg)
+        except ControllerStopHOLD as exc:
+            print(f"HOLD: upgrade requires confirmed stop: {exc}")
+            return 75
+
+    # --reinstall: deep-clean reinstall (fixes partial-upgrade drift)
+    if args.reinstall:
+        from orze.core.control_outcome import ControllerStopHOLD
+        try:
+            return do_reinstall(
+                cfg,
+                orze_version=args.reinstall_orze_version,
+                pro_version=args.reinstall_pro_version,
+                extra_index_url=args.reinstall_extra_index_url,
+                no_restart=args.no_restart,
+            )
+        except ControllerStopHOLD as exc:
+            print(f"HOLD: reinstall requires confirmed stop: {exc}")
+            return 75
+
+    # --uninstall: full cleanup, keep only research results
+    if args.uninstall:
+        do_uninstall(cfg)
+        return
+
+    # --check: validate config and environment, then exit
+    if args.check:
+        do_check(cfg)
+        return
+
+    # Apply CLI overrides
+    if args.timeout is not None and not (local_stop_profile and (args.stop or args.restart)):
+        cfg["timeout"] = args.timeout
+    if args.poll is not None:
+        cfg["poll"] = args.poll
+    if args.ideas_md:
+        cfg["ideas_file"] = args.ideas_md
+    if args.base_config:
+        cfg["base_config"] = args.base_config
+    if args.results_dir:
+        cfg["results_dir"] = args.results_dir
+    if args.train_script:
+        cfg["train_script"] = args.train_script
+
+    # --stop
+    if args.stop:
+        return _stop_controller_command(cfg, args.timeout)
+
+    # --restart cannot proceed past an unconfirmed cooperative request.
+    if args.restart:
+        if controller_profile(cfg) == {"version": 2, "profile": "local_handoff_v1"}:
+            return _restart_controller_command(cfg, args.controller_request_id, args.timeout)
+        from orze.core.control_outcome import ControllerStopHOLD
+        try:
+            stop_running_instance(Path(cfg["results_dir"]))
+        except ControllerStopHOLD as exc:
+            print(f"HOLD: restart requires confirmed stop: {exc}")
+            return 75
+        # Legacy bools and unexpected helper returns are not stop evidence.
+        print("HOLD: restart has no controller/process-tree closure proof.")
+        return 75
+
+    # --disable
+    if args.disable:
+        import datetime
+        from orze.core.fs import atomic_write
+        disable_path = Path(cfg["results_dir"]) / ".orze_disabled"
+        atomic_write(disable_path, f"Disabled at {datetime.datetime.now().isoformat()}")
+        print(f"Orze disabled. Remove {disable_path} to re-enable.")
+        return
+
+    # --enable
+    if args.enable:
+        # Removing a persistent stop latch authorizes future work. A drifted
+        # controller may always stop/disable, but it may never re-enable.
+        _require_controller_runtime(cfg)
+        from orze.core.control_outcome import (
+            ControllerStopHOLD, require_controller_start_allowed,
+        )
+        try:
+            require_controller_start_allowed(cfg["results_dir"])
+        except ControllerStopHOLD as exc:
+            print(f"HOLD: re-enable requires qualified stop/recovery evidence: {exc}")
+            return 75
+        print("No pending stop marker; no recovery authority granted.")
+        return
+
+    # --research-only is an alias for --role-only research
+    if args.research_only:
+        args.role_only = "research"
+
+    # First-run social prompting is confined to the ordinary legacy launch.
+    # Registered controllers and control/read-only commands must not spawn
+    # untracked gh processes before their profile or observer is established.
+    if not local_stop_profile and cpu_execution(cfg) is None and not _find_pro_key():
+        maybe_star()
+
+    # Exact controller identity is checked before GPU discovery and before
+    # any admin thread or orchestrator state can be created.  Stop/disable
+    # controls above intentionally remain reachable during runtime drift.
+    _require_controller_runtime(cfg)
+
+    if "ORZE_CONTROLLER_HANDOFF_FD" in os.environ:
+        try:
+            from orze.engine.controller_handoff import prepare_successor_entry
+            if prepare_successor_entry(cfg, args) is not None:
+                raise ValueError("controller_successor_entry_unconfirmed")
+        except Exception:
+            print("HOLD: successor channel admission is unconfirmed")
+            return 75
+
+    from orze.core.control_outcome import (
+        ControllerStopHOLD, require_controller_start_allowed,
+    )
+    try:
+        require_controller_start_allowed(cfg.get("results_dir", "orze_results"))
+    except ControllerStopHOLD as exc:
+        print(f"HOLD: controller start rejected: {exc}")
+        return 75
+
+    # Select the declared resource before any physical GPU inventory.
+    cpu = cpu_execution(cfg) is not None
+    if cpu:
+        gpu_ids = []
+    elif args.gpus:
+        gpu_ids = [int(g.strip()) for g in args.gpus.split(",")]
+    else:
+        configured_scope = (
+            (cfg.get("gpu_scheduling") or {}).get("allowed_gpus") or [])
+        # A configured physical boundary is authoritative and avoids an
+        # inventory query over devices outside that boundary.
+        gpu_ids = list(configured_scope) if configured_scope else detect_all_gpus()
+
+    if not gpu_ids and not cpu:
+        logger.error("No GPUs detected. Use --gpus to specify manually.")
+        sys.exit(1)
+
+    # Start admin panel in background thread (unless --role-only or --admin-off)
+    if not cpu and not local_stop_profile and not args.role_only and not getattr(args, 'no_admin', False):
+        try:
+            import threading
+            from orze.admin.server import run_admin as _run_admin_server
+            admin_port = int(cfg.get("admin_port") or os.environ.get("ORZE_ADMIN_PORT", "8787"))
+
+            def _admin_thread():
+                try:
+                    _run_admin_server(cfg, port=admin_port)
+                except OSError as e:
+                    if "address already in use" in str(e).lower():
+                        logger.error(
+                            "Admin panel NOT started — port %d already in use. "
+                            "Another process is holding this port. Kill it or "
+                            "set admin_port in orze.yaml to use a different port.",
+                            admin_port)
+                    else:
+                        logger.error("Admin panel failed to start: %s", e)
+                except Exception as e:
+                    logger.error("Admin panel failed to start: %s", e)
+
+            t = threading.Thread(target=_admin_thread, daemon=True)
+            t.start()
+            logger.info("Admin panel binding on http://0.0.0.0:%d ...", admin_port)
+        except Exception as e:
+            logger.warning("Could not start admin panel: %s", e)
+
+    # Launch orchestrator
+    from orze.engine.orchestrator import Orze
+    from orze.core.gpu_lease import GpuLeaseError, safe_gpu_lease_reason
+    if cpu:
+        from orze.core.cpu_action_budget import CpuBudgetHOLD
+        from orze.engine.native_cpu_action import CPUActionHOLD
+        try:
+            orze = Orze([], cfg, once=args.once)
+            orze.run()
+        except (CPUExecutionError, CpuBudgetHOLD, CPUActionHOLD) as exc:
+            print(f"HOLD: CPU action execution unconfirmed: {exc}")
+            return 75
+        return 0
+    orze = Orze(gpu_ids, cfg, once=args.once)
+
+    if args.role_only:
+        orze._run_role_once(args.role_only)
+    else:
+        try:
+            orze.run()
+        except GpuLeaseError as exc:
+            print(
+                "ERROR: controller GPU ownership rejected: "
+                f"{safe_gpu_lease_reason(exc)}"
+            )
+            return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

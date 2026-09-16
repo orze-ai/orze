@@ -237,12 +237,8 @@ def install(config_file, method="auto", stall_threshold=1800):
 
     # Load config to get results_dir
     cfg = load_project_config(config_file)
+    results_dir = cfg["results_dir"]
     workdir = str(Path(config_file).resolve().parent)
-    # Match the controller's working directory even when installed elsewhere.
-    results_path = Path(cfg["results_dir"])
-    if not results_path.is_absolute():
-        results_path = Path(workdir) / results_path
-    results_dir = str(results_path.resolve())
     python = sys.executable
     log_file = str(Path(results_dir).resolve() / "orze.log")
 
