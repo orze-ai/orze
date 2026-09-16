@@ -235,6 +235,29 @@ def _cost_scope(run, request):
             'worker_command': [request['runtime']['python'], str(Path(domain.__file__).resolve())]}
 
 
+def _retained_duplicate_owner(database, task_id, raw):
+    """Explain a missing producer only from retained text and actual lake rows.
+
+    Research acceptance means appended proposal, not native queue admission.
+    The same execution config with another proposal ID can remain in ideas.md.
+    This read-only observation grants neither execution nor a scientific score.
+    """
+    from orze.core.ideas import parse_ideas_text
+    from orze.core.integrity import hash_config
+    if any(row['idea_id'] == task_id for row in database['ideas']):
+        raise ValueError('retained duplicate was already admitted')
+    proposal = parse_ideas_text(raw).get(task_id)
+    if proposal is None or proposal['config'].get('kind') != 'native_cpu_action':
+        raise ValueError('retained duplicate has no native proposal')
+    identity = hash_config(proposal['config'])
+    for row in database['ideas']:
+        if row['kind'] == 'native_cpu_action' and row['status'].lower() in ('queued', 'pending', 'running', 'completed'):
+            config = yaml.safe_load(row['config'])
+            if isinstance(config, dict) and hash_config(config) == identity:
+                return row['idea_id']
+    raise ValueError('retained duplicate has no matching admitted configuration')
+
+
 def _consume_evaluation(run, request, task_id):
     """Read the qualified native verdict used by the workflow selection policy."""
     _finish(run)
@@ -268,7 +291,8 @@ def run(request, output):
     results = root / 'agent_results'
     results.mkdir()
     run = {'root': str(root), 'cfg': cfg, 'calls': [], 'admissions': [], 'snapshots': [],
-           'campaign': {'request_sha256': digest(request), 'research': [], 'evaluation_order': [], 'consumption': []}}
+           'campaign': {'request_sha256': digest(request), 'research': [], 'evaluation_order': [],
+                        'consumption': [], 'retained_duplicates': []}}
     _snapshot(run, 'initial')
     requests, evaluations = [], []
     rng = random.Random(request['slot']['seed'])
@@ -305,6 +329,13 @@ def run(request, output):
             for index, task_id in enumerate(accepted):
                 artifacts = [read_json(r['record_json']) for r in _database(root)['research_artifacts']]
                 candidates = [a for a in artifacts if a['producer']['task_id'] == task_id and a['logical_name'] == 'candidate']
+                if not candidates:
+                    raw = (root / 'ideas.md').read_text()
+                    snapshot = run['snapshots'][-1]
+                    owner = _retained_duplicate_owner(snapshot['database'], task_id, raw)
+                    run['campaign']['retained_duplicates'].append({'cycle': cycle, 'idea_id': task_id,
+                        'duplicate_of': owner, 'raw_markdown': raw, 'snapshot': snapshot['label']})
+                    continue
                 if len(candidates) != 1:
                     raise ValueError('accepted proposal did not produce one candidate')
                 source = candidates[0]
@@ -375,6 +406,8 @@ def _verify_workflow(capture, request):
     protocol = request['inputs']['tools']['evaluation_protocol']
     rng = random.Random(request['slot']['seed'])
     expected_calls, evaluations, expected_admissions, order = ['initialize'], [], [], []
+    retained = campaign.get('retained_duplicates', [])
+    checked_duplicates = []
     for research in campaign['research']:
         cycle = research['cycle']
         accepted = list(research['outcome']['accepted_ids'])
@@ -386,6 +419,16 @@ def _verify_workflow(capture, request):
         for index, producer in enumerate(accepted):
             sources = [a for a in capture['artifacts']
                        if a['producer']['task_id'] == producer and a['logical_name'] == 'candidate']
+            matches = [r for r in retained if r['cycle'] == cycle and r['idea_id'] == producer]
+            if not sources and len(matches) == 1:
+                row = matches[0]
+                snapshot = next((s for s in capture['snapshots'] if s['label'] == row['snapshot']), None)
+                preceding = next(c for c in capture['calls'] if c['label'] == expected_calls[-1])
+                if (snapshot is None or snapshot['label'] != preceding['after_snapshot']
+                        or _retained_duplicate_owner(snapshot['database'], producer, row['raw_markdown']) != row['duplicate_of']):
+                    raise ValueError('retained duplicate does not match its actual source and lake')
+                checked_duplicates.append(row)
+                continue
             if len(sources) != 1:
                 raise ValueError('proposal has no unique candidate')
             source = sources[0]
@@ -397,6 +440,8 @@ def _verify_workflow(capture, request):
             quality = domain.evaluate(request['inputs']['data'],
                 capture['artifact_contents'][source['artifact_id']].encode('utf-8'), protocol)
             evaluations.append((task_id, quality))
+    if checked_duplicates != retained:
+        raise ValueError('unexpected retained duplicate records')
     if not evaluations or campaign['evaluation_order'] != order:
         raise ValueError('evaluation order differs from declared workload seed')
     valid = [item for item in evaluations if item[1]['status'] == 'valid']

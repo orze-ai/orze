@@ -54,9 +54,9 @@ def finished_campaign(tmp_path_factory, request):
                 return
             response = copy.deepcopy(proposal)
             response['title'] += ' ' + str(len(trace))
-            if payload['model'] in ('offline-two-candidates', 'offline-memory'):
+            if payload['model'] in ('offline-two-candidates', 'offline-memory', 'offline-config-duplicate'):
                 name = ('challenger' if model_calls in (1, 4) else 'baseline') if payload['model'] == 'offline-memory' else (
-                    'challenger' if model_calls % 2 else 'baseline')
+                    'challenger' if payload['model'] == 'offline-config-duplicate' or model_calls % 2 else 'baseline')
                 explicit = domain.produce(instance, name)
                 if request.param:
                     explicit['schedule'].append(dict(explicit['schedule'][0]))
@@ -172,6 +172,35 @@ def test_complete_run_binds_actual_quality_usage_and_outer_clock(finished_campai
     else:
         assert 0 < metrics['confirmed_selection_seconds'] <= metrics['cli_wall_seconds']
     assert record['supervision']['closure']['event'] == 'TREE_CLOSED'
+
+
+def test_duplicate_configuration_does_not_abort_remaining_research(finished_campaign):
+    from examples.research_comparison.scheduling_campaign import _verify_workflow
+    root, plan, inputs, runtime, env, record, measured, trace, invalid = finished_campaign
+    plan, inputs = copy.deepcopy(plan), copy.deepcopy(inputs)
+    inputs['model']['model'] = 'offline-config-duplicate'
+    inputs['tools']['rounds'] = 2
+    plan['shared']['model'] = digest(inputs['model'])
+    plan['shared']['tools'] = digest(inputs['tools'])
+    output = root / 'config-duplicate'
+    result = campaign.execute(plan, record['run_id'], inputs, output, runtime=runtime, env=env)
+    assert result['exit_code'] == 0, (output / 'stderr.log').read_text()
+    captured = json.loads((output / 'capture.json').read_bytes())
+    retained = captured['campaign']['retained_duplicates']
+    assert len(retained) == 1
+    assert len(captured['campaign']['consumption']) == 1
+    task = next(t for t in plan['tasks'] if t['id'] == record['task_id'])
+    checked = campaign.verify(result, task, record['arm'], plan=plan)
+    assert checked['quality']['confirmed'] == (not invalid)
+    assert checked['metrics']['native_actions'] == 3
+    changed = copy.deepcopy(captured)
+    changed['campaign']['retained_duplicates'][0]['duplicate_of'] = 'idea-missing'
+    with pytest.raises(ValueError, match='retained duplicate'):
+        _verify_workflow(changed, result['request'])
+    changed = copy.deepcopy(captured)
+    changed['campaign']['retained_duplicates'] = []
+    with pytest.raises(ValueError, match='unique candidate'):
+        _verify_workflow(changed, result['request'])
 
 
 def test_existing_or_changed_input_does_not_start_another_run(finished_campaign):
