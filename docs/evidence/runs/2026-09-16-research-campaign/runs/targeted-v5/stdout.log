@@ -1,0 +1,36 @@
+.....F.F.....F.F........................................................ [ 81%]
+................                                                         [100%]HOLDOUT_REPORTS=[{"bytes": 2504522, "name": "workflow", "path": "/tmp/rc-t5/holdout-workflow0/holdout-report.json", "sha256": "b2c6a24ac16989a80008a148bf85ecf8eb43eb7c3f8d7d10cccf0460f410e039"}, {"bytes": 142865, "name": "boundary", "path": "/tmp/rc-t5/holdout-boundary0/holdout-report.json", "sha256": "8fb29869503524ab92e605c55edbb9dfa1d31ed8f5dfe0261ac1f4796248bd11"}, {"bytes": 142983, "name": "duplicate_id", "path": "/tmp/rc-t5/holdout-duplicate_id0/holdout-report.json", "sha256": "56cf313da635b82720d8a671d065b41fe41c02ec931fb95a270e88c639b2b7f4"}, {"bytes": 144293, "name": "missing_prerequisite", "path": "/tmp/rc-t5/holdout-missing_prerequisite0/holdout-report.json", "sha256": "879d62bc9f21f4f0198e0c7928047037a86dc547ee0104814f42f5e06bb83dac"}, {"bytes": 142357, "name": "overload", "path": "/tmp/rc-t5/holdout-overload0/holdout-report.json", "sha256": "eab3d73a9b2697b098b3aaac194441dd9a747253d2427deca00449dd2f793fb2"}, {"bytes": 141152, "name": "malformed", "path": "/tmp/rc-t5/holdout-malformed0/holdout-report.json", "sha256": "3b0fe9c7cbf950561747a434158cab15b5178f7381d15ad0120326c82b0138b2"}]
+
+=================================== FAILURES ===================================
+__ test_fixed_batch_runs_both_arms_two_rounds_and_keeps_missing_costs[valid] ___
+tests/test_research_campaign.py:281: in test_fixed_batch_runs_both_arms_two_rounds_and_keeps_missing_costs
+    assert row['metrics']['native_actions'] == 5
+E   assert 3 == 5
+__ test_outer_deadline_closes_its_own_child_and_retains_unknown_result[valid] __
+tests/test_research_campaign.py:330: in test_outer_deadline_closes_its_own_child_and_retains_unknown_result
+    campaign.verify(timed, plan['tasks'][0], record['arm'], plan=plan)
+examples/research_comparison/campaign.py:202: in verify
+    raw[name] = read_capture(folder / name, record['files'][name]['sha256'])
+E   KeyError: 'worker.json'
+_ test_fixed_batch_runs_both_arms_two_rounds_and_keeps_missing_costs[invalid] __
+tests/test_research_campaign.py:281: in test_fixed_batch_runs_both_arms_two_rounds_and_keeps_missing_costs
+    assert row['metrics']['native_actions'] == 5
+E   assert 3 == 5
+_ test_outer_deadline_closes_its_own_child_and_retains_unknown_result[invalid] _
+tests/test_research_campaign.py:330: in test_outer_deadline_closes_its_own_child_and_retains_unknown_result
+    campaign.verify(timed, plan['tasks'][0], record['arm'], plan=plan)
+examples/research_comparison/campaign.py:202: in verify
+    raw[name] = read_capture(folder / name, record['files'][name]['sha256'])
+E   KeyError: 'worker.json'
+=============================== warnings summary ===============================
+../../../../../../home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885
+  /home/erik/.local/lib/python3.10/site-packages/_pytest/config/__init__.py:885: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; examples.holdout.testing
+    self.import_plugin(import_spec)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_research_campaign.py::test_fixed_batch_runs_both_arms_two_rounds_and_keeps_missing_costs[valid]
+FAILED tests/test_research_campaign.py::test_outer_deadline_closes_its_own_child_and_retains_unknown_result[valid]
+FAILED tests/test_research_campaign.py::test_fixed_batch_runs_both_arms_two_rounds_and_keeps_missing_costs[invalid]
+FAILED tests/test_research_campaign.py::test_outer_deadline_closes_its_own_child_and_retains_unknown_result[invalid]
+4 failed, 84 passed, 1 warning in 117.25s (0:01:57)
