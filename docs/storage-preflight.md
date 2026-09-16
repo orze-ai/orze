@@ -2,10 +2,12 @@
 
 This check refuses incompatible storage before new work is admitted. It does
 not replace execution authority or certify every future filesystem operation.
-Roles and default atomic GC require no-replace rename. Explicit
+Default atomic roles and GC require no-replace rename. Explicit
 [`gc.storage_mode: guarded`](gc-guarded-storage.md) uses exclusive creation,
 durable task retirement, copying and removal for GC on storage such as the
-locally verified CephFS route. Role-release compatibility remains separate.
+locally verified CephFS route. Explicit
+[`roles.<name>.storage_mode: guarded`](guarded-role-storage.md) uses a persistent
+role namespace and a captured lease for release without directory rename.
 
 ## Routes checked
 
@@ -37,11 +39,14 @@ collisions, identity/readback checks and directory synchronization. Renames use
 captured directory FDs and single basenames; the probe does not reopen a replaced
 pathname or route through `/proc`.
 
-Guarded GC probes exclusive file/directory creation, existing-target collisions,
-readback, synchronization and removal. Its final operations create durable
+Guarded modes probe exclusive file/directory creation, existing-target collisions,
+readback, synchronization and removal. Guarded GC's final operations create durable
 retirement records under the short task guard, then perform bulk I/O outside it.
 These retirements block fresh task effects until confirmed completion. An
 uncertain probe leaves its private diagnostic objects and refuses admission.
+Guarded roles instead require a captured process-local lease, closure/settlement
+proofs and a non-stealable transition guard. Their namespace marker remains after
+release. Mixed role configurations check each selected protocol.
 
 Cleanup uses captured entries and owned FDs only, never a recursive deletion of
 an arbitrary path. Unknown identities, synchronization or cleanup failures refuse
@@ -50,7 +55,7 @@ execution receipts or permission to recover an existing owner. Administrative
 locks/checkpoint directories may be created explicitly for a configured route;
 no user data is moved and archive staging is deferred as described above.
 
-The final role-release and atomic GC operations still execute the protected rename.
+The final atomic role-release and atomic GC operations still execute the protected rename.
 Preflight success does not guarantee a later mount, permission or namespace has
 not changed. Such later failures retain the existing HOLD/owner behavior; a
 successful probe never clears Stop, refunds a reservation, or authorizes adoption.
@@ -60,7 +65,7 @@ state migration, or filesystem-name allowlist.
 ## Cost and deployment status
 
 There is no capability cache. A successful existing-directory probe performs
-four rename calls (two moves and two expected collisions), creates three tiny
+four rename calls in atomic mode (two moves and two expected collisions), creates three tiny
 files plus private directories, and performs synchronization and metadata reads.
 The early Pro check can therefore perform probe I/O on an idle, statically
 runnable role: existing cooldown logic depends on earlier receipt observation,
@@ -70,9 +75,10 @@ cost is intentional in this slice and is not claimed to be free or amortized.
 
 The observed `/hot-data` CephFS mount rejects the no-replace operation;
 the observed `/tmp` ext4 route supports it. Guarded GC has separate positive
-CephFS coverage and a copy/readback cost; passing either route does not establish
-role-release or production support. Select and verify deployment storage and
-the GC mode explicitly; this work does not switch existing services.
+CephFS coverage and a copy/readback cost. Guarded roles have separate actual CPU
+coverage and measured acquire/release costs. Neither establishes production
+support. Select and verify deployment storage and each mode explicitly; this
+work does not switch existing services or supply rolling migration.
 
 `StoragePreflightError` carries `path` and, where available, `probe` diagnostic
 attributes. Not every existing caller prints both attributes; retained private
