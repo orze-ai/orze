@@ -385,19 +385,6 @@ Examples:
     svc_recover.add_argument('--request-id', required=True)
     svc_recover.add_argument('--install', action='store_true', help='Also install/start the new systemd service')
 
-    svc_backup = svc_sub.add_parser('backup', help='Back up or restore inactive data from a closed CPU service')
-    backup_sub = svc_backup.add_subparsers(dest='backup_operation', required=True)
-    backup_create = backup_sub.add_parser('create')
-    backup_create.add_argument('--service-config', required=True)
-    backup_create.add_argument('--destination', required=True)
-    backup_create.add_argument('--max-bytes', type=int, default=4 * 1024 ** 3)
-    for operation in ('verify', 'restore'):
-        backup_command = backup_sub.add_parser(operation)
-        backup_command.add_argument('--backup', required=True)
-        backup_command.add_argument('--manifest-sha256', required=True)
-        if operation == 'restore':
-            backup_command.add_argument('--destination', required=True)
-
     svc_uninstall = svc_sub.add_parser("uninstall", help="Uninstall watchdog service")
     svc_status = svc_sub.add_parser("status", help="Show watchdog service status")
     svc_audit = svc_sub.add_parser(
@@ -1267,16 +1254,6 @@ Examples:
             options = ['--source-service-config', args.source_service_config, '--service-config', args.service_config,
                        '--request-id', args.request_id]
             return recover_main(options + (['--install'] if args.install else []))
-        elif action == 'backup':
-            from orze.service.backup import main as backup_main
-            if args.backup_operation == 'create':
-                options = ['create', '--service-config', args.service_config, '--destination', args.destination,
-                           '--max-bytes', str(args.max_bytes)]
-            else:
-                options = [args.backup_operation, '--backup', args.backup, '--manifest-sha256', args.manifest_sha256]
-                if args.backup_operation == 'restore':
-                    options += ['--destination', args.destination]
-            return backup_main(options)
         elif action == "status":
             from orze.service.status import show_status
             show_status() if args.service_config is None else show_status(service_config_file=args.service_config)
