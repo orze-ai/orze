@@ -1,0 +1,120 @@
+
+
+def test_unavailable_archive_parent_closes_opened_source_parent(tmp_path, monkeypatch):
+    import errno
+    scope, task, checkpoint = guarded(tmp_path)
+    destination = scope.archive_dir / task.name
+    actual = gc_guarded._open_directory
+    opened = []
+    def denied(path, **kwargs):
+        if path == destination and not kwargs.get('create', False):
+            raise PermissionError('owned archive parent unavailable')
+        fd = actual(path, **kwargs)
+        if path == task:
+            opened.append(fd)
+        return fd
+    monkeypatch.setattr(gc_guarded, '_open_directory', denied)
+    assert run(scope, 'archive')['errors'] == 1
+    assert opened and (task / 'scratch.pt').read_bytes() == b'result bytes'
+    leaked = []
+    for fd in opened:
+        try:
+            os.fstat(fd)
+        except OSError as exc:
+            assert exc.errno == errno.EBADF
+        else:
+            leaked.append(fd)
+            os.close(fd)  # Close only descriptors opened by this test.
+    assert not leaked
+
+
+@pytest.mark.parametrize('where', ['history', 'record'])
+def test_excess_history_stops_enumerating_and_closes_stream(tmp_path, monkeypatch, where):
+    scope, task, checkpoint = guarded(tmp_path)
+    assert run(scope)['deleted'] == 1
+    history = task / '_gc_retirements'
+    directory = history if where == 'history' else next(history.iterdir())
+    for number in range(2000):
+        (directory / f'{number:032x}').mkdir()
+    actual = os.scandir
+    visited, closed = [], []
+    class Observed:
+        def __init__(self, path):
+            self.path, self.stream = Path(path), actual(path)
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.stream.close()
+            if self.path == directory:
+                closed.append(True)
+        def __iter__(self):
+            return self
+        def __next__(self):
+            value = next(self.stream)
+            if self.path == directory:
+                visited.append(value.name)
+            return value
+    def eager(*args):
+        pytest.fail('retirement reader used eager Path.iterdir')
+    monkeypatch.setattr(os, 'scandir', Observed)
+    monkeypatch.setattr(Path, 'iterdir', eager)
+    with pytest.raises(AttemptEffectInDoubt):
+        gc_retirement.require_quiet(task)
+    assert len(visited) == (1025 if where == 'history' else 3)
+    assert closed == [True]
+
+
+@pytest.mark.parametrize('change', ['stop', 'journal'])
+def test_copy_completion_rechecks_before_archive_manifest(tmp_path, monkeypatch, change):
+    scope, task, checkpoint = guarded(tmp_path)
+    original = gc_guarded.copy_new
+    journals = []
+    def changed(*args):
+        result = original(*args)
+        journal = next(scope.results_dir.glob('_orze_gc_quarantine/*/*'))
+        journals.append(journal)
+        if change == 'stop':
+            (scope.results_dir / '.orze_shutdown').touch()
+        else:
+            journal.rename(journal.with_name(journal.name + '-saved'))
+            journal.mkdir()
+            (journal / 'foreign').write_bytes(b'keep')
+        return result
+    monkeypatch.setattr(gc_guarded, 'copy_new', changed)
+    result = run(scope, 'archive')
+    assert result['errors'] == 1 and result['archived_files'] == 0
+    assert (task / 'scratch.pt').read_bytes() == b'result bytes'
+    assert len(journals) == 1 and not (journals[0] / 'archive-files').exists()
+    if change == 'journal':
+        assert (journals[0] / 'foreign').read_bytes() == b'keep'
+
+
+@pytest.mark.parametrize('change', ['stop', 'manifest_directory'])
+def test_archive_manifest_loop_stops_before_next_write(tmp_path, monkeypatch, change):
+    scope, task, checkpoint = guarded(tmp_path)
+    (task / 'scratch.pt').unlink()
+    overlay = task / 'overlays'
+    overlay.mkdir()
+    for name in ('a', 'b'):
+        (overlay / name).write_bytes(b'owned')
+    original = gc_guarded._publish
+    writes = []
+    def changed(path, raw):
+        result = original(path, raw)
+        if path.parent.name == 'archive-files':
+            writes.append(path)
+            if len(writes) == 1:
+                if change == 'stop':
+                    (scope.results_dir / '.orze_shutdown').touch()
+                else:
+                    path.parent.rename(path.parent.with_name('saved-manifests'))
+                    path.parent.mkdir()
+                    (path.parent / 'foreign').write_bytes(b'keep')
+        return result
+    monkeypatch.setattr(gc_guarded, '_publish', changed)
+    result = run(scope, 'archive')
+    assert result['errors'] == 1 and result['archived_files'] == 0
+    assert (overlay / 'a').read_bytes() == (overlay / 'b').read_bytes() == b'owned'
+    assert len(writes) == 1
+    if change == 'manifest_directory':
+        assert sorted(p.name for p in writes[0].parent.iterdir()) == ['foreign']

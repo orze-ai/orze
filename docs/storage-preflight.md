@@ -1,8 +1,11 @@
 # Storage admission preflight
 
 This check refuses incompatible storage before new work is admitted. It does
-**not** add CephFS support, replace execution authority, or certify durability
-for every possible future filesystem failure.
+not replace execution authority or certify every future filesystem operation.
+Roles and default atomic GC require no-replace rename. Explicit
+[`gc.storage_mode: guarded`](gc-guarded-storage.md) uses exclusive creation,
+durable task retirement, copying and removal for GC on storage such as the
+locally verified CephFS route. Role-release compatibility remains separate.
 
 ## Routes checked
 
@@ -19,8 +22,8 @@ for every possible future filesystem failure.
   creating quarantine. Archive preflight checks the existing destination
   parent, or its nearest existing ancestor when the destination is absent;
   it does not create an archive directory before native/effect authorization.
-  Actual reclaim still opens/creates the exact route and verifies the final
-  same-device, no-replace operation. Dry-run remains read-only and is not a
+  Actual reclaim still opens/creates the exact route and enforces same-device
+  and collision protection for the selected mode. Dry-run remains read-only and is not a
   filesystem capability certificate.
 - The CPU-only loop does not use these role/GC routes and is not rejected just
   because its filesystem is named CephFS. Other operation-specific admission
@@ -29,10 +32,16 @@ for every possible future filesystem failure.
 ## What the check does
 
 Each probe creates a uniquely named private directory on the relevant route.
-It tests actual file and directory `RENAME_NOREPLACE`, including existing-target
+Atomic-mode probes test actual file and directory `RENAME_NOREPLACE`, including existing-target
 collisions, identity/readback checks and directory synchronization. Renames use
 captured directory FDs and single basenames; the probe does not reopen a replaced
 pathname or route through `/proc`.
+
+Guarded GC probes exclusive file/directory creation, existing-target collisions,
+readback, synchronization and removal. Its final operations create durable
+retirement records under the short task guard, then perform bulk I/O outside it.
+These retirements block fresh task effects until confirmed completion. An
+uncertain probe leaves its private diagnostic objects and refuses admission.
 
 Cleanup uses captured entries and owned FDs only, never a recursive deletion of
 an arbitrary path. Unknown identities, synchronization or cleanup failures refuse
@@ -41,7 +50,7 @@ execution receipts or permission to recover an existing owner. Administrative
 locks/checkpoint directories may be created explicitly for a configured route;
 no user data is moved and archive staging is deferred as described above.
 
-The final role-release and GC operations still execute the real protected rename.
+The final role-release and atomic GC operations still execute the protected rename.
 Preflight success does not guarantee a later mount, permission or namespace has
 not changed. Such later failures retain the existing HOLD/owner behavior; a
 successful probe never clears Stop, refunds a reservation, or authorizes adoption.
@@ -59,10 +68,11 @@ which itself can write. Actual role launch repeats the probe at its lock route;
 GC can probe multiple source/destination parents per candidate. This fixed I/O
 cost is intentional in this slice and is not claimed to be free or amortized.
 
-The observed `/hot-data` CephFS mount rejects the required no-replace operation;
-the observed `/tmp` ext4 route supports it. Passing on ext4 does not establish
-CephFS GC or role-release support. Select and verify the actual deployment
-storage explicitly; this work does not switch services or modify an ASR project.
+The observed `/hot-data` CephFS mount rejects the no-replace operation;
+the observed `/tmp` ext4 route supports it. Guarded GC has separate positive
+CephFS coverage and a copy/readback cost; passing either route does not establish
+role-release or production support. Select and verify deployment storage and
+the GC mode explicitly; this work does not switch existing services.
 
 `StoragePreflightError` carries `path` and, where available, `probe` diagnostic
 attributes. Not every existing caller prints both attributes; retained private

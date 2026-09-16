@@ -1,0 +1,27 @@
+......F.................................F............................... [ 65%]
+......................................                                   [100%]
+=================================== FAILURES ===================================
+________ test_fresh_claim_is_denied_while_bulk_io_holds_no_effect_guard ________
+tests/test_gc_guarded.py:102: in test_fresh_claim_is_denied_while_bulk_io_holds_no_effect_guard
+    (tmp_path / 'fresh-claim-after.json').write_text(json.dumps(fresh_claim(task, blocked=False)))
+tests/test_gc_guarded.py:43: in fresh_claim
+    assert observed == {'claimed': not blocked, 'reason': 'gc_retirement_unconfirmed' if blocked else None,
+E   AssertionError: assert {'claimed': F...xists': False} == {'claimed': T...exists': True}
+E     
+E     Omitting 1 identical items, use -vv to show
+E     Differing items:
+E     {'claimed': False} != {'claimed': True}
+E     {'claim_exists': False} != {'claim_exists': True}
+E     Use -v to get more diff
+_________ test_large_inventory_does_not_use_small_control_record_limit _________
+tests/test_gc_guarded.py:353: in test_large_inventory_does_not_use_small_control_record_limit
+    assert len(plans) == 1 and plans[0].stat().st_size > 65536
+E   AssertionError: assert (1 == 1 and 48814 > 65536)
+E    +  where 1 = len([PosixPath('/tmp/gg-t3/test_large_inventory_does_not_0/checkpoints/_orze_gc_quarantine/idea-disposable/31de80b99ed74b358b9fa94a8ba8f220/guarded-plan.json')])
+E    +  and   48814 = os.stat_result(st_mode=33152, st_ino=48918899, st_dev=66306, st_nlink=1, st_uid=1720161707, st_gid=1720161707, st_size=48814, st_atime=1789574614, st_mtime=1789574614, st_ctime=1789574614).st_size
+E    +    where os.stat_result(st_mode=33152, st_ino=48918899, st_dev=66306, st_nlink=1, st_uid=1720161707, st_gid=1720161707, st_size=48814, st_atime=1789574614, st_mtime=1789574614, st_ctime=1789574614) = stat()
+E    +      where stat = PosixPath('/tmp/gg-t3/test_large_inventory_does_not_0/checkpoints/_orze_gc_quarantine/idea-disposable/31de80b99ed74b358b9fa94a8ba8f220/guarded-plan.json').stat
+=========================== short test summary info ============================
+FAILED tests/test_gc_guarded.py::test_fresh_claim_is_denied_while_bulk_io_holds_no_effect_guard
+FAILED tests/test_gc_guarded.py::test_large_inventory_does_not_use_small_control_record_limit
+2 failed, 108 passed in 19.76s

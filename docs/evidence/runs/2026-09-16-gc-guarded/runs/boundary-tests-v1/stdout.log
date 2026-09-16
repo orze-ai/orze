@@ -1,0 +1,58 @@
+FFFFFFF                                                                  [100%]
+=================================== FAILURES ===================================
+_________ test_unavailable_archive_parent_closes_opened_source_parent __________
+tests/test_gc_guarded.py:385: in test_unavailable_archive_parent_closes_opened_source_parent
+    assert not leaked
+E   assert not [12]
+_______ test_excess_history_stops_enumerating_and_closes_stream[history] _______
+tests/test_gc_guarded.py:419: in test_excess_history_stops_enumerating_and_closes_stream
+    gc_retirement.require_quiet(task)
+src/orze/engine/gc_retirement.py:70: in require_quiet
+    _records(folder)
+src/orze/engine/gc_retirement.py:33: in _records
+    records = list(itertools.islice(root.iterdir(), _LIMIT + 1))
+tests/test_gc_guarded.py:415: in eager
+    pytest.fail('retirement reader used eager Path.iterdir')
+E   Failed: retirement reader used eager Path.iterdir
+_______ test_excess_history_stops_enumerating_and_closes_stream[record] ________
+tests/test_gc_guarded.py:419: in test_excess_history_stops_enumerating_and_closes_stream
+    gc_retirement.require_quiet(task)
+src/orze/engine/gc_retirement.py:70: in require_quiet
+    _records(folder)
+src/orze/engine/gc_retirement.py:33: in _records
+    records = list(itertools.islice(root.iterdir(), _LIMIT + 1))
+tests/test_gc_guarded.py:415: in eager
+    pytest.fail('retirement reader used eager Path.iterdir')
+E   Failed: retirement reader used eager Path.iterdir
+_________ test_copy_completion_rechecks_before_archive_manifest[stop] __________
+tests/test_gc_guarded.py:444: in test_copy_completion_rechecks_before_archive_manifest
+    assert len(journals) == 1 and not (journals[0] / 'archive-files').exists()
+E   AssertionError: assert (1 == 1 and not True)
+E    +  where 1 = len([PosixPath('/tmp/gg-r1/test_copy_completion_rechecks_0/results/_orze_gc_quarantine/idea-disposable/39c06b89e5094ecc866cfc868d5306e5')])
+E    +  and   True = exists()
+E    +    where exists = (PosixPath('/tmp/gg-r1/test_copy_completion_rechecks_0/results/_orze_gc_quarantine/idea-disposable/39c06b89e5094ecc866cfc868d5306e5') / 'archive-files').exists
+________ test_copy_completion_rechecks_before_archive_manifest[journal] ________
+tests/test_gc_guarded.py:444: in test_copy_completion_rechecks_before_archive_manifest
+    assert len(journals) == 1 and not (journals[0] / 'archive-files').exists()
+E   AssertionError: assert (1 == 1 and not True)
+E    +  where 1 = len([PosixPath('/tmp/gg-r1/test_copy_completion_rechecks_1/results/_orze_gc_quarantine/idea-disposable/90e56dcce0574b5fa4667c299da97d84')])
+E    +  and   True = exists()
+E    +    where exists = (PosixPath('/tmp/gg-r1/test_copy_completion_rechecks_1/results/_orze_gc_quarantine/idea-disposable/90e56dcce0574b5fa4667c299da97d84') / 'archive-files').exists
+___________ test_archive_manifest_loop_stops_before_next_write[stop] ___________
+tests/test_gc_guarded.py:475: in test_archive_manifest_loop_stops_before_next_write
+    assert len(writes) == 1
+E   AssertionError: assert 2 == 1
+E    +  where 2 = len([PosixPath('/tmp/gg-r1/test_archive_manifest_loop_sto0/results/_orze_gc_quarantine/idea-disposable/8ba2a5ba03d34f5f8f5...manifest_loop_sto0/results/_orze_gc_quarantine/idea-disposable/8ba2a5ba03d34f5f8f5e533cafff1021/archive-files/1.json')])
+____ test_archive_manifest_loop_stops_before_next_write[manifest_directory] ____
+tests/test_gc_guarded.py:473: in test_archive_manifest_loop_stops_before_next_write
+    assert result['errors'] == 1 and result['archived_files'] == 0
+E   assert (0 == 1)
+=========================== short test summary info ============================
+FAILED tests/test_gc_guarded.py::test_unavailable_archive_parent_closes_opened_source_parent
+FAILED tests/test_gc_guarded.py::test_excess_history_stops_enumerating_and_closes_stream[history]
+FAILED tests/test_gc_guarded.py::test_excess_history_stops_enumerating_and_closes_stream[record]
+FAILED tests/test_gc_guarded.py::test_copy_completion_rechecks_before_archive_manifest[stop]
+FAILED tests/test_gc_guarded.py::test_copy_completion_rechecks_before_archive_manifest[journal]
+FAILED tests/test_gc_guarded.py::test_archive_manifest_loop_stops_before_next_write[stop]
+FAILED tests/test_gc_guarded.py::test_archive_manifest_loop_stops_before_next_write[manifest_directory]
+7 failed, 41 deselected in 1.78s
