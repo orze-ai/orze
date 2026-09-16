@@ -192,6 +192,7 @@ def test_explicit_empty_memory_runs_both_arms_and_retains_later_use(finished_cam
     plan, inputs = copy.deepcopy(plan), copy.deepcopy(inputs)
     inputs['initial_memory'] = {'schema': 1, 'entries': []}
     inputs['tools']['rounds'] = 2
+    inputs['tools']['research_timeout_seconds'] = 180
     inputs['model']['model'] = 'offline-memory'
     plan['shared'].update(model=digest(inputs['model']), tools=digest(inputs['tools']))
     for task in plan['tasks']:
@@ -260,6 +261,15 @@ print(json.dumps(verify(r,t,r['arm'],plan=p)))'''
             campaign.execute(changed_plan, slot['run_id'], changed, output, runtime=runtime, env=env)
         assert not output.exists()
     assert len(trace) == before
+
+
+@pytest.mark.parametrize('timeout', [True, 0, -1, 3601, float('inf'), float('nan'), '180'])
+def test_research_timeout_rejects_invalid_values_before_launch(timeout):
+    from examples.research_comparison.scheduling_campaign import _configuration
+    request = {'inputs': {'tools': {'workload': 'scheduling-v1', 'rounds': 1, 'num_ideas': 1,
+        'evaluation_protocol': domain.PROTOCOLS[0], 'research_timeout_seconds': timeout}, 'model': {}}}
+    with pytest.raises(ValueError, match='research timeout'):
+        _configuration(request, Path('/unused'))
 
 
 def test_child_observes_its_actual_import_root_before_work(finished_campaign):

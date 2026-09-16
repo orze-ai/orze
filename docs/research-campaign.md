@@ -39,7 +39,9 @@ python3 -m examples.research_comparison describe-runtime > runtime.json
   后端的采样参数仍由固定的 Pro 传输实现决定。CLI 模型名称不证明远端模型修订；
   真正等条件实验还需固定供应商模型修订、传输设置并核对实际请求。
 - `tools` 恰好包含 `workload: "scheduling-v1"`、`rounds`（1–16）、`num_ideas`（1–16）和
-  `evaluation_protocol`（公共调度评价器支持的协议）。
+  `evaluation_protocol`（公共调度评价器支持的协议）；另可声明 `research_timeout_seconds`
+  （大于 0、不超过 3600 的有限秒数，默认 60），控制一次 research 子进程的总时限。
+  该值随共同工具输入固定，两边一致；完整项目仍受外层时限约束。
 - `data` 使用公共调度实例格式；`evaluator` 包含评价器文件的 `source_sha256` 和 `protocol`。
   `instructions` 明确提供实例和模型任务要求。种子只控制候选的评价顺序，不控制远端模型采样。
 - `treatment` 可以添加研究配置，不能覆盖共同的实例、资源、队列、报告或项目路径设置。

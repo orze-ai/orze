@@ -101,7 +101,7 @@ def _verify_initial_memory(capture, request, *, complete):
             raise ValueError('memory changed before the first research round')
 
 
-def _invoke(run, label, command, env=None):
+def _invoke(run, label, command, env=None, *, timeout=60):
     from orze.engine.supervised_process import prepare_supervised, SupervisionUncertain
     root = Path(run['root'])
     before = _snapshot(run, label + ':before')
@@ -116,7 +116,7 @@ def _invoke(run, label, command, env=None):
                 process = exc.process
                 raise
             process.start()
-            code = process.wait(timeout=60)
+            code = process.wait(timeout=timeout)
             binding, closure = process.binding, process.closure_receipt()
         except Exception as exc:
             error = type(exc).__name__
@@ -178,11 +178,15 @@ def _finish(run):
 def _configuration(request, root):
     inputs = request['inputs']
     tools, model = inputs['tools'], inputs['model']
-    keys(tools, ('workload', 'rounds', 'num_ideas', 'evaluation_protocol'), 'scheduling tools')
+    keys(tools, ('workload', 'rounds', 'num_ideas', 'evaluation_protocol',
+                 *(('research_timeout_seconds',) if 'research_timeout_seconds' in tools else ())), 'scheduling tools')
     if (tools['workload'] != 'scheduling-v1' or type(tools['rounds']) is not int
             or not 1 <= tools['rounds'] <= 16 or type(tools['num_ideas']) is not int
             or not 1 <= tools['num_ideas'] <= 16 or tools['evaluation_protocol'] not in domain.PROTOCOLS):
         raise ValueError('invalid acceptance workload controls')
+    research_timeout = tools.get('research_timeout_seconds', 60)
+    if type(research_timeout) not in (int, float) or not 0 < research_timeout <= 3600:
+        raise ValueError('research timeout must be a finite positive value at most 3600 seconds')
     keys(model, ('backend', 'model', 'endpoint'), 'model settings')
     if (model['backend'] not in ('custom', 'ollama', 'openai', 'gemini', 'anthropic', 'deepseek')
             or type(model['model']) is not str or not model['model'] or type(model['endpoint']) is not str):
@@ -282,7 +286,8 @@ def run(request, output):
             research = {'cycle': cycle, 'ref': ref, 'manifests': [], 'outcome': None}
             run['campaign']['research'].append(research)
             try:
-                _invoke(run, f'research-{cycle:04d}', command, env)
+                _invoke(run, f'research-{cycle:04d}', command, env,
+                        timeout=tools.get('research_timeout_seconds', 60))
             finally:
                 for path in sorted(results.glob(ref['attempt_id'] + '.prompt*.json')):
                     suffix = path.name[len(ref['attempt_id']):]
