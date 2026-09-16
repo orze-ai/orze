@@ -1,0 +1,27 @@
+{
+  "target": {
+    "instance_id": "memory-pilot-window-tradeoff-v1",
+    "horizon": 12,
+    "capacity": 1,
+    "jobs": [
+      {"id": "prepare", "release": 0, "deadline": 2, "duration": 2, "demand": 1, "value": 1, "required": true, "after": []},
+      {"id": "gate", "release": 2, "deadline": 4, "duration": 1, "demand": 1, "value": 1, "required": true, "after": ["prepare"]},
+      {"id": "finish", "release": 9, "deadline": 12, "duration": 1, "demand": 1, "value": 1, "required": true, "after": ["gate"]},
+      {"id": "long", "release": 3, "deadline": 9, "duration": 5, "demand": 1, "value": 11, "required": false, "after": ["gate"]},
+      {"id": "early", "release": 3, "deadline": 6, "duration": 2, "demand": 1, "value": 7, "required": false, "after": ["gate"]},
+      {"id": "middle", "release": 5, "deadline": 9, "duration": 2, "demand": 1, "value": 8, "required": false, "after": ["gate"]},
+      {"id": "late", "release": 7, "deadline": 11, "duration": 2, "demand": 1, "value": 9, "required": false, "after": ["gate"]}
+    ]
+  },
+  "negative_control": {
+    "instance_id": "memory-pilot-disjoint-windows-v1",
+    "horizon": 4,
+    "capacity": 1,
+    "jobs": [
+      {"id": "start", "release": 0, "deadline": 1, "duration": 1, "demand": 1, "value": 1, "required": true, "after": []},
+      {"id": "one", "release": 1, "deadline": 2, "duration": 1, "demand": 1, "value": 2, "required": false, "after": ["start"]},
+      {"id": "two", "release": 2, "deadline": 3, "duration": 1, "demand": 1, "value": 3, "required": false, "after": ["start"]},
+      {"id": "three", "release": 3, "deadline": 4, "duration": 1, "demand": 1, "value": 4, "required": false, "after": ["start"]}
+    ]
+  }
+}
