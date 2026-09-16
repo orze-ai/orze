@@ -1,0 +1,52 @@
+FF..                                                                     [100%]
+=================================== FAILURES ===================================
+_______ test_cpu_registered_natural_exit_closes_budget_and_members[None] _______
+
+cpu_controller = (PosixPath('/tmp/orze-cpu-stop-target-v1/test_cpu_registered_natural_ex0'), PosixPath('/tmp/orze-cpu-stop-target-v1/te...ction cpu_controller.<locals>.launch at 0x14e7e734ab90>, <function cpu_controller.<locals>.wait_for at 0x14e7e734ac20>)
+program = None
+
+    @pytest.mark.parametrize("program", [None, "pass"])
+    def test_cpu_registered_natural_exit_closes_budget_and_members(cpu_controller, program):
+        root, path, cfg, env, launch, wait_for = cpu_controller
+        proc = launch(program, once=True)
+        assert proc.wait(timeout=20) == 0, (root / "controller-0.log").read_text()
+        proof = ack(root)
+        assert proof["members"]["member_count"] == int(program is not None)
+        assert proof["resources"]["gpu_scope"] == []
+        assert proof["resources"]["gpu_leases"] == "not_acquired"
+        assert proof["resources"]["cpu_budget"]["reservation_count"] == int(program is not None)
+        assert proof["resources"]["cpu_budget"]["active_reservations"] == 0
+>       assert not list((root / "results").glob(".orze.pid*"))
+E       AssertionError: assert not [PosixPath('/tmp/orze-cpu-stop-target-v1/test_cpu_registered_natural_ex0/results/.orze.pid')]
+E        +  where [PosixPath('/tmp/orze-cpu-stop-target-v1/test_cpu_registered_natural_ex0/results/.orze.pid')] = list(<generator object Path.glob at 0x14e7e74fb6f0>)
+E        +    where <generator object Path.glob at 0x14e7e74fb6f0> = glob('.orze.pid*')
+E        +      where glob = (PosixPath('/tmp/orze-cpu-stop-target-v1/test_cpu_registered_natural_ex0') / 'results').glob
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_stop_product.py:133: AssertionError
+_______ test_cpu_registered_natural_exit_closes_budget_and_members[pass] _______
+
+cpu_controller = (PosixPath('/tmp/orze-cpu-stop-target-v1/test_cpu_registered_natural_ex1'), PosixPath('/tmp/orze-cpu-stop-target-v1/te...ction cpu_controller.<locals>.launch at 0x14e7e73eed40>, <function cpu_controller.<locals>.wait_for at 0x14e7e73ee830>)
+program = 'pass'
+
+    @pytest.mark.parametrize("program", [None, "pass"])
+    def test_cpu_registered_natural_exit_closes_budget_and_members(cpu_controller, program):
+        root, path, cfg, env, launch, wait_for = cpu_controller
+        proc = launch(program, once=True)
+        assert proc.wait(timeout=20) == 0, (root / "controller-0.log").read_text()
+        proof = ack(root)
+        assert proof["members"]["member_count"] == int(program is not None)
+        assert proof["resources"]["gpu_scope"] == []
+        assert proof["resources"]["gpu_leases"] == "not_acquired"
+        assert proof["resources"]["cpu_budget"]["reservation_count"] == int(program is not None)
+        assert proof["resources"]["cpu_budget"]["active_reservations"] == 0
+>       assert not list((root / "results").glob(".orze.pid*"))
+E       AssertionError: assert not [PosixPath('/tmp/orze-cpu-stop-target-v1/test_cpu_registered_natural_ex1/results/.orze.pid')]
+E        +  where [PosixPath('/tmp/orze-cpu-stop-target-v1/test_cpu_registered_natural_ex1/results/.orze.pid')] = list(<generator object Path.glob at 0x14e7e73e93f0>)
+E        +    where <generator object Path.glob at 0x14e7e73e93f0> = glob('.orze.pid*')
+E        +      where glob = (PosixPath('/tmp/orze-cpu-stop-target-v1/test_cpu_registered_natural_ex1') / 'results').glob
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_stop_product.py:133: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cpu_controller_stop_product.py::test_cpu_registered_natural_exit_closes_budget_and_members[None]
+FAILED tests/test_cpu_controller_stop_product.py::test_cpu_registered_natural_exit_closes_budget_and_members[pass]
+2 failed, 2 passed in 4.52s

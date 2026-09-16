@@ -6,6 +6,9 @@
 
 ## 显式支持范围
 
+本页描述 GPU `local_stop_v1`。原生 CPU 的独立声明与预算关闭要求见
+[CPU 注册停止](cpu-controller-stop.md)。
+
 在已经完整配置的项目中使用以下配置片段：
 
 ```yaml

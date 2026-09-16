@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="4" time="0.868" timestamp="2026-09-16T09:44:59.546251+00:00" hostname="a100-41"><testcase classname="tests.test_cpu_controller_stop_product" name="test_cpu_registered_natural_exit_closes_budget_and_members[None]" time="0.235"><failure message="AssertionError: 2026-09-16 09:44:59 [INFO] Loaded config from /tmp/orze-cpu-stop-old-v1/test_cpu_registered_natural_ex0/orze.yaml&#10;  ERROR: execution: CPU actions do not use GPU controller profiles or run-idea&#10;  &#10;assert 2 == 0&#10; +  where 2 = wait(timeout=20)&#10; +    where wait = &lt;Popen: returncode: 2 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/t...&gt;.wait">cpu_controller = (PosixPath('/tmp/orze-cpu-stop-old-v1/test_cpu_registered_natural_ex0'), PosixPath('/tmp/orze-cpu-stop-old-v1/test_cpu...ction cpu_controller.&lt;locals&gt;.launch at 0x146a93cb2b90&gt;, &lt;function cpu_controller.&lt;locals&gt;.wait_for at 0x146a93cb2c20&gt;)
+program = None
+
+    @pytest.mark.parametrize("program", [None, "pass"])
+    def test_cpu_registered_natural_exit_closes_budget_and_members(cpu_controller, program):
+        root, path, cfg, env, launch, wait_for = cpu_controller
+        proc = launch(program, once=True)
+&gt;       assert proc.wait(timeout=20) == 0, (root / "controller-0.log").read_text()
+E       AssertionError: 2026-09-16 09:44:59 [INFO] Loaded config from /tmp/orze-cpu-stop-old-v1/test_cpu_registered_natural_ex0/orze.yaml
+E         ERROR: execution: CPU actions do not use GPU controller profiles or run-idea
+E         
+E       assert 2 == 0
+E        +  where 2 = wait(timeout=20)
+E        +    where wait = &lt;Popen: returncode: 2 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/t...&gt;.wait
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_stop_product.py:126: AssertionError</failure></testcase><testcase classname="tests.test_cpu_controller_stop_product" name="test_cpu_registered_natural_exit_closes_budget_and_members[pass]" time="0.167"><failure message="AssertionError: 2026-09-16 09:45:00 [INFO] Loaded config from /tmp/orze-cpu-stop-old-v1/test_cpu_registered_natural_ex1/orze.yaml&#10;  ERROR: execution: CPU actions do not use GPU controller profiles or run-idea&#10;  &#10;assert 2 == 0&#10; +  where 2 = wait(timeout=20)&#10; +    where wait = &lt;Popen: returncode: 2 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/t...&gt;.wait">cpu_controller = (PosixPath('/tmp/orze-cpu-stop-old-v1/test_cpu_registered_natural_ex1'), PosixPath('/tmp/orze-cpu-stop-old-v1/test_cpu...ction cpu_controller.&lt;locals&gt;.launch at 0x146a93d4eb90&gt;, &lt;function cpu_controller.&lt;locals&gt;.wait_for at 0x146a93d4e9e0&gt;)
+program = 'pass'
+
+    @pytest.mark.parametrize("program", [None, "pass"])
+    def test_cpu_registered_natural_exit_closes_budget_and_members(cpu_controller, program):
+        root, path, cfg, env, launch, wait_for = cpu_controller
+        proc = launch(program, once=True)
+&gt;       assert proc.wait(timeout=20) == 0, (root / "controller-0.log").read_text()
+E       AssertionError: 2026-09-16 09:45:00 [INFO] Loaded config from /tmp/orze-cpu-stop-old-v1/test_cpu_registered_natural_ex1/orze.yaml
+E         ERROR: execution: CPU actions do not use GPU controller profiles or run-idea
+E         
+E       assert 2 == 0
+E        +  where 2 = wait(timeout=20)
+E        +    where wait = &lt;Popen: returncode: 2 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/t...&gt;.wait
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_stop_product.py:126: AssertionError</failure></testcase><testcase classname="tests.test_cpu_controller_stop_product" name="test_cpu_registered_stop_closes_worker_and_descendant_before_ack" time="0.151"><failure message="Failed: 2026-09-16 09:45:00 [INFO] Loaded config from /tmp/orze-cpu-stop-old-v1/test_cpu_registered_stop_close0/orze.yaml&#10;ERROR: execution: CPU actions do not use GPU controller profiles or run-idea">cpu_controller = (PosixPath('/tmp/orze-cpu-stop-old-v1/test_cpu_registered_stop_close0'), PosixPath('/tmp/orze-cpu-stop-old-v1/test_cpu...ction cpu_controller.&lt;locals&gt;.launch at 0x146a93d4f0a0&gt;, &lt;function cpu_controller.&lt;locals&gt;.wait_for at 0x146a93d4eef0&gt;)
+
+    def test_cpu_registered_stop_closes_worker_and_descendant_before_ack(cpu_controller):
+        from orze.core.config import load_project_config
+        from orze.engine.controller_session import _Observer
+        root, path, cfg, env, launch, wait_for = cpu_controller
+        marker = root / "child.json"
+        program = ("import os,json,subprocess,sys,time\nfrom pathlib import Path\n"
+            "child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(120)'])\n"
+            f"Path({str(marker)!r}).write_text(json.dumps([os.getpid(),child.pid]))\n"
+            "time.sleep(120)\n")
+        proc = launch(program)
+&gt;       wait_for(proc, marker.exists)
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_stop_product.py:151: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+proc = &lt;Popen: returncode: 2 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/t...&gt;
+predicate = &lt;bound method Path.exists of PosixPath('/tmp/orze-cpu-stop-old-v1/test_cpu_registered_stop_close0/child.json')&gt;
+
+    def wait_for(proc, predicate):
+        deadline = time.monotonic() + 15
+        while time.monotonic() &lt; deadline:
+            try:
+                if predicate():
+                    return
+            except (sqlite3.OperationalError, FileNotFoundError):
+                pass
+            if proc.poll() is not None:
+&gt;               pytest.fail((tmp_path / "controller-0.log").read_text())
+E               Failed: 2026-09-16 09:45:00 [INFO] Loaded config from /tmp/orze-cpu-stop-old-v1/test_cpu_registered_stop_close0/orze.yaml
+E               ERROR: execution: CPU actions do not use GPU controller profiles or run-idea
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_stop_product.py:90: Failed</failure></testcase><testcase classname="tests.test_cpu_controller_stop_product" name="test_cpu_terminal_without_budget_settlement_cannot_ack" time="0.168"><failure message="AssertionError: assert 2 == 75&#10; +  where 2 = wait(timeout=20)&#10; +    where wait = &lt;Popen: returncode: 2 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/t...&gt;.wait">cpu_controller = (PosixPath('/tmp/orze-cpu-stop-old-v1/test_cpu_terminal_without_budg0'), PosixPath('/tmp/orze-cpu-stop-old-v1/test_cpu...ction cpu_controller.&lt;locals&gt;.launch at 0x146a93d7d5a0&gt;, &lt;function cpu_controller.&lt;locals&gt;.wait_for at 0x146a93d7cee0&gt;)
+
+    def test_cpu_terminal_without_budget_settlement_cannot_ack(cpu_controller):
+        root, path, cfg, env, launch, wait_for = cpu_controller
+        proc = launch('pass', once=True, fault='unsettled')
+&gt;       assert proc.wait(timeout=20) == 75
+E       AssertionError: assert 2 == 75
+E        +  where 2 = wait(timeout=20)
+E        +    where wait = &lt;Popen: returncode: 2 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/t...&gt;.wait
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_stop_product.py:181: AssertionError</failure></testcase></testsuite></testsuites>

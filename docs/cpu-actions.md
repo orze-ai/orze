@@ -24,6 +24,9 @@ action_policy:
 
 现有 GPU controller_control profiles、managed run-idea、后台 start、resume/restart、启用 legacy provider roles 不属于此入口。任务用自己的 timeout_seconds，不用 CLI --timeout；资源、策略及作用域路径绑定后不热重载。控制目录参与路径指纹。同一 IdeaLake 内改变额度声明，或替换已捕获 scope 的数据库身份，都不能自动取得新预算。显式配置一个全新数据库属于另一个预算 namespace；跨数据库统一额度或防重置不在本片范围。CPU foreground 不发布 GPU PID/租约 ACK；SIGINT/SIGTERM 与既有停止标记可以要求它收尾，不能据此宣称未知旧工作已经关闭。
 
+原生 CPU 可另外显式启用 [local_cpu_stop_v1 注册停止](cpu-controller-stop.md)，
+以核验进程、动作、预算和数据库关闭。未启用时保留上述前台收尾合同。
+
 ## 动作声明与输入
 
 任务仍经既有 ideas.md 入库和 ACK。示例：

@@ -172,6 +172,11 @@ ingress 两轮 5,000 个 sidecar 首批约 1,027→133 ms、1,037→136 ms；完
 
 ## P2：生产存储兼容与上线
 
+新增原生 CPU 注册停止：`local_cpu_stop_v1` 核验自有进程、动作回执、独立预算结算及数据库关闭；
+最终新增 19 项检查、Core 全量 5,357／6 跳过、Pro 1,647、配对 31 通过。
+CPU 单次交接、watchdog 所有权恢复与服务隔离仍开放；没有真实模型研究收益或生产上线结论。
+见[CPU 注册停止结果](2026-09-16-cpu-controller-stop-results.zh-CN.md)。
+
 - [x] 服务审计按当前项目配置、dotenv 与观察进程环境复算 results 路由，安装后改址或读取期间变化在 watchdog 进程动作前拒绝；169项定向、3个真实CPU项目及重放、两仓全量回归通过。时点／环境和所有权边界见[当前服务路由核验](2026-09-16-service-route-audit-results.zh-CN.md)，不代表完整服务隔离或所有权恢复完成。
 
 - [x] watchdog在进程检查前、陈旧终止前和启动前复核运行时合约，拒绝路径保留原故障计数与告警；140项定向、自有进程反证、2项实际CPU及重放、两仓回归通过。见[watchdog运行时准入](2026-09-16-watchdog-runtime-admission-results.zh-CN.md)；PID所有权仍需独立处理；当前配置路由核验见上项。
