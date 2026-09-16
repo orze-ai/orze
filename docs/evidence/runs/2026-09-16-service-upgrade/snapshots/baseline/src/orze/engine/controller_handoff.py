@@ -743,7 +743,7 @@ def _optional_request(conn, request_id):
     return _row(conn, request_id=request_id)
 
 
-def _validate_payload(route, row, *, historical_runtime=None):
+def _validate_payload(route, row):
     from orze.engine.controller_control import _ID
     value = _decode(row[5])
     keys = {"schema", "grant_id", "request_id", "source_controller_id", "target_controller_id",
@@ -761,7 +761,7 @@ def _validate_payload(route, row, *, historical_runtime=None):
             or value["workdir"] != _plain(route.workdir)
             or value["scope"] != _plain((route.scope, route.scope_witness))
             or value["database"] != _plain((route.db, route.db_witness))
-            or value["runtime"] != (_runtime() if historical_runtime is None else historical_runtime)):
+            or value["runtime"] != _runtime()):
         raise ControllerHOLD("controller_handoff_payload_invalid")
     for key in ("grant_id", "source_controller_id", "target_controller_id"):
         if type(value[key]) is not str or not _ID.fullmatch(value[key]):

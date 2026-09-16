@@ -272,13 +272,8 @@ class Host:
         # Retain a durable boot intention before the one permitted initial spawn.
         # A later host cannot erase this namespace and repeat an unknown launch.
         _create(self.lease.lock_dir / "boot.json", {"schema": 1, "service_sha256": _sha(self.raw)})
-        if 'recovery' in self.svc or 'upgrade' in self.svc:
-            if 'upgrade' in self.svc:
-                if 'recovery' in self.svc:
-                    raise ControllerHOLD('service_host_ambiguous_transition')
-                from orze.service.upgrade import launch
-            else:
-                from orze.service.recovery import launch
+        if 'recovery' in self.svc:
+            from orze.service.recovery import launch
             result = launch(self)
             self._check_owner()
             observed = self.status()

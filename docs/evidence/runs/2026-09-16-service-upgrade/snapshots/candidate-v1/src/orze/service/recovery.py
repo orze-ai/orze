@@ -76,19 +76,15 @@ def _inactive(svc):
 
 
 class _ClosedSource:
-    @staticmethod
-    def _read_closed(path):
-        from orze.service.closed_state import read_closed
-        return read_closed(path)
-
     def __init__(self, cfg, source, *, declaration=None):
         from orze.core.cpu_execution import cpu_handoff_profile
+        from orze.service.closed_state import read_closed
         from orze.service.host import _service, _read, state_directory, _sha
         if not cpu_handoff_profile(cfg):
             raise ControllerHOLD('service_recovery_cpu_handoff_required')
         self.route = _Route(cfg)
         path, _, raw, self.svc = _service(source)
-        self.proof = self._read_closed(path)
+        self.proof = read_closed(path)
         if (self.svc['config_file'] != str(self.route.config_file)
                 or self.svc['results_dir'] != str(self.route.scope)):
             raise ControllerHOLD('service_recovery_source_scope_changed')
@@ -184,7 +180,6 @@ def prepare(source, destination, request_id):
     try:
         declaration = {**closed.source, 'request_id': request_id}
         result = {**svc, 'service_config_file': str(destination), 'recovery': declaration}
-        result.pop('upgrade', None)
         closed.check()
         _create(destination, result)
         return {'kind': 'prepared_recovery', 'service_config': str(destination), 'recovery': declaration}

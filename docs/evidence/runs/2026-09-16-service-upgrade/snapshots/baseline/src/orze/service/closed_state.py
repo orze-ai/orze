@@ -47,23 +47,13 @@ def verify_controller_record(cfg, proof):
 
 def read_closed(service_config):
     """Informational record only; it does not establish that a host is dead."""
-    from orze.service.runtime_contract import capture_runtime_packages
-    return _read_closed(service_config, capture_runtime_packages())
-
-
-def _read_closed(service_config, packages, *, historical_runtime=None):
-    """Shared state reader; the upgrade adapter separately verifies old package files.
-
-    A historical runtime is used only for the closed source service's own
-    already STARTED grant. Live admission keeps its current-runtime checks.
-    """
     from orze.core.config import load_project_config, find_dotenv
     from orze.service.host import _service, state_directory, _read
-    from orze.service.runtime_contract import _runtime_errors
+    from orze.service.runtime_contract import _runtime_errors, capture_runtime_packages
     path, witness, raw, svc = _service(service_config)
     if str(Path.cwd()) != svc['workdir'] or svc['python'] != sys.executable:
         raise ControllerHOLD('service_closed_runtime_mismatch')
-    if _runtime_errors(svc.get('runtime_packages'), packages):
+    if _runtime_errors(svc.get('runtime_packages'), capture_runtime_packages()):
         raise ControllerHOLD('service_closed_runtime_changed')
     state = state_directory(path)
     directory = _path(state, directory=True)
@@ -92,19 +82,13 @@ def _read_closed(service_config, packages, *, historical_runtime=None):
     verified = verify_controller_record(cfg, documents['closed.json'])
     route = _Route(cfg)
     with route.connection() as conn:
-        if 'recovery' in svc or 'upgrade' in svc:
+        if 'recovery' in svc:
             from orze.engine.controller_handoff import _optional_request, _validate_payload
-            if 'upgrade' in svc:
-                from orze.service.upgrade import _declaration
-                if 'recovery' in svc:
-                    raise ControllerHOLD('service_closed_ambiguous_transition')
-                declaration = _declaration(svc['upgrade'])['source']
-            else:
-                declaration = svc['recovery']
+            declaration = svc['recovery']
             grant = _optional_request(conn, declaration['request_id'])
             if grant is None or grant[6] != 'STARTED':
                 raise ControllerHOLD('service_closed_recovery_unconfirmed')
-            payload = _validate_payload(route, grant, historical_runtime=historical_runtime)
+            payload = _validate_payload(route, grant)
             if payload['source_controller_id'] != declaration['source_controller_id']:
                 raise ControllerHOLD('service_closed_recovery_source_changed')
             initial = [(payload['target_controller_id'],)]
