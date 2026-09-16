@@ -3,9 +3,8 @@
 This offline application separates a fixed comparison plan from the workload
 adapter that verifies actual research evidence. It does not run experiments,
 call a model, authorize spending, or change Orze's autonomous stopping policy.
-The legacy adapter reads the **already published** 24 CPU pairs from
-2026-09-12. The scheduling auditor verifies the task-quality and native-ledger
-portion of a captured run. Neither reanalysis creates new research evidence.
+The only included adapter reads the **already published** 24 CPU pairs from
+2026-09-12. Reanalysis is a measurement control, not new research evidence.
 
 ## Commands
 
@@ -114,78 +113,3 @@ limits and initial state. Then obtain the task/model/account/resource scope
 needed for execution. The existing small CPU controls are public and already
 known; they cannot serve as new held-out research tasks. A real model comparison
 and production deployment remain open work.
-
-## Scheduling task evidence
-
-`scheduling.audit_scheduling(capture, **scope)` re-evaluates candidate artifact
-bytes with the existing public scheduling evaluator. It accepts any instance
-supported by that domain; it does not select a candidate or search for a better
-schedule. The public examples are already known, not new held-out tasks.
-
-The scope contains `instance`, `protocol`, `expected_attempt_refs`,
-`selected_ref`, and optional `confirmation_ref` and `worker_command`. Each Ref
-has exactly `task_id`, `phase`, `attempt_id`, and `generation`. Obtain the full
-expected attempt list and selection from the experiment controller, including
-failures. Do not infer the universe from whichever successful results remain.
-The default command is the current Python executable and scheduling module;
-an explicitly pinned historical command can be supplied without executing it.
-
-The capture uses the existing `examples.holdout.testing` collection format:
-configuration, complete database rows, artifact byte strings, ordered owned
-controller calls with closure receipts, and before/after snapshots starting
-before any native attempts. Source producers must close in an earlier
-controller invocation. Multi-action controller invocations and existing-history
-campaigns need a collector/adapter extension; this format does not silently
-guess their internal execution order. The auditor reads no path embedded in
-the capture and runs no captured command.
-
-For a saved capture and scope, supply their independently retained SHA-256:
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD/src" python3 -m examples.research_comparison \
-  audit-scheduling --capture /absolute/capture.json --capture-sha256 CAPTURE_SHA256 \
-  --scope /absolute/scope.json --scope-sha256 SCOPE_SHA256 \
-  --output /absolute/new-audit.json
-```
-
-Both files are bounded to 64 MiB, must be regular files, and must match their
-complete digests. Duplicate JSON fields are rejected. Output is create-only;
-exit 0 means the evidence audit ran, including when the candidate is invalid.
-An unavailable input or failed output exits 1; a failed sync can leave a file.
-Neither the digest nor exit code authenticates the collector or certifies a
-complete research campaign, provider bill, or scientific improvement.
-
-The audit checks request/config/action/data identity, full native references,
-process closure, settled reservations, all artifact and observation membership,
-source producer/effect bindings, and controller clocks. It accepts the same
-bounded YAML or JSON proposal configuration as the actual Core consumer. It
-recomputes feasibility and objective value from candidate bytes and compares
-the result with both the evaluation output and published observation. A model
-score, internally consistent forged envelope, or producer label is insufficient.
-
-Independent confirmation here means **another evaluator attempt on the same
-candidate artifact**, not independent candidate production. Missing or invalid
-confirmation prevents a confirmed-quality result; a valid zero remains valid.
-Observations are separated by evaluation protocol. Only the requested protocol
-counts toward the comparison's coverage gate; other protocols and failed
-evaluation attempts remain visible. No global optimality is asserted.
-
-`measurement` uses the comparison reducer's shape. Native attempt count,
-reserved seconds, evaluator attempt count (including failures), summed native
-elapsed time, and summed captured controller wall time are verified. Controller
-wall time excludes gaps between invocations; the collector must capture every
-relevant invocation before calling it a whole-project cost. Producer and failed
-worker CPU/wall measurements are incomplete, so those totals stay null. So do
-first evidence consumption, selection-decision latency, provider calls/tokens,
-USD and GPU time; completed evaluation is not policy consumption. Separate
-provider usage evidence may supply its own verified metrics, with unknowns kept.
-
-`verify_scheduling(capture, task, scope=scope)` recomputes the audit and checks
-`task.inputs.data == digest(instance)`, the evaluator identity from
-`evaluator_identity(protocol)`, and maximize direction. This is the task part
-of a workload adapter. It does **not** verify arm/model/tool/environment,
-initial-state provenance, whole campaign coverage or external resource ledgers.
-The output explicitly carries `campaign_identity_verified: false`. A complete
-adapter must establish those missing facts separately before using a task audit
-to claim an A/B research result. Prospective budgets remain unqualified while
-required cost metrics are unknown.
