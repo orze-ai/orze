@@ -1,0 +1,66 @@
+.F..                                                                     [100%]
+=================================== FAILURES ===================================
+_____ test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid ______
+
+project = (PosixPath('/tmp/ch-t2/test_cpu_handoff_replays_once_0'), PosixPath('/tmp/ch-t2/test_cpu_handoff_replays_once_0/orze.y... cpu_controller.<locals>.launch at 0x149c120fc790>, <function cpu_controller.<locals>.wait_for at 0x149c11937d90>, ...)
+
+    def test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid(project):
+        from orze.core.config import load_project_config
+        from orze.engine.controller_handoff import _Route, _validate_history
+        from orze.idea_lake import IdeaLake
+        root, path, cfg, env, launch, wait_for, control, births, expected_old = project
+        marker = root / 'first-worker.json'
+        program = ("import os,json,subprocess,sys,time\nfrom pathlib import Path\n"
+            f"marker=Path({str(marker)!r})\n"
+            "if not marker.exists():\n"
+            " child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(120)'])\n"
+            " marker.write_text(json.dumps([os.getpid(),child.pid]))\n"
+            " time.sleep(120)\n")
+        old = launch(program)
+        wait_for(old, marker.exists)
+        fds = [os.pidfd_open(pid) for pid in [old.pid, *json.loads(marker.read_text())]]
+        expected_old[0] = fds[0]
+        try:
+            code, output = control('restart', 'cpu-first')
+            assert code == 0, output + (root / 'successor.log').read_text()
+            assert old.wait(timeout=5) == 0
+            assert all(select.select([fd], [], [], 0)[0] for fd in fds)
+            assert len(births) == 1
+            assert _settled(root, 1)
+            source_id = rows(root, 'SELECT controller_id FROM controller_instances WHERE generation=0')[0][0]
+            original_ack = rows(root, 'SELECT ack_json FROM controller_sessions WHERE controller_id=' +
+                                repr(source_id))[0][0]
+            # Explicit, audited retry of a FAILED task; no automatic adoption/retry.
+            lake = IdeaLake(root / 'lake.db')
+            try:
+                assert lake.record_state_transition('idea-0001', 'FAILED', 'QUEUED',
+                                                    reason='isolated operator retry')
+            finally:
+                lake.close()
+            deadline = time.monotonic() + 15
+            while not _settled(root, 2) and time.monotonic() < deadline:
+                time.sleep(.03)
+>           assert _settled(root, 2), (root / 'successor.log').read_text()
+E           AssertionError: 2026-09-16 10:54:39 [INFO] Loaded config from /tmp/ch-t2/test_cpu_handoff_replays_once_0/orze.yaml
+E             2026-09-16 10:54:39 [INFO] v4.5 migration already applied (both tables have sop_type)
+E             2026-09-16 10:54:39 [INFO] Orze CPU actions: /tmp/ch-t2/test_cpu_handoff_replays_once_0/results, declared slots=1 (no GPU resource allocation)
+E             2026-09-16 10:54:39 [INFO] CPU policy Wait: queue_empty
+E             Traceback (most recent call last):
+E               File "/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/src/orze/engine/cpu_phase.py", line 504, in run_registered
+E                 engine._run_leased()
+E               File "/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/src/orze/engine/orchestrator.py", line 1290, in _run_leased
+E                 if not iteration(self):
+E               File "/tmp/ch-t2/test_cpu_handoff_replays_once_0/sitecustomize.py", line 84, in iteration
+E                 return actual_iteration(engine)
+E               File "/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/src/orze/engine/cpu_phase.py", line 407, in iteration
+E                 raise CPUExecutionError("execution: reserved action claim unconfirmed; budget retained")
+E             orze.core.cpu_execution.CPUExecutionError: execution: reserved action claim unconfirmed; budget retained
+E             HOLD: CPU action execution unconfirmed: execution: reserved action claim unconfirmed; budget retained
+E             
+E           assert False
+E            +  where False = _settled(PosixPath('/tmp/ch-t2/test_cpu_handoff_replays_once_0'), 2)
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_handoff.py:230: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cpu_controller_handoff.py::test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid
+1 failed, 3 passed in 21.41s

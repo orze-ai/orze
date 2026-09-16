@@ -137,3 +137,6 @@ Session 单元测试的简化 host 另列，不冒充产品主循环；真实 CP
 已经有 CPU executor／通用 autoresearch 循环。整版 V1 和研究效率收益仍未验收。
 
 机器可读结果见 [本片证据](evidence/2026-09-11-v1-05c2e2c-controller-stop-ack.json)。
+
+CPU 的版本 2 [单后继交接](cpu-controller-handoff.md) 使用按实例保留的预算摘要；
+版本 1 停止 ACK 仍是单实例全作用域格式，不能直接作为交接许可。

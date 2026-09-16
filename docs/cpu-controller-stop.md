@@ -71,3 +71,6 @@ ACK 包含预算作用域身份、预留数量和完整预留摘要。发布 ACK
 
 测试使用实际 CLI、原生 CPU worker 及后代、SQLite、pidfd 和完整预算结算；
 没有使用真实模型、GPU 或已有服务。它证明停止可靠性，不提供研究质量或速度提升证据。
+
+需要单后继交接时，另有显式版本 2 [local_cpu_handoff_v1](cpu-controller-handoff.md)。
+它从新登记作用域启用，不将已存在的停止登记自动升级。

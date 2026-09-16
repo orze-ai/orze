@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="4" time="3.363" timestamp="2026-09-16T10:52:04.789333+00:00" hostname="a100-41"><testcase classname="tests.test_cpu_controller_handoff" name="test_cpu_handoff_profile_uses_separate_protocol_and_control_cli" time="0.073" /><testcase classname="tests.test_cpu_controller_handoff" name="test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid" time="1.620"><failure message="FileNotFoundError: [Errno 2] No such file or directory: '/tmp/ch-t1/test_cpu_handoff_replays_once_0/successor.log'">project = (PosixPath('/tmp/ch-t1/test_cpu_handoff_replays_once_0'), PosixPath('/tmp/ch-t1/test_cpu_handoff_replays_once_0/orze.y... cpu_controller.&lt;locals&gt;.launch at 0x14e198a70790&gt;, &lt;function cpu_controller.&lt;locals&gt;.wait_for at 0x14e1982cfd00&gt;, ...)
+
+    def test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid(project):
+        from orze.core.config import load_project_config
+        from orze.engine.controller_handoff import _Route, _validate_history
+        from orze.idea_lake import IdeaLake
+        root, path, cfg, env, launch, wait_for, control, births, expected_old = project
+        marker = root / 'first-worker.json'
+        program = ("import os,json,subprocess,sys,time\nfrom pathlib import Path\n"
+            f"marker=Path({str(marker)!r})\n"
+            "if not marker.exists():\n"
+            " child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(120)'])\n"
+            " marker.write_text(json.dumps([os.getpid(),child.pid]))\n"
+            " time.sleep(120)\n")
+        old = launch(program)
+        wait_for(old, marker.exists)
+        fds = [os.pidfd_open(pid) for pid in [old.pid, *json.loads(marker.read_text())]]
+        expected_old[0] = fds[0]
+        try:
+            code, output = control('restart', 'cpu-first')
+&gt;           assert code == 0, output + (root / 'successor.log').read_text()
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_handoff.py:199: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.10/pathlib.py:1134: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/ch-t1/test_cpu_handoff_replays_once_0/successor.log')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return self._accessor.open(self, mode, buffering, encoding, errors,
+                                   newline)
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/ch-t1/test_cpu_handoff_replays_once_0/successor.log'
+
+/usr/lib/python3.10/pathlib.py:1119: FileNotFoundError</failure></testcase><testcase classname="tests.test_cpu_controller_handoff" name="test_cpu_handoff_unknown_commit_or_reply_never_spawns_again[orphan_at_commit]" time="0.731"><failure message="AssertionError: assert 75 == 0&#10; +  where 75 = wait(timeout=5)&#10; +    where wait = &lt;Popen: returncode: 75 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/...&gt;.wait">project = (PosixPath('/tmp/ch-t1/test_cpu_handoff_unknown_commi0'), PosixPath('/tmp/ch-t1/test_cpu_handoff_unknown_commi0/orze.y... cpu_controller.&lt;locals&gt;.launch at 0x14e1983230a0&gt;, &lt;function cpu_controller.&lt;locals&gt;.wait_for at 0x14e198323130&gt;, ...)
+fault = 'orphan_at_commit'
+
+    @pytest.mark.parametrize('fault', ['orphan_at_commit', 'lost_started_reply'])
+    def test_cpu_handoff_unknown_commit_or_reply_never_spawns_again(project, fault):
+        root, path, cfg, env, launch, wait_for, control, births, expected_old = project
+        old = launch()
+        wait_for(old, lambda: _active(root))
+        old_fd = os.pidfd_open(old.pid)
+        expected_old[0] = old_fd
+        try:
+            code, output = control('restart', 'cpu-fault', fault)
+            assert code == 75, output
+&gt;           assert old.wait(timeout=5) == 0
+E           AssertionError: assert 75 == 0
+E            +  where 75 = wait(timeout=5)
+E            +    where wait = &lt;Popen: returncode: 75 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/...&gt;.wait
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_handoff.py:261: AssertionError</failure></testcase><testcase classname="tests.test_cpu_controller_handoff" name="test_cpu_handoff_unknown_commit_or_reply_never_spawns_again[lost_started_reply]" time="0.731"><failure message="AssertionError: assert 75 == 0&#10; +  where 75 = wait(timeout=5)&#10; +    where wait = &lt;Popen: returncode: 75 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/...&gt;.wait">project = (PosixPath('/tmp/ch-t1/test_cpu_handoff_unknown_commi1'), PosixPath('/tmp/ch-t1/test_cpu_handoff_unknown_commi1/orze.y... cpu_controller.&lt;locals&gt;.launch at 0x14e1983239a0&gt;, &lt;function cpu_controller.&lt;locals&gt;.wait_for at 0x14e198323d00&gt;, ...)
+fault = 'lost_started_reply'
+
+    @pytest.mark.parametrize('fault', ['orphan_at_commit', 'lost_started_reply'])
+    def test_cpu_handoff_unknown_commit_or_reply_never_spawns_again(project, fault):
+        root, path, cfg, env, launch, wait_for, control, births, expected_old = project
+        old = launch()
+        wait_for(old, lambda: _active(root))
+        old_fd = os.pidfd_open(old.pid)
+        expected_old[0] = old_fd
+        try:
+            code, output = control('restart', 'cpu-fault', fault)
+            assert code == 75, output
+&gt;           assert old.wait(timeout=5) == 0
+E           AssertionError: assert 75 == 0
+E            +  where 75 = wait(timeout=5)
+E            +    where wait = &lt;Popen: returncode: 75 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/...&gt;.wait
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_handoff.py:261: AssertionError</failure></testcase></testsuite></testsuites>

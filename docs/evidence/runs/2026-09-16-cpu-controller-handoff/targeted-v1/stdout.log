@@ -1,0 +1,95 @@
+.FFF                                                                     [100%]
+=================================== FAILURES ===================================
+_____ test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid ______
+
+project = (PosixPath('/tmp/ch-t1/test_cpu_handoff_replays_once_0'), PosixPath('/tmp/ch-t1/test_cpu_handoff_replays_once_0/orze.y... cpu_controller.<locals>.launch at 0x14e198a70790>, <function cpu_controller.<locals>.wait_for at 0x14e1982cfd00>, ...)
+
+    def test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid(project):
+        from orze.core.config import load_project_config
+        from orze.engine.controller_handoff import _Route, _validate_history
+        from orze.idea_lake import IdeaLake
+        root, path, cfg, env, launch, wait_for, control, births, expected_old = project
+        marker = root / 'first-worker.json'
+        program = ("import os,json,subprocess,sys,time\nfrom pathlib import Path\n"
+            f"marker=Path({str(marker)!r})\n"
+            "if not marker.exists():\n"
+            " child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(120)'])\n"
+            " marker.write_text(json.dumps([os.getpid(),child.pid]))\n"
+            " time.sleep(120)\n")
+        old = launch(program)
+        wait_for(old, marker.exists)
+        fds = [os.pidfd_open(pid) for pid in [old.pid, *json.loads(marker.read_text())]]
+        expected_old[0] = fds[0]
+        try:
+            code, output = control('restart', 'cpu-first')
+>           assert code == 0, output + (root / 'successor.log').read_text()
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_handoff.py:199: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.10/pathlib.py:1134: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/ch-t1/test_cpu_handoff_replays_once_0/successor.log')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return self._accessor.open(self, mode, buffering, encoding, errors,
+                                   newline)
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/ch-t1/test_cpu_handoff_replays_once_0/successor.log'
+
+/usr/lib/python3.10/pathlib.py:1119: FileNotFoundError
+_ test_cpu_handoff_unknown_commit_or_reply_never_spawns_again[orphan_at_commit] _
+
+project = (PosixPath('/tmp/ch-t1/test_cpu_handoff_unknown_commi0'), PosixPath('/tmp/ch-t1/test_cpu_handoff_unknown_commi0/orze.y... cpu_controller.<locals>.launch at 0x14e1983230a0>, <function cpu_controller.<locals>.wait_for at 0x14e198323130>, ...)
+fault = 'orphan_at_commit'
+
+    @pytest.mark.parametrize('fault', ['orphan_at_commit', 'lost_started_reply'])
+    def test_cpu_handoff_unknown_commit_or_reply_never_spawns_again(project, fault):
+        root, path, cfg, env, launch, wait_for, control, births, expected_old = project
+        old = launch()
+        wait_for(old, lambda: _active(root))
+        old_fd = os.pidfd_open(old.pid)
+        expected_old[0] = old_fd
+        try:
+            code, output = control('restart', 'cpu-fault', fault)
+            assert code == 75, output
+>           assert old.wait(timeout=5) == 0
+E           AssertionError: assert 75 == 0
+E            +  where 75 = wait(timeout=5)
+E            +    where wait = <Popen: returncode: 75 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/...>.wait
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_handoff.py:261: AssertionError
+_ test_cpu_handoff_unknown_commit_or_reply_never_spawns_again[lost_started_reply] _
+
+project = (PosixPath('/tmp/ch-t1/test_cpu_handoff_unknown_commi1'), PosixPath('/tmp/ch-t1/test_cpu_handoff_unknown_commi1/orze.y... cpu_controller.<locals>.launch at 0x14e1983239a0>, <function cpu_controller.<locals>.wait_for at 0x14e198323d00>, ...)
+fault = 'lost_started_reply'
+
+    @pytest.mark.parametrize('fault', ['orphan_at_commit', 'lost_started_reply'])
+    def test_cpu_handoff_unknown_commit_or_reply_never_spawns_again(project, fault):
+        root, path, cfg, env, launch, wait_for, control, births, expected_old = project
+        old = launch()
+        wait_for(old, lambda: _active(root))
+        old_fd = os.pidfd_open(old.pid)
+        expected_old[0] = old_fd
+        try:
+            code, output = control('restart', 'cpu-fault', fault)
+            assert code == 75, output
+>           assert old.wait(timeout=5) == 0
+E           AssertionError: assert 75 == 0
+E            +  where 75 = wait(timeout=5)
+E            +    where wait = <Popen: returncode: 75 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/...>.wait
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_handoff.py:261: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cpu_controller_handoff.py::test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid
+FAILED tests/test_cpu_controller_handoff.py::test_cpu_handoff_unknown_commit_or_reply_never_spawns_again[orphan_at_commit]
+FAILED tests/test_cpu_controller_handoff.py::test_cpu_handoff_unknown_commit_or_reply_never_spawns_again[lost_started_reply]
+3 failed, 1 passed in 3.37s

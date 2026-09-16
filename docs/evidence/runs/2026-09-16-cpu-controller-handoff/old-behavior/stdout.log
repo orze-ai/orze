@@ -1,0 +1,75 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_______ test_cpu_handoff_profile_uses_separate_protocol_and_control_cli ________
+
+tmp_path = PosixPath('/tmp/ch-o1/test_cpu_handoff_profile_uses_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1463e94c7ac0>
+
+    def test_cpu_handoff_profile_uses_separate_protocol_and_control_cli(tmp_path, monkeypatch):
+        from test_cpu_controller_profile import supported
+        from orze.core.config import load_project_config
+        from orze.core.controller_profile import controller_profile, validate_profile_cli
+        from orze.core.cpu_execution import CPUExecutionError, validate_cpu_cli
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / 'orze.yaml'
+        path.write_text(yaml.safe_dump({**supported(), 'controller_control': PROFILE}))
+>       cfg = load_project_config(str(path))
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_handoff.py:161: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/src/orze/core/config.py:454: in load_project_config
+    cpu_execution(cfg)
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/src/orze/core/cpu_execution.py:64: in cpu_execution
+    _fail("CPU actions do not use GPU controller profiles or run-idea")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+reason = 'CPU actions do not use GPU controller profiles or run-idea'
+
+    def _fail(reason):
+>       raise CPUExecutionError("execution: " + reason)
+E       orze.core.cpu_execution.CPUExecutionError: execution: CPU actions do not use GPU controller profiles or run-idea
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/src/orze/core/cpu_execution.py:31: CPUExecutionError
+_____ test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid ______
+
+project = (PosixPath('/tmp/ch-o1/test_cpu_handoff_replays_once_0'), PosixPath('/tmp/ch-o1/test_cpu_handoff_replays_once_0/orze.y... cpu_controller.<locals>.launch at 0x1463e9008550>, <function cpu_controller.<locals>.wait_for at 0x1463e90080d0>, ...)
+
+    def test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid(project):
+        from orze.core.config import load_project_config
+        from orze.engine.controller_handoff import _Route, _validate_history
+        from orze.idea_lake import IdeaLake
+        root, path, cfg, env, launch, wait_for, control, births, expected_old = project
+        marker = root / 'first-worker.json'
+        program = ("import os,json,subprocess,sys,time\nfrom pathlib import Path\n"
+            f"marker=Path({str(marker)!r})\n"
+            "if not marker.exists():\n"
+            " child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(120)'])\n"
+            " marker.write_text(json.dumps([os.getpid(),child.pid]))\n"
+            " time.sleep(120)\n")
+        old = launch(program)
+>       wait_for(old, marker.exists)
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_handoff.py:194: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+proc = <Popen: returncode: 2 args: ['/usr/bin/python3', '-m', 'orze.cli', '-c', '/t...>
+predicate = <bound method Path.exists of PosixPath('/tmp/ch-o1/test_cpu_handoff_replays_once_0/first-worker.json')>
+
+    def wait_for(proc, predicate):
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            try:
+                if predicate():
+                    return
+            except (sqlite3.OperationalError, FileNotFoundError):
+                pass
+            if proc.poll() is not None:
+>               pytest.fail((tmp_path / "controller-0.log").read_text())
+E               Failed: 2026-09-16 10:47:17 [INFO] Loaded config from /tmp/ch-o1/test_cpu_handoff_replays_once_0/orze.yaml
+E               ERROR: execution: CPU actions do not use GPU controller profiles or run-idea
+
+/hot-data/fsx/workspace/erik/orze-p1-continuation-20260914/orze/tests/test_cpu_controller_stop_product.py:106: Failed
+=========================== short test summary info ============================
+FAILED tests/test_cpu_controller_handoff.py::test_cpu_handoff_profile_uses_separate_protocol_and_control_cli
+FAILED tests/test_cpu_controller_handoff.py::test_cpu_handoff_replays_once_and_keeps_older_task_generation_valid
+2 failed in 0.49s

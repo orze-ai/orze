@@ -83,3 +83,6 @@ action:
 本片只支持显式零 observation：terminal.observation_ids=[]。产物不是测量或科学判断。尚未交付 measurement envelope、可替换 Domain.prepare/Policy.decide 插件、analyze/显式 CPU replica、恢复接管、未知副作用裁定、按实耗退款、有界持久历史压缩及两个异构领域/独立留出验收。后续必须沿本条真实 CLI、预算、attempt 和产物链路继续接入，不能用此处 QueuePolicy 或声明校验器冒充完成这些目标。
 
 测试证据只覆盖私有 CPU 子进程与本地 SQLite/文件机制；不代表真实 GPU/provider、线上部署、科学独立性或科研收益已经验证。
+
+原生 CPU 还可显式启用 [local_cpu_handoff_v1 单后继交接](cpu-controller-handoff.md)，
+通过原 CPU 预算和一次性授权继续运行，不清除旧 claim 或重置额度。
