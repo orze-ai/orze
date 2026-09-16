@@ -169,27 +169,6 @@ def _is_orze_running():
         return False
 
 
-def _require_runtime_contract(svc_cfg):
-    """Reject runtime drift before watchdog process operations."""
-    from orze.service.runtime_contract import audit_runtime_contract
-    try:
-        contract = audit_runtime_contract(svc_cfg)
-        if contract.get("startup_allowed"):
-            return
-        reasons = tuple(sorted(str(item) for item in (contract.get("errors") or [])))
-        if contract.get("active_latches"):
-            reasons = tuple(sorted((*reasons, "stop_latch_present")))
-    except Exception as exc:
-        raise WatchdogLaunchError(
-            "runtime_contract_unavailable", (type(exc).__name__,)
-        ) from None
-    raise WatchdogLaunchError(
-        "runtime_contract_rejected",
-        reasons or ("unknown_contract_error",),
-        display_parts=reasons or ("unknown_contract_error",),
-    )
-
-
 def _launch_orze(svc_cfg):
     """Launch Orze through the configured service owner.
 
@@ -198,7 +177,17 @@ def _launch_orze(svc_cfg):
     once it has checked the stop sentinels, it asks the main unit to start.
     Crontab installations retain the detached-process behavior.
     """
-    _require_runtime_contract(svc_cfg)
+    from orze.service.runtime_contract import audit_runtime_contract
+    contract = audit_runtime_contract(svc_cfg)
+    if not contract.get("startup_allowed"):
+        reasons = tuple(sorted(str(item) for item in (contract.get("errors") or [])))
+        if contract.get("active_latches"):
+            reasons = tuple(sorted((*reasons, "stop_latch_present")))
+        raise WatchdogLaunchError(
+            "runtime_contract_rejected",
+            reasons or ("unknown_contract_error",),
+            display_parts=reasons or ("unknown_contract_error",),
+        )
     if svc_cfg.get("method") == "systemd":
         # A previous crash may leave the unit failed or start-rate-limited.
         # Clearing that bookkeeping is safe here because check_and_restart()
@@ -428,53 +417,46 @@ def check_and_restart(svc_cfg):
         _log(f"Skipping restart: {reason}")
         return
 
-    def _check_runtime_and_process():
-        _require_runtime_contract(svc_cfg)
-        pid = _read_pid(results_dir, hostname)
+    pid = _read_pid(results_dir, hostname)
 
-        if pid and _is_pid_alive(pid):
-            # Process alive — check for stalls
-            stale, age = _is_heartbeat_stale(results_dir, hostname, threshold)
-            if stale:
-                _require_runtime_contract(svc_cfg)
-                _log(f"Orze PID {pid} alive but heartbeat stale ({age:.0f}s > {threshold}s). Killing.")
-                _kill_stale(pid)
-                time.sleep(2)
-                _write_restart_marker(results_dir, hostname, f"stale heartbeat ({age:.0f}s)", pid)
-            else:
-                # All good, nothing to do
-                _resolve_failure_loop(results_dir, hostname, "service_healthy")
-                return
-        elif pid and not _is_pid_alive(pid):
-            _log(f"Orze PID {pid} not alive.")
-            _write_restart_marker(results_dir, hostname, "process died", pid)
+    if pid and _is_pid_alive(pid):
+        # Process alive — check for stalls
+        stale, age = _is_heartbeat_stale(results_dir, hostname, threshold)
+        if stale:
+            _log(f"Orze PID {pid} alive but heartbeat stale ({age:.0f}s > {threshold}s). Killing.")
+            _kill_stale(pid)
+            time.sleep(2)
+            _write_restart_marker(results_dir, hostname, f"stale heartbeat ({age:.0f}s)", pid)
         else:
-            # No PID file — check if somehow running anyway
-            if _is_orze_running():
-                _resolve_failure_loop(results_dir, hostname, "service_found")
-                _log("No PID file but orze process found. Skipping.")
-                return
-            _write_restart_marker(results_dir, hostname, "no PID file found", None)
-
-        # Double-check: no orze.cli already running (race condition guard)
+            # All good, nothing to do
+            _resolve_failure_loop(results_dir, hostname, "service_healthy")
+            return
+    elif pid and not _is_pid_alive(pid):
+        _log(f"Orze PID {pid} not alive.")
+        _write_restart_marker(results_dir, hostname, "process died", pid)
+    else:
+        # No PID file — check if somehow running anyway
         if _is_orze_running():
             _resolve_failure_loop(results_dir, hostname, "service_found")
-            _log("orze already running (pgrep). Skipping launch.")
+            _log("No PID file but orze process found. Skipping.")
             return
+        _write_restart_marker(results_dir, hostname, "no PID file found", None)
 
-        # Re-check sentinels (may have changed during stall kill)
-        skip, reason = _should_restart(results_dir)
-        if skip:
-            _resolve_failure_loop(results_dir, hostname, "operator_stop_active")
-            _log(f"Skipping restart after kill: {reason}")
-            return
+    # Double-check: no orze.cli already running (race condition guard)
+    if _is_orze_running():
+        _resolve_failure_loop(results_dir, hostname, "service_found")
+        _log("orze already running (pgrep). Skipping launch.")
+        return
 
-        new_pid = _launch_orze(svc_cfg)
-        _resolve_failure_loop(results_dir, hostname, "restart_succeeded")
-        _log(f"Restarted orze (new PID {new_pid})")
+    # Re-check sentinels (may have changed during stall kill)
+    skip, reason = _should_restart(results_dir)
+    if skip:
+        _resolve_failure_loop(results_dir, hostname, "operator_stop_active")
+        _log(f"Skipping restart after kill: {reason}")
+        return
 
     try:
-        _check_runtime_and_process()
+        new_pid = _launch_orze(svc_cfg)
     except WatchdogLaunchError as exc:
         failure = exc
     except Exception as exc:
@@ -484,6 +466,8 @@ def check_and_restart(svc_cfg):
             "launch_exception", (type(exc).__name__,)
         )
     else:
+        _resolve_failure_loop(results_dir, hostname, "restart_succeeded")
+        _log(f"Restarted orze (new PID {new_pid})")
         return
 
     try:

@@ -323,12 +323,6 @@ def test_watchdog_escalates_repeated_failure_without_logging_raw_output(
         "_notify_failure_loop",
         lambda _cfg, event: notifications.append(dict(event)),
     )
-    # This fixture exercises failure escalation after an admitted launch.
-    # Runtime rejection before process access has separate integration tests.
-    monkeypatch.setattr(
-        "orze.service.runtime_contract.audit_runtime_contract",
-        lambda _cfg: {"startup_allowed": True},
-    )
     cfg = {
         "method": "systemd",
         "results_dir": str(results),
