@@ -54,8 +54,9 @@ def finished_campaign(tmp_path_factory, request):
                 return
             response = copy.deepcopy(proposal)
             response['title'] += ' ' + str(len(trace))
-            if payload['model'] == 'offline-two-candidates':
-                name = 'challenger' if model_calls % 2 else 'baseline'
+            if payload['model'] in ('offline-two-candidates', 'offline-memory'):
+                name = ('challenger' if model_calls in (1, 4) else 'baseline') if payload['model'] == 'offline-memory' else (
+                    'challenger' if model_calls % 2 else 'baseline')
                 explicit = domain.produce(instance, name)
                 if request.param:
                     explicit['schedule'].append(dict(explicit['schedule'][0]))
@@ -64,8 +65,15 @@ def finished_campaign(tmp_path_factory, request):
                 prompt = '\n'.join(message['content'] for message in payload['messages'])
                 response['parent'] = ('idea-evaluate-0001-0000' if
                     'Eligible scored parent IDs' in prompt and 'idea-evaluate-0001-0000' in prompt else 'none')
+            content = [response]
+            if payload['model'] == 'offline-memory' and '<stored_research_memory>\n' in prompt:
+                memory = json.loads(prompt.split('<stored_research_memory>\n', 1)[1].split('\n</stored_research_memory>', 1)[0])
+                if not memory['entries']:
+                    content = {'update_memory': {'entries': [{'id': 'pilot-note', 'question': 'What should be checked?',
+                        'hypothesis': 'A future candidate may be feasible.', 'rationale': 'Keep the pending question across rounds.',
+                        'claim': 'No result is established by this note.', 'claimed_state': 'unknown', 'sources': []}], 'refresh': []}}
             raw = json.dumps({'id': 'offline-campaign', 'model': 'offline-revision',
-                'choices': [{'message': {'content': json.dumps([response])}, 'finish_reason': 'stop'}],
+                'choices': [{'message': {'content': json.dumps(content)}, 'finish_reason': 'stop'}],
                 'usage': {'prompt_tokens': 3, 'completion_tokens': 2, 'total_tokens': 5}}).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -176,6 +184,82 @@ def test_existing_or_changed_input_does_not_start_another_run(finished_campaign)
     with pytest.raises(ValueError, match='frozen protocol'):
         campaign.execute(plan, record['run_id'], changed, root / 'wrong-input', runtime=runtime, env=env)
     assert not (root / 'wrong-input').exists() and len(trace) == before
+
+
+def test_explicit_empty_memory_runs_both_arms_and_retains_later_use(finished_campaign):
+    from examples.research_comparison.scheduling_campaign import _verify_initial_memory
+    root, plan, inputs, runtime, env, record, measured, trace, invalid = finished_campaign
+    plan, inputs = copy.deepcopy(plan), copy.deepcopy(inputs)
+    inputs['initial_memory'] = {'schema': 1, 'entries': []}
+    inputs['tools']['rounds'] = 2
+    inputs['model']['model'] = 'offline-memory'
+    plan['shared'].update(model=digest(inputs['model']), tools=digest(inputs['tools']))
+    for task in plan['tasks']:
+        task['inputs']['initial_memory'] = digest(inputs['initial_memory'])
+    base = {'research_evidence': {'version': 2, 'max_requests': 3}}
+    for arm in ('A', 'B'):
+        treatment = copy.deepcopy(base)
+        if arm == 'B':
+            treatment['research_memory'] = {'version': 2, 'max_updates': 1}
+        plan['arms'][arm]['treatment_sha256'] = digest(treatment)
+    before = len(trace)
+    for arm in ('A', 'B'):
+        inputs['treatment'] = copy.deepcopy(base)
+        if arm == 'B':
+            inputs['treatment']['research_memory'] = {'version': 2, 'max_updates': 1}
+        slot = next(slot for slot in schedule(plan) if slot['arm'] == arm)
+        directory = root / ('empty-memory-' + arm)
+        result = campaign.execute(plan, slot['run_id'], inputs, directory, runtime=runtime, env=env)
+        assert result['exit_code'] == 0, (result, (directory / 'worker.json').read_text())
+        captured = json.loads((directory / 'capture.json').read_bytes())
+        _verify_initial_memory(captured, result['request'], complete=True)
+        initial = captured['campaign']['initial_memory_snapshot']
+        modified = copy.deepcopy(captured)
+        snap = next(s for s in modified['snapshots'] if s['label'] == initial)
+        snap['database']['research_memory_current_v1'][0]['revision'] = 2
+        with pytest.raises(ValueError, match='initial memory differs'):
+            _verify_initial_memory(modified, result['request'], complete=True)
+        modified = copy.deepcopy(captured)
+        del modified['campaign']['initial_memory_snapshot']
+        with pytest.raises(ValueError, match='missing campaign memory'):
+            _verify_initial_memory(modified, result['request'], complete=True)
+        current, = captured['database']['research_memory_current_v1']
+        assert current['revision'] == (1 if arm == 'A' else 2)
+        entries = json.loads(current['document_json'])['entries']
+        assert [entry['id'] for entry in entries] == ([] if arm == 'A' else ['pilot-note'])
+        script = '''import json,sys
+from pathlib import Path
+from examples.research_comparison.campaign import verify
+r=json.loads(Path(sys.argv[1]).read_bytes());p=r['request']['protocol']
+t=next(t for t in p['tasks'] if t['id']==r['task_id'])
+print(json.dumps(verify(r,t,r['arm'],plan=p)))'''
+        audited = subprocess.run([sys.executable, '-c', script, str(directory / 'run.json')], env=env,
+                                 cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=30)
+        assert audited.returncode == 0, audited.stderr
+        measured = json.loads(audited.stdout)
+        assert measured['quality']['confirmed'] == (not invalid)
+        assert measured['metrics']['provider_calls'] == (2 if arm == 'A' else 3)
+        assert measured['metrics']['provider_tokens'] == (10 if arm == 'A' else 15)
+        assert measured['metrics']['native_actions'] == 5
+    calls = trace[before:]
+    assert len(calls) == 5
+    prompts = ['\n'.join(m['content'] for m in call['messages']) for call in calls]
+    assert all('<stored_research_memory>\n' not in prompt for prompt in prompts[:2])
+    memories = [json.loads(prompt.split('<stored_research_memory>\n', 1)[1].split('\n</stored_research_memory>', 1)[0])
+                for prompt in prompts[2:]]
+    assert [memory['revision'] for memory in memories] == [1, 2, 2]
+    assert memories[-1]['entries'][0]['id'] == 'pilot-note'
+    before = len(trace)
+    for index, unsupported in enumerate((None, {'schema': True, 'entries': []}, {'schema': 1, 'entries': [{}]})):
+        changed, changed_plan = copy.deepcopy(inputs), copy.deepcopy(plan)
+        changed['initial_memory'] = unsupported
+        for task in changed_plan['tasks']:
+            task['inputs']['initial_memory'] = digest(unsupported)
+        output = root / ('unsupported-memory-' + str(index))
+        with pytest.raises(ValueError, match='fresh history and memory|explicitly initialized empty memory'):
+            campaign.execute(changed_plan, slot['run_id'], changed, output, runtime=runtime, env=env)
+        assert not output.exists()
+    assert len(trace) == before
 
 
 def test_child_observes_its_actual_import_root_before_work(finished_campaign):

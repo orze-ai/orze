@@ -23,7 +23,8 @@ from examples.holdout import scheduling as domain
 
 TABLES = ('ideas', 'idea_state', 'idea_transitions', 'idea_stage_state', 'idea_stage_transitions',
           'execution_attempts', 'research_artifacts', 'research_observations', 'cpu_action_reservations',
-          'cpu_action_decisions', 'cpu_action_scopes', 'cpu_proposal_requests', 'replication_requests')
+          'cpu_action_decisions', 'cpu_action_scopes', 'cpu_proposal_requests', 'replication_requests',
+          'research_memory_current_v1', 'research_memory_pending_v1')
 REF_KEYS = ('task_id', 'phase', 'attempt_id', 'generation')
 
 
@@ -42,6 +43,62 @@ def _snapshot(run, label):
     value = {'label': str(len(run['snapshots'])) + ':' + label, 'database': _database(Path(run['root']))}
     run['snapshots'].append(value)
     return value
+
+
+def _initial_memory_row(root):
+    from orze.research.memory_format import project_scope
+    scope = project_scope(root / 'results')
+    raw = json.dumps({'schema': 1, 'project_scope': scope, 'entries': []}, sort_keys=True, separators=(',', ':'))
+    return {'scope': scope, 'revision': 1, 'operation_id': '0' * 32, 'predecessor': None,
+            'document_sha256': _sha(raw.encode()), 'document_json': raw}
+
+
+def _initialize_memory(run, request):
+    if request['inputs']['initial_memory'] is None:
+        return
+    from orze.research.memory_store import prepare_memory_update, publish_memory_update
+    root = Path(run['root'])
+    row = _initial_memory_row(root)
+    arguments = {'database': root / 'lake.db', 'operation_id': row['operation_id'], 'expected_revision': None}
+    prepared = prepare_memory_update(root / 'results', row['document_json'].encode(), **arguments)
+    if prepared.get('status') != 'prepared' or prepared.get('replayed') is not False:
+        raise ValueError('campaign memory is not a fresh preparation')
+    published = publish_memory_update(root / 'results', document_sha256=row['document_sha256'], **arguments)
+    if published.get('status') != 'committed':
+        raise ValueError('campaign memory initialization did not commit')
+    run['campaign']['initial_memory_snapshot'] = _snapshot(run, 'memory-initialized')['label']
+
+
+def _verify_initial_memory(capture, request, *, complete):
+    declared = request['inputs']['initial_memory'] is not None
+    label = capture['campaign'].get('initial_memory_snapshot')
+    if label is None:
+        if declared and (complete or capture['campaign']['research']):
+            raise ValueError('missing campaign memory initialization')
+        return  # A failed initialization has no research result to qualify.
+    if not declared:
+        raise ValueError('undeclared campaign memory initialization')
+    snapshots = capture['snapshots']
+    matches = [i for i, snapshot in enumerate(snapshots) if snapshot['label'] == label]
+    if len(matches) != 1:
+        raise ValueError('missing or duplicate initial memory snapshot')
+    position = matches[0]
+    initialize = next(call for call in capture['calls'] if call['label'] == 'initialize')
+    if position < 1 or snapshots[position - 1]['label'] != initialize['after_snapshot']:
+        raise ValueError('memory was not initialized immediately after the project')
+    for snapshot in snapshots[:position]:
+        if any(snapshot['database'].get(table) for table in ('research_memory_current_v1', 'research_memory_pending_v1')):
+            raise ValueError('campaign has preexisting memory')
+    expected = [_initial_memory_row(Path(capture['root']))]
+    initial = snapshots[position]['database']
+    if initial.get('research_memory_current_v1') != expected or initial.get('research_memory_pending_v1') != []:
+        raise ValueError('initial memory differs from the declared empty document')
+    if capture['campaign']['research']:
+        first = next(call for call in capture['calls'] if call['label'] == 'research-0001')
+        if (position + 1 >= len(snapshots) or snapshots[position + 1]['label'] != first['before_snapshot']
+                or any(snapshots[position + 1]['database'].get(table) != initial[table]
+                       for table in ('research_memory_current_v1', 'research_memory_pending_v1'))):
+            raise ValueError('memory changed before the first research round')
 
 
 def _invoke(run, label, command, env=None):
@@ -157,7 +214,7 @@ def _configuration(request, root):
 
 def _research_command(request, root, cycle):
     model, tools = request['inputs']['model'], request['inputs']['tools']
-    return [request['runtime']['python'], '-m', 'orze_pro.agents.research', '-c', str(root / 'orze.yaml'),
+    return [request['runtime']['python'], '-m', 'examples.research_comparison.scheduling_research', '-c', str(root / 'orze.yaml'),
         '--backend', model['backend'], '--model', model['model'], '--endpoint', model['endpoint'],
         '--cycle', str(cycle), '--num-ideas', str(tools['num_ideas']), '--rules-file', str(root / 'instructions.md'),
         '--rules-sha256', _sha(request['inputs']['instructions'].encode('utf-8')), '--lake-db', str(root / 'lake.db')]
@@ -213,6 +270,7 @@ def run(request, output):
     rng = random.Random(request['slot']['seed'])
     try:
         _native(run, 'initialize')
+        _initialize_memory(run, request)
         for cycle in range(1, tools['rounds'] + 1):
             nonce = secrets.token_hex(32)
             ref = make_native_result_ref(attempt_id=f'campaign-research-{cycle:04d}', role_name='research',
@@ -452,6 +510,7 @@ def verify(capture, task, *, request, complete=True, clock_window=None):
     campaign = capture['campaign']
     if capture['cfg'] != cfg or campaign['request_sha256'] != digest(request):
         raise ValueError('workload configuration differs from frozen campaign')
+    _verify_initial_memory(capture, request, complete=complete)
     research = campaign['research']
     rounds = request['inputs']['tools']['rounds']
     if (len(research) > rounds or complete and len(research) != rounds

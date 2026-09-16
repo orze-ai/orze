@@ -95,8 +95,13 @@ def _bind(plan, run_id, inputs, runtime):
             or runtime['artifact_sha256'] != plan['arms'][slot['arm']]['artifact_sha256']
             or digest(runtime['environment']) != plan['shared']['environment']):
         raise ValueError('campaign inputs do not match the frozen protocol')
-    if inputs['initial_history'] != [] or inputs['initial_memory'] is not None:
+    if (inputs['initial_history'] != [] or inputs['initial_memory'] is not None
+            and digest(inputs['initial_memory']) != digest({'schema': 1, 'entries': []})):
         raise ValueError('this collector requires explicit fresh history and memory')
+    if type(inputs['treatment']) is not dict:
+        raise ValueError('campaign treatment must be a configuration object')
+    if inputs['treatment'].get('research_memory') is not None and inputs['initial_memory'] is None:
+        raise ValueError('memory treatment requires explicitly initialized empty memory')
     limit = task['limits']['cli_wall_seconds']
     if type(limit) not in (int, float) or not 0 < limit <= 86400:
         raise ValueError('execution requires a finite outer acceptance timeout')

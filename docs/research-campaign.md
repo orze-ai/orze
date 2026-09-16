@@ -30,7 +30,11 @@ python3 -m examples.research_comparison describe-runtime > runtime.json
 
 当前执行器仅支持：
 
-- 新的 prospective 调度任务，最多 256 个计划样本，每个样本从空历史 `[]` 和空记忆 `null` 开始。
+- 新的 prospective 调度任务，最多 256 个计划样本，每个样本从空历史 `[]` 开始。
+  `initial_memory: null` 不创建记忆；`initial_memory: {schema: 1, entries: []}` 则显式发布
+  一个作用域绑定到本项目的空文档。开启 `research_memory` 时必须选择后者；A/B 共同输入
+  采用相同初始化声明，关闭记忆的 arm 也会得到空存储，避免给另一边额外的初始结论。
+  当前不接受预填记忆或导入历史。
 - `model` 恰好包含 `backend`、`model`、`endpoint`，作为实际 Pro CLI 参数传入；需要正常 Pro 许可。
   后端的采样参数仍由固定的 Pro 传输实现决定。CLI 模型名称不证明远端模型修订；
   真正等条件实验还需固定供应商模型修订、传输设置并核对实际请求。
@@ -61,6 +65,10 @@ python3 -m examples.research_comparison execute-campaign \
 `specification_sha256` 对应保存后的文件，供下一步使用。
 
 每个样本按固定轮数调用 Pro，执行获准候选、独立评价并重新评价最终选择。
+研究子进程先注册与 CPU 执行相同的调度 Domain，再进入正常 Pro research CLI；这使证据
+分页中的执行预算检查能识别该任务。显式空记忆在项目初始化后、第一轮 research 前发布，
+初始状态与各调用前后的记忆表随原有数据库快照保存。核验检查空文档、项目作用域、版本 1
+及其发生位置；这些存储快照本身不证明模型理解或使用了条目。初始化开销包含在外层时间内。
 每次评价后重新核验原生账本、观察和候选字节；选择策略使用核验后的有效价值，
 并保存这次决策输入的引用和读取时刻。模型自报分数不参与选择。
 正常失败可以保留已关闭的原生动作与成本；无法确认进程树关闭时停止后续样本。
