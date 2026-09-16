@@ -18,7 +18,7 @@ import yaml
 
 from .campaign import _copy, _sha, _write
 from .protocol import digest, keys, number, read_json
-from .scheduling import _audit_scheduling_for_task, audit_scheduling, audit_scheduling_cost, evaluator_identity
+from .scheduling import audit_scheduling, audit_scheduling_cost, evaluator_identity, verify_scheduling
 from examples.holdout import scheduling as domain
 
 TABLES = ('ideas', 'idea_state', 'idea_transitions', 'idea_stage_state', 'idea_stage_transitions',
@@ -174,23 +174,6 @@ def _cost_scope(run, request):
             'worker_command': [request['runtime']['python'], str(Path(domain.__file__).resolve())]}
 
 
-def _consume_evaluation(run, request, task_id):
-    """Read the qualified native verdict used by the workflow selection policy."""
-    _finish(run)
-    audited = audit_scheduling_cost(run, **_cost_scope(run, request))
-    values = [row for row in audited['evaluations'] if row['ref']['task_id'] == task_id]
-    if len(values) != 1:
-        raise ValueError('selection input has no unique qualified evaluation')
-    evaluation = values[0]
-    call = run['calls'][-1]
-    run['campaign']['consumption'].append({
-        'schema': 1, 'event': 'evidence_consumed', 'after_call': call['label'],
-        'snapshot': call['after_snapshot'], 'evaluation': evaluation,
-        'observed_monotonic': time.monotonic(),
-    })
-    return evaluation['verdict']
-
-
 def run(request, output):
     from orze.core.research_result import make_native_result_ref, read_native_result
     from orze_pro.agents.usage_report import audit_usage, native_request
@@ -207,7 +190,7 @@ def run(request, output):
     results = root / 'agent_results'
     results.mkdir()
     run = {'root': str(root), 'cfg': cfg, 'calls': [], 'admissions': [], 'snapshots': [],
-           'campaign': {'request_sha256': digest(request), 'research': [], 'evaluation_order': [], 'consumption': []}}
+           'campaign': {'request_sha256': digest(request), 'research': [], 'evaluation_order': []}}
     _snapshot(run, 'initial')
     requests, evaluations = [], []
     rng = random.Random(request['slot']['seed'])
@@ -249,12 +232,12 @@ def run(request, output):
                 _admit(run, task_id, task_id, domain.make_request('evaluate', protocol=tools['evaluation_protocol'],
                                                                source_id=source['artifact_id']))
                 _native(run, task_id)
-                quality = _consume_evaluation(run, request, task_id)
+                quality = domain.evaluate(inputs['data'], Path(source['path']).read_bytes(), tools['evaluation_protocol'])
                 run['campaign']['evaluation_order'].append({'task_id': task_id, 'source_id': source['artifact_id']})
                 evaluations.append((task_id, quality))
         if not evaluations:
             raise ValueError('campaign produced no evaluable candidates')
-        # Select from audited native verdicts, recomputed from candidate bytes.
+        # Recompute from candidate bytes; provider scores never select the winner.
         valid = [item for item in evaluations if item[1]['status'] == 'valid']
         selected = max(valid, key=lambda item: item[1]['scheduled_value'])[0] if valid else evaluations[0][0]
         _native(run, 'confirmation-admit', ['replicate', selected, '-c', str(config),
@@ -354,57 +337,6 @@ def _verify_workflow(capture, request):
         expected = [request['runtime']['python'], '-m', 'examples.holdout', *args]
         if call['command'] != expected:
             raise ValueError('native command differs from the declared workflow')
-
-
-def _consumption_timing(capture, audited, *, protocol, clock_window):
-    """Verify decision inputs, not a model's understanding or a file timestamp."""
-    receipts = capture['campaign'].get('consumption')
-    if receipts is None:
-        return
-    if type(receipts) is not list:
-        raise ValueError('invalid consumption inventory')
-    snapshots = {row['label']: row['database'] for row in capture['snapshots']}
-    values = {row['ref']['task_id']: row for row in audited['evaluations']}
-    expected = []
-    for index, call in enumerate(capture['calls']):
-        if call['label'].startswith('idea-evaluate-') and call['label'] in values:
-            evaluation = values[call['label']]
-            ref = digest(evaluation['ref'])
-            before = {digest({k: row[k] for k in REF_KEYS}): row
-                      for row in snapshots[call['before_snapshot']]['execution_attempts']}
-            after = {digest({k: row[k] for k in REF_KEYS}): row
-                     for row in snapshots[call['after_snapshot']]['execution_attempts']}
-            if (ref not in after or after[ref]['state'] != 'TERMINAL'
-                    or ref in before and before[ref]['state'] == 'TERMINAL'):
-                raise ValueError('consumption call does not close its evaluation')
-            expected.append((index, call, evaluation))
-    positions = {call['label']: pos for pos, (_, call, _) in enumerate(expected)}
-    previous = -1
-    first = None
-    for receipt in receipts:
-        keys(receipt, ('schema', 'event', 'after_call', 'snapshot', 'evaluation', 'observed_monotonic'),
-             'consumption receipt')
-        label = receipt['after_call']
-        if type(label) is not str or label not in positions or positions[label] <= previous:
-            raise ValueError('unknown, duplicate or reordered consumption call')
-        previous = positions[label]
-        index, call, evaluation = expected[previous]
-        moment = receipt['observed_monotonic']
-        if (type(receipt['schema']) is not int or receipt['schema'] != 1
-                or receipt['event'] != 'evidence_consumed'
-                or receipt['snapshot'] != call['after_snapshot']
-                or digest(receipt['evaluation']) != digest(evaluation)
-                or evaluation['protocol'] != protocol or not number(moment)
-                or moment < call['finished_monotonic']
-                or index + 1 < len(capture['calls']) and moment > capture['calls'][index + 1]['started_monotonic']):
-            raise ValueError('consumption receipt differs from the qualified decision input')
-        if clock_window is not None and not clock_window['worker_started'] <= moment <= clock_window['worker_finished']:
-            raise ValueError('consumption is outside the worker clock window')
-        if first is None and evaluation['verdict']['status'] == 'valid':
-            first = moment
-    # An incomplete inventory cannot establish which valid input came first.
-    if len(receipts) == len(expected) and first is not None and clock_window is not None:
-        audited['measurement']['metrics']['first_valid_consumed_seconds'] = first - clock_window['outer_started']
 
 
 def _timing(capture, measured, *, complete, clock_window):
@@ -508,15 +440,13 @@ def verify(capture, task, *, request, complete=True, clock_window=None):
         raise ValueError('native attempt coverage differs from captured history')
     if complete:
         _verify_workflow(capture, request)
-        audited = _audit_scheduling_for_task(capture, task, scope=scope)
+        measured = verify_scheduling(capture, task, scope=scope)
     else:
         if (task['inputs']['data'] != digest(scope['instance'])
                 or task['inputs']['evaluator'] != evaluator_identity(scope['protocol'])):
             raise ValueError('failed workload has another task identity')
-        audited = audit_scheduling_cost(capture, **scope)
-    measured = audited['measurement']
+        measured = audit_scheduling_cost(capture, **scope)['measurement']
     usage = audit_usage(**usage_scope)
     measured['metrics'].update(usage['comparison_metrics'])
     _timing(capture, measured, complete=complete, clock_window=clock_window)
-    _consumption_timing(capture, audited, protocol=scope['protocol'], clock_window=clock_window)
     return measured

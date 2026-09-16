@@ -335,15 +335,6 @@ def evaluator_identity(protocol):
     return digest({'source_sha256':_sha(Path(domain.__file__).read_bytes()),'protocol':protocol})
 
 
-def _audit_scheduling_for_task(record, task, *, scope):
-    result = audit_scheduling(record, **scope)
-    identity = result['measurement']['quality']['comparison_key']
-    _require(task['inputs']['data'] == identity['instance_sha256']
-             and task['inputs']['evaluator'] == result['evaluator_identity_sha256']
-             and task['quality']['direction'] == 'maximize', 'comparison task does not match evaluated evidence')
-    return result
-
-
 def verify_scheduling(record, task, *, scope):
     """Bind freshly recomputed task evidence to a comparison task.
 
@@ -352,7 +343,12 @@ also verify the campaign's arm, model, tools, initial state and full resource
 ledgers. Prospective comparison budgets cannot pass with the unknown metrics
 returned here. Never trust a saved audit result in place of the raw capture.
 """
-    return _audit_scheduling_for_task(record, task, scope=scope)['measurement']
+    result = audit_scheduling(record, **scope)
+    identity = result['measurement']['quality']['comparison_key']
+    _require(task['inputs']['data'] == identity['instance_sha256']
+             and task['inputs']['evaluator'] == result['evaluator_identity_sha256']
+             and task['quality']['direction'] == 'maximize', 'comparison task does not match evaluated evidence')
+    return result['measurement']
 
 
 def read_capture(path, expected_sha256):

@@ -155,10 +155,7 @@ def test_complete_run_binds_actual_quality_usage_and_outer_clock(finished_campai
     assert metrics['provider_cost_usd'] is None and metrics['gpu_seconds'] is None
     assert metrics['cli_wall_seconds'] == record['wall_seconds']
     assert metrics['cli_wall_seconds'] > sum(c['wall_seconds'] for c in capture['calls'])
-    if invalid:
-        assert metrics['first_valid_consumed_seconds'] is None
-    else:
-        assert 0 < metrics['first_valid_consumed_seconds'] < metrics['confirmed_selection_seconds']
+    assert metrics['first_valid_consumed_seconds'] is None
     if invalid:
         assert metrics['confirmed_selection_seconds'] is None
     else:
@@ -304,18 +301,11 @@ def test_fixed_batch_runs_both_arms_two_rounds_and_keeps_missing_costs(finished_
             timing = row['metrics']['confirmed_selection_seconds']
             if invalid:
                 assert timing is None
-                assert row['metrics']['first_valid_consumed_seconds'] is None
             else:
                 actual = json.loads((directory / index[i]['path']).read_bytes())
                 capture = json.loads((Path(actual['output']) / 'capture.json').read_bytes())
                 assert timing == capture['campaign']['confirmation']['observed_monotonic'] - actual['started_monotonic']
                 assert 0 < timing <= row['metrics']['cli_wall_seconds']
-                first = next(r['observed_monotonic'] for r in capture['campaign']['consumption']
-                             if r['evaluation']['verdict']['status'] == 'valid')
-                assert row['metrics']['first_valid_consumed_seconds'] == first - actual['started_monotonic']
-                assert 0 < row['metrics']['first_valid_consumed_seconds'] < timing
-            if not mutate and i == 0:
-                _check_consumption_receipts(directory / index[i]['path'], root / 'batch-consumption', env)
     with pytest.raises(FileExistsError):
         batch.execute(spec, directory, env=env)
     changed = copy.deepcopy(spec)
@@ -349,11 +339,6 @@ print(json.dumps(m,sort_keys=True))'''
     (root / 'late-failure.stdout').write_text(checked.stdout)
     (root / 'late-failure.stderr').write_text(checked.stderr)
     assert checked.returncode == 0, checked.stderr
-    timing = json.loads(checked.stdout)['metrics']['first_valid_consumed_seconds']
-    if invalid:
-        assert timing is None
-    else:
-        assert 0 < timing < failed['wall_seconds']
 
 
 def test_outer_deadline_closes_its_own_child_and_retains_unknown_result(finished_campaign):
@@ -451,79 +436,3 @@ print(json.dumps({'cases':len(results),'valid':valid}))'''
         moment = capture['campaign']['confirmation']['observed_monotonic']
         assert capture['calls'][-1]['finished_monotonic'] <= moment <= worker['finished_monotonic']
         assert measured['metrics']['confirmed_selection_seconds'] == moment - record['started_monotonic']
-
-
-def _check_consumption_receipts(record_path, folder, env):
-    """Retain and independently re-audit tampered real one/two-round products."""
-    folder.mkdir()
-    script = '''import copy,json,sys
-from pathlib import Path
-from examples.research_comparison.scheduling_campaign import verify
-r=json.loads(Path(sys.argv[1]).read_bytes());p=r['request']['protocol']
-t=next(t for t in p['tasks'] if t['id']==r['task_id'])
-c=json.loads((Path(r['output'])/'capture.json').read_bytes())
-w=json.loads((Path(r['output'])/'worker.json').read_bytes())
-window={'outer_started':r['started_monotonic'],'worker_started':w['started_monotonic'],
-        'worker_finished':w['finished_monotonic'],'outer_finished':r['finished_monotonic']}
-folder=Path(sys.argv[2]);results={}
-def check(name,capture,expected,clock=window):
- (folder/(name+'.json')).write_text(json.dumps({'capture':capture,'window':clock},sort_keys=True))
- try:
-  result=verify(capture,t,request=r['request'],clock_window=clock)
- except ValueError as exc:
-  assert expected=='reject',(name,str(exc))
-  results[name]={'status':'rejected','reason':str(exc)}
- else:
-  assert expected!='reject',name+' unexpectedly accepted'
-  timing=result['metrics']['first_valid_consumed_seconds']
-  assert (timing is None) if expected=='unknown' else (0<timing<result['metrics']['confirmed_selection_seconds'])
-  results[name]={'status':expected,'metrics':result['metrics']}
-receipts=c['campaign']['consumption'];assert receipts
-valid=any(v['evaluation']['verdict']['status']=='valid' for v in receipts)
-check('original',c,'measured' if valid else 'unknown')
-changed=copy.deepcopy(c);changed['campaign'].pop('consumption')
-check('missing-inventory',changed,'unknown')
-changed=copy.deepcopy(c);changed['campaign']['consumption']=[]
-check('empty-inventory',changed,'unknown')
-check('missing-window',c,'unknown',None)
-index=next(i for i,v in enumerate(c['calls']) if v['label']==receipts[0]['after_call'])
-call=c['calls'][index]
-for name,key,value in [
- ('before-evaluation','observed_monotonic',call['started_monotonic']),
- ('after-next-step','observed_monotonic',c['calls'][index+1]['started_monotonic']+1),
- ('boolean-clock','observed_monotonic',True),
- ('prior-snapshot','snapshot',call['before_snapshot']),
- ('future-snapshot','snapshot',c['calls'][-1]['after_snapshot']),
- ('future-call','after_call',c['calls'][-1]['label'])]:
- changed=copy.deepcopy(c);changed['campaign']['consumption'][0][key]=value
- check(name,changed,'reject')
-for name,key,value in [
- ('future-ref','ref',c['campaign']['scope']['confirmation_ref']),
- ('wrong-candidate','candidate_sha256','0'*64),
- ('wrong-protocol','protocol','schedule-feasibility-v2'),
- ('wrong-verdict','verdict',{'status':'valid','reason_code':'feasible','scheduled_value':999})]:
- changed=copy.deepcopy(c);changed['campaign']['consumption'][0]['evaluation'][key]=value
- check(name,changed,'reject')
-changed=copy.deepcopy(c);changed['campaign']['consumption'][0]['evaluation']['ref']['generation']=True
-check('boolean-ref',changed,'reject')
-changed=copy.deepcopy(c);changed['campaign']['consumption'].append(copy.deepcopy(receipts[0]))
-check('duplicate-input',changed,'reject')
-if len(receipts)>1:
- changed=copy.deepcopy(c);changed['campaign']['consumption'].pop(0)
- check('missing-first-input',changed,'unknown')
- changed=copy.deepcopy(c);changed['campaign']['consumption'].reverse()
- check('reordered-inputs',changed,'reject')
-(folder/'results.json').write_text(json.dumps(results,sort_keys=True,indent=2))
-print(json.dumps({'cases':len(results),'valid':valid}))'''
-    (folder / 'verify.py').write_text(script)
-    checked = subprocess.run([sys.executable, str(folder / 'verify.py'), str(record_path), str(folder)], env=env,
-        cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=60)
-    (folder / 'stdout.log').write_text(checked.stdout)
-    (folder / 'stderr.log').write_text(checked.stderr)
-    assert checked.returncode == 0, checked.stderr
-    assert json.loads(checked.stdout)['cases'] in (16, 18)
-
-
-def test_decision_consumption_receipts_use_real_capture(finished_campaign):
-    root, plan, inputs, runtime, env, record, measured, trace, invalid = finished_campaign
-    _check_consumption_receipts(root / 'run/run.json', root / 'consumption-boundaries', env)
