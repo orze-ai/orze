@@ -406,3 +406,22 @@ The real-data workflow retained its initial model and made an extra evidence
 read in the experimental arm; different programs and response latency also
 contributed to elapsed time. These limited results support keeping the option,
 not a universal stopping rule or a general claim of improved discovery.
+
+
+## Compare the cost of an internal search
+
+`fixed_kernel_ensemble.py` and `c_only_ensemble.py` are optional complete
+`fit_predict` candidates derived from one actual generated SVR/tree ensemble.
+The first removes all internal tuning; the second retains the four C values
+and five train-group folds while fixing gamma to `scale` (20 validation fits
+instead of 80). The remaining models, weights and output bounds match the
+original program. Supply the complete file as a program candidate using the
+same application evaluator; this does not select the final model.
+
+The [native ablations](../../docs/plans/2026-09-17-research-fixed-kernel.zh-CN.md)
+retain all cases. Removing all tuning hurt Servo severely. Fixing only gamma
+reduced program CPU by 46.13% and complete native evaluation-action time by
+19.12%, but real-label quality versus the original was 1 better, 4 identical
+and 3 worse; mean MSE increased 0.22% on Fish and 3.74% on Servo. These are
+measured tradeoffs on familiar, overlapping partitions. Neither candidate
+is a universal replacement, and action time is not full research time.
