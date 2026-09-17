@@ -282,3 +282,13 @@ The result proves optimality only among these pairs on these development rows.
 It does not prove heldout gains, optimality among larger ensembles, or that
 further code research is unnecessary. Use it when saved predictions answer the
 current numeric question; it is an optional project helper.
+
+The [executed multi-round action comparison](../../docs/plans/2026-09-17-research-action-choice.zh-CN.md)
+shows why this distinction matters. On one QSAR partition, the exact pair
+reduced development MSE by 15.32% but increased final refitted holdout MSE by
+20.15% against the initial selected model. A separately generated training
+program improved holdout MSE by 10.47%. The model-assisted pair trajectory
+and a zero-model pair calculation produced identical final predictions;
+that supported removing redundant calls for that result, without establishing
+that pair-first research would choose a better result. Keep the helper optional
+and confirm the actual selected training procedure.

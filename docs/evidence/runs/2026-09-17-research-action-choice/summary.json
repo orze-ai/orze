@@ -1,0 +1,1287 @@
+{
+  "action_trajectories": [
+    {
+      "cycle": 1,
+      "project": "qsar-0-C",
+      "proposal": {
+        "items": [
+          {
+            "kind": "program",
+            "source": "import numpy as np\nfrom sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.model_selection import GroupKFold, KFold\nfrom sklearn.linear_model import LinearRegression\n\n\ndef _models(seed):\n    return [\n        RandomForestRegressor(n_estimators=400, max_features=0.5, min_samples_leaf=2,\n                              random_state=seed, n_jobs=1),\n        ExtraTreesRegressor(n_estimators=400, max_features=0.5, min_samples_leaf=1,\n                            random_state=seed, n_jobs=1),\n        HistGradientBoostingRegressor(learning_rate=0.03, max_leaf_nodes=7,\n                                      min_samples_leaf=40, l2_regularization=0.0,\n                                      max_iter=350, early_stopping=False,\n                                      random_state=seed),\n        make_pipeline(StandardScaler(), SVR(C=4.5, gamma='auto', epsilon=0.1)),\n        make_pipeline(StandardScaler(),\n                      KNeighborsRegressor(n_neighbors=9, p=1, weights='distance', n_jobs=1)),\n    ]\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    n = X.shape[0]\n    m = 5\n    oof = np.zeros((n, m), dtype=float)\n    cnt = np.zeros(n, dtype=float)\n\n    splits = None\n    if train_groups is not None:\n        g = np.asarray(train_groups).ravel()\n        ng = len(np.unique(g))\n        if ng >= 2:\n            k = int(min(5, ng))\n            if k >= 2:\n                splits = list(GroupKFold(n_splits=k).split(X, y, g))\n    if splits is None:\n        splits = list(KFold(n_splits=5, shuffle=True, random_state=seed).split(X))\n\n    for tr, va in splits:\n        if len(tr) < 10 or len(va) == 0:\n            continue\n        fold_models = _models(seed)\n        for j in range(m):\n            mdl = fold_models[j]\n            mdl.fit(X[tr], y[tr])\n            oof[va, j] = np.asarray(mdl.predict(X[va]), dtype=float).ravel()\n        cnt[va] += 1.0\n\n    mask = cnt > 0\n    w = None\n    if int(mask.sum()) >= 3 * m:\n        A = oof[mask]\n        b = y[mask]\n        if np.all(np.isfinite(A)) and np.all(np.isfinite(b)):\n            blend = LinearRegression(positive=True, fit_intercept=False)\n            blend.fit(A, b)\n            cand = np.asarray(blend.coef_, dtype=float).ravel()\n            s = float(cand.sum())\n            if np.all(np.isfinite(cand)) and s > 1e-8:\n                w = cand / s\n    if w is None:\n        w = np.ones(m, dtype=float) / float(m)\n\n    preds = np.zeros((Xe.shape[0], m), dtype=float)\n    full_models = _models(seed)\n    for j in range(m):\n        mdl = full_models[j]\n        mdl.fit(X, y)\n        preds[:, j] = np.asarray(mdl.predict(Xe), dtype=float).ravel()\n\n    out = np.asarray(preds.dot(w), dtype=float).ravel()\n    if not np.all(np.isfinite(out)):\n        fallback = float(np.mean(y))\n        out = np.where(np.isfinite(out), out, fallback)\n    return out\n"
+          }
+        ],
+        "request": {
+          "input_artifact_ids": [
+            "2048ac6f313dc0217760b8fb7404a9e18a528f611d967c8aa92d06d1d1fa149b",
+            "99fa340a16075f40988df5da4d0e16f9d11920ac5a49749379b7acc04fd468f3"
+          ],
+          "inputs": {
+            "allowed_kind": "program",
+            "data_sha256": "9aa98e39aabf7ee9ea78027101416412a5e9239929752ea3c095ef6c4bcac033",
+            "data_source_id": "2048ac6f313dc0217760b8fb7404a9e18a528f611d967c8aa92d06d1d1fa149b",
+            "experiments": [
+              {
+                "kind": "program",
+                "source": "import numpy as np\nfrom sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.model_selection import GroupKFold, KFold\nfrom sklearn.linear_model import LinearRegression\n\n\ndef _models(seed):\n    return [\n        RandomForestRegressor(n_estimators=400, max_features=0.5, min_samples_leaf=2,\n                              random_state=seed, n_jobs=1),\n        ExtraTreesRegressor(n_estimators=400, max_features=0.5, min_samples_leaf=1,\n                            random_state=seed, n_jobs=1),\n        HistGradientBoostingRegressor(learning_rate=0.03, max_leaf_nodes=7,\n                                      min_samples_leaf=40, l2_regularization=0.0,\n                                      max_iter=350, early_stopping=False,\n                                      random_state=seed),\n        make_pipeline(StandardScaler(), SVR(C=4.5, gamma='auto', epsilon=0.1)),\n        make_pipeline(StandardScaler(),\n                      KNeighborsRegressor(n_neighbors=9, p=1, weights='distance', n_jobs=1)),\n    ]\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    n = X.shape[0]\n    m = 5\n    oof = np.zeros((n, m), dtype=float)\n    cnt = np.zeros(n, dtype=float)\n\n    splits = None\n    if train_groups is not None:\n        g = np.asarray(train_groups).ravel()\n        ng = len(np.unique(g))\n        if ng >= 2:\n            k = int(min(5, ng))\n            if k >= 2:\n                splits = list(GroupKFold(n_splits=k).split(X, y, g))\n    if splits is None:\n        splits = list(KFold(n_splits=5, shuffle=True, random_state=seed).split(X))\n\n    for tr, va in splits:\n        if len(tr) < 10 or len(va) == 0:\n            continue\n        fold_models = _models(seed)\n        for j in range(m):\n            mdl = fold_models[j]\n            mdl.fit(X[tr], y[tr])\n            oof[va, j] = np.asarray(mdl.predict(X[va]), dtype=float).ravel()\n        cnt[va] += 1.0\n\n    mask = cnt > 0\n    w = None\n    if int(mask.sum()) >= 3 * m:\n        A = oof[mask]\n        b = y[mask]\n        if np.all(np.isfinite(A)) and np.all(np.isfinite(b)):\n            blend = LinearRegression(positive=True, fit_intercept=False)\n            blend.fit(A, b)\n            cand = np.asarray(blend.coef_, dtype=float).ravel()\n            s = float(cand.sum())\n            if np.all(np.isfinite(cand)) and s > 1e-8:\n                w = cand / s\n    if w is None:\n        w = np.ones(m, dtype=float) / float(m)\n\n    preds = np.zeros((Xe.shape[0], m), dtype=float)\n    full_models = _models(seed)\n    for j in range(m):\n        mdl = full_models[j]\n        mdl.fit(X, y)\n        preds[:, j] = np.asarray(mdl.predict(Xe), dtype=float).ravel()\n\n    out = np.asarray(preds.dot(w), dtype=float).ravel()\n    if not np.all(np.isfinite(out)):\n        fallback = float(np.mean(y))\n        out = np.where(np.isfinite(out), out, fallback)\n    return out\n"
+              }
+            ],
+            "history_source_id": "99fa340a16075f40988df5da4d0e16f9d11920ac5a49749379b7acc04fd468f3",
+            "maximum": 1,
+            "split": "development"
+          },
+          "outputs": {
+            "details": {
+              "max_bytes": 524288,
+              "path": "details.json"
+            },
+            "evaluation": {
+              "max_bytes": 131072,
+              "path": "evaluation.json"
+            },
+            "prediction": {
+              "max_bytes": 4194304,
+              "path": "prediction.json"
+            }
+          },
+          "payload": {
+            "command": [
+              "/usr/bin/python3",
+              "/hot-data/fsx/workspace/erik/work/orze-p1-continuation-20260914/research_action_choice_worker_20260917.py"
+            ],
+            "protocol": {
+              "id": "reviewed-training-v1"
+            },
+            "result_output": "evaluation",
+            "specification": {
+              "delegate_sha256": "e17dca93f846b491964a2d75dfd7ba1fe325fc9388b53f4a2ca7fc95602110c9",
+              "version": 1,
+              "worker_sha256": "4d2b3cec5aa402664fae2764443d2906fc22f7e2295a776d1f61db0a475214c2"
+            }
+          },
+          "purpose": "Evaluate externally scored training predictions",
+          "timeout_seconds": 60,
+          "version": 1
+        },
+        "task_id": "idea-43ac92"
+      }
+    },
+    {
+      "cycle": 2,
+      "project": "qsar-0-C",
+      "proposal": {
+        "items": [
+          {
+            "kind": "program",
+            "source": "import numpy as np\nfrom sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler, PolynomialFeatures\nfrom sklearn.linear_model import LinearRegression, RidgeCV\n\nLOGCOLS = [0, 1, 2, 6, 7]\n\n\ndef _aug(X):\n    X = np.asarray(X, dtype=float)\n    Z = X[:, LOGCOLS]\n    Z = np.where(Z > 0.0, Z, 0.0)\n    return np.hstack([X, np.log1p(Z)])\n\n\ndef _models(seed):\n    return [\n        (\"raw\", RandomForestRegressor(n_estimators=300, max_features=0.5,\n                                      min_samples_leaf=2, random_state=seed, n_jobs=1)),\n        (\"raw\", ExtraTreesRegressor(n_estimators=300, max_features=0.5,\n                                    min_samples_leaf=1, random_state=seed, n_jobs=1)),\n        (\"raw\", HistGradientBoostingRegressor(learning_rate=0.03, max_leaf_nodes=7,\n                                              min_samples_leaf=40, l2_regularization=0.0,\n                                              max_iter=300, early_stopping=False,\n                                              random_state=seed)),\n        (\"raw\", make_pipeline(StandardScaler(), SVR(C=4.5, gamma=\"auto\", epsilon=0.1))),\n        (\"raw\", make_pipeline(StandardScaler(),\n                              KNeighborsRegressor(n_neighbors=9, p=1, weights=\"distance\", n_jobs=1))),\n        (\"aug\", make_pipeline(StandardScaler(),\n                              PolynomialFeatures(degree=2, include_bias=False),\n                              StandardScaler(),\n                              RidgeCV(alphas=np.logspace(-1.0, 3.0, 13)))),\n    ]\n\n\ndef _fold_masks(n, groups, k, rng):\n    if groups is not None:\n        g = np.asarray(groups).ravel()\n        u = np.unique(g)\n        if len(u) >= k:\n            order = rng.permutation(len(u))\n            masks = []\n            for chunk in np.array_split(order, k):\n                masks.append(np.isin(g, u[chunk]))\n            return masks\n    idx = rng.permutation(n)\n    base = np.arange(n)\n    masks = []\n    for chunk in np.array_split(idx, k):\n        masks.append(np.isin(base, chunk))\n    return masks\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    Xa = _aug(X)\n    Xea = _aug(Xe)\n    n = X.shape[0]\n    m = 6\n    reps = 2\n    s = np.zeros((n, m), dtype=float)\n    c = np.zeros(n, dtype=float)\n    for r in range(reps):\n        rng = np.random.default_rng(int(seed) + 977 * r)\n        for mask in _fold_masks(n, train_groups, 5, rng):\n            va = np.where(mask)[0]\n            tr = np.where(~mask)[0]\n            if len(tr) < 20 or len(va) == 0:\n                continue\n            fold = _models(seed)\n            for j in range(m):\n                kind, mdl = fold[j]\n                A = Xa if kind == \"aug\" else X\n                mdl.fit(A[tr], y[tr])\n                s[va, j] += np.asarray(mdl.predict(A[va]), dtype=float).ravel()\n            c[va] += 1.0\n    w = None\n    ok = c > 0\n    if int(ok.sum()) >= 6 * m:\n        A = s[ok] / c[ok][:, None]\n        b = y[ok]\n        if np.all(np.isfinite(A)) and np.all(np.isfinite(b)):\n            mse = np.mean((A - b[:, None]) ** 2, axis=0)\n            inv = 1.0 / np.maximum(mse, 1e-6) ** 2\n            w_inv = inv / float(inv.sum())\n            blend = LinearRegression(positive=True, fit_intercept=False)\n            blend.fit(A, b)\n            cand = np.asarray(blend.coef_, dtype=float).ravel()\n            t = float(cand.sum())\n            if np.all(np.isfinite(cand)) and t > 1e-8:\n                w = 0.75 * (cand / t) + 0.25 * w_inv\n            else:\n                w = w_inv\n    if w is None:\n        w = np.ones(m, dtype=float) / float(m)\n    preds = np.zeros((Xe.shape[0], m), dtype=float)\n    full = _models(seed)\n    for j in range(m):\n        kind, mdl = full[j]\n        A = Xa if kind == \"aug\" else X\n        B = Xea if kind == \"aug\" else Xe\n        mdl.fit(A, y)\n        preds[:, j] = np.asarray(mdl.predict(B), dtype=float).ravel()\n    out = np.asarray(preds.dot(w), dtype=float).ravel()\n    if not np.all(np.isfinite(out)):\n        out = np.where(np.isfinite(out), out, float(np.mean(y)))\n    return out\n"
+          }
+        ],
+        "request": {
+          "input_artifact_ids": [
+            "2048ac6f313dc0217760b8fb7404a9e18a528f611d967c8aa92d06d1d1fa149b",
+            "a533451ee574791c568d2d29c0e39a6fb044f195e6fbd55ce75d589412319b3f"
+          ],
+          "inputs": {
+            "allowed_kind": "program",
+            "data_sha256": "9aa98e39aabf7ee9ea78027101416412a5e9239929752ea3c095ef6c4bcac033",
+            "data_source_id": "2048ac6f313dc0217760b8fb7404a9e18a528f611d967c8aa92d06d1d1fa149b",
+            "experiments": [
+              {
+                "kind": "program",
+                "source": "import numpy as np\nfrom sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler, PolynomialFeatures\nfrom sklearn.linear_model import LinearRegression, RidgeCV\n\nLOGCOLS = [0, 1, 2, 6, 7]\n\n\ndef _aug(X):\n    X = np.asarray(X, dtype=float)\n    Z = X[:, LOGCOLS]\n    Z = np.where(Z > 0.0, Z, 0.0)\n    return np.hstack([X, np.log1p(Z)])\n\n\ndef _models(seed):\n    return [\n        (\"raw\", RandomForestRegressor(n_estimators=300, max_features=0.5,\n                                      min_samples_leaf=2, random_state=seed, n_jobs=1)),\n        (\"raw\", ExtraTreesRegressor(n_estimators=300, max_features=0.5,\n                                    min_samples_leaf=1, random_state=seed, n_jobs=1)),\n        (\"raw\", HistGradientBoostingRegressor(learning_rate=0.03, max_leaf_nodes=7,\n                                              min_samples_leaf=40, l2_regularization=0.0,\n                                              max_iter=300, early_stopping=False,\n                                              random_state=seed)),\n        (\"raw\", make_pipeline(StandardScaler(), SVR(C=4.5, gamma=\"auto\", epsilon=0.1))),\n        (\"raw\", make_pipeline(StandardScaler(),\n                              KNeighborsRegressor(n_neighbors=9, p=1, weights=\"distance\", n_jobs=1))),\n        (\"aug\", make_pipeline(StandardScaler(),\n                              PolynomialFeatures(degree=2, include_bias=False),\n                              StandardScaler(),\n                              RidgeCV(alphas=np.logspace(-1.0, 3.0, 13)))),\n    ]\n\n\ndef _fold_masks(n, groups, k, rng):\n    if groups is not None:\n        g = np.asarray(groups).ravel()\n        u = np.unique(g)\n        if len(u) >= k:\n            order = rng.permutation(len(u))\n            masks = []\n            for chunk in np.array_split(order, k):\n                masks.append(np.isin(g, u[chunk]))\n            return masks\n    idx = rng.permutation(n)\n    base = np.arange(n)\n    masks = []\n    for chunk in np.array_split(idx, k):\n        masks.append(np.isin(base, chunk))\n    return masks\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    Xa = _aug(X)\n    Xea = _aug(Xe)\n    n = X.shape[0]\n    m = 6\n    reps = 2\n    s = np.zeros((n, m), dtype=float)\n    c = np.zeros(n, dtype=float)\n    for r in range(reps):\n        rng = np.random.default_rng(int(seed) + 977 * r)\n        for mask in _fold_masks(n, train_groups, 5, rng):\n            va = np.where(mask)[0]\n            tr = np.where(~mask)[0]\n            if len(tr) < 20 or len(va) == 0:\n                continue\n            fold = _models(seed)\n            for j in range(m):\n                kind, mdl = fold[j]\n                A = Xa if kind == \"aug\" else X\n                mdl.fit(A[tr], y[tr])\n                s[va, j] += np.asarray(mdl.predict(A[va]), dtype=float).ravel()\n            c[va] += 1.0\n    w = None\n    ok = c > 0\n    if int(ok.sum()) >= 6 * m:\n        A = s[ok] / c[ok][:, None]\n        b = y[ok]\n        if np.all(np.isfinite(A)) and np.all(np.isfinite(b)):\n            mse = np.mean((A - b[:, None]) ** 2, axis=0)\n            inv = 1.0 / np.maximum(mse, 1e-6) ** 2\n            w_inv = inv / float(inv.sum())\n            blend = LinearRegression(positive=True, fit_intercept=False)\n            blend.fit(A, b)\n            cand = np.asarray(blend.coef_, dtype=float).ravel()\n            t = float(cand.sum())\n            if np.all(np.isfinite(cand)) and t > 1e-8:\n                w = 0.75 * (cand / t) + 0.25 * w_inv\n            else:\n                w = w_inv\n    if w is None:\n        w = np.ones(m, dtype=float) / float(m)\n    preds = np.zeros((Xe.shape[0], m), dtype=float)\n    full = _models(seed)\n    for j in range(m):\n        kind, mdl = full[j]\n        A = Xa if kind == \"aug\" else X\n        B = Xea if kind == \"aug\" else Xe\n        mdl.fit(A, y)\n        preds[:, j] = np.asarray(mdl.predict(B), dtype=float).ravel()\n    out = np.asarray(preds.dot(w), dtype=float).ravel()\n    if not np.all(np.isfinite(out)):\n        out = np.where(np.isfinite(out), out, float(np.mean(y)))\n    return out\n"
+              }
+            ],
+            "history_source_id": "a533451ee574791c568d2d29c0e39a6fb044f195e6fbd55ce75d589412319b3f",
+            "maximum": 1,
+            "split": "development"
+          },
+          "outputs": {
+            "details": {
+              "max_bytes": 524288,
+              "path": "details.json"
+            },
+            "evaluation": {
+              "max_bytes": 131072,
+              "path": "evaluation.json"
+            },
+            "prediction": {
+              "max_bytes": 4194304,
+              "path": "prediction.json"
+            }
+          },
+          "payload": {
+            "command": [
+              "/usr/bin/python3",
+              "/hot-data/fsx/workspace/erik/work/orze-p1-continuation-20260914/research_action_choice_worker_20260917.py"
+            ],
+            "protocol": {
+              "id": "reviewed-training-v1"
+            },
+            "result_output": "evaluation",
+            "specification": {
+              "delegate_sha256": "e17dca93f846b491964a2d75dfd7ba1fe325fc9388b53f4a2ca7fc95602110c9",
+              "version": 1,
+              "worker_sha256": "4d2b3cec5aa402664fae2764443d2906fc22f7e2295a776d1f61db0a475214c2"
+            }
+          },
+          "purpose": "Evaluate externally scored training predictions",
+          "timeout_seconds": 60,
+          "version": 1
+        },
+        "task_id": "idea-6fd21c"
+      }
+    },
+    {
+      "cycle": 3,
+      "project": "qsar-0-C",
+      "proposal": {
+        "items": [
+          {
+            "kind": "program",
+            "source": "import numpy as np\nfrom sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.kernel_ridge import KernelRidge\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler, PolynomialFeatures\nfrom sklearn.linear_model import LinearRegression, RidgeCV\nfrom sklearn.model_selection import GridSearchCV, KFold\n\nLOGCOLS = [0, 1, 2, 6, 7]\n\n\ndef _aug(X):\n    X = np.asarray(X, dtype=float)\n    Z = X[:, LOGCOLS]\n    Z = np.where(Z > 0.0, Z, 0.0)\n    return np.hstack([X, np.log1p(Z)])\n\n\ndef _models(seed):\n    kr = GridSearchCV(\n        KernelRidge(kernel=\"rbf\"),\n        {\"alpha\": [0.05, 0.2, 1.0, 5.0], \"gamma\": [0.02, 0.06, 0.15]},\n        cv=KFold(n_splits=4, shuffle=True, random_state=seed),\n        scoring=\"neg_mean_squared_error\",\n    )\n    return [\n        (\"raw\", RandomForestRegressor(n_estimators=400, max_features=0.5,\n                                      min_samples_leaf=2, random_state=seed, n_jobs=1)),\n        (\"raw\", ExtraTreesRegressor(n_estimators=400, max_features=0.5,\n                                    min_samples_leaf=1, random_state=seed, n_jobs=1)),\n        (\"raw\", HistGradientBoostingRegressor(learning_rate=0.03, max_leaf_nodes=7,\n                                              min_samples_leaf=40, l2_regularization=0.0,\n                                              max_iter=300, early_stopping=False,\n                                              random_state=seed)),\n        (\"raw\", make_pipeline(StandardScaler(), SVR(C=4.5, gamma=\"auto\", epsilon=0.1))),\n        (\"raw\", make_pipeline(StandardScaler(),\n                              KNeighborsRegressor(n_neighbors=9, p=1, weights=\"distance\", n_jobs=1))),\n        (\"aug\", make_pipeline(StandardScaler(),\n                              PolynomialFeatures(degree=2, include_bias=False),\n                              StandardScaler(),\n                              RidgeCV(alphas=np.logspace(-1.0, 3.0, 13)))),\n        (\"aug\", make_pipeline(StandardScaler(), kr)),\n    ]\n\n\ndef _fold_masks(n, groups, k, rng):\n    if groups is not None:\n        g = np.asarray(groups).ravel()\n        u = np.unique(g)\n        if len(u) >= k:\n            order = rng.permutation(len(u))\n            masks = []\n            for chunk in np.array_split(order, k):\n                masks.append(np.isin(g, u[chunk]))\n            return masks\n    idx = rng.permutation(n)\n    base = np.arange(n)\n    masks = []\n    for chunk in np.array_split(idx, k):\n        masks.append(np.isin(base, chunk))\n    return masks\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    Xa = _aug(X)\n    Xea = _aug(Xe)\n    n = X.shape[0]\n    m = 7\n    reps = 3\n    s = np.zeros((n, m), dtype=float)\n    c = np.zeros(n, dtype=float)\n    for r in range(reps):\n        rng = np.random.default_rng(int(seed) + 977 * r)\n        for mask in _fold_masks(n, train_groups, 5, rng):\n            va = np.where(mask)[0]\n            tr = np.where(~mask)[0]\n            if len(tr) < 20 or len(va) == 0:\n                continue\n            fold = _models(seed)\n            for j in range(m):\n                kind, mdl = fold[j]\n                A = Xa if kind == \"aug\" else X\n                mdl.fit(A[tr], y[tr])\n                s[va, j] += np.asarray(mdl.predict(A[va]), dtype=float).ravel()\n            c[va] += 1.0\n    w = None\n    ok = c > 0\n    if int(ok.sum()) >= 6 * m:\n        A = s[ok] / c[ok][:, None]\n        b = y[ok]\n        if np.all(np.isfinite(A)) and np.all(np.isfinite(b)):\n            mse = np.mean((A - b[:, None]) ** 2, axis=0)\n            inv = 1.0 / np.maximum(mse, 1e-6) ** 2\n            w_inv = inv / float(inv.sum())\n            blend = LinearRegression(positive=True, fit_intercept=False)\n            blend.fit(A, b)\n            cand = np.asarray(blend.coef_, dtype=float).ravel()\n            t = float(cand.sum())\n            if np.all(np.isfinite(cand)) and t > 1e-8:\n                w = 0.75 * (cand / t) + 0.25 * w_inv\n            else:\n                w = w_inv\n    if w is None:\n        w = np.ones(m, dtype=float) / float(m)\n    preds = np.zeros((Xe.shape[0], m), dtype=float)\n    full = _models(seed)\n    for j in range(m):\n        kind, mdl = full[j]\n        A = Xa if kind == \"aug\" else X\n        B = Xea if kind == \"aug\" else Xe\n        mdl.fit(A, y)\n        preds[:, j] = np.asarray(mdl.predict(B), dtype=float).ravel()\n    out = np.asarray(preds.dot(w), dtype=float).ravel()\n    if not np.all(np.isfinite(out)):\n        out = np.where(np.isfinite(out), out, float(np.mean(y)))\n    return out\n"
+          }
+        ],
+        "request": {
+          "input_artifact_ids": [
+            "2048ac6f313dc0217760b8fb7404a9e18a528f611d967c8aa92d06d1d1fa149b",
+            "a1ef4e2ac7a4480531a3a91e249ca50ea38e32d16043a4ab6d42342912c8dd4d"
+          ],
+          "inputs": {
+            "allowed_kind": "program",
+            "data_sha256": "9aa98e39aabf7ee9ea78027101416412a5e9239929752ea3c095ef6c4bcac033",
+            "data_source_id": "2048ac6f313dc0217760b8fb7404a9e18a528f611d967c8aa92d06d1d1fa149b",
+            "experiments": [
+              {
+                "kind": "program",
+                "source": "import numpy as np\nfrom sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.kernel_ridge import KernelRidge\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler, PolynomialFeatures\nfrom sklearn.linear_model import LinearRegression, RidgeCV\nfrom sklearn.model_selection import GridSearchCV, KFold\n\nLOGCOLS = [0, 1, 2, 6, 7]\n\n\ndef _aug(X):\n    X = np.asarray(X, dtype=float)\n    Z = X[:, LOGCOLS]\n    Z = np.where(Z > 0.0, Z, 0.0)\n    return np.hstack([X, np.log1p(Z)])\n\n\ndef _models(seed):\n    kr = GridSearchCV(\n        KernelRidge(kernel=\"rbf\"),\n        {\"alpha\": [0.05, 0.2, 1.0, 5.0], \"gamma\": [0.02, 0.06, 0.15]},\n        cv=KFold(n_splits=4, shuffle=True, random_state=seed),\n        scoring=\"neg_mean_squared_error\",\n    )\n    return [\n        (\"raw\", RandomForestRegressor(n_estimators=400, max_features=0.5,\n                                      min_samples_leaf=2, random_state=seed, n_jobs=1)),\n        (\"raw\", ExtraTreesRegressor(n_estimators=400, max_features=0.5,\n                                    min_samples_leaf=1, random_state=seed, n_jobs=1)),\n        (\"raw\", HistGradientBoostingRegressor(learning_rate=0.03, max_leaf_nodes=7,\n                                              min_samples_leaf=40, l2_regularization=0.0,\n                                              max_iter=300, early_stopping=False,\n                                              random_state=seed)),\n        (\"raw\", make_pipeline(StandardScaler(), SVR(C=4.5, gamma=\"auto\", epsilon=0.1))),\n        (\"raw\", make_pipeline(StandardScaler(),\n                              KNeighborsRegressor(n_neighbors=9, p=1, weights=\"distance\", n_jobs=1))),\n        (\"aug\", make_pipeline(StandardScaler(),\n                              PolynomialFeatures(degree=2, include_bias=False),\n                              StandardScaler(),\n                              RidgeCV(alphas=np.logspace(-1.0, 3.0, 13)))),\n        (\"aug\", make_pipeline(StandardScaler(), kr)),\n    ]\n\n\ndef _fold_masks(n, groups, k, rng):\n    if groups is not None:\n        g = np.asarray(groups).ravel()\n        u = np.unique(g)\n        if len(u) >= k:\n            order = rng.permutation(len(u))\n            masks = []\n            for chunk in np.array_split(order, k):\n                masks.append(np.isin(g, u[chunk]))\n            return masks\n    idx = rng.permutation(n)\n    base = np.arange(n)\n    masks = []\n    for chunk in np.array_split(idx, k):\n        masks.append(np.isin(base, chunk))\n    return masks\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    Xa = _aug(X)\n    Xea = _aug(Xe)\n    n = X.shape[0]\n    m = 7\n    reps = 3\n    s = np.zeros((n, m), dtype=float)\n    c = np.zeros(n, dtype=float)\n    for r in range(reps):\n        rng = np.random.default_rng(int(seed) + 977 * r)\n        for mask in _fold_masks(n, train_groups, 5, rng):\n            va = np.where(mask)[0]\n            tr = np.where(~mask)[0]\n            if len(tr) < 20 or len(va) == 0:\n                continue\n            fold = _models(seed)\n            for j in range(m):\n                kind, mdl = fold[j]\n                A = Xa if kind == \"aug\" else X\n                mdl.fit(A[tr], y[tr])\n                s[va, j] += np.asarray(mdl.predict(A[va]), dtype=float).ravel()\n            c[va] += 1.0\n    w = None\n    ok = c > 0\n    if int(ok.sum()) >= 6 * m:\n        A = s[ok] / c[ok][:, None]\n        b = y[ok]\n        if np.all(np.isfinite(A)) and np.all(np.isfinite(b)):\n            mse = np.mean((A - b[:, None]) ** 2, axis=0)\n            inv = 1.0 / np.maximum(mse, 1e-6) ** 2\n            w_inv = inv / float(inv.sum())\n            blend = LinearRegression(positive=True, fit_intercept=False)\n            blend.fit(A, b)\n            cand = np.asarray(blend.coef_, dtype=float).ravel()\n            t = float(cand.sum())\n            if np.all(np.isfinite(cand)) and t > 1e-8:\n                w = 0.75 * (cand / t) + 0.25 * w_inv\n            else:\n                w = w_inv\n    if w is None:\n        w = np.ones(m, dtype=float) / float(m)\n    preds = np.zeros((Xe.shape[0], m), dtype=float)\n    full = _models(seed)\n    for j in range(m):\n        kind, mdl = full[j]\n        A = Xa if kind == \"aug\" else X\n        B = Xea if kind == \"aug\" else Xe\n        mdl.fit(A, y)\n        preds[:, j] = np.asarray(mdl.predict(B), dtype=float).ravel()\n    out = np.asarray(preds.dot(w), dtype=float).ravel()\n    if not np.all(np.isfinite(out)):\n        out = np.where(np.isfinite(out), out, float(np.mean(y)))\n    return out\n"
+              }
+            ],
+            "history_source_id": "a1ef4e2ac7a4480531a3a91e249ca50ea38e32d16043a4ab6d42342912c8dd4d",
+            "maximum": 1,
+            "split": "development"
+          },
+          "outputs": {
+            "details": {
+              "max_bytes": 524288,
+              "path": "details.json"
+            },
+            "evaluation": {
+              "max_bytes": 131072,
+              "path": "evaluation.json"
+            },
+            "prediction": {
+              "max_bytes": 4194304,
+              "path": "prediction.json"
+            }
+          },
+          "payload": {
+            "command": [
+              "/usr/bin/python3",
+              "/hot-data/fsx/workspace/erik/work/orze-p1-continuation-20260914/research_action_choice_worker_20260917.py"
+            ],
+            "protocol": {
+              "id": "reviewed-training-v1"
+            },
+            "result_output": "evaluation",
+            "specification": {
+              "delegate_sha256": "e17dca93f846b491964a2d75dfd7ba1fe325fc9388b53f4a2ca7fc95602110c9",
+              "version": 1,
+              "worker_sha256": "4d2b3cec5aa402664fae2764443d2906fc22f7e2295a776d1f61db0a475214c2"
+            }
+          },
+          "purpose": "Evaluate externally scored training predictions",
+          "timeout_seconds": 60,
+          "version": 1
+        },
+        "task_id": "idea-17bf0e"
+      }
+    },
+    {
+      "cycle": 1,
+      "project": "qsar-0-T",
+      "proposal": {
+        "items": [
+          {
+            "kind": "program",
+            "source": "import numpy as np\nfrom sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.linear_model import RidgeCV\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler, PolynomialFeatures\nfrom sklearn.model_selection import GroupKFold, KFold\n\n\ndef _models(seed):\n    return [\n        ExtraTreesRegressor(n_estimators=300, max_features=0.5, min_samples_leaf=1, random_state=seed, n_jobs=1),\n        ExtraTreesRegressor(n_estimators=300, max_features=0.25, min_samples_leaf=1, random_state=seed, n_jobs=1),\n        RandomForestRegressor(n_estimators=300, max_features=0.5, min_samples_leaf=2, random_state=seed, n_jobs=1),\n        HistGradientBoostingRegressor(learning_rate=0.03, max_leaf_nodes=7, min_samples_leaf=40, l2_regularization=0.0, max_iter=400, random_state=seed),\n        HistGradientBoostingRegressor(learning_rate=0.06, max_leaf_nodes=7, min_samples_leaf=10, l2_regularization=0.1, max_iter=300, random_state=seed),\n        make_pipeline(StandardScaler(), SVR(C=4.5, gamma='auto', epsilon=0.1)),\n        make_pipeline(StandardScaler(), SVR(C=1.0, gamma='scale', epsilon=0.1)),\n        make_pipeline(StandardScaler(), KNeighborsRegressor(n_neighbors=9, p=1, weights='distance', n_jobs=1)),\n        make_pipeline(StandardScaler(), PolynomialFeatures(degree=2, include_bias=False), StandardScaler(), RidgeCV(alphas=np.logspace(-2.0, 3.0, 12))),\n    ]\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    n = X.shape[0]\n    folds = None\n    if train_groups is not None:\n        g = np.asarray(train_groups)\n        ng = len(np.unique(g))\n        if ng >= 3:\n            k = int(min(5, ng))\n            folds = list(GroupKFold(n_splits=k).split(X, y, g))\n    if folds is None:\n        folds = list(KFold(n_splits=5, shuffle=True, random_state=int(seed)).split(X))\n    M = len(_models(int(seed)))\n    oof = np.zeros((n, M), dtype=float)\n    seen = np.zeros(n, dtype=bool)\n    for tr, va in folds:\n        ms = _models(int(seed))\n        for j, m in enumerate(ms):\n            m.fit(X[tr], y[tr])\n            oof[va, j] = np.asarray(m.predict(X[va]), dtype=float).ravel()\n        seen[va] = True\n    if not np.all(np.isfinite(oof)):\n        oof = np.where(np.isfinite(oof), oof, float(np.mean(y)))\n    idx = np.where(seen)[0]\n    if idx.size < 10:\n        idx = np.arange(n)\n    O = oof[idx]\n    yv = y[idx]\n    counts = np.zeros(M, dtype=float)\n    running = np.zeros(idx.size, dtype=float)\n    total = 0\n    hist = []\n    for _ in range(30):\n        best_j = 0\n        best_e = None\n        for j in range(M):\n            cand = (running * total + O[:, j]) / (total + 1.0)\n            e = float(np.mean((cand - yv) ** 2))\n            if best_e is None or e < best_e:\n                best_e = e\n                best_j = j\n        running = (running * total + O[:, best_j]) / (total + 1.0)\n        total += 1\n        counts[best_j] += 1.0\n        hist.append((float(np.mean((running - yv) ** 2)), counts.copy()))\n    k = int(np.argmin([h[0] for h in hist]))\n    counts = hist[k][1]\n    if counts.sum() <= 0:\n        counts = np.ones(M, dtype=float)\n    w = counts / counts.sum()\n    preds = np.zeros(Xe.shape[0], dtype=float)\n    ms = _models(int(seed))\n    for j, m in enumerate(ms):\n        if w[j] > 0.0:\n            m.fit(X, y)\n            preds = preds + w[j] * np.asarray(m.predict(Xe), dtype=float).ravel()\n    fallback = float(np.mean(y))\n    preds = np.where(np.isfinite(preds), preds, fallback)\n    return preds.astype(float).ravel()\n"
+          }
+        ],
+        "request": {
+          "input_artifact_ids": [
+            "3e66814aa3e231759e0c6362246d0b8869d552922e838286cfb3a29cd51e241e",
+            "3b76ad92612eb0bce55e66c27f0fbc9a4fa22bfaca1eb965090d1fb991852fed"
+          ],
+          "inputs": {
+            "allowed_kind": "program_or_analysis",
+            "data_sha256": "9aa98e39aabf7ee9ea78027101416412a5e9239929752ea3c095ef6c4bcac033",
+            "data_source_id": "3e66814aa3e231759e0c6362246d0b8869d552922e838286cfb3a29cd51e241e",
+            "experiments": [
+              {
+                "kind": "program",
+                "source": "import numpy as np\nfrom sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.linear_model import RidgeCV\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler, PolynomialFeatures\nfrom sklearn.model_selection import GroupKFold, KFold\n\n\ndef _models(seed):\n    return [\n        ExtraTreesRegressor(n_estimators=300, max_features=0.5, min_samples_leaf=1, random_state=seed, n_jobs=1),\n        ExtraTreesRegressor(n_estimators=300, max_features=0.25, min_samples_leaf=1, random_state=seed, n_jobs=1),\n        RandomForestRegressor(n_estimators=300, max_features=0.5, min_samples_leaf=2, random_state=seed, n_jobs=1),\n        HistGradientBoostingRegressor(learning_rate=0.03, max_leaf_nodes=7, min_samples_leaf=40, l2_regularization=0.0, max_iter=400, random_state=seed),\n        HistGradientBoostingRegressor(learning_rate=0.06, max_leaf_nodes=7, min_samples_leaf=10, l2_regularization=0.1, max_iter=300, random_state=seed),\n        make_pipeline(StandardScaler(), SVR(C=4.5, gamma='auto', epsilon=0.1)),\n        make_pipeline(StandardScaler(), SVR(C=1.0, gamma='scale', epsilon=0.1)),\n        make_pipeline(StandardScaler(), KNeighborsRegressor(n_neighbors=9, p=1, weights='distance', n_jobs=1)),\n        make_pipeline(StandardScaler(), PolynomialFeatures(degree=2, include_bias=False), StandardScaler(), RidgeCV(alphas=np.logspace(-2.0, 3.0, 12))),\n    ]\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    n = X.shape[0]\n    folds = None\n    if train_groups is not None:\n        g = np.asarray(train_groups)\n        ng = len(np.unique(g))\n        if ng >= 3:\n            k = int(min(5, ng))\n            folds = list(GroupKFold(n_splits=k).split(X, y, g))\n    if folds is None:\n        folds = list(KFold(n_splits=5, shuffle=True, random_state=int(seed)).split(X))\n    M = len(_models(int(seed)))\n    oof = np.zeros((n, M), dtype=float)\n    seen = np.zeros(n, dtype=bool)\n    for tr, va in folds:\n        ms = _models(int(seed))\n        for j, m in enumerate(ms):\n            m.fit(X[tr], y[tr])\n            oof[va, j] = np.asarray(m.predict(X[va]), dtype=float).ravel()\n        seen[va] = True\n    if not np.all(np.isfinite(oof)):\n        oof = np.where(np.isfinite(oof), oof, float(np.mean(y)))\n    idx = np.where(seen)[0]\n    if idx.size < 10:\n        idx = np.arange(n)\n    O = oof[idx]\n    yv = y[idx]\n    counts = np.zeros(M, dtype=float)\n    running = np.zeros(idx.size, dtype=float)\n    total = 0\n    hist = []\n    for _ in range(30):\n        best_j = 0\n        best_e = None\n        for j in range(M):\n            cand = (running * total + O[:, j]) / (total + 1.0)\n            e = float(np.mean((cand - yv) ** 2))\n            if best_e is None or e < best_e:\n                best_e = e\n                best_j = j\n        running = (running * total + O[:, best_j]) / (total + 1.0)\n        total += 1\n        counts[best_j] += 1.0\n        hist.append((float(np.mean((running - yv) ** 2)), counts.copy()))\n    k = int(np.argmin([h[0] for h in hist]))\n    counts = hist[k][1]\n    if counts.sum() <= 0:\n        counts = np.ones(M, dtype=float)\n    w = counts / counts.sum()\n    preds = np.zeros(Xe.shape[0], dtype=float)\n    ms = _models(int(seed))\n    for j, m in enumerate(ms):\n        if w[j] > 0.0:\n            m.fit(X, y)\n            preds = preds + w[j] * np.asarray(m.predict(Xe), dtype=float).ravel()\n    fallback = float(np.mean(y))\n    preds = np.where(np.isfinite(preds), preds, fallback)\n    return preds.astype(float).ravel()\n"
+              }
+            ],
+            "history_source_id": "3b76ad92612eb0bce55e66c27f0fbc9a4fa22bfaca1eb965090d1fb991852fed",
+            "maximum": 1,
+            "split": "development"
+          },
+          "outputs": {
+            "details": {
+              "max_bytes": 524288,
+              "path": "details.json"
+            },
+            "evaluation": {
+              "max_bytes": 131072,
+              "path": "evaluation.json"
+            },
+            "prediction": {
+              "max_bytes": 4194304,
+              "path": "prediction.json"
+            }
+          },
+          "payload": {
+            "command": [
+              "/usr/bin/python3",
+              "/hot-data/fsx/workspace/erik/work/orze-p1-continuation-20260914/research_action_choice_worker_20260917.py"
+            ],
+            "protocol": {
+              "id": "reviewed-training-v1"
+            },
+            "result_output": "evaluation",
+            "specification": {
+              "delegate_sha256": "e17dca93f846b491964a2d75dfd7ba1fe325fc9388b53f4a2ca7fc95602110c9",
+              "version": 1,
+              "worker_sha256": "4d2b3cec5aa402664fae2764443d2906fc22f7e2295a776d1f61db0a475214c2"
+            }
+          },
+          "purpose": "Evaluate externally scored training predictions",
+          "timeout_seconds": 60,
+          "version": 1
+        },
+        "task_id": "idea-d79362"
+      }
+    },
+    {
+      "cycle": 2,
+      "project": "qsar-0-T",
+      "proposal": {
+        "items": [
+          {
+            "kind": "program",
+            "source": "import numpy as np\nfrom sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.linear_model import RidgeCV, LinearRegression\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler, PolynomialFeatures\nfrom sklearn.model_selection import GroupKFold, KFold\n\nLOGC = [0, 1, 2, 6, 7]\n\n\ndef _aug(X):\n    X = np.asarray(X, dtype=float)\n    L = np.log1p(np.clip(X[:, LOGC], 0.0, None))\n    m = X[:, 3:4]\n    r = X[:, 4:5]\n    g = X[:, 5:6]\n    return np.hstack([X, L, m * m, m * r, m * g, r * g])\n\n\ndef _models(seed):\n    return [\n        ExtraTreesRegressor(n_estimators=400, max_features=0.35, min_samples_leaf=1, random_state=seed, n_jobs=1),\n        RandomForestRegressor(n_estimators=400, max_features=0.5, min_samples_leaf=1, random_state=seed, n_jobs=1),\n        HistGradientBoostingRegressor(learning_rate=0.04, max_leaf_nodes=15, min_samples_leaf=20, l2_regularization=1.0, max_iter=350, random_state=seed),\n        make_pipeline(StandardScaler(), SVR(C=4.0, gamma=0.08, epsilon=0.08)),\n        make_pipeline(StandardScaler(), KNeighborsRegressor(n_neighbors=11, p=1, weights='distance', n_jobs=1)),\n        make_pipeline(StandardScaler(), PolynomialFeatures(degree=2, include_bias=False), StandardScaler(), RidgeCV(alphas=np.logspace(-2.0, 3.0, 12))),\n    ]\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    s = int(seed)\n    Xa = _aug(X_train)\n    Xe = _aug(X_eval)\n    y = np.asarray(y_train, dtype=float).ravel()\n    n = Xa.shape[0]\n    M = len(_models(s))\n    folds = None\n    if train_groups is not None:\n        g = np.asarray(train_groups)\n        if len(np.unique(g)) >= 5:\n            folds = list(GroupKFold(n_splits=5).split(Xa, y, g))\n    if folds is None:\n        folds = list(KFold(n_splits=5, shuffle=True, random_state=s).split(Xa))\n    oof = np.full((n, M), np.nan)\n    for tr, va in folds:\n        for j, mo in enumerate(_models(s)):\n            mo.fit(Xa[tr], y[tr])\n            oof[va, j] = np.asarray(mo.predict(Xa[va]), dtype=float).ravel()\n    P = np.zeros((Xe.shape[0], M))\n    for j, mo in enumerate(_models(s)):\n        mo.fit(Xa, y)\n        P[:, j] = np.asarray(mo.predict(Xe), dtype=float).ravel()\n    lo = float(np.min(y)) - 0.5\n    hi = float(np.max(y)) + 0.5\n    fb = float(np.mean(y))\n    ok = np.all(np.isfinite(oof), axis=1)\n    if int(ok.sum()) < 40:\n        out = P.mean(axis=1)\n        out = np.where(np.isfinite(out), out, fb)\n        return np.clip(out, lo, hi).astype(float).ravel()\n    O = oof[ok]\n    yv = y[ok]\n    single = np.array([float(np.mean((O[:, j] - yv) ** 2)) for j in range(M)])\n    jb = int(np.argmin(single))\n    ps = np.zeros(O.shape[0])\n    for tr, va in KFold(n_splits=5, shuffle=True, random_state=s).split(O):\n        st = LinearRegression(positive=True)\n        st.fit(O[tr], yv[tr])\n        ps[va] = np.asarray(st.predict(O[va]), dtype=float).ravel()\n    e_stack = float(np.mean((ps - yv) ** 2))\n    e_avg = float(np.mean((O.mean(axis=1) - yv) ** 2))\n    if e_stack <= min(e_avg, float(single[jb])):\n        st = LinearRegression(positive=True)\n        st.fit(O, yv)\n        w = np.clip(np.asarray(st.coef_, dtype=float).ravel(), 0.0, None)\n        out = P.dot(w) + float(st.intercept_)\n    elif e_avg <= float(single[jb]):\n        out = P.mean(axis=1)\n    else:\n        out = P[:, jb]\n    out = np.where(np.isfinite(out), out, fb)\n    return np.clip(out, lo, hi).astype(float).ravel()\n"
+          }
+        ],
+        "request": {
+          "input_artifact_ids": [
+            "3e66814aa3e231759e0c6362246d0b8869d552922e838286cfb3a29cd51e241e",
+            "4c8c1d7b8185870775dcd85633de801947ec4aa6bc7e481897cb5ee661b63742"
+          ],
+          "inputs": {
+            "allowed_kind": "program_or_analysis",
+            "data_sha256": "9aa98e39aabf7ee9ea78027101416412a5e9239929752ea3c095ef6c4bcac033",
+            "data_source_id": "3e66814aa3e231759e0c6362246d0b8869d552922e838286cfb3a29cd51e241e",
+            "experiments": [
+              {
+                "kind": "program",
+                "source": "import numpy as np\nfrom sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.linear_model import RidgeCV, LinearRegression\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler, PolynomialFeatures\nfrom sklearn.model_selection import GroupKFold, KFold\n\nLOGC = [0, 1, 2, 6, 7]\n\n\ndef _aug(X):\n    X = np.asarray(X, dtype=float)\n    L = np.log1p(np.clip(X[:, LOGC], 0.0, None))\n    m = X[:, 3:4]\n    r = X[:, 4:5]\n    g = X[:, 5:6]\n    return np.hstack([X, L, m * m, m * r, m * g, r * g])\n\n\ndef _models(seed):\n    return [\n        ExtraTreesRegressor(n_estimators=400, max_features=0.35, min_samples_leaf=1, random_state=seed, n_jobs=1),\n        RandomForestRegressor(n_estimators=400, max_features=0.5, min_samples_leaf=1, random_state=seed, n_jobs=1),\n        HistGradientBoostingRegressor(learning_rate=0.04, max_leaf_nodes=15, min_samples_leaf=20, l2_regularization=1.0, max_iter=350, random_state=seed),\n        make_pipeline(StandardScaler(), SVR(C=4.0, gamma=0.08, epsilon=0.08)),\n        make_pipeline(StandardScaler(), KNeighborsRegressor(n_neighbors=11, p=1, weights='distance', n_jobs=1)),\n        make_pipeline(StandardScaler(), PolynomialFeatures(degree=2, include_bias=False), StandardScaler(), RidgeCV(alphas=np.logspace(-2.0, 3.0, 12))),\n    ]\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    s = int(seed)\n    Xa = _aug(X_train)\n    Xe = _aug(X_eval)\n    y = np.asarray(y_train, dtype=float).ravel()\n    n = Xa.shape[0]\n    M = len(_models(s))\n    folds = None\n    if train_groups is not None:\n        g = np.asarray(train_groups)\n        if len(np.unique(g)) >= 5:\n            folds = list(GroupKFold(n_splits=5).split(Xa, y, g))\n    if folds is None:\n        folds = list(KFold(n_splits=5, shuffle=True, random_state=s).split(Xa))\n    oof = np.full((n, M), np.nan)\n    for tr, va in folds:\n        for j, mo in enumerate(_models(s)):\n            mo.fit(Xa[tr], y[tr])\n            oof[va, j] = np.asarray(mo.predict(Xa[va]), dtype=float).ravel()\n    P = np.zeros((Xe.shape[0], M))\n    for j, mo in enumerate(_models(s)):\n        mo.fit(Xa, y)\n        P[:, j] = np.asarray(mo.predict(Xe), dtype=float).ravel()\n    lo = float(np.min(y)) - 0.5\n    hi = float(np.max(y)) + 0.5\n    fb = float(np.mean(y))\n    ok = np.all(np.isfinite(oof), axis=1)\n    if int(ok.sum()) < 40:\n        out = P.mean(axis=1)\n        out = np.where(np.isfinite(out), out, fb)\n        return np.clip(out, lo, hi).astype(float).ravel()\n    O = oof[ok]\n    yv = y[ok]\n    single = np.array([float(np.mean((O[:, j] - yv) ** 2)) for j in range(M)])\n    jb = int(np.argmin(single))\n    ps = np.zeros(O.shape[0])\n    for tr, va in KFold(n_splits=5, shuffle=True, random_state=s).split(O):\n        st = LinearRegression(positive=True)\n        st.fit(O[tr], yv[tr])\n        ps[va] = np.asarray(st.predict(O[va]), dtype=float).ravel()\n    e_stack = float(np.mean((ps - yv) ** 2))\n    e_avg = float(np.mean((O.mean(axis=1) - yv) ** 2))\n    if e_stack <= min(e_avg, float(single[jb])):\n        st = LinearRegression(positive=True)\n        st.fit(O, yv)\n        w = np.clip(np.asarray(st.coef_, dtype=float).ravel(), 0.0, None)\n        out = P.dot(w) + float(st.intercept_)\n    elif e_avg <= float(single[jb]):\n        out = P.mean(axis=1)\n    else:\n        out = P[:, jb]\n    out = np.where(np.isfinite(out), out, fb)\n    return np.clip(out, lo, hi).astype(float).ravel()\n"
+              }
+            ],
+            "history_source_id": "4c8c1d7b8185870775dcd85633de801947ec4aa6bc7e481897cb5ee661b63742",
+            "maximum": 1,
+            "split": "development"
+          },
+          "outputs": {
+            "details": {
+              "max_bytes": 524288,
+              "path": "details.json"
+            },
+            "evaluation": {
+              "max_bytes": 131072,
+              "path": "evaluation.json"
+            },
+            "prediction": {
+              "max_bytes": 4194304,
+              "path": "prediction.json"
+            }
+          },
+          "payload": {
+            "command": [
+              "/usr/bin/python3",
+              "/hot-data/fsx/workspace/erik/work/orze-p1-continuation-20260914/research_action_choice_worker_20260917.py"
+            ],
+            "protocol": {
+              "id": "reviewed-training-v1"
+            },
+            "result_output": "evaluation",
+            "specification": {
+              "delegate_sha256": "e17dca93f846b491964a2d75dfd7ba1fe325fc9388b53f4a2ca7fc95602110c9",
+              "version": 1,
+              "worker_sha256": "4d2b3cec5aa402664fae2764443d2906fc22f7e2295a776d1f61db0a475214c2"
+            }
+          },
+          "purpose": "Evaluate externally scored training predictions",
+          "timeout_seconds": 60,
+          "version": 1
+        },
+        "task_id": "idea-042619"
+      }
+    },
+    {
+      "cycle": 3,
+      "project": "qsar-0-T",
+      "proposal": {
+        "items": [
+          {
+            "kind": "best_pair"
+          }
+        ],
+        "request": {
+          "input_artifact_ids": [
+            "3e66814aa3e231759e0c6362246d0b8869d552922e838286cfb3a29cd51e241e",
+            "6534da1900e0f203cefd74a81452fd4aa49081ab9b30f4942fe943179bb7a919"
+          ],
+          "inputs": {
+            "allowed_kind": "program_or_analysis",
+            "data_sha256": "9aa98e39aabf7ee9ea78027101416412a5e9239929752ea3c095ef6c4bcac033",
+            "data_source_id": "3e66814aa3e231759e0c6362246d0b8869d552922e838286cfb3a29cd51e241e",
+            "experiments": [
+              {
+                "kind": "best_pair"
+              }
+            ],
+            "history_source_id": "6534da1900e0f203cefd74a81452fd4aa49081ab9b30f4942fe943179bb7a919",
+            "maximum": 1,
+            "split": "development"
+          },
+          "outputs": {
+            "details": {
+              "max_bytes": 524288,
+              "path": "details.json"
+            },
+            "evaluation": {
+              "max_bytes": 131072,
+              "path": "evaluation.json"
+            },
+            "prediction": {
+              "max_bytes": 4194304,
+              "path": "prediction.json"
+            }
+          },
+          "payload": {
+            "command": [
+              "/usr/bin/python3",
+              "/hot-data/fsx/workspace/erik/work/orze-p1-continuation-20260914/research_action_choice_worker_20260917.py"
+            ],
+            "protocol": {
+              "id": "reviewed-training-v1"
+            },
+            "result_output": "evaluation",
+            "specification": {
+              "delegate_sha256": "e17dca93f846b491964a2d75dfd7ba1fe325fc9388b53f4a2ca7fc95602110c9",
+              "version": 1,
+              "worker_sha256": "4d2b3cec5aa402664fae2764443d2906fc22f7e2295a776d1f61db0a475214c2"
+            }
+          },
+          "purpose": "Evaluate externally scored training predictions",
+          "timeout_seconds": 60,
+          "version": 1
+        },
+        "task_id": "idea-aa1cb6"
+      }
+    },
+    {
+      "cycle": 1,
+      "project": "qsar-shuffled-0-C",
+      "proposal": {
+        "items": [
+          {
+            "kind": "program",
+            "source": "import numpy as np\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.linear_model import Ridge\nfrom sklearn.svm import SVR\nfrom sklearn.ensemble import ExtraTreesRegressor\nfrom sklearn.model_selection import GroupKFold, KFold\n\ndef _fit_all(Xtr, ytr, Xte, seed):\n    out = {}\n    sc = StandardScaler().fit(Xtr)\n    Xs = sc.transform(Xtr)\n    Xes = sc.transform(Xte)\n    for a in (10.0, 100.0, 1000.0):\n        out[\"ridge_%g\" % a] = Ridge(alpha=a).fit(Xs, ytr).predict(Xes)\n    out[\"svr\"] = SVR(C=0.26, gamma=\"scale\", epsilon=0.2).fit(Xs, ytr).predict(Xes)\n    out[\"et\"] = ExtraTreesRegressor(n_estimators=300, min_samples_leaf=16, max_features=0.25, random_state=seed, n_jobs=1).fit(Xtr, ytr).predict(Xte)\n    out[\"avg\"] = (out[\"ridge_100\"] + out[\"svr\"] + out[\"et\"]) / 3.0\n    return out\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    n = X.shape[0]\n    folds = None\n    if train_groups is not None:\n        g = np.asarray(train_groups)\n        k = min(5, int(np.unique(g).size))\n        if k >= 2:\n            folds = list(GroupKFold(n_splits=k).split(X, y, g))\n    if folds is None:\n        folds = list(KFold(n_splits=5, shuffle=True, random_state=int(seed)).split(X))\n    oof = {}\n    base = np.zeros(n)\n    mask = np.zeros(n, dtype=bool)\n    for tr, te in folds:\n        if tr.size < 10 or te.size == 0:\n            continue\n        p = _fit_all(X[tr], y[tr], X[te], int(seed))\n        m = float(np.mean(y[tr]))\n        base[te] = m\n        mask[te] = True\n        for key in sorted(p):\n            if key not in oof:\n                oof[key] = np.zeros(n)\n            v = np.asarray(p[key], dtype=float)\n            v = np.where(np.isfinite(v), v, m)\n            oof[key][te] = v\n    idx = np.where(mask)[0]\n    m_all = float(np.mean(y))\n    if idx.size < 20 or len(oof) == 0:\n        return np.full(Xe.shape[0], m_all)\n    ws = [0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0]\n    best_key = None\n    best_w = 0.0\n    best_mse = float(np.mean((base[idx] - y[idx]) ** 2))\n    for key in sorted(oof):\n        d = oof[key][idx] - base[idx]\n        for w in ws:\n            e = base[idx] + w * d - y[idx]\n            mse = float(np.mean(e * e))\n            if mse < best_mse - 1e-9:\n                best_mse = mse\n                best_key = key\n                best_w = w\n    if best_key is None or best_w == 0.0:\n        return np.full(Xe.shape[0], m_all)\n    full = _fit_all(X, y, Xe, int(seed))\n    v = np.asarray(full[best_key], dtype=float)\n    v = np.where(np.isfinite(v), v, m_all)\n    out = m_all + best_w * (v - m_all)\n    out = np.where(np.isfinite(out), out, m_all)\n    return np.asarray(out, dtype=float).ravel()\n"
+          }
+        ],
+        "request": {
+          "input_artifact_ids": [
+            "fe8a2947a0940012d4c58356bd2ebc9940fb46f586d0885ac8c38ebaee8c58fa",
+            "d2755bd04660235795f32a4cfaf83a8dae2741de04100f564e6a1e6d9cfcd2b9"
+          ],
+          "inputs": {
+            "allowed_kind": "program",
+            "data_sha256": "e704c1dd4029e2bd2d269b4e211104806062ff1e8c517ab7ff771c8217e70447",
+            "data_source_id": "fe8a2947a0940012d4c58356bd2ebc9940fb46f586d0885ac8c38ebaee8c58fa",
+            "experiments": [
+              {
+                "kind": "program",
+                "source": "import numpy as np\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.linear_model import Ridge\nfrom sklearn.svm import SVR\nfrom sklearn.ensemble import ExtraTreesRegressor\nfrom sklearn.model_selection import GroupKFold, KFold\n\ndef _fit_all(Xtr, ytr, Xte, seed):\n    out = {}\n    sc = StandardScaler().fit(Xtr)\n    Xs = sc.transform(Xtr)\n    Xes = sc.transform(Xte)\n    for a in (10.0, 100.0, 1000.0):\n        out[\"ridge_%g\" % a] = Ridge(alpha=a).fit(Xs, ytr).predict(Xes)\n    out[\"svr\"] = SVR(C=0.26, gamma=\"scale\", epsilon=0.2).fit(Xs, ytr).predict(Xes)\n    out[\"et\"] = ExtraTreesRegressor(n_estimators=300, min_samples_leaf=16, max_features=0.25, random_state=seed, n_jobs=1).fit(Xtr, ytr).predict(Xte)\n    out[\"avg\"] = (out[\"ridge_100\"] + out[\"svr\"] + out[\"et\"]) / 3.0\n    return out\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    n = X.shape[0]\n    folds = None\n    if train_groups is not None:\n        g = np.asarray(train_groups)\n        k = min(5, int(np.unique(g).size))\n        if k >= 2:\n            folds = list(GroupKFold(n_splits=k).split(X, y, g))\n    if folds is None:\n        folds = list(KFold(n_splits=5, shuffle=True, random_state=int(seed)).split(X))\n    oof = {}\n    base = np.zeros(n)\n    mask = np.zeros(n, dtype=bool)\n    for tr, te in folds:\n        if tr.size < 10 or te.size == 0:\n            continue\n        p = _fit_all(X[tr], y[tr], X[te], int(seed))\n        m = float(np.mean(y[tr]))\n        base[te] = m\n        mask[te] = True\n        for key in sorted(p):\n            if key not in oof:\n                oof[key] = np.zeros(n)\n            v = np.asarray(p[key], dtype=float)\n            v = np.where(np.isfinite(v), v, m)\n            oof[key][te] = v\n    idx = np.where(mask)[0]\n    m_all = float(np.mean(y))\n    if idx.size < 20 or len(oof) == 0:\n        return np.full(Xe.shape[0], m_all)\n    ws = [0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0]\n    best_key = None\n    best_w = 0.0\n    best_mse = float(np.mean((base[idx] - y[idx]) ** 2))\n    for key in sorted(oof):\n        d = oof[key][idx] - base[idx]\n        for w in ws:\n            e = base[idx] + w * d - y[idx]\n            mse = float(np.mean(e * e))\n            if mse < best_mse - 1e-9:\n                best_mse = mse\n                best_key = key\n                best_w = w\n    if best_key is None or best_w == 0.0:\n        return np.full(Xe.shape[0], m_all)\n    full = _fit_all(X, y, Xe, int(seed))\n    v = np.asarray(full[best_key], dtype=float)\n    v = np.where(np.isfinite(v), v, m_all)\n    out = m_all + best_w * (v - m_all)\n    out = np.where(np.isfinite(out), out, m_all)\n    return np.asarray(out, dtype=float).ravel()\n"
+              }
+            ],
+            "history_source_id": "d2755bd04660235795f32a4cfaf83a8dae2741de04100f564e6a1e6d9cfcd2b9",
+            "maximum": 1,
+            "split": "development"
+          },
+          "outputs": {
+            "details": {
+              "max_bytes": 524288,
+              "path": "details.json"
+            },
+            "evaluation": {
+              "max_bytes": 131072,
+              "path": "evaluation.json"
+            },
+            "prediction": {
+              "max_bytes": 4194304,
+              "path": "prediction.json"
+            }
+          },
+          "payload": {
+            "command": [
+              "/usr/bin/python3",
+              "/hot-data/fsx/workspace/erik/work/orze-p1-continuation-20260914/research_action_choice_worker_20260917.py"
+            ],
+            "protocol": {
+              "id": "reviewed-training-v1"
+            },
+            "result_output": "evaluation",
+            "specification": {
+              "delegate_sha256": "e17dca93f846b491964a2d75dfd7ba1fe325fc9388b53f4a2ca7fc95602110c9",
+              "version": 1,
+              "worker_sha256": "4d2b3cec5aa402664fae2764443d2906fc22f7e2295a776d1f61db0a475214c2"
+            }
+          },
+          "purpose": "Evaluate externally scored training predictions",
+          "timeout_seconds": 60,
+          "version": 1
+        },
+        "task_id": "idea-db3f1e"
+      }
+    },
+    {
+      "cycle": 1,
+      "project": "qsar-shuffled-0-T",
+      "proposal": {
+        "items": [
+          {
+            "kind": "best_pair"
+          }
+        ],
+        "request": {
+          "input_artifact_ids": [
+            "2aaac66f115fce13da9b9140fe3eb7cf4a38c84bed4bc776d5e0e24df7264eac",
+            "1a5025e6ab3becf267239b072cbb3656652e472acc67b209c0b6270c6ae53c40"
+          ],
+          "inputs": {
+            "allowed_kind": "program_or_analysis",
+            "data_sha256": "e704c1dd4029e2bd2d269b4e211104806062ff1e8c517ab7ff771c8217e70447",
+            "data_source_id": "2aaac66f115fce13da9b9140fe3eb7cf4a38c84bed4bc776d5e0e24df7264eac",
+            "experiments": [
+              {
+                "kind": "best_pair"
+              }
+            ],
+            "history_source_id": "1a5025e6ab3becf267239b072cbb3656652e472acc67b209c0b6270c6ae53c40",
+            "maximum": 1,
+            "split": "development"
+          },
+          "outputs": {
+            "details": {
+              "max_bytes": 524288,
+              "path": "details.json"
+            },
+            "evaluation": {
+              "max_bytes": 131072,
+              "path": "evaluation.json"
+            },
+            "prediction": {
+              "max_bytes": 4194304,
+              "path": "prediction.json"
+            }
+          },
+          "payload": {
+            "command": [
+              "/usr/bin/python3",
+              "/hot-data/fsx/workspace/erik/work/orze-p1-continuation-20260914/research_action_choice_worker_20260917.py"
+            ],
+            "protocol": {
+              "id": "reviewed-training-v1"
+            },
+            "result_output": "evaluation",
+            "specification": {
+              "delegate_sha256": "e17dca93f846b491964a2d75dfd7ba1fe325fc9388b53f4a2ca7fc95602110c9",
+              "version": 1,
+              "worker_sha256": "4d2b3cec5aa402664fae2764443d2906fc22f7e2295a776d1f61db0a475214c2"
+            }
+          },
+          "purpose": "Evaluate externally scored training predictions",
+          "timeout_seconds": 60,
+          "version": 1
+        },
+        "task_id": "idea-a8413f"
+      }
+    }
+  ],
+  "analytic_checks": [
+    {
+      "all_pairs_checked": 6786,
+      "analysis_cpu_seconds": 0.39199321200000004,
+      "analysis_seconds": 0.39408773370087147,
+      "decimal_precision": 50,
+      "development_component_fits": 0,
+      "history_artifact_id": "6534da1900e0f203cefd74a81452fd4aa49081ab9b30f4942fe943179bb7a919",
+      "optimal_development_mse": 0.9931068824660239,
+      "project": "qsar-0-T"
+    },
+    {
+      "all_pairs_checked": 6555,
+      "analysis_cpu_seconds": 0.3720020799999999,
+      "analysis_seconds": 0.37391383573412895,
+      "decimal_precision": 50,
+      "development_component_fits": 0,
+      "history_artifact_id": "fb4a2fcd5cd9fbc8a9e696f4d2b34dc6c166d18125d21e868fa7810a46683329",
+      "optimal_development_mse": 0.9931068824660239,
+      "project": "qsar-0-Z"
+    },
+    {
+      "all_pairs_checked": 6555,
+      "analysis_cpu_seconds": 0.32799506999999994,
+      "analysis_seconds": 0.3296068925410509,
+      "decimal_precision": 50,
+      "development_component_fits": 0,
+      "history_artifact_id": "1a5025e6ab3becf267239b072cbb3656652e472acc67b209c0b6270c6ae53c40",
+      "optimal_development_mse": 2.34913942321771,
+      "project": "qsar-shuffled-0-T"
+    },
+    {
+      "all_pairs_checked": 6555,
+      "analysis_cpu_seconds": 0.32799771599999994,
+      "analysis_seconds": 0.3265388086438179,
+      "decimal_precision": 50,
+      "development_component_fits": 0,
+      "history_artifact_id": "ace4b11bd773285f6e3b1c4961b7cf3a3b9d5ea682fd7e9560fea2c4430b508e",
+      "optimal_development_mse": 2.34913942321771,
+      "project": "qsar-shuffled-0-Z"
+    },
+    {
+      "all_pairs_checked": 7750,
+      "analysis_cpu_seconds": 0.4160018230000001,
+      "analysis_seconds": 0.4166399836540222,
+      "decimal_precision": 50,
+      "development_component_fits": 0,
+      "history_artifact_id": "9ded90f6b6f638792c17b1b0990ebf501841edb332dc63e62f4eae6edfecb0de",
+      "optimal_development_mse": 0.893907034499043,
+      "project": "smoke-qsar-99-T"
+    },
+    {
+      "all_pairs_checked": 7750,
+      "analysis_cpu_seconds": 0.4240024480000001,
+      "analysis_seconds": 0.4247693158686161,
+      "decimal_precision": 50,
+      "development_component_fits": 0,
+      "history_artifact_id": "72ce7765f6f0521b11ba1f59a42cfd87860e7239372c6e415b224c34e9714fec",
+      "optimal_development_mse": 0.893907034499043,
+      "project": "smoke-qsar-99-T"
+    }
+  ],
+  "artifacts_verified": 612,
+  "attempts_settled": 247,
+  "audit_seconds": 17.39394292794168,
+  "authorized_cap_usd": 5000,
+  "by_arm": {
+    "C": {
+      "analysis_actions": 0,
+      "analysis_cpu_seconds": 0,
+      "analysis_seconds": 0,
+      "api_known_usd": 1.5060499999999999,
+      "between_stage_seconds": 1106.2454256322235,
+      "candidate_evaluations": 264,
+      "elapsed_with_review_and_scheduling_seconds": 1724.4534136876464,
+      "evaluation_cpu_seconds": 56.661527215999996,
+      "evaluation_wall_seconds": 56.6886828597635,
+      "exact_reuses": 26,
+      "invalid_candidates": 0,
+      "new_candidates": 4,
+      "new_identical_predictions": 0,
+      "new_program_actions": 4,
+      "process_active_seconds": 618.2079880554229,
+      "provider_prepared": 4,
+      "provider_returned": 4,
+      "research_invocations": 4
+    },
+    "T": {
+      "analysis_actions": 2,
+      "analysis_cpu_seconds": 0.719988282,
+      "analysis_seconds": 0.7236946262419224,
+      "api_known_usd": 1.32084,
+      "between_stage_seconds": 1144.4444674253464,
+      "candidate_evaluations": 264,
+      "elapsed_with_review_and_scheduling_seconds": 1670.4802214503288,
+      "evaluation_cpu_seconds": 30.366900169,
+      "evaluation_wall_seconds": 30.383003337308764,
+      "exact_reuses": 26,
+      "invalid_candidates": 0,
+      "new_candidates": 4,
+      "new_identical_predictions": 0,
+      "new_program_actions": 2,
+      "process_active_seconds": 526.0357540249825,
+      "provider_prepared": 4,
+      "provider_returned": 4,
+      "research_invocations": 4
+    },
+    "Z": {
+      "analysis_actions": 2,
+      "analysis_cpu_seconds": 0.6999997959999998,
+      "analysis_seconds": 0.7004526443779469,
+      "api_known_usd": 0,
+      "between_stage_seconds": 1529.9901723507792,
+      "candidate_evaluations": 262,
+      "elapsed_with_review_and_scheduling_seconds": 1670.1295300126076,
+      "evaluation_cpu_seconds": 16.405052392,
+      "evaluation_wall_seconds": 16.43532763235271,
+      "exact_reuses": 26,
+      "invalid_candidates": 0,
+      "new_candidates": 2,
+      "new_identical_predictions": 0,
+      "new_program_actions": 0,
+      "process_active_seconds": 140.1393576618284,
+      "provider_prepared": 0,
+      "provider_returned": 0,
+      "research_invocations": 0
+    }
+  },
+  "cost_boundary": "Process active durations include interpreter start, source checks and all state/capture serialization. Full elapsed includes staged scheduling and code review gaps. Evaluation CPU is only measured evaluation work; controller CPU, preparation/audit/packaging and agent work are not asserted zero or covered by API dollars.",
+  "cumulative_known_estimate_usd": 96.41082200000004,
+  "cumulative_prepared": 805,
+  "cumulative_reserved_usd": 4997,
+  "cumulative_returned": 786,
+  "cumulative_unknown_cost": 19,
+  "data_checks": [
+    {
+      "all_rows": 546,
+      "passed": true,
+      "rep": 0,
+      "task": "qsar",
+      "unique_descriptor_groups": 537
+    },
+    {
+      "all_rows": 546,
+      "passed": true,
+      "rep": 0,
+      "task": "qsar-shuffled",
+      "unique_descriptor_groups": 537
+    },
+    {
+      "all_rows": 546,
+      "passed": true,
+      "rep": 99,
+      "task": "qsar",
+      "unique_descriptor_groups": 537
+    }
+  ],
+  "native_calls_closed": 265,
+  "pairs": [
+    {
+      "comparison": "T_vs_C",
+      "holdout_difference": 0.3304971953284269,
+      "quality": "worse",
+      "rep": 0,
+      "same_full_predictions": false,
+      "task": "qsar"
+    },
+    {
+      "comparison": "T_vs_Z",
+      "holdout_difference": 0.0,
+      "quality": "equal",
+      "rep": 0,
+      "same_full_predictions": true,
+      "task": "qsar"
+    },
+    {
+      "comparison": "C_vs_Z",
+      "holdout_difference": -0.3304971953284269,
+      "quality": "better",
+      "rep": 0,
+      "same_full_predictions": false,
+      "task": "qsar"
+    },
+    {
+      "comparison": "T_vs_C",
+      "holdout_difference": 0.03249487675829288,
+      "quality": "worse",
+      "rep": 0,
+      "same_full_predictions": false,
+      "task": "qsar-shuffled"
+    },
+    {
+      "comparison": "T_vs_Z",
+      "holdout_difference": 0.0,
+      "quality": "equal",
+      "rep": 0,
+      "same_full_predictions": true,
+      "task": "qsar-shuffled"
+    },
+    {
+      "comparison": "C_vs_Z",
+      "holdout_difference": -0.03249487675829288,
+      "quality": "better",
+      "rep": 0,
+      "same_full_predictions": false,
+      "task": "qsar-shuffled"
+    }
+  ],
+  "prediction_sets_recomputed": 1053,
+  "preflights": [
+    {
+      "expected_visibility_failure": false,
+      "final_confirmed": true,
+      "project": "smoke-qsar-99-C",
+      "stages": [
+        {
+          "cycle": 0,
+          "error": null,
+          "finished_monotonic": 11138542.602914942,
+          "operation": "setup",
+          "sources_unchanged": true,
+          "started_monotonic": 11138491.005547065
+        },
+        {
+          "cycle": 0,
+          "error": null,
+          "finished_monotonic": 11138575.18080348,
+          "operation": "smoke",
+          "sources_unchanged": true,
+          "started_monotonic": 11138544.938909603
+        }
+      ]
+    },
+    {
+      "expected_visibility_failure": false,
+      "final_confirmed": true,
+      "project": "smoke-qsar-99-T",
+      "stages": [
+        {
+          "cycle": 0,
+          "error": null,
+          "finished_monotonic": 11138543.910530152,
+          "operation": "setup",
+          "sources_unchanged": true,
+          "started_monotonic": 11138492.200917024
+        },
+        {
+          "cycle": 0,
+          "error": null,
+          "finished_monotonic": 11138583.507259171,
+          "operation": "smoke",
+          "sources_unchanged": true,
+          "started_monotonic": 11138546.387883576
+        }
+      ]
+    }
+  ],
+  "prompt_checks": [
+    {
+      "complete_rules_present": true,
+      "cycle": 1,
+      "native_qualified_trial_records": 0,
+      "project": "qsar-0-C",
+      "prompt_bytes": 84472,
+      "response": "response-1-1.json",
+      "single_record_limit": 0
+    },
+    {
+      "complete_rules_present": true,
+      "cycle": 2,
+      "native_qualified_trial_records": 1,
+      "project": "qsar-0-C",
+      "prompt_bytes": 88382,
+      "response": "response-2-1.json",
+      "single_record_limit": 0
+    },
+    {
+      "complete_rules_present": true,
+      "cycle": 3,
+      "native_qualified_trial_records": 2,
+      "project": "qsar-0-C",
+      "prompt_bytes": 93509,
+      "response": "response-3-1.json",
+      "single_record_limit": 0
+    },
+    {
+      "complete_rules_present": true,
+      "cycle": 1,
+      "native_qualified_trial_records": 0,
+      "project": "qsar-0-T",
+      "prompt_bytes": 85054,
+      "response": "response-1-1.json",
+      "single_record_limit": 0
+    },
+    {
+      "complete_rules_present": true,
+      "cycle": 2,
+      "native_qualified_trial_records": 1,
+      "project": "qsar-0-T",
+      "prompt_bytes": 90219,
+      "response": "response-2-1.json",
+      "single_record_limit": 0
+    },
+    {
+      "complete_rules_present": true,
+      "cycle": 3,
+      "native_qualified_trial_records": 2,
+      "project": "qsar-0-T",
+      "prompt_bytes": 93364,
+      "response": "response-3-1.json",
+      "single_record_limit": 0
+    },
+    {
+      "complete_rules_present": true,
+      "cycle": 1,
+      "native_qualified_trial_records": 0,
+      "project": "qsar-shuffled-0-C",
+      "prompt_bytes": 84912,
+      "response": "response-1-1.json",
+      "single_record_limit": 0
+    },
+    {
+      "complete_rules_present": true,
+      "cycle": 1,
+      "native_qualified_trial_records": 0,
+      "project": "qsar-shuffled-0-T",
+      "prompt_bytes": 85494,
+      "response": "response-1-1.json",
+      "single_record_limit": 0
+    }
+  ],
+  "research_outcomes": [
+    {
+      "cycle": 1,
+      "outcome": {
+        "accepted_count": 1,
+        "accepted_ids": [
+          "idea-43ac92"
+        ],
+        "reason": "proposals_accepted",
+        "rejected_count": 0,
+        "rejection_reasons": {},
+        "status": "accepted"
+      },
+      "project": "qsar-0-C"
+    },
+    {
+      "cycle": 2,
+      "outcome": {
+        "accepted_count": 1,
+        "accepted_ids": [
+          "idea-6fd21c"
+        ],
+        "reason": "proposals_accepted",
+        "rejected_count": 0,
+        "rejection_reasons": {},
+        "status": "accepted"
+      },
+      "project": "qsar-0-C"
+    },
+    {
+      "cycle": 3,
+      "outcome": {
+        "accepted_count": 1,
+        "accepted_ids": [
+          "idea-17bf0e"
+        ],
+        "reason": "proposals_accepted",
+        "rejected_count": 0,
+        "rejection_reasons": {},
+        "status": "accepted"
+      },
+      "project": "qsar-0-C"
+    },
+    {
+      "cycle": 1,
+      "outcome": {
+        "accepted_count": 1,
+        "accepted_ids": [
+          "idea-d79362"
+        ],
+        "reason": "proposals_accepted",
+        "rejected_count": 0,
+        "rejection_reasons": {},
+        "status": "accepted"
+      },
+      "project": "qsar-0-T"
+    },
+    {
+      "cycle": 2,
+      "outcome": {
+        "accepted_count": 1,
+        "accepted_ids": [
+          "idea-042619"
+        ],
+        "reason": "proposals_accepted",
+        "rejected_count": 0,
+        "rejection_reasons": {},
+        "status": "accepted"
+      },
+      "project": "qsar-0-T"
+    },
+    {
+      "cycle": 3,
+      "outcome": {
+        "accepted_count": 1,
+        "accepted_ids": [
+          "idea-aa1cb6"
+        ],
+        "reason": "proposals_accepted",
+        "rejected_count": 0,
+        "rejection_reasons": {},
+        "status": "accepted"
+      },
+      "project": "qsar-0-T"
+    },
+    {
+      "cycle": 1,
+      "outcome": {
+        "accepted_count": 1,
+        "accepted_ids": [
+          "idea-db3f1e"
+        ],
+        "reason": "proposals_accepted",
+        "rejected_count": 0,
+        "rejection_reasons": {},
+        "status": "accepted"
+      },
+      "project": "qsar-shuffled-0-C"
+    },
+    {
+      "cycle": 1,
+      "outcome": {
+        "accepted_count": 1,
+        "accepted_ids": [
+          "idea-a8413f"
+        ],
+        "reason": "proposals_accepted",
+        "rejected_count": 0,
+        "rejection_reasons": {},
+        "status": "accepted"
+      },
+      "project": "qsar-shuffled-0-T"
+    }
+  ],
+  "rows": [
+    {
+      "analysis_actions": 0,
+      "analysis_cpu_seconds": 0,
+      "analysis_seconds": 0,
+      "api_known_usd": 1.137025,
+      "arm": "C",
+      "baseline_development": 1.1728241109598625,
+      "baseline_holdout": 1.0792708129049338,
+      "between_stage_seconds": 428.30982810258865,
+      "candidate_evaluations": 133,
+      "confirmed_choice_seconds": 864.5829968359321,
+      "elapsed_with_review_and_scheduling_seconds": 866.582458851859,
+      "evaluation_cpu_seconds": 46.971128627,
+      "evaluation_wall_seconds": 46.98486227914691,
+      "exact_reuses": 13,
+      "first_one_percent_development_seconds": 385.8098399192095,
+      "first_valid_consumed_seconds": 7.512563321739435,
+      "invalid_candidates": 0,
+      "new_candidates": 3,
+      "new_identical_predictions": 0,
+      "new_program_actions": 3,
+      "process_active_seconds": 438.2726307492703,
+      "project": "qsar-0-C",
+      "provider_prepared": 3,
+      "provider_returned": 3,
+      "rep": 0,
+      "research_invocations": 3,
+      "selected_candidate": {
+        "kind": "program",
+        "source": "import numpy as np\nfrom sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, HistGradientBoostingRegressor\nfrom sklearn.neighbors import KNeighborsRegressor\nfrom sklearn.svm import SVR\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler, PolynomialFeatures\nfrom sklearn.linear_model import LinearRegression, RidgeCV\n\nLOGCOLS = [0, 1, 2, 6, 7]\n\n\ndef _aug(X):\n    X = np.asarray(X, dtype=float)\n    Z = X[:, LOGCOLS]\n    Z = np.where(Z > 0.0, Z, 0.0)\n    return np.hstack([X, np.log1p(Z)])\n\n\ndef _models(seed):\n    return [\n        (\"raw\", RandomForestRegressor(n_estimators=300, max_features=0.5,\n                                      min_samples_leaf=2, random_state=seed, n_jobs=1)),\n        (\"raw\", ExtraTreesRegressor(n_estimators=300, max_features=0.5,\n                                    min_samples_leaf=1, random_state=seed, n_jobs=1)),\n        (\"raw\", HistGradientBoostingRegressor(learning_rate=0.03, max_leaf_nodes=7,\n                                              min_samples_leaf=40, l2_regularization=0.0,\n                                              max_iter=300, early_stopping=False,\n                                              random_state=seed)),\n        (\"raw\", make_pipeline(StandardScaler(), SVR(C=4.5, gamma=\"auto\", epsilon=0.1))),\n        (\"raw\", make_pipeline(StandardScaler(),\n                              KNeighborsRegressor(n_neighbors=9, p=1, weights=\"distance\", n_jobs=1))),\n        (\"aug\", make_pipeline(StandardScaler(),\n                              PolynomialFeatures(degree=2, include_bias=False),\n                              StandardScaler(),\n                              RidgeCV(alphas=np.logspace(-1.0, 3.0, 13)))),\n    ]\n\n\ndef _fold_masks(n, groups, k, rng):\n    if groups is not None:\n        g = np.asarray(groups).ravel()\n        u = np.unique(g)\n        if len(u) >= k:\n            order = rng.permutation(len(u))\n            masks = []\n            for chunk in np.array_split(order, k):\n                masks.append(np.isin(g, u[chunk]))\n            return masks\n    idx = rng.permutation(n)\n    base = np.arange(n)\n    masks = []\n    for chunk in np.array_split(idx, k):\n        masks.append(np.isin(base, chunk))\n    return masks\n\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    Xa = _aug(X)\n    Xea = _aug(Xe)\n    n = X.shape[0]\n    m = 6\n    reps = 2\n    s = np.zeros((n, m), dtype=float)\n    c = np.zeros(n, dtype=float)\n    for r in range(reps):\n        rng = np.random.default_rng(int(seed) + 977 * r)\n        for mask in _fold_masks(n, train_groups, 5, rng):\n            va = np.where(mask)[0]\n            tr = np.where(~mask)[0]\n            if len(tr) < 20 or len(va) == 0:\n                continue\n            fold = _models(seed)\n            for j in range(m):\n                kind, mdl = fold[j]\n                A = Xa if kind == \"aug\" else X\n                mdl.fit(A[tr], y[tr])\n                s[va, j] += np.asarray(mdl.predict(A[va]), dtype=float).ravel()\n            c[va] += 1.0\n    w = None\n    ok = c > 0\n    if int(ok.sum()) >= 6 * m:\n        A = s[ok] / c[ok][:, None]\n        b = y[ok]\n        if np.all(np.isfinite(A)) and np.all(np.isfinite(b)):\n            mse = np.mean((A - b[:, None]) ** 2, axis=0)\n            inv = 1.0 / np.maximum(mse, 1e-6) ** 2\n            w_inv = inv / float(inv.sum())\n            blend = LinearRegression(positive=True, fit_intercept=False)\n            blend.fit(A, b)\n            cand = np.asarray(blend.coef_, dtype=float).ravel()\n            t = float(cand.sum())\n            if np.all(np.isfinite(cand)) and t > 1e-8:\n                w = 0.75 * (cand / t) + 0.25 * w_inv\n            else:\n                w = w_inv\n    if w is None:\n        w = np.ones(m, dtype=float) / float(m)\n    preds = np.zeros((Xe.shape[0], m), dtype=float)\n    full = _models(seed)\n    for j in range(m):\n        kind, mdl = full[j]\n        A = Xa if kind == \"aug\" else X\n        B = Xea if kind == \"aug\" else Xe\n        mdl.fit(A, y)\n        preds[:, j] = np.asarray(mdl.predict(B), dtype=float).ravel()\n    out = np.asarray(preds.dot(w), dtype=float).ravel()\n    if not np.all(np.isfinite(out)):\n        out = np.where(np.isfinite(out), out, float(np.mean(y)))\n    return out\n"
+      },
+      "selected_development": 1.131445463455888,
+      "selected_holdout": 0.9662253439836613,
+      "selected_id": "0a0d3fdbb0f226f6620e93592f3b45b9dc92035c59c41bae1d6c3b7a8da1cf8d",
+      "selected_prediction_sha256": "b9e0e49fc19490479e26e11dbb6056965d1d0d65b90730e2528b92d1ef931737",
+      "stopped": null,
+      "task": "qsar"
+    },
+    {
+      "analysis_actions": 1,
+      "analysis_cpu_seconds": 0.39199321200000004,
+      "analysis_seconds": 0.39408773370087147,
+      "api_known_usd": 1.077745,
+      "arm": "T",
+      "baseline_development": 1.1728241109598625,
+      "baseline_holdout": 1.0792708129049338,
+      "between_stage_seconds": 463.6559651698917,
+      "candidate_evaluations": 133,
+      "confirmed_choice_seconds": 855.4618758391589,
+      "elapsed_with_review_and_scheduling_seconds": 857.4716546647251,
+      "evaluation_cpu_seconds": 22.367564987000005,
+      "evaluation_wall_seconds": 22.382477739825845,
+      "exact_reuses": 13,
+      "first_one_percent_development_seconds": 386.3436349276453,
+      "first_valid_consumed_seconds": 7.4848201386630535,
+      "invalid_candidates": 0,
+      "new_candidates": 3,
+      "new_identical_predictions": 0,
+      "new_program_actions": 2,
+      "process_active_seconds": 393.81568949483335,
+      "project": "qsar-0-T",
+      "provider_prepared": 3,
+      "provider_returned": 3,
+      "rep": 0,
+      "research_invocations": 3,
+      "selected_candidate": {
+        "kind": "blend",
+        "left": {
+          "config": {
+            "family": "neighbors",
+            "params": {
+              "neighbors": 1,
+              "p": 1,
+              "weights": "uniform"
+            },
+            "scale": "none"
+          },
+          "kind": "config"
+        },
+        "left_weight": 0.4416211329476385,
+        "right": {
+          "config": {
+            "family": "linear",
+            "params": {
+              "alpha": 0.001059
+            },
+            "scale": "none"
+          },
+          "kind": "config"
+        }
+      },
+      "selected_development": 0.9931068824660239,
+      "selected_holdout": 1.2967225393120883,
+      "selected_id": "508c015c289a115b313aaba954304cbb6d15f762e61c2c7b4faf033e87cef61a",
+      "selected_prediction_sha256": "d3b9a328e494b31f96333adfa9187091f391da42baa12ff98ba38865c28f0f8f",
+      "stopped": null,
+      "task": "qsar"
+    },
+    {
+      "analysis_actions": 1,
+      "analysis_cpu_seconds": 0.3720020799999999,
+      "analysis_seconds": 0.37391383573412895,
+      "api_known_usd": 0,
+      "arm": "Z",
+      "baseline_development": 1.1728241109598625,
+      "baseline_holdout": 1.0792708129049338,
+      "between_stage_seconds": 785.7952009830624,
+      "candidate_evaluations": 131,
+      "confirmed_choice_seconds": 855.4754213709384,
+      "elapsed_with_review_and_scheduling_seconds": 857.070588612929,
+      "evaluation_cpu_seconds": 8.392231161,
+      "evaluation_wall_seconds": 8.415458479896188,
+      "exact_reuses": 13,
+      "first_one_percent_development_seconds": 58.56916617229581,
+      "first_valid_consumed_seconds": 7.580159408971667,
+      "invalid_candidates": 0,
+      "new_candidates": 1,
+      "new_identical_predictions": 0,
+      "new_program_actions": 0,
+      "process_active_seconds": 71.2753876298666,
+      "project": "qsar-0-Z",
+      "provider_prepared": 0,
+      "provider_returned": 0,
+      "rep": 0,
+      "research_invocations": 0,
+      "selected_candidate": {
+        "kind": "blend",
+        "left": {
+          "config": {
+            "family": "neighbors",
+            "params": {
+              "neighbors": 1,
+              "p": 1,
+              "weights": "uniform"
+            },
+            "scale": "none"
+          },
+          "kind": "config"
+        },
+        "left_weight": 0.4416211329476385,
+        "right": {
+          "config": {
+            "family": "linear",
+            "params": {
+              "alpha": 0.001059
+            },
+            "scale": "none"
+          },
+          "kind": "config"
+        }
+      },
+      "selected_development": 0.9931068824660239,
+      "selected_holdout": 1.2967225393120883,
+      "selected_id": "508c015c289a115b313aaba954304cbb6d15f762e61c2c7b4faf033e87cef61a",
+      "selected_prediction_sha256": "d3b9a328e494b31f96333adfa9187091f391da42baa12ff98ba38865c28f0f8f",
+      "stopped": null,
+      "task": "qsar"
+    },
+    {
+      "analysis_actions": 0,
+      "analysis_cpu_seconds": 0,
+      "analysis_seconds": 0,
+      "api_known_usd": 0.369025,
+      "arm": "C",
+      "baseline_development": 2.3613121095646505,
+      "baseline_holdout": 3.1720474663444858,
+      "between_stage_seconds": 677.9355975296348,
+      "candidate_evaluations": 131,
+      "confirmed_choice_seconds": 856.2576213143766,
+      "elapsed_with_review_and_scheduling_seconds": 857.8709548357874,
+      "evaluation_cpu_seconds": 9.690398588999999,
+      "evaluation_wall_seconds": 9.703820580616593,
+      "exact_reuses": 13,
+      "first_one_percent_development_seconds": null,
+      "first_valid_consumed_seconds": 7.5587070398032665,
+      "invalid_candidates": 0,
+      "new_candidates": 1,
+      "new_identical_predictions": 0,
+      "new_program_actions": 1,
+      "process_active_seconds": 179.93535730615258,
+      "project": "qsar-shuffled-0-C",
+      "provider_prepared": 1,
+      "provider_returned": 1,
+      "rep": 0,
+      "research_invocations": 1,
+      "selected_candidate": {
+        "kind": "program",
+        "source": "import numpy as np\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.linear_model import Ridge\nfrom sklearn.svm import SVR\nfrom sklearn.ensemble import ExtraTreesRegressor\nfrom sklearn.model_selection import GroupKFold, KFold\n\ndef _fit_all(Xtr, ytr, Xte, seed):\n    out = {}\n    sc = StandardScaler().fit(Xtr)\n    Xs = sc.transform(Xtr)\n    Xes = sc.transform(Xte)\n    for a in (10.0, 100.0, 1000.0):\n        out[\"ridge_%g\" % a] = Ridge(alpha=a).fit(Xs, ytr).predict(Xes)\n    out[\"svr\"] = SVR(C=0.26, gamma=\"scale\", epsilon=0.2).fit(Xs, ytr).predict(Xes)\n    out[\"et\"] = ExtraTreesRegressor(n_estimators=300, min_samples_leaf=16, max_features=0.25, random_state=seed, n_jobs=1).fit(Xtr, ytr).predict(Xte)\n    out[\"avg\"] = (out[\"ridge_100\"] + out[\"svr\"] + out[\"et\"]) / 3.0\n    return out\n\ndef fit_predict(X_train, y_train, X_eval, seed, train_groups=None):\n    X = np.asarray(X_train, dtype=float)\n    y = np.asarray(y_train, dtype=float).ravel()\n    Xe = np.asarray(X_eval, dtype=float)\n    n = X.shape[0]\n    folds = None\n    if train_groups is not None:\n        g = np.asarray(train_groups)\n        k = min(5, int(np.unique(g).size))\n        if k >= 2:\n            folds = list(GroupKFold(n_splits=k).split(X, y, g))\n    if folds is None:\n        folds = list(KFold(n_splits=5, shuffle=True, random_state=int(seed)).split(X))\n    oof = {}\n    base = np.zeros(n)\n    mask = np.zeros(n, dtype=bool)\n    for tr, te in folds:\n        if tr.size < 10 or te.size == 0:\n            continue\n        p = _fit_all(X[tr], y[tr], X[te], int(seed))\n        m = float(np.mean(y[tr]))\n        base[te] = m\n        mask[te] = True\n        for key in sorted(p):\n            if key not in oof:\n                oof[key] = np.zeros(n)\n            v = np.asarray(p[key], dtype=float)\n            v = np.where(np.isfinite(v), v, m)\n            oof[key][te] = v\n    idx = np.where(mask)[0]\n    m_all = float(np.mean(y))\n    if idx.size < 20 or len(oof) == 0:\n        return np.full(Xe.shape[0], m_all)\n    ws = [0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0]\n    best_key = None\n    best_w = 0.0\n    best_mse = float(np.mean((base[idx] - y[idx]) ** 2))\n    for key in sorted(oof):\n        d = oof[key][idx] - base[idx]\n        for w in ws:\n            e = base[idx] + w * d - y[idx]\n            mse = float(np.mean(e * e))\n            if mse < best_mse - 1e-9:\n                best_mse = mse\n                best_key = key\n                best_w = w\n    if best_key is None or best_w == 0.0:\n        return np.full(Xe.shape[0], m_all)\n    full = _fit_all(X, y, Xe, int(seed))\n    v = np.asarray(full[best_key], dtype=float)\n    v = np.where(np.isfinite(v), v, m_all)\n    out = m_all + best_w * (v - m_all)\n    out = np.where(np.isfinite(out), out, m_all)\n    return np.asarray(out, dtype=float).ravel()\n"
+      },
+      "selected_development": 2.356297149333558,
+      "selected_holdout": 3.06821489286081,
+      "selected_id": "e32d354ce83ad348292a4820a1f9118f4415269a9b4a30931b36e4696cbdf578",
+      "selected_prediction_sha256": "300c05a670829af6a69a9fbfdcc2cb95e41e5027182a211e897c872c98bb5a01",
+      "stopped": null,
+      "task": "qsar-shuffled"
+    },
+    {
+      "analysis_actions": 1,
+      "analysis_cpu_seconds": 0.32799506999999994,
+      "analysis_seconds": 0.3296068925410509,
+      "api_known_usd": 0.243095,
+      "arm": "T",
+      "baseline_development": 2.3613121095646505,
+      "baseline_holdout": 3.1720474663444858,
+      "between_stage_seconds": 680.7885022554547,
+      "candidate_evaluations": 131,
+      "confirmed_choice_seconds": 811.3915766049176,
+      "elapsed_with_review_and_scheduling_seconds": 813.0085667856038,
+      "evaluation_cpu_seconds": 7.999335181999997,
+      "evaluation_wall_seconds": 8.00052559748292,
+      "exact_reuses": 13,
+      "first_one_percent_development_seconds": null,
+      "first_valid_consumed_seconds": 7.165900835767388,
+      "invalid_candidates": 0,
+      "new_candidates": 1,
+      "new_identical_predictions": 0,
+      "new_program_actions": 0,
+      "process_active_seconds": 132.2200645301491,
+      "project": "qsar-shuffled-0-T",
+      "provider_prepared": 1,
+      "provider_returned": 1,
+      "rep": 0,
+      "research_invocations": 1,
+      "selected_candidate": {
+        "kind": "blend",
+        "left": {
+          "config": {
+            "family": "dummy",
+            "params": {},
+            "scale": "none"
+          },
+          "kind": "config"
+        },
+        "left_weight": 0.46279370014547655,
+        "right": {
+          "config": {
+            "family": "svm",
+            "params": {
+              "C": 0.259902,
+              "gamma": "scale"
+            },
+            "scale": "standard"
+          },
+          "kind": "config"
+        }
+      },
+      "selected_development": 2.34913942321771,
+      "selected_holdout": 3.100709769619103,
+      "selected_id": "679cba55f637d68091f0a0a766baed73f6ba803ed130983ba7943df038efdbda",
+      "selected_prediction_sha256": "9963cca958981cc9c1ebfe4c72daacb67ce7a8dc0cda8352f5b00fb5c000751b",
+      "stopped": null,
+      "task": "qsar-shuffled"
+    },
+    {
+      "analysis_actions": 1,
+      "analysis_cpu_seconds": 0.32799771599999994,
+      "analysis_seconds": 0.3265388086438179,
+      "api_known_usd": 0,
+      "arm": "Z",
+      "baseline_development": 2.3613121095646505,
+      "baseline_holdout": 3.1720474663444858,
+      "between_stage_seconds": 744.1949713677168,
+      "candidate_evaluations": 131,
+      "confirmed_choice_seconds": 811.4434646964073,
+      "elapsed_with_review_and_scheduling_seconds": 813.0589413996786,
+      "evaluation_cpu_seconds": 8.012821231,
+      "evaluation_wall_seconds": 8.019869152456522,
+      "exact_reuses": 13,
+      "first_one_percent_development_seconds": null,
+      "first_valid_consumed_seconds": 7.137992039322853,
+      "invalid_candidates": 0,
+      "new_candidates": 1,
+      "new_identical_predictions": 0,
+      "new_program_actions": 0,
+      "process_active_seconds": 68.8639700319618,
+      "project": "qsar-shuffled-0-Z",
+      "provider_prepared": 0,
+      "provider_returned": 0,
+      "rep": 0,
+      "research_invocations": 0,
+      "selected_candidate": {
+        "kind": "blend",
+        "left": {
+          "config": {
+            "family": "dummy",
+            "params": {},
+            "scale": "none"
+          },
+          "kind": "config"
+        },
+        "left_weight": 0.46279370014547655,
+        "right": {
+          "config": {
+            "family": "svm",
+            "params": {
+              "C": 0.259902,
+              "gamma": "scale"
+            },
+            "scale": "standard"
+          },
+          "kind": "config"
+        }
+      },
+      "selected_development": 2.34913942321771,
+      "selected_holdout": 3.100709769619103,
+      "selected_id": "679cba55f637d68091f0a0a766baed73f6ba803ed130983ba7943df038efdbda",
+      "selected_prediction_sha256": "9963cca958981cc9c1ebfe4c72daacb67ce7a8dc0cda8352f5b00fb5c000751b",
+      "stopped": null,
+      "task": "qsar-shuffled"
+    }
+  ],
+  "scope": "Actual multi-round action-choice comparison on new public QSAR aquatic data plus shuffled negative control. C can generate reviewed training code; T can instead choose a parameter-free native best_pair action on verified existing primitive predictions, or generate the same code. Both start with the same actual128 candidates; Z applies one exact pair search without a model. Positive task up to3 decisions, negative1; one partition and one trajectory per arm. This is an action-space/workflow intervention, including access to development-label coefficient optimization; not equal model capacity, a prompt-only ablation, long-horizon evidence retrieval validation, or a new population benchmark.",
+  "usage": {
+    "input_tokens": 340493,
+    "output_tokens": 44977,
+    "prepared_attempts": 8,
+    "priced_usage_usd_lower": 2.82689,
+    "priced_usage_usd_upper": 2.82689,
+    "returned_attempts": 8,
+    "unknown_cost_attempts": 0
+  }
+}
