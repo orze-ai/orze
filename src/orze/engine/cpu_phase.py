@@ -279,7 +279,11 @@ def iteration(engine):
                     evidence_view = engine._cpu_evidence_pager.read(**(evidence_request or {}))
                 engine._cpu_evidence_view = copy.deepcopy(evidence_view)
                 snapshot.update(evidence_view)
-            else:
+            elif engine._cpu_policy.declaration["kind"] != "queue":
+                # The built-in queue selects only a queued task and never
+                # reads historical evidence. Copying unused history can fill
+                # the policy JSON limit and stall an otherwise valid Execute.
+                # Selected task inputs still undergo normal source admission.
                 snapshot["recorded_evidence"] = recorded_evidence(engine.lake, engine.results_dir)
             if proposal_paged:
                 if not continuing:
@@ -291,7 +295,7 @@ def iteration(engine):
                 else:
                     engine._cpu_proposal_pager.verify()
                 snapshot.update(copy.deepcopy(engine._cpu_proposal_view))
-            else:
+            elif engine._cpu_policy.declaration["kind"] != "queue":
                 snapshot["recorded_proposals"] = recorded_proposals(engine.lake, engine.results_dir)
         # This private copy is not passed to a trusted callback. The selected
         # source metadata is still independently verified by normal admission.

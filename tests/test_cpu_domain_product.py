@@ -95,9 +95,14 @@ def test_registered_policy_can_stop_a_nonempty_queue_without_execution(project, 
         assert json.loads(conn.execute("SELECT stop_json FROM cpu_action_scopes").fetchone()[0])["reason"] == "declared_goal_satisfied"
 
 
-def test_unavailable_policy_view_returns_hold_before_any_execute(project, monkeypatch):
+def test_custom_policy_unavailable_view_returns_hold_before_any_execute(project, monkeypatch):
     from orze.engine import cpu_policy_evidence as evidence
+    from orze.core import research_interfaces as api
+    from orze.engine.cpu_phase import QueuePolicy
     root, cfg, run = project
+    monkeypatch.setattr(api, "_POLICIES", dict(api._POLICIES))
+    api.register_policy("fixture_view", "fixture.view_policy.v1", QueuePolicy)
+    cfg["action_policy"]["kind"] = "fixture_view"
     cfg["action_domain"] = {"version": 1, "kind": "command", "config": {}}
     submit(root, "idea-no-view", request("raise AssertionError('must not run')"))
     actual = evidence.recorded_evidence
@@ -117,6 +122,38 @@ def test_unavailable_policy_view_returns_hold_before_any_execute(project, monkey
     with sqlite3.connect(root / "lake.db") as conn:
         assert conn.execute("SELECT COUNT(*) FROM cpu_action_reservations").fetchone()[0] == 0
         assert conn.execute("SELECT status FROM ideas").fetchall() == [("queued",)]
+
+
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_builtin_queue_skips_unused_history_but_checks_selected_source(project, monkeypatch, corrupt):
+    from pathlib import Path
+    from orze.engine import cpu_policy_evidence, cpu_proposals
+    root, cfg, run = project
+    cfg["execution"]["wall_budget_seconds"] = 8
+    cfg["action_domain"] = {"version": 1, "kind": "command", "config": {}}
+    submit(root, "idea-input", request("from pathlib import Path; Path('input').write_text('checked')",
+        outputs={"input": {"path": "input", "max_bytes": 64}}))
+    assert run() == 0
+    with sqlite3.connect(root / "lake.db") as conn:
+        source = json.loads(conn.execute("SELECT record_json FROM research_artifacts").fetchone()[0])
+
+    def unused(*args, **kwargs):
+        pytest.fail("built-in queue requested unused global history")
+
+    monkeypatch.setattr(cpu_policy_evidence, "recorded_evidence", unused)
+    monkeypatch.setattr(cpu_proposals, "recorded_proposals", unused)
+    if corrupt:
+        path = Path(source["path"])
+        path.chmod(0o600)
+        path.write_bytes(b"changed")
+    program = "import os,json; fds=json.loads(os.environ['ORZE_ACTION_SOURCE_FDS']); assert os.read(next(iter(fds.values())),64)==b'checked'"
+    submit(root, "idea-consume", request(program, sources=[source["artifact_id"]]))
+    assert run() == (75 if corrupt else 0)
+    with sqlite3.connect(root / "lake.db") as conn:
+        assert conn.execute("SELECT COUNT(*) FROM cpu_action_reservations").fetchone()[0] == (1 if corrupt else 2)
+        if not corrupt:
+            terminal = json.loads(conn.execute("SELECT terminal_json FROM execution_attempts WHERE task_id='idea-consume'").fetchone()[0])
+            assert terminal["outcome"] == "completed"
 
 
 @pytest.mark.parametrize("component", ["policy", "domain"])
