@@ -223,3 +223,33 @@ The [executed objective-alignment comparison](../../docs/plans/2026-09-17-resear
 reports both useful stops and worse heldout selections. Its two additional CPU
 projects execute this helper and confirm full prediction identity. It is an
 optional project example, not a default stop policy.
+
+## Development coverage and group errors
+
+`data_coverage.py` supplies measured facts that can accompany a project's
+verified candidate history. Pass training and development features, explicit
+group IDs, and any categorical feature names:
+
+```python
+from examples.research_comparison.data_coverage import (
+    coverage_summary, group_error_summary,
+)
+
+facts = coverage_summary(
+    train_X, development_X, feature_names, train_groups, development_groups,
+    categorical_features=["origin"],
+)
+errors = group_error_summary(development_y, verified_predictions, development_groups)
+```
+
+The summary counts values outside each training range, unseen declared
+categories, overlapping groups, and unequal group sizes. Per-group errors
+retain every group and its row count; recover pooled MSE with row weights.
+The concentration measure `1 / sum(group_row_fraction ** 2)` describes how
+unevenly rows occupy groups. It does not estimate statistical independence.
+Feature ranges alone cannot establish joint support or future generalization.
+
+This dependency-free adapter fits no model and changes no selection rule.
+Supply development inputs only and bind the facts to the same verified inputs
+and predictions as the project history. An exposed
+coverage gap does not justify automatic clipping or a default model change.
