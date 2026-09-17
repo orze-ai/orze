@@ -192,3 +192,34 @@ The output explicitly carries `campaign_identity_verified: false`. A complete
 adapter must establish those missing facts separately before using a task audit
 to claim an A/B research result. Prospective budgets remain unqualified while
 required cost metrics are unknown.
+
+### Keep the selection rule in one place
+
+The optional [`MinimumLoss` example](loss_selection.py) provides the model's
+selection instructions, the selector and an exact declared-bound check from one
+project rule. Supply only verified, valid development candidates in their original
+order. Ties retain the earlier candidate; secondary objectives do not change it.
+
+```python
+from examples.research_comparison.loss_selection import MinimumLoss
+
+rule = MinimumLoss("error rate", lower_bound=0)
+project_rules += "\n" + rule.instructions()
+selected = rule.select(valid_development_candidates)
+if rule.at_declared_bound(valid_development_candidates):
+    confirm(selected)
+else:
+    request_next_experiments()
+```
+
+The callbacks above belong to the project; the helper grants no execution or
+settlement authority. Declare a lower bound only when the metric definition
+establishes it. The smallest observed value is not such a proof. Near-zero losses
+do not trigger the check, and any loss below the declared bound raises an error.
+With no bound, selection still works and the check never stops search. The helper
+neither verifies observations nor claims convergence or heldout quality.
+
+The [executed objective-alignment comparison](../../docs/plans/2026-09-17-research-selection.zh-CN.md)
+reports both useful stops and worse heldout selections. Its two additional CPU
+projects execute this helper and confirm full prediction identity. It is an
+optional project example, not a default stop policy.
