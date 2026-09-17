@@ -1,0 +1,1032 @@
+{
+  "artifacts_verified": 68,
+  "authorized_cap_usd": 5000,
+  "by_arm": {
+    "A": {
+      "all_facts_match": 0,
+      "comparison_action_seconds": 0,
+      "known_estimate_usd": 1.6611879999999999,
+      "native_seconds": 14.943950783461332,
+      "project_seconds": 718.3437942266464,
+      "prompt_bytes": 428618,
+      "provider_seconds": 689.9091956857592,
+      "recorded_decisions": 2
+    },
+    "B": {
+      "all_facts_match": 7,
+      "comparison_action_seconds": 0.8769968561828136,
+      "known_estimate_usd": 0.46077100000000004,
+      "native_seconds": 29.74966043047607,
+      "project_seconds": 176.18887810222805,
+      "prompt_bytes": 203368,
+      "provider_seconds": 120.34839948266745,
+      "recorded_decisions": 7
+    }
+  },
+  "cumulative_known_estimate_usd": 70.36220200000001,
+  "cumulative_prepared": 676,
+  "cumulative_reserved_usd": 3638,
+  "cumulative_returned": 657,
+  "cumulative_unknown_cost": 19,
+  "decision": "Keep optional arithmetic worker. This diagnostic improves recorded fact reading at lower measured project cost versus direct raw rows. Do not promote default guidance or claim reliable experiment design, new discovery, full efficiency or adaptive policy improvement.",
+  "execution_attempts_closed": 39,
+  "formal_execution_span_seconds": 246.9537988100201,
+  "frozen_files_verified": 35,
+  "goal_complete": false,
+  "native_calls_closed": 59,
+  "original_open_handoff_items": 6,
+  "review_scope": "Eight structured facts requested before calls, tolerance 0.001; post-call independent check. Exact changed-path check is sensitive to path-root ambiguity; disclose original answers, not a scientific quality aggregate. Interpretation and unexecuted next actions reviewed separately.",
+  "runs": [
+    {
+      "all_facts_match": false,
+      "arm": "A",
+      "case": "heldout-regression",
+      "comparison_action_seconds": 0,
+      "decision": null,
+      "facts_match": {
+        "candidate_id": false,
+        "candidate_minus_reference_mean": false,
+        "changed_paths": false,
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": false,
+        "known_candidate_overlap": false,
+        "reference_id": false,
+        "shared_units": false
+      },
+      "model": "opus",
+      "native_seconds": 1.6311532612890005,
+      "project": "heldout-regression-opus-A",
+      "project_seconds": 83.69681327231228,
+      "prompt_bytes": 46983,
+      "provider_seconds": 80.32137135602534,
+      "reason": "provider_output_truncated",
+      "result_sha256": "aca994cb2b26a88c8c3a3262084feb62ada475c87063a61be95d6cc6b90891b7",
+      "review": [
+        "No recorded decision; failure retained."
+      ],
+      "usage": {
+        "input_tokens": 19630,
+        "output_tokens": 8192,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.30295,
+        "priced_usage_usd_upper": 0.30295,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": true,
+      "arm": "B",
+      "case": "heldout-regression",
+      "comparison_action_seconds": 0.12103476002812386,
+      "decision": {
+        "candidate_id": "candidate",
+        "candidate_minus_reference_mean": 2.742,
+        "changed_paths": [
+          [
+            "family"
+          ],
+          [
+            "params",
+            "l2"
+          ],
+          [
+            "params",
+            "learning_rate"
+          ],
+          [
+            "params",
+            "max_depth"
+          ],
+          [
+            "params",
+            "max_features"
+          ],
+          [
+            "params",
+            "max_leaves"
+          ],
+          [
+            "params",
+            "min_leaf"
+          ]
+        ],
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": 4.979,
+        "interpretation": "Within comparison_scope ml-v1:8720b03c:holdout, the valid paired observation covers all 194 shared units across 86 groups with zero candidate-only or reference-only units. Candidate mean MSE 37.287 vs reference 34.545; candidate minus reference = +2.742 (-7.94% relative), worse under minimize, with 116 units worse and 78 better. Supplied prior-use record 'development-used-for-selection' (184 units) reports 0 overlap with either evaluation set, so no selection contamination is indicated by supplied records; completeness of prior-use history is not certified. Unproved: no population-level significance, no confidence interval, no causal attribution of the loss to any of the seven declared config differences (family trees->boost, learning_rate, l2, max_leaves, min_leaf, dropped max_depth/max_features), and no independent confirmation or replication. Declared JSON differences do not establish effective implementation differences. Conclusion supported: do not adopt this candidate on this holdout scope.",
+        "known_candidate_overlap": 0,
+        "next_action": "Run one bounded paired analysis on the already-captured data artifact: compute a per-group paired summary (group-level candidate-minus-reference means and their dispersion, plus a paired sign/bootstrap spread) over the same 194 shared units. If the group-level differences are consistently positive with spread far from zero, reject the candidate family and stop; if they are dominated by a few groups or straddle zero, run a single-change candidate (only min_leaf or only family) to separate which declared path drives the gap.",
+        "reference_id": "reference",
+        "shared_units": 194
+      },
+      "facts_match": {
+        "candidate_id": true,
+        "candidate_minus_reference_mean": true,
+        "changed_paths": true,
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": true,
+        "known_candidate_overlap": true,
+        "reference_id": true,
+        "shared_units": true
+      },
+      "model": "opus",
+      "native_seconds": 3.9412867706269026,
+      "project": "heldout-regression-opus-B",
+      "project_seconds": 24.78577288426459,
+      "prompt_bytes": 25891,
+      "provider_seconds": 17.10692505724728,
+      "reason": "proposals_accepted",
+      "result_sha256": "af0c9eb8c30f56c1f0db9e00793c8dd3f81a089b8e128d45bfbf201c40ac1748",
+      "review": [
+        "Reads the regression, complete pairing, config changes and supplied zero overlap accurately.",
+        "Next action proposes useful group dispersion, but rejecting the whole candidate family on one fixed configuration overgeneralizes; tree/boost family and family-specific parameters cannot be cleanly toggled arbitrarily."
+      ],
+      "usage": {
+        "input_tokens": 10867,
+        "output_tokens": 1107,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.08201,
+        "priced_usage_usd_upper": 0.08201,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": true,
+      "arm": "B",
+      "case": "heldout-regression",
+      "comparison_action_seconds": 0.11917879059910774,
+      "decision": {
+        "candidate_id": "candidate",
+        "candidate_minus_reference_mean": 2.742,
+        "changed_paths": [
+          [
+            "family"
+          ],
+          [
+            "params",
+            "l2"
+          ],
+          [
+            "params",
+            "learning_rate"
+          ],
+          [
+            "params",
+            "max_depth"
+          ],
+          [
+            "params",
+            "max_features"
+          ],
+          [
+            "params",
+            "max_leaves"
+          ],
+          [
+            "params",
+            "min_leaf"
+          ]
+        ],
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": 4.979,
+        "interpretation": "Paired comparison from idea-comparison is valid and complete (194 shared units, no unmatched). Candidate (boost family, l2=1.0, learning_rate=0.12, max_leaves=23, min_leaf=10) has mean MSE 37.287 vs reference (trees family, max_features=1.0, min_leaf=1) mean MSE 34.545; candidate is worse by 2.742 (relative -7.94%). Equal-group mean gap is larger (4.979), suggesting group composition affects the estimate. Multiple hyperparameters changed simultaneously, so no single change is implicated. Zero overlap with the supplied prior-use selection set, so this is not contaminated by that prior use, but no other prior-use coverage is claimed complete.",
+        "known_candidate_overlap": 0,
+        "next_action": "If deciding whether to pursue the boost-family candidate further, the useful bounded check is an isolated ablation changing only one parameter (e.g. learning_rate alone, keeping family=trees) to see whether the gap narrows toward zero or persists; a result showing near-zero difference would indicate the family switch itself (not the other hyperparameters) drives the regression, informing whether to abandon or refine the boost approach.",
+        "reference_id": "reference",
+        "shared_units": 194
+      },
+      "facts_match": {
+        "candidate_id": true,
+        "candidate_minus_reference_mean": true,
+        "changed_paths": true,
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": true,
+        "known_candidate_overlap": true,
+        "reference_id": true,
+        "shared_units": true
+      },
+      "model": "sonnet",
+      "native_seconds": 3.919776590541005,
+      "project": "heldout-regression-sonnet-B",
+      "project_seconds": 20.103013331070542,
+      "prompt_bytes": 25917,
+      "provider_seconds": 12.56380265392363,
+      "reason": "proposals_accepted",
+      "result_sha256": "d4a74c3e2c37b1b61c73a9284b257e791fff290c2f6a3f6e8ea12c11b2bf30ca",
+      "review": [
+        "Reads regression and supplied zero overlap accurately.",
+        "The proposed learning_rate change while retaining family=trees is not a supported parameter in the actual tree worker. A near-zero effect of that change would not identify the family switch as the cause."
+      ],
+      "usage": {
+        "input_tokens": 10929,
+        "output_tokens": 1119,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.033048,
+        "priced_usage_usd_upper": 0.033048,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": false,
+      "arm": "A",
+      "case": "heldout-regression",
+      "comparison_action_seconds": 0,
+      "decision": null,
+      "facts_match": {
+        "candidate_id": false,
+        "candidate_minus_reference_mean": false,
+        "changed_paths": false,
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": false,
+        "known_candidate_overlap": false,
+        "reference_id": false,
+        "shared_units": false
+      },
+      "model": "sonnet",
+      "native_seconds": 1.631155963987112,
+      "project": "heldout-regression-sonnet-A",
+      "project_seconds": 108.44185502454638,
+      "prompt_bytes": 46999,
+      "provider_seconds": 105.06796333938837,
+      "reason": "provider_output_truncated",
+      "result_sha256": "39898c33994fd7812106b44df6f1df4513dce32c06af269061e6ee7212ac90c3",
+      "review": [
+        "No recorded decision; failure retained."
+      ],
+      "usage": {
+        "input_tokens": 19680,
+        "output_tokens": 8192,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.12128,
+        "priced_usage_usd_upper": 0.12128,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": false,
+      "arm": "A",
+      "case": "different-weighting",
+      "comparison_action_seconds": 0,
+      "decision": null,
+      "facts_match": {
+        "candidate_id": false,
+        "candidate_minus_reference_mean": false,
+        "changed_paths": false,
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": false,
+        "known_candidate_overlap": false,
+        "reference_id": false,
+        "shared_units": false
+      },
+      "model": "opus",
+      "native_seconds": 1.610831469297409,
+      "project": "different-weighting-opus-A",
+      "project_seconds": 118.99421672709286,
+      "prompt_bytes": 59879,
+      "provider_seconds": 115.74662717618048,
+      "reason": "provider_output_truncated",
+      "result_sha256": "31aa5fb7036039f4e7bce5e13b64ecee62bedd5bb4e9627e1338c2d4eaa3b271",
+      "review": [
+        "No recorded decision; failure retained."
+      ],
+      "usage": {
+        "input_tokens": 24847,
+        "output_tokens": 8192,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.329035,
+        "priced_usage_usd_upper": 0.329035,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": false,
+      "arm": "B",
+      "case": "different-weighting",
+      "comparison_action_seconds": 0.09774122387170792,
+      "decision": null,
+      "facts_match": {
+        "candidate_id": false,
+        "candidate_minus_reference_mean": false,
+        "changed_paths": false,
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": false,
+        "known_candidate_overlap": false,
+        "reference_id": false,
+        "shared_units": false
+      },
+      "model": "opus",
+      "native_seconds": 2.811001067981124,
+      "project": "different-weighting-opus-B",
+      "project_seconds": 21.853844180703163,
+      "prompt_bytes": 25207,
+      "provider_seconds": 16.229558397084475,
+      "reason": "unparseable_response",
+      "result_sha256": "41c4d3418004a33bd577038f79327402900ea02ff021c5095f7859f9be17fc03",
+      "review": [
+        "No recorded decision; failure retained."
+      ],
+      "usage": {
+        "input_tokens": 10610,
+        "output_tokens": 975,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.077425,
+        "priced_usage_usd_upper": 0.077425,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": true,
+      "arm": "B",
+      "case": "different-weighting",
+      "comparison_action_seconds": 0.10417626425623894,
+      "decision": {
+        "candidate_id": "candidate",
+        "candidate_minus_reference_mean": -2.931,
+        "changed_paths": [
+          [
+            "params",
+            "l2"
+          ]
+        ],
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": 1.807,
+        "interpretation": "Paired comparison from idea-comparison is valid and complete (196/196 shared units, 0 disagreements). Aggregate mean favors candidate (-2.931) but equal-group weighting reverses the sign (+1.807), showing the aggregate result is sensitive to group composition and is not a uniform per-group improvement. All 196 candidate units overlap with a named prior-use record, so this is not demonstrated to be an independent replication. No causal claim about l2 change is supported; only the declared config difference (params.l2: 1.0->3.0) is noted as a difference, not a proven cause.",
+        "known_candidate_overlap": 196,
+        "next_action": "Request a group-balanced or per-group breakdown of the paired_comparison output (or a re-run restricted to non-overlapping units relative to earlier-study-exposure) to determine whether the equal-group reversal persists once overlap is removed; a persistent reversal would argue against treating the aggregate -2.931 figure as a reliable improvement signal for decision-making.",
+        "reference_id": "reference",
+        "shared_units": 196
+      },
+      "facts_match": {
+        "candidate_id": true,
+        "candidate_minus_reference_mean": true,
+        "changed_paths": true,
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": true,
+        "known_candidate_overlap": true,
+        "reference_id": true,
+        "shared_units": true
+      },
+      "model": "sonnet",
+      "native_seconds": 3.799969147890806,
+      "project": "different-weighting-sonnet-B",
+      "project_seconds": 19.44716501608491,
+      "prompt_bytes": 25233,
+      "provider_seconds": 12.470224255695939,
+      "reason": "proposals_accepted",
+      "result_sha256": "1114b0244ebb3d25fde363a5300b27ac0ed3d06037626ca3470b029c41f06d3d",
+      "review": [
+        "Reads the sign reversal and complete historical overlap accurately.",
+        "Per-group inspection is possible, but removing all overlapping evaluation units leaves zero units in this source. Data reuse does not itself explain the weighting reversal."
+      ],
+      "usage": {
+        "input_tokens": 10690,
+        "output_tokens": 1071,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.03209,
+        "priced_usage_usd_upper": 0.03209,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": false,
+      "arm": "A",
+      "case": "different-weighting",
+      "comparison_action_seconds": 0,
+      "decision": null,
+      "facts_match": {
+        "candidate_id": false,
+        "candidate_minus_reference_mean": false,
+        "changed_paths": false,
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": false,
+        "known_candidate_overlap": false,
+        "reference_id": false,
+        "shared_units": false
+      },
+      "model": "sonnet",
+      "native_seconds": 1.6106570083647966,
+      "project": "different-weighting-sonnet-A",
+      "project_seconds": 125.35723398812115,
+      "prompt_bytes": 59895,
+      "provider_seconds": 122.17343187704682,
+      "reason": "provider_output_truncated",
+      "result_sha256": "dd396c682d3c80864b34874eef6928d8fa8b5fb8d03f44ac20f8e4e60335015c",
+      "review": [
+        "No recorded decision; failure retained."
+      ],
+      "usage": {
+        "input_tokens": 24856,
+        "output_tokens": 8192,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.131632,
+        "priced_usage_usd_upper": 0.131632,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": false,
+      "arm": "A",
+      "case": "actual-reference",
+      "comparison_action_seconds": 0,
+      "decision": null,
+      "facts_match": {
+        "candidate_id": false,
+        "candidate_minus_reference_mean": false,
+        "changed_paths": false,
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": false,
+        "known_candidate_overlap": false,
+        "reference_id": false,
+        "shared_units": false
+      },
+      "model": "opus",
+      "native_seconds": 1.6003702767193317,
+      "project": "actual-reference-opus-A",
+      "project_seconds": 87.08868991583586,
+      "prompt_bytes": 81708,
+      "provider_seconds": 83.93609705939889,
+      "reason": "provider_output_truncated",
+      "result_sha256": "40d157f6654eeea9f16718c09d6dcfeba42b7dd14211eacfcbae971e49091866",
+      "review": [
+        "No recorded decision; failure retained."
+      ],
+      "usage": {
+        "input_tokens": 37914,
+        "output_tokens": 8192,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.39437,
+        "priced_usage_usd_upper": 0.39437,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": true,
+      "arm": "B",
+      "case": "actual-reference",
+      "comparison_action_seconds": 0.10275961086153984,
+      "decision": {
+        "candidate_id": "min-leaf-only",
+        "candidate_minus_reference_mean": -0.85,
+        "changed_paths": [
+          [
+            "params",
+            "learning_rate"
+          ],
+          [
+            "params",
+            "min_leaf"
+          ]
+        ],
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": -0.705,
+        "interpretation": "Valid, completely paired comparison on scope ml-v1:3cb4c2a8...:holdout, metric mean_squared_error, minimize. Candidate mean 6.380 vs reference 7.230: paired mean -0.850 (11.76% relative); group-equal-weighted mean -0.705 over 23 groups. Per-unit direction is near-even (166 better, 161 worse, 0 equal), so the aggregate gain likely comes from magnitude on a subset, not broad dominance. Two declared config differences change together (learning_rate 0.22 vs 0.1; min_leaf 20 vs 5), so no single-factor cause is established; the candidate label 'min-leaf-only' is not a conclusion. All 327 candidate units overlap the supplied prior-use set 'earlier-study-exposure' (1503 prior units), so this is not held-out-fresh evidence; prior-use coverage is not certified complete. No significance test, no causal attribution, no independent confirmation.",
+        "known_candidate_overlap": 327,
+        "next_action": "Run one bounded paired comparison on units disjoint from 'earlier-study-exposure' with only min_leaf changed (learning_rate held at 0.22). If the candidate-minus-reference mean stays clearly negative there, the min_leaf change is supported as the driver and worth ranking; if it moves to about zero or positive, the observed gain is attributable to learning_rate or to prior-use exposure and this direction should be dropped.",
+        "reference_id": "learning-rate-only",
+        "shared_units": 327
+      },
+      "facts_match": {
+        "candidate_id": true,
+        "candidate_minus_reference_mean": true,
+        "changed_paths": true,
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": true,
+        "known_candidate_overlap": true,
+        "reference_id": true,
+        "shared_units": true
+      },
+      "model": "opus",
+      "native_seconds": 3.7898470740765333,
+      "project": "actual-reference-opus-B",
+      "project_seconds": 21.18450027704239,
+      "prompt_bytes": 25303,
+      "provider_seconds": 14.314904984086752,
+      "reason": "proposals_accepted",
+      "result_sha256": "13b2f5c3e623d021d2fd04ce945da76f629586983e7ce45d14249815bbbd1a19",
+      "review": [
+        "Correctly uses learning-rate-only as reference and identifies both changed paths.",
+        "A fixed-factor trial on genuinely new observations would be informative, but no such observations are available in this source. A failed effect would not uniquely attribute the original gain to learning rate or prior exposure; interactions and variability remain."
+      ],
+      "usage": {
+        "input_tokens": 10657,
+        "output_tokens": 1032,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.079085,
+        "priced_usage_usd_upper": 0.079085,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": true,
+      "arm": "B",
+      "case": "actual-reference",
+      "comparison_action_seconds": 0.10386139154434204,
+      "decision": {
+        "candidate_id": "min-leaf-only",
+        "candidate_minus_reference_mean": -0.85,
+        "changed_paths": [
+          [
+            "params",
+            "learning_rate"
+          ],
+          [
+            "params",
+            "min_leaf"
+          ]
+        ],
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": -0.705,
+        "interpretation": "Paired arithmetic is valid and complete (327/327 shared units, no disagreements). Candidate min-leaf-only shows a lower mean MSE than reference learning-rate-only by 0.850 (equal-group: 0.705). However two config paths changed simultaneously (learning_rate 0.22->0.1, min_leaf 20->5), so the direction cannot be attributed to either parameter alone. Prior-use overlap of 327 units with earlier-study-exposure means this is not an independent confirmation sample. No significance test or causal claim is established.",
+        "known_candidate_overlap": 327,
+        "next_action": "Run an isolated ablation holding min_leaf fixed while only varying learning_rate (and vice versa) to see whether either single change alone reproduces a comparable candidate_minus_reference_mean; a result near zero for one isolated change would indicate the other parameter drives the effect, changing which parameter to prioritize next.",
+        "reference_id": "learning-rate-only",
+        "shared_units": 327
+      },
+      "facts_match": {
+        "candidate_id": true,
+        "candidate_minus_reference_mean": true,
+        "changed_paths": true,
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": true,
+        "known_candidate_overlap": true,
+        "reference_id": true,
+        "shared_units": true
+      },
+      "model": "sonnet",
+      "native_seconds": 3.829618502408266,
+      "project": "actual-reference-sonnet-B",
+      "project_seconds": 21.455444460734725,
+      "prompt_bytes": 25329,
+      "provider_seconds": 14.390812257304788,
+      "reason": "proposals_accepted",
+      "result_sha256": "e7165eaac6b1d9c4d98b9deea24dbf877f49afc3f9de2267158b42958e29f808",
+      "review": [
+        "Correctly identifies both paths and all reused units.",
+        "Single-factor ablations are informative; a near-zero effect for one does not establish that the other drives the joint difference, because interactions remain."
+      ],
+      "usage": {
+        "input_tokens": 10780,
+        "output_tokens": 1158,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.03314,
+        "priced_usage_usd_upper": 0.03314,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": false,
+      "arm": "A",
+      "case": "actual-reference",
+      "comparison_action_seconds": 0,
+      "decision": null,
+      "facts_match": {
+        "candidate_id": false,
+        "candidate_minus_reference_mean": false,
+        "changed_paths": false,
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": false,
+        "known_candidate_overlap": false,
+        "reference_id": false,
+        "shared_units": false
+      },
+      "model": "sonnet",
+      "native_seconds": 1.600781660526991,
+      "project": "actual-reference-sonnet-A",
+      "project_seconds": 107.14987437054515,
+      "prompt_bytes": 81724,
+      "provider_seconds": 104.0621686745435,
+      "reason": "provider_output_truncated",
+      "result_sha256": "6a00f1c1f2f096f747913f1d453d104e582de2a3e7dbc5d787defe6e2d215cde",
+      "review": [
+        "No recorded decision; failure retained."
+      ],
+      "usage": {
+        "input_tokens": 37903,
+        "output_tokens": 8192,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.157726,
+        "priced_usage_usd_upper": 0.157726,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": false,
+      "arm": "A",
+      "case": "incompatible-splits",
+      "comparison_action_seconds": 0,
+      "decision": {
+        "candidate_id": "split-1-selected",
+        "candidate_minus_reference_mean": null,
+        "changed_paths": [
+          [
+            "comparison_scope"
+          ],
+          [
+            "configuration",
+            "family"
+          ],
+          [
+            "configuration",
+            "params",
+            "C"
+          ],
+          [
+            "configuration",
+            "params",
+            "gamma"
+          ],
+          [
+            "configuration",
+            "params",
+            "max_depth"
+          ],
+          [
+            "configuration",
+            "params",
+            "max_features"
+          ],
+          [
+            "configuration",
+            "params",
+            "min_leaf"
+          ]
+        ],
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": null,
+        "interpretation": "Reference (svm, C=358.836088, gamma=auto) and candidate (trees, max_depth=null, max_features=0.75, min_leaf=1) report error_rate on different holdout scopes (f59ab857...:holdout vs 523b97e6...:holdout) with 59 and 63 units; only 8 unit ids overlap (ionosphere-42, 60, 157, 275, 277, 281, 294, 304), so the full pairing is incompatible and both paired mean differences are null. On those 8 shared units the supplied groups agree and every value is 0.0 in both records, which is uninformative rather than evidence of equality. Unpaired raw means (candidate 6/63 = 0.095; reference 4/59 = 0.068) are not comparable across scopes and do not show that trees is worse. The listed path differences are literal declared values, not demonstrated causes; scale='none' in both. prior_uses is null, so candidate overlap is unknown, not zero.",
+        "known_candidate_overlap": null,
+        "next_action": "Evaluate both declared configurations unchanged on one common holdout scope and emit per-unit losses with matching unit ids, then compute the paired candidate-minus-reference mean. A stable paired difference clearly away from 0 would support a family-level ranking; a difference near 0 would indicate the apparent gap came from split assignment, not from the configuration change, and would redirect effort to split construction.",
+        "reference_id": "split-0-selected",
+        "shared_units": 8
+      },
+      "facts_match": {
+        "candidate_id": true,
+        "candidate_minus_reference_mean": true,
+        "changed_paths": false,
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": true,
+        "known_candidate_overlap": true,
+        "reference_id": true,
+        "shared_units": true
+      },
+      "model": "opus",
+      "native_seconds": 2.660244246944785,
+      "project": "incompatible-splits-opus-A",
+      "project_seconds": 56.558826107531786,
+      "prompt_bytes": 25707,
+      "provider_seconds": 51.99286123737693,
+      "reason": "proposals_accepted",
+      "result_sha256": "917675d2dc4ccf8c7fb824ed5662faa6489abe0450bbeaf65372bdd8d0d7fbb1",
+      "review": [
+        "Correctly returns null effects, eight shared IDs and unknown history. Adds comparison_scope to config differences and prefixes paths with configuration; exact leaf-path check fails, partly reflecting path-root ambiguity in the request.",
+        "Common-scope reevaluation is useful. A near-zero result does not by itself establish split assignment as the sole cause of the earlier difference."
+      ],
+      "usage": {
+        "input_tokens": 10918,
+        "output_tokens": 4833,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.175415,
+        "priced_usage_usd_upper": 0.175415,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": true,
+      "arm": "B",
+      "case": "incompatible-splits",
+      "comparison_action_seconds": 0.11574595421552658,
+      "decision": {
+        "candidate_id": "split-1-selected",
+        "candidate_minus_reference_mean": null,
+        "changed_paths": [
+          [
+            "family"
+          ],
+          [
+            "params",
+            "C"
+          ],
+          [
+            "params",
+            "gamma"
+          ],
+          [
+            "params",
+            "max_depth"
+          ],
+          [
+            "params",
+            "max_features"
+          ],
+          [
+            "params",
+            "min_leaf"
+          ]
+        ],
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": null,
+        "interpretation": "The paired_comparison observation is invalid (incomparable_measurements): declared scopes are incompatible and pairing is incomplete, with 63 candidate and 59 reference units but only 8 shared and 106 unmatched. No paired difference in the declared loss metric exists, so no direction is supported. The separate means (candidate 0.0952, reference 0.0678) come from disjoint unit sets and are not a comparison; they do not show the candidate is worse. The six listed config differences are literal JSON differences (family svm->trees plus SVM-only and tree-only params); they are not shown to cause any loss change. group_disagreements is 0 only among the 8 shared units, which is too few to characterize the populations. Prior-use overlap is null because no prior-use records were supplied, so no reuse or leakage claim is made either way. Nothing here confirms or refutes either configuration.",
+        "known_candidate_overlap": null,
+        "next_action": "Re-evaluate both configurations on one identical, declared-compatible unit set (a shared-unit protocol covering the same units and groups) and recompute the paired difference. If that run yields a valid observation with complete pairing, its signed paired mean would decide whether split-1-selected is adopted; if it again returns incompatible scope, the split definitions themselves must be fixed before any comparison is attempted.",
+        "reference_id": "split-0-selected",
+        "shared_units": 8
+      },
+      "facts_match": {
+        "candidate_id": true,
+        "candidate_minus_reference_mean": true,
+        "changed_paths": true,
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": true,
+        "known_candidate_overlap": true,
+        "reference_id": true,
+        "shared_units": true
+      },
+      "model": "opus",
+      "native_seconds": 3.8686116691678762,
+      "project": "incompatible-splits-opus-B",
+      "project_seconds": 28.30039693042636,
+      "prompt_bytes": 25231,
+      "provider_seconds": 21.185007901862264,
+      "reason": "proposals_accepted",
+      "result_sha256": "b5e2408189486289a3e94c12beaa22a17452ce0e20c62092bd14df139ad2801a",
+      "review": [
+        "Correct structured facts, including null effects. Prose incorrectly calls partially overlapping populations disjoint, despite reporting eight shared units.",
+        "Common-scope reevaluation is useful; adoption from the sign alone omits effect uncertainty and selection history."
+      ],
+      "usage": {
+        "input_tokens": 10589,
+        "output_tokens": 1628,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.093645,
+        "priced_usage_usd_upper": 0.093645,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": true,
+      "arm": "B",
+      "case": "incompatible-splits",
+      "comparison_action_seconds": 0.11249886080622673,
+      "decision": {
+        "candidate_id": "split-1-selected",
+        "candidate_minus_reference_mean": null,
+        "changed_paths": [
+          [
+            "family"
+          ],
+          [
+            "params",
+            "C"
+          ],
+          [
+            "params",
+            "gamma"
+          ],
+          [
+            "params",
+            "max_depth"
+          ],
+          [
+            "params",
+            "max_features"
+          ],
+          [
+            "params",
+            "min_leaf"
+          ]
+        ],
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": null,
+        "interpretation": "The paired_comparison observation for idea-comparison is marked invalid (incomparable_measurements) with compatible_declared_scope=false and complete=false; only 8 of 63 candidate / 59 reference units overlap, and prior_use_overlap is null. Family (svm vs trees) and hyperparameter sets differ entirely and are not directly comparable. No paired effect or population significance can be derived from this data; the separate unit means (0.095 vs 0.068) are descriptive only and not a validated comparison.",
+        "known_candidate_overlap": null,
+        "next_action": "Request or construct a comparison input where reference and candidate share a compatible declared scope with full unit overlap, so complete_pairing=true can be achieved; if the recomputed pairing remains incomplete or still invalid, this confirms the two candidates are not comparable under current inputs and a different comparison design is needed.",
+        "reference_id": "split-0-selected",
+        "shared_units": 8
+      },
+      "facts_match": {
+        "candidate_id": true,
+        "candidate_minus_reference_mean": true,
+        "changed_paths": true,
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": true,
+        "known_candidate_overlap": true,
+        "reference_id": true,
+        "shared_units": true
+      },
+      "model": "sonnet",
+      "native_seconds": 3.789549607783556,
+      "project": "incompatible-splits-sonnet-B",
+      "project_seconds": 19.05874102190137,
+      "prompt_bytes": 25257,
+      "provider_seconds": 12.087163975462317,
+      "reason": "proposals_accepted",
+      "result_sha256": "fce36efc3ba3b70d4d50c1d482af7cb9260c525914849b2c08df3560c3967354",
+      "review": [
+        "Correct structured facts and invalid-comparison interpretation.",
+        "Useful compatible-input requirement, but inputs must come from a real common-scope evaluation, not just a rewritten scope label. It only specifies what continued invalidity would establish."
+      ],
+      "usage": {
+        "input_tokens": 10614,
+        "output_tokens": 910,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.030328,
+        "priced_usage_usd_upper": 0.030328,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "all_facts_match": false,
+      "arm": "A",
+      "case": "incompatible-splits",
+      "comparison_action_seconds": 0,
+      "decision": {
+        "candidate_id": "split-1-selected",
+        "candidate_minus_reference_mean": null,
+        "changed_paths": [
+          [
+            "configuration",
+            "family"
+          ],
+          [
+            "configuration",
+            "params"
+          ]
+        ],
+        "complete_pairing": false,
+        "equal_group_candidate_minus_reference_mean": 0.125,
+        "interpretation": "Reference (svm, split-0, 59 units) and candidate (trees, split-1, 61 units) have different comparison_scope hashes, so their full unit sets are not identical populations and a full-set mean difference is invalid (null). Among the sets, 8 unit IDs share matching group labels, enabling a bounded equal-group paired check: reference=0.0 on all 8, candidate=0.0 on 7 and 1.0 on one (ionosphere-275/g252), giving equal_group diff=+0.125 (candidate worse on this small matched subset). This does not prove candidate is worse overall — only 8/59-61 units overlap, no prior-use record exists to gauge candidate history, and the differing scopes mean the rest of each evaluation set is unverified against the other.",
+        "known_candidate_overlap": null,
+        "next_action": "If deciding whether trees (candidate) underperforms svm (reference) more broadly, request a comparison run using a single shared comparison_scope/holdout across both configurations so complete_pairing can be true; a full matched result confirming diff near 0 or negative would overturn the current 0.125-worse reading from the tiny 8-unit subset.",
+        "reference_id": "split-0-selected",
+        "shared_units": 8
+      },
+      "facts_match": {
+        "candidate_id": true,
+        "candidate_minus_reference_mean": true,
+        "changed_paths": false,
+        "complete_pairing": true,
+        "equal_group_candidate_minus_reference_mean": false,
+        "known_candidate_overlap": true,
+        "reference_id": true,
+        "shared_units": true
+      },
+      "model": "sonnet",
+      "native_seconds": 2.5987568963319063,
+      "project": "incompatible-splits-sonnet-A",
+      "project_seconds": 31.05628482066095,
+      "prompt_bytes": 25723,
+      "provider_seconds": 26.608674965798855,
+      "reason": "proposals_accepted",
+      "result_sha256": "e7c181149fa2fbcc7facc776c1fadefbe17fb19019c7794af8a0db7dc5564bb1",
+      "review": [
+        "Recognizes incompatible full pairing but invents a non-null +0.125 subset effect. Both candidates actually have zero errors on all eight shared IDs; candidate has 63 units, not 61.",
+        "Lists configuration parent paths rather than actual changed leaves. Common-scope reevaluation is sensible but its asserted starting subset effect is false."
+      ],
+      "usage": {
+        "input_tokens": 10940,
+        "output_tokens": 2690,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.04878,
+        "priced_usage_usd_upper": 0.04878,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    }
+  ],
+  "scope": "Four deliberate diagnostics assembled from real archived measurements: heldout regression, row/group weighting reversal, a different explicit reference and incompatible split populations. Raw numbers A versus a normal native paired-comparison result B. This tests computation-assisted reading, not a new benchmark, adaptive search gain or independent generalization.",
+  "smoke_native_calls": 10,
+  "source_files_verified": 309,
+  "source_measurement_files_verified": 16,
+  "time_scope": "Project sums include native initialization, capture, optional comparison, model response, and recording if accepted. Formal span includes concurrent projects. Both exclude input preparation, preflight failure/correction, audit, documentation and human work; not complete research efficiency.",
+  "truth": {
+    "actual-reference": {
+      "candidate_id": "min-leaf-only",
+      "candidate_minus_reference_mean": -0.8502879039526849,
+      "changed_paths": [
+        [
+          "params",
+          "learning_rate"
+        ],
+        [
+          "params",
+          "min_leaf"
+        ]
+      ],
+      "complete_pairing": true,
+      "equal_group_candidate_minus_reference_mean": -0.7049577374051773,
+      "known_candidate_overlap": 327,
+      "reference_id": "learning-rate-only",
+      "shared_units": 327
+    },
+    "different-weighting": {
+      "candidate_id": "candidate",
+      "candidate_minus_reference_mean": -2.9311256373783863,
+      "changed_paths": [
+        [
+          "params",
+          "l2"
+        ]
+      ],
+      "complete_pairing": true,
+      "equal_group_candidate_minus_reference_mean": 1.8067656008806645,
+      "known_candidate_overlap": 196,
+      "reference_id": "reference",
+      "shared_units": 196
+    },
+    "heldout-regression": {
+      "candidate_id": "candidate",
+      "candidate_minus_reference_mean": 2.7424912720367467,
+      "changed_paths": [
+        [
+          "family"
+        ],
+        [
+          "params",
+          "l2"
+        ],
+        [
+          "params",
+          "learning_rate"
+        ],
+        [
+          "params",
+          "max_depth"
+        ],
+        [
+          "params",
+          "max_features"
+        ],
+        [
+          "params",
+          "max_leaves"
+        ],
+        [
+          "params",
+          "min_leaf"
+        ]
+      ],
+      "complete_pairing": true,
+      "equal_group_candidate_minus_reference_mean": 4.978844726639821,
+      "known_candidate_overlap": 0,
+      "reference_id": "reference",
+      "shared_units": 194
+    },
+    "incompatible-splits": {
+      "candidate_id": "split-1-selected",
+      "candidate_minus_reference_mean": null,
+      "changed_paths": [
+        [
+          "family"
+        ],
+        [
+          "params",
+          "C"
+        ],
+        [
+          "params",
+          "gamma"
+        ],
+        [
+          "params",
+          "max_depth"
+        ],
+        [
+          "params",
+          "max_features"
+        ],
+        [
+          "params",
+          "min_leaf"
+        ]
+      ],
+      "complete_pairing": false,
+      "equal_group_candidate_minus_reference_mean": null,
+      "known_candidate_overlap": null,
+      "reference_id": "split-0-selected",
+      "shared_units": 8
+    }
+  },
+  "usage": {
+    "input_tokens": 272424,
+    "output_tokens": 65675,
+    "prepared_attempts": 16,
+    "priced_usage_usd_lower": 2.1219589999999995,
+    "priced_usage_usd_upper": 2.1219589999999995,
+    "returned_attempts": 16,
+    "unknown_cost_attempts": 0
+  }
+}
