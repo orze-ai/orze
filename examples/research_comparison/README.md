@@ -345,3 +345,29 @@ Changing the available actions can change the entire research trajectory; these
 results do not isolate stopping from candidate generation or justify a default.
 Keep direct selection optional, preserve confirmation, and measure whether
 retrieving past evidence changes a later experiment or final choice.
+
+
+## Check whether additional history changes a decision
+
+The [native history view study](../../docs/plans/2026-09-17-research-history-read.zh-CN.md)
+starts each workflow with 516 actual distinct candidate evaluations. Both arms
+use the same 32 KiB snapshot. An experimental projection omits artifact records
+and input binding metadata only after full qualification, while preserving all
+observation values, validation, comparison scopes and evaluator identities.
+These omitted fields include producer mappings, so the treatment does not
+establish equivalence of every potentially useful provenance detail.
+
+The first snapshot showed 24 versus 36 candidates. The model cited an added
+record and then improved a generated program using measured positive residual
+bias; its final Servo holdout MSE was 37.17% lower than the unchanged baseline
+chosen by the control. Both negative controls regenerated an existing mean
+prediction and finished with identical predictions, 3.85% worse than the initial
+kNN. Calls were 5 per arm; total project time increased 2.68% in the experimental
+arm. No explicit page or ID read occurred in any of the ten responses.
+
+This is evidence of one local research-quality gain, not demonstrated later-page
+retrieval, persistent-memory value or a complete speedup. Choose a consequential
+unresolved comparison for the next retrieval evaluation; an already supplied
+champion can make additional same-scope scores unhelpful. Reusing an already
+measured complete configuration directly is also worth testing, since requiring
+an opaque candidate ID can encourage another lookup or equivalent new code.
