@@ -116,3 +116,20 @@ The module also exposes `compare(document)` for a domain adapter that already
 has bound inputs. It performs no file access or execution. This arithmetic is a
 component of a research decision, not evidence that the entire research policy
 has improved.
+
+## Return useful facts from a batch
+
+When a project combines several comparisons, keep full computation details in
+an artifact and project the needed fields into the model-facing observation.
+Repeated configuration copies and interpretation text can exceed the Domain's
+JSON structure bound or the research consumer's per-record capacity even when
+the declared output file size is sufficient. Do not increase unrelated limits
+before checking that representation.
+
+The [executed research follow-up](plans/2026-09-17-research-edits.zh-CN.md)
+retains a failed eight-candidate publication and verifies a smaller observation
+containing configuration, measured loss, changed paths, pairing facts and known
+reuse. Its four-candidate feedback appeared in the actual next model prompt.
+Some larger initial records remained unavailable, so the study separately
+verified the complete available-configuration and score table. Artifact retention
+and source qualification do not by themselves establish model visibility.
