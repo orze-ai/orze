@@ -143,7 +143,9 @@ def _admit(run, label, task, request):
     from orze.idea_lake import IdeaLake
     root = Path(run['root'])
     before = _snapshot(run, label + ':before')
-    raw = json.dumps({'kind': 'native_cpu_action', 'domain_request': request}, sort_keys=True, separators=(',', ':'))
+    # Lake task configs are consumed as YAML. JSON exponent literals such as
+    # 1e-05 are strings under the YAML loader; emit YAML to preserve their type.
+    raw = yaml.safe_dump({'kind': 'native_cpu_action', 'domain_request': request}, sort_keys=True)
     lake = IdeaLake(str(root / 'lake.db'))
     try:
         outcome = lake.insert(task, task, raw, '', status='queued', kind='native_cpu_action', if_absent=True)
