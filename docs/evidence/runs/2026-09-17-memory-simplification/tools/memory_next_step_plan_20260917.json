@@ -1,0 +1,114 @@
+{
+  "created_utc": "2026-09-17T01:33:14.280536+00:00",
+  "question": "Does one consistent state-aware next-response instruction reduce mixed responses and redundant writes, and yield valid improvements?",
+  "scope": "Second fixed four-pair mechanism diagnostic, planned adaptively after observing failures in the first batch. Same seeded small task; not independent generalization.",
+  "prior_cumulative_reserve_usd": 307,
+  "additional_reserve_usd": 16,
+  "cumulative_reserve_usd": 323,
+  "authorized_cap_usd": 5000,
+  "budget_bound": "8 fresh processes, each shares 200000-token envelope across two research invocations, max token price $5/M = $8 total; reserve $16. No fallback. Normal Pro license.",
+  "baseline_pro_head": "306b8c20c209330479c668daf203a2b554ac26d8",
+  "baseline_prompt_sha256": "3e41761cdb7413e97591e877cf774dc7ec141612bc3a3d5cbb4a98324d19fe29",
+  "baseline_update_instructions_sha256": "ef16999a27b5ca8c26f2c35c7558b6ee0ff1c3aa92859ad6ff4f0bca2c77afed",
+  "arms": {
+    "A": "Frozen first simplification (306b8c2); baseline build_prompt restored in the harness.",
+    "B": "Same memory/source/storage/budget implementation; unify next-response choice and remove unconditional write-first reminder after allowance exhaustion."
+  },
+  "order": [
+    [
+      0,
+      "A"
+    ],
+    [
+      0,
+      "B"
+    ],
+    [
+      1,
+      "B"
+    ],
+    [
+      1,
+      "A"
+    ],
+    [
+      2,
+      "A"
+    ],
+    [
+      2,
+      "B"
+    ],
+    [
+      3,
+      "B"
+    ],
+    [
+      3,
+      "A"
+    ]
+  ],
+  "model": "claude-haiku-4-5-20251001",
+  "model_temperature": "existing provider default; remote generation is not seed-controlled",
+  "cycles": 2,
+  "candidates_per_cycle": 2,
+  "max_requests_per_cycle": 3,
+  "max_memory_updates_per_cycle": 1,
+  "shared_process_token_envelope": 200000,
+  "seed_valid": [
+    [
+      "prepare",
+      0
+    ],
+    [
+      "gate",
+      2
+    ],
+    [
+      "long",
+      3
+    ],
+    [
+      "finish",
+      9
+    ]
+  ],
+  "seed_invalid": [
+    [
+      "prepare",
+      0
+    ],
+    [
+      "gate",
+      2
+    ],
+    [
+      "long",
+      3
+    ],
+    [
+      "early",
+      4
+    ],
+    [
+      "finish",
+      9
+    ]
+  ],
+  "seed_note": "Both seeds generated and evaluated by actual native CPU before research. Valid seed value 14; optimal candidate not supplied.",
+  "rules": "Same prior diagnostic instructions in both arms: save one not-yet-stored counterexample when possible, then improve without repeating notes.",
+  "primary": "Projects with at least one independently recomputed valid new candidate strictly better than seed value 14.",
+  "secondary": [
+    "API attempts and usage-estimated USD",
+    "complete elapsed seconds including seeds, all failures, memory and candidate evaluation",
+    "first valid improvement time",
+    "invalid candidates and repeated invalid schedules",
+    "memory revisions, duplicate notes, update-limit/invalid-response failures",
+    "actual prompt revisions and source qualification"
+  ],
+  "analysis": "Keep all eight planned slots and every failure; separately report seed and new candidate scores, equal-quality pair times, and observed counts. No retry to choose winning samples or retrospective early-stopping savings.",
+  "next_gate": "Retain simplification if tests preserve write/source guards and real diagnostics show useful proposals without greater protocol failure; report inconclusive or regressions honestly.",
+  "baseline_research_sha256": "29c05808b48aa5d9ab6f15780b8f6b47f08453f0116535e074480c4e345bbee7",
+  "observed_trigger": "First simplification suppresses memory template but final Your Task still tells model to write first; actual responses continue writes after exhaustion and combine notes with proposals.",
+  "change_boundary": "Product source and first-batch runner remain unchanged until all first-batch slots finish; this plan adds a separate batch, never replaces failures."
+}

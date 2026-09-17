@@ -1,0 +1,111 @@
+{
+  "created_utc": "2026-09-17T01:23:08.910151+00:00",
+  "question": "Does showing only available memory actions and reusing current notes turn repeated-write failures into independently valid improved proposals?",
+  "scope": "Four fixed pairs of seeded real-model CPU research workflow diagnostics. Not a test of whether memory beats no memory, nor long-horizon/cross-domain efficacy.",
+  "prior_cumulative_reserve_usd": 291,
+  "additional_reserve_usd": 16,
+  "cumulative_reserve_usd": 307,
+  "authorized_cap_usd": 5000,
+  "budget_bound": "8 fresh processes, each shares 200000-token envelope across two research invocations, max token price $5/M = $8 total; reserve $16. No fallback. Normal Pro license.",
+  "baseline_pro_head": "9015f17294435c4c0112ca572fcce7474366b1c9",
+  "baseline_prompt_sha256": "2e9556f9f8436b9e9f5fed983d936cd9b7aaf661f3bff9aab0bbd85d5ca8ba03",
+  "baseline_update_instructions_sha256": "baaa1fd9fb50236c9bc0a17c7cc84671b562ed39dcbffe0288991c5ec3316f24",
+  "arms": {
+    "A": "Frozen previous memory prompt and instructions; same current research implementation otherwise.",
+    "B": "State-aware memory prompt, reuse notes, empty refresh example. Same storage/source/budget guards."
+  },
+  "order": [
+    [
+      0,
+      "A"
+    ],
+    [
+      0,
+      "B"
+    ],
+    [
+      1,
+      "B"
+    ],
+    [
+      1,
+      "A"
+    ],
+    [
+      2,
+      "A"
+    ],
+    [
+      2,
+      "B"
+    ],
+    [
+      3,
+      "B"
+    ],
+    [
+      3,
+      "A"
+    ]
+  ],
+  "model": "claude-haiku-4-5-20251001",
+  "model_temperature": "existing provider default; remote generation is not seed-controlled",
+  "cycles": 2,
+  "candidates_per_cycle": 2,
+  "max_requests_per_cycle": 3,
+  "max_memory_updates_per_cycle": 1,
+  "shared_process_token_envelope": 200000,
+  "seed_valid": [
+    [
+      "prepare",
+      0
+    ],
+    [
+      "gate",
+      2
+    ],
+    [
+      "long",
+      3
+    ],
+    [
+      "finish",
+      9
+    ]
+  ],
+  "seed_invalid": [
+    [
+      "prepare",
+      0
+    ],
+    [
+      "gate",
+      2
+    ],
+    [
+      "long",
+      3
+    ],
+    [
+      "early",
+      4
+    ],
+    [
+      "finish",
+      9
+    ]
+  ],
+  "seed_note": "Both seeds generated and evaluated by actual native CPU before research. Valid seed value 14; optimal candidate not supplied.",
+  "rules": "Same prior diagnostic instructions in both arms: save one not-yet-stored counterexample when possible, then improve without repeating notes.",
+  "primary": "Projects with at least one independently recomputed valid new candidate strictly better than seed value 14.",
+  "secondary": [
+    "API attempts and usage-estimated USD",
+    "complete elapsed seconds including seeds, all failures, memory and candidate evaluation",
+    "first valid improvement time",
+    "invalid candidates and repeated invalid schedules",
+    "memory revisions, duplicate notes, update-limit/invalid-response failures",
+    "actual prompt revisions and source qualification"
+  ],
+  "analysis": "Keep all eight planned slots and every failure; separately report seed and new candidate scores, equal-quality pair times, and observed counts. No retry to choose winning samples or retrospective early-stopping savings.",
+  "next_gate": "Retain simplification if tests preserve write/source guards and real diagnostics show useful proposals without greater protocol failure; report inconclusive or regressions honestly."
+}

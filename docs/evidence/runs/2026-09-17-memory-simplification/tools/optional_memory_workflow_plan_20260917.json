@@ -1,0 +1,366 @@
+{
+  "created_utc": "2026-09-17T01:54:36.010706+00:00",
+  "question": "On two fresh nine-job tasks, does removing a mandatory note-before-proposal rule reduce full research cost without lowering achieved valid quality?",
+  "scope": "Exploratory workflow comparison after mixed prompt-simplification results. Same current code and optional memory interface, different task instructions. Not a product runtime speedup or cross-domain generalization.",
+  "prior_cumulative_reserve_usd": 323,
+  "additional_reserve_usd": 8,
+  "cumulative_reserve_usd": 331,
+  "authorized_cap_usd": 5000,
+  "budget_bound": "4 fresh processes, 200000 tokens each shared across two invocations at maximum $5/M = $4; reserve $8. No fallback; normal license.",
+  "code_head": "6803da695bae5ac52895fbbf50603ae550710e87",
+  "code_sha256": {
+    "research.py": "0fefd9eab99a17bd7907ea808956e310088b62fa1569dea20b1cad2b21d18cf7",
+    "memory_consumer.py": "3e41761cdb7413e97591e877cf774dc7ec141612bc3a3d5cbb4a98324d19fe29",
+    "memory_updates.py": "ef16999a27b5ca8c26f2c35c7558b6ee0ff1c3aa92859ad6ff4f0bca2c77afed"
+  },
+  "order": [
+    [
+      0,
+      "A"
+    ],
+    [
+      0,
+      "B"
+    ],
+    [
+      1,
+      "B"
+    ],
+    [
+      1,
+      "A"
+    ]
+  ],
+  "arms": {
+    "A": "Require one not-yet-stored sourced counterexample before proposing, as in previous mechanism diagnostics.",
+    "B": "Ordinary task instruction: persistent notes are optional, use only if useful. Remove the extra write-first rule."
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "cycles": 2,
+  "candidates_per_cycle": 2,
+  "max_requests_per_cycle": 3,
+  "max_memory_updates_per_cycle": 1,
+  "shared_process_token_envelope": 200000,
+  "tasks": [
+    {
+      "data": {
+        "instance_id": "workflow-optional-nine-jobs-capacity1-v1",
+        "capacity": 1,
+        "horizon": 14,
+        "jobs": [
+          {
+            "id": "prepare",
+            "release": 0,
+            "duration": 2,
+            "deadline": 2,
+            "value": 1,
+            "demand": 1,
+            "required": true,
+            "after": []
+          },
+          {
+            "id": "gate",
+            "release": 2,
+            "duration": 1,
+            "deadline": 4,
+            "value": 1,
+            "demand": 1,
+            "required": true,
+            "after": [
+              "prepare"
+            ]
+          },
+          {
+            "id": "finish",
+            "release": 12,
+            "duration": 1,
+            "deadline": 14,
+            "value": 1,
+            "demand": 1,
+            "required": true,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "long",
+            "release": 3,
+            "duration": 6,
+            "deadline": 11,
+            "value": 13,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "early",
+            "release": 3,
+            "duration": 2,
+            "deadline": 6,
+            "value": 7,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "middle",
+            "release": 5,
+            "duration": 3,
+            "deadline": 10,
+            "value": 10,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "late",
+            "release": 8,
+            "duration": 3,
+            "deadline": 13,
+            "value": 11,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "short",
+            "release": 4,
+            "duration": 1,
+            "deadline": 9,
+            "value": 4,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "tail",
+            "release": 10,
+            "duration": 2,
+            "deadline": 14,
+            "value": 8,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          }
+        ]
+      },
+      "seed_valid": [
+        [
+          "prepare",
+          0
+        ],
+        [
+          "gate",
+          2
+        ],
+        [
+          "long",
+          3
+        ],
+        [
+          "finish",
+          12
+        ]
+      ],
+      "seed_invalid": [
+        [
+          "prepare",
+          0
+        ],
+        [
+          "gate",
+          2
+        ],
+        [
+          "long",
+          3
+        ],
+        [
+          "early",
+          4
+        ],
+        [
+          "finish",
+          12
+        ]
+      ],
+      "seed_score": 16
+    },
+    {
+      "data": {
+        "instance_id": "workflow-optional-nine-jobs-capacity2-v1",
+        "capacity": 2,
+        "horizon": 14,
+        "jobs": [
+          {
+            "id": "prepare",
+            "release": 0,
+            "duration": 2,
+            "deadline": 2,
+            "value": 1,
+            "demand": 2,
+            "required": true,
+            "after": []
+          },
+          {
+            "id": "gate",
+            "release": 2,
+            "duration": 1,
+            "deadline": 4,
+            "value": 1,
+            "demand": 1,
+            "required": true,
+            "after": [
+              "prepare"
+            ]
+          },
+          {
+            "id": "finish",
+            "release": 10,
+            "duration": 1,
+            "deadline": 14,
+            "value": 1,
+            "demand": 2,
+            "required": true,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "early",
+            "release": 3,
+            "duration": 3,
+            "deadline": 7,
+            "value": 10,
+            "demand": 2,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "middle",
+            "release": 4,
+            "duration": 4,
+            "deadline": 11,
+            "value": 9,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "late",
+            "release": 7,
+            "duration": 3,
+            "deadline": 12,
+            "value": 8,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "quick",
+            "release": 3,
+            "duration": 2,
+            "deadline": 8,
+            "value": 6,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "tail",
+            "release": 9,
+            "duration": 3,
+            "deadline": 14,
+            "value": 12,
+            "demand": 2,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "bridge",
+            "release": 6,
+            "duration": 2,
+            "deadline": 10,
+            "value": 5,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          }
+        ]
+      },
+      "seed_valid": [
+        [
+          "prepare",
+          0
+        ],
+        [
+          "gate",
+          2
+        ],
+        [
+          "early",
+          3
+        ],
+        [
+          "finish",
+          10
+        ]
+      ],
+      "seed_invalid": [
+        [
+          "prepare",
+          0
+        ],
+        [
+          "gate",
+          2
+        ],
+        [
+          "early",
+          3
+        ],
+        [
+          "quick",
+          4
+        ],
+        [
+          "finish",
+          10
+        ]
+      ],
+      "seed_score": 13
+    }
+  ],
+  "primary": "Within each new task: valid quality above its seed, achieved best score, and full cost/time. Compare elapsed cost as an efficiency gain only when quality is no lower.",
+  "secondary": [
+    "All API attempts and priced usage",
+    "invalid candidates and repeated schedules",
+    "memory writes and redundant notes",
+    "first valid improvement time"
+  ],
+  "analysis": "Exactly four planned slots, no replacement samples or retries to select wins. Independently recompute every candidate. No optimal answer is included in model instructions. Finite two-round protocol retained even if an early improvement is found."
+}

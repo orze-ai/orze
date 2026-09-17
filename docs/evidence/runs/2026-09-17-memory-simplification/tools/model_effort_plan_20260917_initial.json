@@ -1,0 +1,377 @@
+{
+  "created_utc": "2026-09-17T02:10:23.941942+00:00",
+  "question": "Can explicit medium effort preserve independently valid high-quality schedules while avoiding the observed high-effort HTTP timeouts and reducing research time?",
+  "scope": "Two fixed Sonnet 5 medium-effort projects on the same fresh tasks. Compare to retained high-effort and Haiku results; exploratory, one sample per task/configuration.",
+  "prior_cumulative_reserve_usd": 339,
+  "additional_reserve_usd": 8,
+  "cumulative_reserve_usd": 347,
+  "authorized_cap_usd": 5000,
+  "budget_bound": "2 fresh processes share 200000 tokens each across two cycles; Sonnet 5 maximum $10/M gives $4 total maximum, reserve $8. No fallback; normal license.",
+  "code_head": "6803da695bae5ac52895fbbf50603ae550710e87",
+  "code_sha256": {
+    "research.py": "0fefd9eab99a17bd7907ea808956e310088b62fa1569dea20b1cad2b21d18cf7",
+    "memory_consumer.py": "3e41761cdb7413e97591e877cf774dc7ec141612bc3a3d5cbb4a98324d19fe29",
+    "memory_updates.py": "ef16999a27b5ca8c26f2c35c7558b6ee0ff1c3aa92859ad6ff4f0bca2c77afed"
+  },
+  "order": [
+    [
+      0,
+      "B"
+    ],
+    [
+      1,
+      "B"
+    ]
+  ],
+  "arms": {
+    "B": "Optional memory, normal task instructions, Sonnet 5 with requested max_tokens 32768; existing shared token envelope remains enforced."
+  },
+  "model": "claude-sonnet-5",
+  "cycles": 2,
+  "candidates_per_cycle": 2,
+  "max_requests_per_cycle": 3,
+  "max_memory_updates_per_cycle": 1,
+  "shared_process_token_envelope": 200000,
+  "tasks": [
+    {
+      "data": {
+        "instance_id": "workflow-optional-nine-jobs-capacity1-v1",
+        "capacity": 1,
+        "horizon": 14,
+        "jobs": [
+          {
+            "id": "prepare",
+            "release": 0,
+            "duration": 2,
+            "deadline": 2,
+            "value": 1,
+            "demand": 1,
+            "required": true,
+            "after": []
+          },
+          {
+            "id": "gate",
+            "release": 2,
+            "duration": 1,
+            "deadline": 4,
+            "value": 1,
+            "demand": 1,
+            "required": true,
+            "after": [
+              "prepare"
+            ]
+          },
+          {
+            "id": "finish",
+            "release": 12,
+            "duration": 1,
+            "deadline": 14,
+            "value": 1,
+            "demand": 1,
+            "required": true,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "long",
+            "release": 3,
+            "duration": 6,
+            "deadline": 11,
+            "value": 13,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "early",
+            "release": 3,
+            "duration": 2,
+            "deadline": 6,
+            "value": 7,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "middle",
+            "release": 5,
+            "duration": 3,
+            "deadline": 10,
+            "value": 10,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "late",
+            "release": 8,
+            "duration": 3,
+            "deadline": 13,
+            "value": 11,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "short",
+            "release": 4,
+            "duration": 1,
+            "deadline": 9,
+            "value": 4,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "tail",
+            "release": 10,
+            "duration": 2,
+            "deadline": 14,
+            "value": 8,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          }
+        ]
+      },
+      "seed_valid": [
+        [
+          "prepare",
+          0
+        ],
+        [
+          "gate",
+          2
+        ],
+        [
+          "long",
+          3
+        ],
+        [
+          "finish",
+          12
+        ]
+      ],
+      "seed_invalid": [
+        [
+          "prepare",
+          0
+        ],
+        [
+          "gate",
+          2
+        ],
+        [
+          "long",
+          3
+        ],
+        [
+          "early",
+          4
+        ],
+        [
+          "finish",
+          12
+        ]
+      ],
+      "seed_score": 16
+    },
+    {
+      "data": {
+        "instance_id": "workflow-optional-nine-jobs-capacity2-v1",
+        "capacity": 2,
+        "horizon": 14,
+        "jobs": [
+          {
+            "id": "prepare",
+            "release": 0,
+            "duration": 2,
+            "deadline": 2,
+            "value": 1,
+            "demand": 2,
+            "required": true,
+            "after": []
+          },
+          {
+            "id": "gate",
+            "release": 2,
+            "duration": 1,
+            "deadline": 4,
+            "value": 1,
+            "demand": 1,
+            "required": true,
+            "after": [
+              "prepare"
+            ]
+          },
+          {
+            "id": "finish",
+            "release": 10,
+            "duration": 1,
+            "deadline": 14,
+            "value": 1,
+            "demand": 2,
+            "required": true,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "early",
+            "release": 3,
+            "duration": 3,
+            "deadline": 7,
+            "value": 10,
+            "demand": 2,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "middle",
+            "release": 4,
+            "duration": 4,
+            "deadline": 11,
+            "value": 9,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "late",
+            "release": 7,
+            "duration": 3,
+            "deadline": 12,
+            "value": 8,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "quick",
+            "release": 3,
+            "duration": 2,
+            "deadline": 8,
+            "value": 6,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "tail",
+            "release": 9,
+            "duration": 3,
+            "deadline": 14,
+            "value": 12,
+            "demand": 2,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          },
+          {
+            "id": "bridge",
+            "release": 6,
+            "duration": 2,
+            "deadline": 10,
+            "value": 5,
+            "demand": 1,
+            "required": false,
+            "after": [
+              "gate"
+            ]
+          }
+        ]
+      },
+      "seed_valid": [
+        [
+          "prepare",
+          0
+        ],
+        [
+          "gate",
+          2
+        ],
+        [
+          "early",
+          3
+        ],
+        [
+          "finish",
+          10
+        ]
+      ],
+      "seed_invalid": [
+        [
+          "prepare",
+          0
+        ],
+        [
+          "gate",
+          2
+        ],
+        [
+          "early",
+          3
+        ],
+        [
+          "quick",
+          4
+        ],
+        [
+          "finish",
+          10
+        ]
+      ],
+      "seed_score": 13
+    }
+  ],
+  "primary": "Same or greater independently valid achieved quality, complete fixed-round latency and full returned usage; retain failures and unknown timeout costs.",
+  "secondary": [
+    "All API attempts and priced usage",
+    "invalid candidates and repeated schedules",
+    "memory writes and redundant notes",
+    "first valid improvement time"
+  ],
+  "analysis": "Exactly four planned slots, no replacement samples or retries to select wins. Independently recompute every candidate. No optimal answer is included in model instructions. Finite two-round protocol retained even if an early improvement is found.",
+  "requested_response_max_tokens": 32768,
+  "comparator": "model-capacity-20260917: same Sonnet 5 and 32768 output cap, provider default high effort and unchanged 120-second HTTP timeout.",
+  "limitations": [
+    "Adaptive exploration, not a blinded randomized model benchmark.",
+    "The normal configuration path is new; transport observations and focused regression verify the actual model options and unchanged reservation.",
+    "No third task or replacement sample will be added based on outcomes."
+  ],
+  "requested_effort": "medium",
+  "provider_http_timeout_seconds": 120,
+  "model_environment": {
+    "ORZE_ANTHROPIC_MAX_TOKENS": "32768",
+    "ORZE_ANTHROPIC_EFFORT": "medium"
+  },
+  "implementation_change": "Expose only optional Anthropic max_tokens and effort configuration through the normal research route. Preserve absent-setting defaults, strict configuration validation and shared token reservation.",
+  "baseline_backend_sha256": "c8da10b266bb883e765632bcbf7d53840db9f44d15180ad4798529000989f23f",
+  "official_sources": [
+    "https://platform.claude.com/docs/en/models/sonnet-5/migration-guide",
+    "https://platform.claude.com/docs/en/build-with-claude/effort"
+  ],
+  "observed_trigger": "First Sonnet response consumed 9600 output tokens and produced valid score 39; the next call and first capacity-2 call timed out at the existing 120-second transport boundary."
+}
