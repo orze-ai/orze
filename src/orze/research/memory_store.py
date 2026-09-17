@@ -7,8 +7,10 @@ state. An operation is identified by its ID AND expected predecessor revision;
 content returning to older bytes does not revive an old request.
 
 Existing authored records cannot be removed or rewritten. Their bindings may
-refresh for the same source identities; new records may be appended. Capacity
-rejects the whole document. This is not semantic compaction or evidence
+refresh for the same source identities; new records may be appended. Derived
+records are replaceable summaries; their original observations must be kept
+outside this document. Origin is a declaration, not authenticated authorship.
+Capacity rejects the whole document. This is not semantic compaction or evidence
 qualification: every readable document remains pending_verification.
 
 Connections require an existing DELETE/NORMAL database; writers use EXTRA
@@ -138,7 +140,9 @@ def _row(connection, table, scope):
 
 
 def _preserve_records(previous, proposed):
-    old = {entry['id']: entry for entry in previous['entries']}
+    # Protect the prior declaration: an update cannot relabel an authored
+    # record as derived to remove it. Derived summaries can be rebuilt.
+    old = {entry['id']: entry for entry in previous['entries'] if entry['origin'] == 'authored'}
     new = {entry['id']: entry for entry in proposed['entries']}
     if not old.keys() <= new.keys():
         raise MemoryUnavailable('memory_record_removal_refused')

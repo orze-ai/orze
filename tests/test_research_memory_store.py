@@ -189,6 +189,44 @@ def test_removal_capacity_and_append_reorder_preserve_old_records(tmp_path):
     assert json.loads(raw)['entries'][0] in value['document']['entries']
 
 
+def test_derived_snapshot_can_rotate_while_authored_counterexample_survives(tmp_path):
+    results, database, raw = fixture(tmp_path, count=2)
+    value = json.loads(raw)
+    value['entries'][1]['origin'] = 'derived'
+    initialize(results, database, encoded(value))
+    authored = copy.deepcopy(value['entries'][0])
+    replacement = copy.deepcopy(value['entries'][1])
+    replacement.update(id='latest-result', claim='A newly observed result', sources=[])
+    value['entries'] = [authored, replacement]
+    proposed = encoded(value)
+    assert prepare(results, database, proposed, '2'*32, 1)['status'] == 'prepared'
+    assert read(results, database)['reason'] == 'memory_update_pending'
+    assert publish(results, database, proposed, '2'*32, 1)['status'] == 'committed'
+    assert read(results, database)['document']['entries'] == [authored, replacement]
+    # Replacing a derived snapshot does not allow dropping the authored row.
+    value['entries'] = [replacement]
+    assert prepare(results, database, encoded(value), '3'*32, 2)['reason'] == 'memory_record_removal_refused'
+    value['entries'] = [authored]
+    proposed = encoded(value)
+    assert prepare(results, database, proposed, '3'*32, 2)['status'] == 'prepared'
+    assert publish(results, database, proposed, '3'*32, 2)['status'] == 'committed'
+    assert read(results, database)['document']['entries'] == [authored]
+
+
+def test_rewritten_derived_snapshot_still_uses_revision_and_exact_pending_bytes(tmp_path):
+    results, database, raw = fixture(tmp_path)
+    value = json.loads(raw); value['entries'][0]['origin'] = 'derived'
+    initialize(results, database, encoded(value))
+    value['entries'][0]['claim'] = 'Rebuilt from newer observations'
+    value['entries'][0]['sources'][0]['idea_id'] = 'idea-new-result'
+    proposed = encoded(value)
+    assert prepare(results, database, proposed, '2'*32, None)['status'] == 'conflict'
+    assert prepare(results, database, proposed, '2'*32, 1)['status'] == 'prepared'
+    assert publish(results, database, raw, '2'*32, 1)['status'] == 'operation_mismatch'
+    assert publish(results, database, proposed, '2'*32, 1)['status'] == 'committed'
+    assert read(results, database)['document'] == value
+
+
 @pytest.mark.parametrize('action', ['prepare', 'publish'])
 def test_pending_predecessor_conflict_never_takes_over(tmp_path, action):
     results, database, raw = fixture(tmp_path)
