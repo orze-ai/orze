@@ -331,7 +331,17 @@ by 14.00% and 5.77% against the initial 128-candidate winner. The second require
 selecting a slightly worse development-ranked program. The extra selection
 steps cost 238.02 seconds across four projects; this is quality evidence with
 additional decision cost, not an equal-quality speedup. Three negative-control
-programs repeated an existing mean prediction on development rows. Testing an
-earlier choose-and-finish action is the next research question, rather than
-assuming that another program or another decision is always useful. Complete
+programs repeated an existing mean prediction on development rows. Complete
 programs, failures, usage and confirmations are retained in the linked evidence.
+
+The [early-finish follow-up](../../docs/plans/2026-09-17-research-early-finish.zh-CN.md)
+exposes the same explicit choice from the first decision. Across four paired
+workflows, final quality was better in two, identical in one and worse in one;
+calls decreased from 12 to 10. The identical-prediction negative control chose
+the existing candidate immediately and took 73.19% less complete project time
+(54.57% less after excluding source-review pauses). The real Servo improvement
+occurred with all three calls, while Forest Fires regressed with all three calls.
+Changing the available actions can change the entire research trajectory; these
+results do not isolate stopping from candidate generation or justify a default.
+Keep direct selection optional, preserve confirmation, and measure whether
+retrieving past evidence changes a later experiment or final choice.
