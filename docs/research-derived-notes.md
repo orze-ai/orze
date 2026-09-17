@@ -11,3 +11,9 @@ For a small research loop, an explicit controller can retain the best observed d
 No automatic summarization policy is enabled by this storage change. Evaluate the full research cost—including note construction and source verification—against ordinary history access and a cheap conventional search reference before adopting a policy.
 
 Pro now reads only the report IDs cited by notes when capturing their bindings. This avoids an unrelated initial report-page scan and preserves qualification, source-generation checks and existing reference identities.
+
+
+The [actual ML comparison](plans/2026-09-17-research-ml.zh-CN.md) tested the explicit
+best-plus-recent policy above. It reduced provider cost in aggregate but increased
+wall time in all six pairs and improved heldout quality in only one. Keep it
+optional; the local source-read optimization does not establish a research benefit.
