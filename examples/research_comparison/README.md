@@ -292,3 +292,23 @@ and a zero-model pair calculation produced identical final predictions;
 that supported removing redundant calls for that result, without establishing
 that pair-first research would choose a better result. Keep the helper optional
 and confirm the actual selected training procedure.
+
+## Measure a simplification through the complete CPU workflow
+
+The [ensemble-weight follow-up](../../docs/plans/2026-09-17-research-weights.zh-CN.md)
+publishes the [original winning program](../../docs/evidence/runs/2026-09-17-research-weights/weighted_ensemble.py)
+and an [equal-weight version](../../docs/evidence/runs/2026-09-17-research-weights/uniform_ensemble.py).
+Both use the same six estimators and feature transforms; the latter removes
+repeated grouped out-of-fold prediction and ensemble-weight fitting. The
+individual RidgeCV estimator still performs its own regularization selection.
+These recipes expect the documented eight QSAR descriptor columns in order;
+they are task examples, not generic feature definitions.
+
+With the existing development-loss selector, 16 new cases produced one better
+final result and 15 identical prediction vectors. Independently rerunning both
+complete CPU evaluation/selection/refit workflows reduced summed project time
+by 28.80%, compared with roughly 90% for the isolated program evaluation.
+The original partition and some direct program comparisons regressed, including
+all eight shuffled-target controls. Keep the simplified program as an optional
+candidate. The repeated cases establish measured workflow costs, not new
+independent quality samples or model-driven autoresearch speed.
