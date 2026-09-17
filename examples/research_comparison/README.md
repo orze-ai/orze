@@ -253,3 +253,32 @@ This dependency-free adapter fits no model and changes no selection rule.
 Supply development inputs only and bind the facts to the same verified inputs
 and predictions as the project history. An exposed
 coverage gap does not justify automatic clipping or a default model change.
+
+## Compute a two-model mixture from existing predictions
+
+[`prediction_mixture.py`](prediction_mixture.py) finds the best convex pair in a
+finite pool of verified development predictions, including every single model.
+It fits no estimators and uses no numerical optimizer:
+
+```python
+from examples.research_comparison.prediction_mixture import best_pair
+
+choice = best_pair(
+    development_row_ids, development_targets,
+    [{"id": candidate_id, "row_ids": row_ids, "prediction": predictions}, ...],
+)
+```
+
+Each pair predicts `w * left + (1 - w) * right`. Squared error is a quadratic in
+`w`, so its clipped analytic minimum suffices. Endpoints preserve predictions
+exactly; strict improvements replace the current choice and supplied order
+breaks exact ties. Candidate IDs must be unique, prediction rows must match in
+order, and targets and predictions must be finite numbers. The work is
+quadratic in the number of supplied models and linear in evaluation rows.
+
+The caller verifies source artifacts, records this adaptive development
+selection, and refits the selected components for independent confirmation.
+The result proves optimality only among these pairs on these development rows.
+It does not prove heldout gains, optimality among larger ensembles, or that
+further code research is unnecessary. Use it when saved predictions answer the
+current numeric question; it is an optional project helper.
