@@ -425,3 +425,22 @@ reduced program CPU by 46.13% and complete native evaluation-action time by
 and 3 worse; mean MSE increased 0.22% on Fish and 3.74% on Servo. These are
 measured tradeoffs on familiar, overlapping partitions. Neither candidate
 is a universal replacement, and action time is not full research time.
+
+## Let research choose the next action
+
+The [historical-note study](../../docs/plans/2026-09-17-research-memory-transfer.zh-CN.md)
+found no memory benefit and exposed an application-driver mistake: a nominal
+note-writing invocation had already accepted proposals. The driver ignored
+those queued actions, called research again, and assumed `--once` would execute
+the newest task. It executes eligible queued work; admission alone does not
+make a task the next result. Consume actual accepted work and verify its task
+identity before collecting outputs. Preserve failed workflows when completing
+their remaining CPU work.
+
+Use the existing optional memory action within normal research. A separate
+mandatory note-only stage is unnecessary. Fixed candidate selection can measure
+selection, but cannot demonstrate creative discovery. For that objective, the
+application must permit diagnostic experiments and new method code, record
+predictions before results, and give the researcher feedback that can change
+its explanation or next experiment. Diagnostic value and final predictive
+quality are separate outcomes; neither is established by an eloquent rationale.
