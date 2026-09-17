@@ -312,3 +312,26 @@ The original partition and some direct program comparisons regressed, including
 all eight shuffled-target controls. Keep the simplified program as an optional
 candidate. The repeated cases establish measured workflow costs, not new
 independent quality samples or model-driven autoresearch speed.
+
+
+## Separate the generated candidate from the final choice
+
+The [Auto MPG study](../../docs/plans/2026-09-17-research-final-choice.zh-CN.md)
+compares the initial winner, the development minimum after two actual code
+experiments, and an explicit model choice from that same measured history.
+A fixed native action accepts only an existing candidate ID, checks its identity
+and predictions, and reuses its development result without another fit. Freeze
+the selected training procedure before capturing holdout data, then refit it on
+the declared final training pool. Preserve an explicit choice even when its
+development score is worse; do not silently replace it with the automatic
+minimum. Empty or invalid choice handling must be declared before evaluation.
+
+On two overlapping new-task partitions, final model choices reduced holdout MSE
+by 14.00% and 5.77% against the initial 128-candidate winner. The second required
+selecting a slightly worse development-ranked program. The extra selection
+steps cost 238.02 seconds across four projects; this is quality evidence with
+additional decision cost, not an equal-quality speedup. Three negative-control
+programs repeated an existing mean prediction on development rows. Testing an
+earlier choose-and-finish action is the next research question, rather than
+assuming that another program or another decision is always useful. Complete
+programs, failures, usage and confirmations are retained in the linked evidence.
