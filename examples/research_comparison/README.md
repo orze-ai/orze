@@ -371,3 +371,38 @@ unresolved comparison for the next retrieval evaluation; an already supplied
 champion can make additional same-scope scores unhelpful. Reusing an already
 measured complete configuration directly is also worth testing, since requiring
 an opaque candidate ID can encourage another lookup or equivalent new code.
+
+## Select an already measured candidate by value
+
+[`select_existing`](existing_selection.py) accepts either an existing candidate
+ID or a complete candidate object. Use it when the researcher knows the desired
+configuration and would otherwise need a lookup just to recover its ID:
+
+```python
+selected = select_existing(
+    {"kind": "select", "candidate": complete_candidate},
+    qualified_development_history,
+    canonicalize=canonical_candidate,
+    identity=candidate_id,
+)
+```
+
+The application supplies its own canonicalization and identity rules. The
+helper returns the exact existing record, including an explicit choice with
+worse development loss. An absent or incomplete configuration fails; selection
+does not fit a new candidate, find a nearby configuration or choose a winner.
+History must already be qualified for the current data and evaluation scope.
+The caller still checks prediction identities and retains final confirmation.
+This is an application-level action option; it does not change global research
+defaults or establish a measured speedup by itself.
+
+
+The [paired native study](../../docs/plans/2026-09-17-research-reuse.zh-CN.md)
+used this action once: the permuted-label workflow selected the existing mean
+without an ID lookup or a new program. Across the two pairs, final holdout
+quality was unchanged once and slightly better once, calls fell from 5 to 4,
+and total project time fell 33.76% (26.26% excluding source-review pauses).
+The real-data workflow retained its initial model and made an extra evidence
+read in the experimental arm; different programs and response latency also
+contributed to elapsed time. These limited results support keeping the option,
+not a universal stopping rule or a general claim of improved discovery.
