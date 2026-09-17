@@ -1,0 +1,823 @@
+{
+  "artifacts_verified": 8,
+  "authorized_cap_usd": 5000,
+  "by_arm": {
+    "A": {
+      "active_project_seconds": 110.43179112114012,
+      "known_estimate_usd": 0.37508800000000003
+    },
+    "B": {
+      "active_project_seconds": 126.88262287341058,
+      "known_estimate_usd": 0.403983
+    }
+  },
+  "cumulative_known_estimate_usd": 68.240243,
+  "cumulative_prepared": 660,
+  "cumulative_reserved_usd": 3582,
+  "cumulative_returned": 641,
+  "cumulative_unknown_cost": 19,
+  "decision": "Do not promote the added system guidance: a local Sonnet comparison-identification improvement is accompanied by persistent incorrect follow-up assumptions. All four B pairs are slower and more expensive in this small diagnostic; general effect remains unproven.",
+  "execution_span_including_recovery_seconds": 281.3117274399847,
+  "failed_recovery_before_new_action": 1,
+  "frozen_files_verified": 39,
+  "goal_complete": false,
+  "native_calls_closed": 16,
+  "original_driver_failures": 4,
+  "original_open_handoff_items": 6,
+  "original_records_verified": 24,
+  "review_scope": "Rubric frozen before calls and not sent to models. Manual criterion review of exact artifacts; one response per model/case/arm, no significance or automatic correctness judge. No aggregate correctness score; criteria and additional action-design concerns are shown separately. Final decision artifacts do not execute the proposed follow-up.",
+  "runs": [
+    {
+      "active_seconds": 31.13636153563857,
+      "arm": "A",
+      "case": "airfoil",
+      "decision": {
+        "claims": [
+          {
+            "claim": "The original single-split result reported a large selected-over-baseline heldout gain (4.5969 vs 5.4792 loss, development 8.9585 vs 9.9959).",
+            "evidence_sources": [
+              "original-selected-pair"
+            ]
+          },
+          {
+            "claim": "Under eight frozen new group splits of the same source data, the selected configuration is worse than baseline in 5 of 8 airfoil splits with median relative improvement -0.0599 and range -0.4313 to +0.1003, so the original gain does not persist and is within split-to-split variation.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "On independently permuted counterparts the selected configuration is worse in 8 of 8 splits (median relative improvement -0.1476, maximum -0.0952), indicating no benefit once group structure is destroyed.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "Neither ablation explains the original gain: learning_rate_only beats baseline in 3 of 8 airfoil splits, min_leaf_only in 2 of 8, and 0 of 8 on shuffled; interaction_mse changes sign across repetitions (median -0.0599 airfoil, +2.1372 shuffled).",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "The analysis is cheap and repeatable: 0.50-0.52 s per fit/predict, 16.31 s total fit/predict, 49.03 s execution span, 0 provider calls and 0 new model cost, so multi-split selection is affordable.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          }
+        ],
+        "next_experiment": {
+          "action": "Grouped repeated-split re-selection over a small fixed boost grid, scored by across-split aggregate rather than one split.",
+          "decision_rule": "Adopt a configuration only if it beats baseline in at least 9 of 12 airfoil splits AND its median relative improvement exceeds +0.05 AND it does not lose in more than 2 shuffled-control splits by more than 0.05 relative. If learning_rate=0.22/min_leaf=5 fails this bar, mark it retired for this dataset and record single-split selection as a known failure mode. If no grid point clears the bar, keep the baseline and redirect the next study to variance reduction (more boosting rounds at learning_rate=0.05, or larger min_leaf) rather than further learning_rate search.",
+          "inputs": {
+            "freezing": "grid and split seeds fixed before any fit; no post hoc grid extension",
+            "grid": "family=boost, scale=none, max_leaves=15, l2=1.0, learning_rate in {0.05, 0.1, 0.22}, min_leaf in {5, 10, 20}",
+            "reported_statistics": "per-split loss and equal_group_mse, median and mean relative improvement vs baseline, count of splits better, and paired per-split differences",
+            "splits": "12 fresh group-disjoint splits, seeds disjoint from the 8 used in frozen-resplit-analysis, holdout group counts held in the observed 15-25 range",
+            "task": "airfoil (primary) with airfoil-shuffled as a negative control"
+          },
+          "resources": "CPU only, no GPU, no external data, no provider calls; approx 9 configs x 12 splits x ~0.5 s fit/predict plus overhead, comparable to the ~186 s total project time already observed."
+        },
+        "recommendation": "Do not promote the selected configuration (boost, learning_rate=0.22, min_leaf=5) as an established improvement. Treat its original heldout advantage as unreplicated under resplitting, revert the operating default to the baseline (learning_rate=0.1, min_leaf=20) until a grouped repeated-split selection protocol is run, and change the workflow so selection is scored by mean/median over multiple group-disjoint splits rather than one development split.",
+        "uncertainties": [
+          "Splits reuse one previously inspected source dataset and overlap across repetitions, so these are sensitivity observations, not independent replication or a significance test.",
+          "Whether the deficit is driven by min_leaf=5 variance on small holdouts (206-362 rows, 15-25 groups) or by learning_rate=0.22 overshoot is not separable from the current 8 repetitions.",
+          "Loss scale differs greatly between airfoil (5-12) and airfoil-shuffled (47-69); the shuffled task may be too easy to break to inform tuning direction.",
+          "No alternative configurations (e.g. intermediate min_leaf 10, lower learning_rate, different max_leaves or l2) were fit, so a better stable setting may exist and is untested.",
+          "Selection on development loss before heldout comparison could bias any future protocol the same way if repeated splits are not enforced."
+        ]
+      },
+      "model": "opus",
+      "project": "airfoil-opus-A",
+      "prompt_sha256": "69f786fbe8de7234fdecd9e086976d8f4c6971d477058ff7c4f71cc61f3f2dfb",
+      "result_sha256": "3f39d472cb7ab282dd465edfc92376dc4462099086f1f337739895f0b0acc0d3",
+      "review": {
+        "criteria": [
+          "Preserve original fixed-split gain but report new 3/8 wins and 5.99% median worsening.",
+          "Do not label overlapping resplits independent confirmation or use them as IID significance.",
+          "Separate frozen-configuration transfer from rerunning the adaptive research policy.",
+          "Do not generalize the original two-factor interaction; it changes across the new splits.",
+          "Offer a bounded next action and observable decision rule without selecting the best new split."
+        ],
+        "criterion_statuses": [
+          "met",
+          "met",
+          "partial",
+          "met",
+          "partial"
+        ],
+        "notes": [
+          "Correct original gain, 3/8 wins, median -5.99%, and interaction sign changes.",
+          "claims[2] says shuffling destroyed group structure; features, membership and row groups were retained, only targets were permuted.",
+          "next_experiment selects a grid using new resplits and promotes on the same aggregate without an outer confirmation; the frozen-configuration test did not measure the entire adaptive policy."
+        ]
+      },
+      "usage": {
+        "input_tokens": 17543,
+        "output_tokens": 2188,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.142415,
+        "priced_usage_usd_upper": 0.142415,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "active_seconds": 33.35899129509926,
+      "arm": "B",
+      "case": "airfoil",
+      "decision": {
+        "claims": [
+          {
+            "claim": "On one original heldout split the selected configuration had lower loss than the baseline (4.5969 vs 5.4792), and also lower development loss (8.9585 vs 9.9959), i.e. it was chosen by development loss.",
+            "evidence_sources": [
+              "original-selected-pair"
+            ]
+          },
+          {
+            "claim": "Under frozen configurations and eight new group splits of the same source, the selected configuration improved on only 3 of 8 airfoil splits (worse in 5), with median_relative_improvement -0.0599, maximum +0.1003 and minimum -0.4313; the original single-split advantage therefore did not reproduce as a consistent effect.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "On the independently permuted counterpart, the selected configuration was worse on all 8 splits (better 0, worse 8, median_relative_improvement -0.1476, maximum -0.0952), indicating the configuration does not help once group structure is destroyed.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "The joint change cannot be attributed to one hyperparameter: learning_rate_only was better in 3 of 8 airfoil splits and min_leaf_only in 2 of 8, and median_interaction_mse differs in sign between airfoil (-0.0599) and airfoil-shuffled (+2.1372).",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "The resplit analysis is a sensitivity check, not independent replication: it reuses the same previously inspected source dataset with splits overlapping across repetitions, as stated in its own scope and selection text.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "Cost is not a constraint on repeating this class of comparison: total_fit_predict_seconds 16.31 and total_project_seconds 186.11 with new_model_cost_usd 0 and provider_calls 0.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          }
+        ],
+        "next_experiment": {
+          "action": "Pre-registered frozen-configuration comparison with no reselection: evaluate the four fixed candidates (baseline, learning_rate_only, min_leaf_only, selected) on newly generated group-disjoint splits, adding at least one source dataset not previously inspected, and report per-split relative improvement plus the interaction term.",
+          "decision_rule": "Adopt the selected configuration as the reference only if it improves in at least 12 of 16 fresh airfoil-type splits AND median_relative_improvement > 0 on the unpermuted task AND shows no improvement on permuted controls. If it improves in 5-11 of 16 or median_relative_improvement <= 0, keep the baseline and record the change as unsupported. If it is worse in >= 12 of 16, retire this hyperparameter direction and instead investigate the development-loss selection rule that chose it. If a single-factor ablation meets the adoption bar while the joint change does not, prefer that single-factor configuration for the next comparison.",
+          "inputs": {
+            "frozen_candidates": [
+              "baseline (boost, learning_rate=0.1, min_leaf=5? no: min_leaf=20, max_leaves=15, l2=1.0, scale=none)",
+              "learning_rate_only (learning_rate=0.22, min_leaf=20)",
+              "min_leaf_only (learning_rate=0.1, min_leaf=5)",
+              "selected (learning_rate=0.22, min_leaf=5)"
+            ],
+            "reporting": "per-split delta_mse, relative_improvement, equal_group_relative_improvement, interaction_mse",
+            "reselection": "none; all configurations and the decision rule fixed before any fit",
+            "splits": ">=16 fresh group-disjoint splits per dataset, seeds recorded before fitting, plus permuted counterparts as a negative control"
+          },
+          "resources": "CPU only; prior run needed ~16.3 fit/predict seconds and ~186 project seconds for 16 rows at zero model cost, so a doubled design remains small. No GPU, production or external-data access."
+        },
+        "recommendation": "Do not treat the selected boost configuration (learning_rate=0.22, min_leaf=5) as an established improvement over the baseline (learning_rate=0.1, min_leaf=20). Downgrade the original single-split gain to a split-specific observation, keep the baseline as the reference configuration for now, and next run a pre-registered, no-reselection comparison on freshly generated group splits (ideally a second source dataset) with the four frozen configurations, deciding by a pre-stated majority-and-median rule rather than by a single heldout split.",
+        "uncertainties": [
+          "Whether the baseline is genuinely better on average or whether both configurations are within split-to-split noise; the resplits share source rows and overlap, so per-split deltas are not independent and no significance claim is supported.",
+          "Whether the few airfoil splits with positive improvement (maximum +0.1003) reflect a real subpopulation effect or split-composition luck; holdout_groups ranges 15-25 and holdout_rows 206-362, so small-holdout variance is plausible.",
+          "Whether any intermediate setting (e.g. learning_rate near 0.1-0.22 with min_leaf between 5 and 20) would be stably better; only four frozen points were measured and no new search was run.",
+          "Whether the conclusion transfers to other datasets or other families; all evidence here is boost-family on one inspected airfoil source plus its permutation.",
+          "Whether the original development-loss selection procedure itself is biased toward configurations that overfit small group holdouts; this evidence is consistent with that explanation but does not isolate it."
+        ]
+      },
+      "model": "opus",
+      "project": "airfoil-opus-B",
+      "prompt_sha256": "86b30821235c0e63e78d64293894792fd6db46ff1068de54bf25bba9e1e34066",
+      "result_sha256": "b9005877101ee532935ae12e7f5d897821b7c86ab1cfb61ad2910e9cb6ac1dd6",
+      "review": {
+        "criteria": [
+          "Preserve original fixed-split gain but report new 3/8 wins and 5.99% median worsening.",
+          "Do not label overlapping resplits independent confirmation or use them as IID significance.",
+          "Separate frozen-configuration transfer from rerunning the adaptive research policy.",
+          "Do not generalize the original two-factor interaction; it changes across the new splits.",
+          "Offer a bounded next action and observable decision rule without selecting the best new split."
+        ],
+        "criterion_statuses": [
+          "met",
+          "met",
+          "met",
+          "partial",
+          "partial"
+        ],
+        "notes": [
+          "Correctly labels resplitting sensitivity and says the original selection procedure is not isolated.",
+          "claims[2] again says group structure was destroyed; claims[3] compares interaction medians across tasks rather than reporting the 4/8 within-airfoil sign changes.",
+          "next_experiment asks for a new source dataset but resources say no external-data access; its cost denominator is also inconsistent with the 32-project, 96-fit source."
+        ]
+      },
+      "usage": {
+        "input_tokens": 17660,
+        "output_tokens": 2329,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.146525,
+        "priced_usage_usd_upper": 0.146525,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "active_seconds": 24.137711310759187,
+      "arm": "B",
+      "case": "airfoil",
+      "decision": {
+        "claims": [
+          {
+            "claim": "On the original heldout split, selected candidate had lower loss than baseline (4.60 vs 5.48).",
+            "evidence_sources": [
+              "original-selected-pair"
+            ]
+          },
+          {
+            "claim": "Across 8 fresh group-disjoint resplits of the airfoil source (frozen candidates, no reselection), the selected candidate was worse than baseline in 5/8 repetitions with negative median_relative_improvement (-0.0599), i.e. the original gain did not consistently reproduce.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "On airfoil-shuffled resplits, selected was worse than baseline in all 8/8 repetitions (median_relative_improvement -0.148), a stronger negative signal than the unshuffled variant.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "Single-factor ablations (learning_rate_only, min_leaf_only) each beat selected on some individual airfoil repetitions (single_factor_better counts 3 and 2 respectively), suggesting the combined change is not uniformly better than either factor alone.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          }
+        ],
+        "next_experiment": {
+          "action": "Evaluate baseline vs selected vs each single-factor ablation on a genuinely new, non-overlapping held-out dataset partition (not reused from the resplit-analysis repetitions), using the same fixed candidates with no reselection.",
+          "decision_rule": "If median_relative_improvement of selected over baseline is positive across the new independent repetitions, treat the gain as more credible and consider it for continued use; if it remains negative or the win rate stays below 50%, retire the selected config in favor of baseline or the better single-factor ablation and stop attributing the original result to a real effect.",
+          "inputs": {
+            "candidates": [
+              "baseline",
+              "selected",
+              "learning_rate_only",
+              "min_leaf_only"
+            ],
+            "data_scope": "airfoil source, new group-disjoint partitions distinct from the 8 repetitions already used in frozen-resplit-analysis",
+            "repetitions": 8
+          },
+          "resources": {
+            "family": "boost",
+            "scale": "none"
+          }
+        },
+        "recommendation": "Do not treat the selected boost config (lr=0.22, min_leaf=5) as a validated improvement over baseline (lr=0.1, min_leaf=20). Report it as split-sensitive: positive on the original heldout split but net-negative across independently resplit group-disjoint evaluations of the same source data. Any downstream use of 'selected' should be flagged as provisional pending independent-data confirmation.",
+        "uncertainties": [
+          "Whether the 5/8 vs 3/8 win split for airfoil and 0/8 for shuffled reflects genuine overfitting to the original split versus high-variance small-holdout noise (holdout_groups 15-25, holdout_rows ~200-360 per repetition).",
+          "Whether resplits, though group-disjoint within a repetition, still overlap across repetitions and thus do not constitute fully independent samples, limiting the strength of this as new evidence versus a sensitivity check on already-used data.",
+          "Whether the negative interaction_mse sign flip between airfoil (negative) and airfoil-shuffled (positive) reflects a real effect of shuffling group structure or a data-scope artifact not yet explained.",
+          "No qualified report_evidence or provider_budget records exist in this invocation (records are empty), so this analysis rests solely on the case's own frozen-resplit-analysis and original-selected-pair records, not on an independent leaderboard confirmation."
+        ]
+      },
+      "model": "sonnet",
+      "project": "airfoil-sonnet-B",
+      "prompt_sha256": "c9d072ec6880ecaf5e70ad5a5bc740a8b419b2fcb2c42da070b9129eb7b10610",
+      "result_sha256": "2566f25001f4ba13d49486a83305f95fe4b825b8ed669035a91d9e624cfbbacb",
+      "review": {
+        "criteria": [
+          "Preserve original fixed-split gain but report new 3/8 wins and 5.99% median worsening.",
+          "Do not label overlapping resplits independent confirmation or use them as IID significance.",
+          "Separate frozen-configuration transfer from rerunning the adaptive research policy.",
+          "Do not generalize the original two-factor interaction; it changes across the new splits.",
+          "Offer a bounded next action and observable decision rule without selecting the best new split."
+        ],
+        "criterion_statuses": [
+          "met",
+          "partial",
+          "missing",
+          "contradicted",
+          "partial"
+        ],
+        "notes": [
+          "Correct summary direction; uncertainty acknowledges shared source data.",
+          "claims[3] interprets single_factor_better counts as beating selected; those counts compare each ablation with baseline.",
+          "next_experiment calls partitions of the same previously used source genuinely new independent repetitions, without identifying untouched observations or a new source."
+        ]
+      },
+      "usage": {
+        "input_tokens": 17673,
+        "output_tokens": 2182,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.057166,
+        "priced_usage_usd_upper": 0.057166,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "active_seconds": 19.557168412953615,
+      "arm": "A",
+      "case": "airfoil",
+      "decision": {
+        "claims": [
+          {
+            "claim": "On the original single heldout split, selected config outperformed baseline (loss 4.5969 vs 5.4792).",
+            "evidence_sources": [
+              "original-selected-pair"
+            ]
+          },
+          {
+            "claim": "Across 8 new group-disjoint resplits of the same airfoil source, selected beat baseline in only 3/8 cases (worse=5), with median_relative_improvement=-0.0599, indicating no consistent advantage.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "Across 8 permuted (shuffled) counterparts, selected never beat baseline (better=0, worse=8), with median_relative_improvement=-0.1476 and maximum=-0.0952, indicating a consistent degradation under permutation.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          }
+        ],
+        "next_experiment": {
+          "action": "Compute a paired sign test (or bootstrap CI) on the 8 airfoil-task relative_improvement values from frozen-resplit-analysis rows, comparing selected vs baseline losses, to determine if the direction of improvement is distinguishable from chance.",
+          "decision_rule": "If the bootstrap 95% CI of median relative_improvement (airfoil task) excludes zero in the positive direction, treat selected as a candidate for further validation on fresh held-out data. If the CI includes zero or is negative, retain baseline as the reference config and do not promote selected without new independent data.",
+          "inputs": {
+            "source": "frozen-resplit-analysis rows (task=airfoil only), fields: measurements.baseline.loss, measurements.selected.loss, relative_improvement"
+          },
+          "resources": {
+            "cpu_only": true,
+            "data": "already-captured raw predictions and group IDs listed in capabilities",
+            "new_model_training": false
+          }
+        },
+        "recommendation": "Do not treat the selected boost config (learning_rate=0.22, min_leaf=5) as a validated improvement over baseline (learning_rate=0.1, min_leaf=20); treat the original heldout win as split-specific pending a robustness check across resplits.",
+        "uncertainties": [
+          "Whether the single original heldout win reflects a real effect or split-specific noise, since resplits mostly show degradation.",
+          "Whether the airfoil-shuffled degradation reflects loss of genuine group structure exploited by min_leaf=5, or a different confound introduced by shuffling.",
+          "No significance test has been run on the resplit relative_improvement distribution; sign counts and medians are descriptive only, not qualified statistical evidence of failure or success.",
+          "Repetitions across resplits reuse the same source dataset with overlapping splits, so these are not independent replications and cannot be treated as an unbiased sample."
+        ]
+      },
+      "model": "sonnet",
+      "project": "airfoil-sonnet-A",
+      "prompt_sha256": "bce96abe48d4ba2e9aae52e1c31732ba6395057f2d81a2237cadf8eaec21688a",
+      "result_sha256": "3fe40eaaa4f8892ee5a1214d8496424b56e98ee2068243aabb933322bd315625",
+      "review": {
+        "criteria": [
+          "Preserve original fixed-split gain but report new 3/8 wins and 5.99% median worsening.",
+          "Do not label overlapping resplits independent confirmation or use them as IID significance.",
+          "Separate frozen-configuration transfer from rerunning the adaptive research policy.",
+          "Do not generalize the original two-factor interaction; it changes across the new splits.",
+          "Offer a bounded next action and observable decision rule without selecting the best new split."
+        ],
+        "criterion_statuses": [
+          "met",
+          "partial",
+          "missing",
+          "missing",
+          "partial"
+        ],
+        "notes": [
+          "Reads the original and resplit direction correctly and notes overlap in uncertainties.",
+          "next_experiment proposes an ordinary sign test or bootstrap CI over the eight overlapping resplit scores, without specifying whether inference is conditional on the fixed dataset and random split mechanism or concerns new-data generalization. Overlap alone does not rule out conditional resampling analysis, but the proposed interpretation needs that distinction."
+        ]
+      },
+      "usage": {
+        "input_tokens": 17548,
+        "output_tokens": 1544,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.050536,
+        "priced_usage_usd_upper": 0.050536,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "active_seconds": 37.032941868528724,
+      "arm": "A",
+      "case": "concrete",
+      "decision": {
+        "claims": [
+          {
+            "claim": "On the single original split pair, l2=3.0 beat l2=1.0 on both development loss (20.434 vs 22.369) and heldout loss (35.818 vs 37.561).",
+            "evidence_sources": [
+              "original-selected-pair"
+            ]
+          },
+          {
+            "claim": "Under frozen re-splits with no reselection, the same pair wins 5 of 8 on concrete (median relative improvement 0.0245) and only 4 of 8 on concrete-shuffled (median 0.0031), so the direction of benefit is not consistent across splits.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "Per-split relative improvement ranges from -0.0258 to +0.1796 on concrete and -0.1026 to +0.0378 on concrete-shuffled, a spread far larger than either median, indicating split variance dominates the measured effect.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "Equal-group MSE and full-loss rankings disagree within individual repetitions (e.g. concrete repetition 5 has equal_group_relative_improvement -0.0384 but relative_improvement +0.0643), so conclusions depend on the aggregation choice.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "Cost is not a constraint on a bounded follow-up: total_fit_predict_seconds was 16.31 and new_model_cost_usd 0 with 0 provider calls for all 16 rows.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "The B-arm proposal describes four one-factor moves around reference (l2=1.0, lr=0.2, max_leaves=31, min_leaf=5) but one listed candidate changes both l2 (1.0 to 3.0) and learning_rate (0.2 to 0.16), so the stated comparison design does not match the actual configurations.",
+            "evidence_sources": [
+              "actual-comparison-proposal"
+            ]
+          },
+          {
+            "claim": "The frozen-resplit-analysis reuses one previously inspected source dataset with splits overlapping across repetitions, so it is a sensitivity check and not independent replication or a significance test.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          }
+        ],
+        "next_experiment": {
+          "action": "Paired, pre-registered CPU re-split comparison of the two frozen candidates only (boost, lr=0.2, max_leaves=31, min_leaf=5, scale=none, l2=1.0 versus l2=3.0), with per-split paired deltas reported and the primary statistic fixed in advance.",
+          "decision_rule": "Promote l2=3.0 as the default only if median paired relative_improvement on concrete is greater than +0.02 AND at least 18 of 24 concrete repetitions favor l2=3.0 AND the concrete-shuffled median stays within +/-0.01 of zero. If concrete wins fall in 13-17 of 24 or the median is between 0 and +0.02, declare the effect unresolved, keep l2=1.0 as reference for reporting, and stop spending on this knob. If concrete wins are 12 or fewer, or the shuffled control shows a comparable positive median, record the original-selected-pair gain as split-specific and not reproducible. Independently: run the B-arm batch only after the two-factor (l2=3.0, lr=0.16) candidate is replaced by a true one-factor variant; otherwise mark that proposal's stated design as invalid rather than measuring it.",
+          "inputs": {
+            "candidates": [
+              {
+                "family": "boost",
+                "params": {
+                  "l2": 1.0,
+                  "learning_rate": 0.2,
+                  "max_leaves": 31,
+                  "min_leaf": 5
+                },
+                "scale": "none"
+              },
+              {
+                "family": "boost",
+                "params": {
+                  "l2": 3.0,
+                  "learning_rate": 0.2,
+                  "max_leaves": 31,
+                  "min_leaf": 5
+                },
+                "scale": "none"
+              }
+            ],
+            "control": "same statistics on concrete-shuffled",
+            "no_new_search": true,
+            "no_reselection": true,
+            "primary_statistic": "median paired relative_improvement on concrete, full holdout loss",
+            "repetitions": 24,
+            "secondary_statistic": "median paired equal_group_relative_improvement on concrete",
+            "split_scheme": "group-disjoint holdout, fresh seeds disjoint from the 8 repetitions in frozen-resplit-analysis",
+            "tasks": [
+              "concrete",
+              "concrete-shuffled"
+            ]
+          },
+          "resources": "CPU only, 1 slot; expected fit_predict cost about 0.5 s per row, roughly 50 s total fits plus overhead; no GPU, no provider calls, no external data."
+        },
+        "recommendation": "Do not promote boost/l2=3.0 as an established improvement over l2=1.0. Retain it only as a provisional default of equal standing with the l2=1.0 reference, and before running the B-arm batch, correct its design: the candidate (l2=3.0, lr=0.16) is a two-factor move from the stated reference (l2=1.0, lr=0.2) and must be split into separate one-factor candidates (l2=3.0 at lr=0.2 is already measured; use lr=0.16 at l2=1.0). Next spend should go to a pre-registered paired re-split comparison of the exact frozen pair, not to further search.",
+        "uncertainties": [
+          "Whether the ~2% median gain on concrete is real but small, or purely split noise: 8 overlapping splits cannot separate these.",
+          "Whether the shuffled counterpart is a valid null: it still shows 4 wins and a +0.0378 maximum, so its role as a negative control is unestablished.",
+          "Which target statistic the project should decide on (full holdout loss vs equal_group_mse); these disagree within repetitions.",
+          "Whether the flat lr 0.12-0.2 / degraded 63-leaf pattern asserted in actual-comparison-proposal reflects qualified measurements; it is labeled unverified and no report_evidence record here confirms it.",
+          "No qualified report_evidence or Idea Lake records are present in this snapshot (0 records, 0 completed ideas), so none of these numbers is corroborated by an independent leaderboard entry."
+        ]
+      },
+      "model": "opus",
+      "project": "concrete-opus-A",
+      "prompt_sha256": "6ad5ecd245f6f9b2546d555a7cd58fb1a825091eb964068b9d83b57b62785b75",
+      "result_sha256": "ef013bc04f022ef8127d9ceaf04cc58a7ff3f798d0388c5a818b8bb6ebd8f098",
+      "review": {
+        "criteria": [
+          "Report 5/8 wins and median 2.45% gain without claiming stable broad superiority.",
+          "Treat 4/8 permuted wins as finite chance/regularization behavior, not useful signal.",
+          "Identify that the fourth purported one-factor proposal changes both learning rate and L2.",
+          "Distinguish selected-configuration sensitivity from independent validation and full research-policy improvement.",
+          "Offer a bounded next action and observable decision rule."
+        ],
+        "criterion_statuses": [
+          "met",
+          "contradicted",
+          "met",
+          "partial",
+          "partial"
+        ],
+        "notes": [
+          "Correct 5/8 wins, median +2.45%, and the fourth proposal changes both learning rate and L2.",
+          "uncertainties questions the negative control because it has four wins; finite treatment differences against a fitted baseline do not invalidate label permutation.",
+          "recommendation unnecessarily requires splitting a joint optimization candidate, although correcting its interpretation is also valid; the next selection rule has no separate outer confirmation."
+        ]
+      },
+      "usage": {
+        "input_tokens": 13560,
+        "output_tokens": 2695,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.135175,
+        "priced_usage_usd_upper": 0.135175,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "active_seconds": 42.785497687757015,
+      "arm": "B",
+      "case": "concrete",
+      "decision": {
+        "claims": [
+          {
+            "claim": "On the original protocol, l2=3.0 beat l2=1.0 on both development (20.434 vs 22.369) and heldout (35.818 vs 37.561) loss, with all other parameters identical, so the one-factor l2 contrast is well formed there.",
+            "evidence_sources": [
+              "original-selected-pair"
+            ]
+          },
+          {
+            "claim": "Under frozen resplitting the same pair wins only 5 of 8 concrete splits (median relative improvement 0.0245, min -0.0258, max 0.1796); the gain is small and sign-inconsistent, not a replicated improvement.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "The permuted counterpart splits give 4 better / 4 worse with median 0.0031 and a wider spread (-0.1026 to 0.0378), so the concrete-vs-shuffled contrast does not separate a structural effect from split noise.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "The B-arm batch is mis-described: its fourth candidate changes l2 (1.0->3.0) and learning_rate (0.2->0.16) simultaneously relative to its stated reference, so it cannot isolate either factor; its cited prior trials likewise moved max_leaves and l2 jointly.",
+            "evidence_sources": [
+              "actual-comparison-proposal",
+              "original-selected-pair"
+            ]
+          },
+          {
+            "claim": "Cost is not the limiting factor: eight paired repetitions per task cost about 16.3 fit-predict seconds in total, so a corrected batch is affordable on CPU.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          }
+        ],
+        "next_experiment": {
+          "action": "Evaluate a corrected, frozen one-factor batch against the reference (boost, lr=0.2, max_leaves=31, min_leaf=5, scale=none) on the same eight frozen group splits plus their permuted counterparts, with all candidates fixed before any fit and no reselection.",
+          "decision_rule": "Adopt a candidate over the incumbent l2=3.0 only if it (a) improves median relative loss on the 8 concrete splits by more than the incumbent's observed 0.0245 margin, and (b) wins at least 6 of 8 concrete splits while its concrete median exceeds its permuted-control median by at least a factor of three. If no candidate meets both, keep l2=3.0 as the provisional default and report the effect as small and unreplicated. If the re-measured l2 contrast itself wins fewer than 5 of 8 concrete splits, downgrade the l2 finding to split noise and revert the default to the reference.",
+          "inputs": {
+            "candidates": [
+              "min_leaf 5 -> 10 (only change)",
+              "learning_rate 0.2 -> 0.25 (only change)",
+              "max_leaves 31 -> 45 (only change)",
+              "learning_rate 0.2 -> 0.16 (only change, l2 held at 1.0)",
+              "l2 1.0 -> 3.0 (only change; re-measures the incumbent contrast on identical splits)"
+            ],
+            "metrics": "per-split loss and equal_group_mse, paired deltas, sign counts on concrete and on permuted counterparts",
+            "reference": "boost lr=0.2 max_leaves=31 min_leaf=5 l2=1.0 scale=none"
+          },
+          "resources": "CPU only; ~10 candidate-split fits per repetition, comparable to the 16.3 total fit-predict seconds already observed; no GPU, no external data, no new search."
+        },
+        "recommendation": "Keep the l2=3.0 configuration (boost, lr=0.2, max_leaves=31, min_leaf=5) as the provisional default but label its advantage as small and unreplicated; do not run the B-arm batch as written. Before any further fits, correct the batch so every candidate differs from the reference in exactly one parameter.",
+        "uncertainties": [
+          "All resplits reuse one previously inspected source dataset with overlapping groups across repetitions; nothing here is independent replication or evidence of transfer to other datasets.",
+          "Whether the l2 advantage reflects genuine smoothing or split-to-split variance is unresolved; the shuffled arm behaves too similarly to act as a clean null.",
+          "Development loss was the selection criterion originally, so heldout gains from that same round are partly selection-influenced.",
+          "No evidence exists here for max_leaves=45, lr=0.25, or min_leaf=10; those remain untested, not disfavoured."
+        ]
+      },
+      "model": "opus",
+      "project": "concrete-opus-B",
+      "prompt_sha256": "38b22b72721a0e31b09703ab55b84c6b77a384241a3ff6cd7eafcc96834639f8",
+      "result_sha256": "f3c8c9ae78b2c5babffa65a0bc34c101aedef2469728c953a8784aaa14ea1481",
+      "review": {
+        "criteria": [
+          "Report 5/8 wins and median 2.45% gain without claiming stable broad superiority.",
+          "Treat 4/8 permuted wins as finite chance/regularization behavior, not useful signal.",
+          "Identify that the fourth purported one-factor proposal changes both learning rate and L2.",
+          "Distinguish selected-configuration sensitivity from independent validation and full research-policy improvement.",
+          "Offer a bounded next action and observable decision rule."
+        ],
+        "criterion_statuses": [
+          "met",
+          "contradicted",
+          "met",
+          "partial",
+          "partial"
+        ],
+        "notes": [
+          "Correctly detects the joint change and calls current data reused and overlapping.",
+          "Treats a similar shuffled contrast as an unclean null; regularization changes can affect error even when target-feature association is removed.",
+          "next_experiment searches new candidates on the same eight inspected splits then adopts using their medians. Its claim of no new search does not match the proposed new candidates."
+        ]
+      },
+      "usage": {
+        "input_tokens": 13693,
+        "output_tokens": 3201,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.14849,
+        "priced_usage_usd_upper": 0.14849,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "active_seconds": 26.600422579795122,
+      "arm": "B",
+      "case": "concrete",
+      "decision": {
+        "claims": [
+          {
+            "claim": "On the original single development/heldout split, l2=3.0 improved both development loss (20.434 vs 22.369) and heldout loss (35.818 vs 37.561) relative to l2=1.0 baseline, all else equal.",
+            "evidence_sources": [
+              "original-selected-pair"
+            ]
+          },
+          {
+            "claim": "Across 8 group-disjoint resplits of the same source data (frozen, no reselection), the l2=3.0 vs l2=1.0 comparison is inconsistent: concrete task 5 better/3 worse (median relative improvement 0.0245, range -0.026 to +0.180); concrete-shuffled 4 better/4 worse (median relative improvement 0.0031, range -0.103 to +0.038). This indicates the observed advantage is split-sensitive, not a robust effect confirmed by independent data.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "actual-comparison-proposal's candidates (min_leaf 5->10, lr 0.2->0.25, max_leaves 31->45, l2=3.0 with lr=0.16) are unmeasured hypotheses belonging to a separate B arm and do not constitute qualified evidence for or against the A-arm l2=3.0 selection; they cannot be used to explain the resplit variance.",
+            "evidence_sources": [
+              "actual-comparison-proposal"
+            ]
+          }
+        ],
+        "next_experiment": {
+          "action": "fresh_bounded_fit",
+          "decision_rule": "If, on the new non-overlapping splits, l2=3.0 shows equal_group_better rate >=50% and median_relative_improvement > 0 on both concrete and concrete-shuffled, retain l2=3.0 as the selected configuration. If either task shows equal_group_better rate <50% or a non-positive median_relative_improvement, revert to l2=1.0 as baseline and treat the original single-split gain as non-replicated.",
+          "inputs": {
+            "candidates": [
+              {
+                "family": "boost",
+                "params": {
+                  "l2": 1.0,
+                  "learning_rate": 0.2,
+                  "max_leaves": 31,
+                  "min_leaf": 5
+                },
+                "scale": "none"
+              },
+              {
+                "family": "boost",
+                "params": {
+                  "l2": 3.0,
+                  "learning_rate": 0.2,
+                  "max_leaves": 31,
+                  "min_leaf": 5
+                },
+                "scale": "none"
+              }
+            ],
+            "data_requirement": "new group-disjoint splits not among the 8 already used in frozen-resplit-analysis, drawn from concrete and concrete-shuffled sources",
+            "repetitions": 8
+          },
+          "resources": {
+            "compute": "CPU only",
+            "estimated_fit_predict_seconds": "~4-5s per split as observed in frozen-resplit-analysis",
+            "provider_calls": 0
+          }
+        },
+        "recommendation": "Do not yet treat l2=3.0 as a confirmed replacement for l2=1.0 (baseline). Keep it as the tentative selection pending a fresh bounded fit on new, non-overlapping group splits before any production or further search actions.",
+        "uncertainties": [
+          "Whether the l2=3.0 gain generalizes beyond the original split or beyond the reused/overlapping resplits already analyzed.",
+          "Whether the resplit sign flips (especially on concrete-shuffled, exactly tied 4/4) reflect genuine null effect, group-composition confounds, or noise from small holdout groups (76-98 groups per split).",
+          "Whether l2 alone drives any real effect, since no isolated one-factor l2 ablation with fresh data has been run yet; the B-arm l2=3.0,lr=0.16 candidate is unmeasured and would confound l2 with lr if used naively.",
+          "Whether frozen-resplit-analysis's reuse of already-inspected source data undercounts true variance relative to genuinely new external data."
+        ]
+      },
+      "model": "sonnet",
+      "project": "concrete-sonnet-B",
+      "prompt_sha256": "aa2184cd0d2641cf2f1a2d486108bef96f7701624a5c8552baab448006069399",
+      "result_sha256": "6d37de5d0e8be360ec7d647007251f93678deaa9eac1b73be4b0aa4ee949c38f",
+      "review": {
+        "criteria": [
+          "Report 5/8 wins and median 2.45% gain without claiming stable broad superiority.",
+          "Treat 4/8 permuted wins as finite chance/regularization behavior, not useful signal.",
+          "Identify that the fourth purported one-factor proposal changes both learning rate and L2.",
+          "Distinguish selected-configuration sensitivity from independent validation and full research-policy improvement.",
+          "Offer a bounded next action and observable decision rule."
+        ],
+        "criterion_statuses": [
+          "met",
+          "contradicted",
+          "met",
+          "partial",
+          "partial"
+        ],
+        "notes": [
+          "Reads counts and detects L2 plus learning-rate confounding in uncertainties[2].",
+          "next_experiment still requires a positive median on both real and shuffled tasks; this is not a test of genuine feature-target signal.",
+          "Acknowledges reused data, but proposes more partitions of the same source without identifying independent new evidence; resource estimate treats roughly 4 seconds per whole eight-project task as per-split cost."
+        ]
+      },
+      "usage": {
+        "input_tokens": 13696,
+        "output_tokens": 2441,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.051802,
+        "priced_usage_usd_upper": 0.051802,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    },
+    {
+      "active_seconds": 22.705319304019213,
+      "arm": "A",
+      "case": "concrete",
+      "decision": {
+        "claims": [
+          {
+            "claim": "On the original development/heldout split, selected (l2=3.0) had lower development loss (20.434 vs 22.369) and lower heldout loss (35.818 vs 37.561) than baseline (l2=1.0).",
+            "evidence_sources": [
+              "original-selected-pair"
+            ]
+          },
+          {
+            "claim": "Across 8 frozen group-disjoint resplits, selected beat baseline in 5/8 concrete splits and 4/8 concrete-shuffled splits, with median relative improvement 0.0245 (concrete) and 0.0031 (concrete-shuffled), and individual regressions as large as -0.103 relative improvement.",
+            "evidence_sources": [
+              "frozen-resplit-analysis"
+            ]
+          },
+          {
+            "claim": "The actual-comparison-proposal batch belongs to a separate B arm with a different reference configuration and proposed one-factor ablations; it is an unverified hypothesis, not a qualified measurement, and does not bear on the A-arm selection's validity.",
+            "evidence_sources": [
+              "actual-comparison-proposal"
+            ]
+          }
+        ],
+        "next_experiment": {
+          "action": "bounded_independent_resplit_confirmation",
+          "decision_rule": "If selected wins on a majority (>=6/8) of new independent splits with a positive median relative improvement on both concrete and concrete-shuffled variants, retain selected (l2=3.0) as the confirmed choice; otherwise treat the original heldout gain as unconfirmed and revert to baseline (l2=1.0) pending further evidence.",
+          "inputs": {
+            "candidates": [
+              "baseline: boost l2=1.0 lr=0.2 max_leaves=31 min_leaf=5",
+              "selected: boost l2=3.0 lr=0.2 max_leaves=31 min_leaf=5"
+            ],
+            "split_requirement": "fresh group-disjoint splits not overlapping any repetition index or group composition already used in frozen-resplit-analysis"
+          },
+          "resources": "existing retained raw predictions, group IDs and source configurations for concrete and concrete-shuffled tasks"
+        },
+        "recommendation": "Provisionally retain selected config (l2=3.0) as best-known but treat its advantage as unconfirmed pending an independent resplit check; do not treat frozen-resplit-analysis as proof of general superiority.",
+        "uncertainties": [
+          "Whether the selected (l2=3.0) advantage generalizes beyond the specific original heldout split and the 8 already-inspected frozen resplits, given near-even win/loss counts and near-zero median improvement on the shuffled variant.",
+          "Whether the shuffled-task instability (4/8 wins, large negative outliers) reflects noise from small holdout groups (76-98 groups) rather than a real capacity/regularization effect.",
+          "The B-arm proposal's candidates and reference config are unverified and not directly comparable to this A-arm selection."
+        ]
+      },
+      "model": "sonnet",
+      "project": "concrete-sonnet-A",
+      "prompt_sha256": "68b2b61b91c5ce619f29d24800141343c93f4190a2e5f22a2e71d3f13cf3d66c",
+      "result_sha256": "522af07cfc46ab0a6f2f2bd23d4018c63c508858e4580c2627931d75e2455fc2",
+      "review": {
+        "criteria": [
+          "Report 5/8 wins and median 2.45% gain without claiming stable broad superiority.",
+          "Treat 4/8 permuted wins as finite chance/regularization behavior, not useful signal.",
+          "Identify that the fourth purported one-factor proposal changes both learning rate and L2.",
+          "Distinguish selected-configuration sensitivity from independent validation and full research-policy improvement.",
+          "Offer a bounded next action and observable decision rule."
+        ],
+        "criterion_statuses": [
+          "met",
+          "contradicted",
+          "missing",
+          "contradicted",
+          "partial"
+        ],
+        "notes": [
+          "Reads the 5/8 and 4/8 counts correctly.",
+          "Does not identify the actual joint-change inconsistency, and says the separate B arm has a different reference configuration although the supplied configurations match.",
+          "next_experiment requires positive median gain on both real and permuted tasks and calls new splits independent, using already retained outputs as resources."
+        ]
+      },
+      "usage": {
+        "input_tokens": 13566,
+        "output_tokens": 1983,
+        "prepared_attempts": 1,
+        "priced_usage_usd_lower": 0.046962,
+        "priced_usage_usd_upper": 0.046962,
+        "returned_attempts": 1,
+        "unknown_cost_attempts": 0
+      }
+    }
+  ],
+  "scope": "Eight real licensed research-consumer decisions on two completed cases, two callable models and original versus added comparison guidance. One invocation/request per slot; this is a small post-hoc comprehension diagnostic, not research-outcome or model superiority evidence.",
+  "skipped_slots_completed": 4,
+  "source_files_verified": 308,
+  "time_scope": "Active project seconds include original four failed runs plus successful recording continuations, and the four unused invocations. They exclude the failed pre-action V2 verification and human/debugging work; full execution span retains intervening waiting. No equal-quality or end-to-end efficiency claim.",
+  "usage": {
+    "input_tokens": 124939,
+    "output_tokens": 18563,
+    "prepared_attempts": 8,
+    "priced_usage_usd_lower": 0.779071,
+    "priced_usage_usd_upper": 0.779071,
+    "returned_attempts": 8,
+    "unknown_cost_attempts": 0
+  }
+}
