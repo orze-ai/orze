@@ -464,3 +464,27 @@ concentrations or row IDs. The native application owns code review, bound
 artifacts, resource limits and final confirmation. Syntax checks alone are not
 a sandbox. A valid diagnostic calculation does not establish its interpretation,
 and a novel method still needs independent confirmation.
+
+## Actively choosing what to measure
+
+`active_experiment.py` supports applications where a researcher can request a
+new experiment, analyze the observations accumulated so far, and submit a
+predictor. The application owns the experiment runner and the hidden evaluation;
+the researcher is not limited to selecting an existing estimator.
+
+- `protocols` checks the laboratory's declared input sequences.
+- `analyze` runs reviewed code over acquired observations and research history.
+- `predict` gives a frozen program those observations and new input protocols,
+  without their reference outputs. `score` evaluates predictions externally.
+
+The current laboratory example uses one scalar input per second in `[0, 1]`;
+these limits describe that application, not all Orze experiments. The normal
+native CPU action contract carries each request and its measured result. A
+synthetic laboratory can test whether an agent distinguishes hidden mechanisms;
+success there does not establish a real scientific discovery.
+
+[Experimental design guidance](experimental_design.md) can be included in the
+project rules. It uses the existing hypothesis field to connect competing
+explanations, contrasting predictions and the decision after an experiment.
+Its effect needs measurement on actual research trajectories; it is not a new
+mandatory response schema or a global research policy.
