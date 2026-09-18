@@ -516,3 +516,31 @@ A score and a prose description cannot establish that the next program kept
 all other features, transformations and fitting settings fixed. Computed
 findings also remain claims to inspect: a correctly calculated number can have
 an incorrect name or interpretation.
+
+## Reusing the exact measured program
+
+`source_edits.resolve(action, history)` accepts a full new program or an optional
+method edit with `parent_id` (the complete measured action identity) and an
+`edits` list of `{"old": "exact text", "new": "replacement text"}`. It checks the
+parent's validity and content identity, then applies each uniquely matching
+replacement in order. Missing or ambiguous matches fail. The caller supplies
+current, source-qualified history, reviews the expanded source before execution,
+and retains both the requested edits and the complete program actually run.
+
+Make that parent source available to the researcher as well as its score.
+Exact edits preserve unmentioned text, but even a one-line change can affect
+several scientific factors. Attribution still requires inspecting the method
+and its measurements; the edit count is not a research-quality metric.
+
+The reviewed-source examples allow in-memory `json` and `collections` utilities.
+File I/O and dynamic execution remain outside their contract. Regression
+applications can supply `input_fields` for their own feature schema; evaluation
+labels, group IDs and row IDs cannot be passed through that option.
+
+In the [patient-transfer study](../../docs/plans/2026-09-18-research-parent.zh-CN.md),
+the two source-enabled trajectories never used exact edits: their displayed
+leader remained the median baseline. Related failed or non-leading programs
+were not automatically displayed. One of four trajectories passed the held-out
+quality milestone, in the arm without this extra source block. This study does
+not establish a research benefit from source reuse; relevant-source access,
+actual use and scientific quality need separate evaluation.
