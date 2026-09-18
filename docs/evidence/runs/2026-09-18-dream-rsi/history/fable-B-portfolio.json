@@ -1,0 +1,367 @@
+{
+  "schema": 1,
+  "mode": "replay",
+  "spec": {
+    "plan": {
+      "branches": 1,
+      "calls": 6,
+      "depth": 6,
+      "workers": 1
+    },
+    "problem_id": "uci275-same-development-split",
+    "protocol_id": "f8da4a845887cd29017cec467033062b76d237c2174b075c7d8abd20d28171f3",
+    "root": {
+      "artifact": {
+        "baselines": [
+          {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\ndef fit_predict(train, inputs, seed):\n    return [float(np.median(train['y']))]*len(inputs['X'])\n"
+            },
+            "facts": {
+              "group_mae": 204.26571038251365,
+              "groups": 61,
+              "kind": "method",
+              "loss": 268.4780559562637,
+              "mae": 204.26571038251367,
+              "process_cpu_seconds": 0.08778605,
+              "rows": 1464,
+              "worker_seconds": 0.08690251968801022
+            }
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "from sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.linear_model import Ridge\ndef fit_predict(train, inputs, seed):\n    model=make_pipeline(StandardScaler(),Ridge(alpha=10.0))\n    model.fit(train['X'],train['y'])\n    return model.predict(inputs['X']).tolist()\n"
+            },
+            "facts": {
+              "group_mae": 145.6880639271646,
+              "groups": 61,
+              "kind": "method",
+              "loss": 182.95149476838213,
+              "mae": 145.6880639271646,
+              "process_cpu_seconds": 0.866525967,
+              "rows": 1464,
+              "worker_seconds": 0.9492011517286301
+            }
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "from sklearn.ensemble import HistGradientBoostingRegressor\ndef fit_predict(train, inputs, seed):\n    model=HistGradientBoostingRegressor(max_iter=250,learning_rate=0.08,max_leaf_nodes=31,l2_regularization=1,random_state=1729)\n    model.fit(train['X'],train['y'])\n    return model.predict(inputs['X']).tolist()\n"
+            },
+            "facts": {
+              "group_mae": 40.95457910564305,
+              "groups": 61,
+              "kind": "method",
+              "loss": 59.99341675999134,
+              "mae": 40.954579105643056,
+              "process_cpu_seconds": 1.4723066649999998,
+              "rows": 1464,
+              "worker_seconds": 1.5979675631970167
+            }
+          }
+        ]
+      },
+      "feedback": {
+        "original_source": "fable-B/state-006-b-execute.json",
+        "scope": "historical single-path stopping only",
+        "sha256": "71671b1521f55df2f8e3b4a7b4a6521293935403dc600b83e7dac394421598c9"
+      },
+      "score": -59.99341675999134
+    },
+    "score_scale": 59.99341675999134
+  },
+  "rounds": [
+    {
+      "decision": {
+        "actions": [
+          "b0-s0"
+        ],
+        "reason": "Revealed trajectories: 0 promising/underexplored, 1 unopened, 0 repairable, 0 closed. Preserve successful anchors and compare independent continuations."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s0",
+          "parent": null,
+          "step": 0,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\ndef _make(seed):\n    return HistGradientBoostingRegressor(max_iter=250, learning_rate=0.08, max_leaf_nodes=31, l2_regularization=1.0, early_stopping=False, random_state=int(seed) % 2147483647)\n\ndef _f(name, v):\n    if name == 'log1p':\n        return np.log1p(np.maximum(v, 0.0))\n    if name == 'sqrt':\n        return np.sqrt(np.maximum(v, 0.0))\n    return v\n\ndef _finv(name, v):\n    if name == 'log1p':\n        return np.expm1(np.minimum(v, 12.0))\n    if name == 'sqrt':\n        return np.square(np.maximum(v, 0.0))\n    return v\n\ndef fit_predict(train, inputs, seed):\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    names = list(train['feature_names'])\n    findings = {'fallback_used': False, 'early_stopping': False}\n    ed = names.index('elapsed_day')\n    day = X[:, ed]\n    udays = np.unique(day)\n    ncut = 61 if len(udays) > 122 else max(1, len(udays) // 4)\n    cut = udays[-ncut]\n    tr = day < cut\n    ho = ~tr\n    findings['internal_holdout'] = {'days': int(ncut), 'rows': int(ho.sum()), 'cut_elapsed_day': float(cut), 'train_rows': int(tr.sum())}\n    fsets = {'all': list(range(X.shape[1])), 'no_elapsed_day': [i for i in range(X.shape[1]) if i != ed]}\n    results = {}\n    for t in ['raw', 'log1p', 'sqrt']:\n        for fs, cols in fsets.items():\n            m = _make(seed)\n            m.fit(X[tr][:, cols], _f(t, y[tr]))\n            p = np.clip(_finv(t, m.predict(X[ho][:, cols])), 0.0, None)\n            e = p - y[ho]\n            results[t + '|' + fs] = {'rmse': float(np.sqrt(np.mean(e ** 2))), 'mae': float(np.mean(np.abs(e))), 'bias': float(np.mean(e))}\n    best = min(results, key=lambda k: results[k]['rmse'])\n    t, fs = best.split('|')\n    cols = fsets[fs]\n    findings['internal_results'] = results\n    findings['selected'] = {'transform': t, 'features': fs}\n    try:\n        yi = names.index('yr')\n        mi = names.index('mnth')\n        lv = {}\n        for mo in np.unique(X[:, mi]):\n            a = y[(X[:, mi] == mo) & (X[:, yi] == 0)]\n            b = y[(X[:, mi] == mo) & (X[:, yi] == 1)]\n            if len(a) and len(b):\n                lv[str(int(mo))] = {'mean_2011': float(a.mean()), 'mean_2012': float(b.mean()), 'ratio': float(b.mean() / max(a.mean(), 1e-9))}\n        findings['year_level_by_month'] = lv\n    except Exception as exc:\n        findings['level_diag_error'] = type(exc).__name__\n    m = _make(seed)\n    m.fit(X[:, cols], _f(t, y))\n    pred = np.clip(_finv(t, m.predict(Xe[:, cols])), 0.0, None)\n    bad = ~np.isfinite(pred)\n    if bad.any():\n        findings['fallback_used'] = True\n        findings['nonfinite_replaced'] = int(bad.sum())\n        pred[bad] = float(np.median(y))\n    findings['pred_mean'] = float(pred.mean())\n    findings['train_mean'] = float(y.mean())\n    return {'prediction': pred.tolist(), 'findings': findings}\n"
+            },
+            "task_id": "idea-59da36"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "early_stopping": false,
+              "fallback_used": false,
+              "internal_holdout": {
+                "cut_elapsed_day": 425.0,
+                "days": 61,
+                "rows": 1461,
+                "train_rows": 10078
+              },
+              "internal_results": {
+                "log1p|all": {
+                  "bias": -97.14322601676224,
+                  "mae": 98.35497458445262,
+                  "rmse": 138.71085965709378
+                },
+                "log1p|no_elapsed_day": {
+                  "bias": -63.11335463392525,
+                  "mae": 67.5550841529724,
+                  "rmse": 100.47631281887196
+                },
+                "raw|all": {
+                  "bias": -84.87120597266116,
+                  "mae": 86.8170309426826,
+                  "rmse": 115.53496754811279
+                },
+                "raw|no_elapsed_day": {
+                  "bias": -54.28758507738316,
+                  "mae": 63.63303957095981,
+                  "rmse": 95.23561710501309
+                },
+                "sqrt|all": {
+                  "bias": -81.05319973195007,
+                  "mae": 83.12691776024334,
+                  "rmse": 116.4384663717157
+                },
+                "sqrt|no_elapsed_day": {
+                  "bias": -57.23274137655348,
+                  "mae": 62.825374314197816,
+                  "rmse": 93.93612400261374
+                }
+              },
+              "pred_mean": 281.61206461868886,
+              "selected": {
+                "features": "no_elapsed_day",
+                "transform": "sqrt"
+              },
+              "train_mean": 154.43998613398043,
+              "year_level_by_month": {
+                "1": {
+                  "mean_2011": 55.50726744186046,
+                  "mean_2012": 130.5587044534413,
+                  "ratio": 2.352101093612496
+                },
+                "2": {
+                  "mean_2011": 74.29121725731895,
+                  "mean_2012": 149.04190751445086,
+                  "ratio": 2.0061847553018484
+                },
+                "3": {
+                  "mean_2011": 87.73287671232876,
+                  "mean_2012": 221.90444145356662,
+                  "ratio": 2.52931910783205
+                },
+                "4": {
+                  "mean_2011": 131.9471488178025,
+                  "mean_2012": 242.6518105849582,
+                  "ratio": 1.8390076084176763
+                }
+              }
+            },
+            "group_mae": 42.6913425312718,
+            "groups": 61,
+            "kind": "method",
+            "loss": 63.03688870269608,
+            "mae": 42.69134253127179,
+            "process_cpu_seconds": 4.90590837,
+            "rows": 1464,
+            "worker_seconds": 5.03168161213398
+          },
+          "score": -63.03688870269608,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s1"
+        ],
+        "reason": "Revealed trajectories: 1 promising/underexplored, 0 unopened, 0 repairable, 0 closed. Preserve successful anchors and compare independent continuations."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s1",
+          "parent": "b0-s0",
+          "step": 1,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\ndef _hgb(seed):\n    return HistGradientBoostingRegressor(max_iter=250, learning_rate=0.08, max_leaf_nodes=31, l2_regularization=1.0, early_stopping=False, random_state=int(seed) % 2147483647)\n\ndef _daily_level(X, y, day, cols, seed, nblocks=5):\n    ud = np.unique(day)\n    ly = np.log1p(np.maximum(y, 0.0))\n    res = np.zeros(len(y))\n    for b in np.array_split(ud, nblocks):\n        m = np.isin(day, b)\n        if m.sum() == 0 or (~m).sum() == 0:\n            continue\n        mdl = _hgb(seed)\n        mdl.fit(X[~m][:, cols], ly[~m])\n        res[m] = ly[m] - mdl.predict(X[m][:, cols])\n    rr = np.array([res[day == d].mean() for d in ud])\n    return ud, rr\n\ndef _offset(dd, rr, mode, eday):\n    if mode == 'none':\n        return np.zeros(len(eday)), {}\n    if mode == 'const60':\n        w = dd >= dd[-1] - 59\n        c = float(rr[w].mean())\n        return np.full(len(eday), c), {'const': c, 'n_days': int(w.sum())}\n    if mode == 'trend_all':\n        a, b = np.polyfit(dd, rr, 1)\n        return a * eday + b, {'slope_per_day': float(a), 'intercept': float(b), 'n_days': int(len(dd))}\n    if mode == 'trend180':\n        w = dd >= dd[-1] - 179\n        a, b = np.polyfit(dd[w], rr[w], 1)\n        return a * eday + b, {'slope_per_day': float(a), 'intercept': float(b), 'n_days': int(w.sum())}\n    raise ValueError(mode)\n\ndef _predict_level(X, y, day, Xe, eday, cols, mode, seed):\n    ly = np.log1p(np.maximum(y, 0.0))\n    dd, rr = _daily_level(X, y, day, cols, seed)\n    off, info = _offset(dd, rr, mode, eday)\n    mdl = _hgb(seed)\n    mdl.fit(X[:, cols], ly)\n    lp = mdl.predict(Xe[:, cols]) + off\n    p = np.expm1(np.minimum(lp, 12.0))\n    info['mean_offset'] = float(np.mean(off))\n    return np.clip(p, 0.0, None), info\n\ndef _predict_base(X, y, Xe, seed):\n    mdl = _hgb(seed)\n    mdl.fit(X, y)\n    return np.clip(mdl.predict(Xe), 0.0, None)\n\ndef _metrics(p, y):\n    e = p - y\n    return {'rmse': float(np.sqrt(np.mean(e ** 2))), 'mae': float(np.mean(np.abs(e))), 'bias': float(np.mean(e))}\n\ndef fit_predict(train, inputs, seed):\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    names = list(train['feature_names'])\n    ed = names.index('elapsed_day')\n    yi = names.index('yr')\n    cols = [i for i in range(X.shape[1]) if i not in (ed, yi)]\n    day = X[:, ed]\n    eday = Xe[:, ed]\n    findings = {'fallback_used': False, 'shape_features_exclude': ['elapsed_day', 'yr'], 'level_model': 'cross_fitted_daily_mean_log1p_residual_5_date_blocks', 'target_for_level_variants': 'log1p'}\n    ud = np.unique(day)\n    modes = ['none', 'const60', 'trend_all', 'trend180']\n    folds = [(ud[-60], ud[-30]), (ud[-30], ud[-1] + 1.0)]\n    internal = {}\n    for fi, (lo, hi) in enumerate(folds):\n        tr = day < lo\n        ho = (day >= lo) & (day < hi)\n        fold_res = {}\n        pb = _predict_base(X[tr], y[tr], X[ho], seed)\n        fold_res['baseline_all_raw'] = _metrics(pb, y[ho])\n        for mode in modes:\n            p, info = _predict_level(X[tr], y[tr], day[tr], X[ho], day[ho], cols, mode, seed)\n            r = _metrics(p, y[ho])\n            r.update(info)\n            fold_res['level_' + mode] = r\n        internal['fold%d' % fi] = {'cut_lo': float(lo), 'cut_hi': float(hi), 'holdout_rows': int(ho.sum()), 'train_rows': int(tr.sum()), 'holdout_mean_y': float(y[ho].mean()), 'results': fold_res}\n    cands = ['baseline_all_raw'] + ['level_' + m for m in modes]\n    avg = {c: float(np.mean([internal[f]['results'][c]['rmse'] for f in internal])) for c in cands}\n    best = min(avg, key=avg.get)\n    findings['internal'] = internal\n    findings['avg_internal_rmse'] = avg\n    findings['selected'] = best\n    try:\n        dd, rr = _daily_level(X, y, day, cols, seed)\n        a, b = np.polyfit(dd, rr, 1)\n        w60 = dd >= dd[-1] - 59\n        f60 = dd <= dd[0] + 59\n        findings['full_train_level'] = {'slope_per_day_all': float(a), 'mean_first60': float(rr[f60].mean()), 'mean_last60': float(rr[w60].mean()), 'std_daily': float(rr.std())}\n    except Exception as exc:\n        findings['level_diag_error'] = type(exc).__name__\n    if best == 'baseline_all_raw':\n        pred = _predict_base(X, y, Xe, seed)\n        findings['final_level_info'] = {}\n    else:\n        mode = best[len('level_'):]\n        pred, info = _predict_level(X, y, day, Xe, eday, cols, mode, seed)\n        findings['final_level_info'] = info\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    if bad.any():\n        findings['fallback_used'] = True\n        findings['nonfinite_replaced'] = int(bad.sum())\n        pred[bad] = float(np.median(y))\n    findings['pred_mean'] = float(pred.mean())\n    findings['train_mean'] = float(y.mean())\n    findings['train_last60_mean'] = float(y[day >= ud[-1] - 59].mean())\n    findings['eval_day_range'] = [float(eday.min()), float(eday.max())]\n    findings['train_day_range'] = [float(day.min()), float(day.max())]\n    return {'prediction': pred.tolist(), 'findings': findings}\n"
+            },
+            "task_id": "idea-f87923"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "avg_internal_rmse": {
+                "baseline_all_raw": 71.88861109365959,
+                "level_const60": 66.63174305628934,
+                "level_none": 144.53287269349266,
+                "level_trend180": 115.06625161514492,
+                "level_trend_all": 77.5296320607162
+              },
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback_used": false,
+              "final_level_info": {
+                "const": 0.5535629818997909,
+                "mean_offset": 0.553562981899791,
+                "n_days": 60
+              },
+              "full_train_level": {
+                "mean_first60": -0.6730804037748552,
+                "mean_last60": 0.5535629818997909,
+                "slope_per_day_all": 0.0026869585686958367,
+                "std_daily": 0.44078828146431137
+              },
+              "internal": {
+                "fold0": {
+                  "cut_hi": 456.0,
+                  "cut_lo": 426.0,
+                  "holdout_mean_y": 222.37134909596662,
+                  "holdout_rows": 719,
+                  "results": {
+                    "baseline_all_raw": {
+                      "bias": -45.188531331166566,
+                      "mae": 55.30723145752332,
+                      "rmse": 85.59046610365591
+                    },
+                    "level_const60": {
+                      "bias": 6.742600616132413,
+                      "const": 0.6877720567802508,
+                      "mae": 38.92772799167665,
+                      "mean_offset": 0.6877720567802506,
+                      "n_days": 60,
+                      "rmse": 59.94590486176832
+                    },
+                    "level_none": {
+                      "bias": -107.69426366581874,
+                      "mae": 108.19537801237475,
+                      "mean_offset": 0.0,
+                      "rmse": 149.74732429221726
+                    },
+                    "level_trend180": {
+                      "bias": 8.188948752821018,
+                      "intercept": -1.282151460079749,
+                      "mae": 38.31121551819338,
+                      "mean_offset": 0.6904848693873535,
+                      "n_days": 180,
+                      "rmse": 59.422000229912,
+                      "slope_per_day": 0.004478097784787582
+                    },
+                    "level_trend_all": {
+                      "bias": -29.513577660312446,
+                      "intercept": -0.4013277807988355,
+                      "mae": 42.17406575005555,
+                      "mean_offset": 0.5148476971471649,
+                      "n_days": 426,
+                      "rmse": 66.99068784253619,
+                      "slope_per_day": 0.002079817408297969
+                    }
+                  },
+                  "train_rows": 10102
+                },
+                "fold1": {
+                  "cut_hi": 486.0,
+                  "cut_lo": 456.0,
+                  "holdout_mean_y": 242.6518105849582,
+                  "holdout_rows": 718,
+                  "results": {
+                    "baseline_all_raw": {
+                      "bias": 8.439236959982724,
+                      "mae": 37.59446867289949,
+                      "rmse": 58.18675608366326
+                    },
+                    "level_const60": {
+                      "bias": 30.6180498809526,
+                      "const": 0.6357373371252526,
+                      "mae": 46.5635967020126,
+                      "mean_offset": 0.6357373371252527,
+                      "n_days": 60,
+                      "rmse": 73.31758125081036
+                    },
+                    "level_none": {
+                      "bias": -98.41360715780073,
+                      "mae": 100.7836718835865,
+                      "mean_offset": 0.0,
+                      "rmse": 139.31842109476804
+                    },
+                    "level_trend180": {
+                      "bias": 118.27863526323404,
+                      "intercept": -1.6374754357448926,
+                      "mae": 122.63239328510014,
+                      "mean_offset": 0.9137767786865363,
+                      "n_days": 180,
+                      "rmse": 170.71050300037783,
+                      "slope_per_day": 0.005422138753190935
+                    },
+                    "level_trend_all": {
+                      "bias": 46.335396416789756,
+                      "intercept": -0.6930329563176457,
+                      "mae": 58.38689622285892,
+                      "mean_offset": 0.6921068708689792,
+                      "n_days": 456,
+                      "rmse": 88.0685762788962,
+                      "slope_per_day": 0.002943817272590026
+                    }
+                  },
+                  "train_rows": 10821
+                }
+              },
+              "level_model": "cross_fitted_daily_mean_log1p_residual_5_date_blocks",
+              "pred_mean": 334.18960803661287,
+              "selected": "level_const60",
+              "shape_features_exclude": [
+                "elapsed_day",
+                "yr"
+              ],
+              "target_for_level_variants": "log1p",
+              "train_day_range": [
+                0.0,
+                485.0
+              ],
+              "train_last60_mean": 232.5045233124565,
+              "train_mean": 154.43998613398043
+            },
+            "group_mae": 65.36249172412815,
+            "groups": 61,
+            "kind": "method",
+            "loss": 93.32956262022176,
+            "mae": 65.36249172412815,
+            "process_cpu_seconds": 33.351197897,
+            "rows": 1464,
+            "worker_seconds": 33.46133320778608
+          },
+          "score": -93.32956262022176,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    }
+  ],
+  "termination": "policy_stop",
+  "stop_reason": "Revealed trajectories: 0 promising/underexplored, 0 unopened, 0 repairable, 1 closed. Preserve successful anchors and compare independent continuations.",
+  "metrics": {
+    "supported": true,
+    "best_score": -59.99341675999134,
+    "quality_gain": 0.0,
+    "calls": 2,
+    "rounds": 2,
+    "cost": null,
+    "parallel_seconds_estimate": null
+  }
+}

@@ -1,0 +1,1129 @@
+{
+  "schema": 1,
+  "mode": "replay",
+  "spec": {
+    "plan": {
+      "branches": 1,
+      "calls": 6,
+      "depth": 6,
+      "workers": 1
+    },
+    "problem_id": "uci275-same-development-split",
+    "protocol_id": "f8da4a845887cd29017cec467033062b76d237c2174b075c7d8abd20d28171f3",
+    "root": {
+      "artifact": {
+        "baselines": [
+          {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\ndef fit_predict(train, inputs, seed):\n    return [float(np.median(train['y']))]*len(inputs['X'])\n"
+            },
+            "facts": {
+              "group_mae": 204.26571038251365,
+              "groups": 61,
+              "kind": "method",
+              "loss": 268.4780559562637,
+              "mae": 204.26571038251367,
+              "process_cpu_seconds": 0.08778605,
+              "rows": 1464,
+              "worker_seconds": 0.08690251968801022
+            }
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "from sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.linear_model import Ridge\ndef fit_predict(train, inputs, seed):\n    model=make_pipeline(StandardScaler(),Ridge(alpha=10.0))\n    model.fit(train['X'],train['y'])\n    return model.predict(inputs['X']).tolist()\n"
+            },
+            "facts": {
+              "group_mae": 145.6880639271646,
+              "groups": 61,
+              "kind": "method",
+              "loss": 182.95149476838213,
+              "mae": 145.6880639271646,
+              "process_cpu_seconds": 0.866525967,
+              "rows": 1464,
+              "worker_seconds": 0.9492011517286301
+            }
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "from sklearn.ensemble import HistGradientBoostingRegressor\ndef fit_predict(train, inputs, seed):\n    model=HistGradientBoostingRegressor(max_iter=250,learning_rate=0.08,max_leaf_nodes=31,l2_regularization=1,random_state=1729)\n    model.fit(train['X'],train['y'])\n    return model.predict(inputs['X']).tolist()\n"
+            },
+            "facts": {
+              "group_mae": 40.95457910564305,
+              "groups": 61,
+              "kind": "method",
+              "loss": 59.99341675999134,
+              "mae": 40.954579105643056,
+              "process_cpu_seconds": 1.4723066649999998,
+              "rows": 1464,
+              "worker_seconds": 1.5979675631970167
+            }
+          }
+        ]
+      },
+      "feedback": {
+        "original_source": "fable-B/state-006-b-execute.json",
+        "scope": "historical single-path stopping only",
+        "sha256": "71671b1521f55df2f8e3b4a7b4a6521293935403dc600b83e7dac394421598c9"
+      },
+      "score": -59.99341675999134
+    },
+    "score_scale": 59.99341675999134
+  },
+  "rounds": [
+    {
+      "decision": {
+        "actions": [
+          "b0-s0"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s0",
+          "parent": null,
+          "step": 0,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\ndef _make(seed):\n    return HistGradientBoostingRegressor(max_iter=250, learning_rate=0.08, max_leaf_nodes=31, l2_regularization=1.0, early_stopping=False, random_state=int(seed) % 2147483647)\n\ndef _f(name, v):\n    if name == 'log1p':\n        return np.log1p(np.maximum(v, 0.0))\n    if name == 'sqrt':\n        return np.sqrt(np.maximum(v, 0.0))\n    return v\n\ndef _finv(name, v):\n    if name == 'log1p':\n        return np.expm1(np.minimum(v, 12.0))\n    if name == 'sqrt':\n        return np.square(np.maximum(v, 0.0))\n    return v\n\ndef fit_predict(train, inputs, seed):\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    names = list(train['feature_names'])\n    findings = {'fallback_used': False, 'early_stopping': False}\n    ed = names.index('elapsed_day')\n    day = X[:, ed]\n    udays = np.unique(day)\n    ncut = 61 if len(udays) > 122 else max(1, len(udays) // 4)\n    cut = udays[-ncut]\n    tr = day < cut\n    ho = ~tr\n    findings['internal_holdout'] = {'days': int(ncut), 'rows': int(ho.sum()), 'cut_elapsed_day': float(cut), 'train_rows': int(tr.sum())}\n    fsets = {'all': list(range(X.shape[1])), 'no_elapsed_day': [i for i in range(X.shape[1]) if i != ed]}\n    results = {}\n    for t in ['raw', 'log1p', 'sqrt']:\n        for fs, cols in fsets.items():\n            m = _make(seed)\n            m.fit(X[tr][:, cols], _f(t, y[tr]))\n            p = np.clip(_finv(t, m.predict(X[ho][:, cols])), 0.0, None)\n            e = p - y[ho]\n            results[t + '|' + fs] = {'rmse': float(np.sqrt(np.mean(e ** 2))), 'mae': float(np.mean(np.abs(e))), 'bias': float(np.mean(e))}\n    best = min(results, key=lambda k: results[k]['rmse'])\n    t, fs = best.split('|')\n    cols = fsets[fs]\n    findings['internal_results'] = results\n    findings['selected'] = {'transform': t, 'features': fs}\n    try:\n        yi = names.index('yr')\n        mi = names.index('mnth')\n        lv = {}\n        for mo in np.unique(X[:, mi]):\n            a = y[(X[:, mi] == mo) & (X[:, yi] == 0)]\n            b = y[(X[:, mi] == mo) & (X[:, yi] == 1)]\n            if len(a) and len(b):\n                lv[str(int(mo))] = {'mean_2011': float(a.mean()), 'mean_2012': float(b.mean()), 'ratio': float(b.mean() / max(a.mean(), 1e-9))}\n        findings['year_level_by_month'] = lv\n    except Exception as exc:\n        findings['level_diag_error'] = type(exc).__name__\n    m = _make(seed)\n    m.fit(X[:, cols], _f(t, y))\n    pred = np.clip(_finv(t, m.predict(Xe[:, cols])), 0.0, None)\n    bad = ~np.isfinite(pred)\n    if bad.any():\n        findings['fallback_used'] = True\n        findings['nonfinite_replaced'] = int(bad.sum())\n        pred[bad] = float(np.median(y))\n    findings['pred_mean'] = float(pred.mean())\n    findings['train_mean'] = float(y.mean())\n    return {'prediction': pred.tolist(), 'findings': findings}\n"
+            },
+            "task_id": "idea-59da36"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "early_stopping": false,
+              "fallback_used": false,
+              "internal_holdout": {
+                "cut_elapsed_day": 425.0,
+                "days": 61,
+                "rows": 1461,
+                "train_rows": 10078
+              },
+              "internal_results": {
+                "log1p|all": {
+                  "bias": -97.14322601676224,
+                  "mae": 98.35497458445262,
+                  "rmse": 138.71085965709378
+                },
+                "log1p|no_elapsed_day": {
+                  "bias": -63.11335463392525,
+                  "mae": 67.5550841529724,
+                  "rmse": 100.47631281887196
+                },
+                "raw|all": {
+                  "bias": -84.87120597266116,
+                  "mae": 86.8170309426826,
+                  "rmse": 115.53496754811279
+                },
+                "raw|no_elapsed_day": {
+                  "bias": -54.28758507738316,
+                  "mae": 63.63303957095981,
+                  "rmse": 95.23561710501309
+                },
+                "sqrt|all": {
+                  "bias": -81.05319973195007,
+                  "mae": 83.12691776024334,
+                  "rmse": 116.4384663717157
+                },
+                "sqrt|no_elapsed_day": {
+                  "bias": -57.23274137655348,
+                  "mae": 62.825374314197816,
+                  "rmse": 93.93612400261374
+                }
+              },
+              "pred_mean": 281.61206461868886,
+              "selected": {
+                "features": "no_elapsed_day",
+                "transform": "sqrt"
+              },
+              "train_mean": 154.43998613398043,
+              "year_level_by_month": {
+                "1": {
+                  "mean_2011": 55.50726744186046,
+                  "mean_2012": 130.5587044534413,
+                  "ratio": 2.352101093612496
+                },
+                "2": {
+                  "mean_2011": 74.29121725731895,
+                  "mean_2012": 149.04190751445086,
+                  "ratio": 2.0061847553018484
+                },
+                "3": {
+                  "mean_2011": 87.73287671232876,
+                  "mean_2012": 221.90444145356662,
+                  "ratio": 2.52931910783205
+                },
+                "4": {
+                  "mean_2011": 131.9471488178025,
+                  "mean_2012": 242.6518105849582,
+                  "ratio": 1.8390076084176763
+                }
+              }
+            },
+            "group_mae": 42.6913425312718,
+            "groups": 61,
+            "kind": "method",
+            "loss": 63.03688870269608,
+            "mae": 42.69134253127179,
+            "process_cpu_seconds": 4.90590837,
+            "rows": 1464,
+            "worker_seconds": 5.03168161213398
+          },
+          "score": -63.03688870269608,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s1"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s1",
+          "parent": "b0-s0",
+          "step": 1,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\ndef _hgb(seed):\n    return HistGradientBoostingRegressor(max_iter=250, learning_rate=0.08, max_leaf_nodes=31, l2_regularization=1.0, early_stopping=False, random_state=int(seed) % 2147483647)\n\ndef _daily_level(X, y, day, cols, seed, nblocks=5):\n    ud = np.unique(day)\n    ly = np.log1p(np.maximum(y, 0.0))\n    res = np.zeros(len(y))\n    for b in np.array_split(ud, nblocks):\n        m = np.isin(day, b)\n        if m.sum() == 0 or (~m).sum() == 0:\n            continue\n        mdl = _hgb(seed)\n        mdl.fit(X[~m][:, cols], ly[~m])\n        res[m] = ly[m] - mdl.predict(X[m][:, cols])\n    rr = np.array([res[day == d].mean() for d in ud])\n    return ud, rr\n\ndef _offset(dd, rr, mode, eday):\n    if mode == 'none':\n        return np.zeros(len(eday)), {}\n    if mode == 'const60':\n        w = dd >= dd[-1] - 59\n        c = float(rr[w].mean())\n        return np.full(len(eday), c), {'const': c, 'n_days': int(w.sum())}\n    if mode == 'trend_all':\n        a, b = np.polyfit(dd, rr, 1)\n        return a * eday + b, {'slope_per_day': float(a), 'intercept': float(b), 'n_days': int(len(dd))}\n    if mode == 'trend180':\n        w = dd >= dd[-1] - 179\n        a, b = np.polyfit(dd[w], rr[w], 1)\n        return a * eday + b, {'slope_per_day': float(a), 'intercept': float(b), 'n_days': int(w.sum())}\n    raise ValueError(mode)\n\ndef _predict_level(X, y, day, Xe, eday, cols, mode, seed):\n    ly = np.log1p(np.maximum(y, 0.0))\n    dd, rr = _daily_level(X, y, day, cols, seed)\n    off, info = _offset(dd, rr, mode, eday)\n    mdl = _hgb(seed)\n    mdl.fit(X[:, cols], ly)\n    lp = mdl.predict(Xe[:, cols]) + off\n    p = np.expm1(np.minimum(lp, 12.0))\n    info['mean_offset'] = float(np.mean(off))\n    return np.clip(p, 0.0, None), info\n\ndef _predict_base(X, y, Xe, seed):\n    mdl = _hgb(seed)\n    mdl.fit(X, y)\n    return np.clip(mdl.predict(Xe), 0.0, None)\n\ndef _metrics(p, y):\n    e = p - y\n    return {'rmse': float(np.sqrt(np.mean(e ** 2))), 'mae': float(np.mean(np.abs(e))), 'bias': float(np.mean(e))}\n\ndef fit_predict(train, inputs, seed):\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    names = list(train['feature_names'])\n    ed = names.index('elapsed_day')\n    yi = names.index('yr')\n    cols = [i for i in range(X.shape[1]) if i not in (ed, yi)]\n    day = X[:, ed]\n    eday = Xe[:, ed]\n    findings = {'fallback_used': False, 'shape_features_exclude': ['elapsed_day', 'yr'], 'level_model': 'cross_fitted_daily_mean_log1p_residual_5_date_blocks', 'target_for_level_variants': 'log1p'}\n    ud = np.unique(day)\n    modes = ['none', 'const60', 'trend_all', 'trend180']\n    folds = [(ud[-60], ud[-30]), (ud[-30], ud[-1] + 1.0)]\n    internal = {}\n    for fi, (lo, hi) in enumerate(folds):\n        tr = day < lo\n        ho = (day >= lo) & (day < hi)\n        fold_res = {}\n        pb = _predict_base(X[tr], y[tr], X[ho], seed)\n        fold_res['baseline_all_raw'] = _metrics(pb, y[ho])\n        for mode in modes:\n            p, info = _predict_level(X[tr], y[tr], day[tr], X[ho], day[ho], cols, mode, seed)\n            r = _metrics(p, y[ho])\n            r.update(info)\n            fold_res['level_' + mode] = r\n        internal['fold%d' % fi] = {'cut_lo': float(lo), 'cut_hi': float(hi), 'holdout_rows': int(ho.sum()), 'train_rows': int(tr.sum()), 'holdout_mean_y': float(y[ho].mean()), 'results': fold_res}\n    cands = ['baseline_all_raw'] + ['level_' + m for m in modes]\n    avg = {c: float(np.mean([internal[f]['results'][c]['rmse'] for f in internal])) for c in cands}\n    best = min(avg, key=avg.get)\n    findings['internal'] = internal\n    findings['avg_internal_rmse'] = avg\n    findings['selected'] = best\n    try:\n        dd, rr = _daily_level(X, y, day, cols, seed)\n        a, b = np.polyfit(dd, rr, 1)\n        w60 = dd >= dd[-1] - 59\n        f60 = dd <= dd[0] + 59\n        findings['full_train_level'] = {'slope_per_day_all': float(a), 'mean_first60': float(rr[f60].mean()), 'mean_last60': float(rr[w60].mean()), 'std_daily': float(rr.std())}\n    except Exception as exc:\n        findings['level_diag_error'] = type(exc).__name__\n    if best == 'baseline_all_raw':\n        pred = _predict_base(X, y, Xe, seed)\n        findings['final_level_info'] = {}\n    else:\n        mode = best[len('level_'):]\n        pred, info = _predict_level(X, y, day, Xe, eday, cols, mode, seed)\n        findings['final_level_info'] = info\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    if bad.any():\n        findings['fallback_used'] = True\n        findings['nonfinite_replaced'] = int(bad.sum())\n        pred[bad] = float(np.median(y))\n    findings['pred_mean'] = float(pred.mean())\n    findings['train_mean'] = float(y.mean())\n    findings['train_last60_mean'] = float(y[day >= ud[-1] - 59].mean())\n    findings['eval_day_range'] = [float(eday.min()), float(eday.max())]\n    findings['train_day_range'] = [float(day.min()), float(day.max())]\n    return {'prediction': pred.tolist(), 'findings': findings}\n"
+            },
+            "task_id": "idea-f87923"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "avg_internal_rmse": {
+                "baseline_all_raw": 71.88861109365959,
+                "level_const60": 66.63174305628934,
+                "level_none": 144.53287269349266,
+                "level_trend180": 115.06625161514492,
+                "level_trend_all": 77.5296320607162
+              },
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback_used": false,
+              "final_level_info": {
+                "const": 0.5535629818997909,
+                "mean_offset": 0.553562981899791,
+                "n_days": 60
+              },
+              "full_train_level": {
+                "mean_first60": -0.6730804037748552,
+                "mean_last60": 0.5535629818997909,
+                "slope_per_day_all": 0.0026869585686958367,
+                "std_daily": 0.44078828146431137
+              },
+              "internal": {
+                "fold0": {
+                  "cut_hi": 456.0,
+                  "cut_lo": 426.0,
+                  "holdout_mean_y": 222.37134909596662,
+                  "holdout_rows": 719,
+                  "results": {
+                    "baseline_all_raw": {
+                      "bias": -45.188531331166566,
+                      "mae": 55.30723145752332,
+                      "rmse": 85.59046610365591
+                    },
+                    "level_const60": {
+                      "bias": 6.742600616132413,
+                      "const": 0.6877720567802508,
+                      "mae": 38.92772799167665,
+                      "mean_offset": 0.6877720567802506,
+                      "n_days": 60,
+                      "rmse": 59.94590486176832
+                    },
+                    "level_none": {
+                      "bias": -107.69426366581874,
+                      "mae": 108.19537801237475,
+                      "mean_offset": 0.0,
+                      "rmse": 149.74732429221726
+                    },
+                    "level_trend180": {
+                      "bias": 8.188948752821018,
+                      "intercept": -1.282151460079749,
+                      "mae": 38.31121551819338,
+                      "mean_offset": 0.6904848693873535,
+                      "n_days": 180,
+                      "rmse": 59.422000229912,
+                      "slope_per_day": 0.004478097784787582
+                    },
+                    "level_trend_all": {
+                      "bias": -29.513577660312446,
+                      "intercept": -0.4013277807988355,
+                      "mae": 42.17406575005555,
+                      "mean_offset": 0.5148476971471649,
+                      "n_days": 426,
+                      "rmse": 66.99068784253619,
+                      "slope_per_day": 0.002079817408297969
+                    }
+                  },
+                  "train_rows": 10102
+                },
+                "fold1": {
+                  "cut_hi": 486.0,
+                  "cut_lo": 456.0,
+                  "holdout_mean_y": 242.6518105849582,
+                  "holdout_rows": 718,
+                  "results": {
+                    "baseline_all_raw": {
+                      "bias": 8.439236959982724,
+                      "mae": 37.59446867289949,
+                      "rmse": 58.18675608366326
+                    },
+                    "level_const60": {
+                      "bias": 30.6180498809526,
+                      "const": 0.6357373371252526,
+                      "mae": 46.5635967020126,
+                      "mean_offset": 0.6357373371252527,
+                      "n_days": 60,
+                      "rmse": 73.31758125081036
+                    },
+                    "level_none": {
+                      "bias": -98.41360715780073,
+                      "mae": 100.7836718835865,
+                      "mean_offset": 0.0,
+                      "rmse": 139.31842109476804
+                    },
+                    "level_trend180": {
+                      "bias": 118.27863526323404,
+                      "intercept": -1.6374754357448926,
+                      "mae": 122.63239328510014,
+                      "mean_offset": 0.9137767786865363,
+                      "n_days": 180,
+                      "rmse": 170.71050300037783,
+                      "slope_per_day": 0.005422138753190935
+                    },
+                    "level_trend_all": {
+                      "bias": 46.335396416789756,
+                      "intercept": -0.6930329563176457,
+                      "mae": 58.38689622285892,
+                      "mean_offset": 0.6921068708689792,
+                      "n_days": 456,
+                      "rmse": 88.0685762788962,
+                      "slope_per_day": 0.002943817272590026
+                    }
+                  },
+                  "train_rows": 10821
+                }
+              },
+              "level_model": "cross_fitted_daily_mean_log1p_residual_5_date_blocks",
+              "pred_mean": 334.18960803661287,
+              "selected": "level_const60",
+              "shape_features_exclude": [
+                "elapsed_day",
+                "yr"
+              ],
+              "target_for_level_variants": "log1p",
+              "train_day_range": [
+                0.0,
+                485.0
+              ],
+              "train_last60_mean": 232.5045233124565,
+              "train_mean": 154.43998613398043
+            },
+            "group_mae": 65.36249172412815,
+            "groups": 61,
+            "kind": "method",
+            "loss": 93.32956262022176,
+            "mae": 65.36249172412815,
+            "process_cpu_seconds": 33.351197897,
+            "rows": 1464,
+            "worker_seconds": 33.46133320778608
+          },
+          "score": -93.32956262022176,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s2"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s2",
+          "parent": "b0-s1",
+          "step": 2,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\ndef _model(loss):\n    return HistGradientBoostingRegressor(loss=loss, max_iter=250, learning_rate=0.08, max_leaf_nodes=31, l2_regularization=1, random_state=1729)\n\ndef _metrics(p, y):\n    e = p - y\n    return {'rmse': float(np.sqrt(np.mean(e ** 2))), 'mae': float(np.mean(np.abs(e))), 'bias': float(np.mean(e)), 'pred_mean': float(np.mean(p))}\n\ndef fit_predict(train, inputs, seed):\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    names = list(train['feature_names'])\n    ed = names.index('elapsed_day')\n    day = X[:, ed]\n    ud = np.unique(day)\n    findings = {'fallback_used': False, 'submitted': 'poisson_all_features', 'design': 'fixed submission; internal chronological folds are diagnostics only, not used for selection', 'shared_hparams': 'max_iter=250,lr=0.08,max_leaf_nodes=31,l2=1,random_state=1729,early_stopping=auto'}\n    cands = {'squared_all': ('squared_error', None), 'poisson_all': ('poisson', None), 'poisson_no_elapsed': ('poisson', ed)}\n    internal = {}\n    for lo in [ud[-90], ud[-60], ud[-30]]:\n        hi = lo + 30.0\n        tr = day < lo\n        ho = (day >= lo) & (day < hi)\n        res = {}\n        for name, (loss, drop) in cands.items():\n            cols = [i for i in range(X.shape[1]) if i != drop]\n            try:\n                m = _model(loss)\n                m.fit(X[tr][:, cols], y[tr])\n                p = np.clip(m.predict(X[ho][:, cols]), 0.0, None)\n                r = _metrics(p, y[ho])\n                r['n_iter'] = int(m.n_iter_)\n            except Exception as exc:\n                r = {'error': type(exc).__name__}\n            res[name] = r\n        internal['cut_%d' % int(lo)] = {'train_rows': int(tr.sum()), 'holdout_rows': int(ho.sum()), 'holdout_mean_y': float(y[ho].mean()), 'results': res}\n    findings['internal'] = internal\n    summary = {}\n    for name in cands:\n        vals = [internal[k]['results'][name] for k in internal if 'rmse' in internal[k]['results'][name]]\n        if vals:\n            summary[name] = {'mean_rmse': float(np.mean([v['rmse'] for v in vals])), 'mean_bias': float(np.mean([v['bias'] for v in vals])), 'n_folds': len(vals)}\n    findings['internal_summary'] = summary\n    m11 = (day >= 0) & (day <= 120)\n    m12 = (day >= 365) & (day <= 485)\n    if m11.sum() > 0 and m12.sum() > 0:\n        findings['jan_apr_level_ratio_2012_over_2011'] = float(y[m12].mean() / max(y[m11].mean(), 1e-9))\n    try:\n        m = _model('poisson')\n        m.fit(X, y)\n        pred = np.clip(m.predict(Xe), 0.0, None)\n        findings['final_n_iter'] = int(m.n_iter_)\n    except Exception as exc:\n        findings['fallback_used'] = True\n        findings['fallback_reason'] = type(exc).__name__\n        findings['submitted'] = 'squared_error_fallback'\n        m = _model('squared_error')\n        m.fit(X, y)\n        pred = np.clip(m.predict(Xe), 0.0, None)\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    if bad.any():\n        findings['fallback_used'] = True\n        findings['nonfinite_replaced'] = int(bad.sum())\n        pred[bad] = float(np.median(y))\n    findings['pred_mean'] = float(pred.mean())\n    findings['train_mean'] = float(y.mean())\n    findings['train_last60_mean'] = float(y[day >= ud[-1] - 59].mean())\n    findings['eval_day_range'] = [float(Xe[:, ed].min()), float(Xe[:, ed].max())]\n    return {'prediction': pred.tolist(), 'findings': findings}\n"
+            },
+            "task_id": "idea-a0bc19"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "design": "fixed submission; internal chronological folds are diagnostics only, not used for selection",
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback_used": false,
+              "final_n_iter": 250,
+              "internal": {
+                "cut_396": {
+                  "holdout_mean_y": 151.01536312849163,
+                  "holdout_rows": 716,
+                  "results": {
+                    "poisson_all": {
+                      "bias": 3.516050336700467,
+                      "mae": 22.24466188470908,
+                      "n_iter": 250,
+                      "pred_mean": 154.53141346519206,
+                      "rmse": 38.939996031383515
+                    },
+                    "poisson_no_elapsed": {
+                      "bias": -9.475166853701465,
+                      "mae": 25.15477500715375,
+                      "n_iter": 250,
+                      "pred_mean": 141.54019627479016,
+                      "rmse": 43.02832753611125
+                    },
+                    "squared_all": {
+                      "bias": 5.992930286834968,
+                      "mae": 25.928372044890075,
+                      "n_iter": 250,
+                      "pred_mean": 157.0082934153266,
+                      "rmse": 39.974058228909385
+                    }
+                  },
+                  "train_rows": 9386
+                },
+                "cut_426": {
+                  "holdout_mean_y": 222.37134909596662,
+                  "holdout_rows": 719,
+                  "results": {
+                    "poisson_all": {
+                      "bias": -49.00460984602233,
+                      "mae": 54.65252908051401,
+                      "n_iter": 250,
+                      "pred_mean": 173.3667392499443,
+                      "rmse": 86.23946512234478
+                    },
+                    "poisson_no_elapsed": {
+                      "bias": -51.65292668259351,
+                      "mae": 57.52766840213224,
+                      "n_iter": 243,
+                      "pred_mean": 170.7184224133731,
+                      "rmse": 90.45248483949514
+                    },
+                    "squared_all": {
+                      "bias": -42.936153914856725,
+                      "mae": 54.22359603421014,
+                      "n_iter": 250,
+                      "pred_mean": 179.43519518110992,
+                      "rmse": 84.85617403231427
+                    }
+                  },
+                  "train_rows": 10102
+                },
+                "cut_456": {
+                  "holdout_mean_y": 242.6518105849582,
+                  "holdout_rows": 718,
+                  "results": {
+                    "poisson_all": {
+                      "bias": 4.952043717258758,
+                      "mae": 35.66678319328327,
+                      "n_iter": 218,
+                      "pred_mean": 247.60385430221697,
+                      "rmse": 57.23267609296121
+                    },
+                    "poisson_no_elapsed": {
+                      "bias": 7.788882898087921,
+                      "mae": 33.649117482343435,
+                      "n_iter": 250,
+                      "pred_mean": 250.44069348304615,
+                      "rmse": 57.11064631497574
+                    },
+                    "squared_all": {
+                      "bias": 7.357568850374074,
+                      "mae": 37.66914597689862,
+                      "n_iter": 250,
+                      "pred_mean": 250.00937943533233,
+                      "rmse": 58.03889313282431
+                    }
+                  },
+                  "train_rows": 10821
+                }
+              },
+              "internal_summary": {
+                "poisson_all": {
+                  "mean_bias": -13.512171930687702,
+                  "mean_rmse": 60.8040457488965,
+                  "n_folds": 3
+                },
+                "poisson_no_elapsed": {
+                  "mean_bias": -17.779736879402353,
+                  "mean_rmse": 63.530486230194036,
+                  "n_folds": 3
+                },
+                "squared_all": {
+                  "mean_bias": -9.861884925882562,
+                  "mean_rmse": 60.95637513134932,
+                  "n_folds": 3
+                }
+              },
+              "jan_apr_level_ratio_2012_over_2011": 2.104539342112756,
+              "pred_mean": 264.3496785940459,
+              "shared_hparams": "max_iter=250,lr=0.08,max_leaf_nodes=31,l2=1,random_state=1729,early_stopping=auto",
+              "submitted": "poisson_all_features",
+              "train_last60_mean": 232.5045233124565,
+              "train_mean": 154.43998613398043
+            },
+            "group_mae": 35.887739571036484,
+            "groups": 61,
+            "kind": "method",
+            "loss": 54.00931601830713,
+            "mae": 35.88773957103649,
+            "process_cpu_seconds": 7.053235731999999,
+            "rows": 1464,
+            "worker_seconds": 7.184353273361921
+          },
+          "score": -54.00931601830713,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s3"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s3",
+          "parent": "b0-s2",
+          "step": 3,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\ndef _model():\n    return HistGradientBoostingRegressor(loss='poisson', max_iter=250, learning_rate=0.08, max_leaf_nodes=31, l2_regularization=1, random_state=1729)\n\ndef _metrics(p, y):\n    e = p - y\n    return {'rmse': float(np.sqrt(np.mean(e ** 2))), 'mae': float(np.mean(np.abs(e))), 'bias': float(np.mean(e)), 'pred_mean': float(np.mean(p))}\n\ndef _growth_rate(day, y):\n    ud, inv = np.unique(day, return_inverse=True)\n    tot = np.bincount(inv, weights=y)\n    cnt = np.bincount(inv).astype(float)\n    mean_h = tot / np.maximum(cnt, 1.0)\n    idx = {float(d): i for i, d in enumerate(ud)}\n    logs = []\n    for i, d in enumerate(ud):\n        j = idx.get(float(d) - 365.0)\n        if j is None or cnt[i] < 20 or cnt[j] < 20 or mean_h[i] <= 0 or mean_h[j] <= 0:\n            continue\n        logs.append(float(np.log(mean_h[i] / mean_h[j])))\n    if len(logs) < 20:\n        return None, len(logs)\n    return float(np.median(logs)) / 365.0, len(logs)\n\ndef _fit_predict(Xtr, ytr, Xte, ed, b, ref_day):\n    ltr = np.exp(b * (Xtr[:, ed] - ref_day))\n    lte = np.exp(b * (Xte[:, ed] - ref_day))\n    m = _model()\n    m.fit(Xtr, ytr / ltr)\n    p = np.clip(m.predict(Xte), 0.0, None) * lte\n    return p, int(m.n_iter_)\n\ndef fit_predict(train, inputs, seed):\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    names = list(train['feature_names'])\n    ed = names.index('elapsed_day')\n    day = X[:, ed]\n    ud = np.unique(day)\n    damps = [0.0, 0.5, 1.0]\n    findings = {'fallback_used': False, 'design': 'poisson HGB (parent hparams, all features) fitted on y/L(day), L=exp(damp*b*(day-last_fit_day)); b = median log year-over-year ratio of daily mean hourly cnt / 365, estimated from the fitting window only; damp selected by mean RMSE over 3 chronological folds with 61-day horizon', 'horizon_days': 61, 'damps': damps}\n    internal = {}\n    for lo in [ud[-91], ud[-61], ud[-31]]:\n        hi = lo + 61.0\n        tr = day < lo\n        ho = (day >= lo) & (day < hi)\n        b, npairs = _growth_rate(day[tr], y[tr])\n        fold = {'train_rows': int(tr.sum()), 'holdout_rows': int(ho.sum()), 'holdout_mean_y': float(y[ho].mean()), 'yoy_pairs': int(npairs), 'b_per_day': b, 'results': {}}\n        for dmp in damps:\n            key = 'damp_%.1f' % dmp\n            if b is None and dmp > 0:\n                fold['results'][key] = {'error': 'no_growth_estimate'}\n                continue\n            try:\n                p, nit = _fit_predict(X[tr], y[tr], X[ho], ed, (b or 0.0) * dmp, float(day[tr].max()))\n                r = _metrics(p, y[ho])\n                r['n_iter'] = nit\n            except Exception as exc:\n                r = {'error': type(exc).__name__}\n            fold['results'][key] = r\n        internal['cut_%d' % int(lo)] = fold\n    findings['internal'] = internal\n    summary = {}\n    for dmp in damps:\n        key = 'damp_%.1f' % dmp\n        vals = [internal[k]['results'][key] for k in internal if 'rmse' in internal[k]['results'][key]]\n        if len(vals) == len(internal):\n            summary[key] = {'mean_rmse': float(np.mean([v['rmse'] for v in vals])), 'mean_bias': float(np.mean([v['bias'] for v in vals])), 'mean_mae': float(np.mean([v['mae'] for v in vals]))}\n    findings['internal_summary'] = summary\n    if summary:\n        sel_key = min(summary, key=lambda k: (summary[k]['mean_rmse'], k))\n        sel = float(sel_key.split('_')[1])\n    else:\n        sel_key, sel = 'damp_0.0_default', 0.0\n        findings['selection_note'] = 'no complete internal comparison; default damp 0'\n    findings['selected'] = sel_key\n    b_full, npairs = _growth_rate(day, y)\n    findings['full_yoy_pairs'] = int(npairs)\n    findings['full_b_per_day'] = b_full\n    if b_full is None:\n        b_full = 0.0\n        findings['fallback_used'] = True\n        findings['fallback_reason'] = 'no_growth_estimate_full'\n    ref = float(ud[-1])\n    findings['implied_factor_at_eval_mid'] = float(np.exp(sel * b_full * (float(np.median(Xe[:, ed])) - ref)))\n    findings['implied_annual_factor_undamped'] = float(np.exp(b_full * 365.0))\n    try:\n        pred, nit = _fit_predict(X, y, Xe, ed, sel * b_full, ref)\n        findings['final_n_iter'] = nit\n        findings['submitted'] = 'poisson_trend_normalized_' + sel_key\n    except Exception as exc:\n        findings['fallback_used'] = True\n        findings['fallback_reason'] = type(exc).__name__\n        findings['submitted'] = 'poisson_plain_fallback'\n        m = _model()\n        m.fit(X, y)\n        pred = np.clip(m.predict(Xe), 0.0, None)\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    if bad.any():\n        findings['fallback_used'] = True\n        findings['nonfinite_replaced'] = int(bad.sum())\n        pred[bad] = float(np.median(y))\n    findings['pred_mean'] = float(pred.mean())\n    findings['train_last60_mean'] = float(y[day >= ud[-1] - 59].mean())\n    findings['eval_day_range'] = [float(Xe[:, ed].min()), float(Xe[:, ed].max())]\n    return {'prediction': pred.tolist(), 'findings': findings}\n"
+            },
+            "task_id": "idea-2a518e"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "damps": [
+                0.0,
+                0.5,
+                1.0
+              ],
+              "design": "poisson HGB (parent hparams, all features) fitted on y/L(day), L=exp(damp*b*(day-last_fit_day)); b = median log year-over-year ratio of daily mean hourly cnt / 365, estimated from the fitting window only; damp selected by mean RMSE over 3 chronological folds with 61-day horizon",
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback_used": false,
+              "final_n_iter": 250,
+              "full_b_per_day": 0.002127581676798555,
+              "full_yoy_pairs": 117,
+              "horizon_days": 61,
+              "implied_annual_factor_undamped": 2.173996789727127,
+              "implied_factor_at_eval_mid": 1.0681786822064445,
+              "internal": {
+                "cut_395": {
+                  "b_per_day": 0.002316193579499252,
+                  "holdout_mean_y": 186.78615490061685,
+                  "holdout_rows": 1459,
+                  "results": {
+                    "damp_0.0": {
+                      "bias": -19.156617618582146,
+                      "mae": 36.530394441995995,
+                      "n_iter": 250,
+                      "pred_mean": 167.62953728203473,
+                      "rmse": 63.39328436960808
+                    },
+                    "damp_0.5": {
+                      "bias": -9.140617162345155,
+                      "mae": 30.94652474330398,
+                      "n_iter": 250,
+                      "pred_mean": 177.6455377382717,
+                      "rmse": 52.4139780325474
+                    },
+                    "damp_1.0": {
+                      "bias": -2.0437837155469594,
+                      "mae": 29.679030171175732,
+                      "n_iter": 250,
+                      "pred_mean": 184.7423711850699,
+                      "rmse": 49.51765374937197
+                    }
+                  },
+                  "train_rows": 9362,
+                  "yoy_pairs": 27
+                },
+                "cut_425": {
+                  "b_per_day": 0.0020734134113146257,
+                  "holdout_mean_y": 232.1006160164271,
+                  "holdout_rows": 1461,
+                  "results": {
+                    "damp_0.0": {
+                      "bias": -104.33972619707852,
+                      "mae": 106.11450258294344,
+                      "n_iter": 250,
+                      "pred_mean": 127.76088981934858,
+                      "rmse": 148.37108972947067
+                    },
+                    "damp_0.5": {
+                      "bias": -101.69532376871379,
+                      "mae": 103.6887186891901,
+                      "n_iter": 250,
+                      "pred_mean": 130.4052922477133,
+                      "rmse": 146.20993448920524
+                    },
+                    "damp_1.0": {
+                      "bias": -101.43765347437241,
+                      "mae": 103.89488510296546,
+                      "n_iter": 250,
+                      "pred_mean": 130.6629625420547,
+                      "rmse": 149.35204565996952
+                    }
+                  },
+                  "train_rows": 10078,
+                  "yoy_pairs": 56
+                },
+                "cut_455": {
+                  "b_per_day": 0.0022957785081909004,
+                  "holdout_mean_y": 243.20619946091645,
+                  "holdout_rows": 742,
+                  "results": {
+                    "damp_0.0": {
+                      "bias": -0.02613636778542298,
+                      "mae": 35.69838705678162,
+                      "n_iter": 250,
+                      "pred_mean": 243.180063093131,
+                      "rmse": 56.87061200701111
+                    },
+                    "damp_0.5": {
+                      "bias": 19.098054015395366,
+                      "mae": 35.910304071169826,
+                      "n_iter": 250,
+                      "pred_mean": 262.3042534763118,
+                      "rmse": 60.02186077191997
+                    },
+                    "damp_1.0": {
+                      "bias": 13.664652786343407,
+                      "mae": 37.529439488235255,
+                      "n_iter": 250,
+                      "pred_mean": 256.87085224725985,
+                      "rmse": 58.94168769046474
+                    }
+                  },
+                  "train_rows": 10797,
+                  "yoy_pairs": 86
+                }
+              },
+              "internal_summary": {
+                "damp_0.0": {
+                  "mean_bias": -41.1741600611487,
+                  "mean_mae": 59.447761360573686,
+                  "mean_rmse": 89.54499536869662
+                },
+                "damp_0.5": {
+                  "mean_bias": -30.579295638554527,
+                  "mean_mae": 56.84851583455463,
+                  "mean_rmse": 86.21525776455753
+                },
+                "damp_1.0": {
+                  "mean_bias": -29.938928134525323,
+                  "mean_mae": 57.03445158745882,
+                  "mean_rmse": 85.93712903326873
+                }
+              },
+              "pred_mean": 296.4940305054879,
+              "selected": "damp_1.0",
+              "submitted": "poisson_trend_normalized_damp_1.0",
+              "train_last60_mean": 232.5045233124565
+            },
+            "group_mae": 41.54601574198653,
+            "groups": 61,
+            "kind": "method",
+            "loss": 65.18167910147106,
+            "mae": 41.54601574198653,
+            "process_cpu_seconds": 7.3887667399999994,
+            "rows": 1464,
+            "worker_seconds": 7.514772705733776
+          },
+          "score": -65.18167910147106,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s4"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s4",
+          "parent": "b0-s3",
+          "step": 4,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\ndef _model():\n    return HistGradientBoostingRegressor(loss='poisson', max_iter=250, learning_rate=0.08, max_leaf_nodes=31, l2_regularization=1, random_state=1729)\n\ndef _metrics(p, y):\n    e = p - y\n    return {'rmse': float(np.sqrt(np.mean(e ** 2))), 'mae': float(np.mean(np.abs(e))), 'bias': float(np.mean(e)), 'pred_mean': float(np.mean(p))}\n\ndef _weights(day, hl):\n    if hl is None:\n        return np.ones_like(day, dtype=float)\n    w = np.power(0.5, (float(day.max()) - day) / float(hl))\n    return w / w.mean()\n\ndef _ess(w):\n    return float(w.sum() ** 2 / np.sum(w ** 2))\n\ndef _fit_predict(Xtr, ytr, Xte, day_tr, hl):\n    m = _model()\n    m.fit(Xtr, ytr, sample_weight=_weights(day_tr, hl))\n    return np.clip(m.predict(Xte), 0.0, None), int(m.n_iter_)\n\ndef fit_predict(train, inputs, seed):\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    names = list(train['feature_names'])\n    ed = names.index('elapsed_day')\n    day = X[:, ed]\n    ud = np.unique(day)\n    cands = [('hl_none', None), ('hl_365', 365.0), ('hl_180', 180.0), ('hl_90', 90.0)]\n    order = {k: i for i, (k, _) in enumerate(cands)}\n    findings = {'fallback_used': False, 'design': 'poisson HGB (idea-a0bc19 hparams, all features) with exponential recency sample weights w=0.5**((last_fit_day-day)/half_life), normalized to mean 1; half-life selected by mean RMSE over 3 chronological folds with 61-day horizon, ties toward hl_none; only sample weights vary', 'horizon_days': 61, 'candidates': [k for k, _ in cands]}\n    internal = {}\n    for lo in [ud[-91], ud[-61], ud[-31]]:\n        hi = lo + 61.0\n        tr = day < lo\n        ho = (day >= lo) & (day < hi)\n        fold = {'train_rows': int(tr.sum()), 'holdout_rows': int(ho.sum()), 'holdout_mean_y': float(y[ho].mean()), 'results': {}}\n        for key, hl in cands:\n            try:\n                p, nit = _fit_predict(X[tr], y[tr], X[ho], day[tr], hl)\n                r = _metrics(p, y[ho])\n                r['n_iter'] = nit\n                r['ess'] = _ess(_weights(day[tr], hl))\n            except Exception as exc:\n                r = {'error': type(exc).__name__}\n            fold['results'][key] = r\n        internal['cut_%d' % int(lo)] = fold\n    findings['internal'] = internal\n    summary = {}\n    for key, hl in cands:\n        vals = [internal[k]['results'][key] for k in internal if 'rmse' in internal[k]['results'][key]]\n        if len(vals) == len(internal):\n            summary[key] = {'mean_rmse': float(np.mean([v['rmse'] for v in vals])), 'mean_bias': float(np.mean([v['bias'] for v in vals])), 'mean_mae': float(np.mean([v['mae'] for v in vals]))}\n    findings['internal_summary'] = summary\n    if summary:\n        sel_key = min(summary, key=lambda k: (summary[k]['mean_rmse'], order[k]))\n    else:\n        sel_key = 'hl_none'\n        findings['selection_note'] = 'no complete internal comparison; default hl_none'\n    sel_hl = dict(cands)[sel_key]\n    findings['selected'] = sel_key\n    findings['selected_half_life_days'] = sel_hl\n    try:\n        pred, nit = _fit_predict(X, y, Xe, day, sel_hl)\n        findings['final_n_iter'] = nit\n        findings['final_ess'] = _ess(_weights(day, sel_hl))\n        findings['submitted'] = 'poisson_recency_' + sel_key\n    except Exception as exc:\n        findings['fallback_used'] = True\n        findings['fallback_reason'] = type(exc).__name__\n        findings['submitted'] = 'poisson_uniform_fallback'\n        m = _model()\n        m.fit(X, y)\n        pred = np.clip(m.predict(Xe), 0.0, None)\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    if bad.any():\n        findings['fallback_used'] = True\n        findings['nonfinite_replaced'] = int(bad.sum())\n        pred[bad] = float(np.median(y))\n    findings['pred_mean'] = float(pred.mean())\n    findings['train_mean'] = float(y.mean())\n    findings['train_last60_mean'] = float(y[day >= ud[-1] - 59].mean())\n    findings['eval_day_range'] = [float(Xe[:, ed].min()), float(Xe[:, ed].max())]\n    return {'prediction': pred.tolist(), 'findings': findings}\n"
+            },
+            "task_id": "idea-cf138a"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "candidates": [
+                "hl_none",
+                "hl_365",
+                "hl_180",
+                "hl_90"
+              ],
+              "design": "poisson HGB (idea-a0bc19 hparams, all features) with exponential recency sample weights w=0.5**((last_fit_day-day)/half_life), normalized to mean 1; half-life selected by mean RMSE over 3 chronological folds with 61-day horizon, ties toward hl_none; only sample weights vary",
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback_used": false,
+              "final_ess": 11539.0,
+              "final_n_iter": 250,
+              "horizon_days": 61,
+              "internal": {
+                "cut_395": {
+                  "holdout_mean_y": 186.78615490061685,
+                  "holdout_rows": 1459,
+                  "results": {
+                    "hl_180": {
+                      "bias": -23.869805757296643,
+                      "ess": 7911.05000599166,
+                      "mae": 38.131050240224646,
+                      "n_iter": 250,
+                      "pred_mean": 162.91634914332022,
+                      "rmse": 65.9561223255144
+                    },
+                    "hl_365": {
+                      "bias": -22.769407749160926,
+                      "ess": 8951.02406549591,
+                      "mae": 37.84864695422134,
+                      "n_iter": 250,
+                      "pred_mean": 164.01674715145595,
+                      "rmse": 66.01444857040966
+                    },
+                    "hl_90": {
+                      "bias": -24.40506759800728,
+                      "ess": 5623.782570318768,
+                      "mae": 38.60560124726181,
+                      "n_iter": 250,
+                      "pred_mean": 162.3810873026096,
+                      "rmse": 66.1100455184435
+                    },
+                    "hl_none": {
+                      "bias": -19.156617618582146,
+                      "ess": 9362.0,
+                      "mae": 36.530394441995995,
+                      "n_iter": 250,
+                      "pred_mean": 167.62953728203473,
+                      "rmse": 63.39328436960808
+                    }
+                  },
+                  "train_rows": 9362
+                },
+                "cut_425": {
+                  "holdout_mean_y": 232.1006160164271,
+                  "holdout_rows": 1461,
+                  "results": {
+                    "hl_180": {
+                      "bias": -106.86849390089937,
+                      "ess": 8320.659333265456,
+                      "mae": 108.64569960242378,
+                      "n_iter": 250,
+                      "pred_mean": 125.23212211552773,
+                      "rmse": 152.55723015640197
+                    },
+                    "hl_365": {
+                      "bias": -108.03632807266219,
+                      "ess": 9569.964795360725,
+                      "mae": 109.63828887505272,
+                      "n_iter": 250,
+                      "pred_mean": 124.06428794376492,
+                      "rmse": 153.40545283110131
+                    },
+                    "hl_90": {
+                      "bias": -103.24713312678608,
+                      "ess": 5739.533411937335,
+                      "mae": 105.04631187316659,
+                      "n_iter": 250,
+                      "pred_mean": 128.85348288964104,
+                      "rmse": 148.45629746922867
+                    },
+                    "hl_none": {
+                      "bias": -104.33972619707852,
+                      "ess": 10078.0,
+                      "mae": 106.11450258294344,
+                      "n_iter": 250,
+                      "pred_mean": 127.76088981934858,
+                      "rmse": 148.37108972947067
+                    }
+                  },
+                  "train_rows": 10078
+                },
+                "cut_455": {
+                  "holdout_mean_y": 243.20619946091645,
+                  "holdout_rows": 742,
+                  "results": {
+                    "hl_180": {
+                      "bias": 0.1661017442745873,
+                      "ess": 8701.301510573196,
+                      "mae": 35.502995227182524,
+                      "n_iter": 250,
+                      "pred_mean": 243.372301205191,
+                      "rmse": 57.414173212723036
+                    },
+                    "hl_365": {
+                      "bias": -2.724441549726904,
+                      "ess": 10178.168730761681,
+                      "mae": 35.978246862999804,
+                      "n_iter": 250,
+                      "pred_mean": 240.48175791118956,
+                      "rmse": 58.359610288337436
+                    },
+                    "hl_90": {
+                      "bias": -1.2696252097413112,
+                      "ess": 5833.271824238559,
+                      "mae": 37.61474576958811,
+                      "n_iter": 250,
+                      "pred_mean": 241.93657425117516,
+                      "rmse": 59.73581484133359
+                    },
+                    "hl_none": {
+                      "bias": -0.02613636778542298,
+                      "ess": 10797.0,
+                      "mae": 35.69838705678162,
+                      "n_iter": 250,
+                      "pred_mean": 243.180063093131,
+                      "rmse": 56.87061200701111
+                    }
+                  },
+                  "train_rows": 10797
+                }
+              },
+              "internal_summary": {
+                "hl_180": {
+                  "mean_bias": -43.524065971307145,
+                  "mean_mae": 60.75991502327698,
+                  "mean_rmse": 91.97584189821315
+                },
+                "hl_365": {
+                  "mean_bias": -44.51005912385,
+                  "mean_mae": 61.15506089742462,
+                  "mean_rmse": 92.5931705632828
+                },
+                "hl_90": {
+                  "mean_bias": -42.973941978178225,
+                  "mean_mae": 60.42221963000551,
+                  "mean_rmse": 91.43405260966858
+                },
+                "hl_none": {
+                  "mean_bias": -41.1741600611487,
+                  "mean_mae": 59.447761360573686,
+                  "mean_rmse": 89.54499536869662
+                }
+              },
+              "pred_mean": 264.3496785940459,
+              "selected": "hl_none",
+              "selected_half_life_days": null,
+              "submitted": "poisson_recency_hl_none",
+              "train_last60_mean": 232.5045233124565,
+              "train_mean": 154.43998613398043
+            },
+            "group_mae": 35.887739571036484,
+            "groups": 61,
+            "kind": "method",
+            "loss": 54.00931601830713,
+            "mae": 35.88773957103649,
+            "process_cpu_seconds": 9.420701853,
+            "rows": 1464,
+            "worker_seconds": 9.547600448131561
+          },
+          "score": -54.00931601830713,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s5"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s5",
+          "parent": "b0-s4",
+          "step": 5,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nHP = dict(max_iter=250, learning_rate=0.08, max_leaf_nodes=31, l2_regularization=1, random_state=1729)\n\ndef _model(loss):\n    return HistGradientBoostingRegressor(loss=loss, **HP)\n\ndef _r(x):\n    return float(round(float(x), 3))\n\ndef _metrics(p, y):\n    e = p - y\n    return {'rmse': _r(np.sqrt(np.mean(e ** 2))), 'mae': _r(np.mean(np.abs(e))), 'bias': _r(np.mean(e)), 'pred_mean': _r(np.mean(p))}\n\ndef _fit_base(spec, Xtr, ytr, Xte):\n    loss, drop = spec\n    cols = [i for i in range(Xtr.shape[1]) if i not in drop]\n    m = _model(loss)\n    m.fit(Xtr[:, cols], ytr)\n    return np.clip(m.predict(Xte[:, cols]), 0.0, None), int(m.n_iter_)\n\ndef fit_predict(train, inputs, seed):\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    names = list(train['feature_names'])\n    ed = names.index('elapsed_day')\n    day = X[:, ed]\n    ud = np.unique(day)\n    drop_ms = tuple(names.index(n) for n in ['mnth', 'season'] if n in names)\n    base = {'poisson_all': ('poisson', ()), 'poisson_no_month_season': ('poisson', drop_ms), 'squared_all': ('squared_error', ())}\n    combos = [('poisson_all', ['poisson_all']), ('poisson_no_month_season', ['poisson_no_month_season']), ('squared_all', ['squared_all']), ('avg_poisson_all_squared', ['poisson_all', 'squared_all']), ('avg_poisson_all_noms', ['poisson_all', 'poisson_no_month_season']), ('avg_all_three', ['poisson_all', 'poisson_no_month_season', 'squared_all'])]\n    order = {k: i for i, (k, _) in enumerate(combos)}\n    findings = {'fallback_used': False, 'design': 'HGB variants with idea-a0bc19 hparams (max_iter=250,lr=0.08,leaves=31,l2=1,seed=1729): poisson all features, poisson without mnth/season, squared_error all features, and their simple averages; branch selected by mean RMSE over 3 chronological folds with 61-day horizon, ties toward poisson_all (identical to a0bc19 submission)', 'dropped_for_no_month_season': [names[i] for i in drop_ms], 'horizon_days': 61, 'candidates': [k for k, _ in combos]}\n    internal = {}\n    for lo in [ud[-91], ud[-61], ud[-31]]:\n        hi = lo + 61.0\n        tr = day < lo\n        ho = (day >= lo) & (day < hi)\n        preds = {}\n        errs = {}\n        for bname, spec in base.items():\n            try:\n                p, nit = _fit_base(spec, X[tr], y[tr], X[ho])\n                preds[bname] = p\n            except Exception as exc:\n                errs[bname] = type(exc).__name__\n        res = {}\n        for cname, parts in combos:\n            if all(b in preds for b in parts):\n                res[cname] = _metrics(np.mean([preds[b] for b in parts], axis=0), y[ho])\n            else:\n                res[cname] = {'error': 'missing_base'}\n        fold = {'train_rows': int(tr.sum()), 'holdout_rows': int(ho.sum()), 'holdout_mean_y': _r(y[ho].mean()), 'results': res}\n        if errs:\n            fold['base_errors'] = errs\n        internal['cut_%d' % int(lo)] = fold\n    findings['internal'] = internal\n    summary = {}\n    for cname, _ in combos:\n        vals = [internal[k]['results'][cname] for k in internal if 'rmse' in internal[k]['results'][cname]]\n        if len(vals) == len(internal):\n            summary[cname] = {'mean_rmse': _r(np.mean([v['rmse'] for v in vals])), 'mean_mae': _r(np.mean([v['mae'] for v in vals])), 'mean_bias': _r(np.mean([v['bias'] for v in vals]))}\n    findings['internal_summary'] = summary\n    if summary:\n        sel = min(summary, key=lambda k: (summary[k]['mean_rmse'], order[k]))\n    else:\n        sel = 'poisson_all'\n        findings['selection_note'] = 'no complete internal comparison; default poisson_all'\n    findings['selected'] = sel\n    parts = dict(combos)[sel]\n    findings['selected_components'] = parts\n    findings['identical_to_a0bc19_submission'] = bool(sel == 'poisson_all')\n    try:\n        outs = []\n        iters = {}\n        for b in parts:\n            p, nit = _fit_base(base[b], X, y, Xe)\n            outs.append(p)\n            iters[b] = nit\n        pred = np.mean(outs, axis=0)\n        findings['final_n_iter'] = iters\n        findings['submitted'] = sel\n    except Exception as exc:\n        findings['fallback_used'] = True\n        findings['fallback_reason'] = type(exc).__name__\n        try:\n            pred, nit = _fit_base(base['poisson_all'], X, y, Xe)\n            findings['submitted'] = 'poisson_all_fallback'\n        except Exception as exc2:\n            findings['fallback_reason2'] = type(exc2).__name__\n            pred = np.full(Xe.shape[0], float(np.median(y)))\n            findings['submitted'] = 'train_median_fallback'\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    if bad.any():\n        findings['fallback_used'] = True\n        findings['nonfinite_replaced'] = int(bad.sum())\n        pred[bad] = float(np.median(y))\n    findings['pred_mean'] = _r(pred.mean())\n    findings['train_mean'] = _r(y.mean())\n    findings['train_last60_mean'] = _r(y[day >= ud[-1] - 59].mean())\n    findings['eval_day_range'] = [float(Xe[:, ed].min()), float(Xe[:, ed].max())]\n    return {'prediction': pred.tolist(), 'findings': findings}\n"
+            },
+            "task_id": "idea-16d33f"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "candidates": [
+                "poisson_all",
+                "poisson_no_month_season",
+                "squared_all",
+                "avg_poisson_all_squared",
+                "avg_poisson_all_noms",
+                "avg_all_three"
+              ],
+              "design": "HGB variants with idea-a0bc19 hparams (max_iter=250,lr=0.08,leaves=31,l2=1,seed=1729): poisson all features, poisson without mnth/season, squared_error all features, and their simple averages; branch selected by mean RMSE over 3 chronological folds with 61-day horizon, ties toward poisson_all (identical to a0bc19 submission)",
+              "dropped_for_no_month_season": [
+                "mnth",
+                "season"
+              ],
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback_used": false,
+              "final_n_iter": {
+                "squared_all": 236
+              },
+              "horizon_days": 61,
+              "identical_to_a0bc19_submission": false,
+              "internal": {
+                "cut_395": {
+                  "holdout_mean_y": 186.786,
+                  "holdout_rows": 1459,
+                  "results": {
+                    "avg_all_three": {
+                      "bias": -20.802,
+                      "mae": 37.922,
+                      "pred_mean": 165.984,
+                      "rmse": 65.132
+                    },
+                    "avg_poisson_all_noms": {
+                      "bias": -18.813,
+                      "mae": 36.04,
+                      "pred_mean": 167.973,
+                      "rmse": 62.305
+                    },
+                    "avg_poisson_all_squared": {
+                      "bias": -21.969,
+                      "mae": 39.395,
+                      "pred_mean": 164.817,
+                      "rmse": 67.326
+                    },
+                    "poisson_all": {
+                      "bias": -19.157,
+                      "mae": 36.53,
+                      "pred_mean": 167.63,
+                      "rmse": 63.393
+                    },
+                    "poisson_no_month_season": {
+                      "bias": -18.47,
+                      "mae": 35.832,
+                      "pred_mean": 168.316,
+                      "rmse": 61.607
+                    },
+                    "squared_all": {
+                      "bias": -24.781,
+                      "mae": 43.491,
+                      "pred_mean": 162.005,
+                      "rmse": 72.558
+                    }
+                  },
+                  "train_rows": 9362
+                },
+                "cut_425": {
+                  "holdout_mean_y": 232.101,
+                  "holdout_rows": 1461,
+                  "results": {
+                    "avg_all_three": {
+                      "bias": -98.892,
+                      "mae": 100.4,
+                      "pred_mean": 133.208,
+                      "rmse": 138.426
+                    },
+                    "avg_poisson_all_noms": {
+                      "bias": -105.462,
+                      "mae": 107.098,
+                      "pred_mean": 126.639,
+                      "rmse": 150.011
+                    },
+                    "avg_poisson_all_squared": {
+                      "bias": -95.046,
+                      "mae": 96.701,
+                      "pred_mean": 137.055,
+                      "rmse": 131.985
+                    },
+                    "poisson_all": {
+                      "bias": -104.34,
+                      "mae": 106.115,
+                      "pred_mean": 127.761,
+                      "rmse": 148.371
+                    },
+                    "poisson_no_month_season": {
+                      "bias": -106.584,
+                      "mae": 108.125,
+                      "pred_mean": 125.516,
+                      "rmse": 151.778
+                    },
+                    "squared_all": {
+                      "bias": -85.752,
+                      "mae": 87.792,
+                      "pred_mean": 146.348,
+                      "rmse": 116.63
+                    }
+                  },
+                  "train_rows": 10078
+                },
+                "cut_455": {
+                  "holdout_mean_y": 243.206,
+                  "holdout_rows": 742,
+                  "results": {
+                    "avg_all_three": {
+                      "bias": 0.514,
+                      "mae": 35.0,
+                      "pred_mean": 243.72,
+                      "rmse": 55.948
+                    },
+                    "avg_poisson_all_noms": {
+                      "bias": 0.278,
+                      "mae": 34.77,
+                      "pred_mean": 243.484,
+                      "rmse": 55.747
+                    },
+                    "avg_poisson_all_squared": {
+                      "bias": 0.48,
+                      "mae": 35.766,
+                      "pred_mean": 243.686,
+                      "rmse": 56.848
+                    },
+                    "poisson_all": {
+                      "bias": -0.026,
+                      "mae": 35.698,
+                      "pred_mean": 243.18,
+                      "rmse": 56.871
+                    },
+                    "poisson_no_month_season": {
+                      "bias": 0.582,
+                      "mae": 34.364,
+                      "pred_mean": 243.789,
+                      "rmse": 55.448
+                    },
+                    "squared_all": {
+                      "bias": 0.986,
+                      "mae": 37.774,
+                      "pred_mean": 244.192,
+                      "rmse": 59.314
+                    }
+                  },
+                  "train_rows": 10797
+                }
+              },
+              "internal_summary": {
+                "avg_all_three": {
+                  "mean_bias": -39.727,
+                  "mean_mae": 57.774,
+                  "mean_rmse": 86.502
+                },
+                "avg_poisson_all_noms": {
+                  "mean_bias": -41.332,
+                  "mean_mae": 59.303,
+                  "mean_rmse": 89.354
+                },
+                "avg_poisson_all_squared": {
+                  "mean_bias": -38.845,
+                  "mean_mae": 57.287,
+                  "mean_rmse": 85.386
+                },
+                "poisson_all": {
+                  "mean_bias": -41.174,
+                  "mean_mae": 59.448,
+                  "mean_rmse": 89.545
+                },
+                "poisson_no_month_season": {
+                  "mean_bias": -41.491,
+                  "mean_mae": 59.44,
+                  "mean_rmse": 89.611
+                },
+                "squared_all": {
+                  "mean_bias": -36.516,
+                  "mean_mae": 56.352,
+                  "mean_rmse": 82.834
+                }
+              },
+              "pred_mean": 271.561,
+              "selected": "squared_all",
+              "selected_components": [
+                "squared_all"
+              ],
+              "submitted": "squared_all",
+              "train_last60_mean": 232.505,
+              "train_mean": 154.44
+            },
+            "group_mae": 40.87792084565771,
+            "groups": 61,
+            "kind": "method",
+            "loss": 59.976405377488454,
+            "mae": 40.877920845657705,
+            "process_cpu_seconds": 7.044630905,
+            "rows": 1464,
+            "worker_seconds": 7.172283820807934
+          },
+          "score": -59.976405377488454,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    }
+  ],
+  "termination": "budget",
+  "stop_reason": null,
+  "metrics": {
+    "supported": true,
+    "best_score": -54.00931601830713,
+    "quality_gain": 0.09974595655426832,
+    "calls": 6,
+    "rounds": 6,
+    "cost": null,
+    "parallel_seconds_estimate": null
+  }
+}

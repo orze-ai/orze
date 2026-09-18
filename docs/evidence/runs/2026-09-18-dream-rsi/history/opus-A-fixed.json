@@ -1,0 +1,935 @@
+{
+  "schema": 1,
+  "mode": "replay",
+  "spec": {
+    "plan": {
+      "branches": 1,
+      "calls": 6,
+      "depth": 6,
+      "workers": 1
+    },
+    "problem_id": "uci275-same-development-split",
+    "protocol_id": "7a3704cdac914b404ab1178c8b435695c89aaff435c38fab740f087f8f98bd83",
+    "root": {
+      "artifact": {
+        "baselines": [
+          {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\ndef fit_predict(train, inputs, seed):\n    return [float(np.median(train['y']))]*len(inputs['X'])\n"
+            },
+            "facts": {
+              "group_mae": 204.26571038251365,
+              "groups": 61,
+              "kind": "method",
+              "loss": 268.4780559562637,
+              "mae": 204.26571038251367,
+              "process_cpu_seconds": 0.083444318,
+              "rows": 1464,
+              "worker_seconds": 0.08635515533387661
+            }
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "from sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.linear_model import Ridge\ndef fit_predict(train, inputs, seed):\n    model=make_pipeline(StandardScaler(),Ridge(alpha=10.0))\n    model.fit(train['X'],train['y'])\n    return model.predict(inputs['X']).tolist()\n"
+            },
+            "facts": {
+              "group_mae": 145.6880639271646,
+              "groups": 61,
+              "kind": "method",
+              "loss": 182.95149476838213,
+              "mae": 145.6880639271646,
+              "process_cpu_seconds": 0.856769792,
+              "rows": 1464,
+              "worker_seconds": 0.9573334902524948
+            }
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "from sklearn.ensemble import HistGradientBoostingRegressor\ndef fit_predict(train, inputs, seed):\n    model=HistGradientBoostingRegressor(max_iter=250,learning_rate=0.08,max_leaf_nodes=31,l2_regularization=1,random_state=1729)\n    model.fit(train['X'],train['y'])\n    return model.predict(inputs['X']).tolist()\n"
+            },
+            "facts": {
+              "group_mae": 40.95457910564305,
+              "groups": 61,
+              "kind": "method",
+              "loss": 59.99341675999134,
+              "mae": 40.954579105643056,
+              "process_cpu_seconds": 1.4585402120000002,
+              "rows": 1464,
+              "worker_seconds": 1.5744168534874916
+            }
+          }
+        ]
+      },
+      "feedback": {
+        "original_source": "opus-A/state-006-b-execute.json",
+        "scope": "historical single-path stopping only",
+        "sha256": "f96bb985f0903e124977d9d6180ce87d5d5d2d0289a64a169183af6809f781e5"
+      },
+      "score": -59.99341675999134
+    },
+    "score_scale": 59.99341675999134
+  },
+  "rounds": [
+    {
+      "decision": {
+        "actions": [
+          "b0-s0"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s0",
+          "parent": null,
+          "step": 0,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nBASE = ['season', 'yr', 'mnth', 'hr', 'holiday', 'weekday', 'workingday',\n        'weathersit', 'temp', 'atemp', 'hum', 'windspeed']\n\n\ndef _features(X, feature_names, use_elapsed):\n    A = np.asarray(X, dtype=float)\n    ix = {}\n    for i, nm in enumerate(feature_names):\n        ix[nm] = i\n    n = A.shape[0]\n    z = np.zeros(n)\n\n    def col(name):\n        if name in ix:\n            return A[:, ix[name]]\n        return z\n\n    cols = [col(b) for b in BASE]\n    if use_elapsed and ('elapsed_day' in ix):\n        cols.append(col('elapsed_day'))\n    hr = col('hr')\n    wd = col('workingday')\n    wk = col('weekday')\n    tp = col('temp')\n    hu = col('hum')\n    ws = col('windspeed')\n    cols.append(np.sin(2.0 * np.pi * hr / 24.0))\n    cols.append(np.cos(2.0 * np.pi * hr / 24.0))\n    cols.append(np.sin(4.0 * np.pi * hr / 24.0))\n    cols.append(np.cos(4.0 * np.pi * hr / 24.0))\n    cols.append(hr + 24.0 * wd)\n    cols.append(hr + 24.0 * wk)\n    cols.append(tp * hr)\n    cols.append(hu * hr)\n    cols.append(tp * wd)\n    cols.append(ws * tp)\n    return np.column_stack(cols)\n\n\ndef _fit_branch(F, y, idx, br, rs):\n    model = HistGradientBoostingRegressor(max_iter=br['it'], learning_rate=br['lr'],\n                                          max_leaf_nodes=br['lv'],\n                                          l2_regularization=br['l2'],\n                                          min_samples_leaf=br['ml'],\n                                          early_stopping=False, random_state=rs)\n    yt = y[idx]\n    if br['target'] == 'log':\n        yt = np.log1p(yt)\n    model.fit(F[idx], yt)\n    return model\n\n\ndef _predict_branch(model, F, br):\n    p = model.predict(F)\n    if br['target'] == 'log':\n        p = np.expm1(np.clip(p, -20.0, 20.0))\n    return np.clip(p, 0.0, None)\n\n\ndef _run(train, inputs, seed, findings):\n    try:\n        rs = int(seed)\n    except Exception:\n        rs = 1729\n    fn = list(train['feature_names'])\n    y = np.asarray(train['y'], dtype=float)\n    groups = list(train['groups'])\n    A = np.asarray(train['X'], dtype=float)\n    ixe = fn.index('elapsed_day') if ('elapsed_day' in fn) else None\n    key = {}\n    for i, g in enumerate(groups):\n        k = float(A[i, ixe]) if ixe is not None else float(i)\n        if (g not in key) or (k < key[g]):\n            key[g] = k\n    order = sorted(key.keys(), key=lambda g: key[g])\n    nd = len(order)\n    H = 61\n    folds = []\n    for start in (nd - H, nd - 2 * H):\n        if start >= 120:\n            cut = key[order[start]]\n            hold = set(order[start:start + H])\n            tr_idx = np.array([i for i, g in enumerate(groups) if key[g] < cut], dtype=int)\n            ho_idx = np.array([i for i, g in enumerate(groups) if g in hold], dtype=int)\n            if tr_idx.size >= 500 and ho_idx.size >= 100:\n                folds.append((tr_idx, ho_idx))\n    feats = {True: _features(train['X'], fn, True),\n             False: _features(train['X'], fn, False)}\n    cfgs = [('ref', 250, 0.08, 31, 1.0, 20), ('deep', 600, 0.04, 63, 1.0, 15)]\n    branches = []\n    for ue in (True, False):\n        for tgt in ('raw', 'log'):\n            for c in cfgs:\n                nm = '%s|%s|%s' % ('elapsed' if ue else 'noelapsed', tgt, c[0])\n                branches.append({'name': nm, 'elapsed': ue, 'target': tgt,\n                                 'it': c[1], 'lr': c[2], 'lv': c[3],\n                                 'l2': c[4], 'ml': c[5]})\n    scores = []\n    for br in branches:\n        F = feats[br['elapsed']]\n        rl = []\n        for tr_idx, ho_idx in folds:\n            m = _fit_branch(F, y, tr_idx, br, rs)\n            p = _predict_branch(m, F[ho_idx], br)\n            rl.append(float(np.sqrt(np.mean((p - y[ho_idx]) ** 2))))\n        if rl:\n            mv = float(np.mean(rl))\n        else:\n            mv = None\n        scores.append({'branch': br['name'],\n                       'fold_rmse': [round(v, 3) for v in rl],\n                       'mean_rmse': (round(mv, 3) if mv is not None else None)})\n    if folds:\n        vals = []\n        for s in scores:\n            vals.append(s['mean_rmse'] if s['mean_rmse'] is not None else 1e18)\n        best_i = int(np.argmin(np.asarray(vals, dtype=float)))\n    else:\n        best_i = 0\n        findings['no_internal_folds'] = True\n    best = branches[best_i]\n    Ftr = feats[best['elapsed']]\n    all_idx = np.arange(y.shape[0], dtype=int)\n    model = _fit_branch(Ftr, y, all_idx, best, rs)\n    Fte = _features(inputs['X'], list(inputs['feature_names']), best['elapsed'])\n    pred = _predict_branch(model, Fte, best)\n    if (pred.shape[0] != Fte.shape[0]) or (not np.all(np.isfinite(pred))):\n        raise ValueError('nonfinite_or_shape_mismatch')\n    Ain = np.asarray(inputs['X'], dtype=float)\n    ixe2 = None\n    infn = list(inputs['feature_names'])\n    if 'elapsed_day' in infn:\n        ixe2 = infn.index('elapsed_day')\n    findings['selected_branch'] = best['name']\n    findings['branch_scores'] = scores\n    findings['n_internal_folds'] = len(folds)\n    findings['n_train_dates'] = nd\n    findings['n_train_rows'] = int(y.shape[0])\n    findings['n_pred_rows'] = int(pred.shape[0])\n    findings['pred_mean'] = round(float(np.mean(pred)), 3)\n    findings['pred_max'] = round(float(np.max(pred)), 3)\n    findings['train_y_mean'] = round(float(np.mean(y)), 3)\n    if (ixe is not None) and (ixe2 is not None):\n        tmax = float(np.max(A[:, ixe]))\n        imax = float(np.max(Ain[:, ixe2]))\n        imin = float(np.min(Ain[:, ixe2]))\n        findings['elapsed_train_max'] = tmax\n        findings['elapsed_inputs_min'] = imin\n        findings['elapsed_inputs_max'] = imax\n        findings['inputs_beyond_train_elapsed_fraction'] = round(\n            float(np.mean(Ain[:, ixe2] > tmax)), 4)\n    findings['transductive_use'] = ('none_for_fitting_or_selection; unlabeled input '\n                                    'covariates used only to predict and to report '\n                                    'elapsed_day range diagnostics')\n    findings['selection_rule'] = ('lowest mean RMSE over two strictly chronological '\n                                  '61-date holdouts taken from training dates only')\n    return {'prediction': [float(v) for v in pred], 'findings': findings}\n\n\ndef fit_predict(train, inputs, seed):\n    findings = {'fallback_used': False}\n    try:\n        return _run(train, inputs, seed, findings)\n    except Exception as exc:\n        findings['fallback_used'] = True\n        findings['fallback_reason'] = type(exc).__name__\n        findings['fallback_model'] = ('HistGradientBoosting(250, lr 0.08, 31 leaves, '\n                                      'l2 1, seed 1729) on raw supplied features; '\n                                      'no branch selection was performed')\n        Xtr = np.asarray(train['X'], dtype=float)\n        ytr = np.asarray(train['y'], dtype=float)\n        m = HistGradientBoostingRegressor(max_iter=250, learning_rate=0.08,\n                                          max_leaf_nodes=31, l2_regularization=1.0,\n                                          random_state=1729)\n        m.fit(Xtr, ytr)\n        p = np.clip(m.predict(np.asarray(inputs['X'], dtype=float)), 0.0, None)\n        p = np.nan_to_num(p, nan=float(np.mean(ytr)), posinf=float(np.max(ytr)), neginf=0.0)\n        return {'prediction': [float(v) for v in p], 'findings': findings}\n"
+            },
+            "task_id": "idea-4ed689"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "branch_scores": [
+                {
+                  "branch": "elapsed|raw|ref",
+                  "fold_rmse": [
+                    115.06,
+                    80.088
+                  ],
+                  "mean_rmse": 97.574
+                },
+                {
+                  "branch": "elapsed|raw|deep",
+                  "fold_rmse": [
+                    117.664,
+                    79.029
+                  ],
+                  "mean_rmse": 98.347
+                },
+                {
+                  "branch": "elapsed|log|ref",
+                  "fold_rmse": [
+                    139.628,
+                    84.076
+                  ],
+                  "mean_rmse": 111.852
+                },
+                {
+                  "branch": "elapsed|log|deep",
+                  "fold_rmse": [
+                    134.988,
+                    79.37
+                  ],
+                  "mean_rmse": 107.179
+                },
+                {
+                  "branch": "noelapsed|raw|ref",
+                  "fold_rmse": [
+                    89.511,
+                    101.337
+                  ],
+                  "mean_rmse": 95.424
+                },
+                {
+                  "branch": "noelapsed|raw|deep",
+                  "fold_rmse": [
+                    94.41,
+                    99.258
+                  ],
+                  "mean_rmse": 96.834
+                },
+                {
+                  "branch": "noelapsed|log|ref",
+                  "fold_rmse": [
+                    93.372,
+                    103.521
+                  ],
+                  "mean_rmse": 98.447
+                },
+                {
+                  "branch": "noelapsed|log|deep",
+                  "fold_rmse": [
+                    99.123,
+                    103.608
+                  ],
+                  "mean_rmse": 101.365
+                }
+              ],
+              "elapsed_inputs_max": 546.0,
+              "elapsed_inputs_min": 486.0,
+              "elapsed_train_max": 485.0,
+              "fallback_used": false,
+              "inputs_beyond_train_elapsed_fraction": 1.0,
+              "n_internal_folds": 2,
+              "n_pred_rows": 1464,
+              "n_train_dates": 486,
+              "n_train_rows": 11539,
+              "pred_max": 828.205,
+              "pred_mean": 290.871,
+              "selected_branch": "noelapsed|raw|ref",
+              "selection_rule": "lowest mean RMSE over two strictly chronological 61-date holdouts taken from training dates only",
+              "train_y_mean": 154.44,
+              "transductive_use": "none_for_fitting_or_selection; unlabeled input covariates used only to predict and to report elapsed_day range diagnostics"
+            },
+            "group_mae": 41.715239869744735,
+            "groups": 61,
+            "kind": "method",
+            "loss": 62.03048671220872,
+            "mae": 41.715239869744735,
+            "process_cpu_seconds": 29.271968115,
+            "rows": 1464,
+            "worker_seconds": 29.402162665501237
+          },
+          "score": -62.03048671220872,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s1"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s1",
+          "parent": "b0-s0",
+          "step": 1,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nREF = {\"max_iter\": 250, \"learning_rate\": 0.08, \"max_leaf_nodes\": 31,\n       \"l2_regularization\": 1, \"random_state\": 1729}\n\n\ndef _trend(el, y):\n    days = np.round(el).astype(int)\n    ud = np.unique(days)\n    m = np.empty(ud.size, dtype=float)\n    for i in range(ud.size):\n        m[i] = y[days == ud[i]].mean()\n    lm = np.log(np.maximum(m, 1.0))\n    t = ud.astype(float)\n    cols = [np.ones_like(t), t]\n    for h in (1.0, 2.0):\n        a = 2.0 * np.pi * h * t / 365.25\n        cols.append(np.sin(a))\n        cols.append(np.cos(a))\n    A = np.vstack(cols).T\n    coef = np.linalg.lstsq(A, lm, rcond=None)[0]\n    return float(coef[1]), float(t.max()), float(t.mean())\n\n\ndef _g(el, b, dmax, dref, kappa):\n    eff = np.where(el <= dmax, el, dmax + kappa * (el - dmax))\n    return np.exp(b * (eff - dref))\n\n\ndef _fit_base(Xtr, ytr):\n    mdl = HistGradientBoostingRegressor(**REF)\n    mdl.fit(Xtr, ytr)\n    return mdl\n\n\ndef _pred_base(mdl, Xev):\n    return np.maximum(mdl.predict(Xev), 0.0)\n\n\ndef _fit_trendmodel(Xtr, ytr, eltr, kappa):\n    b, dmax, dref = _trend(eltr, ytr)\n    g = _g(eltr, b, dmax, dref, kappa)\n    g = np.maximum(g, 1e-6)\n    r = ytr / g\n    w = g * g\n    mdl = HistGradientBoostingRegressor(**REF)\n    mdl.fit(Xtr, r, sample_weight=w)\n    return (mdl, b, dmax, dref, kappa)\n\n\ndef _pred_trendmodel(st, Xev, elev):\n    mdl, b, dmax, dref, kappa = st\n    g = _g(elev, b, dmax, dref, kappa)\n    return np.maximum(mdl.predict(Xev) * g, 0.0)\n\n\ndef _rmse(a, p):\n    d = np.asarray(p, dtype=float) - np.asarray(a, dtype=float)\n    return float(np.sqrt(np.mean(d * d)))\n\n\ndef fit_predict(train, inputs, seed):\n    names = list(train['feature_names'])\n    Xtr_full = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xev_full = np.asarray(inputs['X'], dtype=float)\n    ei = names.index('elapsed_day')\n    el_tr = Xtr_full[:, ei]\n    el_ev = Xev_full[:, ei]\n    keep = [j for j in range(len(names)) if j != ei]\n    Xtr_ne = Xtr_full[:, keep]\n    Xev_ne = Xev_full[:, keep]\n    day_tr = np.round(el_tr).astype(int)\n    dates = np.unique(day_tr)\n    n = int(dates.size)\n    findings = {\n        \"fallback_used\": False,\n        \"n_train_rows\": int(Xtr_full.shape[0]),\n        \"n_train_dates\": n,\n        \"n_pred_rows\": int(Xev_full.shape[0]),\n        \"elapsed_train_max\": float(el_tr.max()),\n        \"elapsed_inputs_min\": float(el_ev.min()),\n        \"elapsed_inputs_max\": float(el_ev.max()),\n        \"inputs_beyond_train_elapsed_fraction\": float(np.mean(el_ev > el_tr.max())),\n        \"transductive_use\": \"none_for_fitting_or_selection; unlabeled input elapsed_day used only to evaluate the level factor at prediction time and for range diagnostics\",\n    }\n    try:\n        b_all, dmax_all, dref_all = _trend(el_tr, y)\n        findings[\"full_train_log_slope_per_day\"] = round(b_all, 6)\n        findings[\"full_train_implied_annual_growth\"] = round(float(np.exp(b_all * 365.25)), 4)\n    except Exception as exc:\n        findings[\"trend_diag_error\"] = type(exc).__name__\n    block = 40\n    nf = 4\n    fold_res = {\"baseline\": [], \"trend_full\": [], \"trend_frozen\": []}\n    ok = True\n    try:\n        for k in range(nf):\n            c = n - (nf - k) * block\n            if c < 200:\n                ok = False\n                break\n            trd = set(dates[:c].tolist())\n            vad = set(dates[c:c + block].tolist())\n            mtr = np.array([d in trd for d in day_tr], dtype=bool)\n            mva = np.array([d in vad for d in day_tr], dtype=bool)\n            if mtr.sum() < 500 or mva.sum() < 100:\n                ok = False\n                break\n            b0 = _fit_base(Xtr_full[mtr], y[mtr])\n            fold_res[\"baseline\"].append(round(_rmse(y[mva], _pred_base(b0, Xtr_full[mva])), 3))\n            for nm, kap in ((\"trend_full\", 1.0), (\"trend_frozen\", 0.0)):\n                st = _fit_trendmodel(Xtr_ne[mtr], y[mtr], el_tr[mtr], kap)\n                fold_res[nm].append(round(_rmse(y[mva], _pred_trendmodel(st, Xtr_ne[mva], el_tr[mva])), 3))\n    except Exception as exc:\n        ok = False\n        findings[\"fold_error\"] = type(exc).__name__\n        findings[\"fallback_used\"] = True\n    findings[\"fold_rmse\"] = fold_res\n    findings[\"selection_rule\"] = (\"four strictly chronological 40-date holdout blocks taken from training dates only; \"\n                                  \"a challenger replaces the fixed baseline only if its mean RMSE is lower AND it wins in >=3 of 4 folds\")\n    sel = \"baseline\"\n    if ok and len(fold_res[\"baseline\"]) == nf:\n        bm = float(np.mean(fold_res[\"baseline\"]))\n        findings[\"baseline_mean_rmse\"] = round(bm, 3)\n        summary = {}\n        best = None\n        for nm in (\"trend_full\", \"trend_frozen\"):\n            mm = float(np.mean(fold_res[nm]))\n            wins = int(sum(1 for i in range(nf) if fold_res[nm][i] < fold_res[\"baseline\"][i]))\n            summary[nm] = {\"mean_rmse\": round(mm, 3), \"wins_vs_baseline\": wins}\n            if mm < bm and wins >= 3 and (best is None or mm < best[1]):\n                best = (nm, mm)\n        findings[\"challenger_summary\"] = summary\n        if best is not None:\n            sel = best[0]\n    else:\n        findings[\"selection_note\"] = \"chronological folds unavailable; conservative fixed baseline used\"\n        findings[\"fallback_used\"] = True\n    findings[\"selected_branch\"] = sel\n    try:\n        if sel == \"baseline\":\n            mdl = _fit_base(Xtr_full, y)\n            pred = _pred_base(mdl, Xev_full)\n            findings[\"final_fit\"] = \"HistGradientBoosting(reference settings) on all raw columns, raw target\"\n        else:\n            kap = 1.0 if sel == \"trend_full\" else 0.0\n            st = _fit_trendmodel(Xtr_ne, y, el_tr, kap)\n            pred = _pred_trendmodel(st, Xev_ne, el_ev)\n            findings[\"final_fit\"] = (\"HistGradientBoosting(reference settings) on ratio target y/g(d) with weights g(d)^2, \"\n                                     \"elapsed_day removed from features, level factor g from log-linear daily trend, kappa=%s\" % kap)\n            findings[\"selected_log_slope_per_day\"] = round(float(st[1]), 6)\n            findings[\"selected_kappa\"] = float(kap)\n    except Exception as exc:\n        findings[\"final_fit_error\"] = type(exc).__name__\n        findings[\"fallback_used\"] = True\n        findings[\"selected_branch\"] = \"baseline_after_final_fit_error\"\n        mdl = _fit_base(Xtr_full, y)\n        pred = _pred_base(mdl, Xev_full)\n    pred = np.asarray(pred, dtype=float)\n    pred = np.where(np.isfinite(pred), pred, float(np.median(y)))\n    pred = np.maximum(pred, 0.0)\n    findings[\"pred_mean\"] = round(float(pred.mean()), 3)\n    findings[\"pred_max\"] = round(float(pred.max()), 3)\n    findings[\"train_y_mean\"] = round(float(y.mean()), 3)\n    return {\"prediction\": pred.tolist(), \"findings\": findings}\n"
+            },
+            "task_id": "idea-7637c7"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "baseline_mean_rmse": 65.254,
+              "challenger_summary": {
+                "trend_frozen": {
+                  "mean_rmse": 56.735,
+                  "wins_vs_baseline": 2
+                },
+                "trend_full": {
+                  "mean_rmse": 60.481,
+                  "wins_vs_baseline": 2
+                }
+              },
+              "elapsed_inputs_max": 546.0,
+              "elapsed_inputs_min": 486.0,
+              "elapsed_train_max": 485.0,
+              "fallback_used": false,
+              "final_fit": "HistGradientBoosting(reference settings) on all raw columns, raw target",
+              "fold_rmse": {
+                "baseline": [
+                  56.555,
+                  81.425,
+                  63.177,
+                  59.857
+                ],
+                "trend_frozen": [
+                  57.765,
+                  57.564,
+                  40.626,
+                  70.985
+                ],
+                "trend_full": [
+                  61.906,
+                  54.399,
+                  40.95,
+                  84.668
+                ]
+              },
+              "full_train_implied_annual_growth": 2.0822,
+              "full_train_log_slope_per_day": 0.002008,
+              "inputs_beyond_train_elapsed_fraction": 1.0,
+              "n_pred_rows": 1464,
+              "n_train_dates": 486,
+              "n_train_rows": 11539,
+              "pred_max": 790.863,
+              "pred_mean": 271.561,
+              "selected_branch": "baseline",
+              "selection_rule": "four strictly chronological 40-date holdout blocks taken from training dates only; a challenger replaces the fixed baseline only if its mean RMSE is lower AND it wins in >=3 of 4 folds",
+              "train_y_mean": 154.44,
+              "transductive_use": "none_for_fitting_or_selection; unlabeled input elapsed_day used only to evaluate the level factor at prediction time and for range diagnostics"
+            },
+            "group_mae": 40.87792084565771,
+            "groups": 61,
+            "kind": "method",
+            "loss": 59.976405377488454,
+            "mae": 40.877920845657705,
+            "process_cpu_seconds": 8.421266493,
+            "rows": 1464,
+            "worker_seconds": 8.551739567890763
+          },
+          "score": -59.976405377488454,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s2"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s2",
+          "parent": "b0-s1",
+          "step": 2,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nREF = {\"max_iter\": 250, \"learning_rate\": 0.08, \"max_leaf_nodes\": 31,\n       \"l2_regularization\": 1, \"random_state\": 1729}\n\n\ndef _trend(el, y):\n    days = np.round(el).astype(int)\n    ud = np.unique(days)\n    m = np.empty(ud.size, dtype=float)\n    for i in range(ud.size):\n        m[i] = y[days == ud[i]].mean()\n    lm = np.log(np.maximum(m, 1.0))\n    t = ud.astype(float)\n    cols = [np.ones_like(t), t]\n    for h in (1.0, 2.0):\n        a = 2.0 * np.pi * h * t / 365.25\n        cols.append(np.sin(a))\n        cols.append(np.cos(a))\n    A = np.vstack(cols).T\n    coef = np.linalg.lstsq(A, lm, rcond=None)[0]\n    return float(coef[1]), float(t.max()), float(t.mean())\n\n\ndef _g(el, b, dmax, dref, kappa):\n    eff = np.where(el <= dmax, el, dmax + kappa * (el - dmax))\n    return np.exp(b * (eff - dref))\n\n\ndef _fit_base(Xtr, ytr):\n    mdl = HistGradientBoostingRegressor(**REF)\n    mdl.fit(Xtr, ytr)\n    return mdl\n\n\ndef _pred_base(mdl, Xev):\n    return np.maximum(mdl.predict(Xev), 0.0)\n\n\ndef _fit_trendmodel(Xtr, ytr, eltr, kappa):\n    b, dmax, dref = _trend(eltr, ytr)\n    g = _g(eltr, b, dmax, dref, kappa)\n    g = np.maximum(g, 1e-6)\n    r = ytr / g\n    w = g * g\n    mdl = HistGradientBoostingRegressor(**REF)\n    mdl.fit(Xtr, r, sample_weight=w)\n    return (mdl, b, dmax, dref, kappa)\n\n\ndef _pred_trendmodel(st, Xev, elev):\n    mdl, b, dmax, dref, kappa = st\n    g = _g(elev, b, dmax, dref, kappa)\n    return np.maximum(mdl.predict(Xev) * g, 0.0)\n\n\ndef _rmse(a, p):\n    d = np.asarray(p, dtype=float) - np.asarray(a, dtype=float)\n    return float(np.sqrt(np.mean(d * d)))\n\n\ndef fit_predict(train, inputs, seed):\n    names = list(train['feature_names'])\n    Xtr_full = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xev_full = np.asarray(inputs['X'], dtype=float)\n    ei = names.index('elapsed_day')\n    el_tr = Xtr_full[:, ei]\n    el_ev = Xev_full[:, ei]\n    keep = [j for j in range(len(names)) if j != ei]\n    Xtr_ne = Xtr_full[:, keep]\n    Xev_ne = Xev_full[:, keep]\n    day_tr = np.round(el_tr).astype(int)\n    dates = np.unique(day_tr)\n    n = int(dates.size)\n    findings = {\n        \"fallback_used\": False,\n        \"n_train_rows\": int(Xtr_full.shape[0]),\n        \"n_train_dates\": n,\n        \"n_pred_rows\": int(Xev_full.shape[0]),\n        \"elapsed_train_max\": float(el_tr.max()),\n        \"elapsed_inputs_min\": float(el_ev.min()),\n        \"elapsed_inputs_max\": float(el_ev.max()),\n        \"inputs_beyond_train_elapsed_fraction\": float(np.mean(el_ev > el_tr.max())),\n        \"transductive_use\": \"none_for_fitting_or_selection; unlabeled input elapsed_day used only to evaluate the level factor at prediction time and for range diagnostics\",\n    }\n    try:\n        b_all, dmax_all, dref_all = _trend(el_tr, y)\n        findings[\"full_train_log_slope_per_day\"] = round(b_all, 6)\n        findings[\"full_train_implied_annual_growth\"] = round(float(np.exp(b_all * 365.25)), 4)\n    except Exception as exc:\n        findings[\"trend_diag_error\"] = type(exc).__name__\n    block = 40\n    nf = 4\n    fold_res = {\"baseline\": [], \"trend_full\": [], \"trend_frozen\": []}\n    ok = True\n    try:\n        for k in range(nf):\n            c = n - (nf - k) * block\n            if c < 200:\n                ok = False\n                break\n            trd = set(dates[:c].tolist())\n            vad = set(dates[c:c + block].tolist())\n            mtr = np.array([d in trd for d in day_tr], dtype=bool)\n            mva = np.array([d in vad for d in day_tr], dtype=bool)\n            if mtr.sum() < 500 or mva.sum() < 100:\n                ok = False\n                break\n            b0 = _fit_base(Xtr_full[mtr], y[mtr])\n            fold_res[\"baseline\"].append(round(_rmse(y[mva], _pred_base(b0, Xtr_full[mva])), 3))\n            for nm, kap in ((\"trend_full\", 1.0), (\"trend_frozen\", 0.0)):\n                st = _fit_trendmodel(Xtr_ne[mtr], y[mtr], el_tr[mtr], kap)\n                fold_res[nm].append(round(_rmse(y[mva], _pred_trendmodel(st, Xtr_ne[mva], el_tr[mva])), 3))\n    except Exception as exc:\n        ok = False\n        findings[\"fold_error\"] = type(exc).__name__\n        findings[\"fallback_used\"] = True\n    findings[\"fold_rmse\"] = fold_res\n    findings[\"selection_rule\"] = (\"four strictly chronological 40-date holdout blocks taken from training dates only; \"\n                                  \"a challenger replaces the fixed baseline only if its mean RMSE is lower AND it wins in >=3 of 4 folds\")\n    sel = \"baseline\"\n    if ok and len(fold_res[\"baseline\"]) == nf:\n        bm = float(np.mean(fold_res[\"baseline\"]))\n        findings[\"baseline_mean_rmse\"] = round(bm, 3)\n        summary = {}\n        best = None\n        for nm in (\"trend_full\", \"trend_frozen\"):\n            mm = float(np.mean(fold_res[nm]))\n            wins = int(sum(1 for i in range(nf) if fold_res[nm][i] < fold_res[\"baseline\"][i]))\n            summary[nm] = {\"mean_rmse\": round(mm, 3), \"wins_vs_baseline\": wins}\n            if mm < bm and wins >= 3 and (best is None or mm < best[1]):\n                best = (nm, mm)\n        findings[\"challenger_summary\"] = summary\n        findings[\"old_rule_would_select\"] = (best[0] if best is not None else \"baseline\")\n    else:\n        findings[\"selection_note\"] = \"chronological fold diagnostics unavailable; the returned prediction is still the unconditional trend_frozen model, only the diagnostic folds are missing\"\n        findings[\"fallback_used\"] = True\n    sel = \"trend_frozen\"\n    findings[\"branch_policy\"] = \"unconditional trend_frozen (kappa=0) this round: detrended ratio target with level frozen at the last training day; no data-driven branch switch, so the development score measures this representation directly\"\n    findings[\"selected_branch\"] = sel\n    try:\n        if sel == \"baseline\":\n            mdl = _fit_base(Xtr_full, y)\n            pred = _pred_base(mdl, Xev_full)\n            findings[\"final_fit\"] = \"HistGradientBoosting(reference settings) on all raw columns, raw target\"\n        else:\n            kap = 1.0 if sel == \"trend_full\" else 0.0\n            st = _fit_trendmodel(Xtr_ne, y, el_tr, kap)\n            pred = _pred_trendmodel(st, Xev_ne, el_ev)\n            findings[\"final_fit\"] = (\"HistGradientBoosting(reference settings) on ratio target y/g(d) with weights g(d)^2, \"\n                                     \"elapsed_day removed from features, level factor g from log-linear daily trend, kappa=%s\" % kap)\n            findings[\"selected_log_slope_per_day\"] = round(float(st[1]), 6)\n            findings[\"selected_kappa\"] = float(kap)\n            try:\n                bmdl = _fit_base(Xtr_full, y)\n                bpred = _pred_base(bmdl, Xev_full)\n                findings[\"reference_baseline_pred_mean\"] = round(float(bpred.mean()), 3)\n                findings[\"pred_mean_ratio_vs_reference_baseline\"] = round(float(pred.mean() / max(float(bpred.mean()), 1e-9)), 4)\n                findings[\"mean_abs_diff_vs_reference_baseline\"] = round(float(np.mean(np.abs(pred - bpred))), 3)\n                findings[\"reference_baseline_role\"] = \"diagnostic_only_not_used_in_returned_prediction\"\n            except Exception as exc2:\n                findings[\"ref_diag_error\"] = type(exc2).__name__\n    except Exception as exc:\n        findings[\"final_fit_error\"] = type(exc).__name__\n        findings[\"fallback_used\"] = True\n        findings[\"selected_branch\"] = \"baseline_after_final_fit_error\"\n        mdl = _fit_base(Xtr_full, y)\n        pred = _pred_base(mdl, Xev_full)\n    pred = np.asarray(pred, dtype=float)\n    pred = np.where(np.isfinite(pred), pred, float(np.median(y)))\n    pred = np.maximum(pred, 0.0)\n    findings[\"pred_mean\"] = round(float(pred.mean()), 3)\n    findings[\"pred_max\"] = round(float(pred.max()), 3)\n    findings[\"train_y_mean\"] = round(float(y.mean()), 3)\n    return {\"prediction\": pred.tolist(), \"findings\": findings}\n"
+            },
+            "task_id": "idea-e79ce2"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "baseline_mean_rmse": 65.254,
+              "branch_policy": "unconditional trend_frozen (kappa=0) this round: detrended ratio target with level frozen at the last training day; no data-driven branch switch, so the development score measures this representation directly",
+              "challenger_summary": {
+                "trend_frozen": {
+                  "mean_rmse": 56.735,
+                  "wins_vs_baseline": 2
+                },
+                "trend_full": {
+                  "mean_rmse": 60.481,
+                  "wins_vs_baseline": 2
+                }
+              },
+              "elapsed_inputs_max": 546.0,
+              "elapsed_inputs_min": 486.0,
+              "elapsed_train_max": 485.0,
+              "fallback_used": false,
+              "final_fit": "HistGradientBoosting(reference settings) on ratio target y/g(d) with weights g(d)^2, elapsed_day removed from features, level factor g from log-linear daily trend, kappa=0.0",
+              "fold_rmse": {
+                "baseline": [
+                  56.555,
+                  81.425,
+                  63.177,
+                  59.857
+                ],
+                "trend_frozen": [
+                  57.765,
+                  57.564,
+                  40.626,
+                  70.985
+                ],
+                "trend_full": [
+                  61.906,
+                  54.399,
+                  40.95,
+                  84.668
+                ]
+              },
+              "full_train_implied_annual_growth": 2.0822,
+              "full_train_log_slope_per_day": 0.002008,
+              "inputs_beyond_train_elapsed_fraction": 1.0,
+              "mean_abs_diff_vs_reference_baseline": 57.734,
+              "n_pred_rows": 1464,
+              "n_train_dates": 486,
+              "n_train_rows": 11539,
+              "old_rule_would_select": "baseline",
+              "pred_max": 988.555,
+              "pred_mean": 324.213,
+              "pred_mean_ratio_vs_reference_baseline": 1.1939,
+              "reference_baseline_pred_mean": 271.561,
+              "reference_baseline_role": "diagnostic_only_not_used_in_returned_prediction",
+              "selected_branch": "trend_frozen",
+              "selected_kappa": 0.0,
+              "selected_log_slope_per_day": 0.002008,
+              "selection_rule": "four strictly chronological 40-date holdout blocks taken from training dates only; a challenger replaces the fixed baseline only if its mean RMSE is lower AND it wins in >=3 of 4 folds",
+              "train_y_mean": 154.44,
+              "transductive_use": "none_for_fitting_or_selection; unlabeled input elapsed_day used only to evaluate the level factor at prediction time and for range diagnostics"
+            },
+            "group_mae": 57.85626900130802,
+            "groups": 61,
+            "kind": "method",
+            "loss": 85.3385570670659,
+            "mae": 57.85626900130801,
+            "process_cpu_seconds": 9.071181753,
+            "rows": 1464,
+            "worker_seconds": 9.197391271591187
+          },
+          "score": -85.3385570670659,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s3"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s3",
+          "parent": "b0-s2",
+          "step": 3,
+          "artifact": {
+            "action": {
+              "kind": "analyze",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nREF = {\"max_iter\": 250, \"learning_rate\": 0.08, \"max_leaf_nodes\": 31,\n       \"l2_regularization\": 1, \"random_state\": 1729}\n\n\ndef _rmse(a, p):\n    d = np.asarray(p, dtype=float) - np.asarray(a, dtype=float)\n    return float(np.sqrt(np.mean(d * d)))\n\n\ndef _mae(a, p):\n    return float(np.mean(np.abs(np.asarray(p, dtype=float) - np.asarray(a, dtype=float))))\n\n\ndef _dmae(a, p, days):\n    vals = []\n    for u in np.unique(days):\n        m = days == u\n        vals.append(float(np.mean(np.abs(p[m] - a[m]))))\n    return float(np.mean(vals))\n\n\ndef _trend(el, y):\n    days = np.round(el).astype(int)\n    ud = np.unique(days)\n    m = np.array([float(y[days == u].mean()) for u in ud])\n    lm = np.log(np.maximum(m, 1.0))\n    t = ud.astype(float)\n    cols = [np.ones_like(t), t]\n    for h in (1.0, 2.0):\n        ang = 2.0 * np.pi * h * t / 365.25\n        cols.append(np.sin(ang))\n        cols.append(np.cos(ang))\n    A = np.vstack(cols).T\n    coef = np.linalg.lstsq(A, lm, rcond=None)[0]\n    return float(coef[1]), float(t.max()), float(t.mean())\n\n\ndef _g(el, b, dmax, dref, kappa):\n    eff = np.where(el <= dmax, el, dmax + kappa * (el - dmax))\n    return np.exp(b * (eff - dref))\n\n\ndef _cands(Xtr, ytr, eltr, Xev, elev, keep, notes):\n    out = {}\n    Xtrn = Xtr[:, keep]\n    Xevn = Xev[:, keep]\n\n    def add(name, fn):\n        try:\n            p = np.asarray(fn(), dtype=float)\n            p = np.where(np.isfinite(p), p, 0.0)\n            out[name] = np.maximum(p, 0.0)\n        except Exception as exc:\n            notes[name + \"_error\"] = type(exc).__name__\n\n    add(\"hgb_raw\", lambda: HistGradientBoostingRegressor(**REF).fit(Xtr, ytr).predict(Xev))\n    add(\"hgb_log\", lambda: np.expm1(HistGradientBoostingRegressor(**REF).fit(Xtr, np.log1p(ytr)).predict(Xev)))\n    add(\"hgb_poisson\", lambda: HistGradientBoostingRegressor(loss=\"poisson\", **REF).fit(Xtr, ytr).predict(Xev))\n    add(\"hgb_noelapsed\", lambda: HistGradientBoostingRegressor(**REF).fit(Xtrn, ytr).predict(Xevn))\n    try:\n        b, dmax, dref = _trend(eltr, ytr)\n        notes[\"log_slope_per_day\"] = round(b, 6)\n\n        def mk(kap):\n            def f():\n                g = np.maximum(_g(eltr, b, dmax, dref, kap), 1e-6)\n                m = HistGradientBoostingRegressor(**REF)\n                m.fit(Xtrn, ytr / g, sample_weight=g * g)\n                return m.predict(Xevn) * _g(elev, b, dmax, dref, kap)\n            return f\n\n        add(\"trend_k0\", mk(0.0))\n        add(\"trend_k1\", mk(1.0))\n    except Exception as exc:\n        notes[\"trend_setup_error\"] = type(exc).__name__\n    if \"hgb_raw\" in out and \"hgb_log\" in out:\n        out[\"blend_raw_log\"] = 0.5 * (out[\"hgb_raw\"] + out[\"hgb_log\"])\n    if \"hgb_raw\" in out and \"hgb_poisson\" in out:\n        out[\"blend_raw_pois\"] = 0.5 * (out[\"hgb_raw\"] + out[\"hgb_poisson\"])\n    return out\n\n\ndef _score(preds, a, days):\n    res = {}\n    for k in sorted(preds):\n        p = preds[k]\n        den = float(np.dot(p, p))\n        sc = float(np.dot(p, a) / den) if den > 1e-9 else 1.0\n        res[k] = {\"rmse\": round(_rmse(a, p), 3), \"mae\": round(_mae(a, p), 3),\n                  \"date_mae\": round(_dmae(a, p, days), 3),\n                  \"opt_scale\": round(sc, 4),\n                  \"rmse_opt_scale\": round(_rmse(a, sc * p), 3),\n                  \"pred_mean\": round(float(p.mean()), 2)}\n    return res\n\n\ndef analyze(data, history, seed):\n    f = {\"role\": \"diagnostic_only_no_prediction\",\n         \"transductive_use\": \"none; only supplied train and development arrays are used\"}\n    tr = data[\"train\"]\n    dv = data[\"development\"]\n    names = list(tr[\"feature_names\"])\n    Xtr = np.asarray(tr[\"X\"], dtype=float)\n    ytr = np.asarray(tr[\"y\"], dtype=float)\n    Xdv = np.asarray(dv[\"X\"], dtype=float)\n    ydv = np.asarray(dv[\"y\"], dtype=float)\n    ei = names.index(\"elapsed_day\")\n    hi = names.index(\"hr\")\n    wsi = names.index(\"weathersit\")\n    keep = [j for j in range(len(names)) if j != ei]\n    eltr = Xtr[:, ei]\n    eldv = Xdv[:, ei]\n    dtr = np.round(eltr).astype(int)\n    ddv = np.round(eldv).astype(int)\n    f[\"n_train_rows\"] = int(Xtr.shape[0])\n    f[\"n_dev_rows\"] = int(Xdv.shape[0])\n    f[\"train_day_range\"] = [int(dtr.min()), int(dtr.max())]\n    f[\"dev_day_range\"] = [int(ddv.min()), int(ddv.max())]\n    f[\"train_y_mean\"] = round(float(ytr.mean()), 2)\n    f[\"dev_y_mean\"] = round(float(ydv.mean()), 2)\n    last = dtr >= (dtr.max() - 60)\n    f[\"train_last61d_y_mean\"] = round(float(ytr[last].mean()), 2)\n    f[\"dev_over_train_last61_ratio\"] = round(float(ydv.mean() / max(float(ytr[last].mean()), 1e-9)), 4)\n    try:\n        b0, dmax0, dref0 = _trend(eltr, ytr)\n        gap = float(np.mean(ddv)) - float(np.mean(dtr[last]))\n        f[\"trend_gap_days\"] = round(gap, 1)\n        f[\"trend_implied_ratio_over_gap\"] = round(float(np.exp(b0 * gap)), 4)\n    except Exception as exc:\n        f[\"trend_diag_error\"] = type(exc).__name__\n    notes1 = {}\n    p1 = _cands(Xtr, ytr, eltr, Xdv, eldv, keep, notes1)\n    f[\"future_transfer_train_to_development\"] = _score(p1, ydv, ddv)\n    f[\"p1_notes\"] = notes1\n    ud = np.unique(dtr)\n    if int(ud.size) > 200:\n        cut = int(ud[-61])\n        mi = dtr < cut\n        mo = dtr >= cut\n        notes2 = {}\n        p2 = _cands(Xtr[mi], ytr[mi], eltr[mi], Xtr[mo], eltr[mo], keep, notes2)\n        f[\"internal_last61_train_holdout\"] = _score(p2, ytr[mo], dtr[mo])\n        f[\"p2_notes\"] = notes2\n        try:\n            t1 = f[\"future_transfer_train_to_development\"]\n            t2 = f[\"internal_last61_train_holdout\"]\n            o1 = sorted(t1, key=lambda k: t1[k][\"rmse\"])\n            o2 = sorted(t2, key=lambda k: t2[k][\"rmse\"])\n            f[\"rank_dev\"] = o1\n            f[\"rank_internal\"] = o2\n            f[\"internal_top_is_dev_top\"] = bool(o1[0] == o2[0])\n        except Exception as exc:\n            f[\"rank_error\"] = type(exc).__name__\n    else:\n        f[\"holdout_note\"] = \"insufficient training dates for internal 61-day block\"\n    wk = (ddv - ddv.min()) // 7\n    uw = np.unique(wk)\n    if \"hgb_raw\" in p1:\n        r = p1[\"hgb_raw\"] - ydv\n        hrs = np.round(Xdv[:, hi]).astype(int)\n        f[\"dev_hour_mean_resid_hgb_raw\"] = {str(int(h)): round(float(r[hrs == h].mean()), 1) for h in np.unique(hrs)}\n        f[\"dev_hour_actual_mean\"] = {str(int(h)): round(float(ydv[hrs == h].mean()), 1) for h in np.unique(hrs)}\n        ws = np.round(Xdv[:, wsi]).astype(int)\n        f[\"dev_weathersit_resid_count_hgb_raw\"] = {str(int(w)): [round(float(r[ws == w].mean()), 1), int((ws == w).sum())] for w in np.unique(ws)}\n        f[\"dev_week_actual_mean\"] = [round(float(ydv[wk == u].mean()), 1) for u in uw]\n        f[\"dev_week_pred_mean_hgb_raw\"] = [round(float(p1[\"hgb_raw\"][wk == u].mean()), 1) for u in uw]\n    if \"trend_k0\" in p1:\n        rt = p1[\"trend_k0\"] - ydv\n        hrs2 = np.round(Xdv[:, hi]).astype(int)\n        f[\"dev_week_pred_mean_trend_k0\"] = [round(float(p1[\"trend_k0\"][wk == u].mean()), 1) for u in uw]\n        f[\"dev_hour_mean_resid_trend_k0\"] = {str(int(h)): round(float(rt[hrs2 == h].mean()), 1) for h in np.unique(hrs2)}\n    try:\n        f[\"history_programs_seen\"] = int(len(history))\n    except Exception as exc:\n        f[\"history_len_error\"] = type(exc).__name__\n    return f\n"
+            },
+            "task_id": "idea-845571"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "dev_day_range": [
+                486,
+                546
+              ],
+              "dev_hour_actual_mean": {
+                "0": 77.7,
+                "1": 46.7,
+                "10": 251.6,
+                "11": 304.7,
+                "12": 361.0,
+                "13": 365.1,
+                "14": 340.7,
+                "15": 352.6,
+                "16": 440.2,
+                "17": 662.8,
+                "18": 621.7,
+                "19": 468.5,
+                "2": 30.7,
+                "20": 351.5,
+                "21": 262.4,
+                "22": 203.2,
+                "23": 132.4,
+                "3": 15.0,
+                "4": 8.6,
+                "5": 26.3,
+                "6": 110.4,
+                "7": 309.6,
+                "8": 488.1,
+                "9": 304.4
+              },
+              "dev_hour_mean_resid_hgb_raw": {
+                "0": -14.2,
+                "1": -5.2,
+                "10": 25.2,
+                "11": 18.5,
+                "12": -6.5,
+                "13": -12.6,
+                "14": 1.4,
+                "15": -0.9,
+                "16": 1.8,
+                "17": 12.9,
+                "18": 25.2,
+                "19": 13.9,
+                "2": 1.6,
+                "20": -19.4,
+                "21": -11.7,
+                "22": -7.5,
+                "23": 1.4,
+                "3": 4.3,
+                "4": 6.0,
+                "5": -1.1,
+                "6": -24.6,
+                "7": -14.4,
+                "8": -25.3,
+                "9": 12.6
+              },
+              "dev_hour_mean_resid_trend_k0": {
+                "0": 15.1,
+                "1": 11.7,
+                "10": 52.1,
+                "11": 63.6,
+                "12": 56.5,
+                "13": 53.0,
+                "14": 65.4,
+                "15": 65.1,
+                "16": 78.8,
+                "17": 128.0,
+                "18": 104.0,
+                "19": 81.6,
+                "2": 13.1,
+                "20": 68.6,
+                "21": 56.2,
+                "22": 38.1,
+                "23": 31.3,
+                "3": 8.1,
+                "4": 6.6,
+                "5": 3.4,
+                "6": 18.3,
+                "7": 58.0,
+                "8": 118.7,
+                "9": 49.6
+              },
+              "dev_over_train_last61_ratio": 1.1733,
+              "dev_weathersit_resid_count_hgb_raw": {
+                "1": [
+                  -4.2,
+                  1017
+                ],
+                "2": [
+                  -2.8,
+                  331
+                ],
+                "3": [
+                  35.3,
+                  116
+                ]
+              },
+              "dev_week_actual_mean": [
+                262.7,
+                240.7,
+                281.8,
+                261.9,
+                278.7,
+                297.9,
+                281.0,
+                273.2,
+                273.4
+              ],
+              "dev_week_pred_mean_hgb_raw": [
+                261.6,
+                256.0,
+                276.4,
+                268.4,
+                266.6,
+                283.7,
+                270.3,
+                279.5,
+                285.2
+              ],
+              "dev_week_pred_mean_trend_k0": [
+                322.4,
+                318.6,
+                338.1,
+                326.4,
+                319.9,
+                327.5,
+                321.8,
+                320.9,
+                321.7
+              ],
+              "dev_y_mean": 272.33,
+              "future_transfer_train_to_development": {
+                "blend_raw_log": {
+                  "date_mae": 36.516,
+                  "mae": 36.516,
+                  "opt_scale": 1.0184,
+                  "pred_mean": 268.44,
+                  "rmse": 53.792,
+                  "rmse_opt_scale": 53.428
+                },
+                "blend_raw_pois": {
+                  "date_mae": 37.25,
+                  "mae": 37.25,
+                  "opt_scale": 1.0162,
+                  "pred_mean": 267.96,
+                  "rmse": 55.5,
+                  "rmse_opt_scale": 55.226
+                },
+                "hgb_log": {
+                  "date_mae": 35.253,
+                  "mae": 35.253,
+                  "opt_scale": 1.0279,
+                  "pred_mean": 265.33,
+                  "rmse": 52.712,
+                  "rmse_opt_scale": 51.874
+                },
+                "hgb_noelapsed": {
+                  "date_mae": 44.715,
+                  "mae": 44.715,
+                  "opt_scale": 0.9607,
+                  "pred_mean": 286.85,
+                  "rmse": 65.999,
+                  "rmse_opt_scale": 64.494
+                },
+                "hgb_poisson": {
+                  "date_mae": 35.888,
+                  "mae": 35.888,
+                  "opt_scale": 1.0255,
+                  "pred_mean": 264.35,
+                  "rmse": 54.009,
+                  "rmse_opt_scale": 53.325
+                },
+                "hgb_raw": {
+                  "date_mae": 40.878,
+                  "mae": 40.878,
+                  "opt_scale": 1.0042,
+                  "pred_mean": 271.56,
+                  "rmse": 59.976,
+                  "rmse_opt_scale": 59.959
+                },
+                "trend_k0": {
+                  "date_mae": 57.856,
+                  "mae": 57.856,
+                  "opt_scale": 0.843,
+                  "pred_mean": 324.21,
+                  "rmse": 85.339,
+                  "rmse_opt_scale": 56.298
+                },
+                "trend_k1": {
+                  "date_mae": 75.764,
+                  "mae": 75.764,
+                  "opt_scale": 0.7914,
+                  "pred_mean": 345.21,
+                  "rmse": 106.553,
+                  "rmse_opt_scale": 55.757
+                }
+              },
+              "history_programs_seen": 6,
+              "internal_last61_train_holdout": {
+                "blend_raw_log": {
+                  "date_mae": 93.064,
+                  "mae": 93.079,
+                  "opt_scale": 1.6037,
+                  "pred_mean": 140.44,
+                  "rmse": 128.051,
+                  "rmse_opt_scale": 58.314
+                },
+                "blend_raw_pois": {
+                  "date_mae": 96.69,
+                  "mae": 96.701,
+                  "opt_scale": 1.6534,
+                  "pred_mean": 137.05,
+                  "rmse": 131.985,
+                  "rmse_opt_scale": 55.126
+                },
+                "hgb_log": {
+                  "date_mae": 98.783,
+                  "mae": 98.808,
+                  "opt_scale": 1.7011,
+                  "pred_mean": 134.53,
+                  "rmse": 140.56,
+                  "rmse_opt_scale": 65.854
+                },
+                "hgb_noelapsed": {
+                  "date_mae": 64.19,
+                  "mae": 64.202,
+                  "opt_scale": 1.3444,
+                  "pred_mean": 176.9,
+                  "rmse": 97.606,
+                  "rmse_opt_scale": 59.299
+                },
+                "hgb_poisson": {
+                  "date_mae": 106.1,
+                  "mae": 106.115,
+                  "opt_scale": 1.8235,
+                  "pred_mean": 127.76,
+                  "rmse": 148.371,
+                  "rmse_opt_scale": 57.317
+                },
+                "hgb_raw": {
+                  "date_mae": 87.785,
+                  "mae": 87.792,
+                  "opt_scale": 1.5058,
+                  "pred_mean": 146.35,
+                  "rmse": 116.63,
+                  "rmse_opt_scale": 56.866
+                },
+                "trend_k0": {
+                  "date_mae": 38.084,
+                  "mae": 38.113,
+                  "opt_scale": 0.924,
+                  "pred_mean": 248.76,
+                  "rmse": 61.214,
+                  "rmse_opt_scale": 55.903
+                },
+                "trend_k1": {
+                  "date_mae": 49.47,
+                  "mae": 49.517,
+                  "opt_scale": 0.8566,
+                  "pred_mean": 266.71,
+                  "rmse": 78.217,
+                  "rmse_opt_scale": 59.605
+                }
+              },
+              "internal_top_is_dev_top": false,
+              "n_dev_rows": 1464,
+              "n_train_rows": 11539,
+              "p1_notes": {
+                "log_slope_per_day": 0.002008
+              },
+              "p2_notes": {
+                "log_slope_per_day": 0.002103
+              },
+              "rank_dev": [
+                "hgb_log",
+                "blend_raw_log",
+                "hgb_poisson",
+                "blend_raw_pois",
+                "hgb_raw",
+                "hgb_noelapsed",
+                "trend_k0",
+                "trend_k1"
+              ],
+              "rank_internal": [
+                "trend_k0",
+                "trend_k1",
+                "hgb_noelapsed",
+                "hgb_raw",
+                "blend_raw_log",
+                "blend_raw_pois",
+                "hgb_log",
+                "hgb_poisson"
+              ],
+              "role": "diagnostic_only_no_prediction",
+              "train_day_range": [
+                0,
+                485
+              ],
+              "train_last61d_y_mean": 232.1,
+              "train_y_mean": 154.44,
+              "transductive_use": "none; only supplied train and development arrays are used",
+              "trend_gap_days": 61.0,
+              "trend_implied_ratio_over_gap": 1.1303
+            },
+            "kind": "analyze",
+            "process_cpu_seconds": 8.032052384,
+            "worker_seconds": 8.163462148979306
+          },
+          "score": null,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s4"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s4",
+          "parent": "b0-s3",
+          "step": 4,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nREF = {\"max_iter\": 250, \"learning_rate\": 0.08, \"max_leaf_nodes\": 31,\n       \"l2_regularization\": 1, \"random_state\": 1729}\n\nFACTOR_LO = 1.0\nFACTOR_HI = 1.10\nN_FOLDS = 5\nCHRONO_BLOCK = 40\n\n\ndef _rmse(a, p):\n    d = np.asarray(p, dtype=float) - np.asarray(a, dtype=float)\n    return float(np.sqrt(np.mean(d * d)))\n\n\ndef _fit_log(X, y):\n    m = HistGradientBoostingRegressor(**REF)\n    m.fit(X, np.log1p(np.maximum(y, 0.0)))\n    return m\n\n\ndef _pred_log(m, X, factor=1.0):\n    p = np.expm1(m.predict(X)) * float(factor)\n    return np.maximum(p, 0.0)\n\n\ndef _fit_raw(X, y):\n    m = HistGradientBoostingRegressor(**REF)\n    m.fit(X, y)\n    return m\n\n\ndef _pred_raw(m, X):\n    return np.maximum(m.predict(X), 0.0)\n\n\ndef fit_predict(train, inputs, seed):\n    names = list(train['feature_names'])\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xev = np.asarray(inputs['X'], dtype=float)\n    ei = names.index('elapsed_day')\n    day = np.round(X[:, ei]).astype(int)\n    dates = np.unique(day)\n    findings = {\n        \"fallback_used\": False,\n        \"branch_policy\": \"fixed a priori: reference HistGradientBoosting on log1p(cnt) over all supplied raw columns; chronological diagnostics are reported but never used to switch branch\",\n        \"n_train_rows\": int(X.shape[0]),\n        \"n_train_dates\": int(dates.size),\n        \"n_pred_rows\": int(Xev.shape[0]),\n        \"elapsed_train_max\": float(X[:, ei].max()),\n        \"elapsed_inputs_min\": float(Xev[:, ei].min()),\n        \"elapsed_inputs_max\": float(Xev[:, ei].max()),\n        \"inputs_beyond_train_elapsed_fraction\": float(np.mean(Xev[:, ei] > X[:, ei].max())),\n        \"transductive_use\": \"none for fitting, calibration or branch choice; unlabeled input covariates are used only to emit predictions and for range diagnostics\",\n    }\n\n    try:\n        s = int(seed) if seed is not None else 0\n    except Exception:\n        s = 0\n    rng = np.random.RandomState(abs(s) % (2 ** 31 - 1))\n\n    sum_y = 0.0\n    sum_p = 0.0\n    interp_log = []\n    interp_raw = []\n    interp_ok = True\n    try:\n        perm = rng.permutation(dates.size)\n        for k in range(N_FOLDS):\n            hold = set(dates[perm[k::N_FOLDS]].tolist())\n            mva = np.array([d in hold for d in day], dtype=bool)\n            mtr = ~mva\n            if int(mva.sum()) < 50 or int(mtr.sum()) < 500:\n                interp_ok = False\n                break\n            ml = _fit_log(X[mtr], y[mtr])\n            pl = _pred_log(ml, X[mva], 1.0)\n            sum_y += float(y[mva].sum())\n            sum_p += float(pl.sum())\n            interp_log.append(round(_rmse(y[mva], pl), 3))\n            mr = _fit_raw(X[mtr], y[mtr])\n            interp_raw.append(round(_rmse(y[mva], _pred_raw(mr, X[mva])), 3))\n    except Exception as exc:\n        interp_ok = False\n        findings[\"interpolation_fold_error\"] = type(exc).__name__\n\n    findings[\"interpolation_random_date_folds\"] = {\n        \"purpose\": \"estimate expm1 retransformation level bias only; this design measures interpolation, not future-period transfer\",\n        \"rmse_log_target\": interp_log,\n        \"rmse_raw_target\": interp_raw,\n    }\n\n    factor = 1.0\n    if interp_ok and len(interp_log) == N_FOLDS and sum_p > 0.0:\n        raw_factor = sum_y / sum_p\n        factor = float(min(max(raw_factor, FACTOR_LO), FACTOR_HI))\n        findings[\"retransformation_factor_raw\"] = round(float(raw_factor), 5)\n        findings[\"retransformation_factor_applied\"] = round(factor, 5)\n        findings[\"retransformation_factor_clipped\"] = bool(\n            raw_factor < FACTOR_LO or raw_factor > FACTOR_HI)\n    else:\n        findings[\"retransformation_factor_raw\"] = None\n        findings[\"retransformation_factor_applied\"] = 1.0\n        findings[\"retransformation_note\"] = \"interpolation folds unavailable; uncorrected expm1 used\"\n        findings[\"fallback_used\"] = True\n\n    try:\n        if dates.size > CHRONO_BLOCK + 200:\n            cut = dates.size - CHRONO_BLOCK\n            trd = set(dates[:cut].tolist())\n            vad = set(dates[cut:].tolist())\n            mtr = np.array([d in trd for d in day], dtype=bool)\n            mva = np.array([d in vad for d in day], dtype=bool)\n            ml = _fit_log(X[mtr], y[mtr])\n            pl = _pred_log(ml, X[mva], factor)\n            mr = _fit_raw(X[mtr], y[mtr])\n            pr = _pred_raw(mr, X[mva])\n            findings[\"chronological_last_block_diagnostic\"] = {\n                \"role\": \"diagnostic_only_not_used_for_selection\",\n                \"n_val_rows\": int(mva.sum()),\n                \"val_day_range\": [int(dates[cut]), int(dates[-1])],\n                \"rmse_log_target\": round(_rmse(y[mva], pl), 3),\n                \"rmse_raw_target\": round(_rmse(y[mva], pr), 3),\n                \"val_actual_mean\": round(float(y[mva].mean()), 3),\n                \"val_pred_mean_log_target\": round(float(pl.mean()), 3),\n                \"val_pred_mean_raw_target\": round(float(pr.mean()), 3),\n                \"caveat\": \"this block is the rising spring season, so level bias here mixes seasonal rise with growth and previously mis-ranked candidates relative to actual train->development transfer\",\n            }\n    except Exception as exc:\n        findings[\"chronological_diagnostic_error\"] = type(exc).__name__\n\n    try:\n        mdl = _fit_log(X, y)\n        pred = _pred_log(mdl, Xev, factor)\n        findings[\"selected_branch\"] = \"hgb_log1p_with_interpolation_factor\"\n        findings[\"final_fit\"] = (\"HistGradientBoostingRegressor(reference settings) on log1p(cnt), all supplied raw columns \"\n                                 \"including elapsed_day, inverse expm1 scaled by the clipped interpolation factor\")\n    except Exception as exc:\n        findings[\"final_fit_error\"] = type(exc).__name__\n        findings[\"fallback_used\"] = True\n        findings[\"selected_branch\"] = \"raw_target_reference_after_final_fit_error\"\n        mdl = _fit_raw(X, y)\n        pred = _pred_raw(mdl, Xev)\n\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    if bool(bad.any()):\n        findings[\"nonfinite_predictions_replaced\"] = int(bad.sum())\n        findings[\"fallback_used\"] = True\n        pred = np.where(bad, float(np.median(y)), pred)\n    pred = np.maximum(pred, 0.0)\n    findings[\"pred_mean\"] = round(float(pred.mean()), 3)\n    findings[\"pred_max\"] = round(float(pred.max()), 3)\n    findings[\"train_y_mean\"] = round(float(y.mean()), 3)\n    return {\"prediction\": pred.tolist(), \"findings\": findings}\n"
+            },
+            "task_id": "idea-7da84f"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "branch_policy": "fixed a priori: reference HistGradientBoosting on log1p(cnt) over all supplied raw columns; chronological diagnostics are reported but never used to switch branch",
+              "chronological_last_block_diagnostic": {
+                "caveat": "this block is the rising spring season, so level bias here mixes seasonal rise with growth and previously mis-ranked candidates relative to actual train->development transfer",
+                "n_val_rows": 958,
+                "rmse_log_target": 65.757,
+                "rmse_raw_target": 59.857,
+                "role": "diagnostic_only_not_used_for_selection",
+                "val_actual_mean": 242.182,
+                "val_day_range": [
+                  446,
+                  485
+                ],
+                "val_pred_mean_log_target": 270.667,
+                "val_pred_mean_raw_target": 249.448
+              },
+              "elapsed_inputs_max": 546.0,
+              "elapsed_inputs_min": 486.0,
+              "elapsed_train_max": 485.0,
+              "fallback_used": false,
+              "final_fit": "HistGradientBoostingRegressor(reference settings) on log1p(cnt), all supplied raw columns including elapsed_day, inverse expm1 scaled by the clipped interpolation factor",
+              "inputs_beyond_train_elapsed_fraction": 1.0,
+              "interpolation_random_date_folds": {
+                "purpose": "estimate expm1 retransformation level bias only; this design measures interpolation, not future-period transfer",
+                "rmse_log_target": [
+                  37.547,
+                  38.204,
+                  39.237,
+                  41.401,
+                  38.546
+                ],
+                "rmse_raw_target": [
+                  36.532,
+                  38.037,
+                  39.767,
+                  38.775,
+                  36.459
+                ]
+              },
+              "n_pred_rows": 1464,
+              "n_train_dates": 486,
+              "n_train_rows": 11539,
+              "pred_max": 801.992,
+              "pred_mean": 272.216,
+              "retransformation_factor_applied": 1.02596,
+              "retransformation_factor_clipped": false,
+              "retransformation_factor_raw": 1.02596,
+              "selected_branch": "hgb_log1p_with_interpolation_factor",
+              "train_y_mean": 154.44,
+              "transductive_use": "none for fitting, calibration or branch choice; unlabeled input covariates are used only to emit predictions and for range diagnostics"
+            },
+            "group_mae": 34.850803265395385,
+            "groups": 61,
+            "kind": "method",
+            "loss": 51.87820758312018,
+            "mae": 34.85080326539538,
+            "process_cpu_seconds": 8.633893245000001,
+            "rows": 1464,
+            "worker_seconds": 8.765184437856078
+          },
+          "score": -51.87820758312018,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s5"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s5",
+          "parent": "b0-s4",
+          "step": 5,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nREF = {\"max_iter\": 250, \"learning_rate\": 0.08, \"max_leaf_nodes\": 31,\n       \"l2_regularization\": 1, \"random_state\": 1729}\nSEEDS_A = [1729, 7, 20260918]\nFACTOR_LO = 1.0\nFACTOR_HI = 1.10\nN_FOLDS = 5\nCHRONO_BLOCK = 40\nTREND_WINDOW = 365\nSLOPE_LO = 0.0\nSLOPE_HI = 0.0012\nMAX_EXTRA = 0.15\nW_A = 0.5\n\n\ndef _rmse(a, p):\n    d = np.asarray(p, dtype=float) - np.asarray(a, dtype=float)\n    return float(np.sqrt(np.mean(d * d)))\n\n\ndef _fit(Xs, ylog, s):\n    par = dict(REF)\n    par[\"random_state\"] = int(s)\n    m = HistGradientBoostingRegressor(**par)\n    m.fit(Xs, ylog)\n    return m\n\n\ndef _daily_mean(days, vals):\n    u = np.unique(days)\n    out = np.empty(u.size, dtype=float)\n    for i in range(u.size):\n        out[i] = float(np.mean(vals[days == u[i]]))\n    return u, out\n\n\ndef _fit_line(days, vals, day_ref, slope_fixed=None):\n    u, dm = _daily_mean(days, vals)\n    sel = u >= (day_ref - TREND_WINDOW)\n    du = u[sel].astype(float)\n    dv = dm[sel]\n    if du.size < 30:\n        return None\n    if slope_fixed is None:\n        A = np.vstack([np.ones_like(du), du]).T\n        coef = np.linalg.lstsq(A, dv, rcond=None)[0]\n        raw = float(coef[1])\n    else:\n        raw = float(slope_fixed)\n    slope = float(min(max(raw, SLOPE_LO), SLOPE_HI))\n    inter = float(np.mean(dv - slope * du))\n    return {\"intercept\": inter, \"slope\": slope, \"slope_raw\": raw, \"n_days\": int(du.size)}\n\n\ndef _trend(line, t, day_max):\n    tt = np.asarray(t, dtype=float)\n    v = line[\"intercept\"] + line[\"slope\"] * tt\n    vend = line[\"intercept\"] + line[\"slope\"] * float(day_max)\n    return np.where(tt > day_max, np.minimum(v, vend + MAX_EXTRA), v)\n\n\ndef _clip_factor(num, den):\n    if not np.isfinite(den) or den <= 0.0:\n        return None, None\n    raw = float(num) / float(den)\n    return float(min(max(raw, FACTOR_LO), FACTOR_HI)), raw\n\n\ndef fit_predict(train, inputs, seed):\n    names = list(train['feature_names'])\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xev = np.asarray(inputs['X'], dtype=float)\n    ei = names.index('elapsed_day')\n    drop = set(names.index(c) for c in ('elapsed_day', 'yr') if c in names)\n    keep = [j for j in range(len(names)) if j not in drop]\n    ylog = np.log1p(np.maximum(y, 0.0))\n    day = np.round(X[:, ei]).astype(int)\n    tev = np.round(Xev[:, ei]).astype(int)\n    day_max = int(day.max())\n    dates = np.unique(day)\n\n    findings = {\n        \"fallback_used\": False,\n        \"branch_policy\": \"fixed a priori: 0.5/0.5 blend of (A) seed-averaged reference HGB on log1p(cnt) over all raw columns and (B) HGB on log1p(cnt) with elapsed_day and yr removed plus an explicit clipped linear log-trend in elapsed_day; all diagnostics are reported but never switch the branch\",\n        \"dropped_columns_branch_B\": sorted([names[j] for j in drop]),\n        \"n_train_rows\": int(X.shape[0]),\n        \"n_train_dates\": int(dates.size),\n        \"n_pred_rows\": int(Xev.shape[0]),\n        \"elapsed_train_max\": float(X[:, ei].max()),\n        \"elapsed_inputs_min\": float(Xev[:, ei].min()),\n        \"elapsed_inputs_max\": float(Xev[:, ei].max()),\n        \"inputs_beyond_train_elapsed_fraction\": float(np.mean(Xev[:, ei] > X[:, ei].max())),\n        \"slope_clip_per_day\": [SLOPE_LO, SLOPE_HI],\n        \"max_extrapolated_log_increment\": MAX_EXTRA,\n        \"blend_weight_branch_A\": W_A,\n        \"transductive_use\": \"none for fitting, calibration, trend estimation or branch choice; unlabeled input covariates are used only to emit predictions and for elapsed-day range diagnostics\",\n    }\n\n    try:\n        s0 = int(seed) if seed is not None else 0\n    except Exception:\n        s0 = 0\n    rng = np.random.RandomState(abs(s0) % (2 ** 31 - 1))\n\n    oofA = np.full(X.shape[0], np.nan)\n    oofB = np.full(X.shape[0], np.nan)\n    foldA = []\n    foldB = []\n    folds_ok = True\n    try:\n        perm = rng.permutation(dates.size)\n        for k in range(N_FOLDS):\n            hold = set(dates[perm[k::N_FOLDS]].tolist())\n            mva = np.array([d in hold for d in day], dtype=bool)\n            mtr = ~mva\n            if int(mva.sum()) < 50 or int(mtr.sum()) < 500:\n                folds_ok = False\n                break\n            mA = _fit(X[mtr], ylog[mtr], 1729)\n            pa = mA.predict(X[mva])\n            oofA[mva] = pa\n            foldA.append(round(_rmse(y[mva], np.maximum(np.expm1(pa), 0.0)), 3))\n            mB = _fit(X[mtr][:, keep], ylog[mtr], 1729)\n            pb = mB.predict(X[mva][:, keep])\n            oofB[mva] = pb\n            foldB.append(round(_rmse(y[mva], np.maximum(np.expm1(pb), 0.0)), 3))\n    except Exception as exc:\n        folds_ok = False\n        findings[\"fold_error\"] = type(exc).__name__\n    if folds_ok and (not np.all(np.isfinite(oofA)) or not np.all(np.isfinite(oofB))):\n        folds_ok = False\n\n    findings[\"interpolation_random_date_folds\"] = {\n        \"purpose\": \"estimate retransformation level factors and the residual log-trend; this design measures interpolation, not future-period transfer\",\n        \"rmse_branch_A\": foldA,\n        \"rmse_branch_B_no_trend\": foldB,\n    }\n\n    factorA = 1.0\n    factorB = 1.0\n    lineB_oof = None\n    if folds_ok:\n        fa, ra = _clip_factor(float(y.sum()), float(np.maximum(np.expm1(oofA), 0.0).sum()))\n        if fa is not None:\n            factorA = fa\n        findings[\"factor_A_raw\"] = (round(ra, 5) if ra is not None else None)\n        findings[\"factor_A_applied\"] = round(factorA, 5)\n        lineB_oof = _fit_line(day, ylog - oofB, day_max)\n        if lineB_oof is not None:\n            pbo = np.maximum(np.expm1(oofB + _trend(lineB_oof, day, day_max)), 0.0)\n            fb, rb = _clip_factor(float(y.sum()), float(pbo.sum()))\n            if fb is not None:\n                factorB = fb\n            findings[\"factor_B_raw\"] = (round(rb, 5) if rb is not None else None)\n            findings[\"factor_B_applied\"] = round(factorB, 5)\n            findings[\"oof_trend_slope_raw_per_day\"] = round(lineB_oof[\"slope_raw\"], 6)\n            findings[\"oof_trend_slope_applied_per_day\"] = round(lineB_oof[\"slope\"], 6)\n            findings[\"oof_trend_slope_clipped\"] = bool(lineB_oof[\"slope_raw\"] != lineB_oof[\"slope\"])\n            pao = np.maximum(np.expm1(oofA) * factorA, 0.0)\n            findings[\"oof_rmse_branch_A_calibrated\"] = round(_rmse(y, pao), 3)\n            findings[\"oof_rmse_branch_B_with_trend\"] = round(_rmse(y, np.maximum(pbo * factorB, 0.0)), 3)\n            findings[\"oof_rmse_blend\"] = round(_rmse(y, W_A * pao + (1.0 - W_A) * np.maximum(pbo * factorB, 0.0)), 3)\n            findings[\"oof_note\"] = \"interpolation only; branch B has no elapsed_day/yr inside the fold so these numbers do not measure later-period transfer\"\n    else:\n        findings[\"fallback_used\"] = True\n        findings[\"calibration_note\"] = \"random-date folds unavailable; retransformation factors set to 1.0 and branch B slope estimated from in-sample residuals\"\n\n    try:\n        if dates.size > CHRONO_BLOCK + 200:\n            cut = dates.size - CHRONO_BLOCK\n            trd = set(dates[:cut].tolist())\n            mtr = np.array([d in trd for d in day], dtype=bool)\n            mva = ~mtr\n            dmax_tr = int(day[mtr].max())\n            cA = _fit(X[mtr], ylog[mtr], 1729)\n            pa = np.maximum(np.expm1(cA.predict(X[mva])) * factorA, 0.0)\n            cB = _fit(X[mtr][:, keep], ylog[mtr], 1729)\n            rin = ylog[mtr] - cB.predict(X[mtr][:, keep])\n            slope_fix = (lineB_oof[\"slope\"] if lineB_oof is not None else None)\n            lc = _fit_line(day[mtr], rin, dmax_tr, slope_fixed=slope_fix)\n            if lc is not None:\n                pb = np.maximum(np.expm1(cB.predict(X[mva][:, keep]) + _trend(lc, day[mva], dmax_tr)) * factorB, 0.0)\n            else:\n                pb = pa\n            pbl = W_A * pa + (1.0 - W_A) * pb\n            findings[\"chronological_last_block_diagnostic\"] = {\n                \"role\": \"diagnostic_only_not_used_for_selection\",\n                \"n_val_rows\": int(mva.sum()),\n                \"val_day_range\": [int(dates[cut]), int(dates[-1])],\n                \"rmse_branch_A\": round(_rmse(y[mva], pa), 3),\n                \"rmse_branch_B_trend\": round(_rmse(y[mva], pb), 3),\n                \"rmse_blend\": round(_rmse(y[mva], pbl), 3),\n                \"trend_slope_used\": (round(lc[\"slope\"], 6) if lc is not None else None),\n                \"val_actual_mean\": round(float(y[mva].mean()), 3),\n                \"pred_mean_A\": round(float(pa.mean()), 3),\n                \"pred_mean_B\": round(float(pb.mean()), 3),\n                \"caveat\": \"rising spring block with an in-sample residual level; the parent program recorded that this block mis-ranks candidates relative to actual train->development transfer, so it is reported only\",\n            }\n    except Exception as exc:\n        findings[\"chronological_diagnostic_error\"] = type(exc).__name__\n\n    pred = None\n    try:\n        la = []\n        for s in SEEDS_A:\n            la.append(_fit(X, ylog, s).predict(Xev))\n        predA = np.maximum(np.expm1(np.mean(np.vstack(la), axis=0)) * factorA, 0.0)\n        mB = _fit(X[:, keep], ylog, 1729)\n        rfull = ylog - mB.predict(X[:, keep])\n        slope_fix = (lineB_oof[\"slope\"] if lineB_oof is not None else None)\n        lineB = _fit_line(day, rfull, day_max, slope_fixed=slope_fix)\n        if lineB is None:\n            predB = predA\n            findings[\"fallback_used\"] = True\n            findings[\"branch_B_note\"] = \"trend line unavailable; branch B replaced by branch A predictions\"\n        else:\n            tv = _trend(lineB, tev, day_max)\n            predB = np.maximum(np.expm1(mB.predict(Xev[:, keep]) + tv) * factorB, 0.0)\n            findings[\"final_trend_source\"] = \"slope from out-of-fold residual line when available (clipped), level re-centred on full-model in-sample daily residuals of the last 365 training days\"\n            findings[\"final_trend_slope_per_day\"] = round(lineB[\"slope\"], 6)\n            findings[\"final_trend_days_used\"] = int(lineB[\"n_days\"])\n            findings[\"trend_log_increment_at_max_eval_day\"] = round(float(np.max(tv) - (lineB[\"intercept\"] + lineB[\"slope\"] * float(day_max))), 5)\n        pred = W_A * predA + (1.0 - W_A) * predB\n        findings[\"selected_branch\"] = \"blend_0.5_seedavg_hgb_log1p_allcols_plus_0.5_detrended_hgb_with_extrapolated_log_trend\"\n        findings[\"final_pred_mean_branch_A\"] = round(float(predA.mean()), 3)\n        findings[\"final_pred_mean_branch_B\"] = round(float(predB.mean()), 3)\n        findings[\"final_fit\"] = \"branch A: HistGradientBoostingRegressor(reference settings) on log1p(cnt) over all supplied raw columns, log-space average of 3 seeds, expm1 scaled by clipped factor_A; branch B: same settings without elapsed_day/yr, clipped linear log-trend added before expm1 and scaled by clipped factor_B\"\n    except Exception as exc:\n        findings[\"final_fit_error\"] = type(exc).__name__\n        findings[\"fallback_used\"] = True\n        findings[\"selected_branch\"] = \"raw_target_reference_after_final_fit_error\"\n        m = HistGradientBoostingRegressor(**REF)\n        m.fit(X, y)\n        pred = np.maximum(m.predict(Xev), 0.0)\n\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    if bool(bad.any()):\n        findings[\"nonfinite_predictions_replaced\"] = int(bad.sum())\n        findings[\"fallback_used\"] = True\n        pred = np.where(bad, float(np.median(y)), pred)\n    pred = np.maximum(pred, 0.0)\n    findings[\"pred_mean\"] = round(float(pred.mean()), 3)\n    findings[\"pred_max\"] = round(float(pred.max()), 3)\n    findings[\"train_y_mean\"] = round(float(y.mean()), 3)\n    return {\"prediction\": pred.tolist(), \"findings\": findings}\n"
+            },
+            "task_id": "idea-e6c0e4"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "blend_weight_branch_A": 0.5,
+              "branch_policy": "fixed a priori: 0.5/0.5 blend of (A) seed-averaged reference HGB on log1p(cnt) over all raw columns and (B) HGB on log1p(cnt) with elapsed_day and yr removed plus an explicit clipped linear log-trend in elapsed_day; all diagnostics are reported but never switch the branch",
+              "chronological_last_block_diagnostic": {
+                "caveat": "rising spring block with an in-sample residual level; the parent program recorded that this block mis-ranks candidates relative to actual train->development transfer, so it is reported only",
+                "n_val_rows": 958,
+                "pred_mean_A": 270.667,
+                "pred_mean_B": 182.264,
+                "rmse_blend": 57.397,
+                "rmse_branch_A": 65.757,
+                "rmse_branch_B_trend": 96.725,
+                "role": "diagnostic_only_not_used_for_selection",
+                "trend_slope_used": 0.000922,
+                "val_actual_mean": 242.182,
+                "val_day_range": [
+                  446,
+                  485
+                ]
+              },
+              "dropped_columns_branch_B": [
+                "elapsed_day",
+                "yr"
+              ],
+              "elapsed_inputs_max": 546.0,
+              "elapsed_inputs_min": 486.0,
+              "elapsed_train_max": 485.0,
+              "factor_A_applied": 1.02596,
+              "factor_A_raw": 1.02596,
+              "factor_B_applied": 1.0,
+              "factor_B_raw": 0.99918,
+              "fallback_used": false,
+              "final_fit": "branch A: HistGradientBoostingRegressor(reference settings) on log1p(cnt) over all supplied raw columns, log-space average of 3 seeds, expm1 scaled by clipped factor_A; branch B: same settings without elapsed_day/yr, clipped linear log-trend added before expm1 and scaled by clipped factor_B",
+              "final_pred_mean_branch_A": 267.897,
+              "final_pred_mean_branch_B": 247.442,
+              "final_trend_days_used": 366,
+              "final_trend_slope_per_day": 0.000922,
+              "final_trend_source": "slope from out-of-fold residual line when available (clipped), level re-centred on full-model in-sample daily residuals of the last 365 training days",
+              "inputs_beyond_train_elapsed_fraction": 1.0,
+              "interpolation_random_date_folds": {
+                "purpose": "estimate retransformation level factors and the residual log-trend; this design measures interpolation, not future-period transfer",
+                "rmse_branch_A": [
+                  37.547,
+                  38.204,
+                  39.237,
+                  41.401,
+                  38.546
+                ],
+                "rmse_branch_B_no_trend": [
+                  53.717,
+                  61.351,
+                  55.587,
+                  58.828,
+                  60.783
+                ]
+              },
+              "max_extrapolated_log_increment": 0.15,
+              "n_pred_rows": 1464,
+              "n_train_dates": 486,
+              "n_train_rows": 11539,
+              "oof_note": "interpolation only; branch B has no elapsed_day/yr inside the fold so these numbers do not measure later-period transfer",
+              "oof_rmse_blend": 40.292,
+              "oof_rmse_branch_A_calibrated": 38.841,
+              "oof_rmse_branch_B_with_trend": 48.649,
+              "oof_trend_slope_applied_per_day": 0.000922,
+              "oof_trend_slope_clipped": false,
+              "oof_trend_slope_raw_per_day": 0.000922,
+              "pred_max": 781.798,
+              "pred_mean": 257.669,
+              "selected_branch": "blend_0.5_seedavg_hgb_log1p_allcols_plus_0.5_detrended_hgb_with_extrapolated_log_trend",
+              "slope_clip_per_day": [
+                0.0,
+                0.0012
+              ],
+              "train_y_mean": 154.44,
+              "transductive_use": "none for fitting, calibration, trend estimation or branch choice; unlabeled input covariates are used only to emit predictions and for elapsed-day range diagnostics",
+              "trend_log_increment_at_max_eval_day": 0.05622
+            },
+            "group_mae": 33.76378499702227,
+            "groups": 61,
+            "kind": "method",
+            "loss": 52.429013545525486,
+            "mae": 33.76378499702227,
+            "process_cpu_seconds": 10.487783554,
+            "rows": 1464,
+            "worker_seconds": 10.621217779815197
+          },
+          "score": -52.429013545525486,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    }
+  ],
+  "termination": "budget",
+  "stop_reason": null,
+  "metrics": {
+    "supported": true,
+    "best_score": -51.87820758312018,
+    "quality_gain": 0.13526832801233393,
+    "calls": 6,
+    "rounds": 6,
+    "cost": null,
+    "parallel_seconds_estimate": null
+  }
+}

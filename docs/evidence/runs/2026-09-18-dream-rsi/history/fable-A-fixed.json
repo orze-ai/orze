@@ -1,0 +1,995 @@
+{
+  "schema": 1,
+  "mode": "replay",
+  "spec": {
+    "plan": {
+      "branches": 1,
+      "calls": 6,
+      "depth": 6,
+      "workers": 1
+    },
+    "problem_id": "uci275-same-development-split",
+    "protocol_id": "4c0e9f73de4099685810cbf61ae813e4c8cca096f8144c141a37d2ec1bff027f",
+    "root": {
+      "artifact": {
+        "baselines": [
+          {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\ndef fit_predict(train, inputs, seed):\n    return [float(np.median(train['y']))]*len(inputs['X'])\n"
+            },
+            "facts": {
+              "group_mae": 204.26571038251365,
+              "groups": 61,
+              "kind": "method",
+              "loss": 268.4780559562637,
+              "mae": 204.26571038251367,
+              "process_cpu_seconds": 0.087511614,
+              "rows": 1464,
+              "worker_seconds": 0.08645689114928246
+            }
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "from sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.linear_model import Ridge\ndef fit_predict(train, inputs, seed):\n    model=make_pipeline(StandardScaler(),Ridge(alpha=10.0))\n    model.fit(train['X'],train['y'])\n    return model.predict(inputs['X']).tolist()\n"
+            },
+            "facts": {
+              "group_mae": 145.6880639271646,
+              "groups": 61,
+              "kind": "method",
+              "loss": 182.95149476838213,
+              "mae": 145.6880639271646,
+              "process_cpu_seconds": 0.8579225890000001,
+              "rows": 1464,
+              "worker_seconds": 0.9466005768626928
+            }
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "from sklearn.ensemble import HistGradientBoostingRegressor\ndef fit_predict(train, inputs, seed):\n    model=HistGradientBoostingRegressor(max_iter=250,learning_rate=0.08,max_leaf_nodes=31,l2_regularization=1,random_state=1729)\n    model.fit(train['X'],train['y'])\n    return model.predict(inputs['X']).tolist()\n"
+            },
+            "facts": {
+              "group_mae": 40.95457910564305,
+              "groups": 61,
+              "kind": "method",
+              "loss": 59.99341675999134,
+              "mae": 40.954579105643056,
+              "process_cpu_seconds": 1.4818308020000002,
+              "rows": 1464,
+              "worker_seconds": 1.5967494435608387
+            }
+          }
+        ]
+      },
+      "feedback": {
+        "original_source": "fable-A/state-006-b-execute.json",
+        "scope": "historical single-path stopping only",
+        "sha256": "258888d3314e9b32d8af11298373d74b907fe7bad37fbaaf375e22e337814743"
+      },
+      "score": -59.99341675999134
+    },
+    "score_scale": 59.99341675999134
+  },
+  "rounds": [
+    {
+      "decision": {
+        "actions": [
+          "b0-s0"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s0",
+          "parent": null,
+          "step": 0,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np, math\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nHGB=dict(max_iter=250,learning_rate=0.08,max_leaf_nodes=31,l2_regularization=1)\n\ndef _hgb(X,y,seed):\n    m=HistGradientBoostingRegressor(random_state=seed,**HGB)\n    m.fit(X,y)\n    return m\n\ndef _trend_slope(X,y,fn):\n    ed=X[:,fn.index('elapsed_day')]\n    cols=[np.ones(len(y)),ed]\n    for name in ['hr','mnth','weathersit','weekday']:\n        v=X[:,fn.index(name)]\n        for k in np.unique(v)[1:]:\n            cols.append((v==k).astype(float))\n    for name in ['workingday','holiday','temp','hum','windspeed']:\n        cols.append(X[:,fn.index(name)])\n    A=np.column_stack(cols)\n    coef=np.linalg.lstsq(A,np.log1p(y),rcond=None)[0]\n    return float(coef[1])\n\ndef _branch(b,Xtr,ytr,Xte,fn,seed):\n    info={}\n    if b=='raw':\n        p=_hgb(Xtr,ytr,seed).predict(Xte)\n    elif b=='log':\n        p=np.expm1(_hgb(Xtr,np.log1p(ytr),seed).predict(Xte))\n    elif b=='log_trend':\n        i=fn.index('elapsed_day'); iy=fn.index('yr')\n        slope=_trend_slope(Xtr,ytr,fn)\n        ref=float(Xtr[:,i].max())\n        z=np.log1p(ytr)-slope*(Xtr[:,i]-ref)\n        keep=[j for j in range(Xtr.shape[1]) if j not in (i,iy)]\n        m=_hgb(Xtr[:,keep],z,seed)\n        p=np.expm1(m.predict(Xte[:,keep])+slope*(Xte[:,i]-ref))\n        info={'slope_per_day':slope,'annual_growth_factor':math.exp(365.0*slope),'ref_day':ref,'dropped_features':['elapsed_day','yr']}\n    else:\n        raise ValueError(b)\n    return np.maximum(np.asarray(p,dtype=float),0.0),info\n\ndef fit_predict(train,inputs,seed):\n    fn=list(train['feature_names'])\n    X=np.asarray(train['X'],dtype=float); y=np.asarray(train['y'],dtype=float)\n    Xte=np.asarray(inputs['X'],dtype=float)\n    i=fn.index('elapsed_day')\n    days=np.sort(np.unique(X[:,i]))\n    branches=['raw','log','log_trend']\n    scores={b:[] for b in branches}; errors={}; fold_info=[]\n    for k in (1,2):\n        lo=len(days)-61*k; hi=len(days)-61*(k-1)\n        mte=np.isin(X[:,i],days[lo:hi]); mtr=X[:,i]<days[lo]\n        fold_info.append({'fold':k,'train_days':int(len(np.unique(X[mtr,i]))),'holdout_day_range':[float(days[lo]),float(days[hi-1])],'holdout_rows':int(mte.sum())})\n        for b in branches:\n            try:\n                p,_=_branch(b,X[mtr],y[mtr],X[mte],fn,seed)\n                scores[b].append(float(np.sqrt(np.mean((p-y[mte])**2))))\n            except Exception as exc:\n                errors['%s_fold%d'%(b,k)]=type(exc).__name__\n                scores[b].append(float('inf'))\n    mean_scores={b:float(np.mean(scores[b])) for b in branches}\n    selected=min(branches,key=lambda b:(mean_scores[b],branches.index(b)))\n    fallback=None\n    try:\n        p,info=_branch(selected,X,y,Xte,fn,seed)\n    except Exception as exc:\n        fallback='raw_after_%s'%type(exc).__name__\n        p,info=_branch('raw',X,y,Xte,fn,seed)\n    nonfinite=int((~np.isfinite(p)).sum())\n    if nonfinite:\n        p=np.nan_to_num(p,nan=float(np.median(y)),posinf=float(y.max()),neginf=0.0)\n    findings={'selected_branch':selected,'forward_fold_rmse':scores,'mean_forward_rmse':mean_scores,'folds':fold_info,'errors':errors,'fallback':fallback,'nonfinite_replaced':nonfinite,'final_info':info,'train_days_total':int(len(days)),'train_yr_share':float(np.mean(X[:,fn.index('yr')])),'note':'selection uses only training dates; no evaluation covariates used beyond prediction'}\n    return {'prediction':p.tolist(),'findings':findings}\n"
+            },
+            "task_id": "idea-ea0e19"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "errors": {},
+              "fallback": null,
+              "final_info": {
+                "annual_growth_factor": 1.8828166019819983,
+                "dropped_features": [
+                  "elapsed_day",
+                  "yr"
+                ],
+                "ref_day": 485.0,
+                "slope_per_day": 0.001733613282780014
+              },
+              "folds": [
+                {
+                  "fold": 1,
+                  "holdout_day_range": [
+                    425.0,
+                    485.0
+                  ],
+                  "holdout_rows": 1461,
+                  "train_days": 425
+                },
+                {
+                  "fold": 2,
+                  "holdout_day_range": [
+                    364.0,
+                    424.0
+                  ],
+                  "holdout_rows": 1457,
+                  "train_days": 364
+                }
+              ],
+              "forward_fold_rmse": {
+                "log": [
+                  140.56011292304083,
+                  77.59604219851124
+                ],
+                "log_trend": [
+                  65.8621531663424,
+                  116.47108102161174
+                ],
+                "raw": [
+                  116.62996810326798,
+                  74.9228869497011
+                ]
+              },
+              "mean_forward_rmse": {
+                "log": 109.07807756077604,
+                "log_trend": 91.16661709397707,
+                "raw": 95.77642752648454
+              },
+              "nonfinite_replaced": 0,
+              "note": "selection uses only training dates; no evaluation covariates used beyond prediction",
+              "selected_branch": "log_trend",
+              "train_days_total": 486,
+              "train_yr_share": 0.2508016292573013
+            },
+            "group_mae": 89.60161422208783,
+            "groups": 61,
+            "kind": "method",
+            "loss": 122.12765597347389,
+            "mae": 89.60161422208782,
+            "process_cpu_seconds": 4.908918881,
+            "rows": 1464,
+            "worker_seconds": 5.035523511469364
+          },
+          "score": -122.12765597347389,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s1"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s1",
+          "parent": "b0-s0",
+          "step": 1,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nimport json\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nBRANCHES = ['squared', 'poisson', 'log1p']\n\n\ndef _make(loss, seed):\n    return HistGradientBoostingRegressor(max_iter=250, learning_rate=0.08, max_leaf_nodes=31,\n                                         l2_regularization=1, loss=loss, random_state=seed)\n\n\ndef _fit_pred(branch, Xtr, ytr, Xte, seed):\n    if branch == 'squared':\n        m = _make('squared_error', seed)\n        m.fit(Xtr, ytr)\n        return m.predict(Xte)\n    if branch == 'poisson':\n        m = _make('poisson', seed)\n        m.fit(Xtr, np.maximum(ytr, 0.0))\n        return m.predict(Xte)\n    if branch == 'log1p':\n        m = _make('squared_error', seed)\n        m.fit(Xtr, np.log1p(np.maximum(ytr, 0.0)))\n        return np.expm1(m.predict(Xte))\n    raise ValueError('unknown branch ' + str(branch))\n\n\ndef _rmse(p, y):\n    return float(np.sqrt(np.mean((p - y) ** 2)))\n\n\ndef _date_mae(p, y, days):\n    vals = []\n    for d in np.unique(days):\n        idx = days == d\n        vals.append(float(np.mean(np.abs(p[idx] - y[idx]))))\n    return float(np.mean(vals)) if vals else float('nan')\n\n\ndef fit_predict(train, inputs, seed):\n    fn = list(train['feature_names'])\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    di = fn.index('elapsed_day')\n    days = X[:, di]\n    dmax = float(np.max(days))\n    findings = {'branches': BRANCHES, 'folds': [], 'fold_rmse': {b: [] for b in BRANCHES},\n                'fold_date_mae': {b: [] for b in BRANCHES}, 'errors': {}, 'fallback': None,\n                'note': 'branch selection uses only training dates (two forward 61-day holdouts); evaluation covariates used only for final prediction; baseline HGB hyperparameters fixed'}\n    for k in range(2):\n        hi = dmax - 61.0 * k\n        lo = hi - 61.0\n        te = (days > lo) & (days <= hi)\n        tr = days <= lo\n        if te.sum() < 100 or tr.sum() < 500:\n            findings['folds'].append({'fold': k + 1, 'skipped': True})\n            continue\n        findings['folds'].append({'fold': k + 1, 'holdout_day_range': [float(lo), float(hi)],\n                                  'holdout_rows': int(te.sum()), 'train_rows': int(tr.sum())})\n        for b in BRANCHES:\n            try:\n                p = _fit_pred(b, X[tr], y[tr], X[te], seed)\n                p = np.where(np.isfinite(p), p, np.median(y[tr]))\n                p = np.maximum(p, 0.0)\n                findings['fold_rmse'][b].append(_rmse(p, y[te]))\n                findings['fold_date_mae'][b].append(_date_mae(p, y[te], days[te]))\n            except Exception as exc:\n                findings['errors'][b + '_fold' + str(k + 1)] = type(exc).__name__\n                findings['fold_rmse'][b].append(float('inf'))\n                findings['fold_date_mae'][b].append(float('inf'))\n    mean_rmse = {}\n    mean_mae = {}\n    for b in BRANCHES:\n        r = findings['fold_rmse'][b]\n        m = findings['fold_date_mae'][b]\n        mean_rmse[b] = float(np.mean(r)) if r else float('inf')\n        mean_mae[b] = float(np.mean(m)) if m else float('inf')\n    order = sorted(BRANCHES, key=lambda b: (mean_rmse[b], BRANCHES.index(b)))\n    selected = order[0] if np.isfinite(mean_rmse[order[0]]) else 'squared'\n    findings['mean_forward_rmse'] = {b: (mean_rmse[b] if np.isfinite(mean_rmse[b]) else None) for b in BRANCHES}\n    findings['mean_forward_date_mae'] = {b: (mean_mae[b] if np.isfinite(mean_mae[b]) else None) for b in BRANCHES}\n    findings['selected_branch'] = selected\n    findings['best_by_date_mae'] = min(BRANCHES, key=lambda b: (mean_mae[b], BRANCHES.index(b)))\n    findings['train_rows'] = int(X.shape[0])\n    findings['train_day_range'] = [float(np.min(days)), dmax]\n    findings['eval_day_range'] = [float(np.min(Xe[:, di])), float(np.max(Xe[:, di]))]\n    try:\n        pred = _fit_pred(selected, X, y, Xe, seed)\n    except Exception as exc:\n        findings['errors']['final_' + selected] = type(exc).__name__\n        findings['fallback'] = 'squared_error_after_final_fit_failure'\n        pred = _fit_pred('squared', X, y, Xe, seed)\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    findings['nonfinite_replaced'] = int(bad.sum())\n    if bad.any():\n        pred[bad] = float(np.median(y))\n    pred = np.maximum(pred, 0.0)\n    findings['pred_summary'] = {'mean': float(np.mean(pred)), 'max': float(np.max(pred)), 'min': float(np.min(pred))}\n    return {'prediction': pred.tolist(), 'findings': json.loads(json.dumps(findings))}\n"
+            },
+            "task_id": "idea-ae78bf"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "best_by_date_mae": "squared",
+              "branches": [
+                "squared",
+                "poisson",
+                "log1p"
+              ],
+              "errors": {},
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback": null,
+              "fold_date_mae": {
+                "log1p": [
+                  98.78324336213583,
+                  50.9360927073145
+                ],
+                "poisson": [
+                  106.10029835544307,
+                  52.573042163303676
+                ],
+                "squared": [
+                  87.78475020774239,
+                  48.31657471298465
+                ]
+              },
+              "fold_rmse": {
+                "log1p": [
+                  140.56011292304083,
+                  77.59604219851124
+                ],
+                "poisson": [
+                  148.37108972947067,
+                  80.51271478944386
+                ],
+                "squared": [
+                  116.62996810326798,
+                  74.9228869497011
+                ]
+              },
+              "folds": [
+                {
+                  "fold": 1,
+                  "holdout_day_range": [
+                    424.0,
+                    485.0
+                  ],
+                  "holdout_rows": 1461,
+                  "train_rows": 10078
+                },
+                {
+                  "fold": 2,
+                  "holdout_day_range": [
+                    363.0,
+                    424.0
+                  ],
+                  "holdout_rows": 1457,
+                  "train_rows": 8621
+                }
+              ],
+              "mean_forward_date_mae": {
+                "log1p": 74.85966803472516,
+                "poisson": 79.33667025937338,
+                "squared": 68.05066246036353
+              },
+              "mean_forward_rmse": {
+                "log1p": 109.07807756077604,
+                "poisson": 114.44190225945727,
+                "squared": 95.77642752648454
+              },
+              "nonfinite_replaced": 0,
+              "note": "branch selection uses only training dates (two forward 61-day holdouts); evaluation covariates used only for final prediction; baseline HGB hyperparameters fixed",
+              "pred_summary": {
+                "max": 790.8629109729819,
+                "mean": 271.5605557785885,
+                "min": 0.0
+              },
+              "selected_branch": "squared",
+              "train_day_range": [
+                0.0,
+                485.0
+              ],
+              "train_rows": 11539
+            },
+            "group_mae": 40.87792084565771,
+            "groups": 61,
+            "kind": "method",
+            "loss": 59.976405377488454,
+            "mae": 40.877920845657705,
+            "process_cpu_seconds": 5.195772197,
+            "rows": 1464,
+            "worker_seconds": 5.311307379975915
+          },
+          "score": -59.976405377488454,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s2"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s2",
+          "parent": "b0-s1",
+          "step": 2,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nimport json\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nBRANCHES = ['squared', 'deflate_drop', 'deflate_keep']\nHGB = dict(max_iter=250, learning_rate=0.08, max_leaf_nodes=31, l2_regularization=1)\nB_CLIP = 0.004\n\n\ndef _growth(days, y):\n    ud, inv = np.unique(days, return_inverse=True)\n    tot = np.bincount(inv, weights=y, minlength=len(ud))\n    keep = tot > 0\n    ud = ud[keep]\n    tot = tot[keep]\n    if len(ud) < 30:\n        return 0.0, int(len(ud)), 'too_few_dates'\n    w = 2.0 * np.pi * ud / 365.25\n    A = np.column_stack([np.ones_like(ud), ud, np.sin(w), np.cos(w), np.sin(2 * w), np.cos(2 * w)])\n    coef = np.linalg.lstsq(A, np.log(tot), rcond=None)[0]\n    b_raw = float(coef[1])\n    b = float(np.clip(b_raw, -B_CLIP, B_CLIP))\n    return b, int(len(ud)), ('clipped' if b != b_raw else 'ok')\n\n\ndef _fit_pred(branch, Xtr, ytr, Xte, di, yi, seed, info):\n    if branch == 'squared':\n        m = HistGradientBoostingRegressor(loss='squared_error', random_state=seed, **HGB)\n        m.fit(Xtr, ytr)\n        return m.predict(Xte)\n    b, nd, status = _growth(Xtr[:, di], ytr)\n    ref = float(np.max(Xtr[:, di]))\n    gtr = np.exp(b * (Xtr[:, di] - ref))\n    gte = np.exp(b * (Xte[:, di] - ref))\n    info[branch] = {'growth_b_per_day': b, 'annual_factor': float(np.exp(365.0 * b)), 'n_dates': nd,\n                    'status': status, 'eval_factor_range': [float(np.min(gte)), float(np.max(gte))]}\n    if branch == 'deflate_drop':\n        keep = [j for j in range(Xtr.shape[1]) if j not in (di, yi)]\n        Xtr2, Xte2 = Xtr[:, keep], Xte[:, keep]\n    elif branch == 'deflate_keep':\n        Xtr2, Xte2 = Xtr, Xte\n    else:\n        raise ValueError('unknown branch ' + str(branch))\n    m = HistGradientBoostingRegressor(loss='squared_error', random_state=seed, **HGB)\n    m.fit(Xtr2, ytr / gtr)\n    return m.predict(Xte2) * gte\n\n\ndef _rmse(p, y):\n    return float(np.sqrt(np.mean((p - y) ** 2)))\n\n\ndef _date_mae(p, y, days):\n    vals = []\n    for d in np.unique(days):\n        idx = days == d\n        vals.append(float(np.mean(np.abs(p[idx] - y[idx]))))\n    return float(np.mean(vals)) if vals else float('nan')\n\n\ndef fit_predict(train, inputs, seed):\n    fn = list(train['feature_names'])\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    di = fn.index('elapsed_day')\n    yi = fn.index('yr')\n    days = X[:, di]\n    dmax = float(np.max(days))\n    findings = {'branches': BRANCHES, 'folds': [], 'fold_rmse': {b: [] for b in BRANCHES},\n                'fold_date_mae': {b: [] for b in BRANCHES}, 'fold_growth': [], 'errors': {}, 'fallback': None,\n                'note': 'growth rate b fitted on log daily totals of training dates only (trend + 2 harmonics); target deflated by exp(b*(day-last_train_day)) and predictions re-inflated; branch selection by mean RMSE over two forward 61-day training holdouts; HGB hyperparameters fixed at baseline; evaluation covariates used only for final prediction'}\n    for k in range(2):\n        hi = dmax - 61.0 * k\n        lo = hi - 61.0\n        te = (days > lo) & (days <= hi)\n        tr = days <= lo\n        if te.sum() < 100 or tr.sum() < 500:\n            findings['folds'].append({'fold': k + 1, 'skipped': True})\n            continue\n        findings['folds'].append({'fold': k + 1, 'holdout_day_range': [float(lo), float(hi)],\n                                  'holdout_rows': int(te.sum()), 'train_rows': int(tr.sum())})\n        info = {}\n        for b in BRANCHES:\n            try:\n                p = _fit_pred(b, X[tr], y[tr], X[te], di, yi, seed, info)\n                p = np.where(np.isfinite(p), p, np.median(y[tr]))\n                p = np.maximum(p, 0.0)\n                findings['fold_rmse'][b].append(_rmse(p, y[te]))\n                findings['fold_date_mae'][b].append(_date_mae(p, y[te], days[te]))\n            except Exception as exc:\n                findings['errors'][b + '_fold' + str(k + 1)] = type(exc).__name__\n                findings['fold_rmse'][b].append(float('inf'))\n                findings['fold_date_mae'][b].append(float('inf'))\n        findings['fold_growth'].append(info)\n    mean_rmse = {}\n    mean_mae = {}\n    for b in BRANCHES:\n        r = findings['fold_rmse'][b]\n        m = findings['fold_date_mae'][b]\n        mean_rmse[b] = float(np.mean(r)) if r else float('inf')\n        mean_mae[b] = float(np.mean(m)) if m else float('inf')\n    order = sorted(BRANCHES, key=lambda b: (mean_rmse[b], BRANCHES.index(b)))\n    selected = order[0] if np.isfinite(mean_rmse[order[0]]) else 'squared'\n    findings['mean_forward_rmse'] = {b: (mean_rmse[b] if np.isfinite(mean_rmse[b]) else None) for b in BRANCHES}\n    findings['mean_forward_date_mae'] = {b: (mean_mae[b] if np.isfinite(mean_mae[b]) else None) for b in BRANCHES}\n    findings['selected_branch'] = selected\n    findings['best_by_date_mae'] = min(BRANCHES, key=lambda b: (mean_mae[b], BRANCHES.index(b)))\n    findings['train_rows'] = int(X.shape[0])\n    findings['train_day_range'] = [float(np.min(days)), dmax]\n    findings['eval_day_range'] = [float(np.min(Xe[:, di])), float(np.max(Xe[:, di]))]\n    final_info = {}\n    try:\n        pred = _fit_pred(selected, X, y, Xe, di, yi, seed, final_info)\n    except Exception as exc:\n        findings['errors']['final_' + selected] = type(exc).__name__\n        findings['fallback'] = 'squared_error_after_final_fit_failure'\n        final_info = {}\n        pred = _fit_pred('squared', X, y, Xe, di, yi, seed, final_info)\n    findings['final_growth'] = final_info\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    findings['nonfinite_replaced'] = int(bad.sum())\n    if bad.any():\n        pred[bad] = float(np.median(y))\n    pred = np.maximum(pred, 0.0)\n    findings['pred_summary'] = {'mean': float(np.mean(pred)), 'max': float(np.max(pred)), 'min': float(np.min(pred))}\n    return {'prediction': pred.tolist(), 'findings': json.loads(json.dumps(findings))}\n"
+            },
+            "task_id": "idea-816bb1"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "best_by_date_mae": "deflate_drop",
+              "branches": [
+                "squared",
+                "deflate_drop",
+                "deflate_keep"
+              ],
+              "errors": {},
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback": null,
+              "final_growth": {
+                "deflate_keep": {
+                  "annual_factor": 2.1571210472027276,
+                  "eval_factor_range": [
+                    1.0021084511270044,
+                    1.137098814710008
+                  ],
+                  "growth_b_per_day": 0.002106231463414195,
+                  "n_dates": 486,
+                  "status": "ok"
+                }
+              },
+              "fold_date_mae": {
+                "deflate_drop": [
+                  69.22878367555788,
+                  31.564907816239202
+                ],
+                "deflate_keep": [
+                  60.22712178159127,
+                  41.74691549843267
+                ],
+                "squared": [
+                  87.78475020774239,
+                  48.31657471298465
+                ]
+              },
+              "fold_growth": [
+                {
+                  "deflate_drop": {
+                    "annual_factor": 2.286232413782597,
+                    "eval_factor_range": [
+                      1.002268061946835,
+                      1.148199565558419
+                    ],
+                    "growth_b_per_day": 0.002265493776783812,
+                    "n_dates": 425,
+                    "status": "ok"
+                  },
+                  "deflate_keep": {
+                    "annual_factor": 2.286232413782597,
+                    "eval_factor_range": [
+                      1.002268061946835,
+                      1.148199565558419
+                    ],
+                    "growth_b_per_day": 0.002265493776783812,
+                    "n_dates": 425,
+                    "status": "ok"
+                  }
+                },
+                {
+                  "deflate_drop": {
+                    "annual_factor": 1.7349221634444305,
+                    "eval_factor_range": [
+                      1.0015106262859845,
+                      1.0964510794659441
+                    ],
+                    "growth_b_per_day": 0.001509486437875112,
+                    "n_dates": 364,
+                    "status": "ok"
+                  },
+                  "deflate_keep": {
+                    "annual_factor": 1.7349221634444305,
+                    "eval_factor_range": [
+                      1.0015106262859845,
+                      1.0964510794659441
+                    ],
+                    "growth_b_per_day": 0.001509486437875112,
+                    "n_dates": 364,
+                    "status": "ok"
+                  }
+                }
+              ],
+              "fold_rmse": {
+                "deflate_drop": [
+                  105.07520301895548,
+                  47.65790380924795
+                ],
+                "deflate_keep": [
+                  83.52797151359012,
+                  63.524713020192
+                ],
+                "squared": [
+                  116.62996810326798,
+                  74.9228869497011
+                ]
+              },
+              "folds": [
+                {
+                  "fold": 1,
+                  "holdout_day_range": [
+                    424.0,
+                    485.0
+                  ],
+                  "holdout_rows": 1461,
+                  "train_rows": 10078
+                },
+                {
+                  "fold": 2,
+                  "holdout_day_range": [
+                    363.0,
+                    424.0
+                  ],
+                  "holdout_rows": 1457,
+                  "train_rows": 8621
+                }
+              ],
+              "mean_forward_date_mae": {
+                "deflate_drop": 50.39684574589854,
+                "deflate_keep": 50.98701864001197,
+                "squared": 68.05066246036353
+              },
+              "mean_forward_rmse": {
+                "deflate_drop": 76.36655341410172,
+                "deflate_keep": 73.52634226689106,
+                "squared": 95.77642752648454
+              },
+              "nonfinite_replaced": 0,
+              "note": "growth rate b fitted on log daily totals of training dates only (trend + 2 harmonics); target deflated by exp(b*(day-last_train_day)) and predictions re-inflated; branch selection by mean RMSE over two forward 61-day training holdouts; HGB hyperparameters fixed at baseline; evaluation covariates used only for final prediction",
+              "pred_summary": {
+                "max": 966.7498854420134,
+                "mean": 314.6216646986011,
+                "min": 0.0
+              },
+              "selected_branch": "deflate_keep",
+              "train_day_range": [
+                0.0,
+                485.0
+              ],
+              "train_rows": 11539
+            },
+            "group_mae": 53.444084344629005,
+            "groups": 61,
+            "kind": "method",
+            "loss": 81.02777302582619,
+            "mae": 53.444084344629026,
+            "process_cpu_seconds": 4.922579009000001,
+            "rows": 1464,
+            "worker_seconds": 5.052689358592033
+          },
+          "score": -81.02777302582619,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s3"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s3",
+          "parent": "b0-s2",
+          "step": 3,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nimport json\nfrom collections import defaultdict\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nBRANCHES = ['base', 'lag_point', 'lag_smooth']\nLAG = 364\n\n\ndef _make(seed):\n    return HistGradientBoostingRegressor(max_iter=250, learning_rate=0.08, max_leaf_nodes=31,\n                                         l2_regularization=1, loss='squared_error', random_state=seed)\n\n\ndef _tables(days, hrs, y):\n    hour_tab = {}\n    day_tot = defaultdict(float)\n    for d, h, v in zip(days, hrs, y):\n        hour_tab[(int(round(d)), int(round(h)))] = float(v)\n        day_tot[int(round(d))] += float(v)\n    return hour_tab, dict(day_tot)\n\n\ndef _lag_feats(days, hrs, hour_tab, day_tot, smooth):\n    n = len(days)\n    f_hr = np.full(n, np.nan)\n    f_day = np.full(n, np.nan)\n    for i in range(n):\n        d = int(round(days[i])) - LAG\n        h = int(round(hrs[i]))\n        if smooth:\n            hv = [hour_tab[(dd, h)] for dd in (d - 7, d, d + 7) if (dd, h) in hour_tab]\n            dv = [day_tot[dd] for dd in range(d - 3, d + 4) if dd in day_tot]\n            if len(hv) >= 2:\n                f_hr[i] = float(np.mean(hv))\n            if len(dv) >= 4:\n                f_day[i] = float(np.mean(dv))\n        else:\n            if (d, h) in hour_tab:\n                f_hr[i] = hour_tab[(d, h)]\n            if d in day_tot:\n                f_day[i] = day_tot[d]\n    return np.column_stack([f_hr, f_day])\n\n\ndef _features(branch, Xtr, ytr, Xte, di, hi):\n    if branch == 'base':\n        return Xtr, Xte, None\n    smooth = branch == 'lag_smooth'\n    hour_tab, day_tot = _tables(Xtr[:, di], Xtr[:, hi], ytr)\n    ftr = _lag_feats(Xtr[:, di], Xtr[:, hi], hour_tab, day_tot, smooth)\n    fte = _lag_feats(Xte[:, di], Xte[:, hi], hour_tab, day_tot, smooth)\n    info = {'train_lag_hr_available_frac': float(np.mean(np.isfinite(ftr[:, 0]))),\n            'eval_lag_hr_available_frac': float(np.mean(np.isfinite(fte[:, 0]))),\n            'eval_lag_day_available_frac': float(np.mean(np.isfinite(fte[:, 1])))}\n    return np.hstack([Xtr, ftr]), np.hstack([Xte, fte]), info\n\n\ndef _fit_pred(branch, Xtr, ytr, Xte, seed, di, hi):\n    A, B, info = _features(branch, Xtr, ytr, Xte, di, hi)\n    m = _make(seed)\n    m.fit(A, ytr)\n    return m.predict(B), info\n\n\ndef _rmse(p, y):\n    return float(np.sqrt(np.mean((p - y) ** 2)))\n\n\ndef _date_mae(p, y, days):\n    vals = []\n    for d in np.unique(days):\n        idx = days == d\n        vals.append(float(np.mean(np.abs(p[idx] - y[idx]))))\n    return float(np.mean(vals)) if vals else float('nan')\n\n\ndef _yoy_diag(days, mnth, yrs, y):\n    hour_tab, day_tot = _tables(days, np.zeros_like(days), y)\n    out = {}\n    cur = defaultdict(float)\n    prev = defaultdict(float)\n    seen = set()\n    for d, mo, yv in zip(days, mnth, yrs):\n        dd = int(round(d))\n        if yv < 0.5 or dd in seen:\n            continue\n        seen.add(dd)\n        if dd in day_tot and (dd - LAG) in day_tot:\n            cur[int(round(mo))] += day_tot[dd]\n            prev[int(round(mo))] += day_tot[dd - LAG]\n    for mo in sorted(cur):\n        if prev[mo] > 0:\n            out['month_' + str(mo)] = float(cur[mo] / prev[mo])\n    tc = sum(cur.values())\n    tp = sum(prev.values())\n    out['overall'] = float(tc / tp) if tp > 0 else None\n    return out\n\n\ndef fit_predict(train, inputs, seed):\n    fn = list(train['feature_names'])\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    di = fn.index('elapsed_day')\n    hi = fn.index('hr')\n    mi = fn.index('mnth')\n    yi = fn.index('yr')\n    days = X[:, di]\n    dmax = float(np.max(days))\n    findings = {'branches': BRANCHES, 'lag_days': LAG, 'folds': [],\n                'fold_rmse': {b: [] for b in BRANCHES}, 'fold_date_mae': {b: [] for b in BRANCHES},\n                'fold_lag_info': {b: [] for b in BRANCHES if b != 'base'}, 'errors': {}, 'fallback': None,\n                'note': 'lag features are training-label counts at elapsed_day-364 same hr (point) or mean of lag 357/364/371 same hr plus mean daily total over lag week (smooth); NaN when unavailable; tables built only from the fold/final training labels; branch selection by mean RMSE over two forward 61-day training holdouts; fold 2 training rows have no lag so its lag branches cannot learn lag relations; HGB hyperparameters fixed at baseline; evaluation covariates used only for final prediction'}\n    try:\n        findings['train_yoy_daily_total_ratio_2012_vs_2011'] = _yoy_diag(days, X[:, mi], X[:, yi], y)\n    except Exception as exc:\n        findings['errors']['yoy_diag'] = type(exc).__name__\n    for k in range(2):\n        hi_d = dmax - 61.0 * k\n        lo_d = hi_d - 61.0\n        te = (days > lo_d) & (days <= hi_d)\n        tr = days <= lo_d\n        if te.sum() < 100 or tr.sum() < 500:\n            findings['folds'].append({'fold': k + 1, 'skipped': True})\n            continue\n        findings['folds'].append({'fold': k + 1, 'holdout_day_range': [float(lo_d), float(hi_d)],\n                                  'holdout_rows': int(te.sum()), 'train_rows': int(tr.sum())})\n        for b in BRANCHES:\n            try:\n                p, info = _fit_pred(b, X[tr], y[tr], X[te], seed, di, hi)\n                p = np.where(np.isfinite(p), p, np.median(y[tr]))\n                p = np.maximum(p, 0.0)\n                findings['fold_rmse'][b].append(_rmse(p, y[te]))\n                findings['fold_date_mae'][b].append(_date_mae(p, y[te], days[te]))\n                if info is not None:\n                    findings['fold_lag_info'][b].append(info)\n            except Exception as exc:\n                findings['errors'][b + '_fold' + str(k + 1)] = type(exc).__name__\n                findings['fold_rmse'][b].append(float('inf'))\n                findings['fold_date_mae'][b].append(float('inf'))\n    mean_rmse = {}\n    mean_mae = {}\n    for b in BRANCHES:\n        r = findings['fold_rmse'][b]\n        m = findings['fold_date_mae'][b]\n        mean_rmse[b] = float(np.mean(r)) if r else float('inf')\n        mean_mae[b] = float(np.mean(m)) if m else float('inf')\n    order = sorted(BRANCHES, key=lambda b: (mean_rmse[b], BRANCHES.index(b)))\n    selected = order[0] if np.isfinite(mean_rmse[order[0]]) else 'base'\n    findings['mean_forward_rmse'] = {b: (mean_rmse[b] if np.isfinite(mean_rmse[b]) else None) for b in BRANCHES}\n    findings['mean_forward_date_mae'] = {b: (mean_mae[b] if np.isfinite(mean_mae[b]) else None) for b in BRANCHES}\n    findings['fold1_rmse_by_branch'] = {b: (findings['fold_rmse'][b][0] if findings['fold_rmse'][b] and np.isfinite(findings['fold_rmse'][b][0]) else None) for b in BRANCHES}\n    findings['selected_branch'] = selected\n    findings['best_by_date_mae'] = min(BRANCHES, key=lambda b: (mean_mae[b], BRANCHES.index(b)))\n    findings['train_rows'] = int(X.shape[0])\n    findings['train_day_range'] = [float(np.min(days)), dmax]\n    findings['eval_day_range'] = [float(np.min(Xe[:, di])), float(np.max(Xe[:, di]))]\n    try:\n        pred, info = _fit_pred(selected, X, y, Xe, seed, di, hi)\n        findings['final_lag_info'] = info\n    except Exception as exc:\n        findings['errors']['final_' + selected] = type(exc).__name__\n        findings['fallback'] = 'base_after_final_fit_failure'\n        pred, _ = _fit_pred('base', X, y, Xe, seed, di, hi)\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    findings['nonfinite_replaced'] = int(bad.sum())\n    if bad.any():\n        pred[bad] = float(np.median(y))\n    pred = np.maximum(pred, 0.0)\n    findings['pred_summary'] = {'mean': float(np.mean(pred)), 'max': float(np.max(pred)), 'min': float(np.min(pred))}\n    return {'prediction': pred.tolist(), 'findings': json.loads(json.dumps(findings))}\n"
+            },
+            "task_id": "idea-325a52"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "best_by_date_mae": "base",
+              "branches": [
+                "base",
+                "lag_point",
+                "lag_smooth"
+              ],
+              "errors": {},
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback": null,
+              "final_lag_info": null,
+              "fold1_rmse_by_branch": {
+                "base": 116.62996810326798,
+                "lag_point": 131.6318978312992,
+                "lag_smooth": 124.23563818776273
+              },
+              "fold_date_mae": {
+                "base": [
+                  87.78475020774239,
+                  48.31657471298465
+                ],
+                "lag_point": [
+                  91.81347983826409,
+                  48.31657471298465
+                ],
+                "lag_smooth": [
+                  87.96135771404279,
+                  48.31657471298465
+                ]
+              },
+              "fold_lag_info": {
+                "lag_point": [
+                  {
+                    "eval_lag_day_available_frac": 1.0,
+                    "eval_lag_hr_available_frac": 0.9904175222450377,
+                    "train_lag_hr_available_frac": 0.1371303830125025
+                  },
+                  {
+                    "eval_lag_day_available_frac": 1.0,
+                    "eval_lag_hr_available_frac": 0.9485243651338366,
+                    "train_lag_hr_available_frac": 0.0
+                  }
+                ],
+                "lag_smooth": [
+                  {
+                    "eval_lag_day_available_frac": 1.0,
+                    "eval_lag_hr_available_frac": 0.9931553730321697,
+                    "train_lag_hr_available_frac": 0.141198650525898
+                  },
+                  {
+                    "eval_lag_day_available_frac": 1.0,
+                    "eval_lag_hr_available_frac": 0.9766643788606726,
+                    "train_lag_hr_available_frac": 0.0
+                  }
+                ]
+              },
+              "fold_rmse": {
+                "base": [
+                  116.62996810326798,
+                  74.9228869497011
+                ],
+                "lag_point": [
+                  131.6318978312992,
+                  74.9228869497011
+                ],
+                "lag_smooth": [
+                  124.23563818776273,
+                  74.9228869497011
+                ]
+              },
+              "folds": [
+                {
+                  "fold": 1,
+                  "holdout_day_range": [
+                    424.0,
+                    485.0
+                  ],
+                  "holdout_rows": 1461,
+                  "train_rows": 10078
+                },
+                {
+                  "fold": 2,
+                  "holdout_day_range": [
+                    363.0,
+                    424.0
+                  ],
+                  "holdout_rows": 1457,
+                  "train_rows": 8621
+                }
+              ],
+              "lag_days": 364,
+              "mean_forward_date_mae": {
+                "base": 68.05066246036353,
+                "lag_point": 70.06502727562437,
+                "lag_smooth": 68.13896621351373
+              },
+              "mean_forward_rmse": {
+                "base": 95.77642752648454,
+                "lag_point": 103.27739239050015,
+                "lag_smooth": 99.5792625687319
+              },
+              "nonfinite_replaced": 0,
+              "note": "lag features are training-label counts at elapsed_day-364 same hr (point) or mean of lag 357/364/371 same hr plus mean daily total over lag week (smooth); NaN when unavailable; tables built only from the fold/final training labels; branch selection by mean RMSE over two forward 61-day training holdouts; fold 2 training rows have no lag so its lag branches cannot learn lag relations; HGB hyperparameters fixed at baseline; evaluation covariates used only for final prediction",
+              "pred_summary": {
+                "max": 790.8629109729819,
+                "mean": 271.5605557785885,
+                "min": 0.0
+              },
+              "selected_branch": "base",
+              "train_day_range": [
+                0.0,
+                485.0
+              ],
+              "train_rows": 11539,
+              "train_yoy_daily_total_ratio_2012_vs_2011": {
+                "month_1": 2.5086609272897,
+                "month_2": 2.028658536585366,
+                "month_3": 2.554656874138118,
+                "month_4": 1.7752055673863647,
+                "overall": 2.1380798616345214
+              }
+            },
+            "group_mae": 40.87792084565771,
+            "groups": 61,
+            "kind": "method",
+            "loss": 59.976405377488454,
+            "mae": 40.877920845657705,
+            "process_cpu_seconds": 5.595976306000001,
+            "rows": 1464,
+            "worker_seconds": 5.726006023585796
+          },
+          "score": -59.976405377488454,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s4"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s4",
+          "parent": "b0-s3",
+          "step": 4,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nimport json\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nBRANCHES = ['base', 'yoy_scaled', 'blend']\nLAG = 364\nHALF = 14\nRATIO_WINDOW = 56\nRATIO_CLIP = (0.5, 4.0)\nDROP_FOR_SCALED = ['yr', 'elapsed_day']\n\n\ndef _make(seed):\n    return HistGradientBoostingRegressor(max_iter=250, learning_rate=0.08, max_leaf_nodes=31,\n                                         l2_regularization=1, loss='squared_error', random_state=seed)\n\n\ndef _rmse(p, y):\n    return float(np.sqrt(np.mean((p - y) ** 2)))\n\n\ndef _date_mae(p, y, days):\n    vals = [float(np.mean(np.abs(p[days == d] - y[days == d]))) for d in np.unique(days)]\n    return float(np.mean(vals)) if vals else float('nan')\n\n\ndef _key(d):\n    return float(round(float(d)))\n\n\ndef _level_model(days, y):\n    raw = {}\n    for d in np.unique(days):\n        raw[_key(d)] = float(np.mean(y[days == d]))\n    keys = np.array(sorted(raw.keys()), dtype=float)\n    vals = np.array([raw[k] for k in keys], dtype=float)\n    smooth = {}\n    for k in keys:\n        w = (keys >= k - HALF) & (keys <= k + HALF)\n        smooth[float(k)] = float(np.mean(vals[w]))\n    last_day = float(keys[-1])\n    ratios = []\n    for k in keys[keys > last_day - RATIO_WINDOW]:\n        a = smooth.get(_key(k - LAG))\n        if a is not None and a > 0:\n            ratios.append(smooth[float(k)] / a)\n    ratio = None\n    clipped = False\n    if ratios:\n        ratio = float(np.exp(np.mean(np.log(ratios))))\n        if ratio < RATIO_CLIP[0] or ratio > RATIO_CLIP[1]:\n            clipped = True\n            ratio = float(min(max(ratio, RATIO_CLIP[0]), RATIO_CLIP[1]))\n    return {'smooth': smooth, 'last_day': last_day, 'last_level': smooth[last_day],\n            'ratio': ratio, 'ratio_clipped': bool(clipped), 'n_ratio_days': int(len(ratios))}\n\n\ndef _train_level(days, lm):\n    return np.array([lm['smooth'][_key(d)] for d in days], dtype=float)\n\n\ndef _eval_level(days, lm):\n    out = np.empty(len(days), dtype=float)\n    persist = np.zeros(len(days), dtype=bool)\n    for i, d in enumerate(days):\n        a = lm['smooth'].get(_key(d - LAG)) if lm['ratio'] is not None else None\n        if a is not None and a > 0:\n            out[i] = a * lm['ratio']\n        else:\n            out[i] = lm['last_level']\n            persist[i] = True\n    return out, persist\n\n\ndef _branch_preds(Xtr, ytr, Xte, cols, di, seed):\n    info = {}\n    mb = _make(seed)\n    mb.fit(Xtr, ytr)\n    pb = mb.predict(Xte)\n    lm = _level_model(Xtr[:, di], ytr)\n    ltr = _train_level(Xtr[:, di], lm)\n    lte, persist = _eval_level(Xte[:, di], lm)\n    z = ytr / np.maximum(ltr, 1e-6)\n    ms = _make(seed)\n    ms.fit(Xtr[:, cols], z)\n    ps = np.maximum(ms.predict(Xte[:, cols]), 0.0) * lte\n    info['yoy_ratio'] = lm['ratio']\n    info['ratio_clipped'] = lm['ratio_clipped']\n    info['n_ratio_days'] = lm['n_ratio_days']\n    info['last_train_level'] = float(lm['last_level'])\n    info['persistence_frac'] = float(np.mean(persist))\n    info['eval_level_mean'] = float(np.mean(lte))\n    info['train_level_mean'] = float(np.mean(ltr))\n    info['z_mean'] = float(np.mean(z))\n    return {'base': pb, 'yoy_scaled': ps, 'blend': 0.5 * (pb + ps)}, info\n\n\ndef _mean_over(lst, idx):\n    vals = [lst[i] for i in idx]\n    return float(np.mean(vals)) if vals else float('inf')\n\n\ndef fit_predict(train, inputs, seed):\n    fn = list(train['feature_names'])\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    di = fn.index('elapsed_day')\n    cols = [i for i, n in enumerate(fn) if n not in DROP_FOR_SCALED]\n    days = X[:, di]\n    dmax = float(np.max(days))\n    findings = {'branches': BRANCHES, 'folds': [], 'fold_rmse': {b: [] for b in BRANCHES},\n                'fold_date_mae': {b: [] for b in BRANCHES}, 'errors': {}, 'fallback': None,\n                'scaled_features': [fn[i] for i in cols],\n                'note': 'yoy_scaled: HGB (baseline hyperparameters, squared error) fit on cnt divided by a +/-14-day smoothed mean hourly count per training date; evaluation-date level = smoothed level at elapsed_day-364 times geometric-mean YoY ratio over trailing 56 training days (clipped to [0.5,4]); persistence of last training level when no analog; blend = 0.5*(base+yoy_scaled); selection by mean forward RMSE over training folds with analog coverage >= 50 percent (all folds if none); only evaluation elapsed_day is used for analog lookup; no evaluation labels anywhere'}\n    fold_records = []\n    for k in range(2):\n        hi = dmax - 61.0 * k\n        lo = hi - 61.0\n        te = (days > lo) & (days <= hi)\n        tr = days <= lo\n        if te.sum() < 100 or tr.sum() < 500:\n            findings['folds'].append({'fold': k + 1, 'skipped': True})\n            continue\n        rec = {'fold': k + 1, 'holdout_day_range': [float(lo), float(hi)],\n               'holdout_rows': int(te.sum()), 'train_rows': int(tr.sum())}\n        try:\n            preds, info = _branch_preds(X[tr], y[tr], X[te], cols, di, seed)\n            rec['level_info'] = info\n            rec['analog_supported'] = bool(info['persistence_frac'] < 0.5)\n            for b in BRANCHES:\n                p = np.asarray(preds[b], dtype=float)\n                p = np.where(np.isfinite(p), p, np.median(y[tr]))\n                p = np.maximum(p, 0.0)\n                findings['fold_rmse'][b].append(_rmse(p, y[te]))\n                findings['fold_date_mae'][b].append(_date_mae(p, y[te], days[te]))\n        except Exception as exc:\n            findings['errors']['fold' + str(k + 1)] = type(exc).__name__\n            rec['analog_supported'] = False\n            for b in BRANCHES:\n                findings['fold_rmse'][b].append(float('inf'))\n                findings['fold_date_mae'][b].append(float('inf'))\n        findings['folds'].append(rec)\n        fold_records.append(rec)\n    sel_idx = [i for i, r in enumerate(fold_records) if r.get('analog_supported')]\n    all_idx = list(range(len(fold_records)))\n    if not sel_idx:\n        sel_idx = all_idx\n    findings['selection_fold_numbers'] = [fold_records[i]['fold'] for i in sel_idx]\n    mean_sel = {b: _mean_over(findings['fold_rmse'][b], sel_idx) for b in BRANCHES}\n    mean_all = {b: _mean_over(findings['fold_rmse'][b], all_idx) for b in BRANCHES}\n    mae_sel = {b: _mean_over(findings['fold_date_mae'][b], sel_idx) for b in BRANCHES}\n    order = sorted(BRANCHES, key=lambda b: (mean_sel[b], BRANCHES.index(b)))\n    selected = order[0] if np.isfinite(mean_sel[order[0]]) else 'base'\n    order_all = sorted(BRANCHES, key=lambda b: (mean_all[b], BRANCHES.index(b)))\n    findings['selection_rmse'] = {b: (mean_sel[b] if np.isfinite(mean_sel[b]) else None) for b in BRANCHES}\n    findings['all_fold_rmse_mean'] = {b: (mean_all[b] if np.isfinite(mean_all[b]) else None) for b in BRANCHES}\n    findings['selection_date_mae'] = {b: (mae_sel[b] if np.isfinite(mae_sel[b]) else None) for b in BRANCHES}\n    findings['selected_branch'] = selected\n    findings['would_select_all_folds'] = order_all[0] if np.isfinite(mean_all[order_all[0]]) else 'base'\n    findings['best_by_date_mae'] = min(BRANCHES, key=lambda b: (mae_sel[b], BRANCHES.index(b)))\n    findings['train_rows'] = int(X.shape[0])\n    findings['train_day_range'] = [float(np.min(days)), dmax]\n    findings['eval_day_range'] = [float(np.min(Xe[:, di])), float(np.max(Xe[:, di]))]\n    try:\n        preds, info = _branch_preds(X, y, Xe, cols, di, seed)\n        findings['final_level_info'] = info\n        pred = np.asarray(preds[selected], dtype=float)\n        findings['final_branch_pred_means'] = {b: float(np.mean(preds[b])) for b in BRANCHES}\n    except Exception as exc:\n        findings['errors']['final_' + selected] = type(exc).__name__\n        findings['fallback'] = 'base_hgb_after_final_fit_failure'\n        m = _make(seed)\n        m.fit(X, y)\n        pred = np.asarray(m.predict(Xe), dtype=float)\n    bad = ~np.isfinite(pred)\n    findings['nonfinite_replaced'] = int(bad.sum())\n    if bad.any():\n        pred[bad] = float(np.median(y))\n    pred = np.maximum(pred, 0.0)\n    findings['pred_summary'] = {'mean': float(np.mean(pred)), 'max': float(np.max(pred)), 'min': float(np.min(pred))}\n    return {'prediction': pred.tolist(), 'findings': json.loads(json.dumps(findings))}\n"
+            },
+            "task_id": "idea-fa3d93"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "all_fold_rmse_mean": {
+                "base": 95.77642752648454,
+                "blend": 69.49004178948331,
+                "yoy_scaled": 83.1312339826665
+              },
+              "best_by_date_mae": "blend",
+              "branches": [
+                "base",
+                "yoy_scaled",
+                "blend"
+              ],
+              "errors": {},
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback": null,
+              "final_branch_pred_means": {
+                "base": 271.48389751860316,
+                "blend": 342.4297407864571,
+                "yoy_scaled": 413.3755840543111
+              },
+              "final_level_info": {
+                "eval_level_mean": 401.0421440524148,
+                "last_train_level": 225.9222222222222,
+                "n_ratio_days": 56,
+                "persistence_frac": 0.0,
+                "ratio_clipped": false,
+                "train_level_mean": 154.471049888484,
+                "yoy_ratio": 2.090930703721377,
+                "z_mean": 0.998626775921906
+              },
+              "fold_date_mae": {
+                "base": [
+                  87.78475020774239,
+                  48.31657471298465
+                ],
+                "blend": [
+                  46.90458374409585,
+                  43.59772093590539
+                ],
+                "yoy_scaled": [
+                  62.55247780117409,
+                  41.59194748918624
+                ]
+              },
+              "fold_rmse": {
+                "base": [
+                  116.62996810326798,
+                  74.9228869497011
+                ],
+                "blend": [
+                  71.40687381589272,
+                  67.57320976307389
+                ],
+                "yoy_scaled": [
+                  103.02743309104983,
+                  63.235034874283166
+                ]
+              },
+              "folds": [
+                {
+                  "analog_supported": true,
+                  "fold": 1,
+                  "holdout_day_range": [
+                    424.0,
+                    485.0
+                  ],
+                  "holdout_rows": 1461,
+                  "level_info": {
+                    "eval_level_mean": 240.6461631367086,
+                    "last_train_level": 154.3972222222222,
+                    "n_ratio_days": 56,
+                    "persistence_frac": 0.0,
+                    "ratio_clipped": false,
+                    "train_level_mean": 143.09900040741496,
+                    "yoy_ratio": 2.137249236322177,
+                    "z_mean": 0.9996421778074849
+                  },
+                  "train_rows": 10078
+                },
+                {
+                  "analog_supported": false,
+                  "fold": 2,
+                  "holdout_day_range": [
+                    363.0,
+                    424.0
+                  ],
+                  "holdout_rows": 1457,
+                  "level_info": {
+                    "eval_level_mean": 99.98647342995173,
+                    "last_train_level": 99.9864734299517,
+                    "n_ratio_days": 0,
+                    "persistence_frac": 1.0,
+                    "ratio_clipped": false,
+                    "train_level_mean": 144.02127193183915,
+                    "yoy_ratio": null,
+                    "z_mean": 0.9973067266860984
+                  },
+                  "train_rows": 8621
+                }
+              ],
+              "nonfinite_replaced": 0,
+              "note": "yoy_scaled: HGB (baseline hyperparameters, squared error) fit on cnt divided by a +/-14-day smoothed mean hourly count per training date; evaluation-date level = smoothed level at elapsed_day-364 times geometric-mean YoY ratio over trailing 56 training days (clipped to [0.5,4]); persistence of last training level when no analog; blend = 0.5*(base+yoy_scaled); selection by mean forward RMSE over training folds with analog coverage >= 50 percent (all folds if none); only evaluation elapsed_day is used for analog lookup; no evaluation labels anywhere",
+              "pred_summary": {
+                "max": 1027.0832871032324,
+                "mean": 342.43508057399083,
+                "min": 0.0
+              },
+              "scaled_features": [
+                "season",
+                "mnth",
+                "hr",
+                "holiday",
+                "weekday",
+                "workingday",
+                "weathersit",
+                "temp",
+                "atemp",
+                "hum",
+                "windspeed"
+              ],
+              "selected_branch": "blend",
+              "selection_date_mae": {
+                "base": 87.78475020774239,
+                "blend": 46.90458374409585,
+                "yoy_scaled": 62.55247780117409
+              },
+              "selection_fold_numbers": [
+                1
+              ],
+              "selection_rmse": {
+                "base": 116.62996810326798,
+                "blend": 71.40687381589272,
+                "yoy_scaled": 103.02743309104983
+              },
+              "train_day_range": [
+                0.0,
+                485.0
+              ],
+              "train_rows": 11539,
+              "would_select_all_folds": "blend"
+            },
+            "group_mae": 72.23312691785767,
+            "groups": 61,
+            "kind": "method",
+            "loss": 99.84476660075622,
+            "mae": 72.23312691785767,
+            "process_cpu_seconds": 4.32484134,
+            "rows": 1464,
+            "worker_seconds": 4.422344978898764
+          },
+          "score": -99.84476660075622,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    },
+    {
+      "decision": {
+        "actions": [
+          "b0-s5"
+        ],
+        "reason": "Open independent paths and give each equal refinement depth."
+      },
+      "observations": [
+        {
+          "branch": 0,
+          "id": "b0-s5",
+          "parent": "b0-s4",
+          "step": 5,
+          "artifact": {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nimport json\nimport collections\nfrom sklearn.ensemble import HistGradientBoostingRegressor\n\nCONFIGS = {\n    'base': {'max_iter': 250, 'learning_rate': 0.08, 'max_leaf_nodes': 31, 'l2_regularization': 1.0, 'min_samples_leaf': 20},\n    'slow': {'max_iter': 600, 'learning_rate': 0.04, 'max_leaf_nodes': 31, 'l2_regularization': 1.0, 'min_samples_leaf': 40},\n}\nBRANCHES = ['base', 'slow', 'base_bag', 'slow_bag']\nN_BAGS = 6\n\n\ndef _make(cfg, seed):\n    return HistGradientBoostingRegressor(loss='squared_error', random_state=int(seed) % (2 ** 31 - 1), **cfg)\n\n\ndef _fit_pred(branch, Xtr, ytr, dtr, Xte, seed):\n    cfg = CONFIGS[branch.replace('_bag', '')]\n    if not branch.endswith('_bag'):\n        m = _make(cfg, seed)\n        m.fit(Xtr, ytr)\n        return m.predict(Xte)\n    rng = np.random.RandomState(int(seed) % (2 ** 31 - 1))\n    udays = np.unique(dtr)\n    preds = np.zeros(Xte.shape[0], dtype=float)\n    for b in range(N_BAGS):\n        pick = rng.choice(udays, size=len(udays), replace=True)\n        cnt = collections.Counter(pick.tolist())\n        w = np.array([cnt.get(float(d), 0) for d in dtr], dtype=float)\n        mask = w > 0\n        m = _make(cfg, int(seed) + 7919 * (b + 1))\n        m.fit(Xtr[mask], ytr[mask], sample_weight=w[mask])\n        preds += m.predict(Xte)\n    return preds / float(N_BAGS)\n\n\ndef _rmse(p, y):\n    return float(np.sqrt(np.mean((p - y) ** 2)))\n\n\ndef _date_mae(p, y, days):\n    vals = []\n    for d in np.unique(days):\n        idx = days == d\n        vals.append(float(np.mean(np.abs(p[idx] - y[idx]))))\n    return float(np.mean(vals)) if vals else float('nan')\n\n\ndef fit_predict(train, inputs, seed):\n    fn = list(train['feature_names'])\n    X = np.asarray(train['X'], dtype=float)\n    y = np.asarray(train['y'], dtype=float)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    di = fn.index('elapsed_day')\n    days = X[:, di]\n    dmax = float(np.max(days))\n    findings = {'branches': BRANCHES, 'n_bags': N_BAGS, 'configs': CONFIGS, 'folds': [],\n                'fold_rmse': {b: [] for b in BRANCHES}, 'fold_date_mae': {b: [] for b in BRANCHES},\n                'errors': {}, 'fallback': None,\n                'note': 'same two forward 61-day training holdouts as idea-ae78bf; candidates: baseline HGB, slower/more regularized HGB, and date-bootstrap bags (6 bags, whole-date resampling via sample_weight multiplicity) of each; squared error throughout; selection by mean forward RMSE, ties by branch order; evaluation covariates used only for final prediction; no evaluation labels'}\n    for k in range(2):\n        hi = dmax - 61.0 * k\n        lo = hi - 61.0\n        te = (days > lo) & (days <= hi)\n        tr = days <= lo\n        if te.sum() < 100 or tr.sum() < 500:\n            findings['folds'].append({'fold': k + 1, 'skipped': True})\n            continue\n        findings['folds'].append({'fold': k + 1, 'holdout_day_range': [float(lo), float(hi)],\n                                  'holdout_rows': int(te.sum()), 'train_rows': int(tr.sum())})\n        for b in BRANCHES:\n            try:\n                p = _fit_pred(b, X[tr], y[tr], days[tr], X[te], seed)\n                p = np.where(np.isfinite(p), p, np.median(y[tr]))\n                p = np.maximum(p, 0.0)\n                findings['fold_rmse'][b].append(_rmse(p, y[te]))\n                findings['fold_date_mae'][b].append(_date_mae(p, y[te], days[te]))\n            except Exception as exc:\n                findings['errors'][b + '_fold' + str(k + 1)] = type(exc).__name__\n                findings['fold_rmse'][b].append(float('inf'))\n                findings['fold_date_mae'][b].append(float('inf'))\n    mean_rmse = {}\n    mean_mae = {}\n    for b in BRANCHES:\n        r = findings['fold_rmse'][b]\n        m = findings['fold_date_mae'][b]\n        mean_rmse[b] = float(np.mean(r)) if r else float('inf')\n        mean_mae[b] = float(np.mean(m)) if m else float('inf')\n    order = sorted(BRANCHES, key=lambda b: (mean_rmse[b], BRANCHES.index(b)))\n    selected = order[0] if np.isfinite(mean_rmse[order[0]]) else 'base'\n    findings['mean_forward_rmse'] = {b: (mean_rmse[b] if np.isfinite(mean_rmse[b]) else None) for b in BRANCHES}\n    findings['mean_forward_date_mae'] = {b: (mean_mae[b] if np.isfinite(mean_mae[b]) else None) for b in BRANCHES}\n    findings['selected_branch'] = selected\n    findings['best_by_date_mae'] = min(BRANCHES, key=lambda b: (mean_mae[b], BRANCHES.index(b)))\n    findings['train_rows'] = int(X.shape[0])\n    findings['train_day_range'] = [float(np.min(days)), dmax]\n    findings['eval_day_range'] = [float(np.min(Xe[:, di])), float(np.max(Xe[:, di]))]\n    final_preds = {}\n    for b in BRANCHES:\n        try:\n            fp = np.asarray(_fit_pred(b, X, y, days, Xe, seed), dtype=float)\n            fp = np.where(np.isfinite(fp), fp, np.median(y))\n            final_preds[b] = np.maximum(fp, 0.0)\n        except Exception as exc:\n            findings['errors']['final_' + b] = type(exc).__name__\n    if selected in final_preds:\n        pred = final_preds[selected]\n    elif 'base' in final_preds:\n        findings['fallback'] = 'base_after_final_fit_failure'\n        pred = final_preds['base']\n    else:\n        findings['fallback'] = 'train_median_after_all_final_fits_failed'\n        pred = np.full(Xe.shape[0], float(np.median(y)))\n    findings['final_pred_means'] = {b: float(np.mean(v)) for b, v in final_preds.items()}\n    if 'base' in final_preds:\n        findings['final_rmse_vs_base'] = {b: _rmse(v, final_preds['base']) for b, v in final_preds.items()}\n    pred = np.asarray(pred, dtype=float)\n    bad = ~np.isfinite(pred)\n    findings['nonfinite_replaced'] = int(bad.sum())\n    if bad.any():\n        pred[bad] = float(np.median(y))\n    pred = np.maximum(pred, 0.0)\n    findings['pred_summary'] = {'mean': float(np.mean(pred)), 'max': float(np.max(pred)), 'min': float(np.min(pred))}\n    return {'prediction': pred.tolist(), 'findings': json.loads(json.dumps(findings))}\n"
+            },
+            "task_id": "idea-17d463"
+          },
+          "cost": null,
+          "feedback": {
+            "findings": {
+              "best_by_date_mae": "slow_bag",
+              "branches": [
+                "base",
+                "slow",
+                "base_bag",
+                "slow_bag"
+              ],
+              "configs": {
+                "base": {
+                  "l2_regularization": 1.0,
+                  "learning_rate": 0.08,
+                  "max_iter": 250,
+                  "max_leaf_nodes": 31,
+                  "min_samples_leaf": 20
+                },
+                "slow": {
+                  "l2_regularization": 1.0,
+                  "learning_rate": 0.04,
+                  "max_iter": 600,
+                  "max_leaf_nodes": 31,
+                  "min_samples_leaf": 40
+                }
+              },
+              "errors": {},
+              "eval_day_range": [
+                486.0,
+                546.0
+              ],
+              "fallback": null,
+              "final_pred_means": {
+                "base": 271.5605557785885,
+                "base_bag": 276.4170093288628,
+                "slow": 278.13546908292,
+                "slow_bag": 279.1176416143062
+              },
+              "final_rmse_vs_base": {
+                "base": 0.0,
+                "base_bag": 18.62971791159807,
+                "slow": 16.373022861896654,
+                "slow_bag": 25.23374111467632
+              },
+              "fold_date_mae": {
+                "base": [
+                  87.78475020774239,
+                  48.31657471298465
+                ],
+                "base_bag": [
+                  79.06202638673754,
+                  48.546549381165576
+                ],
+                "slow": [
+                  73.40580562974512,
+                  50.011776005731846
+                ],
+                "slow_bag": [
+                  69.91557546497087,
+                  51.04863171040537
+                ]
+              },
+              "fold_rmse": {
+                "base": [
+                  116.62996810326798,
+                  74.9228869497011
+                ],
+                "base_bag": [
+                  109.04463227866037,
+                  76.07618503111127
+                ],
+                "slow": [
+                  104.94835352763528,
+                  77.332850823599
+                ],
+                "slow_bag": [
+                  100.77593149436659,
+                  78.62321202473429
+                ]
+              },
+              "folds": [
+                {
+                  "fold": 1,
+                  "holdout_day_range": [
+                    424.0,
+                    485.0
+                  ],
+                  "holdout_rows": 1461,
+                  "train_rows": 10078
+                },
+                {
+                  "fold": 2,
+                  "holdout_day_range": [
+                    363.0,
+                    424.0
+                  ],
+                  "holdout_rows": 1457,
+                  "train_rows": 8621
+                }
+              ],
+              "mean_forward_date_mae": {
+                "base": 68.05066246036353,
+                "base_bag": 63.80428788395156,
+                "slow": 61.70879081773848,
+                "slow_bag": 60.482103587688115
+              },
+              "mean_forward_rmse": {
+                "base": 95.77642752648454,
+                "base_bag": 92.56040865488582,
+                "slow": 91.14060217561715,
+                "slow_bag": 89.69957175955044
+              },
+              "n_bags": 6,
+              "nonfinite_replaced": 0,
+              "note": "same two forward 61-day training holdouts as idea-ae78bf; candidates: baseline HGB, slower/more regularized HGB, and date-bootstrap bags (6 bags, whole-date resampling via sample_weight multiplicity) of each; squared error throughout; selection by mean forward RMSE, ties by branch order; evaluation covariates used only for final prediction; no evaluation labels",
+              "pred_summary": {
+                "max": 764.3043228094958,
+                "mean": 279.1176416143062,
+                "min": 0.0
+              },
+              "selected_branch": "slow_bag",
+              "train_day_range": [
+                0.0,
+                485.0
+              ],
+              "train_rows": 11539
+            },
+            "group_mae": 46.24049976024216,
+            "groups": 61,
+            "kind": "method",
+            "loss": 68.5788407827095,
+            "mae": 46.24049976024216,
+            "process_cpu_seconds": 40.298712968,
+            "rows": 1464,
+            "worker_seconds": 40.41208585910499
+          },
+          "score": -68.5788407827095,
+          "seconds": null,
+          "status": "ok"
+        }
+      ],
+      "supported": true
+    }
+  ],
+  "termination": "budget",
+  "stop_reason": null,
+  "metrics": {
+    "supported": true,
+    "best_score": -59.976405377488454,
+    "quality_gain": 0.000283554153465568,
+    "calls": 6,
+    "rounds": 6,
+    "cost": null,
+    "parallel_seconds_estimate": null
+  }
+}
