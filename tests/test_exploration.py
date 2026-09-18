@@ -21,6 +21,27 @@ def executor(contexts):
     return {c["action"]["id"]: outcome(c["action"]["step"] + 1) for c in contexts}
 
 
+def test_default_reaches_late_breakthrough_after_plateau(tmp_path):
+    def late(contexts):
+        return {c["action"]["id"]: outcome(9 if c["action"]["step"] == 4 else 0)
+                for c in contexts}
+    declaration = spec(branches=1, depth=6, calls=6)
+    trace = run_online(declaration, execute_batch=late, output=tmp_path / "default")
+    assert trace["metrics"]["best_score"] == 9
+    assert trace["metrics"]["calls"] == 6
+    assert replay(trace, Portfolio())["metrics"] == trace["metrics"]
+    early = run_online(declaration, Portfolio(stop_on_plateau=True), late,
+                       tmp_path / "explicit-early-stop")
+    assert early["termination"] == "policy_stop"
+    assert early["metrics"]["best_score"] == 0
+
+
+def test_default_still_requires_explicit_executor_before_creating_output(tmp_path):
+    with pytest.raises(ValueError, match="execute_batch"):
+        run_online(spec(), output=tmp_path / "missing-executor")
+    assert not (tmp_path / "missing-executor").exists()
+
+
 def test_online_and_replay_have_identical_decisions_and_resource_accounting(tmp_path):
     trace = run_online(spec(), ParallelRefine(), executor, tmp_path / "online")
     assert validate_trace(trace) == trace

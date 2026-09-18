@@ -26,18 +26,21 @@ promising continuations. The patience parameters count evidence, not tokens or
 monetary cost. They are fixed for a rollout and must be validated across worlds.
 """
 
-    def __init__(self, min_valid=2, patience=2, repair_patience=2):
+    def __init__(self, min_valid=2, patience=2, repair_patience=2, *, stop_on_plateau=False):
         for value in (min_valid, patience, repair_patience):
             if type(value) is not int or value < 1:
                 raise ValueError("portfolio patience must be positive integers")
         self.min_valid = min_valid
         self.patience = patience
         self.repair_patience = repair_patience
+        if type(stop_on_plateau) is not bool:
+            raise ValueError("stop_on_plateau must be boolean")
+        self.stop_on_plateau = stop_on_plateau
 
     def decide(self, view):
         scale = view["score_scale"]
         baseline = view["root"]["score"]
-        roots, repairs, normal = [], [], []
+        roots, repairs, normal, dormant = [], [], [], []
         closed = 0
         for action in view["legal"]:
             path = [n for n in view["observed"] if n["branch"] == action["branch"]]
@@ -75,6 +78,7 @@ monetary cost. They are fixed for a rollout and must be validated across worlds.
                 normal.append((key, action))
             else:
                 closed += 1
+                dormant.append((key, action))
         normal.sort(key=lambda pair: pair[0])
         repairs.sort(key=lambda pair: pair[0])
         slots = min(view["workers"], view["remaining_calls"])
@@ -92,6 +96,14 @@ monetary cost. They are fixed for a rollout and must be validated across worlds.
             remaining = [a for _, a in normal] + roots
             for action in remaining:
                 if len(chosen) < slots and action not in chosen:
+                    chosen.append(action)
+        # A short plateau does not establish that a research path is exhausted.
+        # Spend remaining authorized attempts on underexplored dormant paths;
+        # blocked paths and exhausted repair episodes stay closed.
+        if not self.stop_on_plateau:
+            for _, action in sorted(dormant, key=lambda pair: (
+                    pair[1]["step"], pair[0])):
+                if len(chosen) < slots:
                     chosen.append(action)
         return {"actions": [a["id"] for a in chosen],
                 "reason": (f"Revealed trajectories: {len(normal)} promising/underexplored, "

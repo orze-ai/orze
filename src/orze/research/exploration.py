@@ -170,7 +170,7 @@ def _rollout(spec, policy, transition):
                             for r in rounds) if all(n["seconds"] is not None for n in nodes) else None)}}
 
 
-def run_online(spec, policy, execute_batch, output):
+def run_online(spec, policy=None, execute_batch=None, output=None):
     """Drive an existing executor and archive one non-resumable discovery world.
 
 The output directory is exclusively created BEFORE any execution. A failed or
@@ -178,7 +178,15 @@ interrupted directory cannot be reused. ``execute_batch(contexts)`` returns an
 id -> outcome mapping; it owns actual execution, model calls, and authorization.
 Exceptions stop this rollout without retrying. Each request is saved before
 dispatch, so an uncertain call is never silently counted as free or replayed.
+Omitting ``policy`` uses the Dream-RSI portfolio bootstrap. A replay-selected
+policy can replace it explicitly on the next rollout. The executor and output
+remain required; selecting a default never grants execution authority.
 """
+    if not callable(execute_batch) or output is None:
+        raise ValueError("execute_batch and a fresh output directory are required")
+    if policy is None:
+        from orze.research.exploration_policies import Portfolio
+        policy = Portfolio()
     spec = validate_spec(spec)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)

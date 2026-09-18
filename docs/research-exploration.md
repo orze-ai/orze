@@ -1,6 +1,7 @@
 # Executable exploration and historical replay
 
-`orze.research.exploration` is an opt-in library API. It separates **what the
+`orze.research.exploration` defaults to the Dream-RSI portfolio when the caller
+supplies an executor and omits the policy. It separates **what the
 researcher proposes** from **which research path receives the next attempt**.
 It does not start a daemon, import generated code, grant execution permission,
 or replace Orze's CPU/GPU executors.
@@ -9,7 +10,7 @@ or replace Orze's CPU/GPU executors.
 
 ```python
 from orze.research.exploration import run_online, replay
-from orze.research.exploration_policies import ParallelRefine
+from orze.research.exploration_policies import ParallelRefine  # explicit control
 
 spec = {
     "problem_id": "independent-problem-group-1",
@@ -19,7 +20,8 @@ spec = {
     "plan": {"branches": 4, "depth": 6, "calls": 24, "workers": 2},
 }
 # Supply your already authorized research/execution integration:
-# trace = run_online(spec, ParallelRefine(), execute_batch, fresh_output_directory)
+# trace = run_online(spec, execute_batch=execute_batch, output=fresh_output_directory)
+# control = run_online(spec, ParallelRefine(), execute_batch, another_fresh_directory)
 # alternative = replay(trace, my_policy, calls=12)
 ```
 
@@ -165,7 +167,24 @@ These are empirical means over the chosen problem set, not proof of the true
 expectation on all future tasks. Keep collecting fresh online evidence to assess
 and update the default; the report records `online_improvement_proven=False`.
 
-`ParallelRefine` is a simple reference. `Portfolio` is an experimental policy
-that uses successful anchors, patience and repair episodes. Historical Orze
-traces expose premature stopping failures in its default settings; it is not
-automatically enabled. See the [analysis and evidence](plans/2026-09-18-dream-rsi.zh-CN.md).
+`ParallelRefine` is the explicit reference. `Portfolio` is now the default
+bootstrap: successful anchors, trajectory evidence and repair episodes guide
+allocation. A short quality plateau deprioritizes a path but does not terminate
+remaining authorized exploration; dormant paths fill otherwise unused slots.
+Explicitly blocked paths and exhausted repair episodes remain closed.
+`Portfolio(stop_on_plateau=True)` reproduces the earlier early-stop option.
+The earlier historical counterexamples motivated this default change; see the
+[analysis and evidence](plans/2026-09-18-dream-rsi.zh-CN.md).
+
+Pro's `run_discovery(spec, execute_batch, output=...)` uses this bootstrap.
+Supplying `training`, `validation`, and a reviewed `develop` callback runs replay
+improvement first and directly executes its selected policy. It returns
+`(selected_policy, trace)` so a campaign carries its learned default forward.
+Every invocation requires a fresh output directory. These defaults apply to
+these executable exploration entry points; existing projects must supply their
+own branch-safe executor to use them. A legacy project with a single global
+research conversation is not silently treated as a valid branch replay world.
+
+The prospective [long comparison](plans/2026-09-18-dream-rsi-long.zh-CN.md)
+measures fresh outcomes. Enabling the new default is a user-directed deployment
+choice; average superiority remains an empirical question until that study ends.
