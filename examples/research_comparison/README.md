@@ -488,3 +488,31 @@ project rules. It uses the existing hypothesis field to connect competing
 explanations, contrasting predictions and the decision after an experiment.
 Its effect needs measurement on actual research trajectories; it is not a new
 mandatory response schema or a global research policy.
+
+## Returning findings from a fitted method
+
+`regression_experiment.py` lets a regression application retain computed findings
+alongside a method's predictions. With `report_findings=True`,
+`fit_predict(train, inputs, seed)` may return either a prediction vector or
+`{"prediction": vector, "findings": value}`. Findings have an 8192-byte JSON
+limit. They can expose fitted structure or training-only checks to the next
+research step without running a separate analysis. Prediction error is computed
+externally; method findings cannot use evaluation labels, which are excluded
+from `inputs`. These authored findings still require scientific scrutiny.
+
+The example supports a separate `analyze(data, history, seed)` action and reports
+row RMSE, row MAE, and equal-weight mean group MAE. The application supplies the
+data, grouping, source review, runtime limits, and final confirmation. Optional
+findings extend the method result; they do not impose a new research phase.
+
+In the materials example, each labeled split contains `X`, `C`, `y`, `groups`,
+`row_ids`, `feature_names`, and `elements`. A method receives only `X`, `C`,
+`feature_names`, and `elements` for the evaluation pool. The saved prediction
+artifact is `{"row_ids": [...], "prediction": [...]}`; applications should state
+this shape when exposing prediction history to analysis code.
+
+Keep the actual parent program available when checking a component's effect.
+A score and a prose description cannot establish that the next program kept
+all other features, transformations and fitting settings fixed. Computed
+findings also remain claims to inspect: a correctly calculated number can have
+an incorrect name or interpretation.
