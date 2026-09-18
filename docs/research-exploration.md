@@ -142,12 +142,28 @@ the same dataset/split are related, not independent held-out problems. Freeze
 the validation set for an evaluation round; repeatedly developing against its
 published results turns it into training and requires fresh validation.
 
-Selection includes the incumbent. A supported candidate must strictly improve
-mean normalized training quality. The one training winner then faces the
-incumbent on validation, with no per-world quality regressions allowed. Ties,
-unsupported replay or regressions retain the incumbent. Lower costs alone do
-not promote a policy. All selected policies still need fresh online evaluation:
-the report deliberately records `online_improvement_proven=False`.
+Selection includes the incumbent and compares all frozen, training-supported
+candidates on validation after development has finished. No validation feedback
+enters another revision in that call. The supported candidate with the highest
+mean normalized validation quality becomes the next default; ties retain the
+incumbent (then the earliest candidate). A training runner-up can win validation.
+
+First average repetitions within each `problem_id`, then weight problems equally.
+This weighting is fixed before selection; running one problem more often cannot
+increase its influence. Individual problem regressions are recorded and allowed
+when the overall mean improves. Missing replay support is unknown evidence, so
+it cannot earn a score or be dropped to inflate the mean. Lower costs alone do
+not promote a policy.
+
+`selection.json` records `default_policy`, `promoted_to_default`, all validation
+candidate scores, and paired problem differences. The returned `selected` object
+is the default to use in the next rollout, as in the example above. The earlier
+`promoted_for_online_trial` field remains as a compatibility alias. This API does
+not rewrite an unrelated daemon configuration.
+
+These are empirical means over the chosen problem set, not proof of the true
+expectation on all future tasks. Keep collecting fresh online evidence to assess
+and update the default; the report records `online_improvement_proven=False`.
 
 `ParallelRefine` is a simple reference. `Portfolio` is an experimental policy
 that uses successful anchors, patience and repair episodes. Historical Orze
