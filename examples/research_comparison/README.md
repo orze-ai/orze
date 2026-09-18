@@ -444,3 +444,23 @@ application must permit diagnostic experiments and new method code, record
 predictions before results, and give the researcher feedback that can change
 its explanation or next experiment. Diagnostic value and final predictive
 quality are separate outcomes; neither is established by an eloquent rationale.
+
+## Open diagnostic experiments and new methods
+
+`open_experiment.py` supplies the computation for the gas-drift research
+application. An `analyze` action runs reviewed `analyze(data, history, seed)`
+code and returns findings without a model score. A `method` action runs reviewed
+`fit_predict(train, X_eval, batch_eval, seed)` code, then externally scores its
+predictions. It permits new representations, objectives and methods beyond a
+fixed estimator menu. Record competing explanations and predicted outcomes in
+the existing proposal rationale before execution; use the observed result to
+choose the next experiment.
+
+This example scores six-class gas recognition by equal-weight mean batch macro
+error and retains class coverage and confusion matrices. It is an application
+protocol. Analysis sees the declared early data; method code receives training
+data and one evaluation batch's features and batch IDs, without its labels,
+concentrations or row IDs. The native application owns code review, bound
+artifacts, resource limits and final confirmation. Syntax checks alone are not
+a sandbox. A valid diagnostic calculation does not establish its interpretation,
+and a novel method still needs independent confirmation.
