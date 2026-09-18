@@ -174,8 +174,7 @@ def test_complete_run_binds_actual_quality_usage_and_outer_clock(finished_campai
     assert record['supervision']['closure']['event'] == 'TREE_CLOSED'
 
 
-def test_duplicate_configuration_does_not_abort_remaining_research(finished_campaign):
-    from examples.research_comparison.scheduling_campaign import _verify_workflow
+def test_duplicate_configuration_is_rejected_without_reexecution(finished_campaign):
     root, plan, inputs, runtime, env, record, measured, trace, invalid = finished_campaign
     plan, inputs = copy.deepcopy(plan), copy.deepcopy(inputs)
     inputs['model']['model'] = 'offline-config-duplicate'
@@ -187,20 +186,17 @@ def test_duplicate_configuration_does_not_abort_remaining_research(finished_camp
     assert result['exit_code'] == 0, (output / 'stderr.log').read_text()
     captured = json.loads((output / 'capture.json').read_bytes())
     retained = captured['campaign']['retained_duplicates']
-    assert len(retained) == 1
+    assert retained == []
+    assert len(captured['campaign']['research']) == 2
+    repeated = captured['campaign']['research'][1]['outcome']
+    assert repeated['accepted_ids'] == []
+    assert repeated['reason'] == 'duplicate_proposal'
+    assert repeated['rejection_reasons'] == {'duplicate_proposal': 1}
     assert len(captured['campaign']['consumption']) == 1
     task = next(t for t in plan['tasks'] if t['id'] == record['task_id'])
     checked = campaign.verify(result, task, record['arm'], plan=plan)
     assert checked['quality']['confirmed'] == (not invalid)
     assert checked['metrics']['native_actions'] == 3
-    changed = copy.deepcopy(captured)
-    changed['campaign']['retained_duplicates'][0]['duplicate_of'] = 'idea-missing'
-    with pytest.raises(ValueError, match='retained duplicate'):
-        _verify_workflow(changed, result['request'])
-    changed = copy.deepcopy(captured)
-    changed['campaign']['retained_duplicates'] = []
-    with pytest.raises(ValueError, match='unique candidate'):
-        _verify_workflow(changed, result['request'])
 
 
 def test_existing_or_changed_input_does_not_start_another_run(finished_campaign):

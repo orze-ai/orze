@@ -1,0 +1,742 @@
+{
+  "historical_packets": [
+    {
+      "packet": {
+        "meaning": "recorded_source_and_execution; findings_require_interpretation",
+        "omitted_task_ids": [],
+        "records": [
+          {
+            "action": {
+              "kind": "method",
+              "source": "import json\nimport numpy as np\n\nORDER = [\"row_median\", \"row_mean\", \"row_huber\", \"patient_mean_of_means\", \"patient_median_of_medians\", \"mid_row_mean_median\"]\n\n\ndef _huber_center(y, iters=100):\n    y = np.asarray(y, dtype=float)\n    m = float(np.median(y))\n    mad = float(np.median(np.abs(y - m)))\n    s = 1.4826 * mad\n    if (not np.isfinite(s)) or s <= 1e-9:\n        return m\n    d = 1.345 * s\n    for _ in range(iters):\n        r = y - m\n        w = np.ones_like(r)\n        big = np.abs(r) > d\n        if np.any(big):\n            w[big] = d / np.abs(r[big])\n        sw = float(np.sum(w))\n        if sw <= 0.0:\n            return float(np.median(y))\n        new = float(np.sum(w * y) / sw)\n        if abs(new - m) < 1e-11:\n            return new\n        m = new\n    return m\n\n\ndef _constants(y, g):\n    y = np.asarray(y, dtype=float)\n    g = np.asarray(g)\n    uq = np.unique(g)\n    pmean = np.array([float(np.mean(y[g == u])) for u in uq], dtype=float)\n    pmed = np.array([float(np.median(y[g == u])) for u in uq], dtype=float)\n    c = {}\n    c[\"row_mean\"] = float(np.mean(y))\n    c[\"row_median\"] = float(np.median(y))\n    c[\"row_huber\"] = float(_huber_center(y))\n    c[\"patient_mean_of_means\"] = float(np.mean(pmean))\n    c[\"patient_median_of_medians\"] = float(np.median(pmed))\n    c[\"mid_row_mean_median\"] = 0.5 * (c[\"row_mean\"] + c[\"row_median\"])\n    return c\n\n\ndef _lopo(y, g):\n    y = np.asarray(y, dtype=float)\n    g = np.asarray(g)\n    uq = np.unique(g)\n    se = dict((k, 0.0) for k in ORDER)\n    pm = dict((k, []) for k in ORDER)\n    n = 0\n    for u in uq:\n        te = (g == u)\n        tr = ~te\n        if int(np.sum(tr)) < 2 or int(np.sum(te)) < 1:\n            continue\n        c = _constants(y[tr], g[tr])\n        yt = y[te]\n        n += int(yt.size)\n        for k in ORDER:\n            r = yt - c[k]\n            se[k] += float(np.sum(r * r))\n            pm[k].append(float(np.mean(np.abs(r))))\n    grid = {}\n    for k in ORDER:\n        if n > 0 and len(pm[k]) > 0:\n            grid[k] = [round(float(np.sqrt(se[k] / n)), 4), round(float(np.mean(pm[k])), 4)]\n    return grid, int(uq.size), int(n)\n\n\ndef fit_predict(train, inputs, seed=0):\n    fallbacks = []\n    y = np.asarray(train[\"y\"], dtype=float)\n    if train.get(\"groups\") is None:\n        g = np.zeros(y.size, dtype=int)\n        fallbacks.append(\"groups_missing_single_pseudo_patient\")\n    else:\n        g = np.asarray(train[\"groups\"])\n    n_eval = len(inputs[\"X\"])\n    grid = {}\n    n_pat = 0\n    n_lopo = 0\n    chosen = \"row_median\"\n    rejected = []\n    try:\n        grid, n_pat, n_lopo = _lopo(y, g)\n        if \"row_median\" not in grid:\n            raise ValueError(\"lopo_grid_incomplete\")\n        ref_mae = grid[\"row_median\"][1]\n        best = None\n        for k in ORDER:\n            if k not in grid:\n                continue\n            if grid[k][1] > 1.03 * ref_mae:\n                rejected.append(k)\n                continue\n            if best is None or grid[k][0] < grid[best][0] - 1e-12:\n                best = k\n        if best is None:\n            fallbacks.append(\"all_candidates_rejected_by_equal_patient_mae_guard\")\n            chosen = \"row_median\"\n        else:\n            chosen = best\n    except Exception as exc:\n        fallbacks.append(\"lopo_selection_failed_\" + type(exc).__name__)\n        chosen = \"row_median\"\n    try:\n        consts = _constants(y, g)\n    except Exception as exc:\n        fallbacks.append(\"full_constants_failed_\" + type(exc).__name__)\n        consts = {\"row_median\": float(np.median(y))}\n        chosen = \"row_median\"\n    value = float(consts.get(chosen, float(np.median(y))))\n    if not np.isfinite(value):\n        fallbacks.append(\"non_finite_constant_replaced_by_row_median\")\n        value = float(np.median(y))\n        chosen = \"row_median\"\n    pred = [value] * n_eval\n    gain = None\n    try:\n        if chosen in grid and \"row_median\" in grid:\n            gain = round(100.0 * (grid[\"row_median\"][0] - grid[chosen][0]) / grid[\"row_median\"][0], 4)\n    except Exception:\n        gain = None\n    findings = {\n        \"question\": \"which constant central tendency of interpolated motor_UPDRS transfers to unseen patients, and does LOPO ordering among constants predict held-out-patient ordering\",\n        \"model_class\": \"constant_only_no_features_no_transduction\",\n        \"transductive_use\": \"none; unlabeled evaluation X is used only for its row count\",\n        \"selection_rule\": \"leave-one-training-patient-out row RMSE over a fixed 6-candidate constant list; candidate rejected if its LOPO equal-patient MAE exceeds 1.03x the row-median constant\",\n        \"lopo_rmse_and_patient_mae_grid\": grid,\n        \"lopo_patients\": n_pat,\n        \"lopo_scored_rows\": n_lopo,\n        \"candidate_constants_on_full_train\": dict((k, round(float(v), 4)) for k, v in consts.items()),\n        \"chosen_constant_name\": chosen,\n        \"chosen_constant_value\": round(value, 4),\n        \"rejected_by_patient_mae_guard\": rejected,\n        \"lopo_relative_rmse_gain_vs_row_median_pct\": gain,\n        \"prediction_spread\": [round(value, 4), round(value, 4)],\n        \"eval_rows\": int(n_eval),\n        \"fallbacks_used\": fallbacks,\n        \"caveat\": \"labels are linearly interpolated clinician ratings; these constants summarise that interpolated label distribution and carry no voice information. A LOPO advantage over 28 training patients need not transfer to 7 held-out patients, and the development/confirmation groups are small patient-level samples.\"\n    }\n    try:\n        json.dumps(findings)\n    except Exception:\n        findings = {\"chosen_constant_name\": chosen, \"chosen_constant_value\": round(value, 4), \"fallbacks_used\": fallbacks + [\"findings_not_json_serialisable\"]}\n    return {\"prediction\": pred, \"findings\": findings}\n"
+            },
+            "action_id": "9ea043160f58398a1d7089ed6ea8780e68309019339117807e7ec28939ba04a0",
+            "facts": {
+              "error": "private/reflection and I/O attributes unsupported",
+              "error_type": "ValueError",
+              "kind": "method",
+              "process_cpu_seconds": 0.004000458999999998,
+              "worker_seconds": 0.0036982204765081406
+            },
+            "roles": [
+              "latest_action"
+            ],
+            "task_id": "idea-4684d7",
+            "valid": false
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "import json\nimport math\nimport numpy as np\n\n\ndef find_col(names, key):\n    for i in range(len(names)):\n        if names[i] == key:\n            return i\n    return -1\n\n\ndef group_index(keys):\n    order = []\n    table = {}\n    for i in range(len(keys)):\n        k = keys[i]\n        if k not in table:\n            table[k] = []\n            order.append(k)\n        table[k].append(i)\n    return order, table\n\n\ndef level_set(y, order, table):\n    pm = []\n    for k in order:\n        ii = np.array(table[k], dtype=np.int64)\n        pm.append(float(np.mean(y[ii])))\n    pma = np.array(pm, dtype=float)\n    return {\n        \"row_mean\": float(np.mean(y)),\n        \"row_median\": float(np.median(y)),\n        \"patient_mean\": float(np.mean(pma)),\n        \"patient_median\": float(np.median(pma)),\n    }\n\n\ndef pooled_slope(t, y, order, table):\n    num = 0.0\n    den = 0.0\n    slopes = []\n    for k in order:\n        ii = np.array(table[k], dtype=np.int64)\n        if ii.shape[0] < 4:\n            continue\n        tt = t[ii]\n        tc = tt - float(np.mean(tt))\n        ss = float(np.sum(tc * tc))\n        if ss <= 1e-9:\n            continue\n        yy = y[ii]\n        b = float(np.sum(tc * (yy - float(np.mean(yy)))) / ss)\n        slopes.append(b)\n        num += ss * b\n        den += ss\n    if den <= 1e-12:\n        return 0.0, slopes\n    return num / den, slopes\n\n\ndef fit_predict(train, inputs, seed):\n    notes = []\n    fn = list(train[\"feature_names\"])\n    Xtr = np.asarray(train[\"X\"], dtype=float)\n    ytr = np.asarray(train[\"y\"], dtype=float)\n    gtr = [str(v) for v in train[\"groups\"]]\n    it = find_col(fn, \"test_time\")\n    if it < 0:\n        notes.append(\"fallback: no test_time column in train; time term disabled\")\n        ttr = np.zeros(Xtr.shape[0], dtype=float)\n    else:\n        ttr = Xtr[:, it]\n    order, table = group_index(gtr)\n    lv_keys = [\"row_mean\", \"row_median\", \"patient_mean\", \"patient_median\"]\n    lam_grid = [0.0, 0.25, 0.5, 0.75, 1.0]\n    sse = {}\n    cnt = {}\n    pmae = {}\n    for lk in lv_keys:\n        for lam in lam_grid:\n            sse[(lk, lam)] = 0.0\n            cnt[(lk, lam)] = 0\n            pmae[(lk, lam)] = []\n    for p in order:\n        rest = []\n        for k in order:\n            if k != p:\n                rest.extend(table[k])\n        ridx = np.array(rest, dtype=np.int64)\n        yo = ytr[ridx]\n        to = ttr[ridx]\n        go = [gtr[int(j)] for j in ridx]\n        oo, ot = group_index(go)\n        lvo = level_set(yo, oo, ot)\n        bo, tmp = pooled_slope(to, yo, oo, ot)\n        hi = np.array(table[p], dtype=np.int64)\n        yh = ytr[hi]\n        tc = ttr[hi] - float(np.mean(ttr[hi]))\n        for lk in lv_keys:\n            for lam in lam_grid:\n                err = (lvo[lk] + lam * bo * tc) - yh\n                sse[(lk, lam)] += float(np.sum(err * err))\n                cnt[(lk, lam)] += int(hi.shape[0])\n                pmae[(lk, lam)].append(float(np.mean(np.abs(err))))\n    lopo = {}\n    for lk in lv_keys:\n        for lam in lam_grid:\n            n = max(cnt[(lk, lam)], 1)\n            lopo[(lk, lam)] = (\n                math.sqrt(sse[(lk, lam)] / n),\n                float(np.mean(np.array(pmae[(lk, lam)], dtype=float))),\n            )\n    base = lopo[(\"row_median\", 0.0)]\n    best = (\"row_median\", 0.0)\n    for lk in lv_keys:\n        for lam in lam_grid:\n            cand = lopo[(lk, lam)]\n            if cand[1] > 1.03 * base[1]:\n                continue\n            if cand[0] < lopo[best][0] - 1e-12:\n                best = (lk, lam)\n    lv = level_set(ytr, order, table)\n    bfull, slopes = pooled_slope(ttr, ytr, order, table)\n    level = lv[best[0]]\n    lam = best[1]\n    Xe = np.asarray(inputs[\"X\"], dtype=float)\n    fne = list(inputs[\"feature_names\"])\n    iae = find_col(fne, \"age\")\n    ise = find_col(fne, \"sex\")\n    ite = find_col(fne, \"test_time\")\n    nrow = Xe.shape[0]\n    if ite < 0:\n        notes.append(\"fallback: no test_time in inputs; constant prediction used\")\n        te = np.zeros(nrow, dtype=float)\n        lam = 0.0\n    else:\n        te = Xe[:, ite]\n    center = np.full(nrow, float(np.mean(te)), dtype=float)\n    sizes = []\n    if lam > 0.0 and iae >= 0 and ise >= 0:\n        keys = []\n        for i in range(nrow):\n            keys.append((round(float(Xe[i, iae]), 6), round(float(Xe[i, ise]), 6)))\n        eo, et = group_index(keys)\n        small = 0\n        for k in eo:\n            ii = np.array(et[k], dtype=np.int64)\n            sizes.append(int(ii.shape[0]))\n            if ii.shape[0] >= 20:\n                center[ii] = float(np.mean(te[ii]))\n            else:\n                small += 1\n        if len(eo) < 2:\n            notes.append(\"fallback: transductive (age,sex) grouping gave fewer than 2 clusters; global centering used\")\n        if small > 0:\n            notes.append(\"fallback: \" + str(small) + \" (age,sex) clusters had fewer than 20 rows; those rows used global centering\")\n    elif lam > 0.0:\n        notes.append(\"fallback: age or sex missing in inputs; global centering used\")\n    pred = level + lam * bfull * (te - center)\n    lo = float(np.min(ytr)) - 10.0\n    hi2 = float(np.max(ytr)) + 10.0\n    pred = np.clip(np.nan_to_num(pred, nan=level, posinf=hi2, neginf=lo), lo, hi2)\n    sl = np.array(slopes, dtype=float)\n    grid = {}\n    for lk in lv_keys:\n        for lam2 in lam_grid:\n            grid[lk + \"|\" + str(lam2)] = [round(lopo[(lk, lam2)][0], 4), round(lopo[(lk, lam2)][1], 4)]\n    findings = {\n        \"question\": \"does within-patient temporal drift of interpolated motor_UPDRS transfer to unseen patients via transductive (age,sex) centering of test_time\",\n        \"chosen_level_estimator\": best[0],\n        \"chosen_lambda\": lam,\n        \"pooled_slope_per_day\": round(float(bfull), 6),\n        \"n_patient_slopes\": int(sl.shape[0]),\n        \"slope_positive_fraction\": (round(float(np.mean(sl > 0.0)), 4) if sl.shape[0] > 0 else None),\n        \"slope_mean\": (round(float(np.mean(sl)), 6) if sl.shape[0] > 0 else None),\n        \"slope_sd\": (round(float(np.std(sl)), 6) if sl.shape[0] > 0 else None),\n        \"lopo_rmse_and_patient_mae_grid\": grid,\n        \"lopo_constant_row_median_reference\": [round(base[0], 4), round(base[1], 4)],\n        \"lopo_relative_rmse_gain_pct\": round(100.0 * (base[0] - lopo[best][0]) / max(base[0], 1e-9), 4),\n        \"eval_cluster_sizes\": sizes,\n        \"eval_cluster_count\": len(sizes),\n        \"prediction_spread\": [round(float(np.min(pred)), 4), round(float(np.max(pred)), 4)],\n        \"fallbacks_used\": notes,\n        \"selection_rule\": \"leave-one-training-patient-out row RMSE, candidates rejected if LOPO equal-patient MAE exceeds 1.03x constant row-median reference\",\n        \"transductive_use\": \"unlabeled evaluation rows grouped by exact (age,sex) solely to center test_time within a presumed patient; no evaluation labels, groups or row ids used\",\n        \"caveat\": \"labels are linearly interpolated clinician ratings, so a fitted within-patient slope reflects interpolation between visits and is not an independent clinical measurement\"\n    }\n    return {\"prediction\": [float(v) for v in pred], \"findings\": findings}\n"
+            },
+            "action_id": "8063677f77f3471988af14de44f3cf89af47bb9758d32cca738f1730c4d7ea9f",
+            "facts": {
+              "findings": {
+                "caveat": "labels are linearly interpolated clinician ratings, so a fitted within-patient slope reflects interpolation between visits and is not an independent clinical measurement",
+                "chosen_lambda": 0.0,
+                "chosen_level_estimator": "row_mean",
+                "eval_cluster_count": 0,
+                "eval_cluster_sizes": [],
+                "fallbacks_used": [],
+                "lopo_constant_row_median_reference": [
+                  7.8387,
+                  6.8661
+                ],
+                "lopo_relative_rmse_gain_pct": 1.6137,
+                "lopo_rmse_and_patient_mae_grid": {
+                  "patient_mean|0.0": [
+                    7.7192,
+                    6.7032
+                  ],
+                  "patient_mean|0.25": [
+                    7.7201,
+                    6.7033
+                  ],
+                  "patient_mean|0.5": [
+                    7.7218,
+                    6.7039
+                  ],
+                  "patient_mean|0.75": [
+                    7.7242,
+                    6.7056
+                  ],
+                  "patient_mean|1.0": [
+                    7.7274,
+                    6.7073
+                  ],
+                  "patient_median|0.0": [
+                    7.8929,
+                    6.8348
+                  ],
+                  "patient_median|0.25": [
+                    7.8938,
+                    6.8345
+                  ],
+                  "patient_median|0.5": [
+                    7.8955,
+                    6.8353
+                  ],
+                  "patient_median|0.75": [
+                    7.8978,
+                    6.8365
+                  ],
+                  "patient_median|1.0": [
+                    7.9009,
+                    6.8383
+                  ],
+                  "row_mean|0.0": [
+                    7.7122,
+                    6.7122
+                  ],
+                  "row_mean|0.25": [
+                    7.7132,
+                    6.7128
+                  ],
+                  "row_mean|0.5": [
+                    7.7149,
+                    6.7134
+                  ],
+                  "row_mean|0.75": [
+                    7.7173,
+                    6.7139
+                  ],
+                  "row_mean|1.0": [
+                    7.7204,
+                    6.7151
+                  ],
+                  "row_median|0.0": [
+                    7.8387,
+                    6.8661
+                  ],
+                  "row_median|0.25": [
+                    7.8397,
+                    6.8666
+                  ],
+                  "row_median|0.5": [
+                    7.8414,
+                    6.8676
+                  ],
+                  "row_median|0.75": [
+                    7.8437,
+                    6.8696
+                  ],
+                  "row_median|1.0": [
+                    7.8468,
+                    6.8716
+                  ]
+                },
+                "n_patient_slopes": 28,
+                "pooled_slope_per_day": 0.005452,
+                "prediction_spread": [
+                  20.6191,
+                  20.6191
+                ],
+                "question": "does within-patient temporal drift of interpolated motor_UPDRS transfer to unseen patients via transductive (age,sex) centering of test_time",
+                "selection_rule": "leave-one-training-patient-out row RMSE, candidates rejected if LOPO equal-patient MAE exceeds 1.03x constant row-median reference",
+                "slope_mean": 0.005629,
+                "slope_positive_fraction": 0.6071,
+                "slope_sd": 0.033234,
+                "transductive_use": "unlabeled evaluation rows grouped by exact (age,sex) solely to center test_time within a presumed patient; no evaluation labels, groups or row ids used"
+              },
+              "group_mae": 7.542841684749091,
+              "groups": 7,
+              "kind": "method",
+              "loss": 8.475658049377897,
+              "mae": 7.562962744620813,
+              "process_cpu_seconds": 0.127458572,
+              "rows": 945,
+              "worker_seconds": 0.12583369575440884
+            },
+            "roles": [
+              "latest_valid_method"
+            ],
+            "task_id": "idea-e196dc",
+            "valid": true
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\ndef fit_predict(train, inputs, seed):\n    return [float(np.median(train['y']))]*len(inputs['X'])\n"
+            },
+            "action_id": "b09550c0112a2214dac772c8176445d3932fb70a53d839d2e26bc61dcc2fbca6",
+            "facts": {
+              "group_mae": 7.4265356274492484,
+              "groups": 7,
+              "kind": "method",
+              "loss": 8.379389123125975,
+              "mae": 7.453543068783069,
+              "process_cpu_seconds": 0.04750650999999999,
+              "rows": 945,
+              "worker_seconds": 0.047429218888282776
+            },
+            "roles": [
+              "development_leader"
+            ],
+            "task_id": "idea-baseline-0",
+            "valid": true
+          }
+        ]
+      },
+      "project": "opus-A"
+    },
+    {
+      "packet": {
+        "meaning": "recorded_source_and_execution; findings_require_interpretation",
+        "omitted_task_ids": [],
+        "records": [
+          {
+            "action": {
+              "kind": "method",
+              "source": "import json\nimport math\nimport numpy as np\nfrom scipy import stats\n\n\ndef _patient_table(X, y, groups, fn):\n    X = np.asarray(X, dtype=float)\n    y = np.asarray(y, dtype=float)\n    g = np.asarray(groups)\n    ia = fn.index('age')\n    isx = fn.index('sex')\n    ids = list(dict.fromkeys(g.tolist()))\n    A = np.array([X[g == p, ia].mean() for p in ids])\n    S = np.array([X[g == p, isx].mean() for p in ids])\n    M = np.array([y[g == p].mean() for p in ids])\n    Y = [y[g == p] for p in ids]\n    return ids, A, S, M, Y\n\n\ndef _ridge(F, t, alpha):\n    mu = float(t.mean())\n    p = F.shape[1]\n    w = np.linalg.solve(F.T @ F + alpha * np.eye(p), F.T @ (t - mu))\n    return mu, w\n\n\ndef _lopo(F, M, Y, alpha):\n    n = len(M)\n    sse = 0.0\n    nrow = 0\n    pmae = []\n    preds = []\n    for k in range(n):\n        tr = np.ones(n, dtype=bool)\n        tr[k] = False\n        if F.shape[1] > 0:\n            mean_ = F[tr].mean(0)\n            sd_ = F[tr].std(0)\n            sd_ = np.where(sd_ > 0, sd_, 1.0)\n            Fz = (F - mean_) / sd_\n            mu, w = _ridge(Fz[tr], M[tr], alpha)\n            pred = mu + float(Fz[k] @ w)\n        else:\n            pred = float(M[tr].mean())\n        preds.append(pred)\n        r = pred - Y[k]\n        sse += float((r ** 2).sum())\n        nrow += len(Y[k])\n        pmae.append(float(np.abs(r).mean()))\n    return {'row_rmse': round(math.sqrt(sse / nrow), 4), 'equal_patient_mae': round(float(np.mean(pmae)), 4)}, np.array(preds)\n\n\ndef _perm_p(a, b, rng, nperm=2000):\n    obs = stats.spearmanr(a, b).correlation\n    if not np.isfinite(obs):\n        return None, None\n    cnt = 0\n    for _ in range(nperm):\n        r = stats.spearmanr(a, rng.permutation(b)).correlation\n        if np.isfinite(r) and abs(r) >= abs(obs):\n            cnt += 1\n    return round(float(obs), 4), round((cnt + 1) / (nperm + 1), 4)\n\n\ndef fit_predict(train, inputs, seed=0):\n    findings = {'fallback_used': False, 'fallbacks': [],\n                'method': 'constant (mean of train patient means) + patient-level ridge on standardized age fitted on 28 patient means; alpha by 28-fold LOPO row RMSE; no voice features, no test_time term, no transductive use of inputs; sex variants are LOPO diagnostics only, not deployed'}\n    rng = np.random.RandomState(int(seed) if seed is not None else 0)\n    fn = list(train['feature_names'])\n    ids, A, S, M, Y = _patient_table(train['X'], train['y'], train['groups'], fn)\n    ytr = np.asarray(train['y'], dtype=float)\n    const = float(M.mean())\n    alphas = [0.0, 1.0, 3.0, 10.0, 30.0, 100.0]\n    variants = {'age': np.column_stack([A]), 'sex': np.column_stack([S]), 'age+sex': np.column_stack([A, S])}\n    lopo = {}\n    lopo['const'], _ = _lopo(np.zeros((len(M), 0)), M, Y, 0.0)\n    best = None\n    for name, F in variants.items():\n        for al in alphas:\n            res, _ = _lopo(F, M, Y, al)\n            lopo[name + '_alpha' + ('%g' % al)] = res\n            if name == 'age' and (best is None or res['row_rmse'] < best[1]['row_rmse']):\n                best = (al, res)\n    alpha_sel = float(best[0])\n    F = variants['age']\n    mean_ = F.mean(0)\n    sd_ = F.std(0)\n    sd_ = np.where(sd_ > 0, sd_, 1.0)\n    mu, w = _ridge((F - mean_) / sd_, M, alpha_sel)\n    Xe = np.asarray(inputs['X'], dtype=float)\n    ia = fn.index('age')\n    Fe = (Xe[:, [ia]] - mean_) / sd_\n    pred = mu + Fe @ w\n    lo, hi = float(ytr.min()), float(ytr.max())\n    nclip = int(((pred < lo) | (pred > hi)).sum())\n    pred = np.clip(pred, lo, hi)\n    if not np.all(np.isfinite(pred)):\n        findings['fallback_used'] = True\n        findings['fallbacks'].append('non-finite predictions replaced by train constant')\n        pred = np.where(np.isfinite(pred), pred, const)\n    sp_age, p_age = _perm_p(A, M, rng)\n    sp_sex, p_sex = _perm_p(S, M, rng)\n    findings.update({\n        'n_train_patients': int(len(ids)),\n        'constant_mean_of_patient_means': round(const, 4),\n        'intercept_mu': round(mu, 4),\n        'alpha_selected_by_lopo': alpha_sel,\n        'age_coef_per_sd': round(float(w[0]), 4),\n        'age_coef_per_year': round(float(w[0] / sd_[0]), 4),\n        'train_age_mean_sd': [round(float(mean_[0]), 3), round(float(sd_[0]), 3)],\n        'train_age_range': [float(A.min()), float(A.max())],\n        'eval_age_range': [float(Xe[:, ia].min()), float(Xe[:, ia].max())],\n        'eval_unique_age_values': int(len(np.unique(Xe[:, ia]))),\n        'patient_level_spearman_age_vs_mean_motor': sp_age,\n        'patient_level_perm_p_age': p_age,\n        'patient_level_spearman_sex_vs_mean_motor': sp_sex,\n        'patient_level_perm_p_sex': p_sex,\n        'patient_level_pearson_age': round(float(np.corrcoef(A, M)[0, 1]), 4),\n        'train_lopo_28': lopo,\n        'lopo_row_rmse_delta_age_minus_const': round(best[1]['row_rmse'] - lopo['const']['row_rmse'], 4),\n        'eval_pred_range': [round(float(pred.min()), 3), round(float(pred.max()), 3)],\n        'n_clipped_to_train_range': nclip,\n        'note': 'one-factor change vs the train-patient-mean constant: only a patient-level age term is added; dev labels are not used; sex/age+sex LOPO rows are diagnostics only'\n    })\n    return {'prediction': [float(v) for v in pred], 'findings': findings}\n"
+            },
+            "action_id": "6f9fbd4c017c8b14bdfd4872ac3b1701beb050bed8983b3e397449280b2261ac",
+            "facts": {
+              "findings": {
+                "age_coef_per_sd": 1.8655,
+                "age_coef_per_year": 0.1915,
+                "alpha_selected_by_lopo": 10.0,
+                "constant_mean_of_patient_means": 20.366,
+                "eval_age_range": [
+                  57.0,
+                  74.0
+                ],
+                "eval_pred_range": [
+                  19.025,
+                  22.281
+                ],
+                "eval_unique_age_values": 7,
+                "fallback_used": false,
+                "fallbacks": [],
+                "intercept_mu": 20.366,
+                "lopo_row_rmse_delta_age_minus_const": -0.171,
+                "method": "constant (mean of train patient means) + patient-level ridge on standardized age fitted on 28 patient means; alpha by 28-fold LOPO row RMSE; no voice features, no test_time term, no transductive use of inputs; sex variants are LOPO diagnostics only, not deployed",
+                "n_clipped_to_train_range": 0,
+                "n_train_patients": 28,
+                "note": "one-factor change vs the train-patient-mean constant: only a patient-level age term is added; dev labels are not used; sex/age+sex LOPO rows are diagnostics only",
+                "patient_level_pearson_age": 0.3496,
+                "patient_level_perm_p_age": 0.0695,
+                "patient_level_perm_p_sex": 0.7511,
+                "patient_level_spearman_age_vs_mean_motor": 0.3408,
+                "patient_level_spearman_sex_vs_mean_motor": -0.0685,
+                "train_age_mean_sd": [
+                  64.0,
+                  9.739
+                ],
+                "train_age_range": [
+                  36.0,
+                  85.0
+                ],
+                "train_lopo_28": {
+                  "age+sex_alpha0": {
+                    "equal_patient_mae": 6.8122,
+                    "row_rmse": 8.0162
+                  },
+                  "age+sex_alpha1": {
+                    "equal_patient_mae": 6.8,
+                    "row_rmse": 7.9809
+                  },
+                  "age+sex_alpha10": {
+                    "equal_patient_mae": 6.7452,
+                    "row_rmse": 7.8071
+                  },
+                  "age+sex_alpha100": {
+                    "equal_patient_mae": 6.7064,
+                    "row_rmse": 7.6886
+                  },
+                  "age+sex_alpha3": {
+                    "equal_patient_mae": 6.7804,
+                    "row_rmse": 7.9237
+                  },
+                  "age+sex_alpha30": {
+                    "equal_patient_mae": 6.7191,
+                    "row_rmse": 7.7102
+                  },
+                  "age_alpha0": {
+                    "equal_patient_mae": 6.4867,
+                    "row_rmse": 7.6081
+                  },
+                  "age_alpha1": {
+                    "equal_patient_mae": 6.4878,
+                    "row_rmse": 7.5964
+                  },
+                  "age_alpha10": {
+                    "equal_patient_mae": 6.517,
+                    "row_rmse": 7.5482
+                  },
+                  "age_alpha100": {
+                    "equal_patient_mae": 6.6413,
+                    "row_rmse": 7.6199
+                  },
+                  "age_alpha3": {
+                    "equal_patient_mae": 6.4928,
+                    "row_rmse": 7.5782
+                  },
+                  "age_alpha30": {
+                    "equal_patient_mae": 6.5739,
+                    "row_rmse": 7.5532
+                  },
+                  "const": {
+                    "equal_patient_mae": 6.7032,
+                    "row_rmse": 7.7192
+                  },
+                  "sex_alpha0": {
+                    "equal_patient_mae": 7.0148,
+                    "row_rmse": 8.06
+                  },
+                  "sex_alpha1": {
+                    "equal_patient_mae": 7.0035,
+                    "row_rmse": 8.0472
+                  },
+                  "sex_alpha10": {
+                    "equal_patient_mae": 6.9294,
+                    "row_rmse": 7.9643
+                  },
+                  "sex_alpha100": {
+                    "equal_patient_mae": 6.7683,
+                    "row_rmse": 7.7885
+                  },
+                  "sex_alpha3": {
+                    "equal_patient_mae": 6.9832,
+                    "row_rmse": 8.0243
+                  },
+                  "sex_alpha30": {
+                    "equal_patient_mae": 6.8493,
+                    "row_rmse": 7.876
+                  }
+                }
+              },
+              "group_mae": 7.696137227071452,
+              "groups": 7,
+              "kind": "method",
+              "loss": 8.55621215427536,
+              "mae": 7.700632095808013,
+              "process_cpu_seconds": 1.7237222269999999,
+              "rows": 945,
+              "worker_seconds": 1.7758480589836836
+            },
+            "roles": [
+              "latest_action",
+              "latest_valid_method"
+            ],
+            "task_id": "idea-039411",
+            "valid": true
+          },
+          {
+            "action": {
+              "kind": "method",
+              "source": "import numpy as np\nfrom sklearn.linear_model import Ridge\nfrom sklearn.model_selection import GroupKFold\n\nLOG_KEYS = ('jitter', 'shimmer', 'nhr')\n\ndef col_index(names):\n    idx = {}\n    for j, nm in enumerate(names):\n        idx[str(nm).lower()] = j\n    age = idx.get('age', 0)\n    sex = idx.get('sex', 1)\n    tt = idx.get('test_time', 2)\n    voice = [j for j in range(len(names)) if j not in (age, sex, tt)]\n    return age, sex, tt, voice\n\ndef transform_rows(X, names):\n    Z = np.array(X, dtype=float, copy=True)\n    for j, nm in enumerate(names):\n        low = str(nm).lower()\n        if any(k in low for k in LOG_KEYS):\n            Z[:, j] = np.log1p(np.clip(Z[:, j], 0.0, None))\n    return Z\n\ndef pseudo_keys(Z, age, sex):\n    return [(int(round(Z[i, age])), int(round(Z[i, sex]))) for i in range(Z.shape[0])]\n\ndef aggregate(Z, keys, age, sex, tt, voice):\n    order = {}\n    for i, k in enumerate(keys):\n        order.setdefault(k, []).append(i)\n    out = {}\n    for k in order:\n        r = np.array(order[k], dtype=int)\n        V = Z[r][:, voice]\n        m = V.mean(axis=0)\n        s = V.std(axis=0) if len(r) > 1 else np.zeros(len(voice))\n        out[k] = {'mean': m, 'std': s, 'age': float(Z[r, age].mean()), 'sex': float(Z[r, sex].mean()), 't': float(Z[r, tt].mean()), 'rows': r, 'n': int(len(r))}\n    return out\n\ndef build_matrix(aggs, order, spec):\n    rows = []\n    for k in order:\n        a = aggs[k]\n        parts = []\n        if 'demo' in spec:\n            parts.append(np.array([a['age'], a['sex']], dtype=float))\n        if 'mean' in spec:\n            parts.append(a['mean'])\n        if 'std' in spec:\n            parts.append(a['std'])\n        rows.append(np.concatenate(parts))\n    return np.vstack(rows)\n\ndef fit_agg_model(A, y, kind, alpha):\n    mu = A.mean(axis=0)\n    sd = A.std(axis=0)\n    sd = np.where(sd < 1e-12, 1.0, sd)\n    S = (A - mu) / sd\n    yy = np.asarray(y, dtype=float)\n    if kind == 'const':\n        c = float(yy.mean())\n        return lambda Q: np.full(Q.shape[0], c)\n    if kind == 'ridge':\n        m = Ridge(alpha=float(alpha)).fit(S, yy)\n        return lambda Q: m.predict((Q - mu) / sd)\n    if kind == 'knn':\n        k = int(alpha)\n        def pred(Q):\n            Qs = (Q - mu) / sd\n            D = ((Qs[:, None, :] - S[None, :, :]) ** 2).sum(axis=2)\n            nn = np.argsort(D, axis=1)[:, :k]\n            return yy[nn].mean(axis=1)\n        return pred\n    raise ValueError('unknown kind ' + str(kind))\n\ndef pooled_slope(Z, y, groups, tt):\n    num = 0.0\n    den = 0.0\n    order = {}\n    for i, g in enumerate(groups):\n        order.setdefault(g, []).append(i)\n    for g in order:\n        r = np.array(order[g], dtype=int)\n        if len(r) < 2:\n            continue\n        tc = Z[r, tt] - Z[r, tt].mean()\n        yc = y[r] - y[r].mean()\n        num += float((tc * yc).sum())\n        den += float((tc * tc).sum())\n    return num / den if den > 0 else 0.0\n\ndef fit_candidate(cand, Ztr, ytr, gtr, age, sex, tt, voice):\n    kind, alpha, spec, use_slope = cand\n    slope = pooled_slope(Ztr, ytr, list(gtr), tt) if use_slope else 0.0\n    if kind == 'rowridge':\n        mu = Ztr.mean(axis=0)\n        sd = Ztr.std(axis=0)\n        sd = np.where(sd < 1e-12, 1.0, sd)\n        m = Ridge(alpha=float(alpha)).fit((Ztr - mu) / sd, ytr)\n        return {'row': (m, mu, sd), 'slope': slope}\n    aggs = aggregate(Ztr, list(gtr), age, sex, tt, voice)\n    order = list(aggs.keys())\n    A = build_matrix(aggs, order, spec)\n    ymean = np.array([float(ytr[aggs[k]['rows']].mean()) for k in order])\n    f = fit_agg_model(A, ymean, kind, alpha)\n    return {'agg': f, 'spec': spec, 'slope': slope}\n\ndef predict_candidate(model, Zev, age, sex, tt, voice):\n    if 'row' in model:\n        m, mu, sd = model['row']\n        return m.predict((Zev - mu) / sd), 0, []\n    keys = pseudo_keys(Zev, age, sex)\n    aggs = aggregate(Zev, keys, age, sex, tt, voice)\n    order = list(aggs.keys())\n    A = build_matrix(aggs, order, model['spec'])\n    gp = model['agg'](A)\n    pred = np.zeros(Zev.shape[0])\n    for gi, k in enumerate(order):\n        a = aggs[k]\n        pred[a['rows']] = gp[gi] + model['slope'] * (Zev[a['rows'], tt] - a['t'])\n    return pred, len(order), [aggs[k]['n'] for k in order]\n\ndef fit_predict(train, inputs, seed):\n    names = list(train['feature_names'])\n    Xtr = np.asarray(train['X'], dtype=float)\n    ytr = np.asarray(train['y'], dtype=float)\n    gtr = np.asarray(train['groups'])\n    Xev = np.asarray(inputs['X'], dtype=float)\n    ymean_train = float(ytr.mean())\n    findings = {'method': 'patient-level aggregate voice representation (mean/std of log jitter/shimmer/NHR and raw other voice measures) trained on train patient means; unlabeled inputs pseudo-grouped by rounded (age, sex) key; optional pooled within-patient test_time slope; row-level ridge a1000 as contrast under identical folds', 'fallback_used_train_mean': False, 'error': None, 'transductive_use': 'yes: evaluation rows sharing a rounded (age, sex) key are pooled to compute voice aggregates and mean test_time; no labels, groups or row ids are used; all scaling, aggregation statistics and selection come from train rows only'}\n    pred = np.full(Xev.shape[0], ymean_train)\n    try:\n        age, sex, tt, voice = col_index(names)\n        Ztr = transform_rows(Xtr, names)\n        Zev = transform_rows(Xev, names)\n        cands = [\n            ('const', 0, 'mean', False), ('const', 0, 'mean', True),\n            ('ridge', 10, 'demo', False), ('ridge', 10, 'demo', True),\n            ('ridge', 100, 'mean', False), ('ridge', 100, 'mean', True),\n            ('ridge', 1000, 'mean', False), ('ridge', 1000, 'mean', True),\n            ('ridge', 100, 'demo+mean', False), ('ridge', 1000, 'demo+mean', False), ('ridge', 1000, 'demo+mean', True),\n            ('ridge', 1000, 'demo+mean+std', False), ('ridge', 1000, 'demo+mean+std', True),\n            ('knn', 5, 'mean', False), ('knn', 5, 'mean', True),\n            ('knn', 7, 'demo+mean', False),\n            ('rowridge', 1000, 'all', False),\n        ]\n        gkf = GroupKFold(n_splits=7)\n        results = []\n        for cand in cands:\n            kind, alpha, spec, use_slope = cand\n            name = kind + '_' + spec + '_a' + str(alpha) + ('_slope' if use_slope else '')\n            errs = []\n            gm = []\n            gr = []\n            npg = []\n            ok = True\n            for tri, tei in gkf.split(Ztr, ytr, gtr):\n                model = fit_candidate(cand, Ztr[tri], ytr[tri], gtr[tri], age, sex, tt, voice)\n                p, ng, sizes = predict_candidate(model, Ztr[tei], age, sex, tt, voice)\n                if not np.all(np.isfinite(p)):\n                    ok = False\n                    break\n                e = p - ytr[tei]\n                errs.append(e)\n                npg.append(int(ng))\n                gte = gtr[tei]\n                for g in list(dict.fromkeys(gte.tolist())):\n                    mask = gte == g\n                    gm.append(float(np.abs(e[mask]).mean()))\n                    gr.append(float(e[mask].mean()))\n            rec = {'name': name, 'ok': ok}\n            if ok:\n                E = np.concatenate(errs)\n                rec['row_rmse'] = round(float(np.sqrt((E ** 2).mean())), 4)\n                rec['row_mae'] = round(float(np.abs(E).mean()), 4)\n                rec['group_mae'] = round(float(np.mean(gm)), 4)\n                rec['group_bias_rmse'] = round(float(np.sqrt(np.mean(np.square(gr)))), 4)\n                rec['pseudo_groups_per_fold'] = npg\n            results.append(rec)\n        okres = [r for r in results if r['ok']]\n        best = min(okres, key=lambda r: r['row_rmse'])\n        bi = [r['name'] for r in results].index(best['name'])\n        cand = cands[bi]\n        model = fit_candidate(cand, Ztr, ytr, gtr, age, sex, tt, voice)\n        p, ng, sizes = predict_candidate(model, Zev, age, sex, tt, voice)\n        lo = float(ytr.min()) - 5.0\n        hi = float(ytr.max()) + 5.0\n        bad = ~np.isfinite(p)\n        p = np.where(bad, ymean_train, p)\n        p = np.clip(p, lo, hi)\n        pred = p\n        tk = pseudo_keys(Ztr, age, sex)\n        kmap = {}\n        for i, k in enumerate(tk):\n            kmap.setdefault(k, set()).add(str(gtr[i]))\n        findings.update({'chosen': best['name'], 'selection_rule': 'lowest 7-fold GroupKFold row RMSE on train patients, held-out folds pseudo-grouped by rounded (age,sex) exactly as evaluation inputs; ties earliest in candidate order', 'chosen_slope_per_test_time_unit': round(float(model['slope']), 6), 'candidates': results, 'n_train_patients': int(len(set(gtr.tolist()))), 'n_train_rows': int(Xtr.shape[0]), 'n_train_pseudo_keys': int(len(kmap)), 'n_train_keys_merging_multiple_patients': int(sum(1 for k in kmap if len(kmap[k]) > 1)), 'n_eval_rows': int(Xev.shape[0]), 'n_eval_pseudo_groups': int(ng), 'eval_pseudo_group_sizes': sorted([int(s) for s in sizes]), 'n_nonfinite_replaced': int(bad.sum()), 'clip_range': [round(lo, 3), round(hi, 3)], 'train_y_mean': round(ymean_train, 4), 'note': 'row RMSE in candidates is patient-held-out on train; no evaluation labels used; pseudo-groups can merge distinct patients with equal rounded age and sex'})\n    except Exception as e:\n        findings['fallback_used_train_mean'] = True\n        findings['error'] = str(e)[:500]\n        pred = np.full(Xev.shape[0], ymean_train)\n    return {'prediction': [float(v) for v in pred], 'findings': findings}\n"
+            },
+            "action_id": "f7ce99a872ccb05451f8138bca9b87136316a164a2006f78364e89dda247115a",
+            "facts": {
+              "findings": {
+                "candidates": [
+                  {
+                    "group_bias_rmse": 7.6863,
+                    "group_mae": 6.8891,
+                    "name": "const_mean_a0",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.7975,
+                    "row_rmse": 7.8794
+                  },
+                  {
+                    "group_bias_rmse": 7.688,
+                    "group_mae": 6.8927,
+                    "name": "const_mean_a0_slope",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.8001,
+                    "row_rmse": 7.8871
+                  },
+                  {
+                    "group_bias_rmse": 7.6834,
+                    "group_mae": 6.7972,
+                    "name": "ridge_demo_a10",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.7651,
+                    "row_rmse": 7.9523
+                  },
+                  {
+                    "group_bias_rmse": 7.6852,
+                    "group_mae": 6.8187,
+                    "name": "ridge_demo_a10_slope",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.7836,
+                    "row_rmse": 7.96
+                  },
+                  {
+                    "group_bias_rmse": 8.121,
+                    "group_mae": 7.1175,
+                    "name": "ridge_mean_a100",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 7.0382,
+                    "row_rmse": 8.3052
+                  },
+                  {
+                    "group_bias_rmse": 8.1226,
+                    "group_mae": 7.1285,
+                    "name": "ridge_mean_a100_slope",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 7.0477,
+                    "row_rmse": 8.3126
+                  },
+                  {
+                    "group_bias_rmse": 7.5825,
+                    "group_mae": 6.7398,
+                    "name": "ridge_mean_a1000",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.6678,
+                    "row_rmse": 7.7949
+                  },
+                  {
+                    "group_bias_rmse": 7.5842,
+                    "group_mae": 6.744,
+                    "name": "ridge_mean_a1000_slope",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.6709,
+                    "row_rmse": 7.8028
+                  },
+                  {
+                    "group_bias_rmse": 7.8405,
+                    "group_mae": 6.9724,
+                    "name": "ridge_demo+mean_a100",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.9206,
+                    "row_rmse": 8.0714
+                  },
+                  {
+                    "group_bias_rmse": 7.5674,
+                    "group_mae": 6.7303,
+                    "name": "ridge_demo+mean_a1000",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.6609,
+                    "row_rmse": 7.7839
+                  },
+                  {
+                    "group_bias_rmse": 7.5691,
+                    "group_mae": 6.7348,
+                    "name": "ridge_demo+mean_a1000_slope",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.6642,
+                    "row_rmse": 7.7917
+                  },
+                  {
+                    "group_bias_rmse": 7.5194,
+                    "group_mae": 6.7093,
+                    "name": "ridge_demo+mean+std_a1000",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.6451,
+                    "row_rmse": 7.7455
+                  },
+                  {
+                    "group_bias_rmse": 7.5211,
+                    "group_mae": 6.7172,
+                    "name": "ridge_demo+mean+std_a1000_slope",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 6.6517,
+                    "row_rmse": 7.7533
+                  },
+                  {
+                    "group_bias_rmse": 8.0381,
+                    "group_mae": 7.0594,
+                    "name": "knn_mean_a5",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 7.0212,
+                    "row_rmse": 8.2702
+                  },
+                  {
+                    "group_bias_rmse": 8.0399,
+                    "group_mae": 7.0786,
+                    "name": "knn_mean_a5_slope",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 7.0382,
+                    "row_rmse": 8.2776
+                  },
+                  {
+                    "group_bias_rmse": 8.1707,
+                    "group_mae": 7.1453,
+                    "name": "knn_demo+mean_a7",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      4,
+                      4,
+                      4,
+                      4,
+                      3,
+                      4,
+                      4
+                    ],
+                    "row_mae": 7.1265,
+                    "row_rmse": 8.4451
+                  },
+                  {
+                    "group_bias_rmse": 7.7337,
+                    "group_mae": 6.7688,
+                    "name": "rowridge_all_a1000",
+                    "ok": true,
+                    "pseudo_groups_per_fold": [
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "row_mae": 6.7869,
+                    "row_rmse": 8.1213
+                  }
+                ],
+                "chosen": "ridge_demo+mean+std_a1000",
+                "chosen_slope_per_test_time_unit": 0.0,
+                "clip_range": [
+                  1.01,
+                  44.511
+                ],
+                "error": null,
+                "eval_pseudo_group_sizes": [
+                  112,
+                  126,
+                  137,
+                  138,
+                  143,
+                  144,
+                  145
+                ],
+                "fallback_used_train_mean": false,
+                "method": "patient-level aggregate voice representation (mean/std of log jitter/shimmer/NHR and raw other voice measures) trained on train patient means; unlabeled inputs pseudo-grouped by rounded (age, sex) key; optional pooled within-patient test_time slope; row-level ridge a1000 as contrast under identical folds",
+                "n_eval_pseudo_groups": 7,
+                "n_eval_rows": 945,
+                "n_nonfinite_replaced": 0,
+                "n_train_keys_merging_multiple_patients": 6,
+                "n_train_patients": 28,
+                "n_train_pseudo_keys": 22,
+                "n_train_rows": 3900,
+                "note": "row RMSE in candidates is patient-held-out on train; no evaluation labels used; pseudo-groups can merge distinct patients with equal rounded age and sex",
+                "selection_rule": "lowest 7-fold GroupKFold row RMSE on train patients, held-out folds pseudo-grouped by rounded (age,sex) exactly as evaluation inputs; ties earliest in candidate order",
+                "train_y_mean": 20.6191,
+                "transductive_use": "yes: evaluation rows sharing a rounded (age, sex) key are pooled to compute voice aggregates and mean test_time; no labels, groups or row ids are used; all scaling, aggregation statistics and selection come from train rows only"
+              },
+              "group_mae": 7.42311279201523,
+              "groups": 7,
+              "kind": "method",
+              "loss": 8.291959643688966,
+              "mae": 7.449731367440042,
+              "process_cpu_seconds": 1.45089753,
+              "rows": 945,
+              "worker_seconds": 1.549408970400691
+            },
+            "roles": [
+              "development_leader"
+            ],
+            "task_id": "idea-237111",
+            "valid": true
+          }
+        ]
+      },
+      "project": "fable-A"
+    }
+  ],
+  "new_policy_sha256": "5b6644e391677e90d656f3108783710c364095398c6f4b15713e03f7d670032d",
+  "old_policy_sha256": "408f6f5b749ee594cd2d4a1659cbde1769e6e193703c91df170ca2301fd8bb73",
+  "scope": "Actual previously rejected programs now pass syntax checks; no program execution or new scientific score. Actual historical sources and recorded fitted branches remain paired after a failure or later method. Model use is not established by this offline check.",
+  "source_policy_checks": [
+    {
+      "cycle": 1,
+      "new_source_check": "accepted",
+      "old_error": "private/reflection and I/O attributes unsupported",
+      "program_executed": false,
+      "project": "fable-A",
+      "source_sha256": "18bc73576cf06b2b085460c1479b074306401cf61b28667f60d0c5ae46afd18a"
+    },
+    {
+      "cycle": 7,
+      "new_source_check": "accepted",
+      "old_error": "private/reflection and I/O attributes unsupported",
+      "program_executed": false,
+      "project": "fable-A",
+      "source_sha256": "b52f1dbb596ba0d870213d796678ebd08db1754923ad5bb9ff7e267dc4b07688"
+    },
+    {
+      "cycle": 5,
+      "new_source_check": "accepted",
+      "old_error": "private/reflection and I/O attributes unsupported",
+      "program_executed": false,
+      "project": "fable-B",
+      "source_sha256": "fc0a171cd84674626672dfea9a5734cffb50ad3f4e7d3caf84274d8aaaf63714"
+    },
+    {
+      "cycle": 2,
+      "new_source_check": "accepted",
+      "old_error": "private/reflection and I/O attributes unsupported",
+      "program_executed": false,
+      "project": "opus-A",
+      "source_sha256": "b63c7129d2879214c7d3def97ab8ef3e1f29ad8ed0984bb36b49fd88497c5225"
+    },
+    {
+      "cycle": 4,
+      "new_source_check": "accepted",
+      "old_error": "private/reflection and I/O attributes unsupported",
+      "program_executed": false,
+      "project": "opus-A",
+      "source_sha256": "4f0b70b83a747378d622b30150b4596e75d6d6b33bb100c2e8c5f1085af4292c"
+    },
+    {
+      "cycle": 6,
+      "new_source_check": "accepted",
+      "old_error": "private/reflection and I/O attributes unsupported",
+      "program_executed": false,
+      "project": "opus-A",
+      "source_sha256": "6d77f779219a84642a1b8f93343c1a9b1eea2e648a5357ba67a1cee30a02b877"
+    },
+    {
+      "cycle": 7,
+      "new_source_check": "accepted",
+      "old_error": "private/reflection and I/O attributes unsupported",
+      "program_executed": false,
+      "project": "opus-A",
+      "source_sha256": "636bfb40c4a04223c4b8282ecc0b4cb43d96521d5da4cef3041c1c9bd75ee43b"
+    },
+    {
+      "cycle": 7,
+      "new_source_check": "accepted",
+      "old_error": "private/reflection and I/O attributes unsupported",
+      "program_executed": false,
+      "project": "opus-B",
+      "source_sha256": "cdfbec40978d61370393f933a398d16fc1e7b8c1389f1cd6ea6c86ab38e17357"
+    }
+  ]
+}

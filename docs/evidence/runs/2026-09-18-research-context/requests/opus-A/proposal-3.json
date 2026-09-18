@@ -1,0 +1,26 @@
+{
+  "action": {
+    "edits": [
+      {
+        "new": "        findings[\"challenger_summary\"] = summary\n        findings[\"old_rule_would_select\"] = (best[0] if best is not None else \"baseline\")",
+        "old": "        findings[\"challenger_summary\"] = summary\n        if best is not None:\n            sel = best[0]"
+      },
+      {
+        "new": "        findings[\"selection_note\"] = \"chronological fold diagnostics unavailable; the returned prediction is still the unconditional trend_frozen model, only the diagnostic folds are missing\"",
+        "old": "        findings[\"selection_note\"] = \"chronological folds unavailable; conservative fixed baseline used\""
+      },
+      {
+        "new": "    sel = \"trend_frozen\"\n    findings[\"branch_policy\"] = \"unconditional trend_frozen (kappa=0) this round: detrended ratio target with level frozen at the last training day; no data-driven branch switch, so the development score measures this representation directly\"\n    findings[\"selected_branch\"] = sel",
+        "old": "    findings[\"selected_branch\"] = sel"
+      },
+      {
+        "new": "            findings[\"selected_kappa\"] = float(kap)\n            try:\n                bmdl = _fit_base(Xtr_full, y)\n                bpred = _pred_base(bmdl, Xev_full)\n                findings[\"reference_baseline_pred_mean\"] = round(float(bpred.mean()), 3)\n                findings[\"pred_mean_ratio_vs_reference_baseline\"] = round(float(pred.mean() / max(float(bpred.mean()), 1e-9)), 4)\n                findings[\"mean_abs_diff_vs_reference_baseline\"] = round(float(np.mean(np.abs(pred - bpred))), 3)\n                findings[\"reference_baseline_role\"] = \"diagnostic_only_not_used_in_returned_prediction\"\n            except Exception as exc2:\n                findings[\"ref_diag_error\"] = type(exc2).__name__",
+        "old": "            findings[\"selected_kappa\"] = float(kap)"
+      }
+    ],
+    "kind": "method",
+    "parent_id": "588fdf2c284de6acd72467797f91d50389d74844034f07387b614da2021e3487"
+  },
+  "hypothesis": "Question: does the parent's explicit multiplicative level representation (daily log-linear + annual/semiannual harmonic trend, ratio target y/g with weights g^2, elapsed_day dropped, level frozen at the last training day for out-of-range days) actually transfer to the later period, or was its apparent advantage an artifact of a few internal fold blocks? Prior evidence changed my view about what has been measured: in idea-7637c7 the trend_frozen challenger had a clearly lower mean internal fold RMSE (56.735 vs baseline 65.254) but won only 2 of 4 chronological folds (fold RMSE baseline [56.555, 81.425, 63.177, 59.857] vs trend_frozen [57.765, 57.564, 40.626, 70.985]), so the >=3-win gate selected the fixed baseline; consequently the measured development loss 59.976 is essentially the reference HistGradientBoosting number (59.993 for idea-baseline-2), and the trend representation itself has never been scored on development. Contrasting expected outcomes stated before execution: (A) if end-of-train level freezing genuinely fixes the level dilution that raw-elapsed_day trees suffer, development row RMSE should land near or below ~57 with equal-date MAE not worse than ~41, and the representation becomes the base for further work (e.g. Poisson/log-count loss, hour x workingday profile terms); (B) if the fold gains were block-specific (folds 2-3 only), development RMSE should come out at or above ~61-62 with a higher prediction mean bias, which would be an informative negative result showing the raw-feature HGB already encodes the 2012 level adequately via the yr and binned elapsed_day splits, and the remaining rounds should instead target loss/target transformation or hour-profile structure rather than global level modelling. Diagnostics added this round (reference baseline prediction mean, mean absolute prediction difference, and what the old win-count rule would have chosen) are computed but do not influence the returned vector, so the score is attributable to the unconditional trend_frozen branch. Unverified expectation: the frozen level factor is a single constant multiplier for all development rows (kappa=0 with all inputs beyond train elapsed max), so any systematic level error should show up as a near-uniform scale bias rather than shape error.",
+  "task_id": "idea-e79ce2"
+}

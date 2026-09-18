@@ -5,7 +5,7 @@ import pytest
 
 from examples.research_comparison.open_experiment import check_source, identity
 from examples.research_comparison.regression_experiment import execute
-from examples.research_comparison.source_edits import resolve
+from examples.research_comparison.source_edits import parent_program, resolve
 
 
 def measured():
@@ -28,7 +28,7 @@ def test_exact_edits_keep_unmentioned_source_and_parent_intact():
     assert pred["prediction"] == [3., 3.] and facts["loss"] == 1.
 
 
-@pytest.mark.parametrize("change", ["missing", "tampered", "invalid", "analysis"])
+@pytest.mark.parametrize("change", ["missing", "tampered", "missing_validity", "analysis"])
 def test_unverified_or_changed_parent_is_not_guessed(change):
     row = measured()
     action = {"kind": "method", "parent_id": row["action_id"],
@@ -36,9 +36,34 @@ def test_unverified_or_changed_parent_is_not_guessed(change):
     history = [row]
     if change == "missing": history = []
     if change == "tampered": row["action"]["source"] += "\n# changed"
-    if change == "invalid": row["valid"] = False
+    if change == "missing_validity": row.pop("valid")
     if change == "analysis": row["action"]["kind"] = "analyze"
     with pytest.raises(ValueError): resolve(action, history)
+
+
+def test_failed_program_can_be_repaired_but_is_not_a_valid_reference():
+    row = measured()
+    row["action"]["source"] = row["action"]["source"].replace("[2.0]", "[missing]")
+    row["action_id"] = identity(row["action"])
+    row["valid"] = False
+    with pytest.raises(ValueError): parent_program([row], row["action_id"])
+    result = resolve({"kind": "method", "parent_id": row["action_id"],
+                      "edits": [{"old": "[missing]", "new": "[3.0]"}]}, [row])
+    data = {k: {"X": [[1]], "feature_names": ["x"], "y": [3.],
+                "groups": [0], "row_ids": [0]} for k in ["train", "development"]}
+    facts, pred = execute(result, data, [row], input_fields=("X", "feature_names"))
+    assert pred["prediction"] == [3.] and facts["loss"] == 0.
+
+
+def test_failed_analysis_repair_retains_action_kind():
+    action = {"kind": "analyze", "source": "def analyze(data, history, seed):\n    return missing\n"}
+    row = {"action": action, "action_id": identity(action), "valid": False}
+    edit = {"kind": "analyze", "parent_id": row["action_id"],
+            "edits": [{"old": "return missing", "new": "return {'repaired': True}"}]}
+    repaired = resolve(edit, [row])
+    facts, pred = execute(repaired, {"train": {}, "development": {}}, [row])
+    assert facts["findings"] == {"repaired": True} and pred is None
+    with pytest.raises(ValueError): resolve({**edit, "kind": "method"}, [row])
 
 
 @pytest.mark.parametrize("old,new", [("absent", "x"), (" ", "x"), ("", "x"), ("[2.0]", "x" * 32768)])

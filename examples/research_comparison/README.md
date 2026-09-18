@@ -520,12 +520,14 @@ an incorrect name or interpretation.
 ## Reusing the exact measured program
 
 `source_edits.resolve(action, history)` accepts a full new program or an optional
-method edit with `parent_id` (the complete measured action identity) and an
+program edit with `parent_id` (the complete recorded action identity) and an
 `edits` list of `{"old": "exact text", "new": "replacement text"}`. It checks the
-parent's validity and content identity, then applies each uniquely matching
+parent's recorded status and content identity, then applies each uniquely matching
 replacement in order. Missing or ambiguous matches fail. The caller supplies
 current, source-qualified history, reviews the expanded source before execution,
 and retains both the requested edits and the complete program actually run.
+Failed programs can be repaired, including analyses; the action kind must match
+the parent. A failed program still cannot serve as a valid prediction reference.
 
 Make that parent source available to the researcher as well as its score.
 Exact edits preserve unmentioned text, but even a one-line change can affect
@@ -544,3 +546,26 @@ were not automatically displayed. One of four trajectories passed the held-out
 quality milestone, in the arm without this extra source block. This study does
 not establish a research benefit from source reuse; relevant-source access,
 actual use and scientific quality need separate evaluation.
+
+`program_evidence.context(history, leader_id, max_bytes=48000)` pairs complete
+source and recorded facts for the latest action, latest valid method and
+development leader. The caller qualifies provenance and supplies the leader.
+Overlapping roles share a record. Whole records that do not fit have explicit
+omission IDs; no inferred model label replaces the actual source or findings.
+The application still enforces its full prompt limit. Program-authored findings
+can be wrong, and this helper does not establish scientific validity.
+
+Source-defined helpers such as `self._predict()` and `type(exc).__name__` are
+supported by the reviewed-source examples. Other private internals, reflection
+and I/O remain outside their contract. These checks continue to require manual
+review and application-owned execution limits; they are not a sandbox.
+
+
+The [paired-program research study](../../docs/plans/2026-09-18-research-context.zh-CN.md)
+records one future-period success among four trajectories: a weather-context and
+seasonal-anchor learner reduced RMSE by 15.27%, while two trajectories regressed
+and one stayed nearly unchanged. Actual exact-edit use occurred once in A; B had
+no edit requests. Paired records were present without capacity omissions, but
+models still misstated dates, validation spans and causal interpretations. This
+supports retaining the small example interfaces and the observed syntax fix;
+it does not establish a general research benefit or justify a production default.
