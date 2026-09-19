@@ -21,12 +21,12 @@ def executor(contexts):
     return {c["action"]["id"]: outcome(c["action"]["step"] + 1) for c in contexts}
 
 
-def test_default_reaches_late_breakthrough_after_plateau(tmp_path):
+def test_portfolio_reaches_late_breakthrough_after_plateau(tmp_path):
     def late(contexts):
         return {c["action"]["id"]: outcome(9 if c["action"]["step"] == 4 else 0)
                 for c in contexts}
     declaration = spec(branches=1, depth=6, calls=6)
-    trace = run_online(declaration, execute_batch=late, output=tmp_path / "default")
+    trace = run_online(declaration, Portfolio(), late, tmp_path / "portfolio")
     assert trace["metrics"]["best_score"] == 9
     assert trace["metrics"]["calls"] == 6
     assert replay(trace, Portfolio())["metrics"] == trace["metrics"]
@@ -34,6 +34,17 @@ def test_default_reaches_late_breakthrough_after_plateau(tmp_path):
                        tmp_path / "explicit-early-stop")
     assert early["termination"] == "policy_stop"
     assert early["metrics"]["best_score"] == 0
+
+
+def test_default_preserves_equal_depth_despite_one_early_promising_path(tmp_path):
+    def skewed(contexts):
+        return {c["action"]["id"]: outcome(9 if c["action"]["branch"] == 0 else 0)
+                for c in contexts}
+    trace = run_online(spec(branches=4, depth=6, calls=14, workers=1),
+                       execute_batch=skewed, output=tmp_path / "default")
+    ids = [n["id"] for r in trace["rounds"] for n in r["observations"]]
+    assert ids == [f"b{b}-s{s}" for s in range(4) for b in range(4)][:14]
+    assert replay(trace, ParallelRefine())["metrics"] == trace["metrics"]
 
 
 def test_default_still_requires_explicit_executor_before_creating_output(tmp_path):

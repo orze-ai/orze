@@ -1,0 +1,16 @@
+{
+  "default": "ParallelRefine",
+  "criterion": "higher observed equal-problem confirmation mean",
+  "control_mean_gain": 0.5495436609026563,
+  "dream_mean_gain": 0.5463815683086992,
+  "source": "class ParallelRefine:\n    \"\"\"Open the declared roots, then refine the least explored paths in parallel.\"\"\"\n\n    def decide(self, view):\n        actions = sorted(view[\"legal\"], key=lambda a: (a[\"step\"], a[\"branch\"]))\n        size = min(view[\"workers\"], view[\"remaining_calls\"])\n        return {\"actions\": [a[\"id\"] for a in actions[:size]],\n                \"reason\": \"Open independent paths and give each equal refinement depth.\"}\n",
+  "source_sha256": "d3fb354109149dcbddcfd3b99c9727755b748b1e5e37b8cee305ccb5af0174e1",
+  "tested_dream_identity": "cc2d8eb36d9bc27c1e325898998ce806bf21c3151159e8007b1f19638d99b967",
+  "tested_dream_source_sha256": "0cc6efd4d684697ce690c8be4712ac4912520f13f6f04230426454a5d6f6a3da",
+  "tested_dream_execution": "Fresh Policy() on every decision, complete revealed prefix as input.",
+  "bootstrap_portfolio_was_not_the_online_dream_arm": true,
+  "scope": "Core run_online and Pro run_discovery without an explicit policy or development pool. Explicit policies and replay selection remain available; legacy global-context daemons need a branch-safe executor.",
+  "uncertainty": "No statistically established superiority of either arm; this is an empirical default decision, not proof of the highest population expectation.",
+  "verification": "45 focused Core/Pro checks passed, including equal-depth behavior, shared default identity and explicit learned-policy execution.",
+  "summary_sha256": "00eb12663f4049833c62e0ff45486c535b9d4822abb02e531d0088e72b079e74"
+}

@@ -178,15 +178,16 @@ interrupted directory cannot be reused. ``execute_batch(contexts)`` returns an
 id -> outcome mapping; it owns actual execution, model calls, and authorization.
 Exceptions stop this rollout without retrying. Each request is saved before
 dispatch, so an uncertain call is never silently counted as free or replayed.
-Omitting ``policy`` uses the Dream-RSI portfolio bootstrap. A replay-selected
+Omitting ``policy`` uses equal-depth ParallelRefine, retained after the prospective
+Dream-RSI comparison did not improve mean confirmation quality. A replay-selected
 policy can replace it explicitly on the next rollout. The executor and output
 remain required; selecting a default never grants execution authority.
 """
     if not callable(execute_batch) or output is None:
         raise ValueError("execute_batch and a fresh output directory are required")
     if policy is None:
-        from orze.research.exploration_policies import Portfolio
-        policy = Portfolio()
+        from orze.research.exploration_policies import ParallelRefine
+        policy = ParallelRefine()
     spec = validate_spec(spec)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)

@@ -1,6 +1,6 @@
 # Executable exploration and historical replay
 
-`orze.research.exploration` defaults to the Dream-RSI portfolio when the caller
+`orze.research.exploration` defaults to equal-depth `ParallelRefine` when the caller
 supplies an executor and omits the policy. It separates **what the
 researcher proposes** from **which research path receives the next attempt**.
 It does not start a daemon, import generated code, grant execution permission,
@@ -10,7 +10,7 @@ or replace Orze's CPU/GPU executors.
 
 ```python
 from orze.research.exploration import run_online, replay
-from orze.research.exploration_policies import ParallelRefine  # explicit control
+from orze.research.exploration_policies import Portfolio  # optional alternative
 
 spec = {
     "problem_id": "independent-problem-group-1",
@@ -21,7 +21,7 @@ spec = {
 }
 # Supply your already authorized research/execution integration:
 # trace = run_online(spec, execute_batch=execute_batch, output=fresh_output_directory)
-# control = run_online(spec, ParallelRefine(), execute_batch, another_fresh_directory)
+# portfolio = run_online(spec, Portfolio(), execute_batch, another_fresh_directory)
 # alternative = replay(trace, my_policy, calls=12)
 ```
 
@@ -167,16 +167,18 @@ These are empirical means over the chosen problem set, not proof of the true
 expectation on all future tasks. Keep collecting fresh online evidence to assess
 and update the default; the report records `online_improvement_proven=False`.
 
-`ParallelRefine` is the explicit reference. `Portfolio` is now the default
-bootstrap: successful anchors, trajectory evidence and repair episodes guide
-allocation. A short quality plateau deprioritizes a path but does not terminate
-remaining authorized exploration; dormant paths fill otherwise unused slots.
-Explicitly blocked paths and exhausted repair episodes remain closed.
-`Portfolio(stop_on_plateau=True)` reproduces the earlier early-stop option.
-The earlier historical counterexamples motivated this default change; see the
-[analysis and evidence](plans/2026-09-18-dream-rsi.zh-CN.md).
+`ParallelRefine` is the default after the completed prospective comparison:
+control mean confirmation gain 0.54954, learned Dream revision 4 mean 0.54638.
+The difference interval spans zero; this is the higher observed mean, not proof
+of a universal optimum. See the [results and limitations](plans/2026-09-19-dream-rsi-results.zh-CN.md).
 
-Pro's `run_discovery(spec, execute_batch, output=...)` uses this bootstrap.
+`Portfolio` remains an explicit alternative with successful anchors, trajectory
+evidence and bounded repairs. Short plateaus deprioritize paths but do not end
+remaining exploration; `Portfolio(stop_on_plateau=True)` enables early stopping.
+This bootstrap is distinct from the learned revision 4 used in the online study.
+The exact tested source and identity are retained with the result evidence.
+
+Pro's `run_discovery(spec, execute_batch, output=...)` uses the same default.
 Supplying `training`, `validation`, and a reviewed `develop` callback runs replay
 improvement first and directly executes its selected policy. It returns
 `(selected_policy, trace)` so a campaign carries its learned default forward.
@@ -185,6 +187,13 @@ these executable exploration entry points; existing projects must supply their
 own branch-safe executor to use them. A legacy project with a single global
 research conversation is not silently treated as a valid branch replay world.
 
-The prospective [long comparison](plans/2026-09-18-dream-rsi-long.zh-CN.md)
-measures fresh outcomes. Enabling the new default is a user-directed deployment
-choice; average superiority remains an empirical question until that study ends.
+The [long comparison protocol](plans/2026-09-18-dream-rsi-long.zh-CN.md) and
+[completed results](plans/2026-09-19-dream-rsi-results.zh-CN.md) retain all failures
+and separate the 100 extra development calls from the equal-call online arms.
+
+Executor feedback should preserve typed provider failures alongside any parse
+error (for example, `provider_result={"status": "error", "reason": "provider_transport_failed"}`).
+An empty extracted response alone does not identify the cause. Preserve unknown
+costs and actual usage status. The Core history carries the feedback supplied by
+the executor; it cannot reconstruct omitted provider evidence. This study found
+such an omission in its frozen adapter; it was not repaired during the trial.
