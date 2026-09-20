@@ -197,3 +197,28 @@ An empty extracted response alone does not identify the cause. Preserve unknown
 costs and actual usage status. The Core history carries the feedback supplied by
 the executor; it cannot reconstruct omitted provider evidence. This study found
 such an omission in its frozen adapter; it was not repaired during the trial.
+
+
+## Combine breadth with adaptive exploration
+
+`BreadthThenAdaptive(adaptive, min_steps=2)` gives each available path a minimum
+number of attempts before delegating to the supplied prefix-driven policy. With
+four paths and a 14-call cap, this usually allocates eight broad attempts and six
+adaptive ones. Failures and unscored analyses count; blocked paths stay closed.
+A small cap still opens independent paths before deepening them. During a batch,
+all foundation results return before any adaptive allocation begins.
+
+```python
+from orze.research.exploration_policies import BreadthThenAdaptive, Portfolio
+
+# Explicit candidate, not the current default and not a proven improvement:
+combined = BreadthThenAdaptive(Portfolio(), min_steps=2)
+# trace = run_online(spec, combined, execute_batch, fresh_output_directory)
+```
+
+For Pro, a Candidate factory can return this wrapper; its manifest must include
+wrapper source, min_steps, and the complete adaptive-policy manifest. No new
+campaign API is needed. The [prospective comparison](plans/2026-09-20-dream-rsi-combined.zh-CN.md)
+uses the exact previously tested generated Dream revision 4 inside the wrapper,
+not the illustrative Portfolio above. Default promotion awaits new confirmation
+results; software checks and historical replay are not evidence of better means.

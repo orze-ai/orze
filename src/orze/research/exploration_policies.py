@@ -16,6 +16,42 @@ class ParallelRefine:
                 "reason": "Open independent paths and give each equal refinement depth."}
 
 
+class BreadthThenAdaptive:
+    """Give each available path a minimum depth, then delegate allocation.
+
+    ``min_steps`` counts attempts, including failures and unscored analyses.
+    With four paths, min_steps=2 and 14 calls, the first eight attempts cover
+    each path twice; the adaptive policy allocates the remaining six. A smaller
+    budget still opens paths before deepening any of them. Blocked paths stay
+    closed. The delegate must decide from the complete revealed prefix rather
+    than require callbacks for the initial rounds.
+
+    This is an explicit experimental policy, not evidence of better quality.
+    """
+
+    def __init__(self, adaptive, min_steps=2):
+        if not callable(getattr(adaptive, "decide", None)):
+            raise ValueError("adaptive policy requires decide(view)")
+        if type(min_steps) is not int or min_steps < 1:
+            raise ValueError("minimum exploration depth must be a positive integer")
+        self.adaptive = adaptive
+        self.min_steps = min_steps
+
+    def decide(self, view):
+        latest = {n["branch"]: n for n in view["observed"]}
+        legal = [a for a in view["legal"]
+                 if latest.get(a["branch"], {}).get("status") != "blocked"]
+        initial = sorted((a for a in legal if a["step"] < self.min_steps),
+                         key=lambda a: (a["step"], a["branch"]))
+        size = min(view["workers"], view["remaining_calls"])
+        if initial:
+            return {"actions": [a["id"] for a in initial[:size]],
+                    "reason": f"Give each available path {self.min_steps} attempts before adaptive allocation."}
+        if not legal or not size:
+            return {"actions": [], "reason": "No available paths or remaining attempts."}
+        return self.adaptive.decide(dict(view, legal=legal))
+
+
 class Portfolio:
     """Compare whole trajectories; preserve weak early ideas and repairable paths.
 
