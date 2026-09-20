@@ -34,3 +34,5 @@ Core 新增 `BreadthThenAdaptive(adaptive, min_steps=2)`：先按深度均匀给
 工作目录 ROOT 为 `/hot-data/fsx/workspace/erik/work/orze-p1-continuation-20260914`；运行记录在 `dream-rsi-combined-20260920/`。`RUN_STATE.json`、`campaign-process.json`、`campaign-exit.json` 与逐次原始记录决定当前状态。监督进程保存终态，观察端退出不会重启或重复付费阶段。
 
 原始确认结果出来后，独立重算三组均值及不确定性，核验提示、分支上下文、策略身份、冻结顺序、原始预测和所有费用；再决定默认，归档证据并推送两个 main。冻结协议与源码保存在 Pro `docs/evidence/dream-rsi-combined-20260920/frozen-protocol.tar.gz`。
+
+已启动独立的只读完成观察进程：原研究进程正常结束后，自动运行 `verify.py` 并生成 `verification.json`、`completion-observer-result.json` 和 `results-auto.zh-CN.md`。它不发模型请求、不重跑科学程序、不修改仓库；最终默认集成与 main 结果提交仍需根据完整核验结果处理。复核调度轨迹使用 Python 3.10，科学程序容器为 Python 3.12。
