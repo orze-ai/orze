@@ -222,3 +222,25 @@ campaign API is needed. The [prospective comparison](plans/2026-09-20-dream-rsi-
 uses the exact previously tested generated Dream revision 4 inside the wrapper,
 not the illustrative Portfolio above. Default promotion awaits new confirmation
 results; software checks and historical replay are not evidence of better means.
+
+
+## Time to the research goal
+
+Research efficiency means reaching the declared task goal sooner. Report the
+probability of reaching it by a deadline and the capped time including unsolved
+runs, alongside final quality and complete delivery latency. More proposals or
+fewer dollars alone do not establish faster research.
+
+`orze.research.goal_efficiency.incumbent_checkpoints(trace, completion_seconds)`
+selects the best development artifact at each measured batch completion.
+`time_to_goal(checkpoints, confirmation_scores, target=..., horizon_seconds=...)`
+audits the first selected artifact that independently meets a higher-is-better
+target. Failed confirmation is `None`; every selected checkpoint needs a result.
+Unsolved runs contribute the full horizon. Supply actual elapsed batch times,
+including failures and policy overhead, rather than summed worker durations.
+
+This is an audit, not an online stopping policy: keep confirmation scores out of
+exploration and report confirmation and delivery latency separately. Targets are
+project-specific. The ongoing combined study has an explicitly disclosed
+[mid-study, pre-confirmation supplement](plans/2026-09-20-research-efficiency.zh-CN.md);
+no new efficiency winner has yet been established.
