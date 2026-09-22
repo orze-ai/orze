@@ -6,9 +6,15 @@ researcher proposes** from **which research path receives the next attempt**.
 It does not start a daemon, import generated code, grant execution permission,
 or replace Orze's CPU/GPU executors.
 
+Use the [prepared execution entrypoint](research-execution.md) for new research
+integrations: two independent preparations by default, with serial evaluation as
+proposals become ready. Explicit worker limits and custom batch executors remain
+available. Final goal delivery and paid surplus requests are recorded separately.
+
 ## Online contract
 
 ```python
+from orze.research.execution import run_prepared
 from orze.research.exploration import run_online, replay
 from orze.research.exploration_policies import Portfolio  # optional alternative
 
@@ -20,7 +26,9 @@ spec = {
     "plan": {"branches": 4, "depth": 6, "calls": 24, "workers": 2},
 }
 # Supply your already authorized research/execution integration:
-# trace = run_online(spec, execute_batch=execute_batch, output=fresh_output_directory)
+# trace = run_prepared(spec, prepare, evaluate, output=fresh_output_directory,
+#                      finished=delivery_is_final, unused=record_unused_proposal)
+# Custom batch integrations may call run_online with their own execute_batch.
 # portfolio = run_online(spec, Portfolio(), execute_batch, another_fresh_directory)
 # alternative = replay(trace, my_policy, calls=12)
 ```
@@ -178,7 +186,10 @@ remaining exploration; `Portfolio(stop_on_plateau=True)` enables early stopping.
 This bootstrap is distinct from the learned revision 4 used in the online study.
 The exact tested source and identity are retained with the result evidence.
 
-Pro's `run_discovery(spec, execute_batch, output=...)` uses the same default.
+Pro's `run_discovery(spec, prepare=..., evaluate=..., output=...)` uses this
+prepared execution path and the same exploration default. Supply `finished` and
+`unused` together for accepted-goal delivery. An explicit `execute_batch` retains
+the application's own scheduling. See the [callback contract](research-execution.md).
 Supplying `training`, `validation`, and a reviewed `develop` callback runs replay
 improvement first and directly executes its selected policy. It returns
 `(selected_policy, trace)` so a campaign carries its learned default forward.

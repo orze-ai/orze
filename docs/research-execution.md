@@ -1,58 +1,104 @@
-# Prepare research proposals while the GPU is available
+# Prepare independent research proposals while evaluating ready work
 
-Research executors can overlap a bounded batch of independent proposals and
-consume whichever finishes first. The native exploration controller already
-captures branch-local contexts before submitting a batch; set `plan.workers`
-to the number of preparations you explicitly authorize.
+Use `run_prepared` for the high-level research execution path. It prepares up to
+two independent branch proposals concurrently and evaluates ready proposals one
+at a time. Explicit `plan.workers` limits are preserved, and every preparation
+uses one action from the existing call budget. The exploration policy remains
+`ParallelRefine`; a caller may supply another policy explicitly.
 
 ```python
-from orze.research.execution import prepare_batch
-from orze.research.source import parse_python_proposal
+from orze.research.execution import run_prepared
 
-
-def execute_batch(contexts):
-    outcomes = {}
-    with prepare_batch(contexts, prepare, workers=2) as ready:
-        for context, response in ready:
-            proposal = parse_python_proposal(
-                response.text, complete=response.status == "complete")
-            # User-provided executor: generated Python runs in isolation.
-            outcomes[context["action"]["id"]] = evaluate(proposal, context)
-    return outcomes
+# Your callbacks own model admission, scientific execution and goal acceptance.
+trace = run_prepared(
+    spec, prepare_proposal, evaluate_proposal,
+    output=fresh_output_directory,
+    finished=delivery_is_final,
+    unused=record_unused_proposal,
+)
 ```
 
-`prepare`, `evaluate`, and the response object above are application callbacks,
-not built-in providers. Admit every request against the existing call and money
-budgets before submitting it. Convert proposal/execution errors into normal
-unscored outcomes. Provider uncertainty must retain its reservation and stop an
-unverifiable campaign. There is no automatic request retry.
+`spec` follows the [online exploration contract](research-exploration.md).
+`plan.workers` may be omitted on this path and defaults to two. The specification
+is copied; the caller's object is unchanged. Each preparation sees the root and
+its own branch ancestry, captured before that batch's results become available.
+Pro exposes the same execution through
+`run_discovery(spec, prepare=..., evaluate=..., output=..., finished=..., unused=...)`.
+An explicit `execute_batch` callback continues to own its own scheduling.
 
-`prepare_batch` yields completion order and joins every submitted callback on
-exit, even after early delivery or an exception. The caller must close its own
-subprocesses and record every call, including unused proposals. Record accepted
-delivery immediately, before waiting for unrelated requests to settle; keep
-cleanup time and charges in the campaign record. Return one outcome for every
-requested action. GPU evaluation in this loop is serial, independently of model
-request concurrency. The helper does not increase the controller's call budget
-or share observations across branches.
+## Callback contract
 
-`parse_python_proposal` accepts complete Python, optionally in a single code
-fence. Methods define `build`, `train`, and `predict`; diagnostics define
-`analyze`. It checks size and syntax without executing source. Provider
-completion must be checked separately: syntactically valid partial output is
-not a completed proposal. This is a formatting check, not a sandbox.
+- `prepare(context)` admits and records one authorized model request and returns
+  its response and accounting metadata. It must be safe to run concurrently.
+- `evaluate(context, response)` checks the proposal format, executes it in the
+  application's isolated numerical worker, and returns a native outcome.
+  Expected proposal or execution failures become unscored `repairable` outcomes,
+  retaining their cost and feedback. They consume attempts normally.
+- `finished()` returns true when the application has finalized delivery. Publish
+  the actual acceptance/rejection event before returning from the evaluator.
+- `unused(context, response)` records a paid proposal that was submitted in the
+  same batch but was no longer needed after delivery. Return a `blocked`, unscored
+  native outcome with its actual cost or explicit unknown cost and provenance.
+  The driver adds `feedback.unused_after_delivery = True`.
 
-For numerical worker APIs, `feature_tensor(values, device=..., dtype=...)`
-accepts NumPy arrays, read-only memory maps, CPU tensors, and CUDA tensors. It
-copies array storage and transfers tensors directly without converting CUDA
-through NumPy. NumPy and PyTorch are optional, loaded only when called. The
-worker still owns shape checks, memory limits, and numerical evaluation.
+Supply `finished` and `unused` together, or omit both to use the declared budget.
+On finalized delivery, the next batch is not started and ready surplus proposals
+are not evaluated. Every already submitted preparation is joined and accounted
+for. Actual delivery may precede cleanup; retain both timestamps. Uncertain
+provider or orchestration exceptions stop the rollout without automatic retry.
+Callbacks own child-process closure and outstanding cost reservations.
 
-## Evidence and status
+## Complete Python proposals
 
-Eight A100 conversion checks and four unchanged historical ASR prediction
-failures passed after the input fix. These checks establish execution recovery,
-not faster attainment of research goals. A prospective 16-episode paired study
-compares the execution bundle with the old executor. Both use `ParallelRefine`;
-the two-preparation path is explicit until the mean outcome is verified. See
-[the study plan](plans/2026-09-22-execution-efficiency.zh-CN.md).
+For executable methods, ask for complete Python directly and use
+`parse_python_proposal` inside the evaluator. This avoids embedding long source
+inside JSON. Check the provider completion state even if partial text compiles.
+The following fragment belongs inside the application's evaluation callback:
+
+```python
+from orze.research.source import parse_python_proposal
+
+try:
+    proposal = parse_python_proposal(
+        response["text"], complete=response["status"] == "complete")
+except (ValueError, SyntaxError) as exc:
+    return {
+        "score": None, "status": "repairable", "artifact": {},
+        "feedback": {"error": str(exc)},
+        "cost": response["cost"], "seconds": elapsed_seconds,
+    }
+# Pass proposal to the application's isolated worker and score its real output.
+```
+
+The parser accepts raw Python or one Python fence. Methods define `build`,
+`train`, and `predict`; diagnostics define `analyze`. It validates size and syntax
+without executing source. The format check does not replace execution isolation.
+The driver itself does not call a provider or import model-generated Python.
+
+## Numerical inputs and custom batch integrations
+
+`feature_tensor(values, device=..., dtype=...)` accepts NumPy arrays, read-only
+memory maps, CPU tensors, and CUDA tensors. It copies array storage and transfers
+tensors directly without passing CUDA through NumPy. NumPy and PyTorch are
+optional imports. Worker APIs still own shapes, memory limits and evaluation.
+
+Existing custom batch executors may use `prepare_batch(contexts, prepare,
+workers=...)` directly. It yields completion order and joins all submitted work on
+exit; it does not issue additional actions or change the declared budget.
+
+## Evidence scope
+
+The completed 16-episode comparison accepted 5/8 goals in each arm. Mean capped
+time to final acceptance fell from 71.44 to 54.98 minutes (23.0%). The predeclared
+mean/success-rate gate passed; prepared execution is the default integration path.
+The four-problem difference interval spans zero. See the
+[verified results and limitations](plans/2026-09-22-execution-efficiency-results.zh-CN.md).
+
+The high-level entrypoint composes the bounded preparation helper tested in the
+[paired real GPU protocol](plans/2026-09-22-execution-efficiency.zh-CN.md).
+Independent verification of all 16 episodes, the full mean and success rate
+rule, and the default decision must be retained in the experiment evidence.
+The experiment concerns four known ASR corpora and one research model; it does
+not establish a universal research optimum or attribute the bundle's effect to
+a single component. CPU lifecycle checks additionally exercise native execution,
+process closure, terminal delivery and surplus-proposal accounting.

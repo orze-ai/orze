@@ -10,6 +10,8 @@ Orze runs experiments on GPUs: **schedule ideas → train → evaluate → repor
 
 **Website:** [orze.ai](https://orze.ai)
 
+**Research execution API:** [prepare proposals concurrently and evaluate ready work](docs/research-execution.md).
+
 **Research exploration API:** [branch-local discovery and replay](docs/research-exploration.md), with [Dream-RSI analysis and historical counterexamples](docs/plans/2026-09-18-dream-rsi.zh-CN.md).
 
 ## Install
