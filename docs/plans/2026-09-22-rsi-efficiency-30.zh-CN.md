@@ -97,3 +97,12 @@ $18 开发池结算后保守保留 $6.468675，已确认释放未使用预留 $1
 下一轮前瞻输入须用此前未用于本平台开发的数据。已检查现有计划并排除曾用的 wine-quality / concrete；当前考察 CIFAR-100、KMNIST、AG News、TREC、Abalone、SARCOS（第一关节力矩），另配新生成的优化实例。数据源与任务方案尚未冻结，不能声称已开始新泛化验证；重排旧语料只用于切分修复预检。
 
 来源：[CIFAR](https://www.cs.toronto.edu/~kriz/cifar.html)、[KMNIST](https://codh.rois.ac.jp/kmnist/index.html.en)、[AG News 数据处理论文](https://arxiv.org/abs/1509.01626)、[TREC](https://cogcomp.seas.upenn.edu/Data/QA/QC/)、[Abalone](https://archive.ics.uci.edu/dataset/1/abalone)、[SARCOS](https://gaussianprocess.org/gpml/data/)。这些是已有公开基准，不声称基础模型从未见过。
+
+
+## 第二候选：实测耗时反馈与计算分配
+
+首个 pilot 开发候选被否定后，冻结了更小的组合干预：把已闭合参考及本分支实验的实测容器/worker 墙钟传入研究上下文，增加按问题所需信息决定实验规模、停止条件和兼容模型复用的指导。原参考 Fashion 容器耗时 78.61 秒、电厂 6.75 秒，此前 root 上下文只有源码和开发分数，未显式提供这些计时。
+
+不增加接口、工具调用、共享分支证据或固定训练配额；也不要求选择最便宜的算法。默认仍关闭，两个已观察任务各 control/effort 一次，最多 16 请求。11 项控制器检查通过，特别检查未知计时不填零、不读取确认/最终评估数据、验收失败不能写成开发成功，以及交付不必等并发请求结算。
+
+开发池 $12.50、每 episode $3.125，来自上一轮已核验释放的余额；累计保守分配 $4999.9072。运行输入和方案已冻结，计划位于 `rsi-effort-20260922/plan.json`。本轮结果只决定是否进入新任务验证，不能直接宣布 30% 或升级默认。两组预算一致，但池小于上轮 pilot，不能把两轮均值差异归因给机制。
