@@ -22,8 +22,8 @@
 
 ## 默认与未完成项
 
-按照上一轮已冻结的质量与效率规则，组合是观测均值领先的候选。当前代码默认仍为 ParallelRefine，**默认集成尚未完成**；不能将候选、规则判断和已上线行为混写。正在运行的真实 GPU 对照固定使用两种显式策略，代码与验收规则冻结，运行中不改其依赖。
+按照合成实验已冻结的质量与效率规则，组合是观测均值领先的候选。随后[真实 GPU 对照已完成](2026-09-22-real-gpu-results.zh-CN.md)：旧策略的实际验收达标时间更低，成功率相同，因此已经完成保留 ParallelRefine 默认的决定。不同任务与不同主指标的结果不混算。
 
-下一步依据[真实 GPU 研究验证](2026-09-22-real-gpu-research.zh-CN.md)的完整结果完成默认决策与集成。还缺跨模型／跨研究领域复现、1.7B 项目最终验收，以及真实长期记忆是否缩短交付的直接证据。这些不能用工程检查通过数替代。
+下一步优先处理真实对照暴露的输入类型契约、无效模型输出和批次等待，并重新验证实际达标时间。还缺跨模型／跨研究领域复现、1.7B 项目最终验收，以及真实长期记忆是否缩短交付的直接证据。这些不能用工程检查通过数替代。
 
 原始汇总与核验：[三方质量](../evidence/dream-rsi-combined-20260920/summary.json)、[质量核验](../evidence/dream-rsi-combined-20260920/verification.json)、[效率审计](../evidence/research-efficiency-20260920/summary.json)、[效率核验](../evidence/research-efficiency-20260920/verification.json)。完整原始记录已归档在 Pro 对应目录的 `completed-raw.tar.gz`。

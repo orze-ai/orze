@@ -1,6 +1,6 @@
 # 组合探索策略：三方前瞻验证（2026-09-20）
 
-状态：三方对照及效率审计均已完成并独立核验。组合观测均值领先，默认集成尚未完成；当前代码默认仍为 ParallelRefine。详见[完整结果与经验](2026-09-22-combined-results-and-lessons.zh-CN.md)。以下保留原实验设计。
+状态：三方合成对照及效率审计均已完成，组合在该轮观测均值领先。随后真实 GPU 对照按实际验收时间保留 ParallelRefine 默认，详见[真实任务结果](2026-09-22-real-gpu-results.zh-CN.md)及[合成结果与经验](2026-09-22-combined-results-and-lessons.zh-CN.md)。以下保留原实验设计。
 
 ## 优先级补充：目标达成效率
 
