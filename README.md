@@ -14,6 +14,8 @@ Orze runs experiments on GPUs: **schedule ideas → train → evaluate → repor
 
 **Research exploration API:** [branch-local discovery and replay](docs/research-exploration.md), with [Dream-RSI analysis and historical counterexamples](docs/plans/2026-09-18-dream-rsi.zh-CN.md).
 
+**Research results and handoff:** [verified outcomes, reusable code, and machine recovery notes (中文)](docs/plans/2026-09-23-machine-handoff.zh-CN.md).
+
 ## Install
 
 ```bash
