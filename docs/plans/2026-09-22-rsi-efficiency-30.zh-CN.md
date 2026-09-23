@@ -82,6 +82,8 @@
 
 本轮模型干预是显式 `claude-opus-5` → `claude-opus-5-5`，相同 high effort、32768 输出上限、无 fallback；研究调用经 Pro `call_llm`。源码核对表明 `run_discovery` 默认选择 ParallelRefine，但研究模型仍由调用方 `prepare` 指定；通用 `call_llm` 未指定模型时的 Anthropic 回退值是 `claude-opus-4-6`。因此本轮比较不能自动证明所有旧 daemon 配置都已使用 control 模型，更不能只改一个通用回退值就宣称平台已升级。若完整证据通过原门槛，仍须把被测模型与参数落到实际授权使用的研究入口，验证默认运行确实经过该路径并保留显式覆盖；未确认运行绑定的项目配置不能充当部署证据。这是完成原平台目标所缺的集成证据，不改变冻结对照、分母或 30% 门槛。当前默认未变。
 
+[实际入口绑定核对](../evidence/runs/2026-09-23-rsi-prospective/runtime-binding-review-001.json) 进一步确认：工作项目配置为 `mode: research / backend: custom / model: sonnet`，原生路径由 `build_research_cmd` 把显式参数交给 `research.py → run_research_cycle → call_llm`，没有经过 `run_discovery/run_prepared`。当前 Core/Pro 的 `src` 中只找到 `run_discovery` 的公共 API 定义；当前实验则直接使用 `run_prepared` 和显式 Anthropic 模型。只读快照中，项目配置的本机 8801 端口未监听，不能据配置断言实际模型别名已解析或原生研究服务正在运行。这不改写当前模型对照的范围或结果，也不是服务故障诊断；后续平台默认结论必须先明确实际研究入口及 incumbent 绑定，使测试和默认调用经过被验证路径，不能只改通用模型回退值。没有启动/修改服务、请求模型或改变产品默认。
+
 重新核对 [SIFT §4.3](https://arxiv.org/html/2609.19526v1)：其源码评审发现过默认关闭的验证器与不持久的 shell；这支持本地核对实际执行路径。论文中的评审排名用于选择探索方向，最终仍依赖实际评测，不能把评审意见或文档声明当部署效果。当前实验运行中，不新增评审调用，也不叠加未经本地验证的流程层。
 
 新增 [一次性确认门槛诊断](../evidence/runs/2026-09-23-rsi-prospective/confirmation-gate-diagnostic-001.json)：23 个已结束实例中已有 22 次确认，若额外要求开发集配对区间上界小于零，会暂缓 2 次实际成功与 2 次失败，仍放行另外 5 次失败，包括拖慢 KMNIST-1 candidate 的那次。它没有针对性地解决观察到的瓶颈，暂不增加默认门槛；这只是观察性准入诊断，不能据此推算新成功率或节省时间。视觉完整均值现为 control 8.021、candidate 12.711 分钟，回归为 32.808、36.356 分钟；即使剩余两领域都更快，本候选也无法满足至少三个领域更快。完整对照继续执行，保留所有结果；30% 平台目标未完成，不能通过取消领域门槛升级候选。
@@ -103,6 +105,9 @@
 
 
 新增 [QAP 首次候选审阅](../evidence/runs/2026-09-23-rsi-prospective/qap-first-candidate-review-001.json)：candidate 29.314 分钟最终通过，生成审计目标均值改善 8.5573%，独立排列/双重求和重算一致；两次请求已知用量，一份未使用。两组首份方法均采用编译禁忌搜索和两 CPU 线程，不能将单臂成功或实现名称当作独有创造力。另有三份已闭合开发/确认预测独立重算一致。总计 29/32、21 次通过，control 确认与第二次 QAP 尚未完成，完整配对及终态核验继续等待，默认不变。
+
+
+新增 [QAP 首次完整配对审阅](../evidence/runs/2026-09-23-rsi-prospective/qap-first-pair-review-001.json)：两边均通过，control 54.150、candidate 29.314 分钟，单次配对达标时间下降 45.8652%；新增 control 确认/审计两份独立重算，首次双方全部六份输出已核对。control 最终目标改善 7.9449%，candidate 8.5573%；两者均为两 CPU 线程的编译禁忌搜索，搜索预算、重启及扰动方式也不同，无单因素归因。总计 30/32、22 次通过，最后一对 QAP 按冻结方案启动；完整 QAP、优化领域、终态核验和预算结算仍待结束。
 
 ## 费用与执行边界
 

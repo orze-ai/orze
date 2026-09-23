@@ -1,0 +1,285 @@
+{
+  "created": 1790143480.416233,
+  "scope": "Completed first QAP pair only; second repetition and final campaign verification pending. Newly rescore control confirmation and audit, retaining earlier checks for the other four stages. All stored objectives checked with independent Python fsum; original bootstrap values not rerun.",
+  "episode": "qap-0-control",
+  "completed": {
+    "label": "qap-0-control",
+    "task": "qap",
+    "family": "optimization",
+    "repetition": 0,
+    "arm": "control",
+    "gpu": 6,
+    "started": 1790140127.9538257,
+    "finished": 1790143376.9777784,
+    "seconds": 3249.023952960968,
+    "goal_reached": true,
+    "capped_goal_seconds": 3249.017117500305,
+    "state": {
+      "started": 1790140127.9538257,
+      "terminal": true,
+      "goal_reached": true,
+      "confirmation_used": true,
+      "best": 201.78693870421387,
+      "delivered": {
+        "action": "b0-s0",
+        "finished": 1790143376.9709432,
+        "accepted": true,
+        "within_deadline": true,
+        "route": "fresh_confirmation_then_audit",
+        "source_sha256": "3b972ac001844abe9e1a4ad3b2ab178de2db7d4da74bbbdc1ab2f11f8690f079",
+        "checkpoint_sha256": "1260a47ef67a1fa6ceecc9cdc07ac6ac147619dd15884c69d55bdacf0b653562"
+      }
+    },
+    "metrics": {
+      "best_score": -201.78693870421387,
+      "calls": 2,
+      "cost": 1.032415,
+      "parallel_seconds_estimate": 3248.95818901062,
+      "quality_gain": 0.08701673887347705,
+      "rounds": 1,
+      "supported": true
+    },
+    "paid_calls": 2,
+    "retained_upper_usd": 1.288375,
+    "unused_proposals": 1,
+    "invalid_attempts": 0,
+    "unadmitted_attempts": 0
+  },
+  "selected_source_sha256": "3b972ac001844abe9e1a4ad3b2ab178de2db7d4da74bbbdc1ab2f11f8690f079",
+  "model_authored_rationale": "QAP solver: Taillard-style Robust Taboo Search (RoTS) with O(1)-amortized swap\ndelta updates, replacing the reference's scipy FAQ/2-opt multistart.\n\nRationale (exploratory but standard): for n=64 sparse heavy-tailed flow / geometric\ndistance QAP instances, scipy's `quadratic_assignment` 2-opt and FAQ restarts explore\nvery few solutions per second.  RoTS keeps a full move-cost table delta[i,j] for all\ntranspositions and updates it in O(n^2) per accepted move (O(1) per pair), so a single\niteration evaluates *all* 2016 candidate swaps exactly.  With numba this gives ~10^4-10^5\niterations/second per instance, i.e. several 10^5 exact steepest-descent-with-tabu moves\nper instance inside the prediction budget, versus a few hundred 2-opt passes for the\nreference.  Multi-start (several independent RoTS runs from random permutations) plus\nTaillard's randomized tabu tenure (0.9n..1.1n) and aspiration (5n^2) supply diversification.\n\nDeterminism: per-instance seeds derive from the instance index only; no label or\nordering information is used.  Time budget is measured inside predict (compilation and\ncalibration included) and split evenly over instances, run 2-way parallel over the two\navailable CPU cores.  A scipy FAQ/2-opt fallback is kept in case numba is unavailable.",
+  "stages": {
+    "development": {
+      "model_authored_findings": {
+        "method": "robust_taboo_search_qap",
+        "note": "no labels: optimization task; internal check compares objectives on train instances",
+        "train_instances": 64,
+        "n": 64,
+        "rots_iters_per_sec_single_thread": 18023.5,
+        "internal_check": {
+          "instances": 6,
+          "runs": 1,
+          "iters_per_run": 324423,
+          "rots_mean_objective": 196.9042,
+          "rots_seconds": 55.0,
+          "scipy_faq2opt_4restarts_mean_objective": 217.938,
+          "scipy_seconds": 8.4,
+          "relative_reduction_vs_scipy": 0.0965
+        },
+        "limitations": "Train instances are independently generated and unlabeled; the internal comparison uses a reduced-budget scipy reference (4 restarts) so it is not a like-for-like reproduction of the baseline 16-restart setting. No optimality gaps are known.",
+        "training_seconds": 65.3
+      },
+      "timing": {
+        "started": 1790140303.132022,
+        "finished": 1790141374.8956351,
+        "seconds": 1071.7636137008667
+      },
+      "closure": {
+        "finished": 1790141375.636174,
+        "seconds": 1074.6297116279602,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T05:11:41.113894843Z",
+          "FinishedAt": "2026-09-23T05:29:35.504548414Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 6
+      }
+    },
+    "confirmation": {
+      "model_authored_findings": {},
+      "timing": {
+        "started": 1790141377.856757,
+        "finished": 1790142364.646291,
+        "seconds": 986.789534330368
+      },
+      "closure": {
+        "finished": 1790142365.401391,
+        "seconds": 989.6936390399933,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T05:29:35.811951749Z",
+          "FinishedAt": "2026-09-23T05:46:05.246382096Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 6
+      },
+      "comparison": {
+        "relative_gain": 0.0890016691119011,
+        "candidate_loss": 204.57376736721574,
+        "baseline_loss": 224.5599804423179,
+        "groups": 32,
+        "paired_group_97_5_upper_difference": -17.688732999463333,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    "audit": {
+      "model_authored_findings": {},
+      "timing": {
+        "started": 1790142367.6040046,
+        "finished": 1790143376.1687677,
+        "seconds": 1008.5647633075714
+      },
+      "closure": {
+        "finished": 1790143376.8795621,
+        "seconds": 1011.3968322277069,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T05:46:05.587044365Z",
+          "FinishedAt": "2026-09-23T06:02:56.769209504Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 6
+      },
+      "comparison": {
+        "relative_gain": 0.07944854284305536,
+        "candidate_loss": 201.18803714571033,
+        "baseline_loss": 218.55164703890074,
+        "groups": 64,
+        "paired_group_97_5_upper_difference": -15.977907688089498,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    }
+  },
+  "new_prediction_checks": [
+    {
+      "split": "confirmation",
+      "instances": 32,
+      "facilities": 64,
+      "valid_permutations": true,
+      "candidate_loss": 204.5737673672157,
+      "baseline_loss": 224.55998044231794,
+      "relative_gain": 0.08900166911190144
+    },
+    {
+      "split": "audit",
+      "instances": 64,
+      "facilities": 64,
+      "valid_permutations": true,
+      "candidate_loss": 201.1880371457103,
+      "baseline_loss": 218.55164703890074,
+      "relative_gain": 0.07944854284305547
+    }
+  ],
+  "attempts": [
+    {
+      "action": "b0-s0",
+      "status": "ok",
+      "cost": 0.43402,
+      "known_usage_estimate_usd": 0.43402,
+      "score": -201.78693870421387,
+      "unused_after_delivery": false
+    },
+    {
+      "action": "b1-s0",
+      "status": "blocked",
+      "cost": 0.598395,
+      "known_usage_estimate_usd": 0.598395,
+      "score": null,
+      "unused_after_delivery": true
+    }
+  ],
+  "first_qap_pair": [
+    {
+      "arm": "control",
+      "goal_reached": true,
+      "goal_minutes": 54.15028529167175,
+      "audit": {
+        "relative_gain": 0.07944854284305536,
+        "candidate_loss": 201.18803714571033,
+        "baseline_loss": 218.55164703890074,
+        "groups": 64,
+        "paired_group_97_5_upper_difference": -15.977907688089498,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "paid_calls": 2,
+      "unused_proposals": 1
+    },
+    {
+      "arm": "candidate",
+      "goal_reached": true,
+      "goal_minutes": 29.31417424281438,
+      "audit": {
+        "relative_gain": 0.08557298239332434,
+        "candidate_loss": 199.84953079480886,
+        "baseline_loss": 218.55164703890074,
+        "groups": 64,
+        "paired_group_97_5_upper_difference": -17.209637837038922,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "paid_calls": 2,
+      "unused_proposals": 1
+    }
+  ],
+  "first_pair_descriptive_time_reduction": 0.45865152722800395,
+  "review_findings": [
+    "Both arms implement compiled Taillard-style robust tabu search using two CPU threads. Control uses independent randomized multi-start runs; candidate perturbs previous best/current solutions between 30000-iteration phases. No one-factor ablation separates algorithm, RNG, budget and scheduling differences.",
+    "Control measures a short single-thread calibration then converts the 1120-second prediction budget into fixed iteration counts with a 0.9 factor, split over instances and two threads. Its actual stage times, not the nominal budget, determine delivery.",
+    "Control six-training-instance internal test reports 196.9042 versus a four-restart scipy baseline at 217.938, about 9.65% lower objective. This is a reduced reference, explicitly different from the common 16-restart reference; host final audit uses the correct frozen common reference.",
+    "Control audit objective 201.18804 versus 218.55165, improvement 7.9449%, passes. Candidate audit objective 199.84953 and 29.314-minute delivery versus control 54.150 minutes. This is a single paired repetition, not the full QAP task-class or optimization-family mean.",
+    "One unused paid proposal in each arm. Requests for both completed episodes have known usage; the full campaign remains open and no reservation is released."
+  ],
+  "evidence_sha256": {
+    "rsi-prospective-20260923/episodes/qap-0-control/completed.json": "70551ed6b72bfcb45974c140276df265037437860d01f773001a353016bd4400",
+    "rsi-prospective-20260923/episodes/qap-0-control/goal-delivered.json": "cd5e9305e96032d5bf11242e36a56aa13d638188853094eadf891ffc27d1138b",
+    "rsi-prospective-20260923/calls/qap-0-control/b0-s0/candidate.py": "3b972ac001844abe9e1a4ad3b2ab178de2db7d4da74bbbdc1ab2f11f8690f079",
+    "rsi-prospective-20260923/references/qap-0.json": "e9bccaa68af39a1156cd426ae049c18792fbbdb667887438aebce4f9b762dd18",
+    "rsi-prospective-analysis-20260923/qap-first-stages-pointloss-001.json": "6606b6d529cc9ed9ee917f353aae4214c65d931a5c787c4345584f10b1ca2e98",
+    "rsi-prospective-analysis-20260923/qap-first-candidate-review-001.json": "1beb8fe80e1665015e040cd602cfffb8313078cd5f18f749bfddea4c54e4783e",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0/result.json": "10d640b00f9db2e0f45a4282e1d94ba2b5a75ed93f3857072deed0eb0eca6bef",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0/closure.json": "0ef4465a0c51cab1e86fe327966bedb08678d9c77e879a4cd4be6da2ac9eca1c",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0/timing.json": "3aec0c5c11ab5910737ce85b1c872f515af8c6439617bec9b5e120ce32504c90",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0-confirmation/result.json": "5666b4ffa84220ceebb8baf54746ab03eb14afaeede8b34510ed5209ce444fbb",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0-confirmation/closure.json": "183379955337ef12f691448acce8ddb787f1471d10ab5357dbf9b288566efe1d",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0-confirmation/timing.json": "d645a02ba176acad4e90a31e1b70133c63906d04a68fa1a2b3655f8a84544288",
+    "rsi-prospective-20260923/data/qap-0/confirmation/features.npy": "7dedfba4918a2fbf4713b8088ced619048579adea292d253f9f9f899b6cbcce2",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0-confirmation/comparison.json": "2758ab8055d0ed06e4f3c4996a82397b6378cb88f6c264b11a192acef627832b",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0-audit/result.json": "a06236e9f127ce0906d6014b51c2e9280a6441de2d2c9caa5edfb89afc952a9d",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0-audit/closure.json": "23e6916bee8f2e543450b1db67f6e35b9cfd7943b97d0f4baa3306a7e28bd61e",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0-audit/timing.json": "46cf75d9061bc5884ebf91b6a7f5461f1bc91468e9255e6d663b04c68f21900d",
+    "rsi-prospective-20260923/data/qap-0/audit/features.npy": "1131046693c32322c06494d2f0a538569f9bfd83caeb5fcdb47c519dc5971d32",
+    "rsi-prospective-20260923/episodes/qap-0-control/b0-s0-audit/comparison.json": "cee91b22357d089f6e7c8ba837309de0a46d550cd3bb549376561880ac10dace",
+    "rsi-prospective-20260923/calls/qap-0-control/b0-s0/outcome.json": "f08779f91e225aeebbf02cc6a966a4b9118e7e4a717b0d1c4e2789b50b21760a",
+    "rsi-prospective-20260923/calls/qap-0-control/b0-s0/process-closed.json": "d56dbda7057013c6a474525518a4f69c31c08c82fc92bd755ed84b5101890411",
+    "rsi-prospective-20260923/calls/qap-0-control/b0-s0/usage.jsonl": "b1578c2f1823261292cafa54563f4a397b9bb7f7f70701c552d8da99a62e1638",
+    "rsi-prospective-20260923/calls/qap-0-control/b1-s0/outcome.json": "818ecb604f4a37b9b993e28195e7160ecf7e9f9ba959431ff851a7d4e23ee061",
+    "rsi-prospective-20260923/calls/qap-0-control/b1-s0/process-closed.json": "aa0b02e06a637e807e5c489c9356075677b3836b3794fe96cc44fb5cbf7e726c",
+    "rsi-prospective-20260923/calls/qap-0-control/b1-s0/usage.jsonl": "db4228f2d93007ecdd92326cae157351857f1010e1b393533eb63adece6c190d",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/completed.json": "a7d70e5f28f7cc24cacc1ea39b682f89b71f08b3429d1995d58f502e00d29835",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0-audit/comparison.json": "4eb64be9614fe7f69a49da2d47180ad17f8e749c04b1f4a2dd65068dc7044839"
+  },
+  "new_model_requests": 0,
+  "new_gpu_executions": 0,
+  "whole_campaign_verified": false,
+  "default_promotion_authorized": false
+}

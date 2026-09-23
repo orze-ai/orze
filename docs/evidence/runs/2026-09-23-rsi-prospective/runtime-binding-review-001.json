@@ -1,0 +1,67 @@
+{
+  "created": 1790143190.5579324,
+  "scope": "Read-only static binding review and local listener snapshot. Not a launched product workflow, deployed-model identity proof, service health diagnosis, or performance test.",
+  "project": "/hot-data/fsx/workspace/erik/work/auto-research-1.7b",
+  "config_path": "/hot-data/fsx/workspace/erik/work/auto-research-1.7b/orze.yaml",
+  "config_sha256": "8ac66907af138b4265e5cf909fb077f416272182ecf2bc26852dacc37774eaf7",
+  "config_subset": {
+    "research_mode": "research",
+    "backend": "custom",
+    "model": "sonnet",
+    "endpoint_is_loopback": true,
+    "endpoint_port": 8801
+  },
+  "local_listener_observed": false,
+  "listener_check_exit_code": 0,
+  "inspected_source_tree_run_discovery_mentions": [
+    "pro/src/orze_pro/agents/exploration.py:38:def run_discovery(spec, execute_batch=None, *, output, policy=None, training=None,"
+  ],
+  "native_configured_chain": [
+    {
+      "path": "pro/src/orze_pro/engine/role_runner.py",
+      "function": "build_research_cmd",
+      "finding": "Passes configured backend/model/endpoint explicitly to agents/research.py."
+    },
+    {
+      "path": "pro/src/orze_pro/agents/research.py",
+      "function": "main -> run_cli_cycle -> run_research_cycle",
+      "finding": "Passes CLI backend/model/endpoint into call_llm; this source has no run_discovery or run_prepared call."
+    },
+    {
+      "path": "pro/src/orze_pro/agents/research_llm.py",
+      "function": "call_llm custom branch",
+      "finding": "Uses explicit model and endpoint; changing the Anthropic unspecified-model fallback would not change this configured custom request."
+    }
+  ],
+  "frozen_study_chain": {
+    "execution_entry": "orze.research.execution.run_prepared",
+    "provider_entry": "orze_pro.agents.research_llm.call_llm",
+    "backend": "anthropic",
+    "models": {
+      "control": "claude-opus-5",
+      "candidate": "claude-opus-5-5"
+    },
+    "effort": "high",
+    "output_tokens": 32768,
+    "fallback_enabled": false
+  },
+  "findings": [
+    "The frozen study remains a valid scoped comparison of the two explicitly named models using the same prepared execution loop; this read does not change its control, protocol or results.",
+    "The current project configuration names custom/sonnet, not either explicit study model. The configured loopback endpoint had no listening socket in this namespace at the snapshot; resolved provider-model identity and a currently running native research path are not established.",
+    "Within the inspected Core/Pro src trees, run_discovery occurs only as its public API definition. The inspected native proposal role calls call_llm directly; callback-library defaults alone do not demonstrate that this project executes the tested discovery/confirmation path.",
+    "Before a later platform-default claim, identify and freeze the intended production research entry and its actual incumbent binding, integrate any winning intervention there, and verify that both evaluation and default invocation traverse the intended path. Do not retrofit the current model-only comparison or change live services."
+  ],
+  "evidence_sha256": {
+    "pro/src/orze_pro/agents/exploration.py": "bef28adab99114585f3e2e33c4b7b290c9c0fc086fa6402801cb3ed204a78682",
+    "pro/src/orze_pro/engine/role_runner.py": "395d0a4f6f9c39dc77c5c758ba7c6785db0b5cd39248d4377f42aaf3dd9c7912",
+    "pro/src/orze_pro/agents/research.py": "18c42aef802de1fbccb0dce9088560a6a9ba92d95b6268a00cceb320caba6f52",
+    "pro/src/orze_pro/agents/research_llm.py": "0f6e1e6337fa37ce3642730c82d796b2223c98dd27a90a80ac80be1595de72d5",
+    "rsi-prospective-20260923/study.py": "d86f05949a100838c3e953d3202568e0ed8271a73a0ec834fd509f45408bac59",
+    "rsi-prospective-20260923/model_call.py": "4fa42fdbc2d1105db4e0f5d7dc554d8c0bbdabec202d5151ede22cfe53ed31e8",
+    "rsi-prospective-20260923/plan.json": "bf1fc33a340d075d2338209e0a45daa561cb8a08c7530328f0c9d1228dd16835"
+  },
+  "new_model_requests": 0,
+  "new_container_executions": 0,
+  "services_modified": false,
+  "product_defaults_changed": false
+}
