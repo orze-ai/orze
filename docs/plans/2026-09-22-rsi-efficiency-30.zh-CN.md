@@ -77,6 +77,12 @@ SARCOS 官方测试中大量特征重复，实际合并去重后按输入组重�
 
 [等待消除诊断](../evidence/runs/2026-09-23-rsi-prospective/wait-removal-diagnostic-001.json) 与 [确认失败后提前审计诊断](../evidence/runs/2026-09-23-rsi-prospective/post-confirmation-audit-diagnostic-001.json) 均不足以支持通用捷径。去掉旧轨迹等待不等于改变搜索路径后的新策略；提前交付失败结果仍按失败计时，保留继续探索的能力。
 
+## 后续独立数据准备
+
+[六个公开数据集的原始检查](../evidence/runs/2026-09-23-rsi-next-inputs/INPUT-CHECKS.zh-CN.md) 已完成：EMNIST Balanced、SVHN、Banking77、DBpedia 14、Bike hourly、Superconductivity。九个文件约 937 MB，来源与校验值已保留；没有新增模型或 GPU 请求。Banking77/DBpedia 存在跨原始 train/test 重复，单车两列直接组成目标，超导数据大量相同组成有不同温度，必须在后续划分中处理。
+
+这只是输入准备；划分、共同参考、优化问题任务、目标可达性和下一候选尚未冻结或验证。不能把下载/完整性检查当作新前瞻结果，也不据当前混合实验的中途表现筛选数据或降低门槛。
+
 ## 实际入口与平台交付仍缺什么
 
 [运行绑定核查](../evidence/runs/2026-09-23-rsi-prospective/runtime-binding-review-001.json)：项目配置是 `mode: research / backend: custom / model: sonnet`，原生 `build_research_cmd → research.py → run_research_cycle → call_llm` 只接纳提案入队，没有经过实验的 `run_prepared` 确认/审计流程。实验显式使用 Anthropic 模型；`run_discovery` 的默认 ParallelRefine 也不决定调用方研究模型。
