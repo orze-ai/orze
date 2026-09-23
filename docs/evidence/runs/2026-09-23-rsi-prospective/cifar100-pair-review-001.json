@@ -1,0 +1,113 @@
+{
+  "created": 1790132419.3376021,
+  "scope": "First completed prospective task/repetition pair; descriptive only. Not a family or campaign verdict.",
+  "rows": [
+    {
+      "arm": "control",
+      "model": "claude-opus-5",
+      "episode": "cifar100-0-control",
+      "action": "b0-s0",
+      "goal_seconds": 458.4626054763794,
+      "actual_audit_error_rate": 0.3574,
+      "audit_relative_gain": 0.15267899478425795,
+      "audit_comparison": {
+        "relative_gain": 0.15267899478425795,
+        "candidate_loss": 0.3574,
+        "baseline_loss": 0.4218,
+        "groups": 5000,
+        "paired_group_97_5_upper_difference": -0.05319500000000007,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "findings": {
+        "models": 3,
+        "per_model": [
+          {
+            "model": 0,
+            "epochs": 240,
+            "steps": 10320,
+            "rows": 11040,
+            "seconds": 226.6
+          },
+          {
+            "model": 1,
+            "epochs": 240,
+            "steps": 11040,
+            "rows": 12000,
+            "seconds": 290.4
+          },
+          {
+            "model": 2,
+            "epochs": 240,
+            "steps": 11040,
+            "rows": 12000,
+            "seconds": 486.2
+          }
+        ],
+        "train_rows": 12000,
+        "holdout_rows": 960,
+        "holdout_acc_model0_unbiased": 0.5843750238418579,
+        "holdout_acc_ensemble_optimistic": 1.0,
+        "training_seconds": 293.8,
+        "limitations": "Models 1-2 trained on all rows including the holdout group, so the ensemble holdout accuracy is optimistic; only model 0 is unbiased. No development labels were used. Epoch counts are wall-time limited on a shared GPU, so the schedule length can vary between runs.",
+        "augmentation": "per-sample pad4 crop + hflip + cutout8(p=0.5) + mixup(a=0.2,p=0.5), ls=0.1"
+      },
+      "host_train_container_seconds": 297.4306643009186,
+      "source_rationale": "CIFAR-100 (12k-image subset) method.\n\nRationale (exploratory, measured only by the reported holdout numbers below):\nThe common reference is a ResNet-9 trained ~100 epochs with (a) a *single* crop\noffset shared by the whole mini-batch, (b) no cutout/mixup, (c) no ensembling.\nOn a 12k-image subset of CIFAR-100 the dominant error source is overfitting plus\nunder-trained schedules, so this method changes three things that are cheap in\nwall time on an A100:\n\n1. Per-sample augmentation: per-image random translation (reflect-pad 4, gathered\n   crop), per-image horizontal flip (allowed for CIFAR), per-image cutout (8x8,\n   p=0.5) and batch-level mixup (alpha=0.2, p=0.5) with label smoothing 0.1.\n2. A slightly wider ResNet-9 (64/128/256/512, three residual pairs, avg+max\n   concat head) trained with SGD+Nesterov, warmup + cosine, bf16 autocast,\n   channels_last, all data resident on GPU -> a few hundred epochs per model\n   inside the budget instead of ~100.\n3. A 3-model seed ensemble with horizontal-flip test-time augmentation\n   (softmax averaging).\n\nValidation: groups from api.train_groups are split so that model 0 never sees a\nheld-out group; its holdout accuracy is an unbiased single-model estimate.\nModels 1 and 2 use all training rows, so the reported *ensemble* holdout number\nis optimistic and is labelled as such in the findings.",
+      "source_sha256": "27362313820db493cd8bc77f5ecc5851485d0055d42e54d85db0289442b36e3f",
+      "completed_sha256": "60e98c1de2a34cc0ce4e0566c6186f3d684af204d673ee811fd3d9a222f8ce9d"
+    },
+    {
+      "arm": "candidate",
+      "model": "claude-opus-5-5",
+      "episode": "cifar100-0-candidate",
+      "action": "b1-s0",
+      "goal_seconds": 761.32590508461,
+      "actual_audit_error_rate": 0.3552,
+      "audit_relative_gain": 0.1578947368421052,
+      "audit_comparison": {
+        "relative_gain": 0.1578947368421052,
+        "candidate_loss": 0.3552,
+        "baseline_loss": 0.4218,
+        "groups": 5000,
+        "paired_group_97_5_upper_difference": -0.0568,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "findings": {
+        "parent_loaded": true,
+        "epochs": 1083,
+        "updates": 101768,
+        "cutmix_updates": 47861,
+        "train_loop_seconds": 669.0465424060822,
+        "last_logged_train_loss": 0.4411211311817169,
+        "width": [
+          96,
+          192,
+          384
+        ],
+        "ensemble_weight_new": 0.62,
+        "dev_agreement_new_vs_parent": 0.6000000238418579,
+        "dev_agreement_ens_vs_parent": 0.7795000076293945,
+        "dev_agreement_ens_vs_new": 0.8100000023841858,
+        "total_train_seconds": 678.5790057182312,
+        "limitations": "No development labels were used; agreement rates are not accuracy. Single seed, no internal validation holdout."
+      },
+      "host_train_container_seconds": 681.8060789108276,
+      "source_rationale": "CIFAR-100 (12k training images): stronger augmentation and a wider net, ensembled with the parent.\n\nRationale (exploratory and unverified; no development labels are used here):\n- The reference is a ResNet9-style network (error 0.425). It crops the whole batch\n  with one shared offset and uses no mixing augmentation. With only 120 images per\n  class, stronger regularization should matter most.\n- This method trains a 1.5x wider version of the same architecture. It uses\n  per-sample random crops, per-sample horizontal flips (the task marks flips as\n  valid), CutMix with probability 0.5, label smoothing, and SGD with Nesterov\n  momentum. The learning-rate schedule (warmup then cosine) is driven by elapsed\n  time, so it completes even when the shared GPU runs slower.\n- At prediction time, flip-averaged softmax outputs of the new network are mixed\n  with those of the parent reference network, loaded read-only from\n  api.parent_dir. Averaging two differently trained networks usually lowers\n  error. If the parent cannot be loaded, the new network is used alone.\n- The findings record training statistics and prediction agreement with the\n  parent on development features only. They are not accuracy measurements.",
+      "source_sha256": "15384c86e5108d53324f35e7978237b50de3e9023bc69a13aa5ada53f0e20acb",
+      "completed_sha256": "eeb62ab10e0f38ad2071ae5d29e6db65c4521d4ec99e3f64bae89365484a8a10"
+    }
+  ],
+  "candidate_minus_control_seconds": 302.8632996082306,
+  "observations": [
+    "Both achieved the frozen independent audit goal. Candidate took 12.689 minutes versus control 7.641 minutes.",
+    "Candidate loaded the parent and trained one wider model for 1083 epochs / 669 measured loop seconds. Control trained three 240-epoch models; actual total training was about 294 seconds.",
+    "Parent reuse and fewer new models did not predict lower goal time in this pair. Training schedule, architecture, model response latency and shared hardware were not separately ablated.",
+    "Second repetition has exchanged the arms across GPU 0/1. No outcome is fed back into the frozen study design."
+  ],
+  "whole_campaign_verified": false,
+  "default_promotion_authorized": false,
+  "research_requests": 0,
+  "gpu_executions": 0
+}

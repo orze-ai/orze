@@ -1,0 +1,163 @@
+{
+  "created": 1790131898.6581314,
+  "scope": "Post-hoc read-only review of completed episodes only, while fixed study continues. No feedback injected into researcher prompts, no new model requests or GPU executions.",
+  "frozen_plan_sha256": "bf1fc33a340d075d2338209e0a45daa561cb8a08c7530328f0c9d1228dd16835",
+  "complete_campaign": false,
+  "rows": [
+    {
+      "episode": "abalone-0-control",
+      "completed_sha256": "25f30ef6023d0a0e787ae2dd18c42fcc77054e29294593ba0b571fcf9754724f",
+      "goal_reached": false,
+      "actual_episode_seconds": 199.27177548408508,
+      "capped_goal_seconds": 7200,
+      "selected_action": "b1-s0",
+      "unused_paid_proposals": 1,
+      "source_sha256": "2173eb3fbf6b2d20e6fe81c0bf6caa144a6e00ff39c19fe24f29e06b10b10945",
+      "rationale": "Abalone rings regression: group-aware stacked ensemble.\n\nRationale (exploratory, validated only by internal group CV):\nThe common reference is a single ExtraTreesRegressor (dev MSE 4.677).  Abalone\nring counts are noisy and heteroscedastic; single fully-grown tree ensembles\noverfit local structure and mis-handle the heavy upper tail.  This method\n(1) adds physically meaningful derived features (weight ratios, \"dried/other\"\nweight residual, volume and densities, log and cube-root scalings),\n(2) trains a diverse pool of base learners with different inductive biases\n(two histogram GBMs, a Poisson-loss GBM, log-target GBM, ExtraTrees, RF,\ndegree-2 polynomial RidgeCV, kNN, RBF-SVR, MLP),\n(3) blends them with non-negative least squares plus a free intercept fitted on\nout-of-fold predictions generated with GroupKFold over api.train_groups, so the\nblend weights estimate the declared new-group generalization task rather than\nin-sample fit.\nNon-negative weights with an intercept act as a shrinkage/recalibration step,\nwhich typically buys a few percent MSE over any single member.\n\nLimitations: weights are fitted on ~2.3k training rows with a modest number of\ngroups, so blend weights carry sampling noise; CV MSE reported in findings is an\ninternal estimate, not an independent measurement on development/audit data.",
+      "measured_findings": {
+        "cv_scheme": "GroupKFold",
+        "cv_folds": 8,
+        "n_train": 2297,
+        "n_groups": 2297,
+        "n_features_engineered": 39,
+        "oof_mse_per_model": {
+          "hgb_a": 4.8323,
+          "hgb_b": 4.7712,
+          "hgb_pois": 4.7445,
+          "hgb_log": 4.7029,
+          "et": 4.4383,
+          "rf": 4.4937,
+          "ridge2": 5.0587,
+          "knn": 4.7895,
+          "svr": 4.5937,
+          "mlp": 5.5389
+        },
+        "oof_mse_simple_average": 4.4166,
+        "oof_mse_blend": 4.3563,
+        "blend_weights": {
+          "hgb_a": 0.0,
+          "hgb_b": 0.1047,
+          "hgb_pois": 0.0,
+          "hgb_log": 0.0,
+          "et": 0.2774,
+          "rf": 0.1492,
+          "ridge2": 0.1269,
+          "knn": 0.1183,
+          "svr": 0.264,
+          "mlp": 0.0
+        },
+        "blend_intercept": -0.3326,
+        "uniform_shrinkage_lambda": 0.0,
+        "reference_development_mse": 4.677169218230423,
+        "training_seconds": 82.8,
+        "limitations": [
+          "OOF MSE is an internal group-CV estimate on training rows only; it is not a measurement on development or audit data.",
+          "Blend weights are fitted on the same OOF predictions used to report blend MSE, so the reported blend MSE is mildly optimistic.",
+          "No development labels were used anywhere in this method."
+        ]
+      },
+      "development_loss": 4.1544690474587185,
+      "comparisons": {
+        "confirmation": {
+          "relative_gain": 0.20033994947880718,
+          "candidate_loss": 3.7181429071974104,
+          "baseline_loss": 4.649654443502641,
+          "groups": 626,
+          "paired_group_97_5_upper_difference": -0.6231412545069277,
+          "qualified": true,
+          "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+        },
+        "audit": {
+          "relative_gain": 0.0979480377353128,
+          "candidate_loss": 4.471288868332041,
+          "baseline_loss": 4.956797452229299,
+          "groups": 628,
+          "paired_group_97_5_upper_difference": -0.15189581074918768,
+          "qualified": false,
+          "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+        }
+      }
+    },
+    {
+      "episode": "cifar100-0-control",
+      "completed_sha256": "60e98c1de2a34cc0ce4e0566c6186f3d684af204d673ee811fd3d9a222f8ce9d",
+      "goal_reached": true,
+      "actual_episode_seconds": 458.61172556877136,
+      "capped_goal_seconds": 458.4626054763794,
+      "selected_action": "b0-s0",
+      "unused_paid_proposals": 1,
+      "source_sha256": "27362313820db493cd8bc77f5ecc5851485d0055d42e54d85db0289442b36e3f",
+      "rationale": "CIFAR-100 (12k-image subset) method.\n\nRationale (exploratory, measured only by the reported holdout numbers below):\nThe common reference is a ResNet-9 trained ~100 epochs with (a) a *single* crop\noffset shared by the whole mini-batch, (b) no cutout/mixup, (c) no ensembling.\nOn a 12k-image subset of CIFAR-100 the dominant error source is overfitting plus\nunder-trained schedules, so this method changes three things that are cheap in\nwall time on an A100:\n\n1. Per-sample augmentation: per-image random translation (reflect-pad 4, gathered\n   crop), per-image horizontal flip (allowed for CIFAR), per-image cutout (8x8,\n   p=0.5) and batch-level mixup (alpha=0.2, p=0.5) with label smoothing 0.1.\n2. A slightly wider ResNet-9 (64/128/256/512, three residual pairs, avg+max\n   concat head) trained with SGD+Nesterov, warmup + cosine, bf16 autocast,\n   channels_last, all data resident on GPU -> a few hundred epochs per model\n   inside the budget instead of ~100.\n3. A 3-model seed ensemble with horizontal-flip test-time augmentation\n   (softmax averaging).\n\nValidation: groups from api.train_groups are split so that model 0 never sees a\nheld-out group; its holdout accuracy is an unbiased single-model estimate.\nModels 1 and 2 use all training rows, so the reported *ensemble* holdout number\nis optimistic and is labelled as such in the findings.",
+      "measured_findings": {
+        "models": 3,
+        "per_model": [
+          {
+            "model": 0,
+            "epochs": 240,
+            "steps": 10320,
+            "rows": 11040,
+            "seconds": 226.6
+          },
+          {
+            "model": 1,
+            "epochs": 240,
+            "steps": 11040,
+            "rows": 12000,
+            "seconds": 290.4
+          },
+          {
+            "model": 2,
+            "epochs": 240,
+            "steps": 11040,
+            "rows": 12000,
+            "seconds": 486.2
+          }
+        ],
+        "train_rows": 12000,
+        "holdout_rows": 960,
+        "holdout_acc_model0_unbiased": 0.5843750238418579,
+        "holdout_acc_ensemble_optimistic": 1.0,
+        "training_seconds": 293.8,
+        "limitations": "Models 1-2 trained on all rows including the holdout group, so the ensemble holdout accuracy is optimistic; only model 0 is unbiased. No development labels were used. Epoch counts are wall-time limited on a shared GPU, so the schedule length can vary between runs.",
+        "augmentation": "per-sample pad4 crop + hflip + cutout8(p=0.5) + mixup(a=0.2,p=0.5), ls=0.1"
+      },
+      "development_loss": 0.36,
+      "comparisons": {
+        "confirmation": {
+          "relative_gain": 0.17172897196261683,
+          "candidate_loss": 0.3545,
+          "baseline_loss": 0.428,
+          "groups": 2000,
+          "paired_group_97_5_upper_difference": -0.0555,
+          "qualified": true,
+          "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+        },
+        "audit": {
+          "relative_gain": 0.15267899478425795,
+          "candidate_loss": 0.3574,
+          "baseline_loss": 0.4218,
+          "groups": 5000,
+          "paired_group_97_5_upper_difference": -0.05319500000000007,
+          "qualified": true,
+          "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+        }
+      }
+    }
+  ],
+  "implementation_errors_so_far": [
+    {
+      "attempt": "calls/agnews-0-control/b0-s0",
+      "error": "ValueError: The 'liblinear' solver does not support multiclass classification (n_classes >= 3). Either use another solver or wrap the estimator in a OneVsRestClassifier to keep applying a one-versus-rest scheme.",
+      "outcome_sha256": "d135cd343dfb86b70f5d6abe3c265b62c42da42277685f756dc81bc84878e5fe"
+    }
+  ],
+  "observations": [
+    "Abalone-0 control executed eight-fold grouped CV and a heterogeneous nonnegative blend with derived physical features. All 2297 training feature groups were distinct.",
+    "Its 20.0339949% confirmation gain did not establish the final target: audit gain was 9.7948038%, below the frozen 10% floor despite a negative paired uncertainty bound.",
+    "The observed gap does not by itself identify overfitting, random sample variation or population shift as its cause.",
+    "The unused proposal followed a terminal rejected audit; unused_after_delivery does not imply successful delivery.",
+    "The AG News control liblinear multiclass error is an implementation failure in this runtime, distinct from a negative method result."
+  ],
+  "default_promotion_authorized": false,
+  "goal_30_percent_achieved": false
+}
