@@ -1,0 +1,301 @@
+{
+  "finished": 1790151139.2998161,
+  "judgments": {
+    "kmnist-0-forward": {
+      "started": 1790150874.4822335,
+      "finished": 1790150903.994227,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.12538,
+      "preference": {
+        "preferred": "B",
+        "reasons": [
+          "Both proposals follow the same core recipe: reference-architecture ResNets trained with no-flip affine augmentation, then softmax-averaged with the parent net loaded from parent_dir. Both respect the KMNIST no-flip contract, keep learned state in the model dict, and appear to fit the 900 s train and 600 s predict limits. The difference is mainly robustness of ensemble size.",
+          "A's member loop is fragile on a slow shared GPU. The first member may use up to 360 s, and the next starts only if elapsed + 1.15 \u00d7 last_dur \u2264 700. If a 60-epoch run hits the 360 s cap, 360 + 414 > 700, so A ends up with just one new net plus the parent. That two-member average is a weak ensemble with little variance reduction.",
+          "B always splits about 710 s across 3 new members (about 237 s each, fewer epochs if the GPU is slow). Its cosine schedule is time-based, so each member finishes its learning-rate schedule. B therefore guarantees a 4-member ensemble (3 new + parent).",
+          "B also adds 1-pixel shift test-time averaging to every member. These shifts fall within the parent's crop-augmentation range, so they are in-distribution. B stores the nets on CPU and moves them to the GPU when predicting, which is compatible and cheap. A only gains an advantage in the fast-GPU case, through more members, and more models are not automatically better."
+        ],
+        "uncertainties": [
+          "Actual per-epoch speed on the shared A100. If 60 epochs take about 100 s, A trains roughly 5\u20136 members versus B's 3, which could reverse the preference.",
+          "Whether B's heavier label smoothing (0.1) and shift TTA help or slightly hurt calibration when softmax-averaged with the parent. None of this is verified.",
+          "Whether either ensemble reduces audit errors enough (reference about 0.45% on 5000 rows) to give a negative paired bootstrap upper bound. Neither proposal uses a holdout to check this."
+        ],
+        "action": "b1-s0"
+      }
+    },
+    "kmnist-0-reverse": {
+      "started": 1790150874.4824724,
+      "finished": 1790150904.9455352,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.12968,
+      "preference": {
+        "preferred": "A",
+        "reasons": [
+          "A always trains three new affine-augmented members, each with about 236 s of budget, before averaging with the parent. B's adaptive loop gives the first member up to 360 s and stops when the elapsed time plus 1.15 times the last duration exceeds 700 s. If the shared GPU runs at the speed the reference's 650 s/100-epoch budget allows, B could end up with only one new net plus the parent.",
+          "A adds 5-way one-pixel-shift test-time averaging with zero padding, which suits KMNIST's zero background, and uses no flips. B averages single forward passes only. Both stay well within the 600 s prediction limit for 5000 audit rows.",
+          "Both correctly load the parent reference (a dict with net/mean/std) from api.parent_dir, keep all learned state in the model dict, avoid horizontal flips, and finish training near 700\u2013710 s, leaving room within the 900 s train limit. Neither has an obvious executable defect.",
+          "If the GPU is fast, B's larger ensemble of up to 8 members could beat A's 3 members plus test-time averaging, while A would leave budget unused once its members hit the 60-epoch cap. That gap is plausible but unverified; ensemble gains usually diminish after a few members. A's advantage is lower downside risk rather than a proven larger gain."
+        ],
+        "uncertainties": [
+          "Actual per-epoch speed on the shared A100, which determines how many members B trains and whether A reaches 60 epochs per member.",
+          "Whether shift test-time averaging or extra ensemble members matters more for the few remaining errors (about 9 of 2000 on development).",
+          "Whether either ensemble's gain is large enough for a negative bootstrap upper bound on the 5000-row audit."
+        ],
+        "action": "b1-s0"
+      }
+    },
+    "kmnist-1-forward": {
+      "started": 1790150903.9949534,
+      "finished": 1790150930.6987386,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.118444,
+      "preference": {
+        "preferred": "A",
+        "reasons": [
+          "A trains its new members with AdamW at lr 2e-3. That matches reference variant 1, which development loss selected over the SGD variant. B uses SGD at lr 0.08, close to the reference variant with higher development loss (0.007 vs 0.0065). This slightly favors A's optimizer choice, though the gap is small and unverified.",
+          "A adds EMA weights (decay 0.998, BatchNorm buffers included) and head dropout. These plausibly stabilize members trained on roughly a third of the reference's time each. A also rebuilds nets from CPU state_dicts with a module-level class, which gives robust serialization. B pickles live CUDA nets, including a re-pickled dynamic parent class. That likely works but is more fragile.",
+          "A's shift test-time averaging zero-pads raw images before normalization, so the shifted-in pixels are correct background. B uses torch.roll on normalized tensors, which wraps edge pixels around. This is probably harmless on KMNIST's mostly empty borders but less clean.",
+          "Both follow the contract: no horizontal flips in training or at test time, the parent is loaded as an extra ensemble member, and development labels are not used. Prediction cost is small for both. Neither holds out an internal group validation, so the preference rests on mechanism, not evidence."
+        ],
+        "uncertainties": [
+          "A's 745 s training deadline leaves less margin than B's 680 s under the 900 s train limit. The limit also covers worker startup, data loading, CUDA initialization, saving and development prediction; a slow shared GPU or slow loading could matter.",
+          "Whether either ensemble of four nets actually reaches the roughly 0.585% error needed on 5000 audit images with a negative bootstrap upper bound. The margin is only about 3\u20134 errors per 5000 images, which makes both outcomes highly uncertain.",
+          "Whether SGD with stronger translation augmentation (B) would outperform AdamW with EMA (A) on this particular split is unknown without measurement."
+        ],
+        "action": "b0-s0"
+      }
+    },
+    "kmnist-1-reverse": {
+      "started": 1790150904.9462361,
+      "finished": 1790150939.1589587,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.135504,
+      "preference": {
+        "preferred": "B",
+        "reasons": [
+          "B's new members use AdamW at lr 2e-3, the same optimizer family as reference variant 1. That variant was selected over SGD on development loss (0.0065 vs 0.007). This is weak but real evidence that it suits this data. A switches to SGD at lr 0.08 with a shorter, time-limited schedule.",
+          "B adds EMA weights and light head dropout. For roughly 250 s per member, this plausibly stabilizes the final weights. Otherwise the two proposals are close: both train three affine-augmented nets without flips (no horizontal flip in training or test-time averaging, as the contract requires), add the parent net, and average over one-pixel shifts.",
+          "B saves CPU state_dicts and rebuilds the nets from a module-level class, and it test-loads the parent into its own architecture. A instead re-pickles live CUDA modules, including the parent's dynamically defined class. A should still work under cloudpickle, but B's artifact path is more robust.",
+          "Both fit the limits: small memory use and trivial prediction time on the 5000 audit rows. B's 745 s training budget leaves about 150 s for loading, saving and development prediction. A's 680 s leaves more margin, but B's margin still looks adequate."
+        ],
+        "uncertainties": [
+          "The actual per-epoch speed on the shared A100. If each member gets only a few dozen epochs, the optimizer and schedule differences could reverse the ranking.",
+          "Whether either 4-member ensemble reduces development errors from about 13 to about 11 of 2000. The margin is roughly two images, so run-to-run noise may dominate the difference between A and B.",
+          "Whether the parent pickle deserializes cleanly in the new container. Both proposals fall back to their new members if it does not, but that would weaken the ensemble."
+        ],
+        "action": "b0-s0"
+      }
+    },
+    "abalone-0-forward": {
+      "started": 1790150930.6994424,
+      "finished": 1790150958.4549773,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.122176,
+      "preference": {
+        "preferred": "B",
+        "reasons": [
+          "Both proposals are grouped-CV NNLS stacks of similar smooth learners over engineered features. Neither has any measured evidence of reaching the 10% reduction (about 4.21 MSE versus 4.677), so the difference is mainly execution risk and stacking design.",
+          "B's base models are cheap at this data size: kernel ridge, SVR, HGB, RF/ET, a GLM, splines and one early-stopped MLP. A adds a GP regressor with marginal-likelihood hyperparameter optimisation (5 folds plus a refit) and a 3-seed bagged MLP with max_iter=500. A's 480 s guard only runs before each model starts, and the full-data refits come afterwards, so A has more risk against the 900 s train limit on 2 CPU cores.",
+          "B's NNLS stacker includes a signed intercept, which can correct the downward bias of its log-target models (SVR, KRR and spline predictions via exp). A's stacker has no intercept, so it must absorb that bias through weights alone. B also clips predictions to the observed label range instead of a hardcoded 1\u201329.",
+          "B reports per-fold stack-minus-ref_et differences, CV-honest stack MSE, the relative reduction versus ref_et, and per-model errors. This is more decision-useful than A's findings, which silently drop failed models."
+        ],
+        "uncertainties": [
+          "Whether the development/audit group shift resembles the GroupKFold shift on training groups, which determines whether smooth learners actually beat full-depth ExtraTrees by 10%.",
+          "Actual wall-clock of A's GPR optimisation and bagged MLPs on the shared 2-core container.",
+          "Whether either stack's gain over ref_et survives on development at all, since the typical abalone gain from such stacks may fall short of the 10% target."
+        ],
+        "action": "b1-s0"
+      }
+    },
+    "abalone-0-reverse": {
+      "started": 1790150939.1596425,
+      "finished": 1790150970.019815,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.130496,
+      "preference": {
+        "preferred": "A",
+        "reasons": [
+          "A clips all seven physical measurements to training quantiles (0.1%\u201399.9%) before feature engineering. That bounds extrapolation in its log-link GLM, log-target, spline and kernel models on feature-disjoint groups. B clips only height, and its degree-2 polynomial ridge can extrapolate freely on shifted feature groups, with only a final prediction clip to 1\u201329 as protection.",
+          "A fits its non-negative stacking weights with an intercept. It also reports per-fold stack-minus-reference differences under the same GroupKFold folds, which gives a more direct proxy for the paired audit test. B fits NNLS without an intercept and reports only aggregate MSEs.",
+          "Both are self-contained stacking methods with no parent dependency. They should fit the 900 s training limit: 1840-row folds, a time guard at 450 or 480 s, and base models that are mostly light apart from the 700-tree reference ExtraTrees. A uses only standard sklearn objects in the pickled model. B adds custom and locally defined wrapper classes and a GPR, which cloudpickle should handle but adds marginal risk and cost.",
+          "The advantage is modest. Both share the same core mechanism (grouped out-of-fold stacking of smoother learners), and neither has verified evidence of reaching the ~4.21 development MSE needed for a 10% reduction."
+        ],
+        "uncertainties": [
+          "Whether any regularized stack actually reaches the 10% reduction under the evaluator's feature-group shift; typical abalone MSE gains over ExtraTrees may be smaller than 10%.",
+          "Actual wall time of the 5-fold 700-tree reference ExtraTrees and of B's GPR/bagged MLP on the shared 2-core container.",
+          "Whether the training GroupKFold shift resembles the development/audit group shift, so that out-of-fold weights transfer."
+        ],
+        "action": "b1-s0"
+      }
+    },
+    "abalone-1-forward": {
+      "started": 1790150958.4557793,
+      "finished": 1790150996.5252867,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.1488,
+      "preference": {
+        "preferred": "A",
+        "reasons": [
+          "A's riskiest member, the exact ARD-RBF plus linear GP, runs a fixed 250 Adam steps in float64 on the GPU. At about 1.8k\u20132.3k rows it needs well under the 6 GiB cap. B's sklearn GP instead runs L-BFGS-B with 24 hyperparameters and no iteration cap. Its guard only controls whether the GP starts, not how long it runs, so on 2 CPU cores it could consume a large share of the 900 s train limit.",
+          "A wraps every member's cross-validation in try/except and drops failed members. B has no failure handling for its nine sklearn members, so any single error aborts training. Both refit selected members on the full data without protection, although that refit is low-risk in both.",
+          "A re-optimises GP hyperparameters inside each group fold, so its out-of-fold stacking inputs are cleaner. B tunes the GP kernel on a subset of all training rows (mild leakage it admits) and fits the GP on log(rings), which biases retransformed predictions downward under MSE; its stacker must correct for that.",
+          "Both proposals use group-aware 5-fold cross-validation, plausible smooth learners and a non-negative stack, so the modelling rationale is similar. B has two advantages: a proper intercept and a nested stack-MSE check that gives more honest evidence. A fits its stack without an intercept and then adds a mean-residual bias. The preference therefore rests mainly on bounded runtime and robustness, and it is weak."
+        ],
+        "uncertainties": [
+          "Whether either stack can actually reach the target of development MSE \u2264 about 4.43 (a 10% reduction from 4.92) under the feature-group split; smooth models on abalone often land near 4.4\u20134.6.",
+          "Actual wall time of B's L-BFGS GP optimisation on 1200 rows with 2 CPU cores, and of A's 5-seed MLP ensemble on a shared GPU.",
+          "Whether B's extra diversity (Poisson boosting, log-target SVR, KNN, polynomial ridge) adds more stacking gain than A's stronger per-fold GP and MLP ensemble."
+        ],
+        "action": "b0-s0"
+      }
+    },
+    "abalone-1-reverse": {
+      "started": 1790150970.0205262,
+      "finished": 1790151012.2938085,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.1553,
+      "preference": {
+        "preferred": "A",
+        "reasons": [
+          "Both methods implement the build/train/predict contract correctly. Each uses GroupKFold on api.train_groups, stores all learned state in the model dict and has time guards, so neither shows an obvious executable defect.",
+          "A stacks a broader and more varied set of members. Beyond SVR, gradient boosting and forests, it adds log-target SVR, a Poisson-loss boosted model, a log-target GP, KNN and polynomial ridge, which suit skewed, heteroscedastic ring counts. B covers a narrower family: GP, two SVRs, an MLP, gradient boosting and ExtraTrees.",
+          "A reports a nested out-of-fold stack MSE (stacker weights fitted on four folds, scored on the fifth). That is an honest internal estimate for deciding whether to spend the confirmation step. B reports only the optimistic stack MSE with in-sample weights, though it adds a useful reference-configuration ExtraTrees baseline.",
+          "B's custom torch GP backpropagates through torch.cdist on identical inputs, whose distance-zero diagonal risks NaN gradients or Cholesky failure. The try/except would then silently drop its key smooth member. A's sklearn GP runs behind a start-time guard and a try/except, and its other members are low-risk."
+        ],
+        "uncertainties": [
+          "Whether either stack actually reaches the roughly 4.43 development MSE target (10% below 4.92) on these feature-derived group splits; the expected quality gap between A and B is small, so this is close to a tie.",
+          "Wall time of A's unbounded sklearn L-BFGS kernel optimisation over about 24 GP hyperparameters on 1200 rows, running on 2 CPU cores, followed by refitting all ten members.",
+          "Whether B's GPU GP with an added linear kernel trains stably and outperforms A's log-target GP within the stack."
+        ],
+        "action": "b1-s0"
+      }
+    },
+    "trec-0-forward": {
+      "started": 1790150996.5259986,
+      "finished": 1790151020.9288046,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.113292,
+      "preference": {
+        "preferred": "B",
+        "reasons": [
+          "B refits all three vectorizers inside each GroupKFold fold, so its model selection is not affected by vocabulary or IDF leakage. A fits vocabulary and IDF once on all training text plus development text, then runs CV on those shared statistics.",
+          "A's transductive fit on development text means development error may look slightly better than confirmation or audit error, whose texts are never seen. That raises the risk of clearing the development target and then failing confirmation. B treats all held-out splits the same way.",
+          "B's grid adds multinomial logistic regression alongside LinearSVC, plus TREC-relevant cues A lacks: an 'stand for'/'abbreviat' ABBR cue, acronym and quote flags. Its head-word skip list also covers prepositions and pronouns. Both methods share the same core idea (wh-word and head features, char_wb 2-5, word n-grams).",
+          "Both are low-risk to execute. They use sklearn-only models without custom callables and rebuild features with pure functions at predict time. The API usage and output dtype are correct, and runtime should fit well within 900 s. B has no time guard, but its roughly 150 small linear fits should take minutes at most."
+        ],
+        "uncertainties": [
+          "Whether B's logistic-regression fits (lbfgs on unbounded char n-grams) stay fast on 2 CPU cores; this is unmeasured.",
+          "Whether either head-word heuristic actually beats the 0.154 reference by 10% relative on this grouped split and on the official-test audit distribution.",
+          "The size of the CV-selection optimism for either method, given about 25\u201330 configurations on 3.8k rows."
+        ],
+        "action": "b1-s0"
+      }
+    },
+    "trec-0-reverse": {
+      "started": 1790151012.294598,
+      "finished": 1790151034.9452338,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.111172,
+      "preference": {
+        "preferred": "A",
+        "reasons": [
+          "Method A refits all three vectorizers inside each GroupKFold fold. Its CV estimate is therefore cleaner. Method B fits the word, char and feature vocabularies and IDF weights once on train plus development text, then reuses them across folds. That transductive fit leaks unlabelled validation-fold statistics and is shared across every fold.",
+          "Method A's structural block has more ABBR-specific cues: a 'stand for'/'abbreviat' token, an acronym flag and a quote flag. It also finds the head word after container nouns without requiring a literal 'of'. These plausibly target small, confusable classes that bag-of-n-grams handles weakly. Method B's added '?' token carries almost no signal, because nearly every row is a question.",
+          "Method A searches both LinearSVC and multinomial logistic regression, with separate char and struct weights. Method B only varies LinearSVC C with char weight fixed at 0 or 1 and word weight fixed at 1. Both grids are modest, and both methods store only sklearn objects plus pure module functions, so both are compatible with predict-time serialization.",
+          "Both methods follow the same basic recipe and pass the API checks: integer predictions of shape (N,) and no mutable module-global state. The preference is therefore weak and rests on validation hygiene and feature coverage, not on any verified gain."
+        ],
+        "uncertainties": [
+          "Method A has no time guard. Its 60 lbfgs logistic-regression fits (C up to 30) on uncapped char_wb features could approach the 900s train limit on 2 CPU cores. Method B stops the grid at 600s.",
+          "Neither method's actual development error is known. Either may miss the target of about 0.139, since both could plateau near the reference's 0.154.",
+          "The audit split is the official TREC test set, whose distribution shifts from train. It is unknown whether Method B's train-plus-dev IDF fit or Method A's struct heuristics transfer better to it."
+        ],
+        "action": "b1-s0"
+      }
+    },
+    "trec-1-forward": {
+      "started": 1790151020.9295356,
+      "finished": 1790151044.9325476,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.128176,
+      "preference": {
+        "preferred": "A",
+        "reasons": [
+          "Both are executable, self-contained sparse linear pipelines. Each selects its configuration by 5-fold GroupKFold on api.train_groups and pickles only sklearn objects. Both fit easily within the 900 s train and 600 s predict limits (A: 13 configs with a 480 s guard; B: 40 configs with a 600 s guard).",
+          "A adds a hand-written head-noun-to-coarse-class lexicon (HCAT/WHHCAT/CCAT). This could let it generalize to head nouns absent from training folds, which matters if the feature-derived groups keep lexical content disjoint across splits. B's head-word tokens are purely lexical and cannot transfer to unseen head words.",
+          "A has ABBR-specific cues (acronym detection, STANDFOR, SHORTDEF). These target a sparse class where bag-of-ngrams is weakest. B's closest analogues are only capitalization-count and short-question buckets.",
+          "B has real strengths but they mostly aid diagnosis rather than acceptance. It has a broader C grid, a second head word that skips generic adjectives ('largest', 'famous'), and a paired group-bootstrap against the reference on the same folds. The internal UCB does not affect which model is shipped."
+        ],
+        "uncertainties": [
+          "How the feature-derived groups are formed. If they do not separate head nouns across splits, the lexicon's generalization advantage may vanish and B's finer C tuning could win.",
+          "Whether A's CV actually selects a structural config rather than ref_replica. Selecting ref_replica would reproduce the reference and waste the run.",
+          "Actual development error of either method relative to the 0.1206 target. Both mechanisms are plausible but unverified."
+        ],
+        "action": "b0-s0"
+      }
+    },
+    "trec-1-reverse": {
+      "started": 1790151034.9459338,
+      "finished": 1790151057.8977044,
+      "valid": true,
+      "usage_known": true,
+      "estimated_usd": 0.126516,
+      "preference": {
+        "preferred": "B",
+        "reasons": [
+          "Both are executable, self-contained sklearn replacements of the text reference. Each uses 5-fold GroupKFold on api.train_groups, refits on all training rows and pickles only standard vectorizers and classifiers. Neither has an obvious correctness or runtime-limit risk, so the choice rests on mechanism.",
+          "B adds a hand-written head-word to coarse-category lexicon (HCAT, WHHCAT, CCAT, ACAT). This lets the model map head nouns that are rare or appear in unseen groups to LOC, NUM, HUM or ENTY. It targets group-disjoint generalization directly, which A's purely lexical head-word tokens cannot do for words absent from training.",
+          "B also includes cues aimed at the minority and confusable classes: STANDFOR and acronym features for ABBR, and SHORTDEF for DESC definitions. A's structural block (prefixes, wh+next, head words, SHORTWH) is similar but has no such class-specific semantic prior.",
+          "A searches 40 configurations against B's 13, which increases selection optimism without adding a new mechanism. A's in-CV paired bootstrap is useful diagnostically but does not change what is shipped."
+        ],
+        "uncertainties": [
+          "How train_groups are derived. If groups split by head word or wh-pattern, the lexicon matters more; if they are near-random, the two methods may perform about the same.",
+          "Whether B's lexicon noise hurts accuracy. For example, 'how many people' gives a HUM head category although the question is NUM. Neither method's grouped-CV or development error is known.",
+          "Whether either method clears the roughly 0.1206 development target, and whether its audit upper confidence bound is negative. Both are plausible, but neither has been measured."
+        ],
+        "action": "b0-s0"
+      }
+    },
+    "tsp-0-forward": {
+      "started": 1790151044.9333053,
+      "finished": 1790151084.9064667,
+      "valid": false,
+      "usage_known": true,
+      "estimated_usd": 0.1694,
+      "error": "AssertionError: Provider response incomplete"
+    },
+    "tsp-0-reverse": {
+      "started": 1790151057.8983965,
+      "finished": 1790151098.873106,
+      "valid": false,
+      "usage_known": true,
+      "estimated_usd": 0.1694,
+      "error": "AssertionError: Provider response incomplete"
+    },
+    "tsp-1-forward": {
+      "started": 1790151084.9070623,
+      "finished": 1790151125.933191,
+      "valid": false,
+      "usage_known": true,
+      "estimated_usd": 0.171536,
+      "error": "AssertionError: Provider response incomplete"
+    },
+    "tsp-1-reverse": {
+      "started": 1790151098.873712,
+      "finished": 1790151139.299077,
+      "valid": false,
+      "usage_known": true,
+      "estimated_usd": 0.171536,
+      "error": "AssertionError: Provider response incomplete"
+    }
+  }
+}
