@@ -1,0 +1,252 @@
+{
+  "created": 1790141957.346067,
+  "scope": "First QAP candidate completed; independent final-audit permutation/objective rescore. Earlier development/confirmation rescores referenced by hash. Control confirmation and second repetition remain incomplete; no paired QAP or campaign efficiency conclusion.",
+  "episode": "qap-0-candidate",
+  "completed": {
+    "label": "qap-0-candidate",
+    "task": "qap",
+    "family": "optimization",
+    "repetition": 0,
+    "arm": "candidate",
+    "gpu": 7,
+    "started": 1790140127.953992,
+    "finished": 1790141886.8112695,
+    "seconds": 1758.8572781085968,
+    "goal_reached": true,
+    "capped_goal_seconds": 1758.850454568863,
+    "state": {
+      "started": 1790140127.953992,
+      "terminal": true,
+      "goal_reached": true,
+      "confirmation_used": true,
+      "best": 200.6411680543598,
+      "delivered": {
+        "action": "b0-s0",
+        "finished": 1790141886.8044465,
+        "accepted": true,
+        "within_deadline": true,
+        "route": "fresh_confirmation_then_audit",
+        "source_sha256": "d88595ac2424f262ce2825d7fcaa2f829b55a612491f45b51e19a7d234fa69da",
+        "checkpoint_sha256": "511cfef657204e0e4c1594d0ad0ba4faa5c5b7e772003a676a4750b147e6aef0"
+      }
+    },
+    "metrics": {
+      "best_score": -200.6411680543598,
+      "calls": 2,
+      "cost": 0.455608,
+      "parallel_seconds_estimate": 1758.7962758541107,
+      "quality_gain": 0.0922007682815458,
+      "rounds": 1,
+      "supported": true
+    },
+    "paid_calls": 2,
+    "retained_upper_usd": 0.82555,
+    "unused_proposals": 1,
+    "invalid_attempts": 0,
+    "unadmitted_attempts": 0
+  },
+  "source_sha256": "d88595ac2424f262ce2825d7fcaa2f829b55a612491f45b51e19a7d234fa69da",
+  "model_authored_rationale": "Iterated robust tabu search (Taillard Ro-TS) for QAP n=64, sparse heavy-tailed flows.\n\nRationale (unverified hypothesis): the reference runs FAQ plus scipy 2-opt with 16 restarts.\nThat search stops at the first local optimum of each restart. Taillard's robust tabu search\nkeeps O(n^2)-updated swap deltas. It makes about 1e5 moves per second in numba. The search\nis iterated with perturbed restarts from the best solution. It should find solutions well\nbeyond 2-opt local optima within about 20 s per instance. Two nogil threads process\ninstances in parallel.\n\nTime is budgeted per split: at most about 1000 s wall clock and at most 25 s per instance.\nThis leaves margin under the 1800 s prediction and train limits.\n\nLimitations: no tuning was done on development data. The stopping rule is wall clock, so\nresults are not bit-reproducible. Train only compiles the numba code and measures speed.",
+  "stages": {
+    "development": {
+      "model_authored_findings": {
+        "compile_seconds": 3.5163397789001465,
+        "params": {
+          "phase_iters": 30000,
+          "asp_mult": 5.0,
+          "per_instance_cap": 25.0,
+          "total_budget": 1000.0,
+          "threads": 2
+        },
+        "train_probe": [
+          {
+            "train_instance": 0,
+            "objective_4s": 245.5536960023704,
+            "phases": 2,
+            "seconds": 4.195999383926392
+          },
+          {
+            "train_instance": 1,
+            "objective_4s": 167.18284376549425,
+            "phases": 3,
+            "seconds": 4.435011863708496
+          }
+        ],
+        "limitations": "No comparison to the reference in train. The probe uses a 4 s budget, while prediction gives each instance up to 25 s.",
+        "training_seconds": 12.147393703460693
+      },
+      "timing": {
+        "started": 1790140211.0964322,
+        "finished": 1790140632.723239,
+        "seconds": 421.6268072128296
+      },
+      "closure": {
+        "finished": 1790140633.4719124,
+        "seconds": 424.482449054718,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T05:10:09.090165731Z",
+          "FinishedAt": "2026-09-23T05:17:13.350441799Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 7
+      }
+    },
+    "confirmation": {
+      "model_authored_findings": {},
+      "timing": {
+        "started": 1790140635.679994,
+        "finished": 1790141048.9959588,
+        "seconds": 413.31596517562866
+      },
+      "closure": {
+        "finished": 1790141049.7819035,
+        "seconds": 416.228698015213,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T05:17:13.656215334Z",
+          "FinishedAt": "2026-09-23T05:24:09.63092738Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 7
+      },
+      "comparison": {
+        "relative_gain": 0.08806771447816131,
+        "candidate_loss": 204.78349620150237,
+        "baseline_loss": 224.5599804423179,
+        "groups": 32,
+        "paired_group_97_5_upper_difference": -17.60785785561596,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    "audit": {
+      "model_authored_findings": {},
+      "timing": {
+        "started": 1790141051.9459102,
+        "finished": 1790141885.9987187,
+        "seconds": 834.0528087615967
+      },
+      "closure": {
+        "finished": 1790141886.7125187,
+        "seconds": 836.8517825603485,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T05:24:09.965136701Z",
+          "FinishedAt": "2026-09-23T05:38:06.566904391Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 7
+      },
+      "comparison": {
+        "relative_gain": 0.08557298239332434,
+        "candidate_loss": 199.84953079480886,
+        "baseline_loss": 218.55164703890074,
+        "groups": 64,
+        "paired_group_97_5_upper_difference": -17.209637837038922,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    }
+  },
+  "attempts": [
+    {
+      "action": "b0-s0",
+      "status": "ok",
+      "cost": 0.212944,
+      "score": -200.6411680543598,
+      "unused_after_delivery": false
+    },
+    {
+      "action": "b1-s0",
+      "status": "blocked",
+      "cost": 0.242664,
+      "score": null,
+      "unused_after_delivery": true
+    }
+  ],
+  "new_audit_check": {
+    "instances": 64,
+    "facilities": 64,
+    "valid_permutations": true,
+    "candidate_loss": 199.84953079480886,
+    "baseline_loss": 218.55164703890074,
+    "relative_gain": 0.08557298239332434
+  },
+  "review_findings": [
+    "The source implements conventional compiled robust tabu search with maintained swap deltas, randomized tenure, aspiration, and perturbations between phases. Both arms use this broad algorithm family; this is not evidence of a newly invented algorithm.",
+    "Candidate uses two ThreadPoolExecutor workers and Numba nogil kernels. Per-instance prediction budget is at most 25 seconds, split budget 1000 seconds; each 30000-iteration phase can overrun its individual time check. Actual worker stages, not nominal budgets, determine wall time.",
+    "Training compiles and probes only two training instances for about four seconds each. No full-reference comparison is done in training; twelve-second training is not the full 29.314-minute delivery time. The rationale claim of roughly 100000 moves/second is not established by this short probe.",
+    "Development/confirmation and final audit independently reproduce host objectives. Final audit improves 8.5573% over the fixed reference and passes the original 2% plus uncertainty gate. Bootstrap is retained, not rerun in this local audit.",
+    "Two paid proposals, one unused; all requests for this episode settled. Control is still running, so no prospective QAP paired reduction is asserted."
+  ],
+  "evidence_sha256": {
+    "rsi-prospective-20260923/episodes/qap-0-candidate/completed.json": "a7d70e5f28f7cc24cacc1ea39b682f89b71f08b3429d1995d58f502e00d29835",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/goal-delivered.json": "6154e792e71dcfbbb5b4d4bd38ed7c3c57a5bd28f9e0de7e422f75f0622aa68a",
+    "rsi-prospective-20260923/calls/qap-0-candidate/b0-s0/candidate.py": "d88595ac2424f262ce2825d7fcaa2f829b55a612491f45b51e19a7d234fa69da",
+    "rsi-prospective-analysis-20260923/qap-first-stages-pointloss-001.json": "6606b6d529cc9ed9ee917f353aae4214c65d931a5c787c4345584f10b1ca2e98",
+    "rsi-prospective-20260923/data/qap-0/audit/features.npy": "1131046693c32322c06494d2f0a538569f9bfd83caeb5fcdb47c519dc5971d32",
+    "rsi-prospective-20260923/references/qap-0.json": "e9bccaa68af39a1156cd426ae049c18792fbbdb667887438aebce4f9b762dd18",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0-audit/result.json": "162565a3ff590920b95b299192ff93f85d4fda3209c83a0f20e4a1280347aac8",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0-audit/comparison.json": "4eb64be9614fe7f69a49da2d47180ad17f8e749c04b1f4a2dd65068dc7044839",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0/result.json": "61d9ab9d73a57e6c39ca270125c29e7c636c1a089da88db86c6fe7bd6fb35d80",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0/closure.json": "0f6dc356cceb0c4364cf21890681e1cc5dfcce91ba7fc5a0998ddee477c6625a",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0/timing.json": "332e9574326e91923ee745f18ba6f8a4e91354e648ce786c58da7e7f880093a2",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0-confirmation/result.json": "758e74554423ce9eafca885854b5b096d6a9a8e61c09b28fb05fde97829c27a5",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0-confirmation/closure.json": "badf241bcee6092512fd9d69c9c9c3031210b916a54773e33f7c5b1e94cec369",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0-confirmation/timing.json": "906d9440eb2f3b9a84f387dc86a03ab3a315bd8d28608438582efce460015f24",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0-confirmation/comparison.json": "c32bfc4e1c58a54d1b2c4dab66722d4f196f1dbfd4084a2a9bd3ec79ab4b9391",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0-audit/closure.json": "6edede1e1868c47748242093d41ce5c4559fc6baee1481bdf69c92920cc1e20d",
+    "rsi-prospective-20260923/episodes/qap-0-candidate/b0-s0-audit/timing.json": "22a3f53c49d3a7baf045fb351c4e96aa9b66cb99e093c2ab448c3d1be36afa8d",
+    "rsi-prospective-20260923/calls/qap-0-candidate/b0-s0/outcome.json": "e3da493a1686c8856e005be06f3f061f4136721254796f23e5c2172fb53c9350",
+    "rsi-prospective-20260923/calls/qap-0-candidate/b1-s0/outcome.json": "86fdb4610c9bd4684020861ece5d63aa0e0168322afd8366d366756e8e840515",
+    "rsi-prospective-20260923/calls/qap-0-candidate/b0-s0/process-closed.json": "b156440670c8c55d160d83537ace6c7e49c0b6535baac2abcc98a7245b8fc522",
+    "rsi-prospective-20260923/calls/qap-0-candidate/b0-s0/usage.jsonl": "5092f89e9415f9ded6ae1b4e8535c28a18556e69013a341ce1679ab50c2a815a",
+    "rsi-prospective-20260923/calls/qap-0-candidate/b1-s0/process-closed.json": "73690a7b8b0040f307f18c1afa0a7ef0c4d3f75e84b8d813f7f8f4982941c750",
+    "rsi-prospective-20260923/calls/qap-0-candidate/b1-s0/usage.jsonl": "feaea2260403bb01cefc8bd84dee2a0d7bd14a4dfbe3ddda760541a7200aa33a"
+  },
+  "prior_pointloss_report": "qap-first-stages-pointloss-001.json",
+  "new_research_requests": 0,
+  "new_gpu_executions": 0,
+  "whole_campaign_verified": false,
+  "default_promotion_authorized": false,
+  "settled_requests": [
+    {
+      "action": "b0-s0",
+      "exit_code": 0,
+      "known_usage_estimate_usd": 0.212944
+    },
+    {
+      "action": "b1-s0",
+      "exit_code": 0,
+      "known_usage_estimate_usd": 0.242664
+    }
+  ]
+}
