@@ -1,0 +1,529 @@
+{
+  "created": 1790129953.7613218,
+  "scope": "All nine completed development episodes; source review plus measured outputs, not a causal component ablation.",
+  "rows": [
+    {
+      "episode": "fashion-0-control",
+      "selected_action": "b0-s1",
+      "source_sha256": "1a836d7c3799402c2decaede2f753c3111bb95d13935f042cf2d4e6ebc922505",
+      "rationale": "Deep ensemble of ResNet-9 CNNs for the 12k-row Fashion-MNIST subset:\nlonger per-member cosine schedules, diversified per-sample augmentation,\noptional mixup, and multi-view (shift + flip) test-time augmentation.\n\nRationale (exploratory; the common reference is a single ResNet-9 trained\n~100 epochs with batch-level crop/flip, dev error 0.068; a first ensemble\nattempt with 8 members x 72 epochs and heavy affine+cutout augmentation\nscored 0.0685, i.e. no gain).  Two concrete hypotheses about that null\nresult drive this method:\n\n 1. Under-training of members.  That run consumed only 173 s of its 640 s\n    budget because the per-member epoch count was hard-capped at 72; with\n    strong per-sample augmentation each member was very likely weaker than\n    the 100-epoch reference, so the ensemble merely recovered the reference\n    level.  Here the epoch count is derived from the *measured* step time so\n    that the whole training budget is actually spent (typically ~200 epochs\n    per member), and the cosine schedule always anneals to zero.\n\n 2. Too little useful diversity / too aggressive a single augmentation\n    policy.  Members now use different augmentation strengths and half of\n    them additionally use mixup, which both regularises long schedules and\n    decorrelates member errors; softmax averaging then converts the\n    decorrelation into an accuracy gain.\n\nTest-time augmentation is extended from {identity, hflip} to 5 translations\nx {identity, hflip} (10 views), which is essentially free at prediction time\nand matches the translation range used during training.\n\nLimitations: no labelled internal validation is performed (all 12k rows feed\nevery member), so reported member accuracies are in-sample and optimistic;\nthe ensemble gain is assumed from the mechanism above, not measured against\nlabels here.  Development features are used only for an unlabeled\ndisagreement diagnostic - never for fitting or pseudo-labelling - so that the\ndevelopment estimate stays comparable to confirmation/audit behaviour.",
+      "measured_findings": {
+        "members_trained": 8,
+        "planned_members": 8,
+        "epochs_per_member": 246,
+        "measured_step_seconds": 0.00634,
+        "batch_size": 256,
+        "mixup_prob_per_member": [
+          0.0,
+          0.5,
+          0.0,
+          0.5,
+          0.0,
+          0.5,
+          0.0,
+          0.5
+        ],
+        "train_subset_accuracy_per_member": [
+          0.9985,
+          0.999,
+          1.0,
+          0.998,
+          0.9995,
+          0.999,
+          1.0,
+          0.999
+        ],
+        "training_seconds": 532.6,
+        "augmentation": "per-sample affine (rot 6-12deg, scale +-6-10%, shift +-0.10-0.14), hflip, cutout 6-10px p=0.5; mixup alpha=0.2 on half the members",
+        "tta": "5 translations x {identity, hflip}, softmax averaged over members",
+        "limitations": "no labelled internal validation; every member sees all training rows, so member accuracies are in-sample/optimistic; ensemble gain is a mechanism assumption, not a labelled measurement here. Development features used only for unlabeled disagreement statistics, never for fitting.",
+        "dev_pairwise_disagreement_mean": 0.0404,
+        "dev_unanimous_fraction": 0.907
+      },
+      "result_sha256": "fe63645b58a7e2d5a82206a5e3aad10b1c2d100d853dc4a70afdef326ffad362",
+      "audit": {
+        "relative_gain": 0.12755102040816324,
+        "candidate_loss": 0.0684,
+        "baseline_loss": 0.0784,
+        "groups": 5000,
+        "paired_group_97_5_upper_difference": -0.004,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "audit_sha256": "2aa76012a5c51061dfd3b859ac5d4836518c33b26310934d5330ba32c2d39d22",
+      "completed_sha256": "0eda1b67048f1aedadf3046617f248aca39e24b8f991e71e3c73bb8a4b0831c3"
+    },
+    {
+      "episode": "fashion-0-opus55",
+      "selected_action": "b1-s0",
+      "source_sha256": "1af333e4090780104d11047c6cdc0cc7942b6dc0ab0bcfa0849a869199966cd2",
+      "rationale": "Ensemble refinement of the fashion reference. The rationale is exploratory and unverified.\n\nReference: one residual CNN, SGD with cosine schedule, crop and flip, dev error 0.068.\nTarget: error <= 0.0612.\n\nProposal:\n1. Keep the parent (reference) network as one ensemble member. It is loaded from\n   api.parent_dir/model.pkl, so it costs no training time.\n2. Train up to 3 more networks of the same architecture with different seeds and\n   stronger augmentation:\n   - per-sample random translation (the reference used one crop offset per batch);\n   - horizontal flip;\n   - cutout.\n   Each member gets a time-budgeted cosine schedule.\n3. Predict by averaging softmax probabilities over members, each with flip TTA.\n\nHypothesis: ensembling decorrelated members plus better augmentation reduces\nvariance-dominated error in the 12k-sample regime.\n\nLimitations:\n- There is no labelled validation data in training.\n- Findings report only timing, epochs, training fit, and agreement on dev features.",
+      "measured_findings": {
+        "method": "parent + new-member softmax ensemble with flip TTA",
+        "parent_loaded": true,
+        "parent_members": 1,
+        "new_members": [
+          {
+            "member": 0,
+            "epochs_started": 90,
+            "updates": 8460,
+            "seconds": 58.5,
+            "budget_seconds": 226.6,
+            "last_epoch_aug_train_acc_sampled": 0.9928
+          },
+          {
+            "member": 1,
+            "epochs_started": 90,
+            "updates": 8460,
+            "seconds": 37.8,
+            "budget_seconds": 310.3,
+            "last_epoch_aug_train_acc_sampled": 0.9952
+          },
+          {
+            "member": 2,
+            "epochs_started": 90,
+            "updates": 8460,
+            "seconds": 37.8,
+            "budget_seconds": 582.8,
+            "last_epoch_aug_train_acc_sampled": 0.9928
+          }
+        ],
+        "dev_agreement_member_vs_ensemble": [
+          0.9765,
+          0.98,
+          0.983,
+          0.9855
+        ],
+        "dev_mean_max_prob": 0.9107,
+        "n_members": 4,
+        "training_seconds": 137.4,
+        "limitations": "No labelled internal validation. Agreement is not accuracy. Members share the architecture and train split."
+      },
+      "result_sha256": "352c2a60baaf4581974d749a9e4e370fda3fda5967ddf9f2849a2385c9751d1f",
+      "audit": {
+        "relative_gain": 0.11224489795918369,
+        "candidate_loss": 0.0696,
+        "baseline_loss": 0.0784,
+        "groups": 5000,
+        "paired_group_97_5_upper_difference": -0.0042,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "audit_sha256": "8fa2100854522df261a27b7bab79f88c4014487645476c60e37891b85c33b35b",
+      "completed_sha256": "9f964c69ebb797e0e01e5370de352e33496aa41afef4596828025333fd804cdf"
+    },
+    {
+      "episode": "fashion-0-fable",
+      "selected_action": "b0-s1",
+      "source_sha256": "434076f6084e3fb46abc31011d556fe3d2184218673e23ce733ee9e36876b3d4",
+      "rationale": "Fashion-MNIST: grow the b0-s0 ensemble. b0-s0 (3x ResNet9, translate+flip+\ncutout, SGD cosine, EMA, flip-TTA) reached 6.15% dev error, missing the 6.12%\ntarget by one image, while using only 275 of 690 training seconds (epoch cap\nhit). Ensembling is the most reliable variance reducer here, so this step loads\nthe parent's three trained nets from api.parent_dir (falls back to training\nfrom scratch if unavailable) and trains 4 further members with the same recipe\nbut a longer schedule (cap 220 epochs, time-bounded), then averages softmax of\nall members with flip TTA. Unverified expectation: 7 members vs 3 shave a few\ntenths of a percent. No dev labels used; no internal held-out estimate.",
+      "measured_findings": {
+        "parent": "loaded 3 parent nets",
+        "n_members": 7,
+        "new_models": [
+          {
+            "model": 0,
+            "epochs": 220,
+            "updates": 20680,
+            "seconds": 153.5,
+            "last_batch_loss": 0.5202
+          },
+          {
+            "model": 1,
+            "epochs": 220,
+            "updates": 20680,
+            "seconds": 130.7,
+            "last_batch_loss": 0.5444
+          },
+          {
+            "model": 2,
+            "epochs": 220,
+            "updates": 20680,
+            "seconds": 131.0,
+            "last_batch_loss": 0.5249
+          },
+          {
+            "model": 3,
+            "epochs": 220,
+            "updates": 20680,
+            "seconds": 130.9,
+            "last_batch_loss": 0.5156
+          }
+        ],
+        "ensemble_train_accuracy": 0.9998333333333334,
+        "training_seconds": 547.5,
+        "recipe": "parent ResNet9 EMA nets + new members (translate pad3, flip, cutout12, SGD nesterov cosine, EMA 0.998, up to 220 epochs), softmax averaging with flip TTA",
+        "limitations": "no held-out labels used; train accuracy is on fitted rows and optimistic; no group-respecting internal validation; gain over 3-member parent is unverified"
+      },
+      "result_sha256": "0fa3640f60b72ab1466817b1e9b623ceae294ebd6911df12d6f5588b93b7ed41",
+      "audit": {
+        "relative_gain": 0.18622448979591844,
+        "candidate_loss": 0.0638,
+        "baseline_loss": 0.0784,
+        "groups": 5000,
+        "paired_group_97_5_upper_difference": -0.0092,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "audit_sha256": "7d80875d30c5249704f7526b47c71a371060a0e1e5ed73bf43607d9b8b9d62c8",
+      "completed_sha256": "4ff3aaaf41729028ed8259d6c00546098499d7daecd594585946812ddab17e8b"
+    },
+    {
+      "episode": "powerplant-0-control",
+      "selected_action": "b1-s1",
+      "source_sha256": "dd4eb2655257c5ce3a6e3a1671bdde7fec80d9857e161d0c7a1989aa02615159",
+      "rationale": "Powerplant (CCPP) regression: push past the single-HGB reference (dev MSE 9.94) and the\ntree+isotropic-kernel blend parent (dev MSE 9.42, only ~5% reduction).\n\nRationale (exploratory, validated only by grouped out-of-fold estimates):\n  * The parent's kernel bases were isotropic in standardized 4-d space (OOF 14.9/16.6),\n    which is a poor metric here: ambient temperature and exhaust vacuum carry almost all\n    signal while pressure/humidity are weak and noisy. An ARD (per-feature lengthscale)\n    kernel ridge, tuned by coordinate descent on grouped CV with exact GPU fp64 Cholesky\n    solves, should be a far stronger *smooth* base and therefore a much better complement\n    to axis-aligned tree ensembles.\n  * Tree ensembles pay a piecewise-constant approximation penalty on this smooth response\n    surface. A locally weighted linear regression (tricube-weighted k-NN ridge on the ARD\n    metric) removes exactly that first-order bias and is cheap in closed form, so it is\n    added as a second smooth, strongly decorrelated base.\n  * All bases get grouped out-of-fold predictions (declared protocol) and are combined by\n    non-negative least squares with intercept, with a guard that never accepts a blend\n    worse than the best single OOF base.\n\nLimitations: blend weights and all hyper-parameters are selected on grouped OOF\npredictions of the same training split, so reported OOF MSEs are internal and mildly\noptimistic; no development labels are used anywhere. Every optional component is time\nguarded and wrapped, falling back to the tuned tree ensemble alone.",
+      "measured_findings": {
+        "oof_mse_per_base": {
+          "hgb1": 12.4174,
+          "hgb2": 12.8387,
+          "et": 14.1437,
+          "krr_rbf": 14.7662,
+          "krr_rbf_ls": [
+            1.4,
+            0.141,
+            0.866,
+            3.08
+          ],
+          "krr_rbf_alpha": 0.01,
+          "krr_lap": 11.3997,
+          "krr_lap_ls": [
+            5.6,
+            0.562,
+            3.92,
+            17.248
+          ],
+          "krr_lap_alpha": 0.01,
+          "loclin": 17.7494,
+          "loclin_cfg": [
+            60,
+            0.001
+          ],
+          "loclin_ard": 19.2648,
+          "loclin_ard_cfg": [
+            60,
+            0.001
+          ],
+          "mlp": 17.6534
+        },
+        "blend_oof_mse": 11.0055,
+        "best_single_oof_mse": 11.3997,
+        "blend_weights": {
+          "hgb1": 0.3357,
+          "hgb2": 0.0,
+          "et": 0.0,
+          "krr_rbf": 0.0,
+          "krr_lap": 0.6513,
+          "loclin": 0.0,
+          "loclin_ard": 0.0,
+          "mlp": 0.0127
+        },
+        "intercept": 0.1753,
+        "n_groups": 5239,
+        "training_seconds": 96.1,
+        "limitations": "all hyper-parameters and blend weights selected on grouped OOF predictions of the same training split (internal, mildly optimistic); no development labels used; kernel search is a greedy coordinate descent under a time cap, not exhaustive."
+      },
+      "result_sha256": "36c8ecd6e8fcce13ebb8da267b94379b73f6b006a6fe0b3e726d07952f8d988a",
+      "audit": {
+        "relative_gain": 0.186970445003651,
+        "candidate_loss": 7.995364283808287,
+        "baseline_loss": 9.834038916142712,
+        "groups": 1430,
+        "paired_group_97_5_upper_difference": -1.2274849705633861,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "audit_sha256": "c6cae5a66a3e4fa20baf6094877d8052222c7bb8f4707e53644dad939b774582",
+      "completed_sha256": "02df28974d22f2077c547092b57cd390b1a20c24d01c49b13ab5e9df618f6f96"
+    },
+    {
+      "episode": "powerplant-0-opus55",
+      "selected_action": "b0-s0",
+      "source_sha256": "71e8f29f6981df2879a4d81a2bb6c8fafa8ce54847c69fb882af2046ac134f3f",
+      "rationale": "Powerplant: stacked ensemble of heterogeneous regressors (unverified exploratory rationale).\n\nThe reference is HistGradientBoosting (dev MSE 9.94); the target is about 8.94.\nThe inputs are four smooth physical variables, and the response surface is smooth\nand low-dimensional. Tree models approximate it piecewise. Smooth models should\ncapture it better:\n  - an exact Gaussian process on the GPU, with an ARD RBF + Matern52 kernel and\n    marginal-likelihood hyperparameters;\n  - a batched MLP ensemble.\nThese are combined with HGB (the reference config), ExtraTrees and kNN.\nBlend weights are nonnegative least squares on GroupKFold out-of-fold predictions,\nusing api.train_groups.\n\nFindings report measured per-model OOF MSE and the blend weights.\nLimitation: the blend OOF MSE is slightly optimistic because the weights were fit\non the same OOF predictions.",
+      "measured_findings": {
+        "n_train": 5260,
+        "n_groups": 5239,
+        "cv": "GroupKFold5",
+        "fold_seconds": [
+          23.9,
+          22.8,
+          22.9,
+          22.8,
+          22.9
+        ],
+        "oof_rows": 5260,
+        "oof_mse": {
+          "hgb": 12.880026551462553,
+          "et": 14.128557352941481,
+          "knn": 16.419293398634164,
+          "gp": 8.93341874129572,
+          "mlp": 16.660646402116022
+        },
+        "blend_weights": {
+          "hgb": 0.08605698437900478,
+          "et": 0.0,
+          "knn": 0.0013619187745263013,
+          "gp": 0.9013148809525701,
+          "mlp": 0.011266215893898781
+        },
+        "blend_oof_mse_optimistic": 8.88659346880873,
+        "final_models": {
+          "hgb": 0.0871576225742522,
+          "gp": 0.9128423774257478
+        },
+        "gp_noise_std": 2.410527778702873,
+        "failures": {},
+        "training_seconds": 146.8,
+        "limitations": "Single seed; blend weights fit on the same OOF predictions; dev/audit performance not measured here."
+      },
+      "result_sha256": "f3155fd995b651767ca6d5e29f4ccec7eae0f23a54bc78fcd3383e730eb1772c",
+      "audit": {
+        "relative_gain": 0.3247920731905557,
+        "candidate_loss": 6.640021028732114,
+        "baseline_loss": 9.834038916142712,
+        "groups": 1430,
+        "paired_group_97_5_upper_difference": -2.5032800349747877,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "audit_sha256": "5a20dff7c6c0a20b4e496ffc4d748f0a8614027e4d9a58820e27e9b8e53dbf62",
+      "completed_sha256": "f01ce3200f5eb6aa5d50187a34aca485f10f69b3a6cbb48f5d7ab8da3d90af86"
+    },
+    {
+      "episode": "powerplant-0-fable",
+      "selected_action": "b1-s1",
+      "source_sha256": "27646d77fdb3272307fed4c05ccac9ea72f73c729f90e6dd89e73824e49d9a21",
+      "rationale": "Powerplant regression, refinement of b1-s0 (dev MSE 9.655 vs reference 9.938).\n\nHypothesis: the b1-s0 stack gained ~3% mostly by mixing three near-identical HGB variants\n(weights concentrated there; ET/RF/kNN/MLP were near-useless). Further variance reduction\nneeds bases that are strong AND decorrelated from deterministic HGB. This step adds\n(a) physically motivated monotone HGB (PE decreases with AT, V, RH; increases with AP),\n(b) stochastic subsampled sklearn GBR ensembles (squared and Huber loss, seed-averaged),\n(c) an exact ARD Matern-3/2 Gaussian process fitted on GPU (float64) by marginal\nlikelihood - a smooth non-tree model class. Weights are NNLS on GroupKFold OOF\npredictions; the stack is selected only if OOF MSE beats every base and the uniform mean.\nWeak bases from b1-s0 (kNN, MLP, et_fe) are dropped. Unverified: transfer of OOF gain to\ndevelopment/audit; the exact reference recipe stays as a base so findings report an\ninternal OOF relative reduction. All learned state is stored in the model dict.",
+      "measured_findings": {
+        "cv": "GroupKFold(5) on api.train_groups, out-of-fold predictions",
+        "oof_mse_per_base": {
+          "hgb_ref": 12.88,
+          "hgb_slow": 12.6193,
+          "hgb_slow_fe": 12.694,
+          "hgb_mono": 17.2389,
+          "hgb_small": 12.8007,
+          "gbr_sub": 12.6247,
+          "gbr_huber": 12.298,
+          "et": 14.0991,
+          "rf": 13.8117,
+          "gp": 11.1563
+        },
+        "oof_residual_corr_with_hgb_slow": {
+          "hgb_ref": 0.985,
+          "hgb_slow": 1.0,
+          "hgb_slow_fe": 0.942,
+          "hgb_mono": 0.84,
+          "hgb_small": 0.957,
+          "gbr_sub": 0.963,
+          "gbr_huber": 0.951,
+          "et": 0.903,
+          "rf": 0.914,
+          "gp": 0.853
+        },
+        "oof_mse_nnls_stack": 10.736,
+        "oof_mse_uniform_mean": 12.1135,
+        "selected": "nnls_stack",
+        "selected_oof_mse": 10.736,
+        "internal_relative_reduction_vs_reference_recipe_oof": 0.1665,
+        "b1s0_selected_oof_mse_for_comparison": 12.2088,
+        "stack_weights": {
+          "hgb_ref": 0.0,
+          "hgb_slow": 0.0,
+          "hgb_slow_fe": 0.1125,
+          "hgb_mono": 0.0,
+          "hgb_small": 0.0,
+          "gbr_sub": 0.0,
+          "gbr_huber": 0.2479,
+          "et": 0.0,
+          "rf": 0.0,
+          "gp": 0.6395
+        },
+        "gp_fitted": true,
+        "gp_hyper": {
+          "lengthscales": [
+            2.504,
+            0.037,
+            2.401,
+            8.651
+          ],
+          "signal_var": 0.8096,
+          "noise_var": 0.0239
+        },
+        "fold_seconds": [
+          77.9,
+          77.0,
+          76.7,
+          76.7,
+          76.7
+        ],
+        "dev_prediction_mean": 454.2000688448654,
+        "dev_prediction_std": 16.7609502990512,
+        "training_seconds": 481.3,
+        "limitations": "Relative reduction is a train-only OOF estimate on the same split as the reference; no development labels used. Stack weights fitted on the OOF used for selection (mild optimism). Transfer to development/audit unverified; monotone constraints are a physical assumption that may be violated locally."
+      },
+      "result_sha256": "6213ac470e3a09d92560005028941f9824cb3a84b12151862992423d2db23a4a",
+      "audit": {
+        "relative_gain": 0.24399083380617137,
+        "candidate_loss": 7.434623561310714,
+        "baseline_loss": 9.834038916142712,
+        "groups": 1430,
+        "paired_group_97_5_upper_difference": -1.9106932303511637,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "audit_sha256": "afd1e45a9f8064aefd163c8d1f9493d7e8db205114191ca68f6d8cb411b9c8af",
+      "completed_sha256": "e815ec0c2627f04943123306b7fabe7d2f6402487b6971dfca40c1c485316e50"
+    },
+    {
+      "episode": "newsgroups-0-control",
+      "selected_action": "b0-s0",
+      "source_sha256": "d9a11aedef33aba175d07627a85ff775595a84e9bdf87d4cc4d2e74627b293e5",
+      "rationale": "Newsgroups method: diverse linear-model ensemble over word + char TF-IDF, with an\noptional transductive self-training refit performed at prediction time.\n\nRationale (parts are exploratory, validated only on an internal group-aware holdout):\n- The two reference candidates (word 1-2gram LinearSVC = 0.2864 dev error, char\n  3-5gram LinearSVC = 0.2940) are close in accuracy but use disjoint feature\n  spaces, so their errors should be partly decorrelated.  A score-level ensemble\n  of word-SVC, char-SVC, a union-feature SVC and ComplementNB is the cheapest way\n  to exploit that diversity; weights are chosen on a GroupShuffleSplit holdout\n  (grouping = api.train_groups, i.e. normalized subject threads) rather than by\n  guesswork.\n- TF-IDF vocabulary/IDF is fit on train+development *features only* (no labels),\n  which is permitted and improves vocabulary coverage of the evaluation domain.\n- Self-training: at predict time the whole evaluation split is available, so the\n  ensemble scores are used to pseudo-label the most confident portion of it and a\n  union-feature SVC is refit on labeled + down-weighted pseudo-labeled data.  This\n  is enabled only if it reduced error on the internal holdout (treated as an\n  unlabeled pool), otherwise it is disabled and the plain ensemble is returned.\nLimitations: a single 20% group holdout (~2k docs) is a noisy selector for blend\nweights and for the self-training decision; gains measured there may not fully\ntransfer.  No pretrained representations are used.",
+      "measured_findings": {
+        "n_train": 10090,
+        "n_dev_unlabeled_for_idf": 2748,
+        "word_features": 200000,
+        "char_features": 200000,
+        "vectorize_seconds": 26.8,
+        "holdout_single_errors": {
+          "w": 0.2986,
+          "c": 0.2942,
+          "u": 0.2809,
+          "nb": 0.2775
+        },
+        "holdout_blend_error": 0.2701,
+        "holdout_weights": [
+          1,
+          1,
+          0,
+          0.5
+        ],
+        "holdout_n": 2036,
+        "holdout_selftrain_errors": {
+          "0.0": 0.2701,
+          "0.35": 0.2642,
+          "0.5": 0.2628
+        },
+        "use_self_training": true,
+        "self_training_alpha": 0.5,
+        "final_weights": [
+          1,
+          1,
+          0,
+          0.5
+        ],
+        "train_seconds": 96.6,
+        "limitations": "single 20% group holdout selects blend weights and the self-training switch; development/audit performance not measured here"
+      },
+      "result_sha256": "3a2843e00efd0f0a259bb390aceb035675b4424b40d7ada9f3ff85b28af441e8",
+      "audit": {
+        "relative_gain": 0.12872628726287272,
+        "candidate_loss": 0.24961180124223603,
+        "baseline_loss": 0.2864906832298137,
+        "groups": 1232,
+        "paired_group_97_5_upper_difference": -0.025570416994492525,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "audit_sha256": "1d901042968e0f75b4d62a0142fbda694840adb7ff4816f4305c6449b95c9cab",
+      "completed_sha256": "a74611630bfb85563b4f453eaa644a755932c28f4dcee5bdbec9cdb1336a7689"
+    },
+    {
+      "episode": "newsgroups-0-opus55",
+      "selected_action": "b0-s0",
+      "source_sha256": "045fc882c3f1fc8e9e5f642cfc3af7ac68e6d433909102ff86693a74b63402a5",
+      "rationale": "Transductive word+char TF-IDF ensemble with group-validated self-training (newsgroups).\n\nRationale (exploratory, unverified until measured): the reference is a word (1,2)-gram\nTF-IDF LinearSVC with 0.286 development error. With headers, quotes and footers\nremoved, many posts are short, so three changes are tried together:\n  1. Character n-grams (char_wb 2-5) are added to the word n-grams. They are more\n     robust to rare words, misspellings and morphology.\n  2. The SVM margins are blended with ComplementNB scores, after standardizing each\n     row of scores. The blend weight is chosen on a group holdout.\n  3. Transductive learning. IDF and vocabulary are fitted on labeled plus unlabeled\n     text (the stored development text plus the features being predicted). Then two\n     rounds of confident pseudo-label self-training are run. No labels are used for\n     the unlabeled rows.\nTraining runs a GroupShuffleSplit holdout using api.train_groups (20% of training\ngroups) to choose among these options. The chosen option is refit inside predict on\nall training data, using the prediction features as unlabeled data. The training\ntext and labels are stored in the model for that refit.\nLimitations: the holdout has about 2k documents (SE roughly 1%). The choice uses the\nsame train/dev split history as the reference.",
+      "measured_findings": {
+        "n_train": 10090,
+        "n_dev_unlabeled": 2748,
+        "holdout_docs": 2156,
+        "vectorize_seconds": 27.9,
+        "seconds_before_self": 42.7,
+        "holdout_errors": {
+          "word_svc_C1": 0.288,
+          "wordchar_svc_nb0.00": 0.2829,
+          "wordchar_svc_nb0.20": 0.2676,
+          "wordchar_svc_nb0.35": 0.2602,
+          "wordchar_svc_nb0.50": 0.2565,
+          "nb_only_word": 0.2593,
+          "wordchar_blend_selftrain": 0.2305
+        },
+        "chosen": "wordchar_blend_selftrain",
+        "chosen_cfg": {
+          "char": true,
+          "C": 0.5,
+          "nb": 0.5,
+          "self": true
+        },
+        "best_nb_weight": 0.5,
+        "train_seconds": 87.8,
+        "limitations": "Single group holdout (~20% train groups), SE about 1%; transductive refit happens in predict using features as unlabeled data."
+      },
+      "result_sha256": "e3d3f828f83a288ab228f344703984e8465e300c6c02cfe4c7ceac9bcae00d75",
+      "audit": {
+        "relative_gain": 0.25609756097560976,
+        "candidate_loss": 0.21312111801242237,
+        "baseline_loss": 0.2864906832298137,
+        "groups": 1232,
+        "paired_group_97_5_upper_difference": -0.059344322523758215,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "audit_sha256": "5abdf732eac7086cd8af3a082d5aa68a44a5d2384e7a26d67a4865e5a8a76506",
+      "completed_sha256": "1333b7f3e470f1cb67e5f607d80403eedca8b4e574811ef30cb7163c890a7af3"
+    },
+    {
+      "episode": "newsgroups-0-fable",
+      "selected_action": "b0-s1",
+      "source_sha256": "2b0725d7181cc1c2c847e54ca719577840fe5bf5a44afa6f0b73389dae4a23f6",
+      "rationale": "Repair of b0-s0 (KeyError: 'nb' -- the ComplementNB member had no feature matrix mapped).\nNewsgroups reference: word TF-IDF LinearSVC, ~28.6% dev error. Design unchanged: word (1,2)-gram\nand char_wb (2,5)-gram TF-IDF vectorizers fit unsupervised on train + unlabeled development text;\nLinearSVC members on word / char / concatenated features plus ComplementNB on word TF-IDF.\nC values and blend weights of row-centred, std-normalised scores are chosen by GroupKFold\nout-of-fold error on api.train_groups (subject groups). Changes vs parent: NB maps to the word\nmatrix, 3 folds instead of 4 and a reordered, time-capped member schedule (previous run spent\n~430 s on 12 fits, the concatenated matrix being the slowest), so the run fits the 900 s limit.\nFindings: OOF error per member and for the selected blend (development-label independent).",
+      "measured_findings": {
+        "vectorize_seconds": 45.48568034172058,
+        "n_word_feats": 250000,
+        "n_char_feats": 262729,
+        "n_train": 10090,
+        "cv_seconds": 167.72317600250244,
+        "cv_fit_seconds": {
+          "w1": 5.19730806350708,
+          "nb": 0.5127682685852051,
+          "c1": 24.7126247882843,
+          "w0.5": 4.090144634246826,
+          "b1": 36.733930349349976,
+          "c0.5": 21.305585145950317,
+          "b0.5": 29.66544222831726
+        },
+        "oof_error": {
+          "w0.5": 0.30465807730426164,
+          "w1": 0.30505450941526263,
+          "c0.5": 0.2869177403369673,
+          "c1": 0.2898909811694747,
+          "b0.5": 0.28097125867195244,
+          "b1": 0.2828543111992071,
+          "nb": 0.27234886025768085
+        },
+        "ensemble_members": {
+          "c0.5": 1.0,
+          "nb": 1.5
+        },
+        "oof_error_ensemble": 0.254410307234886,
+        "reference_like_oof_error": 0.30505450941526263,
+        "training_seconds": 178.730464220047,
+        "limitations": "OOF errors use 3-fold GroupKFold on training groups only; blend weights were selected on the same OOF scores (mild optimism). Vectorizers saw unlabeled development text (IDF/vocabulary only). Members not finished within the time cap are absent from oof_error."
+      },
+      "result_sha256": "d90fe78305b3727aadc3f5e7b5e38a95821e2cb5cd3390e4f6b88c3e8be9b85e",
+      "audit": {
+        "relative_gain": 0.1842818428184282,
+        "candidate_loss": 0.23369565217391305,
+        "baseline_loss": 0.2864906832298137,
+        "groups": 1232,
+        "paired_group_97_5_upper_difference": -0.03963532452655085,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      },
+      "audit_sha256": "8afc9b2e19272474ecff4e3409b54d0f7c5263791a0f962e9968cb102fec8d69",
+      "completed_sha256": "2fd3b4ab9863922e249dc02a4b9391293547bd08adde1f32845576b7ed79f416"
+    }
+  ],
+  "default_promotion_authorized": false
+}
