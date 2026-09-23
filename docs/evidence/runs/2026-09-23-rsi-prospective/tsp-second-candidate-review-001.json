@@ -1,0 +1,250 @@
+{
+  "created": 1790137876.8133633,
+  "scope": "Completed TSP repetition 1 candidate only. Three stored route sets validated as permutations and independently rescored with Python math.hypot/fsum. Original bootstrap results retained, not rerun; control repetition 1 and QAP not yet complete.",
+  "episode": "tsp-1-candidate",
+  "completed": {
+    "label": "tsp-1-candidate",
+    "task": "tsp",
+    "family": "optimization",
+    "repetition": 1,
+    "arm": "candidate",
+    "gpu": 6,
+    "started": 1790135711.6136143,
+    "finished": 1790137726.1229954,
+    "seconds": 2014.509381055832,
+    "goal_reached": true,
+    "capped_goal_seconds": 2014.5027492046356,
+    "state": {
+      "started": 1790135711.6136143,
+      "terminal": true,
+      "goal_reached": true,
+      "confirmation_used": true,
+      "best": 10.219687723714603,
+      "delivered": {
+        "action": "b0-s0",
+        "finished": 1790137726.1163635,
+        "accepted": true,
+        "within_deadline": true,
+        "route": "fresh_confirmation_then_audit",
+        "source_sha256": "eebe425eb087c3a3885db4e2b75125ed042dd84c3390bde604ef048eaa60f7db",
+        "checkpoint_sha256": "ef858c94adc6346ca21284fb83279cbce56d88dab61495a3aebf93ebdbfdd43f"
+      }
+    },
+    "metrics": {
+      "best_score": -10.219687723714603,
+      "calls": 2,
+      "cost": 0.711204,
+      "parallel_seconds_estimate": 2014.4648699760437,
+      "quality_gain": 0.032621627902813095,
+      "rounds": 1,
+      "supported": true
+    },
+    "paid_calls": 2,
+    "retained_upper_usd": 1.145125,
+    "unused_proposals": 1,
+    "invalid_attempts": 0,
+    "unadmitted_attempts": 0
+  },
+  "selected_source_sha256": "eebe425eb087c3a3885db4e2b75125ed042dd84c3390bde604ef048eaa60f7db",
+  "model_authored_rationale": "Iterated local search (ILS) for 320-point Euclidean TSP, compiled with numba.\n\nRationale (exploratory, not yet measured on this split): the common reference is\nnearest-neighbour construction plus best-improvement 2-opt, capped at 300 moves,\nkept as the best of 24 restarts. That typically lands several percent above\noptimal. This method keeps a local optimum and tries to improve it:\n  * Neighbour-list (K=10) 2-opt and Or-opt local search. Or-opt moves segments of\n    1-3 cities in either orientation. Don't-look bits are implemented as a work\n    queue, so only cities near a change are rechecked.\n  * Perturbation is a localized double-bridge (swap two adjacent short segments).\n    A result is accepted when it is no longer than the current tour.\n  * Instances run two at a time via numba prange (2 cores). Each pair gets a\n    wall-time share of the budget, and the budget adapts to the time left.\nEvery output tour is checked to be a permutation; otherwise a NN tour is returned.\nLimitations: time-based iteration counts make results depend slightly on\nmachine speed; no learned component is used.",
+  "stages": {
+    "development": {
+      "model_authored_findings": {
+        "sanity_train_instances": 2,
+        "ils_tour_lengths": [
+          6.996692807296963,
+          13.300935694587572
+        ],
+        "nn_tour_lengths_from_city0": [
+          8.797909932231997,
+          17.070641351936743
+        ],
+        "sanity_info": {
+          "kicks_per_instance_mean": 524578.0,
+          "seconds": 12.005549192428589
+        },
+        "train_seconds": 12.02013087272644,
+        "limitations": "Sanity check on 2 training instances only (~6 s each, includes numba compile); no comparison to the reference 2-opt measured here."
+      },
+      "timing.json": {
+        "started": 1790135847.2922242,
+        "finished": 1790136339.335645,
+        "seconds": 492.04342103004456
+      },
+      "closure.json": {
+        "finished": 1790136340.1122289,
+        "seconds": 494.92506980895996,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T03:57:25.294681661Z",
+          "FinishedAt": "2026-09-23T04:05:39.965504658Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 6
+      }
+    },
+    "confirmation": {
+      "model_authored_findings": {},
+      "timing.json": {
+        "started": 1790136342.2885613,
+        "finished": 1790136822.3092067,
+        "seconds": 480.0206456184387
+      },
+      "closure.json": {
+        "finished": 1790136822.9731033,
+        "seconds": 482.7879433631897,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T04:05:40.28793801Z",
+          "FinishedAt": "2026-09-23T04:13:42.820122018Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 6
+      },
+      "comparison.json": {
+        "relative_gain": 0.034874329652819225,
+        "candidate_loss": 10.039819845286932,
+        "baseline_loss": 10.402603675099998,
+        "groups": 32,
+        "paired_group_97_5_upper_difference": -0.3242541362512427,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    "audit": {
+      "model_authored_findings": {},
+      "timing.json": {
+        "started": 1790136825.261151,
+        "finished": 1790137725.288356,
+        "seconds": 900.0272052288055
+      },
+      "closure.json": {
+        "finished": 1790137726.0295584,
+        "seconds": 902.9770691394806,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T04:13:43.215642687Z",
+          "FinishedAt": "2026-09-23T04:28:45.875378837Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 6
+      },
+      "comparison.json": {
+        "relative_gain": 0.03250845061260588,
+        "candidate_loss": 10.578087940454974,
+        "baseline_loss": 10.933519726506049,
+        "groups": 64,
+        "paired_group_97_5_upper_difference": -0.3301287704960415,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    }
+  },
+  "prediction_checks": [
+    {
+      "split": "development",
+      "instances": 32,
+      "points_per_instance": 320,
+      "candidate_loss": 10.219687723714605,
+      "baseline_loss": 10.564312805091213,
+      "relative_gain": 0.03262162790281298
+    },
+    {
+      "split": "confirmation",
+      "instances": 32,
+      "points_per_instance": 320,
+      "candidate_loss": 10.039819845286933,
+      "baseline_loss": 10.402603675099998,
+      "relative_gain": 0.034874329652819114
+    },
+    {
+      "split": "audit",
+      "instances": 64,
+      "points_per_instance": 320,
+      "candidate_loss": 10.578087940454974,
+      "baseline_loss": 10.933519726506049,
+      "relative_gain": 0.03250845061260588
+    }
+  ],
+  "attempts": [
+    {
+      "action": "b0-s0",
+      "status": "ok",
+      "cost": 0.324692,
+      "score": -10.219687723714603,
+      "seconds": 2014.463615655899,
+      "unused_after_delivery": false
+    },
+    {
+      "action": "b1-s0",
+      "status": "blocked",
+      "cost": 0.386512,
+      "score": null,
+      "seconds": 2014.4648699760437,
+      "unused_after_delivery": true
+    }
+  ],
+  "review_findings": [
+    "Standard compiled iterated local search using neighbor-list 2-opt and Or-opt, double-bridge perturbation and a nonworsening acceptance rule. No learned component.",
+    "Two instances are processed together with Numba prange, using at most two CPU threads. This is not GPU-kernel acceleration.",
+    "Prediction budget is min(900, 30*ceil(number_of_instances/2)) seconds: 480 seconds for 32 development/confirmation instances, 900 seconds for 64 audit instances. Recorded worker times agree.",
+    "The 12-second train finding is a sanity check on only two training instances against single-start nearest-neighbor tours. It does not measure gain over the full reference solver. Worker train-plus-development lasts 492.04 seconds.",
+    "Audit mean route length 10.57809 versus 10.93352 reference, 3.2508% improvement, passes the original 2% plus uncertainty conditions. Delivery 33.57505 minutes. More budget than repetition 0 is not a paired timing ablation because task instances and source differ.",
+    "Two paid proposals, one unused. The control counterpart is still running, so no full TSP paired average or optimization-family verdict is inferred."
+  ],
+  "evidence_sha256": {
+    "episodes/tsp-1-candidate/completed.json": "cd9f1a401ee4bf37144c68bcc131610dd50e7a105b317e9c59a0e0311c98b4ff",
+    "episodes/tsp-1-candidate/goal-delivered.json": "be9e55b29a7dc91c1bc271f5d522d3ff55fb43d8913a85c000e01788ddfd8fc8",
+    "calls/tsp-1-candidate/b0-s0/candidate.py": "eebe425eb087c3a3885db4e2b75125ed042dd84c3390bde604ef048eaa60f7db",
+    "references/tsp-1.json": "6fe4af5d4dca01ba7862c2e9343b85e70f3597cb9c6657fd62ccd15c21f73d01",
+    "data/tsp-1/task.json": "3899431474713060def9ddc9f39a636b480dfe16f8f394c2d3b7af32905605d1",
+    "episodes/tsp-1-candidate/b0-s0/result.json": "418cc6870ddad62e62a2918636d4b363a5792e2f3798a9e298d0a0c7e1ace8ef",
+    "data/tsp-1/development/features.npy": "6265a2488316c26b55139d438d1ddecc38b1e6360c55c57eaeaf7c7a79956a4e",
+    "episodes/tsp-1-candidate/b0-s0/timing.json": "55162bbf9a254f9fb2d5f5e89a6ddd2eb2a95f20caebf5184403805fa5f5038d",
+    "episodes/tsp-1-candidate/b0-s0/closure.json": "d326451d6bbfd9f29a51b7cddd716ac48b4d4962a9fc9858baf8236ed5537742",
+    "episodes/tsp-1-candidate/b0-s0/development-score.json": "5ba6e01a3366b3c17640d0536cbc30d9c70df64a4ad2c8f564af3e602e490d99",
+    "episodes/tsp-1-candidate/b0-s0-confirmation/result.json": "53596df5f351df13e5e1957859f544cee8b18b986f200fd4a8371ca845668503",
+    "data/tsp-1/confirmation/features.npy": "8d92ef404de21f9e46849e97154f619c2784bb0368f26864b8c1c3a3678410b8",
+    "episodes/tsp-1-candidate/b0-s0-confirmation/timing.json": "2ed5e0a89063957c94b9e030d728f6b827c9e1e3dc33babe7141f773eaffde5a",
+    "episodes/tsp-1-candidate/b0-s0-confirmation/closure.json": "0e910f159ac5d09be2a2bee01c6c8c36830cb616866693de11192fe245876ba9",
+    "episodes/tsp-1-candidate/b0-s0-confirmation/comparison.json": "89b58d0e25cbf6ac5d384b60bdb0162c9e06a3064ecc0e8e40295f5deec61049",
+    "episodes/tsp-1-candidate/b0-s0-audit/result.json": "a834962779c41c58263d6f3c077b7a27855fbfd635ea2923d142b0d59258e279",
+    "data/tsp-1/audit/features.npy": "5ac876b9bc55d98bdf0ecb039094a990bfdee0e92285ca2563e213909fa7f675",
+    "episodes/tsp-1-candidate/b0-s0-audit/timing.json": "72d5987998cec5c8f5478d871cf16190f8e967edf5a081c439036eb7bd393238",
+    "episodes/tsp-1-candidate/b0-s0-audit/closure.json": "15a0e5e3e86c10540f2847b1cd978977ef39e7cbd9f4234c31760fb811a28ad7",
+    "episodes/tsp-1-candidate/b0-s0-audit/comparison.json": "f5eec0c17c00bc39cc42a7f010c186f88db1c848bd7ed295d7f129506137f3b4",
+    "calls/tsp-1-candidate/b0-s0/outcome.json": "fc4f01698434113e48edea9974b5801d4d76534eaf6c476b11eb521f592d2131",
+    "calls/tsp-1-candidate/b1-s0/outcome.json": "4c7128f9d5b65f727432dc30ff0a4a0af0f2b85dbf6b647f87a42da45fdb77f2"
+  },
+  "new_model_requests": 0,
+  "new_gpu_executions": 0,
+  "whole_campaign_verified": false,
+  "default_promotion_authorized": false
+}
