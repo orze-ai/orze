@@ -1,0 +1,1669 @@
+{
+  "created": 1790135670.0239835,
+  "scope": "Selected source plus all 27 stored classification prediction sets from four completed episodes. Independent point-loss recomputation only; recorded bootstrap is not rerun. No candidate import/execution or checkpoint deserialization. No counterfactual rollout or claim that an earlier audit would have occurred. TREC includes repetition 0 only.",
+  "rows": [
+    {
+      "episode": "trec-0-control",
+      "completed": {
+        "label": "trec-0-control",
+        "task": "trec",
+        "family": "text",
+        "repetition": 0,
+        "arm": "control",
+        "gpu": 2,
+        "started": 1790133713.756581,
+        "finished": 1790134538.6560302,
+        "seconds": 824.8994493484497,
+        "goal_reached": false,
+        "capped_goal_seconds": 7200,
+        "state": {
+          "started": 1790133713.756581,
+          "terminal": true,
+          "goal_reached": false,
+          "confirmation_used": true,
+          "best": 0.12484700122399021,
+          "delivered": {
+            "action": "b0-s0",
+            "finished": 1790134538.631472,
+            "accepted": false,
+            "within_deadline": true,
+            "route": "best_development_at_limit",
+            "source_sha256": "95c2bdab0c5f3244bc27633159df9265af7969d4c8627837069a792c88032c51",
+            "checkpoint_sha256": "5fc64849364a955429d040f30e6b39ea19bf850453ac9ceb75765e4059108f95"
+          }
+        },
+        "metrics": {
+          "best_score": -0.12484700122399021,
+          "calls": 6,
+          "cost": 1.994535,
+          "parallel_seconds_estimate": 820.5132141113281,
+          "quality_gain": 0.19047619047619047,
+          "rounds": 3,
+          "supported": true
+        },
+        "paid_calls": 6,
+        "retained_upper_usd": 3.491275,
+        "unused_proposals": 0,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "selected_action": "b0-s0",
+      "source_sha256": "95c2bdab0c5f3244bc27633159df9265af7969d4c8627837069a792c88032c51",
+      "model_authored_rationale": "TREC text classification: beat the word-TFIDF LinearSVC reference by (a) fusing word\n1-2gram, character_wb 2-5gram and explicit question-head (first 1/2/3 token) features into a\nsingle sparse representation, (b) selecting the regularisation / block weighting / model\nensemble by group-aware cross-validation on the training rows only, and (c) optionally adding a\ntransductive self-training round over the unlabelled features given at prediction time.\n\nRationale (exploratory, validated only by internal group CV here):\n- TREC labels are driven largely by the interrogative head (\"what kind of\", \"how many\",\n  \"who\"); explicit head tokens give the linear model unambiguous high-weight features that\n  1-2 word n-grams dilute.  Character n-grams add robustness to rare content words.\n- The two reference arms (word-only 0.1542, char-only 0.1567 dev error) are close, which\n  suggests they are partly complementary; averaging calibrated decision functions of both\n  families is a cheap variance reduction.\n- All selection uses GroupKFold over api.train_groups (the declared generalisation protocol);\n  development labels are never used.  Vectorizer vocabulary/idf is fitted on train+development\n  *features* only (unsupervised, no labels).\nLimitations: model/ensemble selection over many candidates on ~3.8k CV rows can overfit the\nselection by a few tenths of a percent; self-training is enabled only when it improves CV by a\nclear margin.  No pretrained weights or external data are used.",
+      "selected_training_findings": {
+        "cv_folds": 5,
+        "cv_grouped": true,
+        "n_train": 3823,
+        "n_features_word": 38926,
+        "n_features_char": 31290,
+        "cv_error_singles": {
+          "(0.5, 'svc', 0.5)": 0.14962,
+          "(0.5, 'svc', 1.0)": 0.14491,
+          "(0.5, 'svc', 2.0)": 0.14099,
+          "(0.5, 'svc', 4.0)": 0.13916,
+          "(1.0, 'svc', 0.5)": 0.14177,
+          "(1.0, 'svc', 1.0)": 0.13916,
+          "(1.0, 'svc', 2.0)": 0.13759,
+          "(1.0, 'svc', 4.0)": 0.13602,
+          "(0.5, 'lr', 8.0)": 0.16165,
+          "(1.0, 'lr', 8.0)": 0.15041
+        },
+        "cv_error_best_single": 0.13602,
+        "cv_error_selected": 0.13523,
+        "selected": [
+          "(0.5, 'svc', 4.0)",
+          "(1.0, 'svc', 2.0)"
+        ],
+        "cv_error_self_training": 0.13759,
+        "self_training_enabled": false,
+        "logreg_evaluated": true,
+        "training_seconds": 79.4,
+        "limitations": "CV selection over many candidates can optimistically bias the reported CV error; development labels were never used; vectorizer vocabulary fitted on train+development features only."
+      },
+      "stages": [
+        {
+          "episode": "trec-0-control",
+          "action": "b0-s0",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.12484700122399021,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 102,
+          "baseline_errors": 126,
+          "relative_gain": 0.19047619047619047,
+          "fixed_errors": 40,
+          "new_errors": 16,
+          "timing.json": {
+            "started": 1790133885.7635264,
+            "finished": 1790133966.56362,
+            "seconds": 80.80009412765503
+          },
+          "closure.json": {
+            "finished": 1790133967.3377955,
+            "seconds": 83.72901248931885,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:24:43.714163378Z",
+              "FinishedAt": "2026-09-23T03:26:07.208172823Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        },
+        {
+          "episode": "trec-0-control",
+          "action": "b0-s0-audit",
+          "split": "audit",
+          "rows": 489,
+          "loss": 0.10633946830265849,
+          "baseline_loss": 0.12269938650306748,
+          "errors": 52,
+          "baseline_errors": 60,
+          "relative_gain": 0.1333333333333333,
+          "fixed_errors": 19,
+          "new_errors": 11,
+          "recorded_comparison": {
+            "relative_gain": 0.1333333333333333,
+            "candidate_loss": 0.10633946830265849,
+            "baseline_loss": 0.12269938650306748,
+            "groups": 489,
+            "paired_group_97_5_upper_difference": 0.006134969325153374,
+            "qualified": false,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "timing.json": {
+            "started": 1790134536.4596756,
+            "finished": 1790134537.7351635,
+            "seconds": 1.2754886150360107
+          },
+          "closure.json": {
+            "finished": 1790134538.477607,
+            "seconds": 4.135885000228882,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:35:34.44593228Z",
+              "FinishedAt": "2026-09-23T03:35:38.330101327Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        },
+        {
+          "episode": "trec-0-control",
+          "action": "b0-s1",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.13096695226438188,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 107,
+          "baseline_errors": 126,
+          "relative_gain": 0.15079365079365092,
+          "fixed_errors": 39,
+          "new_errors": 20,
+          "timing.json": {
+            "started": 1790134030.0590186,
+            "finished": 1790134052.2462966,
+            "seconds": 22.187278270721436
+          },
+          "closure.json": {
+            "finished": 1790134053.0452778,
+            "seconds": 25.162277698516846,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:27:07.988544315Z",
+              "FinishedAt": "2026-09-23T03:27:32.932116496Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        },
+        {
+          "episode": "trec-0-control",
+          "action": "b0-s2",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.12484700122399021,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 102,
+          "baseline_errors": 126,
+          "relative_gain": 0.19047619047619047,
+          "fixed_errors": 40,
+          "new_errors": 16,
+          "timing.json": {
+            "started": 1790134404.8686647,
+            "finished": 1790134428.995639,
+            "seconds": 24.12697458267212
+          },
+          "closure.json": {
+            "finished": 1790134429.6313565,
+            "seconds": 26.8136944770813,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:33:22.924011223Z",
+              "FinishedAt": "2026-09-23T03:33:49.537957483Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        },
+        {
+          "episode": "trec-0-control",
+          "action": "b1-s0",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.13708690330477355,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 112,
+          "baseline_errors": 126,
+          "relative_gain": 0.11111111111111116,
+          "fixed_errors": 36,
+          "new_errors": 22,
+          "timing.json": {
+            "started": 1790133817.9472253,
+            "finished": 1790133878.0731707,
+            "seconds": 60.12594556808472
+          },
+          "closure.json": {
+            "finished": 1790133878.8770678,
+            "seconds": 63.10554003715515,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:23:35.874634683Z",
+              "FinishedAt": "2026-09-23T03:24:38.732690099Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        },
+        {
+          "episode": "trec-0-control",
+          "action": "b1-s0-confirmation",
+          "split": "confirmation",
+          "rows": 812,
+          "loss": 0.14532019704433496,
+          "baseline_loss": 0.13916256157635468,
+          "errors": 118,
+          "baseline_errors": 113,
+          "relative_gain": -0.044247787610619316,
+          "fixed_errors": 31,
+          "new_errors": 36,
+          "recorded_comparison": {
+            "relative_gain": -0.044247787610619316,
+            "candidate_loss": 0.14532019704433496,
+            "baseline_loss": 0.13916256157635468,
+            "groups": 807,
+            "paired_group_97_5_upper_difference": 0.02586206896551724,
+            "qualified": false,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "timing.json": {
+            "started": 1790133881.191662,
+            "finished": 1790133882.6638436,
+            "seconds": 1.472182035446167
+          },
+          "closure.json": {
+            "finished": 1790133883.4066694,
+            "seconds": 4.436426639556885,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:24:39.078307769Z",
+              "FinishedAt": "2026-09-23T03:24:43.283580564Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        },
+        {
+          "episode": "trec-0-control",
+          "action": "b1-s1",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.14320685434516525,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 117,
+          "baseline_errors": 126,
+          "relative_gain": 0.0714285714285714,
+          "fixed_errors": 35,
+          "new_errors": 26,
+          "timing.json": {
+            "started": 1790134168.7415845,
+            "finished": 1790134337.4327395,
+            "seconds": 168.69115567207336
+          },
+          "closure.json": {
+            "finished": 1790134338.1939194,
+            "seconds": 171.54832291603088,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:29:26.747295192Z",
+              "FinishedAt": "2026-09-23T03:32:18.050322703Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        },
+        {
+          "episode": "trec-0-control",
+          "action": "b1-s2",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.14320685434516525,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 117,
+          "baseline_errors": 126,
+          "relative_gain": 0.0714285714285714,
+          "fixed_errors": 36,
+          "new_errors": 27,
+          "timing.json": {
+            "started": 1790134499.6032903,
+            "finished": 1790134533.5882616,
+            "seconds": 33.98497176170349
+          },
+          "closure.json": {
+            "finished": 1790134534.2412598,
+            "seconds": 36.72904634475708,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:34:57.617772797Z",
+              "FinishedAt": "2026-09-23T03:35:34.118849616Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        }
+      ],
+      "selected_development_execution_closed_seconds_after_start": 253.581214427948,
+      "selected_ready_to_final_delivery_seconds": 571.2936766147614
+    },
+    {
+      "episode": "trec-0-candidate",
+      "completed": {
+        "label": "trec-0-candidate",
+        "task": "trec",
+        "family": "text",
+        "repetition": 0,
+        "arm": "candidate",
+        "gpu": 3,
+        "started": 1790133713.7567549,
+        "finished": 1790135150.0446036,
+        "seconds": 1436.2878489494324,
+        "goal_reached": true,
+        "capped_goal_seconds": 1435.7608346939087,
+        "state": {
+          "started": 1790133713.7567549,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 0.11260709914320685,
+          "delivered": {
+            "action": "b0-s1",
+            "finished": 1790135149.5175896,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "best_development_at_limit",
+            "source_sha256": "9eaca50a05c953b5bb76a1da044cd063bd3693f72317d5eb55e4ef73c5583c51",
+            "checkpoint_sha256": "0922a1c3bd2b956a7b1a54efb4b3a1776efd698526c1de9cadefc07433934c6d"
+          }
+        },
+        "metrics": {
+          "best_score": -0.11260709914320685,
+          "calls": 6,
+          "cost": 1.450632,
+          "parallel_seconds_estimate": 1430.3958084583282,
+          "quality_gain": 0.2698412698412699,
+          "rounds": 3,
+          "supported": true
+        },
+        "paid_calls": 6,
+        "retained_upper_usd": 3.33195,
+        "unused_proposals": 0,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "selected_action": "b0-s1",
+      "source_sha256": "9eaca50a05c953b5bb76a1da044cd063bd3693f72317d5eb55e4ef73c5583c51",
+      "model_authored_rationale": "TREC: engineered sparse linear models + from-scratch subword BiGRU, ensembled by grouped CV.\n\nRationale (exploratory, unverified). Parent b0-s0 used a stacked sparse model: word\n1-3grams, char_wb 2-5grams and structural tokens (wh-word, head noun and similar\ncues) with a LinearSVC. It improved development loss (0.1346 vs 0.1542) but did not\nqualify on confirmation. With 812 confirmation rows the standard error is about\n0.013, so a larger real gain is needed.\n\nThis step makes two changes:\n 1. Richer structure tokens:\n    - char 3/4-grams of the heuristic head noun, so unseen heads such as\n      -ist/-er/-ity words can generalize;\n    - a what+aux+length cue for definition (DESC) questions;\n    - a plural-head flag.\n 2. A second, heterogeneous learner trained on the GPU from scratch. It is a BiGRU\n    over word embeddings plus fastText-style hashed char n-gram embeddings, using\n    crc32 so the hashing is deterministic, and a bag of the structure tokens.\n    It is trained over several seeds.\nThe log-probabilities of SVC (softmax of the margins), LR and the NN are mixed.\nMixing weights come from a small grid on out-of-fold predictions under GroupKFold\non the training groups. The pure linear models are included in that grid, so the\nensemble falls back to them if the NN does not help in CV.\n\nLimitations: weights are chosen on the same folds that are reported, so there is\nmild optimism. The TF-IDF vocabulary uses train plus unlabeled development text.",
+      "selected_training_findings": {
+        "reference_like_group_cv_error": 0.16505560688498785,
+        "svc_grid": [
+          {
+            "err": 0.13994245357049437,
+            "C": 1.5,
+            "w": [
+              1.0,
+              0.7,
+              0.7
+            ]
+          },
+          {
+            "err": 0.14308134972534658,
+            "C": 0.7,
+            "w": [
+              1.0,
+              0.7,
+              0.7
+            ]
+          },
+          {
+            "err": 0.14465079780277268,
+            "C": 1.5,
+            "w": [
+              1.0,
+              0.7,
+              1.2
+            ]
+          },
+          {
+            "err": 0.14674339523934082,
+            "C": 0.7,
+            "w": [
+              1.0,
+              0.7,
+              1.2
+            ]
+          }
+        ],
+        "lr_oof_error": 0.14883599267590897,
+        "linear_seconds": 45.27118158340454,
+        "nn_model_seconds": 10.598049402236938,
+        "nn_oof_error": 0.14046560292963642,
+        "nn_cv_seeds": 3,
+        "mix_top5": [
+          {
+            "err": 0.1357572586973581,
+            "w_svc_lr_nn": [
+              0.5,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "err": 0.1357572586973581,
+            "w_svc_lr_nn": [
+              1.0,
+              0.0,
+              0.5
+            ]
+          },
+          {
+            "err": 0.13628040805650013,
+            "w_svc_lr_nn": [
+              0.5,
+              0.0,
+              0.5
+            ]
+          },
+          {
+            "err": 0.13628040805650013,
+            "w_svc_lr_nn": [
+              1.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "err": 0.13706513209521318,
+            "w_svc_lr_nn": [
+              0.5,
+              0.5,
+              0.5
+            ]
+          }
+        ],
+        "svc_oof_error": 0.13994245357049437,
+        "nn_final_seeds": 5,
+        "best_mix": [
+          0.5,
+          0.0,
+          1.0
+        ],
+        "best_mix_oof_error": 0.1357572586973581,
+        "svc_C": 1.5,
+        "weights_word_char_meta": [
+          1.0,
+          0.7,
+          0.7
+        ],
+        "train_seconds": 246.63521099090576,
+        "limitations": "Mixing weights and SVC config were selected on the same grouped CV folds (optimistic). TF-IDF vocab fit on train+unlabeled dev text. NN CV used fewer seeds than the final ensemble."
+      },
+      "stages": [
+        {
+          "episode": "trec-0-candidate",
+          "action": "b0-s0",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.1346389228886169,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 110,
+          "baseline_errors": 126,
+          "relative_gain": 0.12698412698412698,
+          "fixed_errors": 38,
+          "new_errors": 22,
+          "timing.json": {
+            "started": 1790133957.1768684,
+            "finished": 1790134109.3927562,
+            "seconds": 152.21588826179504
+          },
+          "closure.json": {
+            "finished": 1790134110.0839982,
+            "seconds": 155.0663137435913,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:25:55.12172941Z",
+              "FinishedAt": "2026-09-23T03:28:29.928581011Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        },
+        {
+          "episode": "trec-0-candidate",
+          "action": "b0-s0-confirmation",
+          "split": "confirmation",
+          "rows": 812,
+          "loss": 0.1268472906403941,
+          "baseline_loss": 0.13916256157635468,
+          "errors": 103,
+          "baseline_errors": 113,
+          "relative_gain": 0.08849557522123885,
+          "fixed_errors": 32,
+          "new_errors": 22,
+          "recorded_comparison": {
+            "relative_gain": 0.08849557522123885,
+            "candidate_loss": 0.1268472906403941,
+            "baseline_loss": 0.13916256157635468,
+            "groups": 807,
+            "paired_group_97_5_upper_difference": 0.004944375772558714,
+            "qualified": false,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "timing.json": {
+            "started": 1790134112.2947893,
+            "finished": 1790134113.5970395,
+            "seconds": 1.302250623703003
+          },
+          "closure.json": {
+            "finished": 1790134114.3019176,
+            "seconds": 4.1368207931518555,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:28:30.26800388Z",
+              "FinishedAt": "2026-09-23T03:28:34.18393817Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        },
+        {
+          "episode": "trec-0-candidate",
+          "action": "b0-s1",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.11260709914320685,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 92,
+          "baseline_errors": 126,
+          "relative_gain": 0.2698412698412699,
+          "fixed_errors": 51,
+          "new_errors": 17,
+          "timing.json": {
+            "started": 1790134281.0555515,
+            "finished": 1790134529.8436728,
+            "seconds": 248.78812217712402
+          },
+          "closure.json": {
+            "finished": 1790134530.837182,
+            "seconds": 251.93231344223022,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:31:19.008634989Z",
+              "FinishedAt": "2026-09-23T03:35:30.730830962Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        },
+        {
+          "episode": "trec-0-candidate",
+          "action": "b0-s1-audit",
+          "split": "audit",
+          "rows": 489,
+          "loss": 0.07566462167689161,
+          "baseline_loss": 0.12269938650306748,
+          "errors": 37,
+          "baseline_errors": 60,
+          "relative_gain": 0.3833333333333333,
+          "fixed_errors": 29,
+          "new_errors": 6,
+          "recorded_comparison": {
+            "relative_gain": 0.3833333333333333,
+            "candidate_loss": 0.07566462167689161,
+            "baseline_loss": 0.12269938650306748,
+            "groups": 489,
+            "paired_group_97_5_upper_difference": -0.022494887525562373,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "timing.json": {
+            "started": 1790135146.3536916,
+            "finished": 1790135148.61588,
+            "seconds": 2.2621891498565674
+          },
+          "closure.json": {
+            "finished": 1790135149.3641005,
+            "seconds": 5.13838005065918,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:45:44.328636289Z",
+              "FinishedAt": "2026-09-23T03:45:49.209949069Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        },
+        {
+          "episode": "trec-0-candidate",
+          "action": "b0-s2",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.11627906976744186,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 95,
+          "baseline_errors": 126,
+          "relative_gain": 0.24603174603174605,
+          "fixed_errors": 49,
+          "new_errors": 18,
+          "timing.json": {
+            "started": 1790134743.1666627,
+            "finished": 1790135142.6648679,
+            "seconds": 399.4982056617737
+          },
+          "closure.json": {
+            "finished": 1790135143.511563,
+            "seconds": 402.4428207874298,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:39:01.171340678Z",
+              "FinishedAt": "2026-09-23T03:45:43.395209181Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        },
+        {
+          "episode": "trec-0-candidate",
+          "action": "b1-s0",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.15055079559363524,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 123,
+          "baseline_errors": 126,
+          "relative_gain": 0.023809523809523947,
+          "fixed_errors": 38,
+          "new_errors": 35,
+          "timing.json": {
+            "started": 1790133762.1134968,
+            "finished": 1790133954.1222985,
+            "seconds": 192.00880217552185
+          },
+          "closure.json": {
+            "finished": 1790133954.920547,
+            "seconds": 194.94822239875793,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:22:40.074372197Z",
+              "FinishedAt": "2026-09-23T03:25:54.799531025Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        },
+        {
+          "episode": "trec-0-candidate",
+          "action": "b1-s1",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.1175030599755202,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 96,
+          "baseline_errors": 126,
+          "relative_gain": 0.23809523809523814,
+          "fixed_errors": 56,
+          "new_errors": 26,
+          "timing.json": {
+            "started": 1790134237.4390163,
+            "finished": 1790134278.1341012,
+            "seconds": 40.69508504867554
+          },
+          "closure.json": {
+            "finished": 1790134278.8143945,
+            "seconds": 43.48386096954346,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:30:35.429019585Z",
+              "FinishedAt": "2026-09-23T03:31:18.673555226Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        },
+        {
+          "episode": "trec-0-candidate",
+          "action": "b1-s2",
+          "split": "development",
+          "rows": 817,
+          "loss": 0.1211750305997552,
+          "baseline_loss": 0.15422276621787026,
+          "errors": 99,
+          "baseline_errors": 126,
+          "relative_gain": 0.2142857142857143,
+          "fixed_errors": 51,
+          "new_errors": 24,
+          "timing.json": {
+            "started": 1790134590.5355866,
+            "finished": 1790134740.2912266,
+            "seconds": 149.7556402683258
+          },
+          "closure.json": {
+            "finished": 1790134740.9780145,
+            "seconds": 152.52418518066406,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:36:28.553316408Z",
+              "FinishedAt": "2026-09-23T03:39:00.835378396Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        }
+      ],
+      "selected_development_execution_closed_seconds_after_start": 817.0804271697998,
+      "selected_ready_to_final_delivery_seconds": 618.6804075241089
+    },
+    {
+      "episode": "kmnist-1-control",
+      "completed": {
+        "label": "kmnist-1-control",
+        "task": "kmnist",
+        "family": "vision",
+        "repetition": 1,
+        "arm": "control",
+        "gpu": 1,
+        "started": 1790133207.0078795,
+        "finished": 1790133642.3927956,
+        "seconds": 435.384916305542,
+        "goal_reached": true,
+        "capped_goal_seconds": 435.1948437690735,
+        "state": {
+          "started": 1790133207.0078795,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 0.0025,
+          "delivered": {
+            "action": "b1-s0",
+            "finished": 1790133642.2027233,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "62ddc680710c257ccca74e64ed956f38792357dfa458209d612b2d3c71e2e334",
+            "checkpoint_sha256": "3bb9d549a644ff56d301d29066c8005c0702301a1d8c5859757bb19e926646c6"
+          }
+        },
+        "metrics": {
+          "best_score": -0.0025,
+          "calls": 2,
+          "cost": 0.662695,
+          "parallel_seconds_estimate": 435.29093408584595,
+          "quality_gain": 0.6153846153846154,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 0.935375,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "selected_action": "b1-s0",
+      "source_sha256": "62ddc680710c257ccca74e64ed956f38792357dfa458209d612b2d3c71e2e334",
+      "model_authored_rationale": "KMNIST: deep ensemble of small residual CNNs with GPU affine augmentation + cutout, plus shift TTA.\n\nRationale (exploratory, unverified until measured): the common reference is a single\nCIFAR-style ResNet trained with pad-and-crop only, reaching 0.65% development error.\nTwo well-established, low-risk sources of further error reduction on small-data\ncharacter recognition are (a) richer label-preserving geometric augmentation\n(small rotation / scale / shear / translation, which respect KMNIST semantics and\nnever use horizontal flips) combined with cutout, and (b) averaging softmax outputs\nover an ensemble of independently seeded networks and a few small-translation\ntest-time views.  Both are variance-reduction mechanisms rather than new inductive\nbiases, so they should compound with the reference recipe rather than trade off\nagainst it.  Training 12k 28x28 images is cheap, so within the 900 s train limit we\ncan fit several networks instead of one, which is the main expected gain.\n\nImplementation notes / limitations:\n - No horizontal flip anywhere (augmentation or TTA), per task contract.\n - All 12k training rows are used for fitting; no internal validation split is held\n   out, so the reported training error is in-sample and is NOT a generalization\n   estimate.  Model selection is by construction (fixed recipe), not by score.\n - Number of ensemble members adapts to measured wall-clock speed on the shared GPU;\n   the cosine LR schedule is driven by max(epoch progress, time progress) so a slow\n   GPU still yields fully annealed models.\n - State dicts (CPU tensors) are stored in the model dict; the architecture is\n   rebuilt at prediction time from this same module, so no mutable module globals\n   are relied upon.",
+      "selected_training_findings": {
+        "ensemble_members": 8,
+        "epochs_per_member_target": 90,
+        "seconds_per_member": [
+          50.1,
+          34.7,
+          34.8,
+          34.9,
+          35.0,
+          35.2,
+          35.1,
+          35.1
+        ],
+        "train_seconds": 298.2,
+        "augmentation": "affine(rot/scale/shear/translate)+cutout, no horizontal flip",
+        "tta": "5 small translations (no flip)",
+        "in_sample_train_error_no_tta": 0.0,
+        "limitations": "No held-out internal validation; train error is in-sample and optimistic. Member count depends on measured GPU speed, so the artifact is not bitwise reproducible. No development labels were used."
+      },
+      "stages": [
+        {
+          "episode": "kmnist-1-control",
+          "action": "b1-s0",
+          "split": "development",
+          "rows": 2000,
+          "loss": 0.0025,
+          "baseline_loss": 0.0065,
+          "errors": 5,
+          "baseline_errors": 13,
+          "relative_gain": 0.6153846153846154,
+          "fixed_errors": 9,
+          "new_errors": 1,
+          "timing.json": {
+            "started": 1790133326.5665503,
+            "finished": 1790133625.8232076,
+            "seconds": 299.2566578388214
+          },
+          "closure.json": {
+            "finished": 1790133626.6112254,
+            "seconds": 302.2058861255646,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:15:24.516861166Z",
+              "FinishedAt": "2026-09-23T03:20:26.486037161Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 1
+          }
+        },
+        {
+          "episode": "kmnist-1-control",
+          "action": "b1-s0-audit",
+          "split": "audit",
+          "rows": 5000,
+          "loss": 0.0108,
+          "baseline_loss": 0.0188,
+          "errors": 54,
+          "baseline_errors": 94,
+          "relative_gain": 0.42553191489361697,
+          "fixed_errors": 49,
+          "new_errors": 9,
+          "recorded_comparison": {
+            "relative_gain": 0.42553191489361697,
+            "candidate_loss": 0.0108,
+            "baseline_loss": 0.0188,
+            "groups": 5000,
+            "paired_group_97_5_upper_difference": -0.0052,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "timing.json": {
+            "started": 1790133635.9939506,
+            "finished": 1790133640.706312,
+            "seconds": 4.712361812591553
+          },
+          "closure.json": {
+            "finished": 1790133641.3280249,
+            "seconds": 7.543195962905884,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:20:33.887417648Z",
+              "FinishedAt": "2026-09-23T03:20:41.190523707Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 1
+          }
+        },
+        {
+          "episode": "kmnist-1-control",
+          "action": "b1-s0-confirmation",
+          "split": "confirmation",
+          "rows": 2000,
+          "loss": 0.004,
+          "baseline_loss": 0.009,
+          "errors": 8,
+          "baseline_errors": 18,
+          "relative_gain": 0.5555555555555556,
+          "fixed_errors": 10,
+          "new_errors": 0,
+          "recorded_comparison": {
+            "relative_gain": 0.5555555555555556,
+            "candidate_loss": 0.004,
+            "baseline_loss": 0.009,
+            "groups": 2000,
+            "paired_group_97_5_upper_difference": -0.002,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "timing.json": {
+            "started": 1790133629.0503128,
+            "finished": 1790133632.7816162,
+            "seconds": 3.7313039302825928
+          },
+          "closure.json": {
+            "finished": 1790133633.3955631,
+            "seconds": 6.539850234985352,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:20:26.961046488Z",
+              "FinishedAt": "2026-09-23T03:20:33.324193439Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 1
+          }
+        }
+      ],
+      "selected_development_execution_closed_seconds_after_start": 419.6033458709717,
+      "selected_ready_to_final_delivery_seconds": 15.591497898101807
+    },
+    {
+      "episode": "kmnist-1-candidate",
+      "completed": {
+        "label": "kmnist-1-candidate",
+        "task": "kmnist",
+        "family": "vision",
+        "repetition": 1,
+        "arm": "candidate",
+        "gpu": 0,
+        "started": 1790133207.0080254,
+        "finished": 1790135047.3834617,
+        "seconds": 1840.3754365444183,
+        "goal_reached": true,
+        "capped_goal_seconds": 1840.3101451396942,
+        "state": {
+          "started": 1790133207.0080254,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 0.002,
+          "delivered": {
+            "action": "b1-s0",
+            "finished": 1790135047.3181705,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "best_development_at_limit",
+            "source_sha256": "2ac741d8119171c9e140ac090e864e5052534992cd4c71232a0e1c75e59974ff",
+            "checkpoint_sha256": "864525c893b1e204aad418856f46fcc2aff183ac40033bf9724aa5e8d74a7770"
+          }
+        },
+        "metrics": {
+          "best_score": -0.002,
+          "calls": 6,
+          "cost": 0.9833280000000001,
+          "parallel_seconds_estimate": 1833.1737742424011,
+          "quality_gain": 0.6923076923076923,
+          "rounds": 3,
+          "supported": true
+        },
+        "paid_calls": 6,
+        "retained_upper_usd": 2.6211,
+        "unused_proposals": 0,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "selected_action": "b1-s0",
+      "source_sha256": "2ac741d8119171c9e140ac090e864e5052534992cd4c71232a0e1c75e59974ff",
+      "model_authored_rationale": "KMNIST: ensemble of affine-augmented residual CNNs, plus the parent reference net.\n\nRationale (exploratory, unverified): the reference is one ResNet-style CNN trained\nwith crop-only augmentation. Its development error is 0.65%, about 13 errors on\n2000 images. At that level, averaging several independently seeded networks\nusually removes a share of the remaining idiosyncratic errors. Two further changes\nshould also help:\n- Stroke-geometry augmentation: small rotation, scale, shear and translation,\n  plus mild cutout. No flips, because reflection changes KMNIST classes.\n- Light shift test-time averaging.\nThe parent reference net is loaded from parent_dir and reused as one ensemble\nmember, which costs no training time. Each member follows a time-based cosine\nschedule, so training finishes inside the limit even if the shared GPU is slow.\nNo development labels are used. Limitation: no internal held-out estimate is\ncomputed; all training rows are used for fitting.",
+      "selected_training_findings": {
+        "parent_loaded": true,
+        "new_members": [
+          {
+            "member": 0,
+            "epochs": 81,
+            "updates": 7520,
+            "seconds": 58.2,
+            "last_train_loss": 0.5038
+          },
+          {
+            "member": 1,
+            "epochs": 81,
+            "updates": 7520,
+            "seconds": 37.6,
+            "last_train_loss": 0.5034
+          },
+          {
+            "member": 2,
+            "epochs": 81,
+            "updates": 7520,
+            "seconds": 37.2,
+            "last_train_loss": 0.5036
+          }
+        ],
+        "n_members": 4,
+        "dev_agreement_with_ensemble": [
+          0.9955,
+          0.998,
+          0.9985,
+          0.9975
+        ],
+        "training_seconds": 135.9,
+        "limitations": "No labeled internal validation; agreement is label-free."
+      },
+      "stages": [
+        {
+          "episode": "kmnist-1-candidate",
+          "action": "b0-s0",
+          "split": "development",
+          "rows": 2000,
+          "loss": 0.0035,
+          "baseline_loss": 0.0065,
+          "errors": 7,
+          "baseline_errors": 13,
+          "relative_gain": 0.46153846153846145,
+          "fixed_errors": 6,
+          "new_errors": 0,
+          "timing.json": {
+            "started": 1790133263.6143756,
+            "finished": 1790133401.7521346,
+            "seconds": 138.1377592086792
+          },
+          "closure.json": {
+            "finished": 1790133402.596361,
+            "seconds": 141.10199570655823,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:14:21.59966248Z",
+              "FinishedAt": "2026-09-23T03:16:42.438841639Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        {
+          "episode": "kmnist-1-candidate",
+          "action": "b0-s0-confirmation",
+          "split": "confirmation",
+          "rows": 2000,
+          "loss": 0.006,
+          "baseline_loss": 0.009,
+          "errors": 12,
+          "baseline_errors": 18,
+          "relative_gain": 0.33333333333333326,
+          "fixed_errors": 8,
+          "new_errors": 2,
+          "recorded_comparison": {
+            "relative_gain": 0.33333333333333326,
+            "candidate_loss": 0.006,
+            "baseline_loss": 0.009,
+            "groups": 2000,
+            "paired_group_97_5_upper_difference": 0.0,
+            "qualified": false,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "timing.json": {
+            "started": 1790133404.929387,
+            "finished": 1790133407.6393344,
+            "seconds": 2.7099478244781494
+          },
+          "closure.json": {
+            "finished": 1790133408.3298013,
+            "seconds": 5.589353799819946,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:16:42.846622991Z",
+              "FinishedAt": "2026-09-23T03:16:48.234511532Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        {
+          "episode": "kmnist-1-candidate",
+          "action": "b0-s1",
+          "split": "development",
+          "rows": 2000,
+          "loss": 0.003,
+          "baseline_loss": 0.0065,
+          "errors": 6,
+          "baseline_errors": 13,
+          "relative_gain": 0.5384615384615384,
+          "fixed_errors": 8,
+          "new_errors": 1,
+          "timing.json": {
+            "started": 1790133756.5075366,
+            "finished": 1790134181.8276784,
+            "seconds": 425.32014203071594
+          },
+          "closure.json": {
+            "finished": 1790134182.6708314,
+            "seconds": 428.292179107666,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:22:34.4782353Z",
+              "FinishedAt": "2026-09-23T03:29:42.542083213Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        {
+          "episode": "kmnist-1-candidate",
+          "action": "b0-s2",
+          "split": "development",
+          "rows": 2000,
+          "loss": 0.003,
+          "baseline_loss": 0.0065,
+          "errors": 6,
+          "baseline_errors": 13,
+          "relative_gain": 0.5384615384615384,
+          "fixed_errors": 8,
+          "new_errors": 1,
+          "timing.json": {
+            "started": 1790134519.4468114,
+            "finished": 1790135039.1299806,
+            "seconds": 519.6831698417664
+          },
+          "closure.json": {
+            "finished": 1790135039.9156196,
+            "seconds": 522.6363170146942,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:35:17.379218Z",
+              "FinishedAt": "2026-09-23T03:43:59.788105624Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        {
+          "episode": "kmnist-1-candidate",
+          "action": "b1-s0",
+          "split": "development",
+          "rows": 2000,
+          "loss": 0.002,
+          "baseline_loss": 0.0065,
+          "errors": 4,
+          "baseline_errors": 13,
+          "relative_gain": 0.6923076923076923,
+          "fixed_errors": 9,
+          "new_errors": 0,
+          "timing.json": {
+            "started": 1790133410.9359002,
+            "finished": 1790133547.1560016,
+            "seconds": 136.2201018333435
+          },
+          "closure.json": {
+            "finished": 1790133548.0097816,
+            "seconds": 139.28737902641296,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:16:48.827312943Z",
+              "FinishedAt": "2026-09-23T03:19:07.866563007Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        {
+          "episode": "kmnist-1-candidate",
+          "action": "b1-s0-audit",
+          "split": "audit",
+          "rows": 5000,
+          "loss": 0.0118,
+          "baseline_loss": 0.0188,
+          "errors": 59,
+          "baseline_errors": 94,
+          "relative_gain": 0.37234042553191493,
+          "fixed_errors": 43,
+          "new_errors": 8,
+          "recorded_comparison": {
+            "relative_gain": 0.37234042553191493,
+            "candidate_loss": 0.0118,
+            "baseline_loss": 0.0188,
+            "groups": 5000,
+            "paired_group_97_5_upper_difference": -0.0042,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "timing.json": {
+            "started": 1790135042.4915009,
+            "finished": 1790135045.7978241,
+            "seconds": 3.306324005126953
+          },
+          "closure.json": {
+            "finished": 1790135046.4641232,
+            "seconds": 6.0871741771698,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:44:00.484958923Z",
+              "FinishedAt": "2026-09-23T03:44:06.314813081Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        {
+          "episode": "kmnist-1-candidate",
+          "action": "b1-s1",
+          "split": "development",
+          "rows": 2000,
+          "loss": 0.0025,
+          "baseline_loss": 0.0065,
+          "errors": 5,
+          "baseline_errors": 13,
+          "relative_gain": 0.6153846153846154,
+          "fixed_errors": 8,
+          "new_errors": 0,
+          "timing.json": {
+            "started": 1790133583.6360433,
+            "finished": 1790133753.3403988,
+            "seconds": 169.70435571670532
+          },
+          "closure.json": {
+            "finished": 1790133754.1838334,
+            "seconds": 172.6906681060791,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:19:41.592627177Z",
+              "FinishedAt": "2026-09-23T03:22:34.032780558Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        {
+          "episode": "kmnist-1-candidate",
+          "action": "b1-s2",
+          "split": "development",
+          "rows": 2000,
+          "loss": 0.003,
+          "baseline_loss": 0.0065,
+          "errors": 6,
+          "baseline_errors": 13,
+          "relative_gain": 0.5384615384615384,
+          "fixed_errors": 8,
+          "new_errors": 1,
+          "timing.json": {
+            "started": 1790134226.6239092,
+            "finished": 1790134516.1053789,
+            "seconds": 289.4814701080322
+          },
+          "closure.json": {
+            "finished": 1790134516.9689634,
+            "seconds": 292.696293592453,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:30:24.381422678Z",
+              "FinishedAt": "2026-09-23T03:35:16.83879353Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        }
+      ],
+      "selected_development_execution_closed_seconds_after_start": 341.00175619125366,
+      "selected_ready_to_final_delivery_seconds": 1499.3083889484406
+    }
+  ],
+  "paired_aggregates": {
+    "kmnist": {
+      "control": {
+        "closed": 2,
+        "accepted": 2,
+        "mean_capped_goal_minutes": 8.140692700942358
+      },
+      "candidate": {
+        "closed": 2,
+        "accepted": 2,
+        "mean_capped_goal_minutes": 16.999161126216254
+      }
+    },
+    "trec": {
+      "control": {
+        "closed": 1,
+        "accepted": 0,
+        "mean_capped_goal_minutes": 120.0
+      },
+      "candidate": {
+        "closed": 1,
+        "accepted": 1,
+        "mean_capped_goal_minutes": 23.929347244898477
+      }
+    }
+  },
+  "point_loss_checks": {
+    "valid": true,
+    "sets": 27
+  },
+  "evidence_sha256": {
+    "episodes/trec-0-control/completed.json": "10c0152d5796ca9807c7e71581fe7a3ae9a34531695e1d3d0e6982e5794e10b2",
+    "episodes/trec-0-control/goal-delivered.json": "28cec3a8bdf5e9401479ce0a1f54f347528dcb886efe3d3e85377c437d041577",
+    "references/trec-0.json": "c8c9112e5040045b030c2c6954a48f3b1935ea9d6a3de9045dc3553b9f77c8e1",
+    "calls/trec-0-control/b0-s0/candidate.py": "95c2bdab0c5f3244bc27633159df9265af7969d4c8627837069a792c88032c51",
+    "episodes/trec-0-control/b0-s0/result.json": "1be238da765602337acb3d5f81baaa62de9e3297d407a40822ffa48d5917e965",
+    "episodes/trec-0-control/b0-s0/closure.json": "627f383ba7359a89ebebef3e8fb7047ac66935ff21dd4e761bca1b89162f7dee",
+    "data/trec-0/development/labels.npy": "119b590dbd95f6c2faa11f0f47c8418e52602bd983502d5e109232153056cb29",
+    "episodes/trec-0-control/b0-s0/development-score.json": "5433ef21e941c8097ee3613b966637a42e2a9e0740e0d1f7ef134d467eb9c66a",
+    "episodes/trec-0-control/b0-s0/timing.json": "0f9b5925860b0aa1395e396c87e3dc811394f648de7dafe804c8a97c91a71a02",
+    "episodes/trec-0-control/b0-s0-audit/result.json": "54f761a7cada5258322bd70e3e3f91f44f906e5fed0e1815290f7b61ff91fd9c",
+    "data/trec-0/audit/labels.npy": "13c4e141f739a5925f4d633b1b8ee3e578af6f7e055f13d15c2ca3efdef8de97",
+    "episodes/trec-0-control/b0-s0-audit/comparison.json": "41fc045507f957749d85cefeb2587da8aa5118c64efbccbd59c66ed56997d4dd",
+    "episodes/trec-0-control/b0-s0-audit/timing.json": "df3e9059b74a3eb562e54eedaa7f297df7f0c08f6cb4583585626eaf22d9aa42",
+    "episodes/trec-0-control/b0-s0-audit/closure.json": "24b14ec8fb0a4a2565807202cd9a730fcf693620e0af52e73770c64b9a67051c",
+    "episodes/trec-0-control/b0-s1/result.json": "075cb50638c9f0923ba6d1a634514a74aa6e3c6e30c1231183f14f388a3ab8f2",
+    "episodes/trec-0-control/b0-s1/development-score.json": "a77ea5c7a600b3fc01515266719e646b1121d446c5d9a3bfa5dd74c95b272909",
+    "episodes/trec-0-control/b0-s1/timing.json": "953b2091e33707635d3bf0b3404c3c26f4b83d1ed1fc30e40a26ccd9dcae56b3",
+    "episodes/trec-0-control/b0-s1/closure.json": "1a88170ce26577ab60f6ff90dea49fcb1cca618b0ecb8e1e3f62d6137c0559f5",
+    "episodes/trec-0-control/b0-s2/result.json": "34811a954ac9562f90059af53eed12acadf3362f5e8e0ee8b5d9c3facaa686d2",
+    "episodes/trec-0-control/b0-s2/development-score.json": "5433ef21e941c8097ee3613b966637a42e2a9e0740e0d1f7ef134d467eb9c66a",
+    "episodes/trec-0-control/b0-s2/timing.json": "b032b9f2347d843cb39aaa739b116b8e29f68a7f47cfcd52226198f145f81666",
+    "episodes/trec-0-control/b0-s2/closure.json": "3ae1aa8e841eef139617a8151acc45d3d8e39704c12428d091d8aa6143121fd3",
+    "episodes/trec-0-control/b1-s0/result.json": "6f8b0f014e6542dfdfd85f4db1bdc5fbb726278a8a73626557341b2356e3c4ca",
+    "episodes/trec-0-control/b1-s0/development-score.json": "dff94ed272331b6646187a07de5e2c30ef0fd5c2b4b39bbae1387d24065dc8e9",
+    "episodes/trec-0-control/b1-s0/timing.json": "0d40bc392dd1c006c472df601f9967b0f5ce2f46145771a60326e554ddcaf7bd",
+    "episodes/trec-0-control/b1-s0/closure.json": "cdf09aed32682a8456d66f2646bd04faf8f1db8e8366dbbcbab108ce7c5e77d8",
+    "episodes/trec-0-control/b1-s0-confirmation/result.json": "153714c271cbf1105a9d7ab4389b5f43aab964acffb20de8c13298a0c7970370",
+    "data/trec-0/confirmation/labels.npy": "51ca098e0cd1e6307d3e0f6aa3ad2622c3d6464f421d8ad5e1051941d6bbe605",
+    "episodes/trec-0-control/b1-s0-confirmation/comparison.json": "393f9627e6d081705fa48df3fc0e60bd24f5df769a2eb85c1c5bfa9a2fcc070d",
+    "episodes/trec-0-control/b1-s0-confirmation/timing.json": "f7d05cb469d83ab5319bdc0ced0d97763b97ca7436a558f6abe166c447778e78",
+    "episodes/trec-0-control/b1-s0-confirmation/closure.json": "00b4f2715fe29540ca3ae0bcf617347d114ce5159435625b532d9f1ca89b4577",
+    "episodes/trec-0-control/b1-s1/result.json": "c8019658987a63c0df4889db8b57e26262609cb3a35dc6d2cf4334ea5356b48a",
+    "episodes/trec-0-control/b1-s1/development-score.json": "ef103ef3e41710144b9c6910b89176ba7f491fe34c65c647e0b79cc284fcd339",
+    "episodes/trec-0-control/b1-s1/timing.json": "47d7b198c87af366cd923eb63fbbef3765eb7ad36a00ff88a776b4f0e06fe898",
+    "episodes/trec-0-control/b1-s1/closure.json": "56cf4ac035ac27fc1507ac3beb0612f7126002a2b8ac316fca488755b8894ff3",
+    "episodes/trec-0-control/b1-s2/result.json": "6b46310e4831a7affc7ad4dc1df6e0413c215e3fb4e11dc0bba3f76e9afeeb45",
+    "episodes/trec-0-control/b1-s2/development-score.json": "3119636cc7c9eb3073feec67d2f19f18f17f97a27e475c97ebc68a8393d3bde5",
+    "episodes/trec-0-control/b1-s2/timing.json": "60d6bad1d62e9aab798b354b20fb103523733a334743cce707056ff0ee7dcde5",
+    "episodes/trec-0-control/b1-s2/closure.json": "9ad1703eff624ab40164a74df5b5229a593b06a79fed86528db77cb2624377cf",
+    "episodes/trec-0-candidate/completed.json": "e3b302375aaa68df7cd01bf68a0eab87d8b5a9e93c645cfc73b8c7de6e1ed0b6",
+    "episodes/trec-0-candidate/goal-delivered.json": "33871243fc1c4fc2faa82542841d8206e71602ab4e86e0bc4f0ff0108fad1a5e",
+    "calls/trec-0-candidate/b0-s1/candidate.py": "9eaca50a05c953b5bb76a1da044cd063bd3693f72317d5eb55e4ef73c5583c51",
+    "episodes/trec-0-candidate/b0-s1/result.json": "bfb881d087658480b2e04c368d9e74ae9808c7d2df128644bd991fb9b56d7b91",
+    "episodes/trec-0-candidate/b0-s1/closure.json": "fdf2f4cefee0b8d4b16e7d32199a3368aecdeca352dcd7bd4a2c2f4ed4328f6b",
+    "episodes/trec-0-candidate/b0-s0/result.json": "6849e68bd206383af63974e2d8d337eecbe93d149fdd7ff959ca94d9c90de627",
+    "episodes/trec-0-candidate/b0-s0/development-score.json": "e80e49e1bc861bb2ff08a653d907989bb43de3408d85e23e5a0d69ae2996100c",
+    "episodes/trec-0-candidate/b0-s0/timing.json": "2a18529ebab7f005c7e007d057746e04720591e852cd789868d96eed69414898",
+    "episodes/trec-0-candidate/b0-s0/closure.json": "3e0aaf2271c52aeefe92105a614302b5d420667cb3e97adb94ec5449764046a3",
+    "episodes/trec-0-candidate/b0-s0-confirmation/result.json": "784646fc2951caf2594eeb39192b742cca5f7dd0822143759db35a46e088acc0",
+    "episodes/trec-0-candidate/b0-s0-confirmation/comparison.json": "d3dde31e52e53a680446a96145695e646037aa8dee195d37434712a8a45e092a",
+    "episodes/trec-0-candidate/b0-s0-confirmation/timing.json": "797017a8fea973c68b78b6155067e0ba5699ccf89ad215f57517b0cf5edeb03c",
+    "episodes/trec-0-candidate/b0-s0-confirmation/closure.json": "b8e2705ee1b9eba32cb642a956f8f98a22a6464362e54a0c5aaf2ca4b69c2373",
+    "episodes/trec-0-candidate/b0-s1/development-score.json": "355a5e2de2dfb31c4a00ad875a2337870e4adef8d5fb64b83aa2a589425b9d5f",
+    "episodes/trec-0-candidate/b0-s1/timing.json": "923c0ec52f953770bc98b25f6f571a2a100ef9d7360bf9d677323be81c1ee32d",
+    "episodes/trec-0-candidate/b0-s1-audit/result.json": "e21376326709de70374f4fe5fc720d5db27938316caf8a5e43b16d36923c9312",
+    "episodes/trec-0-candidate/b0-s1-audit/comparison.json": "c3fdcd81638cebe293691fcc7c35dcfb03dcab595af61fc7f7c71c546de094a0",
+    "episodes/trec-0-candidate/b0-s1-audit/timing.json": "2e7363a23207d5a8b06f5c37e03c5bd53933f02546ceec22c16d0678339c15e7",
+    "episodes/trec-0-candidate/b0-s1-audit/closure.json": "5f60fe313c5ab75f6b73bb6ff6da691fbd86c2f2246f8d82943af1f3f16b30f5",
+    "episodes/trec-0-candidate/b0-s2/result.json": "1185d0c2349c90efb2c5f870c36d871324309d9831a89d14a3a43009744a8434",
+    "episodes/trec-0-candidate/b0-s2/development-score.json": "74036d5ae9c3e42a64d6c52ed56d579d9460216529d93fa464ac3d6c89943a8f",
+    "episodes/trec-0-candidate/b0-s2/timing.json": "f1ad67b92c55e2cec4eec7f1cc76c134fe7082a3adb3ee0c33b4f679212604e6",
+    "episodes/trec-0-candidate/b0-s2/closure.json": "e5494ae852335c073183f8a1310965761fb0abd8ef95fe85c75b48607b22b043",
+    "episodes/trec-0-candidate/b1-s0/result.json": "5a7855654d25413a917e2d4b1a64c746d2bf3d7c38cb52764317ad974c76b866",
+    "episodes/trec-0-candidate/b1-s0/development-score.json": "8df02bba2b1a2aa5c35fc6f3e920995b3067aeba99f0c948d221f8f662cd2dcd",
+    "episodes/trec-0-candidate/b1-s0/timing.json": "96c0d9b3b31d177edc5a21bfe1566c408e0854b28eac4f01fd4b8edb45c82a29",
+    "episodes/trec-0-candidate/b1-s0/closure.json": "09f5263df204223c625f36c2865870c323a722db0b5e474b0a77aad6a9e551c0",
+    "episodes/trec-0-candidate/b1-s1/result.json": "5633b4ceaa46d43d8a268fc913f1897e1b9715464a98aba9898580282a34852d",
+    "episodes/trec-0-candidate/b1-s1/development-score.json": "7a86c70d6f8c4db8c87edcba945dbe25d0506446825476902597631a71c16355",
+    "episodes/trec-0-candidate/b1-s1/timing.json": "58aad44cb54ef8097f28f199920170c116e09b17cefed46b0f36a0f12f79d4bb",
+    "episodes/trec-0-candidate/b1-s1/closure.json": "3e4cd155f81196a271bbbc3c42096bd81fd386712bb721f35663fe7b4d6dac9a",
+    "episodes/trec-0-candidate/b1-s2/result.json": "2be35686c8f864f29e34b9e489dc3321c181924fdaaf4a06cdfd511a921cc175",
+    "episodes/trec-0-candidate/b1-s2/development-score.json": "68ceb9a5dae95dbd93014c3c3ab0d1b65fe9460d26453a6ec252ed3879a874fe",
+    "episodes/trec-0-candidate/b1-s2/timing.json": "5c0f0cdf6c004ac8aa687e0294ea41b2a8195d7d45068b4c43416e267e9554cb",
+    "episodes/trec-0-candidate/b1-s2/closure.json": "2a84b3b880e12a1f9844d14fd624f71bfa8b690f7e2867ca076eba9b430121cf",
+    "episodes/kmnist-1-control/completed.json": "ef5815648ad5709fc4acc761487ed64833a07666e68cd17abf1deff8358f88d4",
+    "episodes/kmnist-1-control/goal-delivered.json": "14e7acd14b863a6733366cdb2cec72513935539cb2e0ea9685d7e35568a476ac",
+    "references/kmnist-1.json": "ae5381d53f41b002c79d3635ffb3816db9e89b43f0907ca45d25341ab1190ecb",
+    "calls/kmnist-1-control/b1-s0/candidate.py": "62ddc680710c257ccca74e64ed956f38792357dfa458209d612b2d3c71e2e334",
+    "episodes/kmnist-1-control/b1-s0/result.json": "b0694dea9117548afb5648ce3da552b421eeb456e50f7478d73439add2e3bc34",
+    "episodes/kmnist-1-control/b1-s0/closure.json": "b95615cb1f9b933a930e287a78e562dc843c70694190239b10cde8f9cf12232f",
+    "data/kmnist-1/development/labels.npy": "b6c638fe7cf8b4ee89108d75e2db687eda3329c0b1d1877db896a7f7851eb284",
+    "episodes/kmnist-1-control/b1-s0/development-score.json": "1a572fd3517f4501c57ff07fd5b4ab32c32bb78e8767b0873b55ff39c35b776d",
+    "episodes/kmnist-1-control/b1-s0/timing.json": "66fb195d636aca736af527dcfb52ff1883ea3ad4e62d61dd4fc660727b328bd2",
+    "episodes/kmnist-1-control/b1-s0-audit/result.json": "5f3af7e771afd764cf86d795c7cea790ce67201b889f186b90c609efcd090d36",
+    "data/kmnist-1/audit/labels.npy": "3155be8089b01d0d9c60afdb908a4686ae89114d6df5a0048021dc25aaa5702c",
+    "episodes/kmnist-1-control/b1-s0-audit/comparison.json": "d5d717172f05414e942e2c1c1caae98b4c92ee990d47ebd36151500cf5dea0a3",
+    "episodes/kmnist-1-control/b1-s0-audit/timing.json": "111a17618ecb1e91c7b0126f318a651680f3eca661a0c405a41477574ded865b",
+    "episodes/kmnist-1-control/b1-s0-audit/closure.json": "a3ae35576514a8998b6015dc1fabbc2ad215d6017da3df982af35ec57ba6a974",
+    "episodes/kmnist-1-control/b1-s0-confirmation/result.json": "9c268cdf7c883e6e56bc17aae0e2c176646c2735947a9d4ff5014c9e41b99952",
+    "data/kmnist-1/confirmation/labels.npy": "b5b32902062d147fedcbffdff2c9f13bcb1d5cd4eb78057f815bbfb81db61f26",
+    "episodes/kmnist-1-control/b1-s0-confirmation/comparison.json": "ceb24e12cf5af5d70cf30600b94bbe247eb3dfe18585bef1b83cd64eda21a930",
+    "episodes/kmnist-1-control/b1-s0-confirmation/timing.json": "0b1dc43d57840c78a82e8136aa405b81201e69d836e68295dc76142ac28c91b6",
+    "episodes/kmnist-1-control/b1-s0-confirmation/closure.json": "5f6a52bec02f23dd0b562e9ad310654dbe3e230509c17318a20ec7bc53c71178",
+    "episodes/kmnist-1-candidate/completed.json": "cf9ee458be88cb9653bb23c4f947193b679ae79571b93b962e6b32d766be0427",
+    "episodes/kmnist-1-candidate/goal-delivered.json": "c8eb2404860a5aa6d45eabaf54dacb2611c1ba8f3f77e7dc30607fcc8cf32e05",
+    "calls/kmnist-1-candidate/b1-s0/candidate.py": "2ac741d8119171c9e140ac090e864e5052534992cd4c71232a0e1c75e59974ff",
+    "episodes/kmnist-1-candidate/b1-s0/result.json": "c3fa3ab3317b592ee3d204b09d1db8a1875b992c673de80e29affa8944173de9",
+    "episodes/kmnist-1-candidate/b1-s0/closure.json": "898b464a0a6ca022f15be36f2d1a81651ec2161c32a562a0db699c75e48cce9f",
+    "episodes/kmnist-1-candidate/b0-s0/result.json": "6d70ec0d888f12e46e31c377750e42def3a7fa2247c1d41a232cc5ed173e6ea7",
+    "episodes/kmnist-1-candidate/b0-s0/development-score.json": "18b72780fbc50757ca348ed9737aed106458e84d730c952d87c0e06f78f8ae36",
+    "episodes/kmnist-1-candidate/b0-s0/timing.json": "9dd57d94d557dadcb92c31dd14242c0dbc21e17b4ebba5defe87fa169b5d4fd2",
+    "episodes/kmnist-1-candidate/b0-s0/closure.json": "64f4dc01af9e44c7a98dffdb3ef327d422aedf8c2c759e83bfe476de8e29b7b1",
+    "episodes/kmnist-1-candidate/b0-s0-confirmation/result.json": "9f965371f8135986f167f9dbb6e02b43e7bd992db48ad594652517a2de0dda78",
+    "episodes/kmnist-1-candidate/b0-s0-confirmation/comparison.json": "df4ac4ffddbef800bd148ca5da8a1c8c8751f58a26dc7b441384bc69c14ebc94",
+    "episodes/kmnist-1-candidate/b0-s0-confirmation/timing.json": "e544b53681077de02648c5c40cf3e3955b58a16f7ed976ee486ed28548c7b22b",
+    "episodes/kmnist-1-candidate/b0-s0-confirmation/closure.json": "5955726c6fe7ec488eba0285cb8874320e05ce2fb4a1b0df965f3fc150f6457e",
+    "episodes/kmnist-1-candidate/b0-s1/result.json": "abc20695ec877d866afbe4e46ee5d99bb7e6455b71c22462881e07ef7be6e0df",
+    "episodes/kmnist-1-candidate/b0-s1/development-score.json": "b3143ac130bc87ee15aeddb596095de57acc9bce350c5f638a67d7984fe33595",
+    "episodes/kmnist-1-candidate/b0-s1/timing.json": "097e93e596e44829f281b1563329acce72c347c5b6fc0a96e44b7b7c8da1a58d",
+    "episodes/kmnist-1-candidate/b0-s1/closure.json": "bb9257ce1beba43b1fb1f917a01ebc13b38dbd8d1db7ffc44896903024432719",
+    "episodes/kmnist-1-candidate/b0-s2/result.json": "7022ea0c45afcf2349215fa9791395c6eb0db3dffbf14f5d6375638d7d198aff",
+    "episodes/kmnist-1-candidate/b0-s2/development-score.json": "b3143ac130bc87ee15aeddb596095de57acc9bce350c5f638a67d7984fe33595",
+    "episodes/kmnist-1-candidate/b0-s2/timing.json": "220bb0e6439e8077d2a63e92450ed734d1a03f2de8ddd48a04c55fe4accfabfc",
+    "episodes/kmnist-1-candidate/b0-s2/closure.json": "d113f64d5429ac8f4f7dc66297915a7b9062418e3933b30d3775a5a2112e0986",
+    "episodes/kmnist-1-candidate/b1-s0/development-score.json": "9431de0634c63dd49219842fbee7b5b939fc14b8da851942aaf0d3fd4674c5b2",
+    "episodes/kmnist-1-candidate/b1-s0/timing.json": "bb9f0d5245136f824ae04612f23719d570874e1ea061da8ba2d375973775af06",
+    "episodes/kmnist-1-candidate/b1-s0-audit/result.json": "6669cb0504db085aedfa29d6d72973a9d3e48efa118b33512b43ecb413fcb761",
+    "episodes/kmnist-1-candidate/b1-s0-audit/comparison.json": "00861b0f82f28bda3d98edbd620ff8f7c573f618847e82d93abd75a930a4683d",
+    "episodes/kmnist-1-candidate/b1-s0-audit/timing.json": "10614ea4cd5757dde984595a5fc50ab19287c025dac33acbf60c78251dbed7ec",
+    "episodes/kmnist-1-candidate/b1-s0-audit/closure.json": "103e53e12e28cb9405be9cde64b8391cef6ce5d8e0c8454069be8ebc4509a094",
+    "episodes/kmnist-1-candidate/b1-s1/result.json": "25da6b89f671f1a7d5c573854f322ecd09d349c1178b0be95c65be1a6ba95931",
+    "episodes/kmnist-1-candidate/b1-s1/development-score.json": "414a8757c9124f0634bdc16cd2160e41cf38a37b5d7df080467bba1a7274f147",
+    "episodes/kmnist-1-candidate/b1-s1/timing.json": "a2e714a0ef45de3de0ad8b01f071552494c5bab2d0319e7fdb85f355a99307ab",
+    "episodes/kmnist-1-candidate/b1-s1/closure.json": "1fb5f999435b8bf35c0b9436ed3c27c25f82126a65f1801625e6da9d23fa7619",
+    "episodes/kmnist-1-candidate/b1-s2/result.json": "7c458fd832fde8936bebc7fcee87cfef867e69d8dabc2f67b46746ea0b2edf70",
+    "episodes/kmnist-1-candidate/b1-s2/development-score.json": "b3143ac130bc87ee15aeddb596095de57acc9bce350c5f638a67d7984fe33595",
+    "episodes/kmnist-1-candidate/b1-s2/timing.json": "32c6b9513a331b96dece9ec397679d626074d207f0615b72164b2594c848b4a6",
+    "episodes/kmnist-1-candidate/b1-s2/closure.json": "53932d2f5353713e35b576e51b735ffd04b340fe49031c46ee2f48598b27c266",
+    "episodes/kmnist-0-control/completed.json": "a5977ebf1453e9b65c038a7d9bf8a44e43d367e128dd14c8fe3a7da4279aa471",
+    "episodes/kmnist-0-candidate/completed.json": "8b57f0edacf3824e206e9f8c7b94845171d3d4e761f632a209dd7951f1940b7a"
+  },
+  "whole_campaign_verified": false,
+  "new_model_requests": 0,
+  "new_gpu_executions": 0
+}
