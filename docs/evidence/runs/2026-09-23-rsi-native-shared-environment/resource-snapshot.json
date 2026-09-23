@@ -1,0 +1,48 @@
+{
+  "created": 1790192809.7402816,
+  "records": [
+    {
+      "command": [
+        "squeue",
+        "-u",
+        "erik",
+        "-o",
+        "%.18i %.12P %.28j %.10T %.10M %.30R"
+      ],
+      "exit_code": 0,
+      "stdout": "             JOBID    PARTITION                         NAME      STATE       TIME               NODELIST(REASON)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "sinfo",
+        "-o",
+        "%P %a %l %D %t %N"
+      ],
+      "exit_code": 0,
+      "stdout": "PARTITION AVAIL TIMELIMIT NODES STATE NODELIST\nmain* up infinite 1 drain* a100-33\nmain* up infinite 2 down* a100-[21,37]\nmain* up infinite 1 drng a100-26\nmain* up infinite 14 drain a100-[1,4-5,19,23,25,27-28,32,35,39,41,43,46]\nmain* up infinite 5 mix a100-[11,18,20,44-45]\nmain* up infinite 24 alloc a100-[3,6-10,12-17,22,24,29-31,34,36,38,40,42,47-48]\nmain* up infinite 1 down a100-2\na100 up infinite 1 drain* a100-33\na100 up infinite 2 down* a100-[21,37]\na100 up infinite 1 drng a100-26\na100 up infinite 14 drain a100-[1,4-5,19,23,25,27-28,32,35,39,41,43,46]\na100 up infinite 5 mix a100-[11,18,20,44-45]\na100 up infinite 24 alloc a100-[3,6-10,12-17,22,24,29-31,34,36,38,40,42,47-48]\na100 up infinite 1 down a100-2\ncpu up infinite 6 down* cpu-20,ngcpu-[7,10-11,15-16]\ncpu up infinite 2 drng cpu-[3,24]\ncpu up infinite 5 drain cpu-[1,4-5],ngcpu-[1-2]\ncpu up infinite 2 mix cpu-10,ngcpu-9\ncpu up infinite 7 alloc cpu-[2,6-7,9,11,23],ngcpu-3\ncpu up infinite 17 idle cpu-[12-19,21-22],ngcpu-[4-6,8,12-14]\ncpu up infinite 1 down cpu-8\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "scontrol",
+        "show",
+        "nodes",
+        "a100-11,a100-18,a100-20,a100-44,a100-45"
+      ],
+      "exit_code": 0,
+      "stdout": "NodeName=a100-11 Arch=x86_64 CoresPerSocket=32 \n   CPUAlloc=32 CPUEfctv=128 CPUTot=128 CPULoad=12.68\n   AvailableFeatures=(null)\n   ActiveFeatures=(null)\n   Gres=gpu:8(S:0-1)\n   NodeAddr=10.1.32.148 NodeHostName=a100-11 Version=23.11.1\n   OS=Linux 5.15.0-163-generic #173-Ubuntu SMP Tue Oct 14 17:51:00 UTC 2025 \n   RealMemory=1031664 AllocMem=1031664 FreeMem=549511 Sockets=2 Boards=1\n   State=MIXED ThreadsPerCore=2 TmpDisk=0 Weight=1 Owner=N/A MCS_label=N/A\n   Partitions=main,a100 \n   BootTime=2026-03-16T20:52:51 SlurmdStartTime=2026-08-19T20:04:06\n   LastBusyTime=2026-09-23T16:59:03 ResumeAfterTime=None\n   CfgTRES=cpu=128,mem=1031664M,billing=128\n   AllocTRES=cpu=32,mem=1031664M\n   CapWatts=n/a\n   CurrentWatts=0 AveWatts=0\n   ExtSensorsJoules=n/a ExtSensorsWatts=0 ExtSensorsTemp=n/a\n\nNodeName=a100-18 Arch=x86_64 CoresPerSocket=32 \n   CPUAlloc=32 CPUEfctv=128 CPUTot=128 CPULoad=11.85\n   AvailableFeatures=(null)\n   ActiveFeatures=(null)\n   Gres=gpu:8(S:0-1)\n   NodeAddr=10.1.32.162 NodeHostName=a100-18 Version=23.11.1\n   OS=Linux 5.15.0-163-generic #173-Ubuntu SMP Tue Oct 14 17:51:00 UTC 2025 \n   RealMemory=1031664 AllocMem=1031664 FreeMem=852934 Sockets=2 Boards=1\n   State=MIXED ThreadsPerCore=2 TmpDisk=0 Weight=1 Owner=N/A MCS_label=N/A\n   Partitions=main,a100 \n   BootTime=2026-04-27T15:55:41 SlurmdStartTime=2026-04-27T15:57:29\n   LastBusyTime=2026-09-23T17:52:01 ResumeAfterTime=None\n   CfgTRES=cpu=128,mem=1031664M,billing=128\n   AllocTRES=cpu=32,mem=1031664M\n   CapWatts=n/a\n   CurrentWatts=0 AveWatts=0\n   ExtSensorsJoules=n/a ExtSensorsWatts=0 ExtSensorsTemp=n/a\n\nNodeName=a100-20 Arch=x86_64 CoresPerSocket=32 \n   CPUAlloc=32 CPUEfctv=128 CPUTot=128 CPULoad=10.90\n   AvailableFeatures=(null)\n   ActiveFeatures=(null)\n   Gres=gpu:8(S:0-1)\n   NodeAddr=10.1.32.166 NodeHostName=a100-20 Version=23.11.1\n   OS=Linux 5.15.0-163-generic #173-Ubuntu SMP Tue Oct 14 17:51:00 UTC 2025 \n   RealMemory=1031664 AllocMem=1031664 FreeMem=771247 Sockets=2 Boards=1\n   State=MIXED ThreadsPerCore=2 TmpDisk=0 Weight=1 Owner=N/A MCS_label=N/A\n   Partitions=main,a100 \n   BootTime=2026-05-11T19:40:16 SlurmdStartTime=2026-05-11T19:42:05\n   LastBusyTime=2026-09-23T17:29:07 ResumeAfterTime=None\n   CfgTRES=cpu=128,mem=1031664M,billing=128\n   AllocTRES=cpu=32,mem=1031664M\n   CapWatts=n/a\n   CurrentWatts=0 AveWatts=0\n   ExtSensorsJoules=n/a ExtSensorsWatts=0 ExtSensorsTemp=n/a\n\nNodeName=a100-44 Arch=x86_64 CoresPerSocket=32 \n   CPUAlloc=32 CPUEfctv=128 CPUTot=128 CPULoad=13.02\n   AvailableFeatures=(null)\n   ActiveFeatures=(null)\n   Gres=gpu:8(S:0-1)\n   NodeAddr=10.1.32.214 NodeHostName=a100-44 Version=23.11.1\n   OS=Linux 5.15.0-163-generic #173-Ubuntu SMP Tue Oct 14 17:51:00 UTC 2025 \n   RealMemory=1031670 AllocMem=1031670 FreeMem=571068 Sockets=2 Boards=1\n   State=MIXED ThreadsPerCore=2 TmpDisk=0 Weight=1 Owner=N/A MCS_label=N/A\n   Partitions=main,a100 \n   BootTime=2026-01-26T22:30:25 SlurmdStartTime=2026-04-21T20:35:02\n   LastBusyTime=2026-09-23T16:10:33 ResumeAfterTime=None\n   CfgTRES=cpu=128,mem=1031670M,billing=128\n   AllocTRES=cpu=32,mem=1031670M\n   CapWatts=n/a\n   CurrentWatts=0 AveWatts=0\n   ExtSensorsJoules=n/a ExtSensorsWatts=0 ExtSensorsTemp=n/a\n\nNodeName=a100-45 Arch=x86_64 CoresPerSocket=32 \n   CPUAlloc=32 CPUEfctv=128 CPUTot=128 CPULoad=12.30\n   AvailableFeatures=(null)\n   ActiveFeatures=(null)\n   Gres=gpu:8(S:0-1)\n   NodeAddr=10.1.32.216 NodeHostName=a100-45 Version=23.11.1\n   OS=Linux 5.15.0-164-generic #174-Ubuntu SMP Fri Nov 14 20:25:16 UTC 2025 \n   RealMemory=1031670 AllocMem=1031670 FreeMem=658674 Sockets=2 Boards=1\n   State=MIXED ThreadsPerCore=2 TmpDisk=0 Weight=1 Owner=N/A MCS_label=N/A\n   Partitions=main,a100 \n   BootTime=2026-08-11T12:42:26 SlurmdStartTime=2026-08-11T12:44:40\n   LastBusyTime=2026-09-23T15:54:31 ResumeAfterTime=None\n   CfgTRES=cpu=128,mem=1031670M,billing=128\n   AllocTRES=cpu=32,mem=1031670M\n   CapWatts=n/a\n   CurrentWatts=0 AveWatts=0\n   ExtSensorsJoules=n/a ExtSensorsWatts=0 ExtSensorsTemp=n/a\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "nvidia-smi",
+        "--query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory",
+        "--format=csv,noheader"
+      ],
+      "exit_code": 0,
+      "stdout": "GPU-06071214-a4a5-f997-791a-1c98f7a6caf3, 3348772, /opt/conda/bin/python, 830 MiB\nGPU-06071214-a4a5-f997-791a-1c98f7a6caf3, 3350072, sgl_diffusion::scheduler, 31304 MiB\nGPU-2ebcf99d-429f-fd69-f5dc-4611e94fb2e4, 3349250, /opt/conda/bin/python, 416 MiB\nGPU-2ebcf99d-429f-fd69-f5dc-4611e94fb2e4, 3350320, sgl_diffusion::scheduler, 31682 MiB\nGPU-0627efd4-7249-ed14-4a75-938347906068, 3349744, /opt/conda/bin/python, 416 MiB\nGPU-0627efd4-7249-ed14-4a75-938347906068, 3350561, sgl_diffusion::scheduler, 31458 MiB\nGPU-38a0ba09-58d2-2165-dc65-df748c4eab56, 1636822, /opt/conda/bin/python, 830 MiB\nGPU-38a0ba09-58d2-2165-dc65-df748c4eab56, 1637777, sgl_diffusion::scheduler, 31512 MiB\nGPU-31a3b54c-59fe-dc6b-71a9-ad1803d15e4b, 895736, VLLM::EngineCore, 69480 MiB\nGPU-c9a1d668-6a8e-ca1f-6ab9-9dab14447a75, 1616099, python, 416 MiB\nGPU-c9a1d668-6a8e-ca1f-6ab9-9dab14447a75, 1617063, sgl_diffusion::scheduler, 29666 MiB\nGPU-c9a1d668-6a8e-ca1f-6ab9-9dab14447a75, 2664680, /usr/bin/python, 19674 MiB\nGPU-214103b7-b162-a3fb-bb61-1a3b1f04dbcc, 1636809, /opt/conda/bin/python, 830 MiB\nGPU-214103b7-b162-a3fb-bb61-1a3b1f04dbcc, 1637780, sgl_diffusion::scheduler, 31386 MiB\nGPU-04eb880b-0e41-6257-bffe-df01be581a98, 487086, sglang::scheduler, 15238 MiB\nGPU-04eb880b-0e41-6257-bffe-df01be581a98, 991840, /usr/bin/python, 18390 MiB\nGPU-04eb880b-0e41-6257-bffe-df01be581a98, 592432, VLLM::EngineCore, 19872 MiB\nGPU-04eb880b-0e41-6257-bffe-df01be581a98, 1635849, python3, 5154 MiB\n",
+      "stderr": ""
+    }
+  ]
+}
