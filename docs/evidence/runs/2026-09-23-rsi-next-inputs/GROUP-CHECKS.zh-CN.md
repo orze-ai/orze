@@ -1,5 +1,7 @@
 # 纠正旧数据重用，并完成划分前分组
 
+本页保留分组阶段记录；后续四份划分及独立核验已经完成，见 [PREPARED.zh-CN.md](PREPARED.zh-CN.md)。
+
 原检查只扫描 `tasks.json`，漏掉了 9 月 18 日已用的 Bike Sharing 与 Superconductivity。扩大到两仓 396 份历史记录后确认旧使用；`novelty-review.json` 保留具体计划、行号和哈希。两项已移出后续新任务池，原九文件下载和原始检查保持不变。此处纠正发生在下一轮任何候选或基线运行之前。
 
 从 UCI 下载 YearPredictionMSD、Online News Popularity 两份替代原始归档，共 218,488,382 字节，两次下载均成功。来源与校验见 `regression-downloads.json`。选择依据是未找到历史使用、领域覆盖与数据可用性，没有候选分数参与。
