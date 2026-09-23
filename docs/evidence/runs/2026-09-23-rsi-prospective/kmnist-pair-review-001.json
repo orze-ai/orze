@@ -1,0 +1,485 @@
+{
+  "created": 1790133643.803816,
+  "scope": "First repetition of KMNIST; source and measurement review, independent classification point-loss checks on all six stored split predictions. No candidate code executed, no checkpoint loaded, no bootstrap recomputation. Not a full task/family/campaign result.",
+  "valid_point_loss_checks": true,
+  "rows": [
+    {
+      "episode": "kmnist-0-control",
+      "selected_action": "b1-s0",
+      "completed": {
+        "label": "kmnist-0-control",
+        "task": "kmnist",
+        "family": "vision",
+        "repetition": 0,
+        "arm": "control",
+        "gpu": 0,
+        "started": 1790132665.1534197,
+        "finished": 1790133207.0069265,
+        "seconds": 541.8535070419312,
+        "goal_reached": true,
+        "capped_goal_seconds": 541.6882803440094,
+        "state": {
+          "started": 1790132665.1534197,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 0.0035,
+          "delivered": {
+            "action": "b1-s0",
+            "finished": 1790133206.8417,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "52e82e1152291bdb04feb6aaa7e7d1f021a7a77149a35ec3ba1d4c781ba97b68",
+            "checkpoint_sha256": "724114551a5f6ca399030bda3cfa57ddb305bf8006604cdb4923ef919ba3b0e7"
+          }
+        },
+        "metrics": {
+          "best_score": -0.0035,
+          "calls": 2,
+          "cost": 0.824405,
+          "parallel_seconds_estimate": 541.7608542442322,
+          "quality_gain": 0.22222222222222215,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 1.097125,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "52e82e1152291bdb04feb6aaa7e7d1f021a7a77149a35ec3ba1d4c781ba97b68",
+      "rationale_from_source": "KMNIST: beat a single ResNet-9 reference (0.45% dev error) by training a diverse\n*ensemble* of ResNet-9 style CNNs with per-sample GPU affine augmentation and\naveraging softmax over a small no-flip test-time-augmentation set.\n\nRationale (exploratory, unverified before measurement):\n * The reference augments a whole batch with ONE shared crop offset and no\n   rotation/scale/shear.  KMNIST characters vary in stroke placement and slant;\n   per-sample random affine (rotation +-12deg, shear, scale, translation) plus\n   random erasing is a much stronger regulariser for only 12k training rows.\n * At 0.45% error the remaining mistakes are dominated by variance, not bias.\n   Averaging independently seeded/width-varied networks plus mild TTA is the\n   cheapest reliable variance reduction, and it applies identically on the audit\n   split (no transduction, no dev pseudo-labels, so dev gains should transfer).\n * Horizontal flips are NOT used anywhere (train or TTA), per the task contract.\n * Time is budgeted adaptively: each member gets an equal slice of the remaining\n   training budget and its LR schedule advances by max(step fraction, time\n   fraction) so every member always completes a full cosine schedule.\nLimitations: no held-out internal validation (all 12k labelled rows are used by\nevery member to maximise accuracy at this error level), so the findings report\ntraining-set diagnostics only; the ensemble size can shrink if the shared GPU is\nslow.",
+      "measured_findings": {
+        "method": "ensemble of ResNet9-style CNNs, per-sample affine+erasing aug, softmax TTA",
+        "members": 8,
+        "member_detail": [
+          {
+            "width": 64,
+            "aug_mag": 1.0,
+            "steps": 5170,
+            "epochs": 110.0,
+            "seconds": 53.9,
+            "final_batch_loss": 0.4209
+          },
+          {
+            "width": 80,
+            "aug_mag": 0.85,
+            "steps": 5170,
+            "epochs": 110.0,
+            "seconds": 60.3,
+            "final_batch_loss": 0.4184
+          },
+          {
+            "width": 64,
+            "aug_mag": 1.15,
+            "steps": 5170,
+            "epochs": 110.0,
+            "seconds": 34.7,
+            "final_batch_loss": 0.4187
+          },
+          {
+            "width": 80,
+            "aug_mag": 1.0,
+            "steps": 5170,
+            "epochs": 110.0,
+            "seconds": 43.7,
+            "final_batch_loss": 0.4182
+          },
+          {
+            "width": 64,
+            "aug_mag": 0.85,
+            "steps": 5170,
+            "epochs": 110.0,
+            "seconds": 34.4,
+            "final_batch_loss": 0.4181
+          },
+          {
+            "width": 80,
+            "aug_mag": 1.15,
+            "steps": 5170,
+            "epochs": 110.0,
+            "seconds": 43.8,
+            "final_batch_loss": 0.4181
+          },
+          {
+            "width": 64,
+            "aug_mag": 1.0,
+            "steps": 5170,
+            "epochs": 110.0,
+            "seconds": 33.8,
+            "final_batch_loss": 0.4179
+          },
+          {
+            "width": 80,
+            "aug_mag": 0.85,
+            "steps": 5170,
+            "epochs": 110.0,
+            "seconds": 43.3,
+            "final_batch_loss": 0.4187
+          }
+        ],
+        "train_rows": 12000,
+        "in_sample_ensemble_accuracy": 1.0,
+        "tta": "9 no-flip views (identity, +-7deg rot, +-7% scale, +-2px shifts)",
+        "horizontal_flip_used": false,
+        "training_seconds": 354.0,
+        "limitations": "no held-out internal validation: every member uses all labelled rows, so the reported accuracy is in-sample and optimistic; ensemble size may shrink under a slow shared GPU; no dev pseudo-labelling (avoids transductive dev-only gains)."
+      },
+      "phases": {
+        "development": {
+          "rows": 2000,
+          "candidate_loss": 0.0035,
+          "baseline_loss": 0.0045,
+          "relative_gain": 0.22222222222222215,
+          "recorded_comparison": null,
+          "worker_timing": {
+            "started": 1790132829.4792173,
+            "finished": 1790133184.7553396,
+            "seconds": 355.2761228084564
+          },
+          "host_closure": {
+            "finished": 1790133185.734618,
+            "seconds": 358.53152537345886,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:07:07.319419508Z",
+              "FinishedAt": "2026-09-23T03:13:05.517535229Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        "confirmation": {
+          "rows": 2000,
+          "candidate_loss": 0.003,
+          "baseline_loss": 0.007,
+          "relative_gain": 0.5714285714285714,
+          "recorded_comparison": {
+            "relative_gain": 0.5714285714285714,
+            "candidate_loss": 0.003,
+            "baseline_loss": 0.007,
+            "groups": 2000,
+            "paired_group_97_5_upper_difference": -0.0015,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "worker_timing": {
+            "started": 1790133188.1253352,
+            "finished": 1790133194.3384724,
+            "seconds": 6.213138103485107
+          },
+          "host_closure": {
+            "finished": 1790133195.0567615,
+            "seconds": 9.090863227844238,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:13:06.067807074Z",
+              "FinishedAt": "2026-09-23T03:13:14.915180308Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        "audit": {
+          "rows": 5000,
+          "candidate_loss": 0.0132,
+          "baseline_loss": 0.0232,
+          "relative_gain": 0.43103448275862066,
+          "recorded_comparison": {
+            "relative_gain": 0.43103448275862066,
+            "candidate_loss": 0.0132,
+            "baseline_loss": 0.0232,
+            "groups": 5000,
+            "paired_group_97_5_upper_difference": -0.007,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "worker_timing": {
+            "started": 1790133197.6243393,
+            "finished": 1790133205.2550778,
+            "seconds": 7.630739212036133
+          },
+          "host_closure": {
+            "finished": 1790133205.9850316,
+            "seconds": 10.543322086334229,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:13:15.551188712Z",
+              "FinishedAt": "2026-09-23T03:13:25.827958397Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        }
+      }
+    },
+    {
+      "episode": "kmnist-0-candidate",
+      "selected_action": "b0-s0",
+      "completed": {
+        "label": "kmnist-0-candidate",
+        "task": "kmnist",
+        "family": "vision",
+        "repetition": 0,
+        "arm": "candidate",
+        "gpu": 1,
+        "started": 1790132665.153583,
+        "finished": 1790132864.8228028,
+        "seconds": 199.66921997070312,
+        "goal_reached": true,
+        "capped_goal_seconds": 199.5891900062561,
+        "state": {
+          "started": 1790132665.153583,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 0.004,
+          "delivered": {
+            "action": "b0-s0",
+            "finished": 1790132864.742773,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "f1872c5779c1bce9a8b801d2d688082aa1fd1a6451e6f6c7c93583ed1a99e5e2",
+            "checkpoint_sha256": "c41a7e8673f890128a201c07733f325ddf95209de5fa36ebe834baae4b19825f"
+          }
+        },
+        "metrics": {
+          "best_score": -0.004,
+          "calls": 2,
+          "cost": 0.29632000000000003,
+          "parallel_seconds_estimate": 199.57336854934692,
+          "quality_gain": 0.11111111111111102,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 0.6432,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "f1872c5779c1bce9a8b801d2d688082aa1fd1a6451e6f6c7c93583ed1a99e5e2",
+      "rationale_from_source": "KMNIST: ensemble the parent reference network with newly trained, augmented CNNs.\n\nRationale (exploratory, not yet verified): the reference is a single ResNet-style CNN\ntrained with crop-only augmentation, at about 0.45% development error. Averaging the\npredictions of several independently seeded models usually lowers error. Mild\ngeometric augmentation (small rotation, scale, shear and translation, no flips) is\nplausible for handwritten characters. Hoped-for effect: an error drop of about 10% or\nmore relative to the reference.\n\nThe parent model is loaded from api.parent_dir and kept as one ensemble member.\nIf loading fails, only the new networks are used. Every learned state is stored in\nthe model dict. No development labels are used.",
+      "measured_findings": {
+        "parent_loaded": true,
+        "new_ensemble_train_acc_first4000": 1.0,
+        "dev_disagree_parent_vs_new": 6,
+        "dev_disagree_parent_vs_final": 6,
+        "new_members": 4,
+        "per_model": [
+          {
+            "epochs_completed": 60,
+            "updates": 5640,
+            "seconds": 46.0
+          },
+          {
+            "epochs_completed": 60,
+            "updates": 5640,
+            "seconds": 26.6
+          },
+          {
+            "epochs_completed": 60,
+            "updates": 5640,
+            "seconds": 26.2
+          },
+          {
+            "epochs_completed": 60,
+            "updates": 5640,
+            "seconds": 27.1
+          }
+        ],
+        "train_seconds": 129.4,
+        "augmentation": "affine rot12 scale0.1 shear0.15 shift~2px, no flip",
+        "limitations": "no internal group validation; dev agreement is not accuracy; audit outcome unknown"
+      },
+      "phases": {
+        "development": {
+          "rows": 2000,
+          "candidate_loss": 0.004,
+          "baseline_loss": 0.0045,
+          "relative_gain": 0.11111111111111102,
+          "recorded_comparison": null,
+          "worker_timing": {
+            "started": 1790132721.141516,
+            "finished": 1790132850.703573,
+            "seconds": 129.5620574951172
+          },
+          "host_closure": {
+            "finished": 1790132851.5834005,
+            "seconds": 132.60166263580322,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:05:19.088225819Z",
+              "FinishedAt": "2026-09-23T03:07:31.429384552Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 1
+          }
+        },
+        "confirmation": {
+          "rows": 2000,
+          "candidate_loss": 0.0035,
+          "baseline_loss": 0.007,
+          "relative_gain": 0.5,
+          "recorded_comparison": {
+            "relative_gain": 0.5,
+            "candidate_loss": 0.0035,
+            "baseline_loss": 0.007,
+            "groups": 2000,
+            "paired_group_97_5_upper_difference": -0.0005,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "worker_timing": {
+            "started": 1790132853.9509768,
+            "finished": 1790132856.8618393,
+            "seconds": 2.910863161087036
+          },
+          "host_closure": {
+            "finished": 1790132857.5709255,
+            "seconds": 5.837069034576416,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:07:31.853331201Z",
+              "FinishedAt": "2026-09-23T03:07:37.459971043Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 1
+          }
+        },
+        "audit": {
+          "rows": 5000,
+          "candidate_loss": 0.0154,
+          "baseline_loss": 0.0232,
+          "relative_gain": 0.3362068965517241,
+          "recorded_comparison": {
+            "relative_gain": 0.3362068965517241,
+            "candidate_loss": 0.0154,
+            "baseline_loss": 0.0232,
+            "groups": 5000,
+            "paired_group_97_5_upper_difference": -0.005,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          },
+          "worker_timing": {
+            "started": 1790132860.231155,
+            "finished": 1790132863.2344055,
+            "seconds": 3.003251552581787
+          },
+          "host_closure": {
+            "finished": 1790132863.890683,
+            "seconds": 5.9366631507873535,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:07:38.057341099Z",
+              "FinishedAt": "2026-09-23T03:07:43.815582587Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 1
+          }
+        }
+      }
+    }
+  ],
+  "inputs_sha256": {
+    "episodes/kmnist-0-control/b1-s0/result.json": "a7252de672424c8e42b7db5c7b35d86a3be1ccffd8b4cc6da9949f63080e7c46",
+    "episodes/kmnist-0-control/b1-s0/timing.json": "d2f7dbaad970f5be559e5bf928007dfb57233deeed0b74c055cef363aa8c6788",
+    "episodes/kmnist-0-control/b1-s0/closure.json": "ae2f1f172bb0d8f9d2604b159057be8ef3fc8ade2b1acb7f815f55a7fc6d549a",
+    "data/kmnist-0/development/labels.npy": "09f2390786475fdf4822012da6e567bcb65bf369822d1a3f41be7f6f2cf37d96",
+    "data/kmnist-0/development/groups.json": "e576ae1db2ed5d185822acd9ae74ef6915ef3f3a5111cfd253dc3dd97ee8523d",
+    "episodes/kmnist-0-control/b1-s0-confirmation/result.json": "9aaa7fc6e685c5a623def641537a1d8dffcb54cb586b357d57a6e6ee143629b1",
+    "episodes/kmnist-0-control/b1-s0-confirmation/timing.json": "900d52510e7b7ef525dc98ec08deba5f41a219b626c7f627f846e5e9e0dbc1fc",
+    "episodes/kmnist-0-control/b1-s0-confirmation/closure.json": "2ebdf41518c71be7401599d2d1837239ef62a13c950bb162dc9cbd7084234023",
+    "data/kmnist-0/confirmation/labels.npy": "466cc40c6ea9755f3770ddabb9f7b024481063dfecca4d8b6a57d6b019d87978",
+    "data/kmnist-0/confirmation/groups.json": "86036c4256d72b19f44771699dd6b0a3c01238ad22573a75704319debbe7011e",
+    "episodes/kmnist-0-control/b1-s0-audit/result.json": "675465ff6376b6c80e2f25d756eb5089f9ace3cdabf074ac4d16cc8f6775d6c7",
+    "episodes/kmnist-0-control/b1-s0-audit/timing.json": "28f89ec7e40331bc1cb6bb1d55bfa322de3a61580b1047c09cb45d2f3d5a30f8",
+    "episodes/kmnist-0-control/b1-s0-audit/closure.json": "2935d0d6ea56bd7edf1d2b858d80b8b602cece7c01f1309276b1ccd53684c26d",
+    "data/kmnist-0/audit/labels.npy": "b1a170fcca239e7f2e0478ac5938c10107ee75b3b69a6dcda7598a724b2967b6",
+    "data/kmnist-0/audit/groups.json": "1c7768348043e20a9fda7819db3021009140344cd451822837adecadcb3985a8",
+    "calls/kmnist-0-control/b1-s0/candidate.py": "52e82e1152291bdb04feb6aaa7e7d1f021a7a77149a35ec3ba1d4c781ba97b68",
+    "episodes/kmnist-0-control/completed.json": "a5977ebf1453e9b65c038a7d9bf8a44e43d367e128dd14c8fe3a7da4279aa471",
+    "episodes/kmnist-0-control/goal-delivered.json": "df28a59a681fb65b54b4918d0b8805380a8f0cc18f0feade54d54a18c64b75c6",
+    "references/kmnist-0.json": "f5d7882414a55ef517148804365b0223c337618b7bf4e5303e4fcd72c88715c0",
+    "data/kmnist-0/task.json": "f1982f153e03b8c3844b66c03a365a86dad6aabdc2787abe90db10b42357375a",
+    "episodes/kmnist-0-candidate/b0-s0/result.json": "b13f86d4ece60f8f448ec80eff3077da2697409fc97111a8a5e40d22fda38924",
+    "episodes/kmnist-0-candidate/b0-s0/timing.json": "dafbf368e41f3bffd3a0590b9366497cfc684a245242f9428aa88077a742bb5d",
+    "episodes/kmnist-0-candidate/b0-s0/closure.json": "34fcf067dde77190e9c9fdda7c91260263bbe270e09181e093672452f63bca21",
+    "episodes/kmnist-0-candidate/b0-s0-confirmation/result.json": "f4ebafaddbb138eb62eac695a3898c8b08ca5433533a2618471637770ac4e3b9",
+    "episodes/kmnist-0-candidate/b0-s0-confirmation/timing.json": "c42a06bb5f48bf5d509c4760d7feb6360a1a17d9f330ded1242222735f7b5581",
+    "episodes/kmnist-0-candidate/b0-s0-confirmation/closure.json": "f3eccac68cece55bb2eb0fab82ba2e091b8c8c8b6a316b2e1d873610cadc0f00",
+    "episodes/kmnist-0-candidate/b0-s0-audit/result.json": "bf3f410250035525670ef9828d5d765ee2fca299853fa7ae97e2ec54fe39c431",
+    "episodes/kmnist-0-candidate/b0-s0-audit/timing.json": "1f7b8767621d536fbf1d6b706679ca37310b957245b33ad9d035661fbc39ccd8",
+    "episodes/kmnist-0-candidate/b0-s0-audit/closure.json": "8299df2c2d4efc23fce6143b2980276663a20fc5ff0a5de57a57b117f6b69c88",
+    "calls/kmnist-0-candidate/b0-s0/candidate.py": "f1872c5779c1bce9a8b801d2d688082aa1fd1a6451e6f6c7c93583ed1a99e5e2",
+    "episodes/kmnist-0-candidate/completed.json": "8b57f0edacf3824e206e9f8c7b94845171d3d4e761f632a209dd7951f1940b7a",
+    "episodes/kmnist-0-candidate/goal-delivered.json": "b85ad76ed1ebe2709df98ba7467ecb8a94fb8ebf9af560f62dca3a76fd4204d8"
+  },
+  "observations": [
+    "Both delivered candidates use no horizontal flip in training or prediction; inspected affine and prediction implementations, not only the self-report.",
+    "Control trains eight new 110-epoch networks and predicts with nine geometric views per member. Candidate loads the existing reference, trains four 60-epoch networks and averages five single-view networks.",
+    "The candidate is faster on this repetition but has a higher final error; both pass the frozen goal. No isolated causal test of ensemble size, parent reuse, augmentation or GPU speed was run.",
+    "Reported in-sample accuracy and unlabelled agreement are not internal held-out accuracy or acceptance evidence."
+  ],
+  "whole_campaign_verified": false,
+  "default_promotion_authorized": false,
+  "research_requests": 0,
+  "gpu_executions": 0
+}
