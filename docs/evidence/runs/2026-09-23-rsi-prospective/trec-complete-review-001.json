@@ -1,0 +1,842 @@
+{
+  "created": 1790136994.649244,
+  "scope": "Completed TREC repetition 1 control source and all eight stored prediction sets. Independent NumPy classification point losses only; original bootstrap outputs retained, not rerun. No candidate execution, checkpoint deserialization, model request or GPU execution. Full campaign is still running.",
+  "episode": "trec-1-control",
+  "completed": {
+    "label": "trec-1-control",
+    "task": "trec",
+    "family": "text",
+    "repetition": 1,
+    "arm": "control",
+    "gpu": 3,
+    "started": 1790135150.0459263,
+    "finished": 1790136600.5779834,
+    "seconds": 1450.5320575237274,
+    "goal_reached": false,
+    "capped_goal_seconds": 7200,
+    "state": {
+      "started": 1790135150.0459263,
+      "terminal": true,
+      "goal_reached": false,
+      "confirmation_used": true,
+      "best": 0.11814859926918392,
+      "delivered": {
+        "action": "b1-s1",
+        "finished": 1790136600.4003716,
+        "accepted": false,
+        "within_deadline": true,
+        "route": "best_development_at_limit",
+        "source_sha256": "76c2541a67ef4be16f8a1e265de5fece563a7fa222694ffc9067295e72f5180f",
+        "checkpoint_sha256": "dde1365f1e7597b77f466e6b336efd676740893e74560672a17fc67d4e3af724"
+      }
+    },
+    "metrics": {
+      "best_score": -0.11814859926918392,
+      "calls": 6,
+      "cost": 2.3188750000000002,
+      "parallel_seconds_estimate": 1444.3832790851593,
+      "quality_gain": 0.11818181818181822,
+      "rounds": 3,
+      "supported": true
+    },
+    "paid_calls": 6,
+    "retained_upper_usd": 3.924075,
+    "unused_proposals": 0,
+    "invalid_attempts": 0,
+    "unadmitted_attempts": 0
+  },
+  "selected_action": "b1-s1",
+  "selected_source_sha256": "76c2541a67ef4be16f8a1e265de5fece563a7fa222694ffc9067295e72f5180f",
+  "model_authored_rationales": {
+    "b0-s0": "TREC question-type classification: feature-engineered sparse ensemble.\n\nRationale (exploratory, validated by group-aware CV on training rows only):\nThe common reference is a single word 1-2gram TF-IDF LinearSVC (dev error .134).\nThree cheap, orthogonal sources of signal are added:\n\n1. Explicit head-of-question features. TREC coarse classes are largely decided by\n   the leading wh-phrase (\"what is\", \"who\", \"how many\", \"where\"). Bag-of-ngrams\n   dilutes position, so the first/second/third leading tokens are appended as\n   dedicated tokens (fwxq_/fw2xq_/fw3xq_) before word vectorization.\n2. A char_wb 2-5 gram block (weighted .7) concatenated to the word block, which\n   is robust to morphology/typos and to the small (3815 row) training set.\n3. A heterogeneous classifier ensemble (RBF-SVM, two LinearSVCs, logistic\n   regression, ComplementNB) combined by greedy weight selection with\n   replacement on out-of-fold probabilities, so the combination is chosen by a\n   grouped CV estimate rather than by authored belief.\n\nOptionally, confident pseudo-labels on the unlabeled development features are\nadded to the training pool; this is *accepted only if* a held-out fold check\n(train on folds 1..k-1, pseudo-label the unlabeled pool, refit, score fold 0)\nshows a non-trivial gain. No development labels are read anywhere.\n\nLimitations: CV is computed on training groups only and may be optimistic or\npessimistic relative to the disjoint development/audit groups; the pseudo-label\ndecision rests on a single fold split and is therefore noisy (it is gated by a\nmargin so that ties keep the simpler supervised model).",
+    "b0-s1": "TREC question-type classification: sparse linear/NB ensemble blended with a\nrandomly-initialised word-CNN ensemble.\n\nRationale (exploratory; validated only by group-aware CV on training rows):\nThe common reference is a word 1-2gram TF-IDF LinearSVC (dev error .134) and the\nprevious branch step reached dev .119 with a purely sparse ensemble, which did\nnot qualify on the fresh confirmation split.  The remaining error of sparse\nbag-of-ngram models on TREC is dominated by questions whose class depends on\nshort *ordered* phrases (\"what is the name of\", \"how far\", \"what does X stand\nfor\") that TF-IDF dilutes.  A Kim-style convolutional network over randomly\ninitialised word embeddings models exactly those local ordered patterns and is\na genuinely different hypothesis class, so its errors are largely decorrelated\nfrom the sparse block; literature reports CNN-rand as clearly stronger than\nlinear bag-of-ngrams on TREC even without any pretrained vectors (none are\navailable here).\n\nDesign:\n1. Sparse block: word 1-2grams (with explicit leading-token features) + char_wb\n   2-5grams, four cheap learners (2 LinearSVC, logistic regression,\n   ComplementNB) combined by greedy weight selection on grouped out-of-fold\n   probabilities.\n2. Neural block: word-CNN (embedding 128, filters 2/3/4/5 x 128, max-pool,\n   dropout .5, word-dropout augmentation), averaged over several seeds.\n3. Blend weight alpha chosen on the same grouped out-of-fold predictions by a\n   coarse grid search, then both blocks refit on all labelled rows.\n\nLimitations: all internal estimates use training groups only; development,\nconfirmation and audit groups are disjoint, so the CV numbers are proxies and\nnot measurements on the evaluated splits.  Seed averaging reduces but does not\nremove neural variance; no development labels are read anywhere.",
+    "b0-s2": "TREC question-type classification: calibrated, feature-diverse ensemble.\n\nRationale (exploratory; internal estimates use grouped CV on training rows only).\nThe common reference is a word 1-2gram TF-IDF LinearSVC (dev error .134).  The\nprevious branch step (sparse greedy ensemble) reached dev .119 -- an ~11%\nrelative reduction that did not survive the fresh confirmation split, i.e. the\nmargin was too thin.  Three changes aim at a wider, more stable margin rather\nthan at a new hypothesis about TREC itself:\n\n1. Richer question-shape features.  Besides the leading 1/2/3 tokens (which\n   carry most of the coarse-class signal), the final token, a length bucket,\n   a digit flag and an internal-capitalisation flag (proper nouns -> ENTY/HUM/\n   LOC) are appended as dedicated tokens before word vectorization.\n2. Genuinely different hypothesis classes added to the sparse block: an NBSVM\n   (one-vs-rest log-count-ratio weighted binary 1-3grams, a strong small-data\n   text baseline) and a seed-averaged MLP over a truncated-SVD projection of\n   the TF-IDF space (dense, non-linear, decorrelated errors).\n3. Per-model temperature calibration of decision values by out-of-fold log\n   loss before greedy weight selection.  Uncalibrated margins let one\n   overconfident member dominate the average; calibrating first makes the\n   combination closer to a proper probability average and reduces variance.\n\nAll combination weights and temperatures are chosen on grouped out-of-fold\npredictions; the whole system is then refit on all labelled rows.  No\ndevelopment labels are read anywhere.\n\nLimitations: CV uses training groups only, while development/confirmation/audit\ngroups are disjoint, so CV numbers are proxies (observed to be pessimistic by\n~3 points relative to development) and not measurements on evaluated splits.\nTemperatures and blend weights are selected on the same out-of-fold matrix used\nto report cv accuracy, so that figure is mildly optimistic.  MLP seed averaging\nreduces but does not remove neural variance.",
+    "b1-s0": "TREC topic classification: stronger sparse-feature ensemble over the LinearSVC reference.\n\nRationale (exploratory but grounded in standard TREC practice):\n  * The reference uses only word 1-2gram TF-IDF + LinearSVC (dev error 0.1340).\n    TREC question type is largely determined by the leading wh-phrase and by\n    sub-word morphology of the head noun, so we add two extra feature blocks:\n      (a) character n-grams (char_wb 2-5), robust to morphology/typos;\n      (b) explicit positional \"prefix\" tokens (first three tokens, first\n          bigram/trigram and the last token) which encode question-form cues\n          that plain bag-of-ngrams dilutes.\n  * Block weights, the linear-SVM regularisation strength and the classifier\n    ensemble (LinearSVC / logistic regression / ComplementNB score averaging)\n    are selected by GroupKFold cross-validation on the provided training\n    groups, i.e. the declared generalization protocol, never on development\n    labels (none are supplied to a method).\n  * Scores of different members are z-normalised before averaging so that\n    margin-based and probabilistic members contribute comparably.\n\nLimitations: model selection uses ~3.8k training rows, so CV differences below\nroughly 0.5 points are within noise; the reported CV numbers are in-training\nestimates, not independent confirmations.",
+    "b1-s1": "TREC question-type classification: diverse multi-family soft-vote ensemble.\n\nRationale (exploratory, validated only by GroupKFold CV on training rows):\n  * The common reference is a single word 1-2gram TF-IDF LinearSVC.  A previous\n    branch step showed that *selecting* one tweaked sparse-linear configuration\n    by CV did not transfer to development (CV -1.5pt, dev +0.1pt), which is what\n    one expects when CV differences (~0.6pt s.e.) are used for greedy selection.\n    So here the emphasis is variance reduction by *averaging* structurally\n    different learners instead of picking the CV winner.\n  * Feature space: word 1-2gram TF-IDF + char_wb 2-5gram TF-IDF (morphology of\n    the head noun) + explicit positional \"prefix\" tokens (first tokens, leading\n    bigram/trigram, last token) which carry the wh-form cue.  Vectorizer\n    vocabularies/IDF are fit on train+development *texts only* (unsupervised,\n    no labels), improving coverage for both evaluated splits.\n  * Members: LinearSVC (C=1,4), multinomial logistic regression, ComplementNB,\n    RBF-kernel SVC (non-linear on cosine-normalised TF-IDF), an NB-SVM\n    (log-count-ratio scaled binary features, one-vs-rest), and a small sparse\n    MLP trained on GPU (3 seeds averaged) - three genuinely different inductive\n    biases plus two margin models.\n  * Scores are row-centred and rescaled by an out-of-fold standard deviation so\n    margins and log-probabilities contribute comparably; members clearly worse\n    than the best member in CV are dropped; the weight vector is chosen among\n    three fixed candidates by out-of-fold error.\n\nLimitations: all model choices rest on 5-fold GroupKFold CV over 3815 training\nrows (~0.6pt s.e.); no development labels are used or available to a method;\nthe CV estimate is mildly optimistic because vectorizers are fit once on all\nunlabeled text.  Gains below ~1pt on development cannot be distinguished from\nnoise at these split sizes.",
+    "b1-s2": "TREC question-type classification: variance-reduced multi-family, multi-view soft-vote ensemble.\n\nRationale (exploratory; validated only by GroupKFold CV on training rows):\n  * Parent lineage (b1-s1) showed that *averaging* structurally different sparse\n    learners beats CV-greedy selection of a single tweaked LinearSVC\n    (dev 0.1181 vs reference 0.1340).  The remaining, easily removable source of\n    variance in that recipe is the single arbitrary feature-block weighting\n    (char 0.6 / prefix 0.8): the ensemble sees one view only.\n  * This step keeps every ingredient that worked (word 1-2gram TF-IDF, char_wb\n    2-5gram TF-IDF, positional \"prefix\" tokens for the wh-form cue, binary\n    counts for NB-SVM; members LinearSVC C=1/4, multinomial LR, RBF-SVC,\n    NB-SVM, sparse GPU MLP with several seeds) and adds a *second feature view*\n    (char 1.0 / prefix 0.4) on which the two margin models are refit.  Feature\n    view bagging averages away the block-weight choice instead of selecting it.\n  * ComplementNB is dropped: in the parent OOF it was 9pt worse than the best\n    member and was always filtered out, so its fit time is spent on extra MLP\n    seeds instead.\n  * Member scores are row-centred and rescaled by their out-of-fold standard\n    deviation so margins and log-probabilities are commensurate; members more\n    than 5pt worse than the best member in OOF are dropped; the weight vector is\n    chosen among three fixed candidates by out-of-fold error (a 3-way choice,\n    much less noisy than per-hyperparameter selection).\n  * Vectorizer vocabularies/IDF are fit on train+development *texts only*\n    (unsupervised, no labels are available to a method) for coverage.\n\nLimitations: all choices rest on 5-fold GroupKFold CV over 3815 training rows\n(s.e. ~0.6pt), so member ranking and the weighting choice are noisy; the CV\nestimate is mildly optimistic because vectorizers are fit once on all unlabeled\ntext; no development or audit labels were used or measured here; differences\nbelow ~1pt on development cannot be distinguished from noise at these sizes."
+  },
+  "model_authored_findings": {
+    "b0-s0": {
+      "cv_scheme": "GroupKFold",
+      "cv_folds_completed": 5,
+      "cv_rows_scored": 3815,
+      "cv_accuracy_per_model": {
+        "svc_rbf": 0.8214941022280472,
+        "lsvc1": 0.8419397116644823,
+        "lsvc4": 0.8469200524246396,
+        "logreg": 0.8314547837483617,
+        "cnb": 0.8120576671035387
+      },
+      "cv_accuracy_ensemble": 0.8511140235910878,
+      "cv_error_ensemble": 0.1488859764089122,
+      "ensemble_weights": {
+        "svc_rbf": 0.0,
+        "lsvc1": 0.125,
+        "lsvc4": 0.5,
+        "logreg": 0.0,
+        "cnb": 0.375
+      },
+      "pseudo_label_check": {
+        "attempted": true,
+        "used": false,
+        "fold0_base_acc": 0.8479685452162516,
+        "fold0_pseudo_acc": 0.8492791612057667,
+        "n_pseudo_fold0": 311
+      },
+      "n_pseudo_final": 0,
+      "n_train_rows": 3815,
+      "train_seconds": 169.21898102760315,
+      "limitations": "CV uses training groups only; development/audit groups are disjoint so these numbers are proxies, not measurements on the evaluated splits. The pseudo-label gate rests on one fold split and is noisy."
+    },
+    "b0-s1": {
+      "cv_scheme": "GroupKFold",
+      "cv_folds_completed": 5,
+      "cv_rows_scored": 3815,
+      "cv_accuracy_per_sparse_model": {
+        "lsvc1": 0.8419397116644823,
+        "lsvc4": 0.8469200524246396,
+        "logreg": 0.8314547837483617,
+        "cnb": 0.8120576671035387
+      },
+      "cv_accuracy_sparse_ensemble": 0.8511140235910878,
+      "cv_accuracy_cnn_ensemble": 0.8238532110091743,
+      "cv_accuracy_blend": 0.8511140235910878,
+      "cv_error_blend": 0.1488859764089122,
+      "blend_alpha_cnn": 0.0,
+      "n_cnn_models_final": 0,
+      "sparse_weights": {
+        "lsvc1": 0.125,
+        "lsvc4": 0.5,
+        "logreg": 0.0,
+        "cnb": 0.375
+      },
+      "vocab_size": 2,
+      "neural_error": null,
+      "n_train_rows": 3815,
+      "train_seconds": 98.39977884292603,
+      "limitations": "CV uses training groups only; development/confirmation/audit groups are disjoint, so these are proxies rather than measurements on evaluated splits. The blend weight is selected on the same out-of-fold matrix used to score it, so cv_accuracy_blend is mildly optimistic. CNN seeds add variance not captured by a single CV pass."
+    },
+    "b0-s2": {
+      "cv_scheme": "GroupKFold",
+      "cv_folds_completed": 5,
+      "cv_rows_scored": 3815,
+      "cv_accuracy_per_model": {
+        "lsvc1": 0.8432503276539974,
+        "lsvc4": 0.8437745740498034,
+        "logreg": 0.8325032765399738,
+        "cnb": 0.8117955439056357,
+        "rbf": 0.8201834862385321,
+        "mlp": 0.8217562254259502,
+        "nbsvm": 0.8346002621231979
+      },
+      "cv_accuracy_ensemble": 0.8505897771952818,
+      "cv_error_ensemble": 0.14941022280471816,
+      "ensemble_weights": {
+        "lsvc1": 0.45454545454545453,
+        "lsvc4": 0.13636363636363635,
+        "logreg": 0.045454545454545456,
+        "cnb": 0.0,
+        "rbf": 0.0,
+        "mlp": 0.0,
+        "nbsvm": 0.36363636363636365
+      },
+      "temperatures": {
+        "lsvc1": 3.0,
+        "lsvc4": 3.0,
+        "logreg": 1.0,
+        "cnb": 1.5,
+        "rbf": 1.5,
+        "mlp": 1.0,
+        "nbsvm": 5.0
+      },
+      "mlp_members_final": 5,
+      "nbsvm_available": true,
+      "n_train_rows": 3815,
+      "train_seconds": 214.52125430107117,
+      "limitations": "CV uses training groups only; development/confirmation/audit groups are disjoint, so these are proxies rather than measurements on the evaluated splits (the previous step observed CV error ~.149 with dev error ~.119). Temperatures and blend weights are selected on the same out-of-fold matrix that is scored, so cv_accuracy_ensemble is mildly optimistic. MLP seed averaging leaves residual neural variance."
+    },
+    "b1-s0": {
+      "selected": {
+        "w_char": 0.6,
+        "w_prefix": 0.8,
+        "C": 4.0,
+        "C_lr": 4.0,
+        "members": [
+          "svc",
+          "nb"
+        ]
+      },
+      "cv_error_selected": 0.15177,
+      "cv_error_reference_style_word_svc": 0.16697,
+      "cv_protocol": "GroupKFold(5) on api.train_groups",
+      "n_train": 3815,
+      "n_groups": 3763,
+      "n_features_word": 24767,
+      "n_features_char": 22728,
+      "n_features_prefix": 6975,
+      "top_configs": [
+        {
+          "w_char": 0.6,
+          "w_prefix": 0.8,
+          "C": 4.0,
+          "C_lr": 4.0,
+          "members": [
+            "svc",
+            "nb"
+          ],
+          "cv_error": 0.15177
+        },
+        {
+          "w_char": 0.6,
+          "w_prefix": 0.8,
+          "C": 4.0,
+          "C_lr": 4.0,
+          "members": [
+            "svc"
+          ],
+          "cv_error": 0.15256
+        },
+        {
+          "w_char": 0.3,
+          "w_prefix": 0.5,
+          "C": 4.0,
+          "C_lr": 4.0,
+          "members": [
+            "svc"
+          ],
+          "cv_error": 0.15413
+        },
+        {
+          "w_char": 0.6,
+          "w_prefix": 0.8,
+          "C": 2.0,
+          "C_lr": 4.0,
+          "members": [
+            "svc",
+            "nb"
+          ],
+          "cv_error": 0.15439
+        },
+        {
+          "w_char": 0.3,
+          "w_prefix": 0.5,
+          "C": 4.0,
+          "C_lr": 4.0,
+          "members": [
+            "svc",
+            "nb"
+          ],
+          "cv_error": 0.15439
+        },
+        {
+          "w_char": 0.6,
+          "w_prefix": 0.8,
+          "C": 2.0,
+          "C_lr": 4.0,
+          "members": [
+            "svc"
+          ],
+          "cv_error": 0.1557
+        }
+      ],
+      "training_seconds": 217.9,
+      "limitations": "CV differences below ~0.005 are within noise at this sample size; vectorizers were fit on the full training text (unsupervised) before CV, which is mildly optimistic for vocabulary coverage; no development labels used."
+    },
+    "b1-s1": {
+      "members_kept": [
+        "svc1",
+        "svc4",
+        "lr",
+        "rbf",
+        "nbsvm",
+        "mlp"
+      ],
+      "cv_member_error": {
+        "svc1": 0.1599,
+        "svc4": 0.1536,
+        "lr": 0.17326,
+        "cnb": 0.24509,
+        "rbf": 0.19502,
+        "nbsvm": 0.18218,
+        "mlp": 0.16435
+      },
+      "cv_ensemble_error_by_weighting": {
+        "mix": 0.15963,
+        "equal": 0.16016,
+        "lin": 0.1599
+      },
+      "selected_weighting": "mix",
+      "cv_error_reference_style_word_svc": 0.16697,
+      "cv_protocol": "GroupKFold(5) on api.train_groups",
+      "cv_rows_used": 3815,
+      "n_train": 3815,
+      "n_dev_texts_used_unsupervised": 821,
+      "n_features_combined": 62013,
+      "mlp_seeds_final": 3,
+      "training_seconds": 184.4,
+      "limitations": "CV s.e. ~0.6pt on 3815 rows, so member ranking and the weighting choice among three fixed candidates are noisy; vectorizers were fit once on all unlabeled train+development text (no labels), mildly optimistic for vocabulary coverage; no development labels were used; development/audit performance is not measured here."
+    },
+    "b1-s2": {
+      "members_kept": [
+        "svc1a",
+        "svc4a",
+        "svc1b",
+        "svc4b",
+        "lr",
+        "rbf",
+        "nbsvm",
+        "mlp"
+      ],
+      "cv_member_error": {
+        "svc1a": 0.1599,
+        "svc4a": 0.1536,
+        "svc1b": 0.16173,
+        "svc4b": 0.15963,
+        "lr": 0.17326,
+        "rbf": 0.19502,
+        "nbsvm": 0.18218,
+        "mlp": 0.16435
+      },
+      "cv_ensemble_error_by_weighting": {
+        "mix": 0.16068,
+        "svcheavy": 0.15937,
+        "equal": 0.15937
+      },
+      "selected_weighting": "svcheavy",
+      "cv_protocol": "GroupKFold(5) on api.train_groups",
+      "cv_rows_used": 3815,
+      "n_train": 3815,
+      "n_dev_texts_used_unsupervised": 821,
+      "n_features_viewA": 62013,
+      "n_features_viewB": 62013,
+      "mlp_seeds_final": 5,
+      "training_seconds": 198.4,
+      "limitations": "CV s.e. ~0.6pt on 3815 rows, so member ranking and the 3-way weighting choice are noisy; vectorizers fit once on all unlabeled train+development text (no labels), mildly optimistic for vocabulary coverage; two feature views are averaged rather than selected, but the view definitions themselves are fixed a priori and untested individually on held-out data; development/audit performance is not measured here."
+    }
+  },
+  "attempts": [
+    {
+      "action": "b0-s0",
+      "status": "ok",
+      "score": -0.11936662606577345,
+      "cost": 0.319245,
+      "seconds": 490.45906949043274,
+      "feedback": {
+        "valid": true
+      }
+    },
+    {
+      "action": "b0-s1",
+      "status": "ok",
+      "score": -0.11936662606577345,
+      "cost": 0.384945,
+      "seconds": 236.75450038909912,
+      "feedback": {
+        "valid": true
+      }
+    },
+    {
+      "action": "b0-s2",
+      "status": "ok",
+      "score": -0.12423873325213154,
+      "cost": 0.53834,
+      "seconds": 525.9369473457336,
+      "feedback": {
+        "valid": true
+      }
+    },
+    {
+      "action": "b1-s0",
+      "status": "ok",
+      "score": -0.13520097442143728,
+      "cost": 0.230745,
+      "seconds": 312.87674355506897,
+      "feedback": {
+        "valid": true
+      }
+    },
+    {
+      "action": "b1-s1",
+      "status": "ok",
+      "score": -0.11814859926918392,
+      "cost": 0.50844,
+      "seconds": 427.9872622489929,
+      "feedback": {
+        "valid": true
+      }
+    },
+    {
+      "action": "b1-s2",
+      "status": "ok",
+      "score": -0.12058465286236297,
+      "cost": 0.33716,
+      "seconds": 303.63124346733093,
+      "feedback": {
+        "valid": true
+      }
+    }
+  ],
+  "stages": {
+    "b0-s0": {
+      "timing.json": {
+        "started": 1790135465.057839,
+        "finished": 1790135635.5897412,
+        "seconds": 170.53190279006958
+      },
+      "closure.json": {
+        "finished": 1790135636.2998564,
+        "seconds": 173.33582472801208,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T03:51:03.064135231Z",
+          "FinishedAt": "2026-09-23T03:53:56.124029551Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 3
+      }
+    },
+    "b0-s0-confirmation": {
+      "timing.json": {
+        "started": 1790135638.4773486,
+        "finished": 1790135639.7027497,
+        "seconds": 1.2254016399383545
+      },
+      "closure.json": {
+        "finished": 1790135640.3357358,
+        "seconds": 3.9350433349609375,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T03:53:56.508456702Z",
+          "FinishedAt": "2026-09-23T03:54:00.217128488Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 3
+      },
+      "comparison.json": {
+        "relative_gain": 0.0,
+        "candidate_loss": 0.13848039215686275,
+        "baseline_loss": 0.13848039215686275,
+        "groups": 807,
+        "paired_group_97_5_upper_difference": 0.018337408312958436,
+        "qualified": false,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    "b0-s1": {
+      "timing.json": {
+        "started": 1790135776.5586526,
+        "finished": 1790135876.278111,
+        "seconds": 99.71945881843567
+      },
+      "closure.json": {
+        "finished": 1790135877.2202518,
+        "seconds": 102.75565266609192,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T03:56:14.567931389Z",
+          "FinishedAt": "2026-09-23T03:57:57.112681449Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 3
+      }
+    },
+    "b0-s2": {
+      "timing.json": {
+        "started": 1790136374.3726723,
+        "finished": 1790136593.3093903,
+        "seconds": 218.93671822547913
+      },
+      "closure.json": {
+        "finished": 1790136594.1633224,
+        "seconds": 221.9579644203186,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T04:06:12.307801388Z",
+          "FinishedAt": "2026-09-23T04:09:54.031165848Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 3
+      }
+    },
+    "b1-s0": {
+      "timing.json": {
+        "started": 1790135244.023117,
+        "finished": 1790135462.1514354,
+        "seconds": 218.1283187866211
+      },
+      "closure.json": {
+        "finished": 1790135462.873234,
+        "seconds": 220.9408950805664,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T03:47:22.033178902Z",
+          "FinishedAt": "2026-09-23T03:51:02.755374435Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 3
+      }
+    },
+    "b1-s1": {
+      "timing.json": {
+        "started": 1790135879.4666147,
+        "finished": 1790136067.4022899,
+        "seconds": 187.9356758594513
+      },
+      "closure.json": {
+        "finished": 1790136068.2804067,
+        "seconds": 190.9615879058838,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T03:57:57.419314286Z",
+          "FinishedAt": "2026-09-23T04:01:08.182557442Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 3
+      }
+    },
+    "b1-s1-audit": {
+      "timing.json": {
+        "started": 1790136596.5979784,
+        "finished": 1790136599.5617363,
+        "seconds": 2.963758945465088
+      },
+      "closure.json": {
+        "finished": 1790136600.2484598,
+        "seconds": 5.738916873931885,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T04:09:54.612317021Z",
+          "FinishedAt": "2026-09-23T04:10:00.167573556Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 3
+      },
+      "comparison.json": {
+        "relative_gain": 0.06000000000000005,
+        "candidate_loss": 0.09611451942740286,
+        "baseline_loss": 0.10224948875255624,
+        "groups": 489,
+        "paired_group_97_5_upper_difference": 0.014314928425357873,
+        "qualified": false,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    "b1-s2": {
+      "timing.json": {
+        "started": 1790136168.8395364,
+        "finished": 1790136370.9894123,
+        "seconds": 202.14987659454346
+      },
+      "closure.json": {
+        "finished": 1790136371.848703,
+        "seconds": 205.06887292861938,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T04:02:46.885047568Z",
+          "FinishedAt": "2026-09-23T04:06:11.709271622Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 3
+      }
+    }
+  },
+  "prediction_checks": [
+    {
+      "stage": "b0-s0",
+      "split": "development",
+      "rows": 821,
+      "candidate_errors": 98,
+      "baseline_errors": 110,
+      "candidate_loss": 0.11936662606577345,
+      "baseline_loss": 0.13398294762484775,
+      "relative_gain": 0.10909090909090913,
+      "fixes_baseline_errors": 30,
+      "introduces_errors": 18
+    },
+    {
+      "stage": "b0-s0-confirmation",
+      "split": "confirmation",
+      "rows": 816,
+      "candidate_errors": 113,
+      "baseline_errors": 113,
+      "candidate_loss": 0.13848039215686275,
+      "baseline_loss": 0.13848039215686275,
+      "relative_gain": 0.0,
+      "fixes_baseline_errors": 27,
+      "introduces_errors": 27,
+      "recorded_comparison": {
+        "relative_gain": 0.0,
+        "candidate_loss": 0.13848039215686275,
+        "baseline_loss": 0.13848039215686275,
+        "groups": 807,
+        "paired_group_97_5_upper_difference": 0.018337408312958436,
+        "qualified": false,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    {
+      "stage": "b0-s1",
+      "split": "development",
+      "rows": 821,
+      "candidate_errors": 98,
+      "baseline_errors": 110,
+      "candidate_loss": 0.11936662606577345,
+      "baseline_loss": 0.13398294762484775,
+      "relative_gain": 0.10909090909090913,
+      "fixes_baseline_errors": 30,
+      "introduces_errors": 18
+    },
+    {
+      "stage": "b0-s2",
+      "split": "development",
+      "rows": 821,
+      "candidate_errors": 102,
+      "baseline_errors": 110,
+      "candidate_loss": 0.12423873325213154,
+      "baseline_loss": 0.13398294762484775,
+      "relative_gain": 0.07272727272727275,
+      "fixes_baseline_errors": 33,
+      "introduces_errors": 25
+    },
+    {
+      "stage": "b1-s0",
+      "split": "development",
+      "rows": 821,
+      "candidate_errors": 111,
+      "baseline_errors": 110,
+      "candidate_loss": 0.13520097442143728,
+      "baseline_loss": 0.13398294762484775,
+      "relative_gain": -0.009090909090909038,
+      "fixes_baseline_errors": 27,
+      "introduces_errors": 28
+    },
+    {
+      "stage": "b1-s1",
+      "split": "development",
+      "rows": 821,
+      "candidate_errors": 97,
+      "baseline_errors": 110,
+      "candidate_loss": 0.11814859926918392,
+      "baseline_loss": 0.13398294762484775,
+      "relative_gain": 0.11818181818181817,
+      "fixes_baseline_errors": 43,
+      "introduces_errors": 30
+    },
+    {
+      "stage": "b1-s1-audit",
+      "split": "audit",
+      "rows": 489,
+      "candidate_errors": 47,
+      "baseline_errors": 50,
+      "candidate_loss": 0.09611451942740286,
+      "baseline_loss": 0.10224948875255624,
+      "relative_gain": 0.06000000000000005,
+      "fixes_baseline_errors": 15,
+      "introduces_errors": 12,
+      "recorded_comparison": {
+        "relative_gain": 0.06000000000000005,
+        "candidate_loss": 0.09611451942740286,
+        "baseline_loss": 0.10224948875255624,
+        "groups": 489,
+        "paired_group_97_5_upper_difference": 0.014314928425357873,
+        "qualified": false,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    {
+      "stage": "b1-s2",
+      "split": "development",
+      "rows": 821,
+      "candidate_errors": 99,
+      "baseline_errors": 110,
+      "candidate_loss": 0.12058465286236297,
+      "baseline_loss": 0.13398294762484775,
+      "relative_gain": 0.09999999999999998,
+      "fixes_baseline_errors": 38,
+      "introduces_errors": 27
+    }
+  ],
+  "development_b0s0_vs_b0s1_predictions_identical": true,
+  "complete_text_aggregates": {
+    "text": {
+      "control": {
+        "completed": 4,
+        "accepted": 0,
+        "mean_capped_goal_minutes": 120.0
+      },
+      "candidate": {
+        "completed": 4,
+        "accepted": 2,
+        "mean_capped_goal_minutes": 68.65337196191152
+      }
+    },
+    "trec": {
+      "control": {
+        "completed": 2,
+        "accepted": 0,
+        "mean_capped_goal_minutes": 120.0
+      },
+      "candidate": {
+        "completed": 2,
+        "accepted": 2,
+        "mean_capped_goal_minutes": 17.30674392382304
+      }
+    },
+    "agnews": {
+      "control": {
+        "completed": 2,
+        "accepted": 0,
+        "mean_capped_goal_minutes": 120.0
+      },
+      "candidate": {
+        "completed": 2,
+        "accepted": 0,
+        "mean_capped_goal_minutes": 120.0
+      }
+    }
+  },
+  "review_findings": [
+    "Control explored neural and NB-SVM methods; its failure does not show an absence of method diversity.",
+    "b0-s1 internally scored its CNN worse than the sparse ensemble and chose CNN weight zero. Final CNN count is zero; its development predictions exactly equal b0-s0.",
+    "Selected b1-s1 fits an MLP and NB-SVM alongside sparse models and uses them with nonzero final weights. Its selected OOF ensemble error 0.15963 is worse than the best individual OOF member 0.1536; the three weight candidates do not include a single-member fallback. This is an internal selection diagnostic, not proof that changing it would pass the external audit.",
+    "Selected audit has 47 errors versus the reference 50: 6% gain, below 10%, and its paired bootstrap upper difference is positive. Six valid paid attempts do not establish useful research progress by themselves.",
+    "The candidate passes both TREC repetitions with different methods (subword BiGRU mixture and semantic lexicon features). This is local success, not a causal attribution to any one method, an isolated method ablation or proof of generic creativity."
+  ],
+  "evidence_sha256": {
+    "episodes/trec-1-control/completed.json": "2b574cbb89c34a495740fa7da977a0b1bf6b19260e11b5e36e22b2f7ece58325",
+    "calls/trec-1-control/b1-s1/candidate.py": "76c2541a67ef4be16f8a1e265de5fece563a7fa222694ffc9067295e72f5180f",
+    "episodes/trec-1-control/goal-delivered.json": "8083083ea9f92e80a31e2cff6dd3f38b7e0b0d0ac79dbfc35c0510255448ca2f",
+    "references/trec-1.json": "8a17efe9d1fbaefe21ab1564a350864ec03fd3efe33095cc6c55c4918630301f",
+    "data/trec-1/task.json": "d24e509ebfdf669d4a62a26ce1b05a6357d15ea0699edd23e381e0bfb1a3aabb",
+    "calls/trec-1-control/b0-s0/candidate.py": "b4d89ec987d5c32e3cbda335ef7cd37be9e1e601016c9437525f002a3d68486c",
+    "calls/trec-1-control/b0-s0/outcome.json": "391bc590f9f64080d28412f923fe9d9f5112822196ed36f3418b864bd4312967",
+    "calls/trec-1-control/b0-s1/candidate.py": "1752a3a33b56fe1daf0547e0e0c5db4da446da5b39dd2a638d9a10402a21c969",
+    "calls/trec-1-control/b0-s1/outcome.json": "2df63890be3edd61e80a717842d741aabf2643b9d2031889d32b3db4d379c3c4",
+    "calls/trec-1-control/b0-s2/candidate.py": "54798091c7b1e30db4b16a7b33a1f04cf32aea639d5ba2c19613f5f10b09bd03",
+    "calls/trec-1-control/b0-s2/outcome.json": "56e46b0b4c9571ae33885412e7246956fee8f32d9dd162dc31f813ad454f4006",
+    "calls/trec-1-control/b1-s0/candidate.py": "1dedf0888357fb4aeee6113dbc174a404a2db8a269e258ce15354fedc421def6",
+    "calls/trec-1-control/b1-s0/outcome.json": "6faa23c712ab07c51ef9c44785d9e9f6fb043a98a80ac413f65f4dd7a465fa68",
+    "calls/trec-1-control/b1-s1/outcome.json": "5f0073521ad79cbaac4320e836dc517295ff873fb92c5d352a0a6051f5ce978d",
+    "calls/trec-1-control/b1-s2/candidate.py": "ba969e785ad9ccd0c5181d2269586ef1e094de5530c1b558107c6103a60994aa",
+    "calls/trec-1-control/b1-s2/outcome.json": "23d02adfa6b426a137040022088d62023b545b4cefc0b05c31f7e3012ef4a563",
+    "episodes/trec-1-control/b0-s0/result.json": "30db820dc18aae8d6dbfa58b72cf4e00b606b5efc650c1756dcbd3748e279225",
+    "data/trec-1/development/labels.npy": "bfaa607b4f457bdd37cc1234882af8f89a422b10d996fda4cdad7544a8212204",
+    "episodes/trec-1-control/b0-s0/timing.json": "8c3c0eceea28db6d9709cf2f6840368131f92feb2980309a823ee25dfd7a1b8b",
+    "episodes/trec-1-control/b0-s0/closure.json": "c49585e84dd200d2f1c82c8664730f77d78771341e869ef269a22425bfced8c7",
+    "episodes/trec-1-control/b0-s0/development-score.json": "6c91dfab4ade76b60297a930de74240b0051ac5e401be3b0acdbab7608e566e3",
+    "episodes/trec-1-control/b0-s0-confirmation/result.json": "94811edcbc46922c5a612b3c9471db3216a7b9565223f994bf63e53f150acace",
+    "data/trec-1/confirmation/labels.npy": "c9863e88741edafd133ed67faa85b7489326e1b74257ffd10fcc659d616aa8f5",
+    "episodes/trec-1-control/b0-s0-confirmation/timing.json": "baef289bc8f50c58797896814fe32992805b8a795fa21e94a82120d51f3d2425",
+    "episodes/trec-1-control/b0-s0-confirmation/closure.json": "6a66c8fc5e575c9d09112367a17d776b7507191144e183677234efbba6193270",
+    "episodes/trec-1-control/b0-s0-confirmation/comparison.json": "62aa162fe847f46302c3e8e1c390dd30868774d9ad931a273c34f8df1c3a7d95",
+    "episodes/trec-1-control/b0-s1/result.json": "6407191c9a1178bdbe062be8eaa72c2ac7c8b73ff24523fec19c30aedd5c54f6",
+    "episodes/trec-1-control/b0-s1/timing.json": "3150a2e61e4bb9f10a19e7ade4a9a508a0ffb0192e7df146e9865ea65b6d9182",
+    "episodes/trec-1-control/b0-s1/closure.json": "18b07ce576586ffe12c3246fe16bd781f12d6232517b549abc27701e2eaa005e",
+    "episodes/trec-1-control/b0-s1/development-score.json": "6c91dfab4ade76b60297a930de74240b0051ac5e401be3b0acdbab7608e566e3",
+    "episodes/trec-1-control/b0-s2/result.json": "64ccb53f305b961f12afae6a9d941d13b56a4e32a68f6a70a9f8b9e88115be47",
+    "episodes/trec-1-control/b0-s2/timing.json": "7a9105ba8b5ef3139650aa3e7235c49d91e034d1ff3d9e031e74b850f741dcc3",
+    "episodes/trec-1-control/b0-s2/closure.json": "4a018bfca6cb306bc0fb81b71c6ef13b4dd03d23920fa43ec785604179b8d448",
+    "episodes/trec-1-control/b0-s2/development-score.json": "233d4c6fc1bc6bcc248e2ae70a90c02046a1fa1a69809d6c8e331d2fcdf78f2c",
+    "episodes/trec-1-control/b1-s0/result.json": "d2d57a53ccdbb37b84c51add7957410db9a6b12bbf3a55bd07ad32f6e211f2e6",
+    "episodes/trec-1-control/b1-s0/timing.json": "5159f2e50a0dd43dc2b22b2c6fe356a0c4765ea0bf5cf5a70187ba633c23f316",
+    "episodes/trec-1-control/b1-s0/closure.json": "ddc7e02f8ca9bff043367407e64437af7e4568e6e59d800a0d6ca98218d2bd35",
+    "episodes/trec-1-control/b1-s0/development-score.json": "333a7472d80a0ff253240543ee07777524faaa8075529e7c7c3f0baed61dbe49",
+    "episodes/trec-1-control/b1-s1/result.json": "23b6b9f5464240ab9dd75c14f75b720825c6ce3c6f44c490665e6b63bd845b92",
+    "episodes/trec-1-control/b1-s1/timing.json": "4bf2519cb358e5e542fd0a38daeb9acf5ad6d81d5b7373f496fb6888d3748355",
+    "episodes/trec-1-control/b1-s1/closure.json": "71f9ca5c2964e8e1e57d622ca21d760d45009ab83ebbdc267422822348673522",
+    "episodes/trec-1-control/b1-s1/development-score.json": "5543691313ba13d6c7e4725901e97925590327c4b8dfc87873030760ef0d89d9",
+    "episodes/trec-1-control/b1-s1-audit/result.json": "10855dc4d11cc8fe6019f24dd09653040eb907be0c332f7e53f927da80653ef2",
+    "data/trec-1/audit/labels.npy": "a2b4acac490e1f76ebb216845ba189d207b890bb0a200ea8a3f6072917fda834",
+    "episodes/trec-1-control/b1-s1-audit/timing.json": "7b2a3c9bfe230abc5aae0e3609fc4408426e0ad1a1c39bf501f21863fe6f4df6",
+    "episodes/trec-1-control/b1-s1-audit/closure.json": "64e81d76758a517bfc6010c6e1faabb2373c02b09210b0ce99faa4b97fbb08fa",
+    "episodes/trec-1-control/b1-s1-audit/comparison.json": "bbab694a7676a34fad2ebcd241cce42885565eddd34247fb3040206ab2ff24b8",
+    "episodes/trec-1-control/b1-s2/result.json": "dee603ecee360d4e40804af9c2192da655f9ce0e189539b3c83f64cdc711990e",
+    "episodes/trec-1-control/b1-s2/timing.json": "76dddad17c44b562f02f6b73e63bcd963ccc373b8f25a674ca2e152d019f98cd",
+    "episodes/trec-1-control/b1-s2/closure.json": "b76290ebe88ec60e2bd49741bf4c2a8a87122d1f837e76305a1aec176fc07412",
+    "episodes/trec-1-control/b1-s2/development-score.json": "a0054d8a62d47749a0d7d0923988df4ff94217cc7a3569b27199a7869551814e",
+    "episodes/agnews-0-candidate/completed.json": "20d60bd8a51f65694bd5c53dcdb926e52893ba5645e861c1146017bc31b4402f",
+    "episodes/agnews-0-control/completed.json": "d6f48ff8bf4326d6dadaff6e94322e127039195fd1eeba115a185a8f66066ad7",
+    "episodes/agnews-1-candidate/completed.json": "e5ae2f97f4c360764b3f534e26430bab7f6e728faddf77366657cdcf6538bf32",
+    "episodes/agnews-1-control/completed.json": "642f82404f5ef6555d0892e3872e3446c277feb8734faf2b8fb319d271d6e61d",
+    "episodes/trec-0-candidate/completed.json": "e3b302375aaa68df7cd01bf68a0eab87d8b5a9e93c645cfc73b8c7de6e1ed0b6",
+    "episodes/trec-0-control/completed.json": "10c0152d5796ca9807c7e71581fe7a3ae9a34531695e1d3d0e6982e5794e10b2",
+    "episodes/trec-1-candidate/completed.json": "938ae5d7e1e371a9ca4f2068e6e631c3bacc0c0ddc4264e23ad6f8ed72fd75fc"
+  },
+  "frozen_plan_sha256": "bf1fc33a340d075d2338209e0a45daa561cb8a08c7530328f0c9d1228dd16835",
+  "research_requests": 0,
+  "gpu_executions": 0,
+  "whole_campaign_verified": false,
+  "default_promotion_authorized": false
+}
