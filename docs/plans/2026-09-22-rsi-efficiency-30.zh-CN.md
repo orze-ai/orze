@@ -79,9 +79,11 @@ SARCOS 官方测试中大量特征重复，实际合并去重后按输入组重�
 
 ## 后续独立数据准备
 
-[六个公开数据集的原始检查](../evidence/runs/2026-09-23-rsi-next-inputs/INPUT-CHECKS.zh-CN.md) 已完成：EMNIST Balanced、SVHN、Banking77、DBpedia 14、Bike hourly、Superconductivity。九个文件约 937 MB，来源与校验值已保留；没有新增模型或 GPU 请求。Banking77/DBpedia 存在跨原始 train/test 重复，单车两列直接组成目标，超导数据大量相同组成有不同温度，必须在后续划分中处理。
+[原始检查](../evidence/runs/2026-09-23-rsi-next-inputs/INPUT-CHECKS.zh-CN.md) 的历史核查发现遗漏：单车和超导在 9 月 18 日已用，只查 `tasks.json` 未发现。已扩大到 396 份计划和证据核查，将二者移出新任务池；原下载和检查保留。替换后的六项为 EMNIST Balanced、SVHN、Banking77、DBpedia 14、YearPredictionMSD、Online News Popularity，在所查历史范围未找到旧研究使用，不声称基础模型未知。
 
-这只是输入准备；划分、共同参考、优化问题任务、目标可达性和下一候选尚未冻结或验证。不能把下载/完整性检查当作新前瞻结果，也不据当前混合实验的中途表现筛选数据或降低门槛。
+[划分前分组](../evidence/runs/2026-09-23-rsi-next-inputs/GROUP-CHECKS.zh-CN.md) 已完成，全部记录保留并验证关系闭合。Banking77/DBpedia 跨原始 train/test 的重复组必须完整留在验收侧；音乐保持官方艺术家隔离边界，新闻按日期等关系归组并排除未核实可用时间的分享量特征。新增模型/GPU 请求均为 0。
+
+这只是输入准备；划分、共同参考、优化问题任务、目标可达性和下一候选尚未冻结或验证。不能把下载/分组检查当作新前瞻结果，也不据当前混合实验的中途表现筛选数据或降低门槛。
 
 ## 实际入口与平台交付仍缺什么
 
