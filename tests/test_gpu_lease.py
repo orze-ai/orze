@@ -59,6 +59,49 @@ def test_overlapping_controllers_fail_closed_but_disjoint_scopes_coexist():
     assert disjoint.returncode == 0
 
 
+def test_slurm_local_zero_uses_driver_confirmed_physical_lock(tmp_path, monkeypatch):
+    import json
+    from orze.engine import controller_probe
+    monkeypatch.setattr(gpu_lease_module, "_lease_dir", lambda: tmp_path)
+    monkeypatch.setenv("SLURM_STEP_GPUS", "4")
+    def inventory(command, **kwargs):
+        assert command == ["nvidia-smi", "-q", "-x", "-i", "0"]
+        return subprocess.CompletedProcess(command, 0,
+            stdout='<nvidia_smi_log><gpu><minor_number>4</minor_number></gpu></nvidia_smi_log>')
+    monkeypatch.setattr(controller_probe, "run_probe", inventory)
+    with gpu_execution_lease(0) as descriptors:
+        assert len(descriptors) == 1
+        assert json.loads((tmp_path / 'gpu-4.lock').read_text())['device_index'] == 0
+        assert not (tmp_path / 'gpu-0.lock').exists()
+        # A host controller using the physical ID must still conflict with a
+        # task-local controller. Changing index namespaces grants no bypass.
+        monkeypatch.delenv("SLURM_STEP_GPUS")
+        with pytest.raises(GpuLeaseError, match='gpu_lease_contended'):
+            acquire_gpu_leases([4])
+        other = acquire_gpu_leases([5])
+        other.close()
+
+
+@pytest.mark.parametrize('allocation,xml', [
+    ('4', '<nvidia_smi_log><gpu><minor_number>5</minor_number></gpu></nvidia_smi_log>'),
+    ('4', '<nvidia_smi_log><gpu/></nvidia_smi_log>'),
+    ('4', '<nvidia_smi_log/>'),
+    ('4', 'not XML'),
+    ('4,4', ''),
+    ('GPU-unknown', ''),
+    ('', ''),
+])
+def test_slurm_identity_disagreement_or_unknown_never_takes_a_lock(tmp_path, monkeypatch, allocation, xml):
+    from orze.engine import controller_probe
+    monkeypatch.setattr(gpu_lease_module, '_lease_dir', lambda: tmp_path)
+    monkeypatch.setenv('SLURM_STEP_GPUS', allocation)
+    monkeypatch.setattr(controller_probe, 'run_probe',
+                        lambda *a, **k: subprocess.CompletedProcess([], 0, stdout=xml))
+    with pytest.raises(GpuLeaseError, match='gpu_lease_slurm_device_identity_invalid'):
+        acquire_gpu_leases([0])
+    assert not list(tmp_path.iterdir())
+
+
 def test_cli_lease_reason_never_echoes_arbitrary_exception_content():
     assert safe_gpu_lease_reason(GpuLeaseError(
         "gpu_lease_contended: physical_gpu=4")) == (

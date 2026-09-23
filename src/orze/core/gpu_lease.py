@@ -17,6 +17,7 @@ import signal
 import stat
 import subprocess
 import threading
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Sequence
@@ -43,6 +44,46 @@ def _validate_gpu(gpu: int) -> int:
     if isinstance(gpu, bool) or not isinstance(gpu, int) or gpu < 0:
         raise GpuLeaseError("gpu_lease_invalid_physical_gpu")
     return gpu
+
+
+def _lease_device_id(gpu: int) -> int:
+    """Resolve Slurm's task-local index to its declared physical device.
+
+    Each cgroup-isolated step can expose a different GPU as index zero. The
+    driver minor must agree with Slurm's integer device allocation before it
+    can select the existing host-wide lock. Unsupported mappings fail closed;
+    outside Slurm, callers retain the physical-index contract.
+    """
+    allocated = os.environ.get("SLURM_STEP_GPUS")
+    if allocated is None:
+        return gpu
+    if not re.fullmatch(r"[0-9]+(?:,[0-9]+)*", allocated):
+        raise GpuLeaseError("gpu_lease_slurm_device_identity_invalid")
+    devices = [int(value) for value in allocated.split(",")]
+    if len(set(devices)) != len(devices):
+        raise GpuLeaseError("gpu_lease_slurm_device_identity_invalid")
+    from orze.engine.controller_probe import ControllerProbeHOLD, run_probe
+    try:
+        result = run_probe(
+            ["nvidia-smi", "-q", "-x", "-i", str(gpu)],
+            capture_output=True, text=True, check=False, timeout=10)
+        if result.returncode != 0 or len(result.stdout.encode()) > 65536:
+            raise ValueError("device inventory unavailable")
+        rows = ET.fromstring(result.stdout).findall("gpu")
+        if len(rows) != 1:
+            raise ValueError("device inventory ambiguous")
+        raw = rows[0].findtext("minor_number", "")
+        if not re.fullmatch(r"[0-9]+", raw):
+            raise ValueError("device minor missing")
+        physical = int(raw)
+        if physical not in devices or not (
+                gpu < len(devices) and devices[gpu] == physical or gpu == physical):
+            raise ValueError("device allocation disagrees with driver")
+        return physical
+    except ControllerProbeHOLD:
+        raise
+    except (OSError, subprocess.SubprocessError, ValueError, ET.ParseError) as exc:
+        raise GpuLeaseError("gpu_lease_slurm_device_identity_invalid") from exc
 
 
 def _lease_dir() -> Path:
@@ -97,7 +138,8 @@ class GpuLease:
 
 def _acquire_one(gpu: int) -> GpuLease:
     gpu = _validate_gpu(gpu)
-    path = _lease_dir() / f"gpu-{gpu}.lock"
+    physical = _lease_device_id(gpu)
+    path = _lease_dir() / f"gpu-{physical}.lock"
     flags = os.O_RDWR | os.O_CREAT | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
@@ -119,7 +161,8 @@ def _acquire_one(gpu: int) -> GpuLease:
             raise GpuLeaseError(
                 f"gpu_lease_contended: physical_gpu={gpu}") from exc
         metadata = json.dumps({
-            "physical_gpu": gpu,
+            "physical_gpu": physical,
+            "device_index": gpu,
             "pid": os.getpid(),
         }, sort_keys=True).encode("utf-8") + b"\n"
         os.ftruncate(fd, 0)
