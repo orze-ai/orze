@@ -1,0 +1,1926 @@
+{
+  "created": 1790134793.0772624,
+  "scope": "Eight completed episodes; selected source and stored predictions only. No candidate code executed/imported, no model requests, no GPU executions. Rationale is model-authored, not causal proof.",
+  "frozen_plan_sha256": "bf1fc33a340d075d2338209e0a45daa561cb8a08c7530328f0c9d1228dd16835",
+  "rows": [
+    {
+      "episode": "abalone-1-control",
+      "selected_action": "b1-s0",
+      "completed": {
+        "label": "abalone-1-control",
+        "task": "abalone",
+        "family": "regression",
+        "repetition": 1,
+        "arm": "control",
+        "gpu": 5,
+        "started": 1790132629.7016454,
+        "finished": 1790132799.8101814,
+        "seconds": 170.10853624343872,
+        "goal_reached": true,
+        "capped_goal_seconds": 169.96396350860596,
+        "state": {
+          "started": 1790132629.7016454,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 4.176381965859064,
+          "delivered": {
+            "action": "b1-s0",
+            "finished": 1790132799.665609,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "c8b9059369b8998d4ba05c97ebb1a9e35a52e4344308738bf4548331e78abdbd",
+            "checkpoint_sha256": "1c9dea8f6c37430deba9b2894313a008ddcad21ebbf8b6922d5ba582192a99d7"
+          }
+        },
+        "metrics": {
+          "best_score": -4.176381965859064,
+          "calls": 2,
+          "cost": 0.579745,
+          "parallel_seconds_estimate": 169.4553644657135,
+          "quality_gain": 0.1518730709534094,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 0.855625,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "c8b9059369b8998d4ba05c97ebb1a9e35a52e4344308738bf4548331e78abdbd",
+      "model_authored_rationale": "Stacked ensemble for the abalone ring-count regression task.\n\nRationale (exploratory, validated only by group-aware cross-validation on the\ntraining split):\n\nThe common reference is a single ExtraTreesRegressor on the raw 10 features\n(development MSE 4.924).  Two weaknesses are plausible: (a) raw measurements are\nstrongly collinear and a pure axis-aligned tree ensemble cannot cheaply express\nthe informative *ratios* (shell/whole, shucked/whole, density = weight/volume)\nthat carry maturity information, and (b) a single model family has a fixed bias\nprofile on the heavy right tail of ring counts.\n\nThis method therefore (1) engineers ratio / density / log features, (2) fits a\nheterogeneous pool of base learners (two gradient-boosting configurations, one\nboosted model on a log-transformed target, extra-trees, random forest, a degree-2\npolynomial ridge, a small MLP ensemble, and a distance-weighted kNN), and\n(3) combines their out-of-fold predictions with a non-negative least-squares\nblend (intercept allowed).  Cross-validation uses GroupKFold on\napi.train_groups, matching the declared disjoint-group generalization protocol.\nAn honest nested estimate of the blend (weights refit inside each fold) is\nreported in the findings alongside per-model OOF MSE.\n\nLimitations: the blend weights are fit on training out-of-fold predictions only;\nno development labels are used anywhere.  The nested CV number is the honest\ninternal estimate, but group structure of the evaluation splits may differ, so\nthe development/audit loss can deviate from it.",
+      "stages": {
+        "development": {
+          "findings": {
+            "n_train": 2297,
+            "n_groups": 2297,
+            "cv_splits": 5,
+            "per_model_oof_mse": {
+              "hgb_a": 4.5795,
+              "hgb_b": 4.6822,
+              "hgb_log": 4.5276,
+              "et": 4.2915,
+              "rf": 4.3069,
+              "ridge2": 4.9322,
+              "mlp": 4.6337,
+              "knn": 4.5225
+            },
+            "blend_oof_mse_optimistic": 4.2085,
+            "blend_nested_cv_mse": 4.2584,
+            "blend_weights": [
+              0.0,
+              0.0,
+              0.1975,
+              0.1339,
+              0.2984,
+              0.0607,
+              0.122,
+              0.1949,
+              0.0
+            ],
+            "selected": "nnls_blend",
+            "reference_dev_mse_for_context": 4.9242,
+            "training_seconds": 49.3,
+            "limitations": "weights fit on training out-of-fold predictions only; no development labels used; group structure of the evaluation splits may differ from training groups"
+          },
+          "candidate_loss": 4.176381965859064,
+          "baseline_loss": 4.9242416704701055,
+          "relative_gain": 0.1518730709534094,
+          "timing.json": {
+            "started": 1790132738.0361748,
+            "finished": 1790132788.7992265,
+            "seconds": 50.763052463531494
+          },
+          "closure.json": {
+            "finished": 1790132789.5793257,
+            "seconds": 53.64466071128845,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:05:36.039767723Z",
+              "FinishedAt": "2026-09-23T03:06:29.407588072Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          }
+        },
+        "confirmation": {
+          "findings": {},
+          "candidate_loss": 4.364140373708748,
+          "baseline_loss": 4.8641847297385405,
+          "relative_gain": 0.10280126759426556,
+          "timing.json": {
+            "started": 1790132792.0054777,
+            "finished": 1790132793.665221,
+            "seconds": 1.6597437858581543
+          },
+          "closure.json": {
+            "finished": 1790132794.5816758,
+            "seconds": 4.786157131195068,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:06:29.906078791Z",
+              "FinishedAt": "2026-09-23T03:06:34.454526605Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          },
+          "comparison.json": {
+            "relative_gain": 0.10280126759426556,
+            "candidate_loss": 4.364140373708748,
+            "baseline_loss": 4.8641847297385405,
+            "groups": 626,
+            "paired_group_97_5_upper_difference": -0.19563744553430645,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        },
+        "audit": {
+          "findings": {},
+          "candidate_loss": 4.170226780438476,
+          "baseline_loss": 4.687643250357468,
+          "relative_gain": 0.11037880706462355,
+          "timing.json": {
+            "started": 1790132796.9401052,
+            "finished": 1790132798.6509829,
+            "seconds": 1.7108781337738037
+          },
+          "closure.json": {
+            "finished": 1790132799.490229,
+            "seconds": 4.738306283950806,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:06:34.854456041Z",
+              "FinishedAt": "2026-09-23T03:06:39.352175936Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          },
+          "comparison.json": {
+            "relative_gain": 0.11037880706462355,
+            "candidate_loss": 4.170226780438476,
+            "baseline_loss": 4.687643250357468,
+            "groups": 628,
+            "paired_group_97_5_upper_difference": -0.19657421294169594,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "status": "blocked",
+          "cost": 0.301785,
+          "seconds": 169.4553644657135,
+          "feedback": {
+            "valid": false,
+            "unused_after_delivery": true
+          }
+        },
+        {
+          "action": "b1-s0",
+          "status": "ok",
+          "cost": 0.27796,
+          "seconds": 169.343852519989,
+          "feedback": {
+            "valid": true
+          }
+        }
+      ]
+    },
+    {
+      "episode": "abalone-1-candidate",
+      "selected_action": "b1-s1",
+      "completed": {
+        "label": "abalone-1-candidate",
+        "task": "abalone",
+        "family": "regression",
+        "repetition": 1,
+        "arm": "candidate",
+        "gpu": 4,
+        "started": 1790132629.701793,
+        "finished": 1790133864.0077646,
+        "seconds": 1234.3059718608856,
+        "goal_reached": false,
+        "capped_goal_seconds": 7200,
+        "state": {
+          "started": 1790132629.701793,
+          "terminal": true,
+          "goal_reached": false,
+          "confirmation_used": true,
+          "best": 4.092614460207043,
+          "delivered": {
+            "action": "b1-s1",
+            "finished": 1790133863.9873526,
+            "accepted": false,
+            "within_deadline": true,
+            "route": "best_development_at_limit",
+            "source_sha256": "d2f289662a824952433c73452e96c36667f72a1c8086033b735115fa8f24cf85",
+            "checkpoint_sha256": "7ee7a46e973b58683825dcbe6e697aad9adc5f935a9a40f20ad8758037ff11e5"
+          }
+        },
+        "metrics": {
+          "best_score": -4.092614460207043,
+          "calls": 6,
+          "cost": 0.994544,
+          "parallel_seconds_estimate": 1228.0146536827087,
+          "quality_gain": 0.16888432085902655,
+          "rounds": 3,
+          "supported": true
+        },
+        "paid_calls": 6,
+        "retained_upper_usd": 2.7015,
+        "unused_proposals": 0,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "d2f289662a824952433c73452e96c36667f72a1c8086033b735115fa8f24cf85",
+      "model_authored_rationale": "Abalone: faster, lower-risk refinement of the b1-s0 grouped-CV NNLS stack.\n\nRationale: the parent (b1-s0) reported a development MSE of 4.094, against 4.924 for the\nreference. That is about 17% lower, which beats the 10% target. The main risk was\noperational: its training took about 668 s, and 438 s of that went to the ARD Gaussian\nprocess, which got only 4% stack weight. The whole train run took 763 s against a 900 s\nlimit.\n\nThis version makes these changes:\n- Drops the GP.\n- Adds cheap diverse members: seed-bagged HGB with feature subsampling, a log-target HGB\n  and a larger RF.\n- Keeps the same grouped-CV (GroupKFold on api.train_groups) OOF protocol.\n- Fits a non-negative least-squares stack and checks it with a nested grouped CV.\n\nExpected training time is under about 200 s. The effect on loss is unverified. Every\nestimate here comes from the training split only.",
+      "stages": {
+        "development": {
+          "findings": {
+            "cv": "GroupKFold",
+            "n_train": 2297,
+            "oof_mse": {
+              "svr_C3": 4.555866313030269,
+              "svr_log": 4.7266157629476675,
+              "hgb_pois": 4.323905700862541,
+              "hgb_sq": 4.269612904060714,
+              "hgb_bag": 4.268874188493916,
+              "hgb_logy": 4.2583362080540805,
+              "et_leaf5": 4.302329486631358,
+              "rf_leaf5": 4.253477145338417,
+              "rf_leaf10": 4.2307582928736025,
+              "ridge_poly2": 5.143891155770982,
+              "mlp5": 4.775727391948394,
+              "et_ref_like": 4.977764799496929
+            },
+            "fit_seconds_cv": {
+              "svr_C3": 0.7,
+              "svr_log": 1.3,
+              "hgb_pois": 2.5,
+              "hgb_sq": 1.9,
+              "hgb_bag": 10.3,
+              "hgb_logy": 1.9,
+              "et_leaf5": 4.3,
+              "rf_leaf5": 9.6,
+              "rf_leaf10": 6.0,
+              "ridge_poly2": 2.4,
+              "mlp5": 20.9,
+              "et_ref_like": 3.4
+            },
+            "stack_nested_oof_mse": 4.2115287665125605,
+            "stack_weights": {
+              "svr_C3": 0.019612445334977233,
+              "svr_log": 0.09053945641751045,
+              "hgb_sq": 0.17131248362571075,
+              "hgb_logy": 0.29859532517321946,
+              "rf_leaf10": 0.30901401895366026,
+              "ridge_poly2": 0.049234850402515774,
+              "mlp5": 0.07017086809821674
+            },
+            "best_single": "rf_leaf10",
+            "best_single_oof_mse": 4.2307582928736025,
+            "used_stack": true,
+            "reference_like_et_oof_mse": 4.977764799496929,
+            "training_seconds": 74.0,
+            "limitations": "OOF losses come from grouped CV on the training split only. Stack weights were chosen on the same OOF predictions; the nested estimate is less biased but not independent. The GP from the parent was removed to cut runtime; its effect on loss is not measured here. The reference-like ET is a re-fit, not the reference artifact."
+          },
+          "candidate_loss": 4.092614460207043,
+          "baseline_loss": 4.9242416704701055,
+          "relative_gain": 0.1688843208590266,
+          "timing.json": {
+            "started": 1790133430.9104416,
+            "finished": 1790133506.2005155,
+            "seconds": 75.29007411003113
+          },
+          "closure.json": {
+            "finished": 1790133506.9136357,
+            "seconds": 78.17615032196045,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:17:08.843918447Z",
+              "FinishedAt": "2026-09-23T03:18:26.763417284Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 4
+          }
+        },
+        "audit": {
+          "findings": {},
+          "candidate_loss": 4.264458128596513,
+          "baseline_loss": 4.687643250357468,
+          "relative_gain": 0.09027673377846812,
+          "timing.json": {
+            "started": 1790133861.560913,
+            "finished": 1790133863.0482748,
+            "seconds": 1.4873621463775635
+          },
+          "closure.json": {
+            "finished": 1790133863.7778978,
+            "seconds": 4.737168788909912,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:24:19.142012165Z",
+              "FinishedAt": "2026-09-23T03:24:23.696871572Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 4
+          },
+          "comparison.json": {
+            "relative_gain": 0.09027673377846812,
+            "candidate_loss": 4.264458128596513,
+            "baseline_loss": 4.687643250357468,
+            "groups": 628,
+            "paired_group_97_5_upper_difference": -0.1049778558423764,
+            "qualified": false,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "status": "ok",
+          "cost": 0.131036,
+          "seconds": 91.50053453445435,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b0-s1",
+          "status": "ok",
+          "cost": 0.190192,
+          "seconds": 179.22946906089783,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b0-s2",
+          "status": "ok",
+          "cost": 0.216872,
+          "seconds": 285.3021628856659,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s0",
+          "status": "ok",
+          "cost": 0.157296,
+          "seconds": 763.483021736145,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s1",
+          "status": "ok",
+          "cost": 0.134424,
+          "seconds": 112.69512796401978,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s2",
+          "status": "ok",
+          "cost": 0.164724,
+          "seconds": 173.83196306228638,
+          "feedback": {
+            "valid": true
+          }
+        }
+      ]
+    },
+    {
+      "episode": "agnews-1-control",
+      "selected_action": "b1-s0",
+      "completed": {
+        "label": "agnews-1-control",
+        "task": "agnews",
+        "family": "text",
+        "repetition": 1,
+        "arm": "control",
+        "gpu": 3,
+        "started": 1790132361.043475,
+        "finished": 1790133512.4522035,
+        "seconds": 1151.408728837967,
+        "goal_reached": false,
+        "capped_goal_seconds": 7200,
+        "state": {
+          "started": 1790132361.043475,
+          "terminal": true,
+          "goal_reached": false,
+          "confirmation_used": true,
+          "best": 0.0875,
+          "delivered": {
+            "action": "b1-s0",
+            "finished": 1790133512.3835523,
+            "accepted": false,
+            "within_deadline": true,
+            "route": "best_development_at_limit",
+            "source_sha256": "aecc0e90043cea0a79ef8848b0a0b845f36cd194477b6b3023f2c4119a6254f6",
+            "checkpoint_sha256": "5eedbbf911ba2d6fb7ea28ff1f7a37fe74d22ae1b8893df2e739f7ce919b2410"
+          }
+        },
+        "metrics": {
+          "best_score": -0.0875,
+          "calls": 6,
+          "cost": 2.788225,
+          "parallel_seconds_estimate": 1144.5356435775757,
+          "quality_gain": 0.1116751269035534,
+          "rounds": 3,
+          "supported": true
+        },
+        "paid_calls": 6,
+        "retained_upper_usd": 4.324625,
+        "unused_proposals": 0,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "aecc0e90043cea0a79ef8848b0a0b845f36cd194477b6b3023f2c4119a6254f6",
+      "model_authored_rationale": "AG News text classification: beat the word-TFIDF + LinearSVC reference (dev error 0.0985)\nby >=10% relative.\n\nRationale (exploratory, validated internally by group-aware CV):\n1. Feature union of word (1-2 gram) and char_wb (3-5 gram) TF-IDF.  Char n-grams add\n   robustness to the noisy AG News bodies (HTML escapes, truncations, rare proper nouns)\n   and are complementary to word features; the reference uses word features only.\n2. IDF/vocabulary is fitted on train + provided unlabeled development texts (no labels\n   used) -- legitimate transductive vocabulary coverage.\n3. A small stacked ensemble (LinearSVC with softmax-calibrated margins, liblinear\n   logistic regression, ComplementNB on the word block).  Hyper-parameters (C, alpha,\n   softmax temperature, blend weights) are chosen on out-of-fold predictions produced\n   with GroupKFold over api.train_groups, so the internal estimate respects the declared\n   grouping.\n4. Optional test-time self-training (pseudo-labelling confident test rows and refitting\n   the linear SVM) is *measured* on the CV folds and only enabled if it helps there.\n\nLimitations: the internal estimate uses vectorizers fitted once on all training texts,\nso the OOF error is mildly optimistic for absolute level; it is used only for relative\nmodel selection.  No pretrained weights or external data are used.",
+      "stages": {
+        "development": {
+          "findings": {
+            "oof_error_svc_by_C": {
+              "0.5": 0.09933,
+              "1.0": 0.10075,
+              "2.0": 0.10175
+            },
+            "oof_error_logreg": null,
+            "oof_error_complementnb": 0.10108,
+            "oof_error_ensemble": 0.09408,
+            "oof_error_self_training": 0.09492,
+            "self_training_enabled": false,
+            "chosen": {
+              "C": 0.5,
+              "temperature": 1.0,
+              "weights": [
+                0.6,
+                0.0,
+                0.4
+              ]
+            },
+            "n_word_features": 286718,
+            "n_char_features": 77614,
+            "vectorize_seconds": 8.5,
+            "training_seconds": 47.5,
+            "reference_dev_error": 0.0985,
+            "limitations": "OOF estimate uses vectorizers fitted once on all training texts (mildly optimistic absolute level); used only for relative selection. Folds respect api.train_groups when >=5 groups exist. No development labels were used anywhere."
+          },
+          "candidate_loss": 0.0875,
+          "baseline_loss": 0.0985,
+          "relative_gain": 0.11167512690355341,
+          "timing.json": {
+            "started": 1790132480.7755313,
+            "finished": 1790132530.4432945,
+            "seconds": 49.66776371002197
+          },
+          "closure.json": {
+            "finished": 1790132531.2842605,
+            "seconds": 52.74336647987366,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:01:18.642186905Z",
+              "FinishedAt": "2026-09-23T03:02:11.150579219Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        },
+        "confirmation": {
+          "findings": {},
+          "candidate_loss": 0.1025,
+          "baseline_loss": 0.106,
+          "relative_gain": 0.03301886792452835,
+          "timing.json": {
+            "started": 1790132533.5776904,
+            "finished": 1790132535.470509,
+            "seconds": 1.8928191661834717
+          },
+          "closure.json": {
+            "finished": 1790132536.1672244,
+            "seconds": 4.737102031707764,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:02:11.540582168Z",
+              "FinishedAt": "2026-09-23T03:02:16.050012395Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          },
+          "comparison.json": {
+            "relative_gain": 0.03301886792452835,
+            "candidate_loss": 0.1025,
+            "baseline_loss": 0.106,
+            "groups": 1980,
+            "paired_group_97_5_upper_difference": 0.00400600901352028,
+            "qualified": false,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        },
+        "audit": {
+          "findings": {},
+          "candidate_loss": 0.094,
+          "baseline_loss": 0.1004,
+          "relative_gain": 0.06374501992031878,
+          "timing.json": {
+            "started": 1790133507.8904674,
+            "finished": 1790133510.6582932,
+            "seconds": 2.767826795578003
+          },
+          "closure.json": {
+            "finished": 1790133511.5361996,
+            "seconds": 5.839341402053833,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:18:25.799677295Z",
+              "FinishedAt": "2026-09-23T03:18:31.386727202Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          },
+          "comparison.json": {
+            "relative_gain": 0.06374501992031878,
+            "candidate_loss": 0.094,
+            "baseline_loss": 0.1004,
+            "groups": 4988,
+            "paired_group_97_5_upper_difference": -0.0014005602240896359,
+            "qualified": false,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "status": "ok",
+          "cost": 0.295895,
+          "seconds": 275.5908057689667,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b0-s1",
+          "status": "ok",
+          "cost": 0.60411,
+          "seconds": 467.8572313785553,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b0-s2",
+          "status": "ok",
+          "cost": 0.533135,
+          "seconds": 401.0876064300537,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s0",
+          "status": "ok",
+          "cost": 0.300345,
+          "seconds": 175.45741939544678,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s1",
+          "status": "ok",
+          "cost": 0.555105,
+          "seconds": 301.75044536590576,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s2",
+          "status": "ok",
+          "cost": 0.499635,
+          "seconds": 254.47821593284607,
+          "feedback": {
+            "valid": true
+          }
+        }
+      ]
+    },
+    {
+      "episode": "agnews-1-candidate",
+      "selected_action": "b0-s1",
+      "completed": {
+        "label": "agnews-1-candidate",
+        "task": "agnews",
+        "family": "text",
+        "repetition": 1,
+        "arm": "candidate",
+        "gpu": 2,
+        "started": 1790132361.043672,
+        "finished": 1790133713.7550344,
+        "seconds": 1352.711362361908,
+        "goal_reached": false,
+        "capped_goal_seconds": 7200,
+        "state": {
+          "started": 1790132361.043672,
+          "terminal": true,
+          "goal_reached": false,
+          "confirmation_used": true,
+          "best": 0.088,
+          "delivered": {
+            "action": "b0-s1",
+            "finished": 1790133713.6630943,
+            "accepted": false,
+            "within_deadline": true,
+            "route": "best_development_at_limit",
+            "source_sha256": "e8dd44e4eea16afce7e11de3490b6e1b84b16fa6f70dbce3b2edca6876c1c13c",
+            "checkpoint_sha256": "42025aa6798195f0193b14ad6d46603e107c292f69aa3b5af632f806712b99a8"
+          }
+        },
+        "metrics": {
+          "best_score": -0.088,
+          "calls": 6,
+          "cost": 1.585712,
+          "parallel_seconds_estimate": 1345.2890625,
+          "quality_gain": 0.10659898477157369,
+          "rounds": 3,
+          "supported": true
+        },
+        "paid_calls": 6,
+        "retained_upper_usd": 3.5268,
+        "unused_proposals": 0,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "e8dd44e4eea16afce7e11de3490b6e1b84b16fa6f70dbce3b2edca6876c1c13c",
+      "model_authored_rationale": "AG News (12k train): weighted ensemble of sparse linear text models, with an optional\nself-training step on unlabeled development text. Refines parent b0-s0.\n\nRationale (unverified and exploratory):\n- The parent b0-s0 is a mean of 6 standardized linear-model scores. It reached dev error\n  0.089. The goal is at most 0.08865, so it needs a real improvement, not noise.\n- Change 1: add three more diverse members. These are multinomial logistic regression on\n  word+char TF-IDF, ComplementNB, and an SVM on l2-normalized binary 1-3grams.\n- Change 2: learn integer-grid ensemble weights by coordinate search on out-of-fold (OOF)\n  error.\n- Change 3: self-training. Confident pseudo-labels on the unlabeled development text are\n  added to the training data.\n- The self-training check is made audit-like. In each GroupKFold fold (on\n  api.train_groups), models trained on the fold's training part pseudo-label the dev text,\n  are refit on train plus pseudo-dev, and are scored on the held-out train fold. The\n  held-out fold is never pseudo-labeled.\n- Self-training is used only if it lowers the OOF error.\n- Vectorizers are fit without labels on train+dev text.\n- Limitations: the weights and mode are selected on the same OOF errors they report, so\n  those errors are mildly optimistic. No development labels were used.",
+      "stages": {
+        "development": {
+          "findings": {
+            "cv_protocol": "5-fold GroupKFold on train_groups; vectorizers fit unsupervised on train+dev text",
+            "oof_error_single": {
+              "svm_w": 0.10333333333333333,
+              "svm_c": 0.10291666666666667,
+              "svm_wc": 0.09758333333333333,
+              "nbsvm": 0.10633333333333334,
+              "mnb": 0.11308333333333333,
+              "sgd_wc": 0.1035,
+              "lr_wc": 0.10233333333333333,
+              "cnb": 0.10083333333333333,
+              "svm_b": 0.11658333333333333
+            },
+            "oof_error_equal_mean_9models": 0.09566666666666666,
+            "oof_error_parent_like_6model_mean": 0.09541666666666666,
+            "oof_error_weighted_selected": 0.09158333333333334,
+            "weights": {
+              "svm_w": 0.0,
+              "svm_c": 2.0,
+              "svm_wc": 0.5,
+              "nbsvm": 3.0,
+              "mnb": 0.0,
+              "sgd_wc": 0.0,
+              "lr_wc": 0.5,
+              "cnb": 3.0,
+              "svm_b": 0.0
+            },
+            "oof_error_self_training_by_q": {
+              "0.8": 0.09258333333333334,
+              "1.0": 0.091
+            },
+            "self_training_q_used": 1.0,
+            "dev_pred_class_counts": [
+              485,
+              499,
+              508,
+              508
+            ],
+            "cv_seconds": 99.9959545135498,
+            "self_training_cv_seconds": 193.97763895988464,
+            "training_seconds": 340.36202931404114,
+            "limitations": "The weights and self-training choice were selected on the same OOF errors, so those errors are optimistic. Self-training uses dev text, so dev loss for this method is partly transductive; confirmation/audit rows were never used. No development labels were used."
+          },
+          "candidate_loss": 0.088,
+          "baseline_loss": 0.0985,
+          "relative_gain": 0.1065989847715737,
+          "timing.json": {
+            "started": 1790132800.7348921,
+            "finished": 1790133144.1718528,
+            "seconds": 343.4369614124298
+          },
+          "closure.json": {
+            "finished": 1790133144.9860432,
+            "seconds": 346.45379877090454,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:06:38.636440499Z",
+              "FinishedAt": "2026-09-23T03:12:24.857579512Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        },
+        "audit": {
+          "findings": {},
+          "candidate_loss": 0.0908,
+          "baseline_loss": 0.1004,
+          "relative_gain": 0.09561752988047811,
+          "timing.json": {
+            "started": 1790133708.5394247,
+            "finished": 1790133712.0513144,
+            "seconds": 3.511890172958374
+          },
+          "closure.json": {
+            "finished": 1790133712.7972248,
+            "seconds": 6.339743614196777,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:21:46.554482576Z",
+              "FinishedAt": "2026-09-23T03:21:52.659862612Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          },
+          "comparison.json": {
+            "relative_gain": 0.09561752988047811,
+            "candidate_loss": 0.0908,
+            "baseline_loss": 0.1004,
+            "groups": 4988,
+            "paired_group_97_5_upper_difference": -0.0046,
+            "qualified": false,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "status": "ok",
+          "cost": 0.142804,
+          "seconds": 109.50598621368408,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b0-s1",
+          "status": "ok",
+          "cost": 0.2107,
+          "seconds": 612.0501391887665,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b0-s2",
+          "status": "ok",
+          "cost": 0.396584,
+          "seconds": 561.2698509693146,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s0",
+          "status": "ok",
+          "cost": 0.278584,
+          "seconds": 171.96907234191895,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s1",
+          "status": "ok",
+          "cost": 0.22988,
+          "seconds": 265.42414236068726,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s2",
+          "status": "ok",
+          "cost": 0.32716,
+          "seconds": 297.8310089111328,
+          "feedback": {
+            "valid": true
+          }
+        }
+      ]
+    },
+    {
+      "episode": "sarcos-0-control",
+      "selected_action": "b1-s0",
+      "completed": {
+        "label": "sarcos-0-control",
+        "task": "sarcos",
+        "family": "regression",
+        "repetition": 0,
+        "arm": "control",
+        "gpu": 4,
+        "started": 1790133864.0087504,
+        "finished": 1790134087.686674,
+        "seconds": 223.67792391777039,
+        "goal_reached": true,
+        "capped_goal_seconds": 223.65128684043884,
+        "state": {
+          "started": 1790133864.0087504,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 4.211829894804761,
+          "delivered": {
+            "action": "b1-s0",
+            "finished": 1790134087.6600373,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "a276e699969445fd28a3f994906d1b4b6349f6e85f00c25ab65290f6ace20c8a",
+            "checkpoint_sha256": "e5f15aace2826a9a4b1914900254937260f74d2effc48397a49579c20e54324f"
+          }
+        },
+        "metrics": {
+          "best_score": -4.211829894804761,
+          "calls": 2,
+          "cost": 0.42482,
+          "parallel_seconds_estimate": 215.63964438438416,
+          "quality_gain": 0.5506435980624863,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 0.7081,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "a276e699969445fd28a3f994906d1b4b6349f6e85f00c25ab65290f6ace20c8a",
+      "model_authored_rationale": "SARCOS inverse-dynamics regression: replace the ExtraTrees reference with a\nsmall deep-ensemble of MLPs on trigonometrically augmented inputs.\n\nRationale (exploratory but grounded in the physics of rigid-body dynamics):\nthe target (first joint torque) is a smooth analytic function of joint\npositions/velocities/accelerations in which the positions enter only through\nsines and cosines of the angles.  Axis-aligned tree ensembles approximate such\nsmooth multiplicative structure with piecewise-constant steps, which is the most\nlikely source of the reference's residual error (dev MSE 9.37).  We therefore\n(a) append sin/cos of the seven joint angles to the 21 raw inputs, giving the\nnetwork the natural trigonometric basis, and (b) fit an ensemble of 8 SiLU MLPs\n(3x512) with AdamW + cosine schedule on standardized inputs/target, averaging\npredictions to cut variance.  Both changes attack smoothness, not capacity\nalone.  A group-respecting holdout (15% of training groups held out) is measured\nonce before the final full-data fit and reported in the findings, so the\ndevelopment improvement claim is backed by an internal generalization estimate\nthat never touches development labels.\n\nLimitations: the holdout MSE is a single split (one model, not the ensemble) and\nis only an estimate of the ensemble's error; training uses fixed epochs without\nearly stopping; no hyper-parameter search was run inside the time budget.",
+      "stages": {
+        "development": {
+          "findings": {
+            "approach": "deep ensemble of 3x512 SiLU MLPs on 21 raw + 14 sin/cos features",
+            "n_train": 24468,
+            "target_std": 20.328561782836914,
+            "holdout_groups": 3669,
+            "holdout_rows": 3669,
+            "holdout_mse_original_units": 4.804192166892126,
+            "holdout_variance_baseline_mse": 426.7762021789296,
+            "holdout_seconds": 14.5,
+            "train_mse_in_sample": 1.3688385486602783,
+            "ensemble_size": 8,
+            "epochs": 300,
+            "training_seconds": 139.3,
+            "limitations": "single group holdout with one model, no hyper-parameter search, fixed epochs without early stopping; development labels never used"
+          },
+          "candidate_loss": 4.211829894804761,
+          "baseline_loss": 9.373027460261815,
+          "relative_gain": 0.5506435980624864,
+          "timing.json": {
+            "started": 1790133939.1836498,
+            "finished": 1790134078.5328064,
+            "seconds": 139.34915685653687
+          },
+          "closure.json": {
+            "finished": 1790134079.2003093,
+            "seconds": 142.16352725028992,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:25:37.143470039Z",
+              "FinishedAt": "2026-09-23T03:27:59.085709684Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 4
+          }
+        },
+        "confirmation": {
+          "findings": {},
+          "candidate_loss": 4.0125454641557985,
+          "baseline_loss": 9.253423643359195,
+          "relative_gain": 0.5663717972066005,
+          "timing.json": {
+            "started": 1790134081.5353591,
+            "finished": 1790134081.7539878,
+            "seconds": 0.2186291217803955
+          },
+          "closure.json": {
+            "finished": 1790134082.415437,
+            "seconds": 3.0838944911956787,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:27:59.437875522Z",
+              "FinishedAt": "2026-09-23T03:28:02.283272225Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 4
+          },
+          "comparison.json": {
+            "relative_gain": 0.5663717972066005,
+            "candidate_loss": 4.0125454641557985,
+            "baseline_loss": 9.253423643359195,
+            "groups": 6672,
+            "paired_group_97_5_upper_difference": -4.678394735060861,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        },
+        "audit": {
+          "findings": {},
+          "candidate_loss": 4.391364445188947,
+          "baseline_loss": 9.842181109377947,
+          "relative_gain": 0.5538220241644696,
+          "timing.json": {
+            "started": 1790134085.6718178,
+            "finished": 1790134085.886085,
+            "seconds": 0.21426749229431152
+          },
+          "closure.json": {
+            "finished": 1790134086.5175076,
+            "seconds": 2.984483003616333,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:28:03.640081128Z",
+              "FinishedAt": "2026-09-23T03:28:06.404673519Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 4
+          },
+          "comparison.json": {
+            "relative_gain": 0.5538220241644696,
+            "candidate_loss": 4.391364445188947,
+            "baseline_loss": 9.842181109377947,
+            "groups": 6674,
+            "paired_group_97_5_upper_difference": -4.707749440788796,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "status": "blocked",
+          "cost": 0.24081,
+          "seconds": 215.48382258415222,
+          "feedback": {
+            "valid": false,
+            "unused_after_delivery": true
+          }
+        },
+        {
+          "action": "b1-s0",
+          "status": "ok",
+          "cost": 0.18401,
+          "seconds": 215.63964438438416,
+          "feedback": {
+            "valid": true
+          }
+        }
+      ]
+    },
+    {
+      "episode": "sarcos-0-candidate",
+      "selected_action": "b0-s0",
+      "completed": {
+        "label": "sarcos-0-candidate",
+        "task": "sarcos",
+        "family": "regression",
+        "repetition": 0,
+        "arm": "candidate",
+        "gpu": 5,
+        "started": 1790133864.008913,
+        "finished": 1790134008.8741083,
+        "seconds": 144.8651955127716,
+        "goal_reached": true,
+        "capped_goal_seconds": 144.83452701568604,
+        "state": {
+          "started": 1790133864.008913,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 4.24443935163313,
+          "delivered": {
+            "action": "b0-s0",
+            "finished": 1790134008.84344,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "9281a7abe322f68a205cf8e0b84cbcb6f196b284c7a6fcefd2f33d552e630dc0",
+            "checkpoint_sha256": "7d12daec2add4f37c538bc193369391ee8944772933ef659e45cc4e2a6adfef4"
+          }
+        },
+        "metrics": {
+          "best_score": -4.24443935163313,
+          "calls": 2,
+          "cost": 0.324732,
+          "parallel_seconds_estimate": 135.56127190589905,
+          "quality_gain": 0.5471645239888617,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 0.689275,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "9281a7abe322f68a205cf8e0b84cbcb6f196b284c7a6fcefd2f33d552e630dc0",
+      "model_authored_rationale": "SARCOS joint-1 torque: batched MLP ensemble with physics-motivated features.\n\nRationale (exploratory, unverified before this run): the torque is a smooth,\nnonlinear rigid-body function. It is roughly linear in accelerations, with\ncoefficients that depend on trigonometric functions of the joint positions,\nplus velocity-product terms. Axis-aligned tree ensembles, like the reference\nExtraTrees, approximate such smooth functions piecewise. A standardized MLP\nensemble usually fits them better. Inputs are the 21 raw columns plus sin and\ncos of the 7 joint positions. Several MLPs are trained in parallel as one\nbatched network, each member drawing its own bootstrap minibatches.\n\nA group-aware holdout (20% of train_groups) measures MLP, HGB and small\nExtraTrees MSE on the same rows. It also chooses a blend weight with HGB, which\nis used only if it helps. The same holdout rows choose that weight, so the\nblend estimate is slightly optimistic. The final model is retrained on all\ntraining rows.",
+      "stages": {
+        "development": {
+          "findings": {
+            "n_train": 24468,
+            "n_groups": 24466,
+            "holdout_rows": 4893,
+            "features": "raw21 + sin/cos(positions)",
+            "mlp": "3x512 SiLU, AdamW, cosine, batch 256",
+            "holdout_mlp_mse": 4.768550952820741,
+            "holdout_mlp_steps": 24000,
+            "holdout_mlp_seconds": 26.2,
+            "holdout_target_var": 421.9646512851742,
+            "holdout_hgb_mse": 9.278517365179216,
+            "holdout_et100_mse": 9.93792636076029,
+            "blend_weight_mlp": 0.8,
+            "holdout_blend_mse": 4.410530130690622,
+            "full_mlp_steps": 24000,
+            "full_mlp_seconds": 26.9,
+            "full_budget": 330.0,
+            "ensemble_size": 8,
+            "total_train_seconds": 63.1,
+            "limitations": "single group holdout; blend weight chosen on the same holdout (optimistic); holdout ensemble smaller (4) than final (8)"
+          },
+          "candidate_loss": 4.24443935163313,
+          "baseline_loss": 9.373027460261815,
+          "relative_gain": 0.5471645239888617,
+          "timing.json": {
+            "started": 1790133933.213222,
+            "finished": 1790133996.5285063,
+            "seconds": 63.315284967422485
+          },
+          "closure.json": {
+            "finished": 1790133997.5459418,
+            "seconds": 66.51041865348816,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:25:31.134075974Z",
+              "FinishedAt": "2026-09-23T03:26:37.417523433Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          }
+        },
+        "confirmation": {
+          "findings": {},
+          "candidate_loss": 4.116130283415873,
+          "baseline_loss": 9.253423643359195,
+          "relative_gain": 0.5551775816111206,
+          "timing.json": {
+            "started": 1790133999.8739746,
+            "finished": 1790134001.3495486,
+            "seconds": 1.4755744934082031
+          },
+          "closure.json": {
+            "finished": 1790134002.151191,
+            "seconds": 4.4865992069244385,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:26:37.776761596Z",
+              "FinishedAt": "2026-09-23T03:26:42.043251042Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          },
+          "comparison.json": {
+            "relative_gain": 0.5551775816111206,
+            "candidate_loss": 4.116130283415873,
+            "baseline_loss": 9.253423643359195,
+            "groups": 6672,
+            "paired_group_97_5_upper_difference": -4.6164959322587364,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        },
+        "audit": {
+          "findings": {},
+          "candidate_loss": 4.492950429103405,
+          "baseline_loss": 9.842181109377947,
+          "relative_gain": 0.5435005331468269,
+          "timing.json": {
+            "started": 1790134005.4610336,
+            "finished": 1790134006.9443877,
+            "seconds": 1.4833548069000244
+          },
+          "closure.json": {
+            "finished": 1790134007.7270455,
+            "seconds": 4.435757398605347,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:26:43.39873394Z",
+              "FinishedAt": "2026-09-23T03:26:47.636058506Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          },
+          "comparison.json": {
+            "relative_gain": 0.5435005331468269,
+            "candidate_loss": 4.492950429103405,
+            "baseline_loss": 9.842181109377947,
+            "groups": 6674,
+            "paired_group_97_5_upper_difference": -4.6759224651208475,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "status": "ok",
+          "cost": 0.158456,
+          "seconds": 135.55924701690674,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s0",
+          "status": "blocked",
+          "cost": 0.166276,
+          "seconds": 135.56127190589905,
+          "feedback": {
+            "valid": false,
+            "unused_after_delivery": true
+          }
+        }
+      ]
+    },
+    {
+      "episode": "sarcos-1-control",
+      "selected_action": "b1-s0",
+      "completed": {
+        "label": "sarcos-1-control",
+        "task": "sarcos",
+        "family": "regression",
+        "repetition": 1,
+        "arm": "control",
+        "gpu": 5,
+        "started": 1790134087.6882553,
+        "finished": 1790134367.9859114,
+        "seconds": 280.2976562976837,
+        "goal_reached": true,
+        "capped_goal_seconds": 280.2639217376709,
+        "state": {
+          "started": 1790134087.6882553,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 3.9455076267159224,
+          "delivered": {
+            "action": "b1-s0",
+            "finished": 1790134367.952177,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "b988cd844fdfee1dff7a6da7d4e500f65ffb66ab6cca9f66ebb1b7ffd46a5179",
+            "checkpoint_sha256": "2e68b5a9c8d1d6b19f1ba1046abb60471f667097f507d46deda0e8a2bd3447ce"
+          }
+        },
+        "metrics": {
+          "best_score": -3.9455076267159224,
+          "calls": 2,
+          "cost": 0.45809500000000003,
+          "parallel_seconds_estimate": 272.37592792510986,
+          "quality_gain": 0.5886985671571592,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 0.741375,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "b988cd844fdfee1dff7a6da7d4e500f65ffb66ab6cca9f66ebb1b7ffd46a5179",
+      "model_authored_rationale": "SARCOS inverse-dynamics: replace the tree-ensemble reference with a small deep-MLP ensemble.\n\nRationale (exploratory but grounded in the physics of the task): the first-joint torque is a\nsmooth analytic function of joint positions, velocities and accelerations (rigid-body dynamics\nplus friction).  Axis-aligned tree ensembles approximate such smooth multiplicative interactions\n(e.g. products of accelerations with sines/cosines of angles) very poorly, which plausibly\nexplains the reference development MSE of ~9.59 while smooth global regressors on SARCOS\nroutinely reach far lower error.  This method therefore:\n\n  * augments the 21 raw inputs with sin(q) and cos(q) of the 7 joint positions, the exact\n    trigonometric primitives that appear in rigid-body dynamics, so the network does not have to\n    learn periodic angle structure from scratch;\n  * standardizes inputs and target, and fits an ensemble of 3-hidden-layer (512, SiLU) MLPs with\n    AdamW, cosine LR decay, tiny input jitter and an exponential moving average of weights;\n  * averages the ensemble members' predictions (variance reduction on a low-bias learner).\n\nInternal validation uses a *group-disjoint* holdout drawn from api.train_groups (two members,\nshortened budget) purely to report a measured generalization estimate in the findings; the\ndelivered model is retrained on all training rows.  Limitations: the holdout estimate uses fewer\nensemble members and a single group split, so it is a conservative, noisy proxy for the\ndevelopment/audit loss; no hyper-parameter search was run against development labels.",
+      "stages": {
+        "development": {
+          "findings": {
+            "holdout_group_mse_single": 4.911451816558838,
+            "holdout_group_mse_2model": 4.4497880935668945,
+            "holdout_rows": 4893,
+            "holdout_groups": 4893,
+            "holdout_variance_of_target": 428.45709228515625,
+            "train_mse_in_sample": 1.062834620475769,
+            "n_models": 10,
+            "epochs_per_model": 250,
+            "features": "21 raw + sin(q1..q7) + cos(q1..q7) = 35, standardized",
+            "architecture": "MLP 3x512 SiLU, AdamW, cosine LR, EMA weights",
+            "reference_development_mse": 9.592739805075052,
+            "limitations": "Holdout MSE uses one group split and only 2 ensemble members with a shortened schedule; it is a noisy conservative proxy. No tuning was performed against development labels; development/audit losses unknown here.",
+            "training_seconds": 173.54329323768616
+          },
+          "candidate_loss": 3.9455076267159224,
+          "baseline_loss": 9.592739805075052,
+          "relative_gain": 0.5886985671571592,
+          "timing.json": {
+            "started": 1790134185.2520993,
+            "finished": 1790134358.9029353,
+            "seconds": 173.65083646774292
+          },
+          "closure.json": {
+            "finished": 1790134359.599349,
+            "seconds": 176.54320192337036,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:29:43.157856459Z",
+              "FinishedAt": "2026-09-23T03:32:39.461342709Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          }
+        },
+        "confirmation": {
+          "findings": {},
+          "candidate_loss": 4.125509701010072,
+          "baseline_loss": 9.60583856839313,
+          "relative_gain": 0.570520608728053,
+          "timing.json": {
+            "started": 1790134361.8315675,
+            "finished": 1790134362.0669246,
+            "seconds": 0.23535752296447754
+          },
+          "closure.json": {
+            "finished": 1790134362.6976998,
+            "seconds": 2.9843618869781494,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:32:39.814205124Z",
+              "FinishedAt": "2026-09-23T03:32:42.546073217Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          },
+          "comparison.json": {
+            "relative_gain": 0.570520608728053,
+            "candidate_loss": 4.125509701010072,
+            "baseline_loss": 9.60583856839313,
+            "groups": 6672,
+            "paired_group_97_5_upper_difference": -4.844967311424392,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        },
+        "audit": {
+          "findings": {},
+          "candidate_loss": 3.838600397017688,
+          "baseline_loss": 9.310789240211749,
+          "relative_gain": 0.5877255624647358,
+          "timing.json": {
+            "started": 1790134365.9612582,
+            "finished": 1790134366.1784248,
+            "seconds": 0.21716690063476562
+          },
+          "closure.json": {
+            "finished": 1790134366.811967,
+            "seconds": 2.9854369163513184,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:32:43.930892677Z",
+              "FinishedAt": "2026-09-23T03:32:46.661195622Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          },
+          "comparison.json": {
+            "relative_gain": 0.5877255624647358,
+            "candidate_loss": 3.838600397017688,
+            "baseline_loss": 9.310789240211749,
+            "groups": 6674,
+            "paired_group_97_5_upper_difference": -4.816840025887169,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "status": "blocked",
+          "cost": 0.22871,
+          "seconds": 272.37592792510986,
+          "feedback": {
+            "valid": false,
+            "unused_after_delivery": true
+          }
+        },
+        {
+          "action": "b1-s0",
+          "status": "ok",
+          "cost": 0.229385,
+          "seconds": 272.20111751556396,
+          "feedback": {
+            "valid": true
+          }
+        }
+      ]
+    },
+    {
+      "episode": "sarcos-1-candidate",
+      "selected_action": "b0-s0",
+      "completed": {
+        "label": "sarcos-1-candidate",
+        "task": "sarcos",
+        "family": "regression",
+        "repetition": 1,
+        "arm": "candidate",
+        "gpu": 4,
+        "started": 1790134087.6884246,
+        "finished": 1790134252.957131,
+        "seconds": 165.2687065601349,
+        "goal_reached": true,
+        "capped_goal_seconds": 164.89719581604004,
+        "state": {
+          "started": 1790134087.6884246,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 4.537045234901194,
+          "delivered": {
+            "action": "b0-s0",
+            "finished": 1790134252.5856204,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "bf06a9e5b4c56bd91fce218154aed221b21d97d4e683f2e5c0ac7a6febe6b0b3",
+            "checkpoint_sha256": "cebc0c2ad3825df7e32cc9317a061f07d2ed0b59c52ae705af8f7b3ad8f43cd5"
+          }
+        },
+        "metrics": {
+          "best_score": -4.537045234901194,
+          "calls": 2,
+          "cost": 0.302732,
+          "parallel_seconds_estimate": 155.99405908584595,
+          "quality_gain": 0.5270334307930604,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 0.661775,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "bf06a9e5b4c56bd91fce218154aed221b21d97d4e683f2e5c0ac7a6febe6b0b3",
+      "model_authored_rationale": "SARCOS joint-1 torque: bagged GPU MLP ensemble, optionally blended with ExtraTrees.\n\nRationale (exploratory, not yet verified). Joint torque is a smooth rigid-body-dynamics\nfunction. It combines sin/cos of the joint positions with velocity products and linear\nacceleration terms. Tree ensembles, including the ExtraTrees reference (dev MSE 9.59),\napproximate this function piecewise-constant and extrapolate poorly to unseen feature\ngroups. A smooth MLP ensemble should fit it better. Inputs are standardized and augmented\nwith sin/cos of positions. Eight members are trained in parallel with bmm, each on its own\nbootstrap-like minibatch stream.\n\nThe MLP/ExtraTrees blend weight is chosen on a held-out 20% of training *groups*, which\nrespects the grouped split. The final models are then retrained on all training rows. The\nfindings report group-holdout MSEs. These come from one split of the training data only\nand are not an independent replication.",
+      "stages": {
+        "development": {
+          "findings": {
+            "n_train": 24467,
+            "n_holdout_rows": 4894,
+            "n_groups": 24466,
+            "ensemble_members": 8,
+            "epochs_target": 400,
+            "holdout_mlp_steps": 15291,
+            "holdout_mlp_seconds": 28.2,
+            "holdout_et_seconds": 10.0,
+            "holdout_mse_mlp": 5.302219538221534,
+            "holdout_mse_et": 12.15315401798215,
+            "holdout_mse_blend": 5.05335875635004,
+            "blend_weight_mlp": 0.8500000000000001,
+            "used_weight_mlp": 0.8500000000000001,
+            "final_mlp_steps": 19114,
+            "final_mlp_seconds": 35.0,
+            "train_seconds": 85.0,
+            "limitations": "Blend weight and holdout MSEs come from a single 20% group holdout of training data; final models are retrained on all rows and are not separately validated."
+          },
+          "candidate_loss": 4.537045234901194,
+          "baseline_loss": 9.592739805075052,
+          "relative_gain": 0.5270334307930604,
+          "timing.json": {
+            "started": 1790134154.1425858,
+            "finished": 1790134239.4818704,
+            "seconds": 85.33928561210632
+          },
+          "closure.json": {
+            "finished": 1790134240.3796093,
+            "seconds": 88.28621697425842,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:29:12.198671482Z",
+              "FinishedAt": "2026-09-23T03:30:40.250427026Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 4
+          }
+        },
+        "confirmation": {
+          "findings": {},
+          "candidate_loss": 5.0100886114004775,
+          "baseline_loss": 9.60583856839313,
+          "relative_gain": 0.47843297847149147,
+          "timing.json": {
+            "started": 1790134242.9554834,
+            "finished": 1790134244.754371,
+            "seconds": 1.7988877296447754
+          },
+          "closure.json": {
+            "finished": 1790134245.565934,
+            "seconds": 4.736902952194214,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:30:40.935281295Z",
+              "FinishedAt": "2026-09-23T03:30:45.46107891Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 4
+          },
+          "comparison.json": {
+            "relative_gain": 0.47843297847149147,
+            "candidate_loss": 5.0100886114004775,
+            "baseline_loss": 9.60583856839313,
+            "groups": 6672,
+            "paired_group_97_5_upper_difference": -3.99569568337795,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        },
+        "audit": {
+          "findings": {},
+          "candidate_loss": 4.602880420433085,
+          "baseline_loss": 9.310789240211749,
+          "relative_gain": 0.505640144816724,
+          "timing.json": {
+            "started": 1790134248.85513,
+            "finished": 1790134250.636671,
+            "seconds": 1.781541347503662
+          },
+          "closure.json": {
+            "finished": 1790134251.4497738,
+            "seconds": 4.736149311065674,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:30:46.815812473Z",
+              "FinishedAt": "2026-09-23T03:30:51.334191896Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 4
+          },
+          "comparison.json": {
+            "relative_gain": 0.505640144816724,
+            "candidate_loss": 4.602880420433085,
+            "baseline_loss": 9.310789240211749,
+            "groups": 6674,
+            "paired_group_97_5_upper_difference": -4.112372161758265,
+            "qualified": true,
+            "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "status": "ok",
+          "cost": 0.145056,
+          "seconds": 155.99212050437927,
+          "feedback": {
+            "valid": true
+          }
+        },
+        {
+          "action": "b1-s0",
+          "status": "blocked",
+          "cost": 0.157676,
+          "seconds": 155.99405908584595,
+          "feedback": {
+            "valid": false,
+            "unused_after_delivery": true
+          }
+        }
+      ]
+    }
+  ],
+  "complete_task_or_family_aggregates": {
+    "abalone": {
+      "control": {
+        "closed": 2,
+        "accepted": 1,
+        "mean_capped_goal_minutes": 61.416366362571715
+      },
+      "candidate": {
+        "closed": 2,
+        "accepted": 1,
+        "mean_capped_goal_minutes": 70.13184317747752
+      }
+    },
+    "sarcos": {
+      "control": {
+        "closed": 2,
+        "accepted": 2,
+        "mean_capped_goal_minutes": 4.199293404817581
+      },
+      "candidate": {
+        "closed": 2,
+        "accepted": 2,
+        "mean_capped_goal_minutes": 2.581097690264384
+      }
+    },
+    "regression": {
+      "control": {
+        "closed": 4,
+        "accepted": 3,
+        "mean_capped_goal_minutes": 32.80782988369465
+      },
+      "candidate": {
+        "closed": 4,
+        "accepted": 3,
+        "mean_capped_goal_minutes": 36.35647043387095
+      }
+    },
+    "agnews": {
+      "control": {
+        "closed": 2,
+        "accepted": 0,
+        "mean_capped_goal_minutes": 120.0
+      },
+      "candidate": {
+        "closed": 2,
+        "accepted": 0,
+        "mean_capped_goal_minutes": 120.0
+      }
+    }
+  },
+  "evidence_sha256": {
+    "episodes/abalone-1-control/completed.json": "63db8c69e6b90a7b961e182044c1ffcadd1ed648daf65bcc34293d2ff1567f75",
+    "episodes/abalone-1-control/goal-delivered.json": "f2170f8b13a6a7392d4035ba3193c869774077d187b8b045f5e06f682458c751",
+    "calls/abalone-1-control/b1-s0/candidate.py": "c8b9059369b8998d4ba05c97ebb1a9e35a52e4344308738bf4548331e78abdbd",
+    "references/abalone-1.json": "2125c9c3dc20eb219f3ee2154c4f0c168f146491652925bf2ea4113d5f028471",
+    "data/abalone-1/task.json": "cc52f69d3e959b40bf46966a1661af3d07be591ebdd1b07c8b3ad2623a87fc70",
+    "episodes/abalone-1-control/b1-s0/result.json": "79bbcd82617ec1748dee7b77f8901b9c05388fb6d28e15221ff51a352d5d5b07",
+    "data/abalone-1/development/labels.npy": "a3593dd0217bb4133551b226bd8de3d9c28f850909666e31223fe0a263d88a6e",
+    "episodes/abalone-1-control/b1-s0/timing.json": "293cace971dc9434fe62e9cb5a6bb3eda75894008035620804f15b017ab14825",
+    "episodes/abalone-1-control/b1-s0/closure.json": "e7d2d3774c3e6e21b568cb670bea89264f8ad9fb061d5eaafb394bc4349c554e",
+    "episodes/abalone-1-control/b1-s0/development-score.json": "67c07e9a88f6094439cbbd769f8f0c63ebd35c8a9a286b1530e9570cf7d32ccc",
+    "episodes/abalone-1-control/b1-s0-confirmation/result.json": "6ea555522857c9c79816238c252ed8a51e144a8e6746272dea7635ccc01825bb",
+    "data/abalone-1/confirmation/labels.npy": "15c58cbb2910e76a9f27a02640d149083b7a18526444abfad3233f8ff78f30b0",
+    "episodes/abalone-1-control/b1-s0-confirmation/timing.json": "ecfe1b8e38c435ca654d6f8e8d3592dd6026a388dbd84e5765da0a8ec6a2baa6",
+    "episodes/abalone-1-control/b1-s0-confirmation/closure.json": "03fb2ade077c64f33f5b7e6de7a79af74e7373e1642999e350ae0d96d51a868e",
+    "episodes/abalone-1-control/b1-s0-confirmation/comparison.json": "b33c774cc040eff33b24278bf7339b5f108f33471a8a40872102939108431b13",
+    "episodes/abalone-1-control/b1-s0-audit/result.json": "5f269f4752061c56edeb947621e1f02566af8c8f198bc950977c2088459535cb",
+    "data/abalone-1/audit/labels.npy": "28e212e5e84191aa1d573de350c724aad2bba355912b46a077c6c5e33282232a",
+    "episodes/abalone-1-control/b1-s0-audit/timing.json": "c30cacc2976dbde3df5d70c4db2fe87a9aa950b1510b17398d3e5a9bc7764145",
+    "episodes/abalone-1-control/b1-s0-audit/closure.json": "008cd2f170ec4d6a8531a04d6bfed4dc3fd1056d3450cc4e435b647d07e4b324",
+    "episodes/abalone-1-control/b1-s0-audit/comparison.json": "f7b006ea64e7b4eb900c6b11a7e62045b965b68d62ecec7121dca04beb5d9bab",
+    "calls/abalone-1-control/b0-s0/outcome.json": "ee70a6077e4b596bb80c6ac5ba6b7016230ad17167f73363b0c73dbd8c732496",
+    "calls/abalone-1-control/b1-s0/outcome.json": "f0c4f981376755ba6e09cf0c2e25ed8b6ea5277043afa626ea5211bbe7ef0143",
+    "episodes/abalone-1-candidate/completed.json": "3a18afa4a13d82ce925155e386f8a3c89a110d6c712bca8ceaf8e4db84139bb3",
+    "episodes/abalone-1-candidate/goal-delivered.json": "180af6cc7f37adc1d8f4471daca23689ced52e31b02ef76dcc5b345b2a2f50cf",
+    "calls/abalone-1-candidate/b1-s1/candidate.py": "d2f289662a824952433c73452e96c36667f72a1c8086033b735115fa8f24cf85",
+    "episodes/abalone-1-candidate/b1-s1/result.json": "314139f1c6e1b66f05016f95fc88bd29417d134c7f8b9257cbf8adda4918fc10",
+    "episodes/abalone-1-candidate/b1-s1/timing.json": "d5a6d474b0369d7a9458893c4b595760d00bf908b334f82219d6cacb04eb574e",
+    "episodes/abalone-1-candidate/b1-s1/closure.json": "ad75a891f621139d89b647bb7726a82535fd297c1cda828d265cafa0da795e20",
+    "episodes/abalone-1-candidate/b1-s1/development-score.json": "b5b3619bfea8b8bfc84ed992c1c351717cd80edf0395554d4aebdc1d33ad07b3",
+    "episodes/abalone-1-candidate/b1-s1-audit/result.json": "1bcf36c37c365d7499bb7a283fe82074e7477def4c6a59bca1b47b882fe1f2e6",
+    "episodes/abalone-1-candidate/b1-s1-audit/timing.json": "94fb135b8838e3bf266d20774c7003474d2853713b9f958ec14f9d3248bc1e1b",
+    "episodes/abalone-1-candidate/b1-s1-audit/closure.json": "388ae52d6936af417b95fa710a97a625285f3bd5906dafac0a1563e54f53b9d5",
+    "episodes/abalone-1-candidate/b1-s1-audit/comparison.json": "9107f0f693f07e47ba4b72a08ba896c865df54f9f57f529b57bde83950d502bf",
+    "calls/abalone-1-candidate/b0-s0/outcome.json": "d5499c77523ea4bd516d6e3d66abee25a27636b4c85f6429f744db1619733e12",
+    "calls/abalone-1-candidate/b0-s1/outcome.json": "f7c51f878b5ff143d186a31f87954f1dc2e76bbe0949cee48ba79bc46c25f46d",
+    "calls/abalone-1-candidate/b0-s2/outcome.json": "70306fedb0301d506feb7bf4a4b2af36ab6f81c8263802ad533f86884df48179",
+    "calls/abalone-1-candidate/b1-s0/outcome.json": "2d170f81c6d6cd13c9d4bb52d0da2508a0e4b260144d48df255281f856533ccd",
+    "calls/abalone-1-candidate/b1-s1/outcome.json": "6f41da6b84a0994d39a34ac14c809c2785311c5268ee272e405041b5e37672fb",
+    "calls/abalone-1-candidate/b1-s2/outcome.json": "d001be309bf594624ce73defcca66f3bc3e929c3f024d3d4d6768d77179d9453",
+    "episodes/agnews-1-control/completed.json": "642f82404f5ef6555d0892e3872e3446c277feb8734faf2b8fb319d271d6e61d",
+    "episodes/agnews-1-control/goal-delivered.json": "6a001d623c08056bc67add73e8979f00c9da4f7bd065b5fe600d4466738d86b0",
+    "calls/agnews-1-control/b1-s0/candidate.py": "aecc0e90043cea0a79ef8848b0a0b845f36cd194477b6b3023f2c4119a6254f6",
+    "references/agnews-1.json": "57c5d15d62a58b19e07fc0d35fa09e23fdd6d24936878e7397fe34f2b8095bee",
+    "data/agnews-1/task.json": "b9f788a9a7680a73987840414397e66eb5c14d6b3578a97b3c985dfb612bd40c",
+    "episodes/agnews-1-control/b1-s0/result.json": "fa507ac3a2866c09c8cb8913f8d1493979425857412ebeac845dfd908cb3ced7",
+    "data/agnews-1/development/labels.npy": "f2c83ee934287ac93d7383d08817ed990eb594b81641144a57ed5fd7e6191d84",
+    "episodes/agnews-1-control/b1-s0/timing.json": "63768621732a5e9aab6b80ed529758877b1e7d2e2f6e964ba4704ff92fd5e909",
+    "episodes/agnews-1-control/b1-s0/closure.json": "4d1104a726890fcf7b95e3d29d3e78d5049569514bf62dce78c1bc7ca3071114",
+    "episodes/agnews-1-control/b1-s0/development-score.json": "893e716daf6f68f5a639834277bc053755807e697f5afb198782911191cd9fb3",
+    "episodes/agnews-1-control/b1-s0-confirmation/result.json": "df96884dc362bb601b230144977c92236c3bc6899eda9e958d0ae65d5c372a85",
+    "data/agnews-1/confirmation/labels.npy": "b796bf6245e1aef8bf13aef7db5a043f4a2807a6089676b31bce1565323dcaa2",
+    "episodes/agnews-1-control/b1-s0-confirmation/timing.json": "0959364c7bb0eac7fe1f7d2ef4ecc9bef51ae572506bcb97e05467ee795d4f97",
+    "episodes/agnews-1-control/b1-s0-confirmation/closure.json": "d56ced412ae7aad43908a4c2af165cf2694ace56e0710236e8b3a897b4c82fdb",
+    "episodes/agnews-1-control/b1-s0-confirmation/comparison.json": "b6f602c9561af614cab61ceedf7d5a524bf3a25336e0fd62166d9986c585ed32",
+    "episodes/agnews-1-control/b1-s0-audit/result.json": "2c812e7b1b5b388d31abb461d8b4a69fa42c888b7c5513b49611d1baa10c673d",
+    "data/agnews-1/audit/labels.npy": "0b8aad084267a34d23216bc1c759536219771c4dcde80a2f7ba4db1edd2076be",
+    "episodes/agnews-1-control/b1-s0-audit/timing.json": "e1c6f3295eb3714aa0af632dd5df6180fdf4d4fb96219550633acca3c6f2b025",
+    "episodes/agnews-1-control/b1-s0-audit/closure.json": "004506da12fa2556f8981deb8704de3a62c81143eb78dcb3e1e54da15c7ac0b4",
+    "episodes/agnews-1-control/b1-s0-audit/comparison.json": "18e73d81effa1d76066c2af744dbbb1e5645fd0995ddf14035fb7512560444ad",
+    "calls/agnews-1-control/b0-s0/outcome.json": "fbb09bc21a6f3073af74206232ca1ded844197d7c9fb438d759b4be884272f49",
+    "calls/agnews-1-control/b0-s1/outcome.json": "decdfc6292cc2d65ff88754d4380ac9edbc77c7dba440fe14d2178aae8961f64",
+    "calls/agnews-1-control/b0-s2/outcome.json": "962db424b8e6354698ebcc8f5415576e697abc9ca9b6a4dcc8e69202d5088ac0",
+    "calls/agnews-1-control/b1-s0/outcome.json": "d89e785b351d1cb72acb96726820da4884671d8652c2ef2d755f0ed0801987f8",
+    "calls/agnews-1-control/b1-s1/outcome.json": "fe12514a1cdbf9e0c18241b40408f286075aa702e64d9c6ad9b94bb4b65bb864",
+    "calls/agnews-1-control/b1-s2/outcome.json": "58503002ac73884c5cd60cd7f1f3010065dfbeb5aae53199d73e0ddba2528055",
+    "episodes/agnews-1-candidate/completed.json": "e5ae2f97f4c360764b3f534e26430bab7f6e728faddf77366657cdcf6538bf32",
+    "episodes/agnews-1-candidate/goal-delivered.json": "db095afdb3821832cfe2e473ae95bb2cc8579052bb3e086ed0a9010e574f2499",
+    "calls/agnews-1-candidate/b0-s1/candidate.py": "e8dd44e4eea16afce7e11de3490b6e1b84b16fa6f70dbce3b2edca6876c1c13c",
+    "episodes/agnews-1-candidate/b0-s1/result.json": "034022fcf269bbbe08fd55e4dca819a009cdf83f4831877dabbb3bd0a364332c",
+    "episodes/agnews-1-candidate/b0-s1/timing.json": "2f78c352ecabb933f0943efcdc3c82de8437580bdd4be7bbe138728803c7001a",
+    "episodes/agnews-1-candidate/b0-s1/closure.json": "9449f0b5fed1e3bfba6e7050f079a55a6c1605eee2e00d2a6fe1919aa8a05572",
+    "episodes/agnews-1-candidate/b0-s1/development-score.json": "4625cfd47804c02bbfea3e78a54fe0bbf5d75998ed8fe48f939ff03ac120b247",
+    "episodes/agnews-1-candidate/b0-s1-audit/result.json": "495861f67497ee9029b042f475dc374d1d44acf3cb6752d8f86729d948b3e2d4",
+    "episodes/agnews-1-candidate/b0-s1-audit/timing.json": "42cf788292a07151b42835dac273eadc5b268e633ded8ef9901a81f0a0cab715",
+    "episodes/agnews-1-candidate/b0-s1-audit/closure.json": "3b8ebb715be8bd07229be238b26da7d541befe086b789be0e663cc47a70eb69b",
+    "episodes/agnews-1-candidate/b0-s1-audit/comparison.json": "b3090047691e7e0288f7957e730d1441b50f038d821968c5d554ac691469fe76",
+    "calls/agnews-1-candidate/b0-s0/outcome.json": "c8f4e4c5c7021732a4e5c32f3bed9190a36f267f98102a0f9cd466a69e54dd9d",
+    "calls/agnews-1-candidate/b0-s1/outcome.json": "f2886594ea6cab4e59652560706d9e2d6b9fab79633ff4b32a2532742c4c0c32",
+    "calls/agnews-1-candidate/b0-s2/outcome.json": "7c6a70f54ad4a8ef80a455ea51bbca70eba993b26381380eb0d8fdf09dc7811b",
+    "calls/agnews-1-candidate/b1-s0/outcome.json": "fb719725c93bb51284826fb6c714dadc2bef440f872586f0edbba4d54baaa96e",
+    "calls/agnews-1-candidate/b1-s1/outcome.json": "d8ccb126c1f817bbcfbb85836d043fe22e604bcffb0cd7c353d40ad3fc45912c",
+    "calls/agnews-1-candidate/b1-s2/outcome.json": "c03a640796d1f0be387a858698a816a7e9d560aa627834b35b95b90d40d98b08",
+    "episodes/sarcos-0-control/completed.json": "f9d75dcc6dcf7f44a3a7e90fbda9e64d88282dd6ea20a0b2bb35de7e9053a28d",
+    "episodes/sarcos-0-control/goal-delivered.json": "339b2ba13db1093e2a180abe7e94822de2c1b972f8ac44c3d0dae5b927415c54",
+    "calls/sarcos-0-control/b1-s0/candidate.py": "a276e699969445fd28a3f994906d1b4b6349f6e85f00c25ab65290f6ace20c8a",
+    "references/sarcos-0.json": "230f7f285fc74aa596980ab5e3e16511e33b0d753fd85f724fcf52f6221ba82d",
+    "data/sarcos-0/task.json": "f2bf1190022292770cc9b69ab0082f6831d2e5d88600b8c6dd18baae04a252d9",
+    "episodes/sarcos-0-control/b1-s0/result.json": "774992c36eff7b77950fef4216f331eab6246c8ff016f5ef66934d99b232d245",
+    "data/sarcos-0/development/labels.npy": "792928224f566d197f7bcf50714e9d60a2f19934158c385fa722e16e365b6599",
+    "episodes/sarcos-0-control/b1-s0/timing.json": "39fe521220fa7a67a73cfad92d0369bdc8c5699b78bb5815a162c4b102e8dc0a",
+    "episodes/sarcos-0-control/b1-s0/closure.json": "d95a30e6464295e2fa78991712954489b2dacb8ec7571271341a5776652879c9",
+    "episodes/sarcos-0-control/b1-s0/development-score.json": "fea4ddb1b30dfb552f6796d9fd921ea59d30059461aaf3b62550a0e5d7578b41",
+    "episodes/sarcos-0-control/b1-s0-confirmation/result.json": "3faf5dab3a905cf2fb135a934d79c49e888fd8cc26f2a9f0540678ff2b43a6f8",
+    "data/sarcos-0/confirmation/labels.npy": "8813707144dfa9cc3f6ce5bd4be4e1a0619e744b25fa58f5e32a30c19242d19a",
+    "episodes/sarcos-0-control/b1-s0-confirmation/timing.json": "119d6eb9517e71d93ca58d13a074956880c17417782b3fcc2e3a25660ec060d2",
+    "episodes/sarcos-0-control/b1-s0-confirmation/closure.json": "41bf66918b9738523a761bac41e05d2e482581a1961b8f59d9992d9e86e5de2d",
+    "episodes/sarcos-0-control/b1-s0-confirmation/comparison.json": "022bdbee06fe770d78c976a19e76ae86e24bd423043506542df76752c25980ee",
+    "episodes/sarcos-0-control/b1-s0-audit/result.json": "f9e36cc4811a84b40427de175d31e8f700c5132a33bf89bf641d4fe5da640cf4",
+    "data/sarcos-0/audit/labels.npy": "5a14167faf68ee6f217e2e74fe6cefa1b32dac6c76e0866ba4a2e91fbf80d7ed",
+    "episodes/sarcos-0-control/b1-s0-audit/timing.json": "2280009768f56dea3ab7e87cab77dce3af2fcbeb9b79986b6c67c29990df3169",
+    "episodes/sarcos-0-control/b1-s0-audit/closure.json": "eb96ffaa675f2d4263b50883ad36c6ece8fdcc5ebc0cd658e621544edbc7044b",
+    "episodes/sarcos-0-control/b1-s0-audit/comparison.json": "feb2f9cd869a2e90545ec2c3cdd5bfa0d3df122589ecbb05285367d6917d1ca5",
+    "calls/sarcos-0-control/b0-s0/outcome.json": "93fdd3b7f4092933281ac34ee2b4b77b61047df571b0d43927a1a005efa6fc48",
+    "calls/sarcos-0-control/b1-s0/outcome.json": "bd76909a82b5236b32a2802669f7886d35bae9b49035b31f8422ed31024ed634",
+    "episodes/sarcos-0-candidate/completed.json": "fd99d7260616eade2326e7d1a674d1907db540aee4c14695faf631285368d770",
+    "episodes/sarcos-0-candidate/goal-delivered.json": "451aef038bdb5176e1d0b4641f62552ad8f5e81194f61522c1155323f0be7c03",
+    "calls/sarcos-0-candidate/b0-s0/candidate.py": "9281a7abe322f68a205cf8e0b84cbcb6f196b284c7a6fcefd2f33d552e630dc0",
+    "episodes/sarcos-0-candidate/b0-s0/result.json": "d2b06a4835f22d350005eefa0c45658fe3fc28527d5969f450e480321aa7ab52",
+    "episodes/sarcos-0-candidate/b0-s0/timing.json": "f5daf558b9193620673850c7be5d1b1b6a6905e1c08a21fe5da1b0d3486dd768",
+    "episodes/sarcos-0-candidate/b0-s0/closure.json": "d009ff1f1eb6c2386a326bf3bd388ae36da90e9a17832147f369cae83eed00fa",
+    "episodes/sarcos-0-candidate/b0-s0/development-score.json": "d444b98373b708053f4fdaf36ffc43c5ab5956a1a0a9490f73f5c7743e552b83",
+    "episodes/sarcos-0-candidate/b0-s0-confirmation/result.json": "6d7a05bde89b91d990f1dd00dff06cc51ca18c94d9d0fb588aa532e2500b3d07",
+    "episodes/sarcos-0-candidate/b0-s0-confirmation/timing.json": "5d5d87c106a62917c352cec38aa616aa0a6e7fa8b5c0045f4ef7ae79117d31f7",
+    "episodes/sarcos-0-candidate/b0-s0-confirmation/closure.json": "4a1b6934a38950eab864a81ea64f7241dd9138bcab98bc09e6db89a143c17b5f",
+    "episodes/sarcos-0-candidate/b0-s0-confirmation/comparison.json": "5be197ea6f2f51fe71894402468146a6d7a18fc2fcac916b549175136ec7e273",
+    "episodes/sarcos-0-candidate/b0-s0-audit/result.json": "e07833cf7d20e644df62923554da5ae8f5affef71ded226e4401a383a5443163",
+    "episodes/sarcos-0-candidate/b0-s0-audit/timing.json": "e2b13d736aa718fe15cf92fd6ae66b2eabe59ec4854e25f3cea48faa08782778",
+    "episodes/sarcos-0-candidate/b0-s0-audit/closure.json": "5b265367d4cb908bc74fa862d85c5b8871af0f84505b0d578dcdb4d179f21086",
+    "episodes/sarcos-0-candidate/b0-s0-audit/comparison.json": "5af77d8b2a5573a0eb8342088164e1387cbbb60e267f113d425e5b4f6d379bb0",
+    "calls/sarcos-0-candidate/b0-s0/outcome.json": "8779dbe4287a4267ce6b50a2e72feb9373a24690984174b66cf31af5b271ca21",
+    "calls/sarcos-0-candidate/b1-s0/outcome.json": "23d6ab07cc337f89e4340c709afeadaf77e521294a170ab07e3eec7f2dfe6716",
+    "episodes/sarcos-1-control/completed.json": "75dc5fd1333aaafea3a00d2d5a6b268979d01df2788c26dc02d9d1e31acd76fb",
+    "episodes/sarcos-1-control/goal-delivered.json": "7c568eb5d345291691b90c127fac64ce983e8a12bd229486e31fc761d495f6ee",
+    "calls/sarcos-1-control/b1-s0/candidate.py": "b988cd844fdfee1dff7a6da7d4e500f65ffb66ab6cca9f66ebb1b7ffd46a5179",
+    "references/sarcos-1.json": "375289fb32a2401619d00f39c595441e5ed6799797b8e5a876417146c33b1fc2",
+    "data/sarcos-1/task.json": "5f269af110ca2ff55bad2fc4e226f2bd57926fae12c6dcef638821e441276c07",
+    "episodes/sarcos-1-control/b1-s0/result.json": "572f88c251b80ab89747cac27d341a461003eab07013a9608fe8971e64fa83c8",
+    "data/sarcos-1/development/labels.npy": "e5e52d5d15904cb08b43faaac362bc69e3286d34fde9bea305a1edae15a97a7b",
+    "episodes/sarcos-1-control/b1-s0/timing.json": "b7b6af897548f914c094e5ddfc842eb77b54867a763542004b171c628f6a237c",
+    "episodes/sarcos-1-control/b1-s0/closure.json": "2da5645db57c6a2ee3a9ebe434776cf49919ddcdc80962b3d09360c86d5f5a8e",
+    "episodes/sarcos-1-control/b1-s0/development-score.json": "3af04f2cb8afc5ea7e7e4a5df67b6327445bdf2913bd08a8c457a246b0f0bb7a",
+    "episodes/sarcos-1-control/b1-s0-confirmation/result.json": "dd2aefb1206f1565d19359cc83e319d5aca4ed9e760a539cbbe8a835256fba9f",
+    "data/sarcos-1/confirmation/labels.npy": "dbf99cc1cb95144d5be3175ff1ffbf866fec22289754264fea609181e8b7d2f4",
+    "episodes/sarcos-1-control/b1-s0-confirmation/timing.json": "d2cc0c6bdadea1cb6ca8ac4e1348b2980b9aaafda21d5a6d80aa505cecbe3377",
+    "episodes/sarcos-1-control/b1-s0-confirmation/closure.json": "1c69514ae766b05772f5d5e027ada21b99d8e86c9e54c3ed644cf07628a8aa15",
+    "episodes/sarcos-1-control/b1-s0-confirmation/comparison.json": "a2d468e97d407ee791e3358000934b36219c9cacc43b07a7ef46fb86bd7aee9e",
+    "episodes/sarcos-1-control/b1-s0-audit/result.json": "e87be98f2757bfcd0148d6936d1ddc6d8be25156145c7ac8b3d3575016e4f38f",
+    "data/sarcos-1/audit/labels.npy": "5f47ed2fce0d8503a67480ac0fe752cd9b34f422f2dcbcfd69ac078217e75fe2",
+    "episodes/sarcos-1-control/b1-s0-audit/timing.json": "ebda6e5469fc1ca9e21a429c724390530ee1ea07a7c1488a064bc3a41854f111",
+    "episodes/sarcos-1-control/b1-s0-audit/closure.json": "cf195e3bbbfe64edf121d4fb6bf71caced4d36d3adbf2426d4ec3c1dca5e41df",
+    "episodes/sarcos-1-control/b1-s0-audit/comparison.json": "c2233305ea4c9b5b0a50063104f1b8e292aaf3de54798ec7e40d39cae615246a",
+    "calls/sarcos-1-control/b0-s0/outcome.json": "5ed01d609e3dc8cd0cf107a08484d4fdf15c8f020ce2ea43906fe7bb6f3ea8da",
+    "calls/sarcos-1-control/b1-s0/outcome.json": "52ed418b7d5da56790c6d3abb38ae31102846fc8b3cb645c7ad0e3c9463d3901",
+    "episodes/sarcos-1-candidate/completed.json": "a4fd6e277a11b623a9538ded5c79ff4c121e477e50549aa6adb008b7416bd8c9",
+    "episodes/sarcos-1-candidate/goal-delivered.json": "b84a01067982c17b92b4fe0ceda6bbe535870f949df68826c9736e1d81174b90",
+    "calls/sarcos-1-candidate/b0-s0/candidate.py": "bf06a9e5b4c56bd91fce218154aed221b21d97d4e683f2e5c0ac7a6febe6b0b3",
+    "episodes/sarcos-1-candidate/b0-s0/result.json": "02cf892814f4607e9bb89a138a227d6579dcf318bdce860a527a32f1977dce22",
+    "episodes/sarcos-1-candidate/b0-s0/timing.json": "8e25efb27e7718875e430d331af61f97b3f9a6a26bb9cdae27efc1a9125e54b1",
+    "episodes/sarcos-1-candidate/b0-s0/closure.json": "39aef38f8eaccea5d4b9c5e97c931c34583448547a979b76bf34104357233296",
+    "episodes/sarcos-1-candidate/b0-s0/development-score.json": "a76fa468f2081c1d49c5ec4c47e89f36e93b8e24ae13844808c87a47e7062fd0",
+    "episodes/sarcos-1-candidate/b0-s0-confirmation/result.json": "044d2d92bf6282f160acd3e09d122cb9aa674b62880b30a13c66f7a82d898fe2",
+    "episodes/sarcos-1-candidate/b0-s0-confirmation/timing.json": "1ac1c5b04a68556282ffda8a75dfda7b8c57846e6ef722c968963c0d8622a80d",
+    "episodes/sarcos-1-candidate/b0-s0-confirmation/closure.json": "55bbbf8448325f6e5b886382a625e4019174139442c881d3212b96f346478c25",
+    "episodes/sarcos-1-candidate/b0-s0-confirmation/comparison.json": "b0081c61d23b9f8d8bed0fd8b3600eecfc2be1a0db88eadc5c08a96acd18e070",
+    "episodes/sarcos-1-candidate/b0-s0-audit/result.json": "c3c9c1d95a90ac87cdebec96d4e7faeeb35b4ff34d6644a191819967c78129d0",
+    "episodes/sarcos-1-candidate/b0-s0-audit/timing.json": "f0fb2117ee7d8ed3013abd2ada87213e66c416bed62af079fa378bfeeec922e3",
+    "episodes/sarcos-1-candidate/b0-s0-audit/closure.json": "571f46a3fdef05ea25d294835fa78b4f33c3ab0d74c671f17b925c91c7ca2c03",
+    "episodes/sarcos-1-candidate/b0-s0-audit/comparison.json": "ace7fe62246ad3ab388748c436bfff5b05f99f8166547cc7ada0ce1b5210b9fe",
+    "calls/sarcos-1-candidate/b0-s0/outcome.json": "45a6ffcbc8c75cf8e5ce0c92834bc5dab4b950b763e0438ec16a2f46eef32478",
+    "calls/sarcos-1-candidate/b1-s0/outcome.json": "3a075db3346ec14ee49761c51dd4cc100f2ad7607efe1dc6cd7e5dce29a93347",
+    "episodes/abalone-0-control/completed.json": "25f30ef6023d0a0e787ae2dd18c42fcc77054e29294593ba0b571fcf9754724f",
+    "episodes/abalone-0-candidate/completed.json": "309c885ca2bc562c347823ad68b2998263381840e28a10d42f1fe670d183f5d8",
+    "episodes/agnews-0-control/completed.json": "d6f48ff8bf4326d6dadaff6e94322e127039195fd1eeba115a185a8f66066ad7",
+    "episodes/agnews-0-candidate/completed.json": "20d60bd8a51f65694bd5c53dcdb926e52893ba5645e861c1146017bc31b4402f"
+  },
+  "whole_campaign_verified": false,
+  "default_promotion_authorized": false
+}
