@@ -91,6 +91,8 @@ SARCOS 官方测试中大量特征重复，实际合并去重后按输入组重�
 
 [运行绑定核查](../evidence/runs/2026-09-23-rsi-prospective/runtime-binding-review-001.json)：项目配置是 `mode: research / backend: custom / model: sonnet`，原生 `build_research_cmd → research.py → run_research_cycle → call_llm` 只接纳提案入队，没有经过实验的 `run_prepared` 确认/审计流程。实验显式使用 Anthropic 模型；`run_discovery` 的默认 ParallelRefine 也不决定调用方研究模型。
 
+[原生 CLI 会话复核](../evidence/runs/2026-09-23-rsi-mixed-model/native-session-binding-review.json) 找到该代理工作目录下 243 份 8 月 10–11 日会话，全部是 API 错误且模型为 `<synthetic>`，晚于所复制项目的最新 8 月 4 日研究回执。它们不能证明历史成功模型或当前 `sonnet` 的解析身份。本轮已结算的 62 次直接 API 请求则均有与分支匹配的返回模型记录；这是当前快照，完整核验仍待实验结束。现有用量日志已记录 `response_model` 和 `response_id`，后续复用它，不先另建日志框架。
+
 此前端口只读快照不能证明服务长期状态，也不能据配置认定实际模型别名已解析。后续必须明确实际研究入口和 incumbent，把胜出机制接到该入口并验证默认运行；只改通用 Anthropic 回退值不能完成平台升级。当前没有改服务、项目配置或产品默认。
 
 ## 费用与执行边界
