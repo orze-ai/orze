@@ -1,0 +1,2183 @@
+{
+  "created": 1790137488.3107579,
+  "scope": "Read-only timing diagnosis of all 24 completed episodes in the three completed families. Not a replayed or executed policy comparison; unfinished optimization is excluded from this diagnostic, not from the main trial.",
+  "definitions": {
+    "model_pending": "Union of recorded response started/finished intervals, clipped to episode start and delivered time. Does not use outcome.seconds as model latency.",
+    "execution": "Union of container dispatch.started through closure.finished, clipped to delivery. Includes launch/cleanup and CPU execution; not GPU-kernel utilization.",
+    "pure_model_pending": "Duration(model union) minus duration(intersection(model union, execution union)).",
+    "conditional_limit": "For successful episodes retain every recorded serial execution-envelope duration, remove all time outside them. Failed episodes stay at the prespecified 7200 seconds. This is conditional arithmetic, not a measured speedup or a physically achievable schedule.",
+    "necessary_assumptions": [
+      "Same admitted/executed methods, successful/failed outcomes, confirmation and final selection path.",
+      "Same serial execution-envelope durations. Changed hardware contention, per-method budgets, parallel evaluation, early stopping, speculative exploration or omitted executions fall outside this calculation.",
+      "No prediction of changed model outputs or success rate. No full-campaign mean or uncertainty claimed."
+    ]
+  },
+  "family_aggregates": {
+    "vision": {
+      "control": {
+        "completed": 4,
+        "accepted": 4,
+        "observed_mean_scored_minutes": 8.02135385274887,
+        "conditional_mean_minutes_with_all_nonexecution_removed": 5.731056200464566,
+        "success_model_pending_without_execution_minutes_sum": 9.043879429499308
+      },
+      "candidate": {
+        "completed": 4,
+        "accepted": 4,
+        "observed_mean_scored_minutes": 12.710688547293346,
+        "conditional_mean_minutes_with_all_nonexecution_removed": 11.449147573113441,
+        "success_model_pending_without_execution_minutes_sum": 4.903468990325928
+      }
+    },
+    "regression": {
+      "control": {
+        "completed": 4,
+        "accepted": 3,
+        "observed_mean_scored_minutes": 32.80782988369465,
+        "conditional_mean_minutes_with_all_nonexecution_removed": 31.64130845069885,
+        "success_model_pending_without_execution_minutes_sum": 4.294279781977336
+      },
+      "candidate": {
+        "completed": 4,
+        "accepted": 3,
+        "observed_mean_scored_minutes": 36.35647043387095,
+        "conditional_mean_minutes_with_all_nonexecution_removed": 35.41525826354822,
+        "success_model_pending_without_execution_minutes_sum": 3.3367003281911214
+      }
+    },
+    "text": {
+      "control": {
+        "completed": 4,
+        "accepted": 0,
+        "observed_mean_scored_minutes": 120.0,
+        "conditional_mean_minutes_with_all_nonexecution_removed": 120.0,
+        "success_model_pending_without_execution_minutes_sum": 0.0
+      },
+      "candidate": {
+        "completed": 4,
+        "accepted": 2,
+        "observed_mean_scored_minutes": 68.65337196191152,
+        "conditional_mean_minutes_with_all_nonexecution_removed": 66.65833593308926,
+        "success_model_pending_without_execution_minutes_sum": 7.918749825159709
+      }
+    }
+  },
+  "rows": [
+    {
+      "episode": "abalone-0-candidate",
+      "family": "regression",
+      "arm": "candidate",
+      "accepted": true,
+      "started": 1790131413.8500657,
+      "delivery_finished": 1790132629.671247,
+      "observed_scored_seconds": 1215.8211812973022,
+      "execution_envelope_seconds": 1126.4699394702911,
+      "model_pending_union_seconds": 132.28777861595154,
+      "model_execution_overlap_seconds": 44.69697070121765,
+      "model_pending_without_execution_seconds": 87.59080791473389,
+      "all_nonexecution_seconds": 89.35124182701111,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 1126.4699394702911,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790131414.7108529,
+          "finished": 1790131479.6198974
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790132537.8931832,
+          "finished": 1790132605.0153105
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790131414.5385025,
+          "finished": 1790131460.2275233
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790132537.8089268,
+          "finished": 1790132579.6401277
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790132360.6555402,
+          "finished": 1790132537.255708,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790131460.2635577,
+          "finished": 1790132360.5784712,
+          "exit_code": 137,
+          "timeout": true
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790132579.6746795,
+          "finished": 1790132620.8074188,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1-audit",
+          "started": 1790132625.3125453,
+          "finished": 1790132629.4996502,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1-confirmation",
+          "started": 1790132620.9050548,
+          "finished": 1790132625.1400688,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "abalone-0-control",
+      "family": "regression",
+      "arm": "control",
+      "accepted": false,
+      "started": 1790131413.849178,
+      "delivery_finished": 1790131613.0234709,
+      "observed_scored_seconds": 7200,
+      "execution_envelope_seconds": 95.37806701660156,
+      "model_pending_union_seconds": 107.11164569854736,
+      "model_execution_overlap_seconds": 4.623077154159546,
+      "model_pending_without_execution_seconds": 102.48856854438782,
+      "all_nonexecution_seconds": 103.7962257862091,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 7200,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790131414.6353476,
+          "finished": 1790131521.7466402
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790131414.6349945,
+          "finished": 1790131517.0949543
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b1-s0",
+          "started": 1790131517.123563,
+          "finished": 1790131603.2730322,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-audit",
+          "started": 1790131608.203864,
+          "finished": 1790131612.8425472,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790131603.4404783,
+          "finished": 1790131608.0303931,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "abalone-1-candidate",
+      "family": "regression",
+      "arm": "candidate",
+      "accepted": false,
+      "started": 1790132629.701793,
+      "delivery_finished": 1790133863.9873526,
+      "observed_scored_seconds": 7200,
+      "execution_envelope_seconds": 1112.6964411735535,
+      "model_pending_union_seconds": 176.00206804275513,
+      "model_execution_overlap_seconds": 57.08833146095276,
+      "model_pending_without_execution_seconds": 118.91373658180237,
+      "all_nonexecution_seconds": 121.58911848068237,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 7200,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790132630.3997095,
+          "finished": 1790132678.5366096
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790133394.3423784,
+          "finished": 1790133454.7581556
+        },
+        {
+          "action": "b0-s2",
+          "started": 1790133573.8555896,
+          "finished": 1790133633.049638
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790132630.5760596,
+          "finished": 1790132686.791952
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790133394.4218988,
+          "finished": 1790133428.6677194
+        },
+        {
+          "action": "b1-s2",
+          "started": 1790133573.9429157,
+          "finished": 1790133610.1352446
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790132678.5712793,
+          "finished": 1790132717.1495261,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-confirmation",
+          "started": 1790132717.2423778,
+          "finished": 1790132721.5793684,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1",
+          "started": 1790133507.0027034,
+          "finished": 1790133573.3618438,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s2",
+          "started": 1790133747.6605186,
+          "finished": 1790133858.8765774,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790132721.7695086,
+          "finished": 1790133393.765375,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790133428.737486,
+          "finished": 1790133506.9136357,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1-audit",
+          "started": 1790133859.0407293,
+          "finished": 1790133863.7778978,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s2",
+          "started": 1790133610.2026489,
+          "finished": 1790133747.4994688,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "abalone-1-control",
+      "family": "regression",
+      "arm": "control",
+      "accepted": true,
+      "started": 1790132629.7016454,
+      "delivery_finished": 1790132799.665609,
+      "observed_scored_seconds": 169.96396350860596,
+      "execution_envelope_seconds": 63.16912341117859,
+      "model_pending_union_seconds": 116.59891057014465,
+      "model_execution_overlap_seconds": 11.132128715515137,
+      "model_pending_without_execution_seconds": 105.46678185462952,
+      "all_nonexecution_seconds": 106.79484009742737,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 63.16912341117859,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790132630.4678833,
+          "finished": 1790132747.066794
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790132630.5856972,
+          "finished": 1790132735.9047108
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b1-s0",
+          "started": 1790132735.9346652,
+          "finished": 1790132789.5793257,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-audit",
+          "started": 1790132794.7519228,
+          "finished": 1790132799.490229,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790132789.7955189,
+          "finished": 1790132794.5816758,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "agnews-0-candidate",
+      "family": "text",
+      "arm": "candidate",
+      "accepted": false,
+      "started": 1790131413.8477345,
+      "delivery_finished": 1790132329.8027616,
+      "observed_scored_seconds": 7200,
+      "execution_envelope_seconds": 671.314352273941,
+      "model_pending_union_seconds": 279.7683119773865,
+      "model_execution_overlap_seconds": 39.20336723327637,
+      "model_pending_without_execution_seconds": 240.5649447441101,
+      "all_nonexecution_seconds": 244.64067482948303,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 7200,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790131414.076161,
+          "finished": 1790131467.559444
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790131615.5882964,
+          "finished": 1790131708.7918537
+        },
+        {
+          "action": "b0-s2",
+          "started": 1790131891.2908282,
+          "finished": 1790132010.1202807
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790131414.0680857,
+          "finished": 1790131476.2873774
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790131615.5850573,
+          "finished": 1790131714.300328
+        },
+        {
+          "action": "b1-s2",
+          "started": 1790131891.2865312,
+          "finished": 1790131985.026144
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790131467.6100855,
+          "finished": 1790131511.8421063,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-audit",
+          "started": 1790132321.4868815,
+          "finished": 1790132328.9267771,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-confirmation",
+          "started": 1790131511.9705648,
+          "finished": 1790131517.61325,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1",
+          "started": 1790131708.83002,
+          "finished": 1790131773.593294,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s2",
+          "started": 1790132156.2849138,
+          "finished": 1790132320.8222103,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790131518.0132294,
+          "finished": 1790131615.3353066,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790131773.9478266,
+          "finished": 1790131890.8374815,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s2",
+          "started": 1790131985.0645134,
+          "finished": 1790132155.5519614,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "agnews-0-control",
+      "family": "text",
+      "arm": "control",
+      "accepted": false,
+      "started": 1790131413.8474908,
+      "delivery_finished": 1790132360.7294474,
+      "observed_scored_seconds": 7200,
+      "execution_envelope_seconds": 520.7637269496918,
+      "model_pending_union_seconds": 706.1354990005493,
+      "model_execution_overlap_seconds": 282.38879013061523,
+      "model_pending_without_execution_seconds": 423.7467088699341,
+      "all_nonexecution_seconds": 426.11822962760925,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 7200,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790131414.0712276,
+          "finished": 1790131662.2699888
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790131672.718414,
+          "finished": 1790131805.504263
+        },
+        {
+          "action": "b0-s2",
+          "started": 1790132112.0294666,
+          "finished": 1790132248.9274547
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790131414.0691593,
+          "finished": 1790131537.3537617
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790131672.721874,
+          "finished": 1790131913.073129
+        },
+        {
+          "action": "b1-s2",
+          "started": 1790132112.0354688,
+          "finished": 1790132329.6094213
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790131662.3173604,
+          "finished": 1790131672.5104568,
+          "exit_code": 1,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1",
+          "started": 1790131805.5533118,
+          "finished": 1790131899.9067476,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1-audit",
+          "started": 1790132334.0544658,
+          "finished": 1790132359.8665836,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s2",
+          "started": 1790132248.9623072,
+          "finished": 1790132333.3079064,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790131537.3876483,
+          "finished": 1790131644.7758887,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790131913.104602,
+          "finished": 1790132111.7758396,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "agnews-1-candidate",
+      "family": "text",
+      "arm": "candidate",
+      "accepted": false,
+      "started": 1790132361.043672,
+      "delivery_finished": 1790133713.6630943,
+      "observed_scored_seconds": 7200,
+      "execution_envelope_seconds": 1115.6146585941315,
+      "model_pending_union_seconds": 336.7489376068115,
+      "model_execution_overlap_seconds": 103.53953385353088,
+      "model_pending_without_execution_seconds": 233.20940375328064,
+      "all_nonexecution_seconds": 237.00476360321045,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 7200,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790132361.2420082,
+          "finished": 1790132416.0361795
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790132533.2178652,
+          "finished": 1790132610.6487205
+        },
+        {
+          "action": "b0-s2",
+          "started": 1790133145.3008454,
+          "finished": 1790133295.9101038
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790132361.253245,
+          "finished": 1790132469.9508321
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790132533.2251344,
+          "finished": 1790132610.254258
+        },
+        {
+          "action": "b1-s2",
+          "started": 1790133145.3131897,
+          "finished": 1790133246.5364609
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790132416.0763474,
+          "finished": 1790132470.4742544,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1",
+          "started": 1790132798.5322444,
+          "finished": 1790133144.9860432,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1-audit",
+          "started": 1790133706.4574814,
+          "finished": 1790133712.7972248,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s2",
+          "started": 1790133443.019727,
+          "finished": 1790133706.2720947,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790132470.6184025,
+          "finished": 1790132532.923487,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790132610.2873716,
+          "finished": 1790132790.791642,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1-confirmation",
+          "started": 1790132791.1891847,
+          "finished": 1790132798.1295168,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s2",
+          "started": 1790133246.6064036,
+          "finished": 1790133442.0275583,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "agnews-1-control",
+      "family": "text",
+      "arm": "control",
+      "accepted": false,
+      "started": 1790132361.043475,
+      "delivery_finished": 1790133512.3835523,
+      "observed_scored_seconds": 7200,
+      "execution_envelope_seconds": 631.7499771118164,
+      "model_pending_union_seconds": 579.4923779964447,
+      "model_execution_overlap_seconds": 63.1786150932312,
+      "model_pending_without_execution_seconds": 516.3137629032135,
+      "all_nonexecution_seconds": 519.5901002883911,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 7200,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790132361.2215543,
+          "finished": 1790132478.9765742
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790132636.8336606,
+          "finished": 1790132877.617666
+        },
+        {
+          "action": "b0-s2",
+          "started": 1790133104.7526615,
+          "finished": 1790133325.6929433
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790132361.2279177,
+          "finished": 1790132478.5048308
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790132636.8432844,
+          "finished": 1790132867.2661734
+        },
+        {
+          "action": "b1-s2",
+          "started": 1790133104.7395906,
+          "finished": 1790133273.232403
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790132536.5755513,
+          "finished": 1790132636.5491102,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1",
+          "started": 1790132938.4745502,
+          "finished": 1790133104.250086,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s2",
+          "started": 1790133359.0869803,
+          "finished": 1790133505.4532104,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790132478.5408943,
+          "finished": 1790132531.2842605,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-audit",
+          "started": 1790133505.6968582,
+          "finished": 1790133511.5361996,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790132531.4301226,
+          "finished": 1790132536.1672244,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790132867.3100219,
+          "finished": 1790132938.24233,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s2",
+          "started": 1790133273.2576523,
+          "finished": 1790133358.640187,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "cifar100-0-candidate",
+      "family": "vision",
+      "arm": "candidate",
+      "accepted": true,
+      "started": 1790131413.8467023,
+      "delivery_finished": 1790132175.1726074,
+      "observed_scored_seconds": 761.32590508461,
+      "execution_envelope_seconds": 705.7010183334351,
+      "model_pending_union_seconds": 67.08911085128784,
+      "model_execution_overlap_seconds": 13.30305290222168,
+      "model_pending_without_execution_seconds": 53.78605794906616,
+      "all_nonexecution_seconds": 55.62488675117493,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 705.7010183334351,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790131414.2645755,
+          "finished": 1790131481.3475466
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790131414.2584357,
+          "finished": 1790131467.993857
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b1-s0",
+          "started": 1790131468.0444937,
+          "finished": 1790132149.8505723,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-audit",
+          "started": 1790132162.149984,
+          "finished": 1790132174.2958062,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790132149.9758637,
+          "finished": 1790132161.724981,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "cifar100-0-control",
+      "family": "vision",
+      "arm": "control",
+      "accepted": true,
+      "started": 1790131413.846511,
+      "delivery_finished": 1790131872.3091164,
+      "observed_scored_seconds": 458.4626054763794,
+      "execution_envelope_seconds": 310.11297130584717,
+      "model_pending_union_seconds": 174.27988719940186,
+      "model_execution_overlap_seconds": 27.772615432739258,
+      "model_pending_without_execution_seconds": 146.5072717666626,
+      "all_nonexecution_seconds": 148.34963417053223,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 310.11297130584717,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790131414.2049396,
+          "finished": 1790131560.6431262
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790131414.2268682,
+          "finished": 1790131588.4848268
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790131560.7122114,
+          "finished": 1790131858.1428754,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-audit",
+          "started": 1790131865.211836,
+          "finished": 1790131871.4527452,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-confirmation",
+          "started": 1790131858.3651297,
+          "finished": 1790131864.8065279,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "cifar100-1-candidate",
+      "family": "vision",
+      "arm": "candidate",
+      "accepted": true,
+      "started": 1790132175.222131,
+      "delivery_finished": 1790132424.5621421,
+      "observed_scored_seconds": 249.34001111984253,
+      "execution_envelope_seconds": 189.337646484375,
+      "model_pending_union_seconds": 119.10221982002258,
+      "model_execution_overlap_seconds": 60.86401319503784,
+      "model_pending_without_execution_seconds": 58.23820662498474,
+      "all_nonexecution_seconds": 60.00236463546753,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 189.337646484375,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790132175.5783403,
+          "finished": 1790132294.6725268
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790132175.570307,
+          "finished": 1790132233.7368667
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b1-s0",
+          "started": 1790132233.8085136,
+          "finished": 1790132410.5165422,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-audit",
+          "started": 1790132417.2523203,
+          "finished": 1790132423.692582,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790132410.6705515,
+          "finished": 1790132416.8599079,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "cifar100-1-control",
+      "family": "vision",
+      "arm": "control",
+      "accepted": true,
+      "started": 1790132175.2219849,
+      "delivery_finished": 1790132665.00118,
+      "observed_scored_seconds": 489.7791950702667,
+      "execution_envelope_seconds": 370.88587474823,
+      "model_pending_union_seconds": 161.0824167728424,
+      "model_execution_overlap_seconds": 43.97855091094971,
+      "model_pending_without_execution_seconds": 117.1038658618927,
+      "all_nonexecution_seconds": 118.89332032203674,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 370.88587474823,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790132175.5539646,
+          "finished": 1790132292.6115866
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790132175.5881722,
+          "finished": 1790132336.6363814
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790132292.6578305,
+          "finished": 1790132647.9629767,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-audit",
+          "started": 1790132656.252677,
+          "finished": 1790132664.1438272,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-confirmation",
+          "started": 1790132648.1786516,
+          "finished": 1790132655.8682299,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "kmnist-0-candidate",
+      "family": "vision",
+      "arm": "candidate",
+      "accepted": true,
+      "started": 1790132665.153583,
+      "delivery_finished": 1790132864.742773,
+      "observed_scored_seconds": 199.5891900062561,
+      "execution_envelope_seconds": 144.37539410591125,
+      "model_pending_union_seconds": 59.31896209716797,
+      "model_execution_overlap_seconds": 5.711911201477051,
+      "model_pending_without_execution_seconds": 53.60705089569092,
+      "all_nonexecution_seconds": 55.21379590034485,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 144.37539410591125,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790132665.3990927,
+          "finished": 1790132718.9234385
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790132665.3746872,
+          "finished": 1790132724.6936493
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790132718.981738,
+          "finished": 1790132851.5834005,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-audit",
+          "started": 1790132857.95402,
+          "finished": 1790132863.890683,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-confirmation",
+          "started": 1790132851.7338567,
+          "finished": 1790132857.5709255,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "kmnist-0-control",
+      "family": "vision",
+      "arm": "control",
+      "accepted": true,
+      "started": 1790132665.1534197,
+      "delivery_finished": 1790133206.8417,
+      "observed_scored_seconds": 541.6882803440094,
+      "execution_envelope_seconds": 378.16571021080017,
+      "model_pending_union_seconds": 185.6819462776184,
+      "model_execution_overlap_seconds": 23.843274354934692,
+      "model_pending_without_execution_seconds": 161.83867192268372,
+      "all_nonexecution_seconds": 163.52257013320923,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 378.16571021080017,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790132665.3644207,
+          "finished": 1790132851.046367
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790132665.38697,
+          "finished": 1790132827.177516
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b1-s0",
+          "started": 1790132827.2030926,
+          "finished": 1790133185.734618,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-audit",
+          "started": 1790133195.4417098,
+          "finished": 1790133205.9850316,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790133185.9658985,
+          "finished": 1790133195.0567615,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "kmnist-1-candidate",
+      "family": "vision",
+      "arm": "candidate",
+      "accepted": true,
+      "started": 1790133207.0080254,
+      "delivery_finished": 1790135047.3181705,
+      "observed_scored_seconds": 1840.3101451396942,
+      "execution_envelope_seconds": 1708.3813586235046,
+      "model_pending_union_seconds": 168.52351021766663,
+      "model_execution_overlap_seconds": 39.94668626785278,
+      "model_pending_without_execution_seconds": 128.57682394981384,
+      "all_nonexecution_seconds": 131.92878651618958,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 1708.3813586235046,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790133207.2640545,
+          "finished": 1790133261.471964
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790133548.3155415,
+          "finished": 1790133604.2221355
+        },
+        {
+          "action": "b0-s2",
+          "started": 1790134183.1337566,
+          "finished": 1790134240.2371504
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790133207.234079,
+          "finished": 1790133262.7476013
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790133548.3296885,
+          "finished": 1790133581.4549258
+        },
+        {
+          "action": "b1-s2",
+          "started": 1790134183.1534545,
+          "finished": 1790134224.252
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790133261.4943655,
+          "finished": 1790133402.596361,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-confirmation",
+          "started": 1790133402.7404478,
+          "finished": 1790133408.3298013,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1",
+          "started": 1790133754.3786526,
+          "finished": 1790134182.6708314,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s2",
+          "started": 1790134517.2793028,
+          "finished": 1790135039.9156196,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790133408.7224028,
+          "finished": 1790133548.0097816,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-audit",
+          "started": 1790135040.3769493,
+          "finished": 1790135046.4641232,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790133581.4931655,
+          "finished": 1790133754.1838334,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s2",
+          "started": 1790134224.27267,
+          "finished": 1790134516.9689634,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "kmnist-1-control",
+      "family": "vision",
+      "arm": "control",
+      "accepted": true,
+      "started": 1790133207.0078795,
+      "delivery_finished": 1790133642.2027233,
+      "observed_scored_seconds": 435.1948437690735,
+      "execution_envelope_seconds": 316.28893184661865,
+      "model_pending_union_seconds": 152.2047414779663,
+      "model_execution_overlap_seconds": 35.021785259246826,
+      "model_pending_without_execution_seconds": 117.18295621871948,
+      "all_nonexecution_seconds": 118.90591192245483,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 316.28893184661865,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790133207.222383,
+          "finished": 1790133359.4271245
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790133207.250202,
+          "finished": 1790133324.3646674
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b1-s0",
+          "started": 1790133324.4053392,
+          "finished": 1790133626.6112254,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-audit",
+          "started": 1790133633.7848291,
+          "finished": 1790133641.3280249,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790133626.8557131,
+          "finished": 1790133633.3955631,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "sarcos-0-candidate",
+      "family": "regression",
+      "arm": "candidate",
+      "accepted": true,
+      "started": 1790133864.008913,
+      "delivery_finished": 1790134008.84344,
+      "observed_scored_seconds": 144.83452701568604,
+      "execution_envelope_seconds": 75.43277478218079,
+      "model_pending_union_seconds": 62.01392412185669,
+      "model_execution_overlap_seconds": 4.4116740226745605,
+      "model_pending_without_execution_seconds": 57.60225009918213,
+      "all_nonexecution_seconds": 69.40175223350525,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 75.43277478218079,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790133873.4498115,
+          "finished": 1790133930.9768028
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790133873.4332733,
+          "finished": 1790133935.4471974
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790133931.0355234,
+          "finished": 1790133997.5459418,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-audit",
+          "started": 1790134003.2912881,
+          "finished": 1790134007.7270455,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-confirmation",
+          "started": 1790133997.664592,
+          "finished": 1790134002.151191,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "sarcos-0-control",
+      "family": "regression",
+      "arm": "control",
+      "accepted": true,
+      "started": 1790133864.0087504,
+      "delivery_finished": 1790134087.6600373,
+      "observed_scored_seconds": 223.65128684043884,
+      "execution_envelope_seconds": 148.23190426826477,
+      "model_pending_union_seconds": 90.45804810523987,
+      "model_execution_overlap_seconds": 25.589903116226196,
+      "model_pending_without_execution_seconds": 64.86814498901367,
+      "all_nonexecution_seconds": 75.41938257217407,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 148.23190426826477,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790133872.3221576,
+          "finished": 1790133962.6266854
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790133872.1686373,
+          "finished": 1790133937.0049217
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b1-s0",
+          "started": 1790133937.0367823,
+          "finished": 1790134079.2003093,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-audit",
+          "started": 1790134083.5330245,
+          "finished": 1790134086.5175076,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790134079.3315427,
+          "finished": 1790134082.415437,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "sarcos-1-candidate",
+      "family": "regression",
+      "arm": "candidate",
+      "accepted": true,
+      "started": 1790134087.6884246,
+      "delivery_finished": 1790134252.5856204,
+      "observed_scored_seconds": 164.89719581604004,
+      "execution_envelope_seconds": 97.75926899909973,
+      "model_pending_union_seconds": 60.20471239089966,
+      "model_execution_overlap_seconds": 5.195750713348389,
+      "model_pending_without_execution_seconds": 55.00896167755127,
+      "all_nonexecution_seconds": 67.13792681694031,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 97.75926899909973,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790134097.1021812,
+          "finished": 1790134152.0139976
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790134097.0844307,
+          "finished": 1790134157.289143
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790134152.0933924,
+          "finished": 1790134240.3796093,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-audit",
+          "started": 1790134246.7136247,
+          "finished": 1790134251.4497738,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-confirmation",
+          "started": 1790134240.829031,
+          "finished": 1790134245.565934,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "sarcos-1-control",
+      "family": "regression",
+      "arm": "control",
+      "accepted": true,
+      "started": 1790134087.6882553,
+      "delivery_finished": 1790134367.952177,
+      "observed_scored_seconds": 280.2639217376709,
+      "execution_envelope_seconds": 182.51300048828125,
+      "model_pending_union_seconds": 88.66750431060791,
+      "model_execution_overlap_seconds": 1.345644235610962,
+      "model_pending_without_execution_seconds": 87.32186007499695,
+      "all_nonexecution_seconds": 97.75092124938965,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 182.51300048828125,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790134095.734287,
+          "finished": 1790134184.4017913
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790134095.9040112,
+          "finished": 1790134182.963563
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b1-s0",
+          "started": 1790134183.056147,
+          "finished": 1790134359.599349,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-audit",
+          "started": 1790134363.82653,
+          "finished": 1790134366.811967,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790134359.7133381,
+          "finished": 1790134362.6976998,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "trec-0-candidate",
+      "family": "text",
+      "arm": "candidate",
+      "accepted": true,
+      "started": 1790133713.7567549,
+      "delivery_finished": 1790135149.5175896,
+      "observed_scored_seconds": 1435.7608346939087,
+      "execution_envelope_seconds": 1209.672916173935,
+      "model_pending_union_seconds": 276.7216844558716,
+      "model_execution_overlap_seconds": 53.1004204750061,
+      "model_pending_without_execution_seconds": 223.62126398086548,
+      "all_nonexecution_seconds": 226.08791851997375,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 1209.672916173935,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790133713.918769,
+          "finished": 1790133763.20171
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790134114.646466,
+          "finished": 1790134243.7290337
+        },
+        {
+          "action": "b0-s2",
+          "started": 1790134531.5922997,
+          "finished": 1790134629.926365
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790133713.953677,
+          "finished": 1790133759.909315
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790134114.6646087,
+          "finished": 1790134235.281677
+        },
+        {
+          "action": "b1-s2",
+          "started": 1790134531.5701892,
+          "finished": 1790134588.4000072
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790133955.0176845,
+          "finished": 1790134110.0839982,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-confirmation",
+          "started": 1790134110.1650968,
+          "finished": 1790134114.3019176,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1",
+          "started": 1790134278.9048686,
+          "finished": 1790134530.837182,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1-audit",
+          "started": 1790135144.2257206,
+          "finished": 1790135149.3641005,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s2",
+          "started": 1790134741.0687425,
+          "finished": 1790135143.511563,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790133759.9723248,
+          "finished": 1790133954.920547,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790134235.3305337,
+          "finished": 1790134278.8143945,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s2",
+          "started": 1790134588.4538295,
+          "finished": 1790134740.9780145,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "trec-0-control",
+      "family": "text",
+      "arm": "control",
+      "accepted": false,
+      "started": 1790133713.756581,
+      "delivery_finished": 1790134538.631472,
+      "observed_scored_seconds": 7200,
+      "execution_envelope_seconds": 415.6602039337158,
+      "model_pending_union_seconds": 513.485401391983,
+      "model_execution_overlap_seconds": 105.6000428199768,
+      "model_pending_without_execution_seconds": 407.8853585720062,
+      "all_nonexecution_seconds": 409.21468710899353,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 7200,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790133713.9721477,
+          "finished": 1790133869.3955991
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790133967.593314,
+          "finished": 1790134027.853671
+        },
+        {
+          "action": "b0-s2",
+          "started": 1790134338.471915,
+          "finished": 1790134402.7936757
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790133713.9359696,
+          "finished": 1790133815.7490957
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790133967.5744627,
+          "finished": 1790134166.6062078
+        },
+        {
+          "action": "b1-s2",
+          "started": 1790134338.4511364,
+          "finished": 1790134497.445163
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790133883.6087832,
+          "finished": 1790133967.3377955,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-audit",
+          "started": 1790134534.3417222,
+          "finished": 1790134538.477607,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1",
+          "started": 1790134027.8830006,
+          "finished": 1790134053.0452778,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s2",
+          "started": 1790134402.817662,
+          "finished": 1790134429.6313565,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790133815.771528,
+          "finished": 1790133878.8770678,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790133878.970243,
+          "finished": 1790133883.4066694,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790134166.6455967,
+          "finished": 1790134338.1939194,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s2",
+          "started": 1790134497.5122135,
+          "finished": 1790134534.2412598,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "trec-1-candidate",
+      "family": "text",
+      "arm": "candidate",
+      "accepted": true,
+      "started": 1790135150.0461025,
+      "delivery_finished": 1790135791.0945387,
+      "observed_scored_seconds": 641.048436164856,
+      "execution_envelope_seconds": 388.3277077674866,
+      "model_pending_union_seconds": 302.5041627883911,
+      "model_execution_overlap_seconds": 51.00043725967407,
+      "model_pending_without_execution_seconds": 251.50372552871704,
+      "all_nonexecution_seconds": 252.72072839736938,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 388.3277077674866,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790135150.2352796,
+          "finished": 1790135215.2318559
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790135276.2723815,
+          "finished": 1790135345.4870865
+        },
+        {
+          "action": "b0-s2",
+          "started": 1790135653.857735,
+          "finished": 1790135734.928024
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790135150.283321,
+          "finished": 1790135199.0998328
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790135276.2973084,
+          "finished": 1790135380.7214296
+        },
+        {
+          "action": "b1-s2",
+          "started": 1790135653.8352153,
+          "finished": 1790135786.8937538
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790135250.3768604,
+          "finished": 1790135276.043021,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1",
+          "started": 1790135345.5338595,
+          "finished": 1790135380.460688,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790135199.1582472,
+          "finished": 1790135245.9445908,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0-confirmation",
+          "started": 1790135246.0318031,
+          "finished": 1790135250.1697354,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790135380.758805,
+          "finished": 1790135653.58376,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1-audit",
+          "started": 1790135786.9603171,
+          "finished": 1790135790.9458048,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    },
+    {
+      "episode": "trec-1-control",
+      "family": "text",
+      "arm": "control",
+      "accepted": false,
+      "started": 1790135150.0459263,
+      "delivery_finished": 1790136600.4003716,
+      "observed_scored_seconds": 7200,
+      "execution_envelope_seconds": 1124.6947567462921,
+      "model_pending_union_seconds": 522.8084044456482,
+      "model_execution_overlap_seconds": 199.3173863887787,
+      "model_pending_without_execution_seconds": 323.4910180568695,
+      "all_nonexecution_seconds": 325.6596884727478,
+      "conditional_scored_seconds_with_all_nonexecution_removed": 7200,
+      "model_response_intervals": [
+        {
+          "action": "b0-s0",
+          "started": 1790135150.3074782,
+          "finished": 1790135277.581037
+        },
+        {
+          "action": "b0-s1",
+          "started": 1790135640.7346838,
+          "finished": 1790135774.4278932
+        },
+        {
+          "action": "b0-s2",
+          "started": 1790136068.7167592,
+          "finished": 1790136260.5803838
+        },
+        {
+          "action": "b1-s0",
+          "started": 1790135150.2598572,
+          "finished": 1790135241.8867073
+        },
+        {
+          "action": "b1-s1",
+          "started": 1790135640.7091339,
+          "finished": 1790135844.3327339
+        },
+        {
+          "action": "b1-s2",
+          "started": 1790136068.7447748,
+          "finished": 1790136166.7418356
+        }
+      ],
+      "execution_dispatch_closure_intervals": [
+        {
+          "stage": "b0-s0",
+          "started": 1790135462.964032,
+          "finished": 1790135636.2998564,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s0-confirmation",
+          "started": 1790135636.4006927,
+          "finished": 1790135640.3357358,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s1",
+          "started": 1790135774.4645991,
+          "finished": 1790135877.2202518,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b0-s2",
+          "started": 1790136372.205358,
+          "finished": 1790136594.1633224,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s0",
+          "started": 1790135241.9323392,
+          "finished": 1790135462.873234,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1",
+          "started": 1790135877.318819,
+          "finished": 1790136068.2804067,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s1-audit",
+          "started": 1790136594.5095432,
+          "finished": 1790136600.2484598,
+          "exit_code": 0,
+          "timeout": false
+        },
+        {
+          "stage": "b1-s2",
+          "started": 1790136166.77983,
+          "finished": 1790136371.848703,
+          "exit_code": 0,
+          "timeout": false
+        }
+      ]
+    }
+  ],
+  "decision": "Do not prioritize an async-only framework justified by deleting observed model/coordination waits while preserving the current candidate execution path: even deleting all nonexecution time leaves both vision and regression slower than observed control, so this restricted change cannot satisfy the existing >=3 faster families rule. Prioritize independently testing method quality/selection and exploration-to-delivery decisions after the frozen trial closes. This does not reject the broader SIFT strategy or all asynchronous research policies.",
+  "paper_connection": {
+    "source": "https://arxiv.org/html/2609.19526v1",
+    "section": "4.3",
+    "author_result": "Asynchronous expansion/evaluation supplies most measured SIFT speedup; judge-guided speculative expansion contributes additional gains.",
+    "local_limit": "SIFT speculative expansion changes the search path. The conditional arithmetic above only covers wait removal with the existing serial execution path retained; paper speedups do not transfer numerically to orze."
+  },
+  "evidence_sha256": {
+    "episodes/abalone-0-candidate/completed.json": "309c885ca2bc562c347823ad68b2998263381840e28a10d42f1fe670d183f5d8",
+    "calls/abalone-0-candidate/b0-s0/response.json": "578d68d1351df0280b290c1f520b7418f209c4da9abfc3495f13cfde433f24ac",
+    "calls/abalone-0-candidate/b0-s1/response.json": "0dab7e353fad3608faccf2fd16da3d3b8370c490823ea2422d4a873a50eced62",
+    "calls/abalone-0-candidate/b1-s0/response.json": "69447a84f85075bbee6f6c0ccd3d975e34d331180e48cca678afd5218a64e262",
+    "calls/abalone-0-candidate/b1-s1/response.json": "e463d036c385a75b02e9427f80761686a33152e8ca93a014240f0acc6c015171",
+    "episodes/abalone-0-candidate/b0-s0/dispatch.json": "d29fbfc530d6fe97f386e1d346ab153d87d6b48912f1e0e9de3783d3e6b4a586",
+    "episodes/abalone-0-candidate/b0-s0/closure.json": "b142cb109dae6cb3ccc8bc5cf2e3af2f6f6894179147c7012be2d9e70cafd25d",
+    "episodes/abalone-0-candidate/b1-s0/dispatch.json": "44fb0ea2885ed8db28dfc2b3a8452377bae653f77143c45dad48ff21559e9c01",
+    "episodes/abalone-0-candidate/b1-s0/closure.json": "5d22df65e25514c9d0fdb4f3a2e630bd1fa2edaa41426411b13c56165f8bc336",
+    "episodes/abalone-0-candidate/b1-s1/dispatch.json": "6e6013919e4d94b57477f8ed2a710225e624f790448f838a741372fcaea56423",
+    "episodes/abalone-0-candidate/b1-s1/closure.json": "065b7a273caf02dea99dc0648d39cfe6ecab3dcc24e615af02772366d478f941",
+    "episodes/abalone-0-candidate/b1-s1-audit/dispatch.json": "40dec6bab2ec81c4369e962801dca1af210031ba52a77ae78b81b6785c50c2f0",
+    "episodes/abalone-0-candidate/b1-s1-audit/closure.json": "b6a428dbe7bef831d7de3b464b4502dedcffd07fd9ca140e7fd28cdfd77f36e3",
+    "episodes/abalone-0-candidate/b1-s1-confirmation/dispatch.json": "47bf158a9f4903a05bdbfe13ec9af59d9730b7c1510eefeeb09d26e4d23c4a40",
+    "episodes/abalone-0-candidate/b1-s1-confirmation/closure.json": "023587d17833b771fca0955d2859c86e055d9f26728baaf03b06a939e40acfab",
+    "episodes/abalone-0-control/completed.json": "25f30ef6023d0a0e787ae2dd18c42fcc77054e29294593ba0b571fcf9754724f",
+    "calls/abalone-0-control/b0-s0/response.json": "15edb5c5081fd270bf7bf46e2b2331cde06e21fc9fd517ccf8805b8943101ec4",
+    "calls/abalone-0-control/b1-s0/response.json": "bc2145f0424c96a149148cba8caddb60558c1d5dbbffcd36d91793f34ba2f06f",
+    "episodes/abalone-0-control/b1-s0/dispatch.json": "67f1475031d527c4922bca552b1e625df817442c0f37e67f0714e532a7d87844",
+    "episodes/abalone-0-control/b1-s0/closure.json": "c5a881ef0012eb7168c972fd4f39ac0e4dc81f6d499bf8c45cddc43a524e34e5",
+    "episodes/abalone-0-control/b1-s0-audit/dispatch.json": "5da46f48a203faf517c2b4175fcd0ef0574e03d62d198489aaac6eb307967b64",
+    "episodes/abalone-0-control/b1-s0-audit/closure.json": "c79fff4544bd352957d37806df5ce7c6765d1e9388bf8669e9e20ce9d308d753",
+    "episodes/abalone-0-control/b1-s0-confirmation/dispatch.json": "55aa138889ac11430218572553cf310077053b47a234aa8dd9de20790930574f",
+    "episodes/abalone-0-control/b1-s0-confirmation/closure.json": "8777885b076392e6298135e1734a2b418b7e0db6910256088c57e4166c9d2512",
+    "episodes/abalone-1-candidate/completed.json": "3a18afa4a13d82ce925155e386f8a3c89a110d6c712bca8ceaf8e4db84139bb3",
+    "calls/abalone-1-candidate/b0-s0/response.json": "8d1949df08fef449014a0936614c0c74f6ccc947a48c4a386a523a013927b79e",
+    "calls/abalone-1-candidate/b0-s1/response.json": "4ce35918390c25c4fa73011f7ef132748986ccb03cbcd39de96709f1f60b856b",
+    "calls/abalone-1-candidate/b0-s2/response.json": "829e1ad4ba624469823e32739c8417b479ee839df7c6e99e35a6660f6158b1f7",
+    "calls/abalone-1-candidate/b1-s0/response.json": "aa8d11e9711483b233f6191e4a0968096ed383db0d5a89a7e000320bfcc09caa",
+    "calls/abalone-1-candidate/b1-s1/response.json": "13f7d06f2ad7e96e77480a48de888e10b21b12d0ec7841ba4fbfac825d2907dc",
+    "calls/abalone-1-candidate/b1-s2/response.json": "1317325dcb6c2a782081a75e6955639083aa8e5cbd933123f3f5684c978ded05",
+    "episodes/abalone-1-candidate/b0-s0/dispatch.json": "11e9572918d24135df1a40819dfdfb40dce5b2a45af4a104d0d343983050d377",
+    "episodes/abalone-1-candidate/b0-s0/closure.json": "47bbcb967a24caf396493295b8e9f32bb0a0da9e8327d1a9d3d9ee4bb65912c6",
+    "episodes/abalone-1-candidate/b0-s0-confirmation/dispatch.json": "d6f75c432888b00103d72789298bcb36d24aac803ff97dac0fb8abae37238294",
+    "episodes/abalone-1-candidate/b0-s0-confirmation/closure.json": "d82add6d72971e8f8070553e8960269965742006bd2cff6af3b942ca27082616",
+    "episodes/abalone-1-candidate/b0-s1/dispatch.json": "437737ad05e23f2a2686d3143253d4ddd60423c6cbc9bc39556c99bca51611d0",
+    "episodes/abalone-1-candidate/b0-s1/closure.json": "de5fd49c5a1a45d7184cc01925d6e074ddf9830ab7b31334a5cdd8ecd599b607",
+    "episodes/abalone-1-candidate/b0-s2/dispatch.json": "f00f6f721e8f30449160b0f53d0d45e2d69923fe9287342043912796b757ae04",
+    "episodes/abalone-1-candidate/b0-s2/closure.json": "3db2d9f83527c91be6376b103f275b3e93d3717a033a12cf085d7a5afd399805",
+    "episodes/abalone-1-candidate/b1-s0/dispatch.json": "413c33434e7e51f77726db3871cfa12bf1bdb35fe8db93f216627587e889104d",
+    "episodes/abalone-1-candidate/b1-s0/closure.json": "ccd0dbf82661537cc10c734a2e4598c03dfcc2468e6cd7ad47deb5798c623626",
+    "episodes/abalone-1-candidate/b1-s1/dispatch.json": "3ef8c8aada51f9279f6c7ed0276540b4bcfb84f539b5bc38013f8fa89ab7341c",
+    "episodes/abalone-1-candidate/b1-s1/closure.json": "ad75a891f621139d89b647bb7726a82535fd297c1cda828d265cafa0da795e20",
+    "episodes/abalone-1-candidate/b1-s1-audit/dispatch.json": "36a07ac1766faab7addddf79481c0d4811c78d8679df7e2e4a6c50b3deca3275",
+    "episodes/abalone-1-candidate/b1-s1-audit/closure.json": "388ae52d6936af417b95fa710a97a625285f3bd5906dafac0a1563e54f53b9d5",
+    "episodes/abalone-1-candidate/b1-s2/dispatch.json": "882ab2b09db02310c82d6488c70ddd661dac2283fd429f5684d0dd2c23bea871",
+    "episodes/abalone-1-candidate/b1-s2/closure.json": "fe58a1daa20549579524e6c80c2dcff333e73797896d1b0c7c722e0832c70713",
+    "episodes/abalone-1-control/completed.json": "63db8c69e6b90a7b961e182044c1ffcadd1ed648daf65bcc34293d2ff1567f75",
+    "calls/abalone-1-control/b0-s0/response.json": "b1e709e84aedd1fda5816d833ec066765d7bf4df1930dd59847f1bdbec551e06",
+    "calls/abalone-1-control/b1-s0/response.json": "0965ca75175ad72b5aac89487f8d1037244bd192cc6173ed98a84a35ac39c57f",
+    "episodes/abalone-1-control/b1-s0/dispatch.json": "dd498287dd152637e76390f5f30b67001a5eecd9e4787ba13d93d09cf80a559b",
+    "episodes/abalone-1-control/b1-s0/closure.json": "e7d2d3774c3e6e21b568cb670bea89264f8ad9fb061d5eaafb394bc4349c554e",
+    "episodes/abalone-1-control/b1-s0-audit/dispatch.json": "1ddb01c94113e802e59f9e740119188ca81ed54903e4582ecdf025aa762b5e6d",
+    "episodes/abalone-1-control/b1-s0-audit/closure.json": "008cd2f170ec4d6a8531a04d6bfed4dc3fd1056d3450cc4e435b647d07e4b324",
+    "episodes/abalone-1-control/b1-s0-confirmation/dispatch.json": "fc5305b68699b9325fa4ea30aa89852c2b7e54233b5a044c82372c42c8c2ff13",
+    "episodes/abalone-1-control/b1-s0-confirmation/closure.json": "03fb2ade077c64f33f5b7e6de7a79af74e7373e1642999e350ae0d96d51a868e",
+    "episodes/agnews-0-candidate/completed.json": "20d60bd8a51f65694bd5c53dcdb926e52893ba5645e861c1146017bc31b4402f",
+    "calls/agnews-0-candidate/b0-s0/response.json": "3e9ca65cd82bfae4af2a9b73d2661961180b3685522c30408956dc2a9746a98a",
+    "calls/agnews-0-candidate/b0-s1/response.json": "0255edbc28ae743156e2d016a4253ca5512b171a6ead4f06b70dd1defe36a465",
+    "calls/agnews-0-candidate/b0-s2/response.json": "fce87b1f98ba28eb7564b02ab9b72481621edd4827487b68a00f07a87babaf12",
+    "calls/agnews-0-candidate/b1-s0/response.json": "4df975de2eedb21e6d53bc6727d10a94cf99c5466f74fa87eaccc901305174de",
+    "calls/agnews-0-candidate/b1-s1/response.json": "a194067f79863cc20854db1cf8a8fdc8a656659fc1c39d92a36686a2972feafa",
+    "calls/agnews-0-candidate/b1-s2/response.json": "93d809740de259294b0f51b553ed017f18568db6c541e8546fbe88ba16a445d9",
+    "episodes/agnews-0-candidate/b0-s0/dispatch.json": "e2b9eab6e02ff07b7c799135eb3cde311e379f3b55f0c2e6feb58e97cd311979",
+    "episodes/agnews-0-candidate/b0-s0/closure.json": "c135fa715bb9860e989035eb87f4b1470c853387114ad011e5f92ef184c79ab0",
+    "episodes/agnews-0-candidate/b0-s0-audit/dispatch.json": "897f54b3349c56f92e9e8bbaf1a326e5253d6a6987565b35abcd8e9ef5a2c6dc",
+    "episodes/agnews-0-candidate/b0-s0-audit/closure.json": "513d06051a95894ca98deb2b345d84aad614b0adfdece3c6995ea2f0d7c72688",
+    "episodes/agnews-0-candidate/b0-s0-confirmation/dispatch.json": "e62b25411b8bba0cceaccc19a6bbb2c26a82d81556187555f686e296ad20c471",
+    "episodes/agnews-0-candidate/b0-s0-confirmation/closure.json": "53f5e0ce329f848690cc98604832f8abbaf08e2e979fb8eba993b1b416bca279",
+    "episodes/agnews-0-candidate/b0-s1/dispatch.json": "230df9324ffd1b2d73542b032144ad0ee20375355b11b0be5b9468caf61a7449",
+    "episodes/agnews-0-candidate/b0-s1/closure.json": "a14ffe75a854acd25f889854dbafe8145c97ee769da98b09ff4226b3c85a298f",
+    "episodes/agnews-0-candidate/b0-s2/dispatch.json": "c28fa1001725d5863e3a22b2dc651212a4aa1a70c1426f8214057b81bbe08e05",
+    "episodes/agnews-0-candidate/b0-s2/closure.json": "eb1d5681e519036a63bc1ad8ee860f529dccc35ec6606b80bee5d516bf8404cb",
+    "episodes/agnews-0-candidate/b1-s0/dispatch.json": "b14e904fd4d420de45831e2c5a34ae2d6a49246ef6d41081dda2baf8a4c58476",
+    "episodes/agnews-0-candidate/b1-s0/closure.json": "445da7911d52a2760baf7d7b6af3b7dd72726030b471e9c85b31dfee77bbad07",
+    "episodes/agnews-0-candidate/b1-s1/dispatch.json": "81b8669cc447b8923e693cfea1d123eed7017bf1cefc34e1f1d9afded2291571",
+    "episodes/agnews-0-candidate/b1-s1/closure.json": "10ffc9b64302edc5712fcef5aef8121830faebae792f67ac2241fc400259deab",
+    "episodes/agnews-0-candidate/b1-s2/dispatch.json": "497d3fb70713365689c263f3d00898c052de0b7a8a28c365c42fab0eec6285bc",
+    "episodes/agnews-0-candidate/b1-s2/closure.json": "5c53b136122c94b3d7f2d068452aed550d80fabec1f76fd741bfef215d2c1934",
+    "episodes/agnews-0-control/completed.json": "d6f48ff8bf4326d6dadaff6e94322e127039195fd1eeba115a185a8f66066ad7",
+    "calls/agnews-0-control/b0-s0/response.json": "c624c1d5b7fff196055187bfcb40d4e6182e21535f79fa41467e0b43e8ed6a14",
+    "calls/agnews-0-control/b0-s1/response.json": "ed106cdbe6103318d1a1123c29f392ac9996eb885cf3509daaee09d3af866411",
+    "calls/agnews-0-control/b0-s2/response.json": "ecd4c977030c7594b30717c44515451d009047cb44d275cfa8c374aa255683e6",
+    "calls/agnews-0-control/b1-s0/response.json": "a23e8deb1d175f71090bb4ec7e54304f34d4f70d9298dcac72763a19da9072bf",
+    "calls/agnews-0-control/b1-s1/response.json": "c6be475eefee5c10f778f9387ba877b9ad3b7d3a7809e373e277fa78f567f54f",
+    "calls/agnews-0-control/b1-s2/response.json": "cbff8ad00f420bfa46e74b856ddaf595451467e08adbaed212ef37522593dce2",
+    "episodes/agnews-0-control/b0-s0/dispatch.json": "b1b5fa45d1941deb93ab0dab8307b043fce4cf986809a7f10dfa7222a2d3402e",
+    "episodes/agnews-0-control/b0-s0/closure.json": "f69f006fea6e1fdbc9b7c700be1ade7c71ccb2bc876f14d1f063236ec930a8a9",
+    "episodes/agnews-0-control/b0-s1/dispatch.json": "d7836c0599dd10276d692221de2c980e40d31bfb00a31bb51da9c6ff272379f5",
+    "episodes/agnews-0-control/b0-s1/closure.json": "bb3ce9b70518df7b5c1a9cfd5c6dcb8170da0cb77eeed21947c6a669d2f9b019",
+    "episodes/agnews-0-control/b0-s1-audit/dispatch.json": "8670d44b3a8f02e8afb0404b719dab667f997acd4522f771ce11488fb395a4c3",
+    "episodes/agnews-0-control/b0-s1-audit/closure.json": "1881bebdd4a50206a30b30fa88f75b34fb012580689d0f3d8a407c772a96ceb0",
+    "episodes/agnews-0-control/b0-s2/dispatch.json": "20177908fd611b57380642a82c4a7826152e2312bf76bf8124606bd792d785f0",
+    "episodes/agnews-0-control/b0-s2/closure.json": "39e3f89e36c193df506993f78b444a13b33d268d0443c8ae4da59d3b713c81cb",
+    "episodes/agnews-0-control/b1-s0/dispatch.json": "1702cf1c84cede369cc4b92f09cf0cf8b0f0a4031f6ce4ed3d55a3ca8e923b26",
+    "episodes/agnews-0-control/b1-s0/closure.json": "58a3f758b41d0c6819575c59f5fa555e16e3c70627de384baac4609218f5c3d9",
+    "episodes/agnews-0-control/b1-s1/dispatch.json": "06c932d4a08ce6acac3d822ad078f477b736d15f1192644b2c3a081ee460d8dd",
+    "episodes/agnews-0-control/b1-s1/closure.json": "fb4ef0c5dd0b58c4ad2b8b5a8807c0eff65b7966cf641e4424d6bc56db126996",
+    "episodes/agnews-1-candidate/completed.json": "e5ae2f97f4c360764b3f534e26430bab7f6e728faddf77366657cdcf6538bf32",
+    "calls/agnews-1-candidate/b0-s0/response.json": "950df140a910411a7b23b1fe8f30cd7e501d463bd1055f4d5f05ae3c9bf393c4",
+    "calls/agnews-1-candidate/b0-s1/response.json": "3f07833ba62f264671ece30376de93ba12bb2130d154b78bee5fbdfd414d240e",
+    "calls/agnews-1-candidate/b0-s2/response.json": "f1897182a0e0088abe95fcb660c34b009f668978176bc9d798b6d2d90063bd64",
+    "calls/agnews-1-candidate/b1-s0/response.json": "14d499ac6cd6fb51828538a9a473463e706415d5d59a0f6d5408d0636ddce414",
+    "calls/agnews-1-candidate/b1-s1/response.json": "a2024b51858f8aa2d63640f3a2fa380679cb606bcd00230b1924c4db0ab1689f",
+    "calls/agnews-1-candidate/b1-s2/response.json": "921bdc18b2f3ea2a00cbc9a628e16bd09f0652a1fc26b3769af92668a4ebd513",
+    "episodes/agnews-1-candidate/b0-s0/dispatch.json": "69da8575fa74e1c823e941cc08ce3aa888fb56312e90635b22f7a8f5830ba149",
+    "episodes/agnews-1-candidate/b0-s0/closure.json": "776a99c5443df48fe1a8e424dccc8793d9cf673f11b921600eecdaf000e5f891",
+    "episodes/agnews-1-candidate/b0-s1/dispatch.json": "29494e8a19bd120f0342903aa28b716fdf3d39a4839e0cb9cefe08cfd7319342",
+    "episodes/agnews-1-candidate/b0-s1/closure.json": "9449f0b5fed1e3bfba6e7050f079a55a6c1605eee2e00d2a6fe1919aa8a05572",
+    "episodes/agnews-1-candidate/b0-s1-audit/dispatch.json": "70a5b3f3e783407bf4ecd754cb43f59968aa6b1306524defd4e9515b5aabd40b",
+    "episodes/agnews-1-candidate/b0-s1-audit/closure.json": "3b8ebb715be8bd07229be238b26da7d541befe086b789be0e663cc47a70eb69b",
+    "episodes/agnews-1-candidate/b0-s2/dispatch.json": "4a61685d8999b25c6464178cf52cc75e757878f17542d19ccdc5bc47a4fa0334",
+    "episodes/agnews-1-candidate/b0-s2/closure.json": "78525c624699f05cf9b51015163e22858cf55da8d5ce2859a215e9046226c00d",
+    "episodes/agnews-1-candidate/b1-s0/dispatch.json": "acdaf4ce43887b3c9d59d5267b2075737f98bdfd4ac9e2e0123920c457dd0f3d",
+    "episodes/agnews-1-candidate/b1-s0/closure.json": "59872b482dcef8fa470de11fab84d1b0bcba768c7b6ff5829cb448073b087e4b",
+    "episodes/agnews-1-candidate/b1-s1/dispatch.json": "611ccb2298dda6fa68bccb0878b862cdd2aadcc56c5186769a1250e8cb9b2def",
+    "episodes/agnews-1-candidate/b1-s1/closure.json": "bbf1aabc8de188d45af81dbfcb0b3e63a0e428e0cb87b376408da55339e66779",
+    "episodes/agnews-1-candidate/b1-s1-confirmation/dispatch.json": "11454054f8553b52cb061355ec22c58dc2b035cefccf753a6c31deeeb72e80ae",
+    "episodes/agnews-1-candidate/b1-s1-confirmation/closure.json": "60cd1dc0a823fffe9661e240f2ad37378acafd48e6a4dda6afcec2f29c8e691f",
+    "episodes/agnews-1-candidate/b1-s2/dispatch.json": "0a51c9f53b414985d45432d6c0d76b8fee68f2eb7f50ed06bd97831d4e44c930",
+    "episodes/agnews-1-candidate/b1-s2/closure.json": "a10d39bac699bbc99fc51756e99812c0599d332c5ece7e9a96737b516f2f5f06",
+    "episodes/agnews-1-control/completed.json": "642f82404f5ef6555d0892e3872e3446c277feb8734faf2b8fb319d271d6e61d",
+    "calls/agnews-1-control/b0-s0/response.json": "d504ccb50092da0ec5a794560d43fc2028509e120d271e43bec97697ba7302b7",
+    "calls/agnews-1-control/b0-s1/response.json": "ac67bf3fd56a0e10930cfcedcf72587538cfca8d65461a1b47d9c8eeed5fdb71",
+    "calls/agnews-1-control/b0-s2/response.json": "9b6ff583dd71ef87700f002853d0d6bb4784c6eb2bf686462420e3feeecdc57b",
+    "calls/agnews-1-control/b1-s0/response.json": "3e765ecaf18ecf31203aa463a799289c84db8c1c2cb525230f506d3d1bf69a22",
+    "calls/agnews-1-control/b1-s1/response.json": "062e11d54edecb0885a78ca180b8ec99e2a5361ed92417c73de692bbfbba403c",
+    "calls/agnews-1-control/b1-s2/response.json": "df9534b00b743ae126785f6e7c2059634463dcca0e6b5df7e3629dd19396a5e8",
+    "episodes/agnews-1-control/b0-s0/dispatch.json": "71f0d0e796403db543e7ef567257aa38ead5dda8e1853a3aa8bd91e91f6dc184",
+    "episodes/agnews-1-control/b0-s0/closure.json": "31a4694086d5fe2dc38fd5d9e969bdea3f225e6971a0fbdd0b148f3fcd0db588",
+    "episodes/agnews-1-control/b0-s1/dispatch.json": "55ddd925260417d3c21d1f5dac9acedf4047a1c5ba47d02b845524f7a0717e3a",
+    "episodes/agnews-1-control/b0-s1/closure.json": "f2a4e530e59064922281be527448fc958e7da7cf4d107d7727c929886ff7c02f",
+    "episodes/agnews-1-control/b0-s2/dispatch.json": "b2fa7bbb8d8298138de2a0f5c13740545c6b6997a9ffc001b086cd9a4aa25ce1",
+    "episodes/agnews-1-control/b0-s2/closure.json": "0f08c7804e17be5739568d5e8f72ebb7bbf4ae62639a689d53e25c6d073e6921",
+    "episodes/agnews-1-control/b1-s0/dispatch.json": "6f26078880be0ad34fd8643af7f3da85dd2aad1d6420321cd9411245209c4d4d",
+    "episodes/agnews-1-control/b1-s0/closure.json": "4d1104a726890fcf7b95e3d29d3e78d5049569514bf62dce78c1bc7ca3071114",
+    "episodes/agnews-1-control/b1-s0-audit/dispatch.json": "da075785b9561c830c57756caba9103b331dc0afbc49a22fe81d64bc0a811d63",
+    "episodes/agnews-1-control/b1-s0-audit/closure.json": "004506da12fa2556f8981deb8704de3a62c81143eb78dcb3e1e54da15c7ac0b4",
+    "episodes/agnews-1-control/b1-s0-confirmation/dispatch.json": "bd2f2ee37f2442c6e806ea47d55c7f706578d6637247f44b3b1fc8127eeb9c21",
+    "episodes/agnews-1-control/b1-s0-confirmation/closure.json": "d56ced412ae7aad43908a4c2af165cf2694ace56e0710236e8b3a897b4c82fdb",
+    "episodes/agnews-1-control/b1-s1/dispatch.json": "650bbcc5c7e2b3b17383289e784ac7091aea1c8985cbf78ad1e0f9ddb467c22a",
+    "episodes/agnews-1-control/b1-s1/closure.json": "2f23b436b4278fc34df2bb1e5461f876608ef931bb549a7f1c1648ba945a8e72",
+    "episodes/agnews-1-control/b1-s2/dispatch.json": "7ee48d260590bb68fcbaaba412660ae9333d72b211e7f5fc5dc9146d93d5c040",
+    "episodes/agnews-1-control/b1-s2/closure.json": "10c73ce30094df1c5385e0a215c2544188611749049e3b809c90e336b7f369ea",
+    "episodes/cifar100-0-candidate/completed.json": "eeb62ab10e0f38ad2071ae5d29e6db65c4521d4ec99e3f64bae89365484a8a10",
+    "calls/cifar100-0-candidate/b0-s0/response.json": "18ba8102284d8e6d03f4afc9e9ee0456bea7055c22efde7f0bc550c1f9792f21",
+    "calls/cifar100-0-candidate/b1-s0/response.json": "bec36ae6a96eba786a87389c1a945aa7801175274a92f2b479b682d622011392",
+    "episodes/cifar100-0-candidate/b1-s0/dispatch.json": "63eb2dc2a5172d80a31617f4f3eedbea655f7ff040b7cb3c70e59c5d1c012496",
+    "episodes/cifar100-0-candidate/b1-s0/closure.json": "d5d34024444723ee8505a867e73d0e75afdfe52f52c585c296cc0c5da2a1f45a",
+    "episodes/cifar100-0-candidate/b1-s0-audit/dispatch.json": "c35e3451e6db0c41726bfbe6e71345f70e4aed0ddae90588305cde8743ee9c96",
+    "episodes/cifar100-0-candidate/b1-s0-audit/closure.json": "55506464526909dcf3c37ccab4ddafe03050d71c7cfa6b528d3afd6b6e8f9912",
+    "episodes/cifar100-0-candidate/b1-s0-confirmation/dispatch.json": "ff9abae192b2392797722dd47338844563ce4d2deb316ae593b45101f81ed9d9",
+    "episodes/cifar100-0-candidate/b1-s0-confirmation/closure.json": "91adfe16c52893c3acab93ab46a0113cffb1c53b3edbccfa0ad8aa09de4f5efb",
+    "episodes/cifar100-0-control/completed.json": "60e98c1de2a34cc0ce4e0566c6186f3d684af204d673ee811fd3d9a222f8ce9d",
+    "calls/cifar100-0-control/b0-s0/response.json": "4a4ab3086d05adb446ac5944636184603674530afeff1659267435c0ab674cb4",
+    "calls/cifar100-0-control/b1-s0/response.json": "5092deea42cbb1576803f951925765c8efc925d9206cd44ff478988c81edf814",
+    "episodes/cifar100-0-control/b0-s0/dispatch.json": "c6b52e26fb3a3a9658f53fd7ccc4cffdb53c36b90e5ae4ed6009ab323ef64798",
+    "episodes/cifar100-0-control/b0-s0/closure.json": "ef0d97a205df17598bc6c1c9ec2c4830f11249fb0f546236bd5f564578785680",
+    "episodes/cifar100-0-control/b0-s0-audit/dispatch.json": "46e79785f5053e2f9bfadd796d89de825ae8a2b7bee02586f53758df071dde7b",
+    "episodes/cifar100-0-control/b0-s0-audit/closure.json": "f4a48b865836c550e47ebb2ff8a1747d4a5e402428b99ebc4b6635a54101e7be",
+    "episodes/cifar100-0-control/b0-s0-confirmation/dispatch.json": "362ce7fbab66e161a53c85bd1ff9e394b356ae54166b875ff89fe9838c5bfbc3",
+    "episodes/cifar100-0-control/b0-s0-confirmation/closure.json": "bea3bb01adbca07ef884cfd8a58d6f4d115be211aaffa57876e3951a58734d1f",
+    "episodes/cifar100-1-candidate/completed.json": "a0a301d73d01195934a789069ac0d7c5e825f1369e5db8be86915323dbe6151f",
+    "calls/cifar100-1-candidate/b0-s0/response.json": "38341f7deee4dda397fd07890e2aee2e0c374016ece834e4fbbc6b5dce97c57a",
+    "calls/cifar100-1-candidate/b1-s0/response.json": "5499b30019e6317344d7979bf3121465a323aed6304a4cf24aa6d0219cb44811",
+    "episodes/cifar100-1-candidate/b1-s0/dispatch.json": "c44f831304e4652ecbb9b43054da9a588fdb699bed6949c3163378892caf6320",
+    "episodes/cifar100-1-candidate/b1-s0/closure.json": "cbaad60a71d4c3d9da3a8da9485ca3c8397db10901ccf100ccc7cfb285f9625c",
+    "episodes/cifar100-1-candidate/b1-s0-audit/dispatch.json": "e85c5e844ee6f8376655c435d07ff4034471bfee8685f83f2be227b521c766f6",
+    "episodes/cifar100-1-candidate/b1-s0-audit/closure.json": "dba8c6afed02ce68dbcfdc7c4a769520f806852a53873d2181114f164b2ef4dd",
+    "episodes/cifar100-1-candidate/b1-s0-confirmation/dispatch.json": "9bfadd294a75b480e01b4c6a71a70dbb055a955f75756ebaa2f297af3e9def4c",
+    "episodes/cifar100-1-candidate/b1-s0-confirmation/closure.json": "6889a2cacba69048018836a0c3b0f58daa10e02e0a25e44f6fcdd8ee9c434eb4",
+    "episodes/cifar100-1-control/completed.json": "d397c0acfd04ae72ffbec6021ca959a4e42a1dca6fb480de9ad9553b8ac393ae",
+    "calls/cifar100-1-control/b0-s0/response.json": "aedce7ebb5b316beacfa02abd166d75ccaa2699a366680ce3400b416dfad8870",
+    "calls/cifar100-1-control/b1-s0/response.json": "4ea7f97ff2553fd15556b23c0f61fa755557445c92a735b8a17bee23bb2735d8",
+    "episodes/cifar100-1-control/b0-s0/dispatch.json": "cd2b50b2ccd2e85c0903bf20da54401dc59e2b2a5686761f91a1db7b0b4cead9",
+    "episodes/cifar100-1-control/b0-s0/closure.json": "91a0d08577a3ce8bd1d4f33f94fa975a7d718722c82af24c272c09751a496b12",
+    "episodes/cifar100-1-control/b0-s0-audit/dispatch.json": "9a71a1ad19314fa3c988426300a46ed8c0e9ef55039320512bcf43e7c8247a7f",
+    "episodes/cifar100-1-control/b0-s0-audit/closure.json": "f2679d94ce580304f47124a973344b680b061db91413a7dad89cb3de789f660e",
+    "episodes/cifar100-1-control/b0-s0-confirmation/dispatch.json": "d45dddaa47f512e6e56a5700d177f436ffae0a8e8f72d3f40e742ac47af9fb7b",
+    "episodes/cifar100-1-control/b0-s0-confirmation/closure.json": "88156ed972510f661027cea806489e7ec772fd4ce7d86f474f99447423dffcb7",
+    "episodes/kmnist-0-candidate/completed.json": "8b57f0edacf3824e206e9f8c7b94845171d3d4e761f632a209dd7951f1940b7a",
+    "calls/kmnist-0-candidate/b0-s0/response.json": "540198cad4bf02658087f0c206c1c2426893f9af2caa8dc974d0befd6467af80",
+    "calls/kmnist-0-candidate/b1-s0/response.json": "587227c4e5841b112396517ad599961956b2ae6a1a6a3a86faabda2db5d29188",
+    "episodes/kmnist-0-candidate/b0-s0/dispatch.json": "d31941937de6c71bcd85adc36deac7a2fd27e08a5db692fa5def8e8650bdf549",
+    "episodes/kmnist-0-candidate/b0-s0/closure.json": "34fcf067dde77190e9c9fdda7c91260263bbe270e09181e093672452f63bca21",
+    "episodes/kmnist-0-candidate/b0-s0-audit/dispatch.json": "0a2b015707f53111e6bb663442f595c0580018ff654b350a5ca4d8ba8a648d71",
+    "episodes/kmnist-0-candidate/b0-s0-audit/closure.json": "8299df2c2d4efc23fce6143b2980276663a20fc5ff0a5de57a57b117f6b69c88",
+    "episodes/kmnist-0-candidate/b0-s0-confirmation/dispatch.json": "d31ec742a0222cb5c1d7bcf69b7853ec3ad8ac30feff056bd762a3acf696efd0",
+    "episodes/kmnist-0-candidate/b0-s0-confirmation/closure.json": "f3eccac68cece55bb2eb0fab82ba2e091b8c8c8b6a316b2e1d873610cadc0f00",
+    "episodes/kmnist-0-control/completed.json": "a5977ebf1453e9b65c038a7d9bf8a44e43d367e128dd14c8fe3a7da4279aa471",
+    "calls/kmnist-0-control/b0-s0/response.json": "3676c8e88122f15ab8691aa51412a1c1f8011c68367fb5c79bc99e5b4574bd9c",
+    "calls/kmnist-0-control/b1-s0/response.json": "2dabfd8de180b471e2c2ba60ae04523994fec82a072a9d0f45ee69e30ef46108",
+    "episodes/kmnist-0-control/b1-s0/dispatch.json": "c04967e71d65adeb79d44bf370103100f9a2635e2e0364c9adc84cef1edcef71",
+    "episodes/kmnist-0-control/b1-s0/closure.json": "ae2f1f172bb0d8f9d2604b159057be8ef3fc8ade2b1acb7f815f55a7fc6d549a",
+    "episodes/kmnist-0-control/b1-s0-audit/dispatch.json": "04eaa04f86b969e559384bf1d0d00ca9b2a94d6907fa6af87a78aead7a21511d",
+    "episodes/kmnist-0-control/b1-s0-audit/closure.json": "2935d0d6ea56bd7edf1d2b858d80b8b602cece7c01f1309276b1ccd53684c26d",
+    "episodes/kmnist-0-control/b1-s0-confirmation/dispatch.json": "1436002a19f923451a9b491b90402447280809f0520db7ceaecfa3ae5dab4618",
+    "episodes/kmnist-0-control/b1-s0-confirmation/closure.json": "2ebdf41518c71be7401599d2d1837239ef62a13c950bb162dc9cbd7084234023",
+    "episodes/kmnist-1-candidate/completed.json": "cf9ee458be88cb9653bb23c4f947193b679ae79571b93b962e6b32d766be0427",
+    "calls/kmnist-1-candidate/b0-s0/response.json": "828e511f84b5d7a026cde556f8c440a264aae9e12fdb2ca7abee87a94b37a85f",
+    "calls/kmnist-1-candidate/b0-s1/response.json": "c1ffe9b103356b48829da86810fd3fc324f4181de18ce921fd9b17eb604ebf01",
+    "calls/kmnist-1-candidate/b0-s2/response.json": "52883cf6bee53cd24705a87c7411521f007fdd51076f0845796225423eb51158",
+    "calls/kmnist-1-candidate/b1-s0/response.json": "4b28d59521893db62a1ddae1a779633a2656938e5b1e9a18845e309049f8b67c",
+    "calls/kmnist-1-candidate/b1-s1/response.json": "f6d2669d63cd0d8ab2da9dc3522f89294a4309146bf9d64dae935723de87b012",
+    "calls/kmnist-1-candidate/b1-s2/response.json": "90104fe3a0ff7d753a04bbf79691e41c891a2d21cd520c1238724fc1e3e043b4",
+    "episodes/kmnist-1-candidate/b0-s0/dispatch.json": "c7c65bd1f815fa1c62a544c02232b899d2db2c5c158595d6336a2668d5f0f5dd",
+    "episodes/kmnist-1-candidate/b0-s0/closure.json": "64f4dc01af9e44c7a98dffdb3ef327d422aedf8c2c759e83bfe476de8e29b7b1",
+    "episodes/kmnist-1-candidate/b0-s0-confirmation/dispatch.json": "e352d4f35d52059ac56a1608f41312c70b8c5b3c171ed18c3c49a1e53c41761d",
+    "episodes/kmnist-1-candidate/b0-s0-confirmation/closure.json": "5955726c6fe7ec488eba0285cb8874320e05ce2fb4a1b0df965f3fc150f6457e",
+    "episodes/kmnist-1-candidate/b0-s1/dispatch.json": "f3871feba90ca71e2cded171eecdbf357df79a70cd21040c1e13353aa0594a27",
+    "episodes/kmnist-1-candidate/b0-s1/closure.json": "bb9257ce1beba43b1fb1f917a01ebc13b38dbd8d1db7ffc44896903024432719",
+    "episodes/kmnist-1-candidate/b0-s2/dispatch.json": "3ff8bcde739f2cbc9851ce11544577ffc9da6b7cb7aa57bb2c7eeb84cbcc1f7e",
+    "episodes/kmnist-1-candidate/b0-s2/closure.json": "d113f64d5429ac8f4f7dc66297915a7b9062418e3933b30d3775a5a2112e0986",
+    "episodes/kmnist-1-candidate/b1-s0/dispatch.json": "307eb6e65e6e94864ee07393fbd0a6ce9de7eb3fe033b33115d2365d9984f80d",
+    "episodes/kmnist-1-candidate/b1-s0/closure.json": "898b464a0a6ca022f15be36f2d1a81651ec2161c32a562a0db699c75e48cce9f",
+    "episodes/kmnist-1-candidate/b1-s0-audit/dispatch.json": "4f8fc881d31885fb6e4f4409eaf4830d7fea4d637510f833afb3196ea590e978",
+    "episodes/kmnist-1-candidate/b1-s0-audit/closure.json": "103e53e12e28cb9405be9cde64b8391cef6ce5d8e0c8454069be8ebc4509a094",
+    "episodes/kmnist-1-candidate/b1-s1/dispatch.json": "7168ae110da3cb76ed3747d646a7fec1d94a56f0349b474a3140921a8f6f8c29",
+    "episodes/kmnist-1-candidate/b1-s1/closure.json": "1fb5f999435b8bf35c0b9436ed3c27c25f82126a65f1801625e6da9d23fa7619",
+    "episodes/kmnist-1-candidate/b1-s2/dispatch.json": "b8ec9cd7c192bc779853c95a74a7f43e89aa8f3eae8b79d1d1d331d88d774d53",
+    "episodes/kmnist-1-candidate/b1-s2/closure.json": "53932d2f5353713e35b576e51b735ffd04b340fe49031c46ee2f48598b27c266",
+    "episodes/kmnist-1-control/completed.json": "ef5815648ad5709fc4acc761487ed64833a07666e68cd17abf1deff8358f88d4",
+    "calls/kmnist-1-control/b0-s0/response.json": "98ab22d92378a8d84f54481d58960584974b5e46979a7c720d47f0aaab279e05",
+    "calls/kmnist-1-control/b1-s0/response.json": "71ca5eeab59a9c54f8ea3bd9e300640ece75122661c9645f5cb13335aedbfdb6",
+    "episodes/kmnist-1-control/b1-s0/dispatch.json": "21f1807c4e08b71c676f89032d7a34a9cf731328b28f3ea9e660f0b5458fc83b",
+    "episodes/kmnist-1-control/b1-s0/closure.json": "b95615cb1f9b933a930e287a78e562dc843c70694190239b10cde8f9cf12232f",
+    "episodes/kmnist-1-control/b1-s0-audit/dispatch.json": "e82122c9a7dd276233ae8c5393c21f6863c8772fde83a03cf9d5b657622d6a09",
+    "episodes/kmnist-1-control/b1-s0-audit/closure.json": "a3ae35576514a8998b6015dc1fabbc2ad215d6017da3df982af35ec57ba6a974",
+    "episodes/kmnist-1-control/b1-s0-confirmation/dispatch.json": "f54eaf73d832d15733a9e2032945fb01fb28a5fa0cf95b0b62ccbcfeccb3f1bc",
+    "episodes/kmnist-1-control/b1-s0-confirmation/closure.json": "5f6a52bec02f23dd0b562e9ad310654dbe3e230509c17318a20ec7bc53c71178",
+    "episodes/sarcos-0-candidate/completed.json": "fd99d7260616eade2326e7d1a674d1907db540aee4c14695faf631285368d770",
+    "calls/sarcos-0-candidate/b0-s0/response.json": "6a3f3be75559e7c2ff10279becb5adfdff5efbc5e0b4d1a92caee0bacfdf53e6",
+    "calls/sarcos-0-candidate/b1-s0/response.json": "42296f6268e73822a370c21ec770d06dfcbcf56830d2cdc3d4ab213115f22413",
+    "episodes/sarcos-0-candidate/b0-s0/dispatch.json": "e2a1c8c10273cb4959f6749137944326c90d4880fd1f12af9df0b0f471a26534",
+    "episodes/sarcos-0-candidate/b0-s0/closure.json": "d009ff1f1eb6c2386a326bf3bd388ae36da90e9a17832147f369cae83eed00fa",
+    "episodes/sarcos-0-candidate/b0-s0-audit/dispatch.json": "e294fa889fad2028cb928c4586e7e8186b0dc223c1b46217638ebe9aa9150b76",
+    "episodes/sarcos-0-candidate/b0-s0-audit/closure.json": "5b265367d4cb908bc74fa862d85c5b8871af0f84505b0d578dcdb4d179f21086",
+    "episodes/sarcos-0-candidate/b0-s0-confirmation/dispatch.json": "125767644a8388ef80da372eccbe65ca8b6e28991cb0e1cfdcc6934ef040222f",
+    "episodes/sarcos-0-candidate/b0-s0-confirmation/closure.json": "4a1b6934a38950eab864a81ea64f7241dd9138bcab98bc09e6db89a143c17b5f",
+    "episodes/sarcos-0-control/completed.json": "f9d75dcc6dcf7f44a3a7e90fbda9e64d88282dd6ea20a0b2bb35de7e9053a28d",
+    "calls/sarcos-0-control/b0-s0/response.json": "71df0724f3ab9c3d5cfa9d40f88b1fd0b1eb399adf1ca487fca30ad5c0a2d08f",
+    "calls/sarcos-0-control/b1-s0/response.json": "cbe26c00dcb24eb9b7be231188ed9c5bf852e0be6b4ac1501890bab20807312c",
+    "episodes/sarcos-0-control/b1-s0/dispatch.json": "724c7ab9a1f2ea90458eb43571cc996f9e5ca79bac116a2925422a4b38432ede",
+    "episodes/sarcos-0-control/b1-s0/closure.json": "d95a30e6464295e2fa78991712954489b2dacb8ec7571271341a5776652879c9",
+    "episodes/sarcos-0-control/b1-s0-audit/dispatch.json": "3cb5f2e7199540eab65eceef4f6420f17c180cbfbdae52795fc431e4002f9eff",
+    "episodes/sarcos-0-control/b1-s0-audit/closure.json": "eb96ffaa675f2d4263b50883ad36c6ece8fdcc5ebc0cd658e621544edbc7044b",
+    "episodes/sarcos-0-control/b1-s0-confirmation/dispatch.json": "d6f846723d514517616e7d5c166fe7df9ba15255b4fcbcaaeacf30d26578e259",
+    "episodes/sarcos-0-control/b1-s0-confirmation/closure.json": "41bf66918b9738523a761bac41e05d2e482581a1961b8f59d9992d9e86e5de2d",
+    "episodes/sarcos-1-candidate/completed.json": "a4fd6e277a11b623a9538ded5c79ff4c121e477e50549aa6adb008b7416bd8c9",
+    "calls/sarcos-1-candidate/b0-s0/response.json": "a53b2ad20bac0d50703592be159fd5c26b87662fb98b797b3b5b870c6aff119b",
+    "calls/sarcos-1-candidate/b1-s0/response.json": "ef01a17acded8d6d50fda7f676e4d801e1fec428dfd8ad17573160f3a35dc078",
+    "episodes/sarcos-1-candidate/b0-s0/dispatch.json": "f9118adca2b12d090b704764353c5690ce9cda2186d85d0bd14f410034f9eadc",
+    "episodes/sarcos-1-candidate/b0-s0/closure.json": "39aef38f8eaccea5d4b9c5e97c931c34583448547a979b76bf34104357233296",
+    "episodes/sarcos-1-candidate/b0-s0-audit/dispatch.json": "4f1386412e120c1f6871450b5bb7b687ac37c1b933c1d9115ef3b1604012bbea",
+    "episodes/sarcos-1-candidate/b0-s0-audit/closure.json": "571f46a3fdef05ea25d294835fa78b4f33c3ab0d74c671f17b925c91c7ca2c03",
+    "episodes/sarcos-1-candidate/b0-s0-confirmation/dispatch.json": "46792770f4a3d7a8d30c81609396adef02bacacf5eba19fa01534f15a3d5d9fb",
+    "episodes/sarcos-1-candidate/b0-s0-confirmation/closure.json": "55bbbf8448325f6e5b886382a625e4019174139442c881d3212b96f346478c25",
+    "episodes/sarcos-1-control/completed.json": "75dc5fd1333aaafea3a00d2d5a6b268979d01df2788c26dc02d9d1e31acd76fb",
+    "calls/sarcos-1-control/b0-s0/response.json": "c5a9e1f15592289a7342fc1cc5458bd6b9dfac6be9fda4a0afbc99f1db052846",
+    "calls/sarcos-1-control/b1-s0/response.json": "8a15f512b24a934183bb6f833e28a98cc3119382eb3c0e55ef913e86d9cc8be3",
+    "episodes/sarcos-1-control/b1-s0/dispatch.json": "abaf4dfe91d68d3ead145bfa0d0203816142b574bc1ffe762be36ef96f1362ad",
+    "episodes/sarcos-1-control/b1-s0/closure.json": "2da5645db57c6a2ee3a9ebe434776cf49919ddcdc80962b3d09360c86d5f5a8e",
+    "episodes/sarcos-1-control/b1-s0-audit/dispatch.json": "0c91171ed4ac7a59b71e5285402e3b5439318ddf5490d5997894fa5a39b9efa8",
+    "episodes/sarcos-1-control/b1-s0-audit/closure.json": "cf195e3bbbfe64edf121d4fb6bf71caced4d36d3adbf2426d4ec3c1dca5e41df",
+    "episodes/sarcos-1-control/b1-s0-confirmation/dispatch.json": "bab723fe80f93200a858343d2a20d65d6fb3a253c06c773dd08bff966739c42e",
+    "episodes/sarcos-1-control/b1-s0-confirmation/closure.json": "1c69514ae766b05772f5d5e027ada21b99d8e86c9e54c3ed644cf07628a8aa15",
+    "episodes/trec-0-candidate/completed.json": "e3b302375aaa68df7cd01bf68a0eab87d8b5a9e93c645cfc73b8c7de6e1ed0b6",
+    "calls/trec-0-candidate/b0-s0/response.json": "398375aeb7b0876363d4cefba29d1b3c35d90bda766b50b1eb4ef3aed6a4064e",
+    "calls/trec-0-candidate/b0-s1/response.json": "cdcf1ed32ed57fd439d80be61adf7a657d587b8e2aeb292153e83baf91cc45de",
+    "calls/trec-0-candidate/b0-s2/response.json": "cb0df93cb5525800d3a44f6478435dff653ccea8f3d2b5dbb242bad335167d16",
+    "calls/trec-0-candidate/b1-s0/response.json": "bf4c438b769b3294cf2c8f2819e9a6b041b34a42169dac4d1f31ebd87f882b0a",
+    "calls/trec-0-candidate/b1-s1/response.json": "0a95ee66aac53d461afc2957d15872f383e1a0c9fc755e6a81aab2b03fb40611",
+    "calls/trec-0-candidate/b1-s2/response.json": "597dd40c2541a9df4a00ad2b52137bc3e95cbe80e5e12c44dde5dfea279437e7",
+    "episodes/trec-0-candidate/b0-s0/dispatch.json": "94e57ad4a0606677eed7f45e77a022546fd2f13aa819bbbd804d436f743c4f84",
+    "episodes/trec-0-candidate/b0-s0/closure.json": "3e0aaf2271c52aeefe92105a614302b5d420667cb3e97adb94ec5449764046a3",
+    "episodes/trec-0-candidate/b0-s0-confirmation/dispatch.json": "590a977caabc206e8b36a17804299fbf7ce32412856d1d58ca0bdf5cb33bed6e",
+    "episodes/trec-0-candidate/b0-s0-confirmation/closure.json": "b8e2705ee1b9eba32cb642a956f8f98a22a6464362e54a0c5aaf2ca4b69c2373",
+    "episodes/trec-0-candidate/b0-s1/dispatch.json": "84ff069da5e3440b51c073877e3c4cddc98eaf97af027b962ae1989b85321927",
+    "episodes/trec-0-candidate/b0-s1/closure.json": "fdf2f4cefee0b8d4b16e7d32199a3368aecdeca352dcd7bd4a2c2f4ed4328f6b",
+    "episodes/trec-0-candidate/b0-s1-audit/dispatch.json": "f5d28c8be400ee634491686572fd83920ee7eb03b097778b42cd24cf723f8938",
+    "episodes/trec-0-candidate/b0-s1-audit/closure.json": "5f60fe313c5ab75f6b73bb6ff6da691fbd86c2f2246f8d82943af1f3f16b30f5",
+    "episodes/trec-0-candidate/b0-s2/dispatch.json": "24308af8b166480164fbe383c9c7c0e12c048a393f7c50a610e1f27b07eec3c9",
+    "episodes/trec-0-candidate/b0-s2/closure.json": "e5494ae852335c073183f8a1310965761fb0abd8ef95fe85c75b48607b22b043",
+    "episodes/trec-0-candidate/b1-s0/dispatch.json": "7529e20e69edb8c87d7e4432378364a773c4f771c681a1848f4a4dcdf71acab0",
+    "episodes/trec-0-candidate/b1-s0/closure.json": "09f5263df204223c625f36c2865870c323a722db0b5e474b0a77aad6a9e551c0",
+    "episodes/trec-0-candidate/b1-s1/dispatch.json": "de58ef6c92ed4b5dab71840729de739e36097d0464e505b8a9d7e1e77714c58d",
+    "episodes/trec-0-candidate/b1-s1/closure.json": "3e4cd155f81196a271bbbc3c42096bd81fd386712bb721f35663fe7b4d6dac9a",
+    "episodes/trec-0-candidate/b1-s2/dispatch.json": "3d681b45ee9a5790667db62368570315653bae76051489a66d5a5cdb322b27fe",
+    "episodes/trec-0-candidate/b1-s2/closure.json": "2a84b3b880e12a1f9844d14fd624f71bfa8b690f7e2867ca076eba9b430121cf",
+    "episodes/trec-0-control/completed.json": "10c0152d5796ca9807c7e71581fe7a3ae9a34531695e1d3d0e6982e5794e10b2",
+    "calls/trec-0-control/b0-s0/response.json": "41a5b5801315aa6bfc20b425abe695765a25eea6a552dedd7f1318c57c93950e",
+    "calls/trec-0-control/b0-s1/response.json": "57c5833482c85279df60ed8aed02c431471e9bded61a6431005cf396264cf66b",
+    "calls/trec-0-control/b0-s2/response.json": "aea51750ec8157b3526a6bfe5814afdc394c5c099ca62f5fef0c481b68c4bc93",
+    "calls/trec-0-control/b1-s0/response.json": "e450d66cd899ced643a0008f31376d0117a64501b257674407ab4723081bdf27",
+    "calls/trec-0-control/b1-s1/response.json": "44956618e35faf7480d27db7e6292275ad7f0d9af32c5f8542338b483743eda8",
+    "calls/trec-0-control/b1-s2/response.json": "0d8e1fbae7cba21afde8fc76a68f9ab19f4da12807d7dc05c81b3d8fd60ec3e1",
+    "episodes/trec-0-control/b0-s0/dispatch.json": "08ecee683ac4f9e4b4f79e1915e2d319d037f51be007320bc60fdb39931b8e4c",
+    "episodes/trec-0-control/b0-s0/closure.json": "627f383ba7359a89ebebef3e8fb7047ac66935ff21dd4e761bca1b89162f7dee",
+    "episodes/trec-0-control/b0-s0-audit/dispatch.json": "5ae060e49039cfeaa770711d18584742766e015f6db736173c58d3599318a42c",
+    "episodes/trec-0-control/b0-s0-audit/closure.json": "24b14ec8fb0a4a2565807202cd9a730fcf693620e0af52e73770c64b9a67051c",
+    "episodes/trec-0-control/b0-s1/dispatch.json": "6fe1c6b3547ca013c933c0337be5859e78d821f09dd4f4727f28e5468f8a9f08",
+    "episodes/trec-0-control/b0-s1/closure.json": "1a88170ce26577ab60f6ff90dea49fcb1cca618b0ecb8e1e3f62d6137c0559f5",
+    "episodes/trec-0-control/b0-s2/dispatch.json": "e40dccf56870bcef870ad4cd778abdb59c559a4de766c5121e62220d71d70c07",
+    "episodes/trec-0-control/b0-s2/closure.json": "3ae1aa8e841eef139617a8151acc45d3d8e39704c12428d091d8aa6143121fd3",
+    "episodes/trec-0-control/b1-s0/dispatch.json": "fe4ef5ec8f49615902d783033e855680b9601d3a29f4d185b6c5a3ca9893df06",
+    "episodes/trec-0-control/b1-s0/closure.json": "cdf09aed32682a8456d66f2646bd04faf8f1db8e8366dbbcbab108ce7c5e77d8",
+    "episodes/trec-0-control/b1-s0-confirmation/dispatch.json": "1e59035675662321d6b2cb9ecace69343fe7e27008ffb1bd9e2e30502092b981",
+    "episodes/trec-0-control/b1-s0-confirmation/closure.json": "00b4f2715fe29540ca3ae0bcf617347d114ce5159435625b532d9f1ca89b4577",
+    "episodes/trec-0-control/b1-s1/dispatch.json": "5933950f13830be2364337b3bb455302dec991a768f1de4c68973883f429dc53",
+    "episodes/trec-0-control/b1-s1/closure.json": "56cf4ac035ac27fc1507ac3beb0612f7126002a2b8ac316fca488755b8894ff3",
+    "episodes/trec-0-control/b1-s2/dispatch.json": "a7b8b4649e51de2d549264162df95e3df690768fbdef88668093203a0982c58f",
+    "episodes/trec-0-control/b1-s2/closure.json": "9ad1703eff624ab40164a74df5b5229a593b06a79fed86528db77cb2624377cf",
+    "episodes/trec-1-candidate/completed.json": "938ae5d7e1e371a9ca4f2068e6e631c3bacc0c0ddc4264e23ad6f8ed72fd75fc",
+    "calls/trec-1-candidate/b0-s0/response.json": "fd2804294ac8026b62e98fd7cb3ce42f1f8847ebb17d10b3d458b7c018901f74",
+    "calls/trec-1-candidate/b0-s1/response.json": "54d31f8c7abe5211b93dd08cb5ed2d916ec5dea8262441e55a4f522487605a9a",
+    "calls/trec-1-candidate/b0-s2/response.json": "f7b5af1b46c51497a24456676e9892d7b522595d9cf59526a9a0e283a7c2ffac",
+    "calls/trec-1-candidate/b1-s0/response.json": "925d7a466c6282713b1c535a9c7ff12d6edd95f5e82b8b1ec6ae1ca1a46e265a",
+    "calls/trec-1-candidate/b1-s1/response.json": "2be293ae743e16d0042b475168834721663e5191ac956c35eed97d7da65b0235",
+    "calls/trec-1-candidate/b1-s2/response.json": "7f5f5457ee3210fe54ba68664aa751d898e136dbbf0c9c6da6f1bbe89f721e5d",
+    "episodes/trec-1-candidate/b0-s0/dispatch.json": "fb44430912cfb651089a817466e7f12a60f7224fc7bff5824c7fdbc97f0b1e7a",
+    "episodes/trec-1-candidate/b0-s0/closure.json": "0f8bb9192eba968b76a2312f93c25c9dae3eb33b55e5baebdc2f9e33cd486c02",
+    "episodes/trec-1-candidate/b0-s1/dispatch.json": "6554dccc7c8209917567f1133e7c68508fb26a3290cf2c0a1dc42c25d58d24aa",
+    "episodes/trec-1-candidate/b0-s1/closure.json": "1a85f39e3915b00b713b1d097984fc090b8ca0e64f8d143e069948584237296b",
+    "episodes/trec-1-candidate/b1-s0/dispatch.json": "04f9fcd357d3fe8fc218c881a2c0def9dd418eda5747db1a2037ee4d7f0e0a3d",
+    "episodes/trec-1-candidate/b1-s0/closure.json": "05df2340a40a665397289b8da95287b070210bc667bafb940a15658ba459401e",
+    "episodes/trec-1-candidate/b1-s0-confirmation/dispatch.json": "418ebfd70ead3164194e3238523ea2512b4b396684d8c9972fbf6aa4f6c63d10",
+    "episodes/trec-1-candidate/b1-s0-confirmation/closure.json": "fed770c8e562ca4fe0f4677aad2025431d1f1d3769aba61673bc46b24641f161",
+    "episodes/trec-1-candidate/b1-s1/dispatch.json": "61a6224dba18fc4f751c745898c1117d525d558c1ab2801f22ecbe25ddc0aa30",
+    "episodes/trec-1-candidate/b1-s1/closure.json": "d43aadf762da4a2ee10b86e92cfb8694a94cf787076b43ba04f6225a3dac11a8",
+    "episodes/trec-1-candidate/b1-s1-audit/dispatch.json": "52f4e2c33c89137ebfb9d536b7a9bdc8d53148be87d679e066df3b7f8dd06756",
+    "episodes/trec-1-candidate/b1-s1-audit/closure.json": "a85fbb8ed85143f19af8f83d4de5ebf52a36458a752bb9f08efbd12a8d7508b3",
+    "episodes/trec-1-control/completed.json": "2b574cbb89c34a495740fa7da977a0b1bf6b19260e11b5e36e22b2f7ece58325",
+    "calls/trec-1-control/b0-s0/response.json": "23a5870cd721f0184199412a99f261b652de280f5139f08ebc0e96ccc90ae637",
+    "calls/trec-1-control/b0-s1/response.json": "a1431cdddce294d4f44d5be7a5e8332e421acdbdb51557112ca3f82b02dbc971",
+    "calls/trec-1-control/b0-s2/response.json": "bfd3497103175d5c6ec67bdaa31f6a8d8667300bce8b8b884ca2423f213eea1c",
+    "calls/trec-1-control/b1-s0/response.json": "105c61761bf49ba46bd2651002cc5412612477dde68c208722843758bca730d4",
+    "calls/trec-1-control/b1-s1/response.json": "57c2149deecfd0770ce51137fbab2432545c62e396815c43a1b063865c3aebf1",
+    "calls/trec-1-control/b1-s2/response.json": "a80aeb3131a5b64815798af35657793850d4aee68d2cf99392d3b8328ba8ec45",
+    "episodes/trec-1-control/b0-s0/dispatch.json": "8948f4df5d8cc954fe0baf3157d3625ba0337c3974b99ae2e495d672b8a25c10",
+    "episodes/trec-1-control/b0-s0/closure.json": "c49585e84dd200d2f1c82c8664730f77d78771341e869ef269a22425bfced8c7",
+    "episodes/trec-1-control/b0-s0-confirmation/dispatch.json": "7c7bdd03de4ca6dc1ad258dc905c16bcd286567e8ade3f0ab33a6bb179482623",
+    "episodes/trec-1-control/b0-s0-confirmation/closure.json": "6a66c8fc5e575c9d09112367a17d776b7507191144e183677234efbba6193270",
+    "episodes/trec-1-control/b0-s1/dispatch.json": "c8f12b4d46d37dab684f190f945397d84a4d66df7dc9ebfd82897d5a06fc016a",
+    "episodes/trec-1-control/b0-s1/closure.json": "18b07ce576586ffe12c3246fe16bd781f12d6232517b549abc27701e2eaa005e",
+    "episodes/trec-1-control/b0-s2/dispatch.json": "3b66372bd354dbb46bc60a6db2757a41a98dcb2694cf8d87d0e8141ccd89e690",
+    "episodes/trec-1-control/b0-s2/closure.json": "4a018bfca6cb306bc0fb81b71c6ef13b4dd03d23920fa43ec785604179b8d448",
+    "episodes/trec-1-control/b1-s0/dispatch.json": "2dacc216a65d9083940baa25549655c17ed6e9d9fc3270570156eaa85779a7c9",
+    "episodes/trec-1-control/b1-s0/closure.json": "ddc7e02f8ca9bff043367407e64437af7e4568e6e59d800a0d6ca98218d2bd35",
+    "episodes/trec-1-control/b1-s1/dispatch.json": "06e83e8bbfc69347ecdc7417fe75140d8ef8c744d1e39873df3a26582de0d6f5",
+    "episodes/trec-1-control/b1-s1/closure.json": "71f9ca5c2964e8e1e57d622ca21d760d45009ab83ebbdc267422822348673522",
+    "episodes/trec-1-control/b1-s1-audit/dispatch.json": "be38c762d3518c4db243dd7b5822f28f3b6aea4526599bc4ad65c6d313b8c924",
+    "episodes/trec-1-control/b1-s1-audit/closure.json": "64e81d76758a517bfc6010c6e1faabb2373c02b09210b0ce99faa4b97fbb08fa",
+    "episodes/trec-1-control/b1-s2/dispatch.json": "f562eb16313b42537bb82440da18987c53ac32ff26fd9023a1a18fd96e7dabf4",
+    "episodes/trec-1-control/b1-s2/closure.json": "b76290ebe88ec60e2bd49741bf4c2a8a87122d1f837e76305a1aec176fc07412",
+    "episodes/tsp-0-candidate/completed.json": "1723b61f61040375feeaa6ddbf8f91f9b5c990807a0fb299ec6a79ade91849dc",
+    "episodes/tsp-0-control/completed.json": "dc9846ab06f77bded3860c75e977274481bcd980e1a56369fbe505c938773670"
+  },
+  "frozen_plan_sha256": "bf1fc33a340d075d2338209e0a45daa561cb8a08c7530328f0c9d1228dd16835",
+  "new_model_requests": 0,
+  "new_gpu_executions": 0,
+  "production_change": false,
+  "whole_campaign_verified": false
+}
