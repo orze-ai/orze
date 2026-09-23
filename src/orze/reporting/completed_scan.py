@@ -31,6 +31,12 @@ from orze.reporting.lifecycle_stages import (
 class CompletedScanUnavailable(ValueError):
     """A content-safe reason why no aggregate may be consumed."""
 
+    def __init__(self, reason, *, retryable=False):
+        super().__init__(reason)
+        # Only a peer data commit permits starting a fresh scan. No pages
+        # from the invalidated scan may be retained by the caller.
+        self.retryable = retryable
+
 
 class CompletedIdeaScan:
     def __init__(self, db_path: Path, *, page_size: int = 128):
@@ -81,9 +87,14 @@ class CompletedIdeaScan:
 
     def verify(self):
         try:
-            if (self._pid != os.getpid() or self._path_identity() != self._identity
-                    or self._stamp() != self._revision):
+            if self._pid != os.getpid() or self._path_identity() != self._identity:
                 raise CompletedScanUnavailable("authoritative_lifecycle_scan_changed")
+            revision = self._stamp()
+            if revision[0] != self._revision[0] or revision[2] != self._revision[2]:
+                raise CompletedScanUnavailable("authoritative_lifecycle_scan_changed")
+            if revision[1] != self._revision[1]:
+                raise CompletedScanUnavailable(
+                    "authoritative_lifecycle_scan_changed", retryable=True)
         except (OSError, sqlite3.Error) as exc:
             raise CompletedScanUnavailable("authoritative_lifecycle_scan_changed") from exc
 

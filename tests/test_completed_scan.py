@@ -45,7 +45,7 @@ def test_full_enumeration_matches_legacy_without_holding_reader(tmp_path, page_s
 @pytest.mark.parametrize("mutation", ["status", "state", "stage", "drop_stage", "unrelated", "change_restore", "replace", "symlink", "hardlink", "delete"])
 def test_changes_after_a_page_reject_whole_scan(tmp_path, mutation):
     path = lake(tmp_path)
-    with pytest.raises(CompletedScanUnavailable):
+    with pytest.raises(CompletedScanUnavailable) as error:
         with CompletedIdeaScan(path, page_size=2) as scan:
             pages = scan.pages()
             assert len(next(pages)) == 2
@@ -75,6 +75,7 @@ def test_changes_after_a_page_reject_whole_scan(tmp_path, mutation):
                     path.symlink_to(replacement)
             list(pages)
     assert scan._conn is None
+    assert error.value.retryable == (mutation in {"status", "state", "stage", "change_restore"})
 
 
 def test_exit_rechecks_after_last_qualification(tmp_path):
