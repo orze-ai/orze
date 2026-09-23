@@ -1,0 +1,328 @@
+{
+  "created": 1790140668.2078395,
+  "scope": "Complete TSP-320 task pair, two repetitions per arm. Only newly closed control repetition 1 stored predictions rescored here, including its three baseline route sets. Prior route checks referenced by hash. Full QAP/optimization-family and campaign verification still pending.",
+  "episode": "tsp-1-control",
+  "completed": {
+    "label": "tsp-1-control",
+    "task": "tsp",
+    "family": "optimization",
+    "repetition": 1,
+    "arm": "control",
+    "gpu": 7,
+    "started": 1790135711.6134703,
+    "finished": 1790140127.9527507,
+    "seconds": 4416.339280605316,
+    "goal_reached": true,
+    "capped_goal_seconds": 4416.3326416015625,
+    "state": {
+      "started": 1790135711.6134703,
+      "terminal": true,
+      "goal_reached": true,
+      "confirmation_used": true,
+      "best": 10.209244669082643,
+      "delivered": {
+        "action": "b1-s0",
+        "finished": 1790140127.946112,
+        "accepted": true,
+        "within_deadline": true,
+        "route": "fresh_confirmation_then_audit",
+        "source_sha256": "af51c4c60b4e153603a71d89e67fbf86bcb8f018cd9610fa9a2233f58bc387ed",
+        "checkpoint_sha256": "7bbea45294347f1b0e6ed14259966b61ad997b8e211f1c7a4b4800d29ba8fc95"
+      }
+    },
+    "metrics": {
+      "best_score": -10.209244669082643,
+      "calls": 2,
+      "cost": 1.0728849999999999,
+      "parallel_seconds_estimate": 4416.296542882919,
+      "quality_gain": 0.033610149809029946,
+      "rounds": 1,
+      "supported": true
+    },
+    "paid_calls": 2,
+    "retained_upper_usd": 1.328925,
+    "unused_proposals": 1,
+    "invalid_attempts": 0,
+    "unadmitted_attempts": 0
+  },
+  "selected_source_sha256": "af51c4c60b4e153603a71d89e67fbf86bcb8f018cd9610fa9a2233f58bc387ed",
+  "model_authored_rationale": "TSP-320 solver: Or-opt + 2-opt local search with neighbour lists and don't-look\nbits, driven by iterated local search (double-bridge perturbation), compiled\nwith numba.\n\nRationale (unverified before measurement, but mechanically grounded):\nThe common reference builds a nearest-neighbour tour and then applies a\n*truncated* dense 2-opt (at most 300 improving moves, best-improvement over an\nO(n^2) gain matrix) with 24 random restarts.  For n=320 that truncation stops\nfar short of 2-opt local optimality and the neighbourhood contains no segment\n(Or-opt) moves, so its tours typically sit well above 2-opt+Or-opt quality.\n\nThis method replaces the search entirely:\n  * exact distance matrix, K=10 nearest-neighbour candidate lists,\n  * first-improvement 2-opt over candidate edges in both tour directions with\n    the standard d(a,c) < d(a,b) pruning and shorter-side reversal,\n  * Or-opt moves for segments of length 1..3, forward and reversed insertion,\n  * don't-look bits so re-optimisation after a perturbation is local,\n  * iterated local search with random double-bridge kicks, accepting only\n    improvements, run under a wall-clock budget shared evenly over the split.\nPer-instance time is derived from the split size so the whole split fits inside\nthe execution limit (development prediction happens inside the train limit, so\ntraining itself only warms the JIT and runs a short sanity check).\nNo labels are involved: the objective is computed directly from the instance.",
+  "stages": {
+    "development": {
+      "model_authored_findings": {
+        "method": "2-opt + Or-opt(1..3) local search with K=10 neighbour lists, don't-look bits, ILS with double-bridge kicks",
+        "numba_available": true,
+        "jit_compile_seconds": 3.23,
+        "train_probe_instances": 3,
+        "probe_nearest_neighbour_mean_length": 11.9257,
+        "probe_ils_6s_mean_length": 9.3806,
+        "train_seconds": 21.24,
+        "limitations": [
+          "probe uses only 3 training instances and a 6s budget, far below the prediction-time budget; it is a sanity check, not an estimate of split loss",
+          "no comparison against the reference solver was run inside training",
+          "per-instance time is split evenly over the prediction split, so quality depends on split size and shared-GPU/CPU contention"
+        ]
+      },
+      "worker": {
+        "started": 1790135899.4328253,
+        "finished": 1790137320.8866034,
+        "seconds": 1421.4537782669067
+      },
+      "closure": {
+        "finished": 1790137321.6424098,
+        "seconds": 1424.349015712738,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T03:58:17.392474585Z",
+          "FinishedAt": "2026-09-23T04:22:01.479960165Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 7
+      }
+    },
+    "confirmation": {
+      "model_authored_findings": {},
+      "worker": {
+        "started": 1790137323.803807,
+        "finished": 1790138724.0061347,
+        "seconds": 1400.2023282051086
+      },
+      "closure": {
+        "finished": 1790138724.6767435,
+        "seconds": 1402.9608039855957,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T04:22:01.817306208Z",
+          "FinishedAt": "2026-09-23T04:45:24.551955037Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 7
+      },
+      "original_comparison": {
+        "relative_gain": 0.03633705962103384,
+        "candidate_loss": 10.024603645143904,
+        "baseline_loss": 10.402603675099998,
+        "groups": 32,
+        "paired_group_97_5_upper_difference": -0.3386401292089408,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    "audit": {
+      "model_authored_findings": {},
+      "worker": {
+        "started": 1790138726.8868043,
+        "finished": 1790140127.0824783,
+        "seconds": 1400.195674419403
+      },
+      "closure": {
+        "finished": 1790140127.8601475,
+        "seconds": 1403.0973691940308,
+        "state": {
+          "Status": "exited",
+          "Running": false,
+          "Paused": false,
+          "Restarting": false,
+          "OOMKilled": false,
+          "Dead": false,
+          "Pid": 0,
+          "ExitCode": 0,
+          "Error": "",
+          "StartedAt": "2026-09-23T04:45:24.866496319Z",
+          "FinishedAt": "2026-09-23T05:08:47.702789141Z"
+        },
+        "exit_code": 0,
+        "timeout": false,
+        "gpu": 7
+      },
+      "original_comparison": {
+        "relative_gain": 0.03346552007078729,
+        "candidate_loss": 10.567623802654312,
+        "baseline_loss": 10.933519726506049,
+        "groups": 64,
+        "paired_group_97_5_upper_difference": -0.33875259548749226,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    }
+  },
+  "new_prediction_checks": [
+    {
+      "split": "development",
+      "instances": 32,
+      "points_per_instance": 320,
+      "candidate_loss": 10.209244669082643,
+      "baseline_loss": 10.564312805091213,
+      "relative_gain": 0.03361014980902999,
+      "valid_permutations": true
+    },
+    {
+      "split": "confirmation",
+      "instances": 32,
+      "points_per_instance": 320,
+      "candidate_loss": 10.024603645143904,
+      "baseline_loss": 10.402603675099998,
+      "relative_gain": 0.03633705962103384,
+      "valid_permutations": true
+    },
+    {
+      "split": "audit",
+      "instances": 64,
+      "points_per_instance": 320,
+      "candidate_loss": 10.567623802654312,
+      "baseline_loss": 10.933519726506049,
+      "relative_gain": 0.03346552007078729,
+      "valid_permutations": true
+    }
+  ],
+  "tsp_rows": [
+    {
+      "label": "tsp-0-control",
+      "goal_reached": true,
+      "capped_goal_seconds": 4297.7551691532135,
+      "paid_calls": 2,
+      "unused_proposals": 1,
+      "invalid_attempts": 0,
+      "unadmitted_attempts": 0,
+      "audit": {
+        "relative_gain": 0.032630571918407014,
+        "candidate_loss": 10.604872805242263,
+        "baseline_loss": 10.962588332228949,
+        "groups": 64,
+        "paired_group_97_5_upper_difference": -0.33177058581740665,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    {
+      "label": "tsp-0-candidate",
+      "goal_reached": true,
+      "capped_goal_seconds": 1434.286967754364,
+      "paid_calls": 2,
+      "unused_proposals": 1,
+      "invalid_attempts": 0,
+      "unadmitted_attempts": 0,
+      "audit": {
+        "relative_gain": 0.032370522978307226,
+        "candidate_loss": 10.60772361471881,
+        "baseline_loss": 10.962588332228949,
+        "groups": 64,
+        "paired_group_97_5_upper_difference": -0.3299225337799072,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    {
+      "label": "tsp-1-control",
+      "goal_reached": true,
+      "capped_goal_seconds": 4416.3326416015625,
+      "paid_calls": 2,
+      "unused_proposals": 1,
+      "invalid_attempts": 0,
+      "unadmitted_attempts": 0,
+      "audit": {
+        "relative_gain": 0.03346552007078729,
+        "candidate_loss": 10.567623802654312,
+        "baseline_loss": 10.933519726506049,
+        "groups": 64,
+        "paired_group_97_5_upper_difference": -0.33875259548749226,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    },
+    {
+      "label": "tsp-1-candidate",
+      "goal_reached": true,
+      "capped_goal_seconds": 2014.5027492046356,
+      "paid_calls": 2,
+      "unused_proposals": 1,
+      "invalid_attempts": 0,
+      "unadmitted_attempts": 0,
+      "audit": {
+        "relative_gain": 0.03250845061260588,
+        "candidate_loss": 10.578087940454974,
+        "baseline_loss": 10.933519726506049,
+        "groups": 64,
+        "paired_group_97_5_upper_difference": -0.3301287704960415,
+        "qualified": true,
+        "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+      }
+    }
+  ],
+  "tsp_aggregates": {
+    "control": {
+      "episodes": 2,
+      "accepted": 2,
+      "mean_capped_goal_minutes": 72.61739842295647,
+      "paid_calls": 4,
+      "unused_proposals": 2
+    },
+    "candidate": {
+      "episodes": 2,
+      "accepted": 2,
+      "mean_capped_goal_minutes": 28.739914307991665,
+      "paid_calls": 4,
+      "unused_proposals": 2
+    }
+  },
+  "tsp_descriptive_mean_reduction": 0.6042282575231153,
+  "review_findings": [
+    "Control repetition 1 implements standard compiled neighbor-list 2-opt/Or-opt ILS, double-bridge perturbation and strict improvement acceptance, sequentially across instances.",
+    "Control fixes each prediction batch at 1400 seconds; train plus development worker is about 1421 seconds. Candidate repetition 1 uses two CPU threads with 480/480/900 second development/confirmation/audit budgets. These are simultaneous algorithm, allocation and threading differences, not an isolated ablation.",
+    "Control training's three-instance six-second probe compares against single-start nearest neighbor, not the full common reference. Its unverified rationale about reference local optimality is not established by this probe.",
+    "Both arms pass both TSP repetitions. Candidate is substantially faster in this generated task class with close, passing audit objectives; no claim of GPU-kernel acceleration or new algorithm.",
+    "One unused paid proposal per episode: choosing to execute both before confirmation could impose extra cost even on currently successful episodes; the planned development comparison must measure that cost.",
+    "No full optimization-family verdict or generic research improvement inferred. Complete vision and regression already fail the at-least-three-families-faster criterion. Original bootstrap results are retained, not rerun here."
+  ],
+  "evidence_sha256": {
+    "rsi-prospective-20260923/episodes/tsp-1-control/completed.json": "a8f7535b1a46d96825084e09209d7e901412a9de234511906fbf09e9cb07ac05",
+    "rsi-prospective-20260923/episodes/tsp-1-control/goal-delivered.json": "ea7f107d85106e9d854d267454187a3b57f00337b87264799f2bcd0e80f13864",
+    "rsi-prospective-20260923/calls/tsp-1-control/b1-s0/candidate.py": "af51c4c60b4e153603a71d89e67fbf86bcb8f018cd9610fa9a2233f58bc387ed",
+    "rsi-prospective-20260923/references/tsp-1.json": "6fe4af5d4dca01ba7862c2e9343b85e70f3597cb9c6657fd62ccd15c21f73d01",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0/result.json": "fe356360f53cdc489ca60a0c7c4cf6e6a059a002f723445f47622ab9e49479b6",
+    "rsi-prospective-20260923/data/tsp-1/development/features.npy": "6265a2488316c26b55139d438d1ddecc38b1e6360c55c57eaeaf7c7a79956a4e",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0/timing.json": "60e89fb763e4e335b6cefe5f8337c42964bd483847a5aba2af39b72ab1de9238",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0/closure.json": "15ed80d2688bf3464d6555114aa9e1852c86f7221ea220acc670c590c7dce668",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0/development-score.json": "604e37a4f9416d915ca815accfa700620fb0c79db913861d03b58bced04990f5",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0-confirmation/result.json": "e1d45e9fa8fe4e09a4f6f7e3bc10913f730c7dd3ef6621813e32b25a21e463d0",
+    "rsi-prospective-20260923/data/tsp-1/confirmation/features.npy": "8d92ef404de21f9e46849e97154f619c2784bb0368f26864b8c1c3a3678410b8",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0-confirmation/timing.json": "a2b62f729d7bc46ea4bddaeccb712e3ce499fddaf788990bca1cf75383a3b5a1",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0-confirmation/closure.json": "58e4b0bcd93c31cdceeb88240d56504419fa03e2f1077ea44b11008d8f8feb89",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0-confirmation/comparison.json": "39865cee6eef8ac4ba0957aa3dd44f26eb030950222a5f0b05be56df3b730755",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0-audit/result.json": "7f23b72c3235d15655f94aac08df0eadc20e20b00f14de37d80a13d81579c60e",
+    "rsi-prospective-20260923/data/tsp-1/audit/features.npy": "5ac876b9bc55d98bdf0ecb039094a990bfdee0e92285ca2563e213909fa7f675",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0-audit/timing.json": "de5e730fa487268e17c50538965950a780301b24c052a16bb69cb456c48d8c5e",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0-audit/closure.json": "6c167898a66589c8ef0b38cba5d1ccfd8bb9a7eb39b59e7167e51d3f01dce747",
+    "rsi-prospective-20260923/episodes/tsp-1-control/b1-s0-audit/comparison.json": "96ac2597eac3b118abb5a0aac367cdfd7918f8a79383073be29826cb7aa5b8d3",
+    "rsi-prospective-20260923/episodes/tsp-0-control/completed.json": "dc9846ab06f77bded3860c75e977274481bcd980e1a56369fbe505c938773670",
+    "rsi-prospective-20260923/episodes/tsp-0-control/b1-s0-audit/comparison.json": "51fc3261a49ab44383441585764a13ff936fb06570f9dc2dd8d4948b1739af4b",
+    "rsi-prospective-20260923/episodes/tsp-0-candidate/completed.json": "1723b61f61040375feeaa6ddbf8f91f9b5c990807a0fb299ec6a79ade91849dc",
+    "rsi-prospective-20260923/episodes/tsp-0-candidate/b0-s0-audit/comparison.json": "0a6ada9b2c896d41219199c1bb4a799a1ca4b51a05566f263733c0d6778b237f",
+    "rsi-prospective-20260923/episodes/tsp-1-candidate/completed.json": "cd9f1a401ee4bf37144c68bcc131610dd50e7a105b317e9c59a0e0311c98b4ff",
+    "rsi-prospective-20260923/episodes/tsp-1-candidate/b0-s0-audit/comparison.json": "f5eec0c17c00bc39cc42a7f010c186f88db1c848bd7ed295d7f129506137f3b4",
+    "rsi-prospective-analysis-20260923/tsp-trec-review-001.json": "46dd3ebf603f814cbac3e4a5ec30f12fb745f3eff207b09e9f770b137aa44840",
+    "rsi-prospective-analysis-20260923/tsp-second-candidate-review-001.json": "77c4f1b49922c0b6fa3c8d356d0a8d1e6ab773403f20f9c9425529e0033a7f39"
+  },
+  "new_model_requests": 0,
+  "new_gpu_executions": 0,
+  "whole_campaign_verified": false,
+  "default_promotion_authorized": false
+}
