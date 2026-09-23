@@ -1,0 +1,2423 @@
+{
+  "created": 1790133091.3563302,
+  "scope": "Source and measurement review of six completed episodes while the prospective campaign is running. Rationale is model-authored, not verified causality. Selection includes successes, failures, both arms of AG News 0 and CIFAR-100 1.",
+  "frozen_plan_sha256": "bf1fc33a340d075d2338209e0a45daa561cb8a08c7530328f0c9d1228dd16835",
+  "rows": [
+    {
+      "episode": "agnews-0-control",
+      "selected_action": "b0-s1",
+      "completed": {
+        "label": "agnews-0-control",
+        "task": "agnews",
+        "family": "text",
+        "repetition": 0,
+        "arm": "control",
+        "gpu": 2,
+        "started": 1790131413.8474908,
+        "finished": 1790132361.0423567,
+        "seconds": 947.1948661804199,
+        "goal_reached": false,
+        "capped_goal_seconds": 7200,
+        "state": {
+          "started": 1790131413.8474908,
+          "terminal": true,
+          "goal_reached": false,
+          "confirmation_used": false,
+          "best": 0.091,
+          "delivered": {
+            "action": "b0-s1",
+            "finished": 1790132360.7294474,
+            "accepted": false,
+            "within_deadline": true,
+            "route": "best_development_at_limit",
+            "source_sha256": "a6332a804f29803964190dc41dfae00a8c8847f35a3a23ce8bfd360f671a0dc2",
+            "checkpoint_sha256": "639734b118540176ceffb11837ec28375766481551061b20fc4cf6c7fa6309dc"
+          }
+        },
+        "metrics": {
+          "best_score": -0.091,
+          "calls": 6,
+          "cost": 2.7681299999999998,
+          "parallel_seconds_estimate": 920.0286457538605,
+          "quality_gain": 0.08542713567839202,
+          "rounds": 3,
+          "supported": true
+        },
+        "paid_calls": 6,
+        "retained_upper_usd": 4.29145,
+        "unused_proposals": 0,
+        "invalid_attempts": 2,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "a6332a804f29803964190dc41dfae00a8c8847f35a3a23ce8bfd360f671a0dc2",
+      "model_authored_rationale": "AG-News (12k labelled rows): diverse linear ensemble over word / char / NB-scaled features\nwith greedy OOF weighting plus optional transductive self-training.\n\nReference: single word(1-2) TF-IDF + LinearSVC, dev error .0995.  Target <= .0896.\n\nRationale (exploratory; only validated by group-aware OOF CV on the training split):\n1. The two reference variants (word .0995, char .1045) are close in error, so their mistakes are\n   probably partly decorrelated.  We build three representation blocks -- word(1-2) TF-IDF,\n   char_wb(3-5) TF-IDF, and binary word counts scaled by per-class NB log-count ratios (NB-SVM) --\n   and fit several linear learners (LinearSVC at several C, multinomial logistic regression,\n   ComplementNB) on them.\n2. Mixture weights are not guessed: greedy forward selection with replacement on group-aware\n   3-fold out-of-fold scores minimises OOF error (small CE tie-break).  Every base score is row\n   centred and divided by its global std so hinge/log-odds outputs are commensurable.\n3. Vectorisers (vocabulary and idf only, no labels) are fitted once on labelled texts plus the\n   unlabelled development texts.  This makes CV slightly optimistic about idf coverage relative to\n   audit deployment; the CV numbers are used only to pick weights, not as an audit estimate.\n4. Optional transductive self-training at prediction time: the ensemble pseudo-labels the most\n   confident 60% of the split being predicted (pooled with the unlabelled development texts unless\n   that split *is* development), the base learners are refit on train+pseudo-labels (weight .7),\n   and both stages are averaged.  It is enabled only if a held-out fold probe does not show harm\n   (tolerance .002 absolute).\nFix vs. the previous failed run: liblinear cannot do multiclass; the logistic model now uses lbfgs.\nLimitations: no pretrained text models; a single train/development split; OOF error carries roughly\n0.3-0.5pt noise; the self-training probe uses one fold only.",
+      "measured_findings": {
+        "cv_kind": "group",
+        "cv_folds_done": 3,
+        "oof_rows": 12000,
+        "oof_error_per_model": {
+          "w_svc1": 0.1094,
+          "w_svc03": 0.1135,
+          "c_svc": 0.1046,
+          "wc_svc": 0.1013,
+          "w_lr": 0.1117,
+          "w_cnb": 0.1078,
+          "nbsvm": 0.1211
+        },
+        "oof_error_ensemble": 0.0977,
+        "ensemble_weights": {
+          "wc_svc": 0.333,
+          "w_cnb": 0.417,
+          "nbsvm": 0.167,
+          "c_svc": 0.083
+        },
+        "reference_dev_error": 0.0995,
+        "target_dev_error": 0.08955,
+        "selftrain_enabled": true,
+        "selftrain_probe": {
+          "fold0_rows": 4000,
+          "stage1_err": 0.099,
+          "stage2_err": 0.097,
+          "blend_err": 0.0985
+        },
+        "train_seconds": 73.8,
+        "limitations": "Single train/development split; vectoriser vocabulary/idf pooled with unlabelled development texts so OOF is mildly optimistic about term coverage; self-training judged on one held-out fold (~0.5pt noise); no pretrained text models available."
+      },
+      "phases": {
+        "development": {
+          "point_check": {
+            "episode": "agnews-0-control",
+            "split": "development",
+            "rows": 2000,
+            "candidate_loss": 0.091,
+            "baseline_loss": 0.0995,
+            "relative_gain": 0.08542713567839202,
+            "effect_floor": 0.1,
+            "meets_effect_floor": false
+          },
+          "worker_timing": {
+            "started": 1790131807.7447731,
+            "finished": 1790131899.1092906,
+            "seconds": 91.3645179271698
+          },
+          "host_closure": {
+            "finished": 1790131899.9067476,
+            "seconds": 94.35343599319458,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T02:50:05.656661614Z",
+              "FinishedAt": "2026-09-23T02:51:39.757015263Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        },
+        "audit": {
+          "point_check": {
+            "episode": "agnews-0-control",
+            "split": "audit",
+            "rows": 5000,
+            "candidate_loss": 0.094,
+            "baseline_loss": 0.1036,
+            "relative_gain": 0.09266409266409265,
+            "effect_floor": 0.1,
+            "meets_effect_floor": false,
+            "recorded_comparison": {
+              "relative_gain": 0.09266409266409259,
+              "candidate_loss": 0.094,
+              "baseline_loss": 0.1036,
+              "groups": 4989,
+              "paired_group_97_5_upper_difference": -0.005194805194805195,
+              "qualified": false,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790132336.212381,
+            "finished": 1790132359.1215036,
+            "seconds": 22.909123182296753
+          },
+          "host_closure": {
+            "finished": 1790132359.8665836,
+            "seconds": 25.81211805343628,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T02:58:54.156769987Z",
+              "FinishedAt": "2026-09-23T02:59:19.760932418Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 2
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "source_sha256": "44e3869686530014fb6f865e1591319c44cc3d4b68a93d7334fb1605430ddd95",
+          "model_authored_rationale": "AG-News (12k labelled rows) reference is a single word 1-2gram TF-IDF + LinearSVC (dev err .0995).\n\nRationale (exploratory, validated only by group-aware OOF CV on the training split):\n1. Feature diversity: the two reference variants (word TF-IDF .0995, char TF-IDF .1045) are\n   individually close, so their errors are likely partly decorrelated.  We fit word(1-2) and\n   char_wb(3-5) TF-IDF plus their concatenation and train several linear learners\n   (LinearSVC at two C values, liblinear logistic regression, ComplementNB) on them.\n2. Ensemble weights are not guessed: greedy (Caruana) forward selection with replacement on\n   group-aware 3-fold out-of-fold scores picks the mixture that minimises OOF error\n   (CE tie-break).  Scores of every base model are centred per row and scaled by their global\n   std so that hinge and log-odds outputs are commensurable.\n3. Vectorisers are fitted on labelled texts + the *unlabelled* development texts (vocabulary /\n   idf only, no labels).  In CV the held-out fold texts are excluded from the vocabulary pool so\n   the estimate matches deployment, where audit texts are unseen.\n4. Optional transductive self-training at prediction time: the ensemble pseudo-labels the most\n   confident 60% of the split being predicted, the base learners are refit on\n   train + pseudo-labels (weight .7) and the two stages are averaged.  This is applied\n   identically to development and audit rows, so the development estimate is not optimistically\n   biased relative to audit.  It is enabled only if a held-out fold check does not show it to be\n   harmful (tolerance .002 abs).\nLimitations: no pretrained text models are available; all error estimates come from one\ntrain/development split, OOF error has ~0.3-0.5pt noise, and the self-training check uses a\nsingle fold.",
+          "closure.json": {
+            "seconds": 10.193096399307251,
+            "timeout": false,
+            "exit_code": 1
+          },
+          "result.json": {
+            "valid": false,
+            "error": "ValueError: The 'liblinear' solver does not support multiclass classification (n_classes >= 3). Either use another solver or wrap the estimator in a OneVsRestClassifier to keep applying a one-versus-rest scheme."
+          },
+          "outcome": {
+            "status": "repairable",
+            "seconds": 258.619913816452,
+            "cost": 0.519045
+          },
+          "unused": false
+        },
+        {
+          "action": "b0-s1",
+          "source_sha256": "a6332a804f29803964190dc41dfae00a8c8847f35a3a23ce8bfd360f671a0dc2",
+          "model_authored_rationale": "AG-News (12k labelled rows): diverse linear ensemble over word / char / NB-scaled features\nwith greedy OOF weighting plus optional transductive self-training.\n\nReference: single word(1-2) TF-IDF + LinearSVC, dev error .0995.  Target <= .0896.\n\nRationale (exploratory; only validated by group-aware OOF CV on the training split):\n1. The two reference variants (word .0995, char .1045) are close in error, so their mistakes are\n   probably partly decorrelated.  We build three representation blocks -- word(1-2) TF-IDF,\n   char_wb(3-5) TF-IDF, and binary word counts scaled by per-class NB log-count ratios (NB-SVM) --\n   and fit several linear learners (LinearSVC at several C, multinomial logistic regression,\n   ComplementNB) on them.\n2. Mixture weights are not guessed: greedy forward selection with replacement on group-aware\n   3-fold out-of-fold scores minimises OOF error (small CE tie-break).  Every base score is row\n   centred and divided by its global std so hinge/log-odds outputs are commensurable.\n3. Vectorisers (vocabulary and idf only, no labels) are fitted once on labelled texts plus the\n   unlabelled development texts.  This makes CV slightly optimistic about idf coverage relative to\n   audit deployment; the CV numbers are used only to pick weights, not as an audit estimate.\n4. Optional transductive self-training at prediction time: the ensemble pseudo-labels the most\n   confident 60% of the split being predicted (pooled with the unlabelled development texts unless\n   that split *is* development), the base learners are refit on train+pseudo-labels (weight .7),\n   and both stages are averaged.  It is enabled only if a held-out fold probe does not show harm\n   (tolerance .002 absolute).\nFix vs. the previous failed run: liblinear cannot do multiclass; the logistic model now uses lbfgs.\nLimitations: no pretrained text models; a single train/development split; OOF error carries roughly\n0.3-0.5pt noise; the self-training probe uses one fold only.",
+          "development-score.json": {
+            "loss": 0.091
+          },
+          "closure.json": {
+            "seconds": 94.35343599319458,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "cv_kind": "group",
+              "cv_folds_done": 3,
+              "oof_rows": 12000,
+              "oof_error_per_model": {
+                "w_svc1": 0.1094,
+                "w_svc03": 0.1135,
+                "c_svc": 0.1046,
+                "wc_svc": 0.1013,
+                "w_lr": 0.1117,
+                "w_cnb": 0.1078,
+                "nbsvm": 0.1211
+              },
+              "oof_error_ensemble": 0.0977,
+              "ensemble_weights": {
+                "wc_svc": 0.333,
+                "w_cnb": 0.417,
+                "nbsvm": 0.167,
+                "c_svc": 0.083
+              },
+              "reference_dev_error": 0.0995,
+              "target_dev_error": 0.08955,
+              "selftrain_enabled": true,
+              "selftrain_probe": {
+                "fold0_rows": 4000,
+                "stage1_err": 0.099,
+                "stage2_err": 0.097,
+                "blend_err": 0.0985
+              },
+              "train_seconds": 73.8,
+              "limitations": "Single train/development split; vectoriser vocabulary/idf pooled with unlabelled development texts so OOF is mildly optimistic about term coverage; self-training judged on one held-out fold (~0.5pt noise); no pretrained text models available."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 227.64876413345337,
+            "cost": 0.37484
+          },
+          "unused": false
+        },
+        {
+          "action": "b0-s2",
+          "source_sha256": "07bca1d3ea890cb739aecfd5f0f94f80a8d1f9fbd9816276f0cd6af8ad64e1e4",
+          "model_authored_rationale": "AG-News (12k labels): diverse linear ensemble + multi-round transductive self-training.\n\nParent b0-s1 (dev error .0910; reference .0995, target <= .08955) combined word/char/NB-scaled\nlinear models with greedy OOF weights and ONE self-training round.  Its fold-0 probe showed the\nself-trained stage alone (.0970) beat stage 1 (.0990) and the 50/50 blend (.0985), i.e. the\ntransductive signal was under-used and the stage mixture was fixed a priori.  Changes here,\nall exploratory and validated only by group-aware OOF CV on the training split:\n\n1. Extra base learner with genuinely different inductive bias: logistic regression on a 180-dim\n   LSA (TruncatedSVD) projection of the word+char TF-IDF fitted on labelled *and* unlabelled\n   texts, so unlabelled co-occurrence structure enters the feature space, not only idf.\n2. Two self-training rounds instead of one (confident 60% then 90% of the unlabelled pool,\n   pseudo-label weights .7/.6), the pool being the split being predicted plus the unlabelled\n   development texts.  Each round refits every base learner and re-scores the pool.\n3. The stage mixture is selected, not assumed: a fold-0 probe scores {stage1, mean(1,2), stage2,\n   mean(1,2,3), mean(2,3), stage3} and picks the best, breaking ties (0.002 tolerance) toward the\n   most-averaged candidate for robustness.  If the probe fails, stage 1 is used.\nLimitations: one train/development split; OOF/probe error carries ~0.3-0.5pt noise (probe uses\n4000 rows); vectoriser/SVD pools include unlabelled development texts, so CV is mildly optimistic\nabout term coverage; no pretrained text models exist in this container.",
+          "development-score.json": {
+            "loss": 0.0955
+          },
+          "closure.json": {
+            "seconds": 84.34559941291809,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "cv_kind": "group",
+              "oof_rows": 12000,
+              "oof_error_per_model": {
+                "wc_svc": 0.1013,
+                "w_svc1": 0.1094,
+                "c_svc": 0.1046,
+                "w_cnb": 0.1078,
+                "nbsvm": 0.1211,
+                "l_lr": 0.1303
+              },
+              "oof_error_ensemble": 0.0973,
+              "ensemble_weights": {
+                "wc_svc": 0.235,
+                "w_cnb": 0.471,
+                "nbsvm": 0.176,
+                "c_svc": 0.118
+              },
+              "svd_fit_seconds": 25.4,
+              "selected_stage_mode": "m123",
+              "selftrain_probe": {
+                "fold0_rows": 4000,
+                "stage_errors": {
+                  "m123": 0.098,
+                  "m23": 0.098,
+                  "m12": 0.0983,
+                  "m2": 0.0988,
+                  "m3": 0.097,
+                  "m1": 0.0983
+                },
+                "stages_available": 3
+              },
+              "parent_dev_error": 0.091,
+              "reference_dev_error": 0.0995,
+              "target_dev_error": 0.08955,
+              "train_seconds": 62.1,
+              "limitations": "Single train/development split; probe uses one 4000-row fold so stage selection carries ~0.5pt noise; vectorisers and the LSA projection are fitted on labelled plus unlabelled development texts, making OOF mildly optimistic about term coverage; self-training at prediction time uses the split being predicted (transductive), applied identically to development and audit rows."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 222.14341473579407,
+            "cost": 0.39856
+          },
+          "unused": false
+        },
+        {
+          "action": "b1-s0",
+          "source_sha256": "89e777e4645079c2438baae6f1de949b398f52a0bcab14b58efcd828ca238ae0",
+          "model_authored_rationale": "AG News (12k train, error_rate) improvement over a word-TFIDF + LinearSVC reference.\n\nRationale (parts are exploratory / unverified until measured on development data):\n1. Representation: union of word (1-2gram) and character_wb (2-5gram) TF-IDF blocks.\n   Char n-grams are robust to the short, noisy, abbreviation-heavy AG News titles and\n   are largely decorrelated from word features, so their union usually beats either.\n   Vectorizers are fit on train + (unlabeled) development text for vocabulary/idf only.\n2. Diversity ensemble: several linear learners (LinearSVC on union/word/char blocks,\n   multinomial logistic regression, ComplementNB) whose scores are mapped to calibrated\n   probabilities with a common z-scored softmax, then combined by greedy forward\n   selection with repetition on GROUP-aware out-of-fold predictions (GroupKFold on\n   api.train_groups), which is the declared generalization protocol.\n3. Optional transduction: at prediction time the model can self-train, i.e. pseudo-label\n   confident test rows with the ensemble and refit a union LinearSVC on train + pseudo\n   rows, blending its probabilities with the ensemble. This is NOT assumed to help: the\n   blend weight, confidence threshold and on/off decision are chosen by simulating the\n   identical procedure inside every CV fold (fold held-out rows play the unlabeled test\n   set). If no self-training configuration improves OOF accuracy it is disabled.\n\nLimitations: development labels are never seen by training; all selection uses grouped\nCV on the 12k training rows, so selection noise (~0.3pt) is possible. Vectorizer idf is\nfit with development text included, which is transductive for development only; audit\ntext is unseen at fit time, so any idf benefit must transfer as a plain vocabulary prior.",
+          "development-score.json": {
+            "loss": 0.0935
+          },
+          "closure.json": {
+            "seconds": 107.38824033737183,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "cv_splits": 5,
+              "oof_single_accuracy": {
+                "svc_u": 0.90117,
+                "svc_u2": 0.89908,
+                "svc_w": 0.8965,
+                "svc_c": 0.89458,
+                "lr_u": 0.89775,
+                "cnb_w": 0.89483
+              },
+              "oof_ensemble_accuracy": 0.90425,
+              "ensemble_weights": {
+                "svc_u": 0.5,
+                "cnb_w": 0.5
+              },
+              "self_training_oof": {
+                "thr0.65_a0.25": 0.90342,
+                "thr0.65_a0.40": 0.90325,
+                "thr0.65_a0.55": 0.90283,
+                "thr0.65_a0.70": 0.90233,
+                "thr0.85_a0.25": 0.903,
+                "thr0.85_a0.40": 0.90242,
+                "thr0.85_a0.55": 0.90242,
+                "thr0.85_a0.70": 0.90208
+              },
+              "self_training_enabled": false,
+              "n_word_features": 73306,
+              "n_char_features": 80729,
+              "training_seconds": 102.1,
+              "limitations": "selection by grouped CV on 12k train rows only; development labels unseen; self-training gate simulated in-fold, audit distribution assumed identical."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 230.94955682754517,
+            "cost": 0.29527
+          },
+          "unused": false
+        },
+        {
+          "action": "b1-s1",
+          "source_sha256": "4a593b08ef8c66652e2c620e6a9e74d4919944f2f1a9467d799ce33789cc908c",
+          "model_authored_rationale": "AG News (12k labelled rows, error_rate): diverse linear ensemble + a GPU sparse-input\nMLP, combined by greedy weight search on GROUP-aware out-of-fold predictions.\n\nRationale (exploratory where noted, all selection measured on grouped CV of the 12k\ntraining rows; development labels are never seen by training):\n\n1. Representation: union of word (1-2gram) and char_wb (2-5gram) TF-IDF blocks, with the\n   vectorisers fit on train + unlabeled development text (vocabulary/idf prior only).\n   This matches the parent method b1-s0, whose OOF ensemble was 0.9043 while its best\n   single linear model was 0.9012 -- i.e. the linear family is saturated and the useful\n   remaining headroom is a *decorrelated* model class, not another linear variant.\n\n2. New component (the actual change vs. the parent): a small neural net that consumes the\n   same sparse TF-IDF union directly (torch.sparse.mm on a 154k-dim input -> 192 hidden ->\n   192 -> 4) trained with (a) input feature dropout as text augmentation, (b) manifold\n   mixup in the first hidden layer, (c) label smoothing and cosine-decayed AdamW, and\n   averaged over 2 seeds. Non-linearity + these regularisers give a model whose errors are\n   only partly shared with LinearSVC/ComplementNB, which is what a greedy ensemble can\n   exploit. This is unverified until the OOF numbers in the findings are read.\n\n3. Combination: greedy forward selection with repetition over calibrated probability\n   matrices (common z-scored softmax) on GroupKFold OOF predictions -- the declared\n   generalisation protocol. A member receives weight only if it improves OOF accuracy, so\n   the MLP cannot hurt the ensemble beyond selection noise.\n\n4. Self-training / transduction was measured by the parent and was neutral-to-harmful\n   (best blend 0.9034 vs 0.9043 baseline OOF); it is therefore NOT used here, and nothing\n   at prediction time is fit on the evaluated split.\n\nLimitations: all model selection uses grouped CV on 12k rows, so ~0.3pt selection noise is\npossible and a development gain of that size would not be conclusive; idf fitting includes\ndevelopment text (transductive for development only, audit text is unseen at fit time, so\nany benefit must transfer as a plain vocabulary prior); MLP seeds are few, so seed variance\nremains in the final predictor.",
+          "development-score.json": {
+            "loss": 0.0935
+          },
+          "closure.json": {
+            "seconds": 198.67123770713806,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "cv_splits": 5,
+              "oof_single_accuracy": {
+                "svc_u": 0.90117,
+                "svc_u2": 0.89908,
+                "svc_w": 0.8965,
+                "svc_c": 0.89458,
+                "lr_u": 0.89775,
+                "cnb_w": 0.89483,
+                "cnb_c": 0.8905,
+                "mlp_u": 0.89958
+              },
+              "oof_ensemble_accuracy": 0.90425,
+              "ensemble_weights": {
+                "svc_u": 0.5,
+                "cnb_w": 0.5
+              },
+              "mlp_trained": true,
+              "mlp_final_seeds": 0,
+              "n_word_features": 73306,
+              "n_char_features": 80729,
+              "input_dim": 154035,
+              "training_seconds": 193.3,
+              "limitations": "all selection by grouped CV on 12k train rows (~0.3pt noise); development labels unseen; vectoriser idf uses development text (transductive for development only); no self-training/transduction at prediction time; MLP averaged over few seeds."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 439.2645740509033,
+            "cost": 0.594935
+          },
+          "unused": false
+        },
+        {
+          "action": "b1-s2",
+          "outcome": {
+            "status": "repairable",
+            "seconds": 222.14415788650513,
+            "cost": 0.58548
+          },
+          "unused": false
+        }
+      ]
+    },
+    {
+      "episode": "agnews-0-candidate",
+      "selected_action": "b0-s0",
+      "completed": {
+        "label": "agnews-0-candidate",
+        "task": "agnews",
+        "family": "text",
+        "repetition": 0,
+        "arm": "candidate",
+        "gpu": 3,
+        "started": 1790131413.8477345,
+        "finished": 1790132329.8589277,
+        "seconds": 916.0111935138702,
+        "goal_reached": false,
+        "capped_goal_seconds": 7200,
+        "state": {
+          "started": 1790131413.8477345,
+          "terminal": true,
+          "goal_reached": false,
+          "confirmation_used": true,
+          "best": 0.088,
+          "delivered": {
+            "action": "b0-s0",
+            "finished": 1790132329.8027616,
+            "accepted": false,
+            "within_deadline": true,
+            "route": "best_development_at_limit",
+            "source_sha256": "734ac9055553e1eb9785e273c54f7deb2ac296c8eefe1f0670f087312fe36f57",
+            "checkpoint_sha256": "b16671116b0ce36619c6f2a8c4125fe3b1a3d7c2a3bda65e91cc6f42adb91fe5"
+          }
+        },
+        "metrics": {
+          "best_score": -0.088,
+          "calls": 6,
+          "cost": 1.4995560000000001,
+          "parallel_seconds_estimate": 907.4652600288391,
+          "quality_gain": 0.11557788944723628,
+          "rounds": 3,
+          "supported": true
+        },
+        "paid_calls": 6,
+        "retained_upper_usd": 3.342425,
+        "unused_proposals": 0,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "734ac9055553e1eb9785e273c54f7deb2ac296c8eefe1f0670f087312fe36f57",
+      "model_authored_rationale": "AG News (12k train, no pretrained weights): a weighted ensemble of diverse sparse linear models.\n\nRationale (exploratory, not yet verified on held-out data):\n- The reference is a TF-IDF word 1-2gram LinearSVC with development error 0.0995.\n- This method combines several complementary views of the text:\n  - word 1-3grams and char_wb 2-5grams in one SVM (at two regularisation strengths);\n  - an NB-SVM using log-count-ratio features, one-vs-rest;\n  - multinomial-style logistic regression on the combined features;\n  - Complement NB.\n- Before vectorising, the text is cleaned of AG News HTML-entity debris (for example \"#39;\" and \"quot;\").\n- Vectorisers are fit without labels on train plus development text.\n- Ensemble weights are chosen on group-respecting 4-fold out-of-fold decision scores. Each model's scores are standardised before weighting.\n- Findings report the out-of-fold error of each model and of the ensemble, including the reference-like model.\n- Limitation: out-of-fold estimates come from the training split only. The weight search can slightly overfit the out-of-fold data.",
+      "measured_findings": {
+        "vectorize_seconds": 16.4,
+        "fold_seconds": [
+          4.0,
+          4.1,
+          4.5,
+          4.5
+        ],
+        "oof_error_single_models": {
+          "svm_w12": 0.10591666666666667,
+          "svm_comb_c03": 0.099,
+          "svm_comb_c1": 0.09958333333333333,
+          "nbsvm": 0.111,
+          "cnb": 0.11241666666666666
+        },
+        "oof_error_ensemble": 0.09733333333333333,
+        "weights": {
+          "svm_w12": 0.0,
+          "svm_comb_c03": 0.0,
+          "svm_comb_c1": 1.0,
+          "nbsvm": 1.0,
+          "cnb": 1.0
+        },
+        "models_skipped": [
+          "lr_comb"
+        ],
+        "training_seconds": 37.8,
+        "limitations": "OOF errors are from 4-fold GroupKFold on the training split only; the ensemble weights were selected on the same OOF scores, so the ensemble OOF error is optimistically biased."
+      },
+      "phases": {
+        "development": {
+          "point_check": {
+            "episode": "agnews-0-candidate",
+            "split": "development",
+            "rows": 2000,
+            "candidate_loss": 0.088,
+            "baseline_loss": 0.0995,
+            "relative_gain": 0.11557788944723628,
+            "effect_floor": 0.1,
+            "meets_effect_floor": true
+          },
+          "worker_timing": {
+            "started": 1790131469.7906048,
+            "finished": 1790131511.0575583,
+            "seconds": 41.26695418357849
+          },
+          "host_closure": {
+            "finished": 1790131511.8421063,
+            "seconds": 44.23202109336853,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T02:44:27.716283058Z",
+              "FinishedAt": "2026-09-23T02:45:11.720531235Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        },
+        "confirmation": {
+          "point_check": {
+            "episode": "agnews-0-candidate",
+            "split": "confirmation",
+            "rows": 2000,
+            "candidate_loss": 0.093,
+            "baseline_loss": 0.0935,
+            "relative_gain": 0.005347593582887705,
+            "effect_floor": 0.1,
+            "meets_effect_floor": false,
+            "recorded_comparison": {
+              "relative_gain": 0.005347593582887722,
+              "candidate_loss": 0.093,
+              "baseline_loss": 0.0935,
+              "groups": 1977,
+              "paired_group_97_5_upper_difference": 0.006490345650355634,
+              "qualified": false,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790131514.1529322,
+            "finished": 1790131516.7531464,
+            "seconds": 2.600214958190918
+          },
+          "host_closure": {
+            "finished": 1790131517.61325,
+            "seconds": 5.642685413360596,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T02:45:12.078201829Z",
+              "FinishedAt": "2026-09-23T02:45:17.457707873Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        },
+        "audit": {
+          "point_check": {
+            "episode": "agnews-0-candidate",
+            "split": "audit",
+            "rows": 5000,
+            "candidate_loss": 0.0966,
+            "baseline_loss": 0.1036,
+            "relative_gain": 0.0675675675675675,
+            "effect_floor": 0.1,
+            "meets_effect_floor": false,
+            "recorded_comparison": {
+              "relative_gain": 0.06756756756756754,
+              "candidate_loss": 0.0966,
+              "baseline_loss": 0.1036,
+              "groups": 4989,
+              "paired_group_97_5_upper_difference": -0.002598440935438737,
+              "qualified": false,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790132323.7102084,
+            "finished": 1790132327.9842079,
+            "seconds": 4.274000406265259
+          },
+          "host_closure": {
+            "finished": 1790132328.9267771,
+            "seconds": 7.439895868301392,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T02:58:41.594268442Z",
+              "FinishedAt": "2026-09-23T02:58:48.760115795Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 3
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "source_sha256": "734ac9055553e1eb9785e273c54f7deb2ac296c8eefe1f0670f087312fe36f57",
+          "model_authored_rationale": "AG News (12k train, no pretrained weights): a weighted ensemble of diverse sparse linear models.\n\nRationale (exploratory, not yet verified on held-out data):\n- The reference is a TF-IDF word 1-2gram LinearSVC with development error 0.0995.\n- This method combines several complementary views of the text:\n  - word 1-3grams and char_wb 2-5grams in one SVM (at two regularisation strengths);\n  - an NB-SVM using log-count-ratio features, one-vs-rest;\n  - multinomial-style logistic regression on the combined features;\n  - Complement NB.\n- Before vectorising, the text is cleaned of AG News HTML-entity debris (for example \"#39;\" and \"quot;\").\n- Vectorisers are fit without labels on train plus development text.\n- Ensemble weights are chosen on group-respecting 4-fold out-of-fold decision scores. Each model's scores are standardised before weighting.\n- Findings report the out-of-fold error of each model and of the ensemble, including the reference-like model.\n- Limitation: out-of-fold estimates come from the training split only. The weight search can slightly overfit the out-of-fold data.",
+          "development-score.json": {
+            "loss": 0.088
+          },
+          "closure.json": {
+            "seconds": 44.23202109336853,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "vectorize_seconds": 16.4,
+              "fold_seconds": [
+                4.0,
+                4.1,
+                4.5,
+                4.5
+              ],
+              "oof_error_single_models": {
+                "svm_w12": 0.10591666666666667,
+                "svm_comb_c03": 0.099,
+                "svm_comb_c1": 0.09958333333333333,
+                "nbsvm": 0.111,
+                "cnb": 0.11241666666666666
+              },
+              "oof_error_ensemble": 0.09733333333333333,
+              "weights": {
+                "svm_w12": 0.0,
+                "svm_comb_c03": 0.0,
+                "svm_comb_c1": 1.0,
+                "nbsvm": 1.0,
+                "cnb": 1.0
+              },
+              "models_skipped": [
+                "lr_comb"
+              ],
+              "training_seconds": 37.8,
+              "limitations": "OOF errors are from 4-fold GroupKFold on the training split only; the ensemble weights were selected on the same OOF scores, so the ensemble OOF error is optimistically biased."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 104.04439783096313,
+            "cost": 0.151604
+          },
+          "unused": false
+        },
+        {
+          "action": "b0-s1",
+          "source_sha256": "7a5910e1401b0c90882587a70b45e3c1a60a167015b14647af407956b54dbe8d",
+          "model_authored_rationale": "AG News (12k train, no pretrained weights): linear ensemble plus GPU sparse-MLP ensemble.\n\nRationale (exploratory, unverified):\n- The parent linear ensemble (SVM on word 1-3gram + char_wb 2-5gram TF-IDF, NB-SVM, CNB)\n  scored 0.088 development error but did not qualify on confirmation. It needs a larger margin.\n- Added view: a nonlinear sparse MLP trained on the GPU on the same combined TF-IDF features.\n  It is an EmbeddingBag with TF-IDF weights, a 128-unit ReLU layer, and a linear head.\n  Regularisation is token dropout, hidden dropout and label smoothing.\n  The final MLP averages several seeds.\n  Such models often add diversity to linear SVMs, but this is untested here.\n- The MLP epoch count is chosen on group-respecting 4-fold out-of-fold error.\n- Ensemble weights over standardised scores are chosen on the same out-of-fold scores.\n- Limitation: the weight and epoch selection is optimistic on the training out-of-fold data.\n  Vectorisers are fit without labels on train plus development text.",
+          "development-score.json": {
+            "loss": 0.093
+          },
+          "closure.json": {
+            "seconds": 64.76327419281006,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "vectorize_seconds": 14.7,
+              "fold_seconds": [
+                10.5,
+                9.4,
+                9.2,
+                9.2
+              ],
+              "n_features": 206857,
+              "oof_error_single_models": {
+                "svm_c03": 0.099,
+                "svm_c1": 0.09958333333333333,
+                "nbsvm": 0.111,
+                "cnb": 0.11241666666666666,
+                "mlp": 0.09775
+              },
+              "mlp_oof_error_by_epoch": [
+                0.11267,
+                0.09925,
+                0.09775,
+                0.09775,
+                0.09892,
+                0.09992,
+                0.1,
+                0.09933,
+                0.09817,
+                0.099,
+                0.09933,
+                0.09975
+              ],
+              "mlp_best_epoch": 3,
+              "oof_error_weighted_ensemble": 0.09558333333333334,
+              "oof_error_equal_weight_ensemble": 0.09691666666666666,
+              "weights": {
+                "svm_c03": 0.0,
+                "svm_c1": 2.0,
+                "nbsvm": 0.0,
+                "cnb": 3.0,
+                "mlp": 3.0
+              },
+              "final_mlp_seeds": 3,
+              "mlp_error": null,
+              "training_seconds": 58.6,
+              "limitations": "OOF errors are from 4-fold GroupKFold on training data only. The MLP epoch count and the ensemble weights were selected on the same OOF scores, so the ensemble OOF error is optimistic. The final MLP trains on 4/3 more data at the same epoch count."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 158.46792769432068,
+            "cost": 0.244888
+          },
+          "unused": false
+        },
+        {
+          "action": "b0-s2",
+          "source_sha256": "f9f24434e2cca5f3ac76962598d40e1b4b85fe23e8908a1aefa875dae0ce8cb1",
+          "model_authored_rationale": "AG News (12k train, no pretrained weights): a larger multi-view ensemble of sparse linear models\nand GPU sparse MLPs. The combiner is chosen by a nested, group-respecting estimate.\n\nRationale (exploratory and unverified; the rationale is not evidence):\n- Parent b0-s1 scored 0.093 on development. The linear ensemble b0-s0 scored 0.088 but did not\n  qualify on confirmation.\n- The differences between these runs are near the noise level of about 0.006 on 2000 rows. The\n  previous weight grids were also chosen on the same out-of-fold (OOF) scores that estimated them.\n  This version targets a larger and more robust margin in two ways:\n  1. More diverse base views: word 1-3gram TF-IDF, char_wb 2-5gram TF-IDF, char 3-6gram TF-IDF\n     and binary word counts. Base models are LinearSVC on two views, NB-SVM, Complement NB, and\n     three sparse MLPs (one per TF-IDF view), each averaged over seeds.\n  2. The combiner (equal weights, weight grid, or stacked logistic regression) is selected by a\n     nested GroupKFold error. Its training OOF score is not used for this choice, which reduces\n     selection optimism.\n- Vectorisers are fit without labels on train plus development text. No development labels are\n  used. Prediction does no fitting.\n- Limitations: all estimates come from the training split with train_groups GroupKFold. The MLP\n  epoch count is chosen on OOF. The final models train on 4/3 more data.",
+          "development-score.json": {
+            "loss": 0.0925
+          },
+          "closure.json": {
+            "seconds": 164.53729677200317,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "vectorize_seconds": 31.6,
+              "fold_seconds": [
+                24.3,
+                23.0,
+                23.1,
+                23.4
+              ],
+              "n_features": {
+                "comb": 206857,
+                "w13": 107391,
+                "c36": 150000,
+                "cnt": 107391
+              },
+              "oof_error_single_models": {
+                "svm_comb": 0.09958,
+                "svm_c36": 0.1055,
+                "nbsvm": 0.111,
+                "cnb": 0.11242,
+                "mlp_comb": 0.09825,
+                "mlp_w13": 0.10658,
+                "mlp_c36": 0.10333
+              },
+              "mlp_oof_error_by_epoch": {
+                "comb": [
+                  0.1115,
+                  0.10017,
+                  0.09892,
+                  0.09825,
+                  0.09933,
+                  0.09858,
+                  0.09942
+                ],
+                "w13": [
+                  0.14067,
+                  0.11725,
+                  0.10892,
+                  0.10658,
+                  0.10783,
+                  0.10667,
+                  0.10658
+                ],
+                "c36": [
+                  0.11417,
+                  0.10425,
+                  0.10342,
+                  0.104,
+                  0.10375,
+                  0.10333,
+                  0.10358
+                ]
+              },
+              "mlp_best_epoch": {
+                "comb": 4,
+                "w13": 4,
+                "c36": 6
+              },
+              "mlp_errors": {},
+              "oof_error_equal_weight": 0.096,
+              "grid_oof_error_optimistic": 0.095,
+              "grid_nested_2fold_error": 0.09616666666666666,
+              "grid_weights_full": {
+                "svm_comb": 1.0,
+                "svm_c36": 0.0,
+                "nbsvm": 0.0,
+                "cnb": 2.0,
+                "mlp_comb": 2.0,
+                "mlp_w13": 1.0,
+                "mlp_c36": 2.0
+              },
+              "stack_nested_5fold_error": 0.09683333333333333,
+              "chosen_combiner": "equal",
+              "final_mlp_seeds": {
+                "comb": 3,
+                "w13": 3,
+                "c36": 3
+              },
+              "training_seconds": 156.1,
+              "limitations": "All errors come from GroupKFold on the training split only. The MLP epoch count was selected on the same OOF scores. The combiner was chosen by nested estimates, but the choice among three combiners is itself slightly optimistic. The final models train on all 12k rows."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 430.3063476085663,
+            "cost": 0.345468
+          },
+          "unused": false
+        },
+        {
+          "action": "b1-s0",
+          "source_sha256": "c83222bce28c21c699f6638709cf4738b4145059cc46b8219853c1c26a7e045e",
+          "model_authored_rationale": "AG News: grouped-CV ensemble of sparse linear text models (exploratory, unverified).\n\nRationale: the reference is a single word 1-2gram TF-IDF + LinearSVC with\ndevelopment error 0.0995. The target is <=0.0895. Without pretrained weights and\nwith only 12k labelled rows, the realistic lever is complementary sparse views:\n  - word n-grams and char_wb n-grams stacked in one feature space;\n  - NB-SVM, which uses log-count-ratio feature scaling;\n  - multinomial logistic regression;\n  - multinomial NB.\nTheir errors are partly decorrelated.\n\nProcedure:\n  - Vectorizers are fitted, without labels, on train plus development text.\n  - Out-of-fold scores come from GroupKFold over api.train_groups, so validation\n    respects the declared group generalization.\n  - A greedy Caruana-style selection (with replacement) chooses blend weights by\n    OOF accuracy over row-centred, globally scaled scores. The reference-equivalent\n    member is included, so the blend can fall back to it.\n  - Selected members are refit on all training rows.\n\nLimitations:\n  - The OOF gain is measured on training groups only.\n  - It is not evidence of audit improvement.",
+          "development-score.json": {
+            "loss": 0.0925
+          },
+          "closure.json": {
+            "seconds": 97.32207727432251,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "oof_error_by_member": {
+                "svc_w": 0.1035,
+                "svc_c": 0.10283333333333333,
+                "svc_wc": 0.09875,
+                "svc_wc_lo": 0.1,
+                "lr_wc": 0.10216666666666667,
+                "nbsvm_b": 0.10416666666666667,
+                "mnb_w": 0.10566666666666667
+              },
+              "oof_error_reference_equivalent_svc_w": 0.1035,
+              "oof_error_ensemble": 0.09308333333333334,
+              "ensemble_weights": {
+                "svc_c": 1,
+                "svc_wc": 1,
+                "lr_wc": 1,
+                "mnb_w": 2
+              },
+              "selection_history": [
+                [
+                  "svc_wc",
+                  0.90125
+                ],
+                [
+                  "mnb_w",
+                  0.90592
+                ],
+                [
+                  "lr_wc",
+                  0.90633
+                ],
+                [
+                  "mnb_w",
+                  0.90633
+                ],
+                [
+                  "svc_c",
+                  0.90692
+                ]
+              ],
+              "skipped_members_for_time": [],
+              "member_cv_seconds": {
+                "svc_w": 1.1,
+                "svc_c": 6.3,
+                "svc_wc": 9.5,
+                "svc_wc_lo": 6.0,
+                "lr_wc": 41.5,
+                "nbsvm_b": 1.0,
+                "mnb_w": 0.1
+              },
+              "vectorize_seconds": 13.0,
+              "total_train_seconds": 91.6,
+              "n_features": {
+                "w": 73306,
+                "c": 103554,
+                "wc": 176860,
+                "b": 109319
+              },
+              "limitations": "OOF from 5-fold GroupKFold on training rows. The ensemble weights were selected on the same OOF scores, so the ensemble OOF error is optimistically biased. Vectorizer vocab/idf were fit on train+dev text without labels."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 201.48627161979675,
+            "cost": 0.165444
+          },
+          "unused": false
+        },
+        {
+          "action": "b1-s1",
+          "source_sha256": "47c6ece2bdca64e28192c00b848d67e7e98866ff28ea8e9f29cd5346db06fdc4",
+          "model_authored_rationale": "AG News refinement of b1-s0: larger diversified grouped-CV ensemble with a GPU\nTF-IDF bag-embedding MLP and conservative dev pseudo-labels. Exploratory and unverified.\n\nParent b1-s0 blended sparse linear members, selected greedily on GroupKFold OOF scores.\nIts OOF error was 0.0931 and its development error was 0.0925. The target is <=0.0895.\n\nChanges, each aimed at more decorrelated errors or more (weakly) labelled data:\n  1. New members: LR on word n-grams and ComplementNB.\n  2. A nonlinear member: tfidf-weighted EmbeddingBag -> ReLU -> dropout -> linear,\n     trained on GPU with feature dropout. Its epoch count is chosen by grouped OOF\n     accuracy. Seeds are averaged: 2 in CV, 3 for the final fit.\n  3. Development texts are unlabelled and available in training. During CV they are\n     scored by the fold models. The 70% most confident ensemble predictions are added\n     as pseudo-labelled rows for the final refit only; weights are selected on\n     train-only OOF.\n\nLimitations:\n  - Greedy weights are chosen on the same OOF scores, so the ensemble OOF error is\n    optimistic.\n  - Pseudo-labels may carry ensemble errors.\n  - Vectorizers were fit on train plus dev text without labels.",
+          "development-score.json": {
+            "loss": 0.092
+          },
+          "closure.json": {
+            "seconds": 116.88965511322021,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "oof_error_by_member": {
+                "svc_w": 0.1035,
+                "svc_c": 0.10283333333333333,
+                "svc_wc": 0.09875,
+                "lr_wc": 0.10216666666666667,
+                "lr_w": 0.10541666666666667,
+                "nbsvm_b": 0.10416666666666667,
+                "mnb_w": 0.10566666666666667,
+                "cnb_w": 0.10516666666666667,
+                "mlp_wc": 0.09691666666666666
+              },
+              "oof_error_ensemble": 0.09308333333333334,
+              "ensemble_weights": {
+                "svc_w": 1,
+                "svc_wc": 1,
+                "mnb_w": 1,
+                "mlp_wc": 1
+              },
+              "selection_history": [
+                [
+                  "mlp_wc",
+                  0.90308
+                ],
+                [
+                  "mnb_w",
+                  0.9055
+                ],
+                [
+                  "svc_wc",
+                  0.9065
+                ],
+                [
+                  "svc_w",
+                  0.90692
+                ]
+              ],
+              "mlp_oof_acc_by_epoch": [
+                0.8899166666666667,
+                0.9004166666666666,
+                0.9030833333333333,
+                0.90125,
+                0.90075,
+                0.9003333333333333,
+                0.9006666666666666,
+                0.90075,
+                0.9009166666666667,
+                0.9008333333333334
+              ],
+              "mlp_best_epochs": 3,
+              "pseudo_labels_added": 1400,
+              "pseudo_label_class_counts": [
+                366,
+                422,
+                308,
+                304
+              ],
+              "skipped_members_for_time": [],
+              "member_cv_seconds": {
+                "svc_w": 1.2,
+                "svc_c": 5.8,
+                "svc_wc": 8.5,
+                "lr_wc": 41.5,
+                "lr_w": 12.0,
+                "nbsvm_b": 1.0,
+                "mnb_w": 0.1,
+                "cnb_w": 0.1,
+                "mlp_wc": 22.2
+              },
+              "vectorize_seconds": 13.0,
+              "total_train_seconds": 111.0,
+              "limitations": "5-fold GroupKFold OOF on training rows; greedy weights and the MLP epoch were chosen on the same OOF, so the reported errors are optimistic. The final refit includes 70% most confident dev pseudo-labels, with unknown accuracy. Vectorizers were fit on train+dev text without labels."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 275.6726408004761,
+            "cost": 0.280004
+          },
+          "unused": false
+        },
+        {
+          "action": "b1-s2",
+          "source_sha256": "239c79af0972a0042a86fcd8eb24543753dcd39954385f80178c1ab67b69a700",
+          "model_authored_rationale": "AG News b1-s2 (refines b1-s1): diversified bag-MLP views, seed averaging, and a combiner\nchosen by nested grouped CV. Exploratory and unverified.\n\nMeasured so far:\n- b1-s1 dev error 0.092 (reference 0.0995, target <=0.0895).\n- Its strongest single member was the tf-idf EmbeddingBag MLP, with grouped OOF error 0.0969.\n- The greedy blend was selected on the same OOF it scored, so its OOF error is optimistic.\n\nChanges, each aimed at lower variance or more decorrelated errors:\n 1. Three nonlinear MLP views (word+char tf-idf, l2-normalised binary word 1-3gram,\n    char tf-idf). Each averages 3 seeds in CV and 4 seeds in the final fit. Epochs are\n    chosen from the grouped OOF curve.\n 2. Three combiners: greedy (Caruana), uniform scaled-score averaging, and a multinomial\n    LR stacker. They are compared by NESTED GroupKFold over the OOF scores; the lowest\n    nested error is used.\n 3. Confident dev pseudo-labels (top 80% by margin) from fold models, used in the final\n    refit only.\n\nLimitations: the OOF generator folds equal the nested folds. Pseudo-label accuracy is\nunknown. Vectorizers are fit on train+dev text without labels.",
+          "development-score.json": {
+            "loss": 0.0955
+          },
+          "closure.json": {
+            "seconds": 170.48744821548462,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "oof_error_by_member": {
+                "svc_w": 0.1035,
+                "svc_c": 0.10283,
+                "svc_wc": 0.09875,
+                "lr_wc": 0.10217,
+                "nbsvm_b": 0.10417,
+                "mnb_w": 0.10567,
+                "cnb_w": 0.10517,
+                "mlp_wc": 0.09717,
+                "mlp_bn": 0.10483,
+                "mlp_c": 0.10008
+              },
+              "nested_grouped_error_by_combiner": {
+                "greedy": 0.095,
+                "stack": 0.09383,
+                "uniform": 0.09408
+              },
+              "combiner_chosen": "stack",
+              "combiner_insample_oof_error": 0.09125,
+              "greedy_weights": null,
+              "mlp_oof_acc_by_epoch": {
+                "mlp_wc": [
+                  0.89192,
+                  0.90208,
+                  0.90283,
+                  0.90233,
+                  0.90192,
+                  0.9015,
+                  0.90125,
+                  0.9005
+                ],
+                "mlp_bn": [
+                  0.851,
+                  0.87867,
+                  0.89017,
+                  0.89225,
+                  0.89358,
+                  0.895,
+                  0.89475,
+                  0.89517
+                ],
+                "mlp_c": [
+                  0.88633,
+                  0.89858,
+                  0.89992,
+                  0.899,
+                  0.89725,
+                  0.89642,
+                  0.89658,
+                  0.89592
+                ]
+              },
+              "mlp_epochs": {
+                "mlp_wc": 3,
+                "mlp_bn": 8,
+                "mlp_c": 3
+              },
+              "pseudo_labels_added": 1600,
+              "pseudo_label_class_counts": [
+                424,
+                460,
+                357,
+                359
+              ],
+              "skipped_members_for_time": [],
+              "member_cv_seconds": {
+                "svc_w": 1.1,
+                "svc_c": 6.8,
+                "svc_wc": 9.8,
+                "lr_wc": 42.8,
+                "nbsvm_b": 1.1,
+                "mnb_w": 0.1,
+                "cnb_w": 0.1,
+                "mlp_wc": 26.4,
+                "mlp_bn": 14.7,
+                "mlp_c": 19.2
+              },
+              "vectorize_seconds": 13.9,
+              "total_train_seconds": 163.9,
+              "limitations": "OOF is from 5-fold GroupKFold on train. Nested combiner errors reuse the same folds, and MLP epochs were chosen on the full OOF, so the errors are mildly optimistic. Dev pseudo-labels (top 80% margin) have unknown accuracy. Vectorizers were fit on train+dev text without labels. No dev labels were used."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 265.1060938835144,
+            "cost": 0.312148
+          },
+          "unused": false
+        }
+      ]
+    },
+    {
+      "episode": "cifar100-1-control",
+      "selected_action": "b0-s0",
+      "completed": {
+        "label": "cifar100-1-control",
+        "task": "cifar100",
+        "family": "vision",
+        "repetition": 1,
+        "arm": "control",
+        "gpu": 1,
+        "started": 1790132175.2219849,
+        "finished": 1790132665.1522388,
+        "seconds": 489.9302542209625,
+        "goal_reached": true,
+        "capped_goal_seconds": 489.7791950702667,
+        "state": {
+          "started": 1790132175.2219849,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 0.335,
+          "delivered": {
+            "action": "b0-s0",
+            "finished": 1790132665.00118,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "af6a9e73c2633d92334bfd9ae46bfc8ed51065bb307c5d38a89774b6f44608f4",
+            "checkpoint_sha256": "2fdbf20de628f4316a476dc4f9f6642014769f3463edf776f67fc3ac6140add2"
+          }
+        },
+        "metrics": {
+          "best_score": -0.335,
+          "calls": 2,
+          "cost": 0.68695,
+          "parallel_seconds_estimate": 489.7085566520691,
+          "quality_gain": 0.1799265605875152,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 0.97855,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "af6a9e73c2633d92334bfd9ae46bfc8ed51065bb307c5d38a89774b6f44608f4",
+      "model_authored_rationale": "CIFAR-100 (12k-image subset) method.\n\nRationale (exploratory but grounded in standard small-data CIFAR practice):\nThe common reference is a ResNet-9 trained ~100 epochs with crop+flip only and a\n650 s wall cap; on a 12k-image subset the dominant error source is overfitting /\ninsufficient regularisation rather than optimisation speed.  Two cheap, reliable\nlevers are used here:\n\n1. A CIFAR-style ResNet-18 (3x3 stem, no max-pool, zero-init residual BN) with\n   substantially stronger GPU-side augmentation: per-sample random affine\n   (translation +-4 px, rotation +-12 deg, scale +-10%, horizontal mirror --\n   allowed for CIFAR-100 per task metadata), per-sample brightness/contrast\n   jitter, Cutout(8) and mixup (alpha 0.4, p=0.5, disabled in the final 15% of\n   the schedule), plus label smoothing 0.1 and a warmup+cosine SGD schedule.\n   Augmentation is done as batched tensor ops (one grid_sample) so the epoch\n   cost stays close to the plain network.\n2. A 2-member independent-seed ensemble with horizontal-flip test-time\n   averaging of softmax probabilities, fitted inside the same 900 s train limit\n   via a strict wall-clock-aware schedule (progress = max(epoch fraction,\n   elapsed fraction)) so the cosine schedule always completes even on a slow\n   shared GPU; the second member is only started if enough time remains.\n\nLimitations: no held-out internal validation was used (all 12k rows are trained\non), so no epoch/EMA selection is performed and the expected gain is not\nmeasured here; group structure is therefore trivially respected (no split).\nModel state is stored as CPU state_dicts and rebuilt at predict time.",
+      "measured_findings": {
+        "members": 2,
+        "member_info": [
+          {
+            "epochs": 200,
+            "steps": 18600,
+            "seconds": 180.0
+          },
+          {
+            "epochs": 200,
+            "steps": 18600,
+            "seconds": 347.8
+          }
+        ],
+        "architecture": "CIFAR ResNet-18 (3x3 stem, zero-init residual BN), width 64",
+        "augmentation": "random affine (shift/rot/scale/mirror), brightness+contrast jitter, cutout8, mixup(0.4, p=0.5 until 85% of schedule)",
+        "objective": "cross-entropy, label smoothing 0.1; SGD nesterov, warmup+cosine, wd 5e-4, bs 128",
+        "test_time": "softmax averaged over members and horizontal flip",
+        "training_seconds": 347.8,
+        "limitations": "No internal held-out validation (all training rows used); expected generalisation gain over the reference is unverified here. Wall-clock-driven schedule means epoch count varies with GPU load."
+      },
+      "phases": {
+        "development": {
+          "point_check": {
+            "episode": "cifar100-1-control",
+            "split": "development",
+            "rows": 2000,
+            "candidate_loss": 0.335,
+            "baseline_loss": 0.4085,
+            "relative_gain": 0.1799265605875152,
+            "effect_floor": 0.1,
+            "meets_effect_floor": true
+          },
+          "worker_timing": {
+            "started": 1790132294.9173107,
+            "finished": 1790132647.1626196,
+            "seconds": 352.24530935287476
+          },
+          "host_closure": {
+            "finished": 1790132647.9629767,
+            "seconds": 355.3051462173462,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T02:58:12.767202894Z",
+              "FinishedAt": "2026-09-23T03:04:07.825487535Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 1
+          }
+        },
+        "confirmation": {
+          "point_check": {
+            "episode": "cifar100-1-control",
+            "split": "confirmation",
+            "rows": 2000,
+            "candidate_loss": 0.3335,
+            "baseline_loss": 0.413,
+            "relative_gain": 0.19249394673123477,
+            "effect_floor": 0.1,
+            "meets_effect_floor": true,
+            "recorded_comparison": {
+              "relative_gain": 0.19249394673123477,
+              "candidate_loss": 0.3335,
+              "baseline_loss": 0.413,
+              "groups": 2000,
+              "paired_group_97_5_upper_difference": -0.0595,
+              "qualified": true,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790132650.3022077,
+            "finished": 1790132655.3207865,
+            "seconds": 5.018579483032227
+          },
+          "host_closure": {
+            "finished": 1790132655.8682299,
+            "seconds": 7.689578533172607,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:04:08.281040206Z",
+              "FinishedAt": "2026-09-23T03:04:15.787957289Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 1
+          }
+        },
+        "audit": {
+          "point_check": {
+            "episode": "cifar100-1-control",
+            "split": "audit",
+            "rows": 5000,
+            "candidate_loss": 0.3504,
+            "baseline_loss": 0.4208,
+            "relative_gain": 0.16730038022813692,
+            "effect_floor": 0.1,
+            "meets_effect_floor": true,
+            "recorded_comparison": {
+              "relative_gain": 0.16730038022813687,
+              "candidate_loss": 0.3504,
+              "baseline_loss": 0.4208,
+              "groups": 5000,
+              "paired_group_97_5_upper_difference": -0.0584,
+              "qualified": true,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790132658.4289088,
+            "finished": 1790132663.5107386,
+            "seconds": 5.081830263137817
+          },
+          "host_closure": {
+            "finished": 1790132664.1438272,
+            "seconds": 7.89115047454834,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:04:16.355528231Z",
+              "FinishedAt": "2026-09-23T03:04:24.043577615Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 1
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "source_sha256": "af6a9e73c2633d92334bfd9ae46bfc8ed51065bb307c5d38a89774b6f44608f4",
+          "model_authored_rationale": "CIFAR-100 (12k-image subset) method.\n\nRationale (exploratory but grounded in standard small-data CIFAR practice):\nThe common reference is a ResNet-9 trained ~100 epochs with crop+flip only and a\n650 s wall cap; on a 12k-image subset the dominant error source is overfitting /\ninsufficient regularisation rather than optimisation speed.  Two cheap, reliable\nlevers are used here:\n\n1. A CIFAR-style ResNet-18 (3x3 stem, no max-pool, zero-init residual BN) with\n   substantially stronger GPU-side augmentation: per-sample random affine\n   (translation +-4 px, rotation +-12 deg, scale +-10%, horizontal mirror --\n   allowed for CIFAR-100 per task metadata), per-sample brightness/contrast\n   jitter, Cutout(8) and mixup (alpha 0.4, p=0.5, disabled in the final 15% of\n   the schedule), plus label smoothing 0.1 and a warmup+cosine SGD schedule.\n   Augmentation is done as batched tensor ops (one grid_sample) so the epoch\n   cost stays close to the plain network.\n2. A 2-member independent-seed ensemble with horizontal-flip test-time\n   averaging of softmax probabilities, fitted inside the same 900 s train limit\n   via a strict wall-clock-aware schedule (progress = max(epoch fraction,\n   elapsed fraction)) so the cosine schedule always completes even on a slow\n   shared GPU; the second member is only started if enough time remains.\n\nLimitations: no held-out internal validation was used (all 12k rows are trained\non), so no epoch/EMA selection is performed and the expected gain is not\nmeasured here; group structure is therefore trivially respected (no split).\nModel state is stored as CPU state_dicts and rebuilt at predict time.",
+          "development-score.json": {
+            "loss": 0.335
+          },
+          "closure.json": {
+            "seconds": 355.3051462173462,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "members": 2,
+              "member_info": [
+                {
+                  "epochs": 200,
+                  "steps": 18600,
+                  "seconds": 180.0
+                },
+                {
+                  "epochs": 200,
+                  "steps": 18600,
+                  "seconds": 347.8
+                }
+              ],
+              "architecture": "CIFAR ResNet-18 (3x3 stem, zero-init residual BN), width 64",
+              "augmentation": "random affine (shift/rot/scale/mirror), brightness+contrast jitter, cutout8, mixup(0.4, p=0.5 until 85% of schedule)",
+              "objective": "cross-entropy, label smoothing 0.1; SGD nesterov, warmup+cosine, wd 5e-4, bs 128",
+              "test_time": "softmax averaged over members and horizontal flip",
+              "training_seconds": 347.8,
+              "limitations": "No internal held-out validation (all training rows used); expected generalisation gain over the reference is unverified here. Wall-clock-driven schedule means epoch count varies with GPU load."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 489.7085566520691,
+            "cost": 0.303375
+          },
+          "unused": false
+        },
+        {
+          "action": "b1-s0",
+          "outcome": {
+            "status": "blocked",
+            "seconds": 489.6755232810974,
+            "cost": 0.383575
+          },
+          "unused": true
+        }
+      ]
+    },
+    {
+      "episode": "cifar100-1-candidate",
+      "selected_action": "b1-s0",
+      "completed": {
+        "label": "cifar100-1-candidate",
+        "task": "cifar100",
+        "family": "vision",
+        "repetition": 1,
+        "arm": "candidate",
+        "gpu": 0,
+        "started": 1790132175.222131,
+        "finished": 1790132424.6509414,
+        "seconds": 249.42881059646606,
+        "goal_reached": true,
+        "capped_goal_seconds": 249.34001111984253,
+        "state": {
+          "started": 1790132175.222131,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 0.3345,
+          "delivered": {
+            "action": "b1-s0",
+            "finished": 1790132424.5621421,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "391733210e90241b7bfa357d45436ac6e89c223662dd86faa4370dea2a08a0dc",
+            "checkpoint_sha256": "684b306f8656a7abbd9bb437f8374ebc1682a92df98b9939b9183181e317131d"
+          }
+        },
+        "metrics": {
+          "best_score": -0.3345,
+          "calls": 2,
+          "cost": 0.432516,
+          "parallel_seconds_estimate": 249.1873643398285,
+          "quality_gain": 0.18115055079559353,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 0.832325,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "391733210e90241b7bfa357d45436ac6e89c223662dd86faa4370dea2a08a0dc",
+      "model_authored_rationale": "Wider ResNet trained with CutMix, ensembled with the parent reference network.\n\nRationale (unverified until it is scored):\n- The reference is a ResNet9-like network trained on 12k CIFAR-100 images. On a\n  dataset this small, the main limit is overfitting.\n- This method trains a new, wider residual network (widths 96/192/384/512) with\n  stronger regularization:\n  * random crops chosen separately for each image (the reference used one crop\n    offset per batch);\n  * horizontal flips, which task metadata marks as semantically valid;\n  * CutMix and label smoothing;\n  * SGD with Nesterov momentum and a warmup plus cosine schedule, bounded by\n    elapsed time.\n- Its flip-averaged softmax is averaged with the parent reference network, loaded\n  read-only from api.parent_dir. Two differently trained networks usually err on\n  different examples, so the average should cut error further. This is the\n  intended route to the 10% relative reduction target.\n- If the parent cannot be loaded, the method falls back to the new network alone.\n\nLimitations:\n- No labelled internal validation is done, because holding out data would weaken\n  the model. The findings report only training statistics and the unlabelled\n  agreement between the two networks on development features.\n- Ensemble weights are fixed a priori, not tuned.",
+      "measured_findings": {
+        "parent_loaded": true,
+        "epochs_started": 200,
+        "updates": 18800,
+        "cutmix_batches": 13883,
+        "training_seconds": 170.6,
+        "final_train_loss": 0.45733630657196045,
+        "architecture": "wide residual 96/192/384/512, mean+max pooling, dropout .1",
+        "augmentation": "per-sample reflect-crop, flip=True, CutMix p=.8 until 92% progress",
+        "dev_agreement_new_vs_parent": 0.6205000281333923,
+        "dev_ensemble_equals_new": 0.8870000243186951,
+        "note": "agreement values are unlabeled; no development accuracy measured"
+      },
+      "phases": {
+        "development": {
+          "point_check": {
+            "episode": "cifar100-1-candidate",
+            "split": "development",
+            "rows": 2000,
+            "candidate_loss": 0.3345,
+            "baseline_loss": 0.4085,
+            "relative_gain": 0.18115055079559353,
+            "effect_floor": 0.1,
+            "meets_effect_floor": true
+          },
+          "worker_timing": {
+            "started": 1790132235.98911,
+            "finished": 1790132409.6291146,
+            "seconds": 173.64000511169434
+          },
+          "host_closure": {
+            "finished": 1790132410.5165422,
+            "seconds": 176.70802879333496,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T02:57:13.909647012Z",
+              "FinishedAt": "2026-09-23T03:00:10.386565892Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        "confirmation": {
+          "point_check": {
+            "episode": "cifar100-1-candidate",
+            "split": "confirmation",
+            "rows": 2000,
+            "candidate_loss": 0.3465,
+            "baseline_loss": 0.413,
+            "relative_gain": 0.1610169491525424,
+            "effect_floor": 0.1,
+            "meets_effect_floor": true,
+            "recorded_comparison": {
+              "relative_gain": 0.1610169491525424,
+              "candidate_loss": 0.3465,
+              "baseline_loss": 0.413,
+              "groups": 2000,
+              "paired_group_97_5_upper_difference": -0.05,
+              "qualified": true,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790132412.852344,
+            "finished": 1790132416.2550645,
+            "seconds": 3.4027211666107178
+          },
+          "host_closure": {
+            "finished": 1790132416.8599079,
+            "seconds": 6.189356565475464,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:00:10.774309883Z",
+              "FinishedAt": "2026-09-23T03:00:16.744665199Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        },
+        "audit": {
+          "point_check": {
+            "episode": "cifar100-1-candidate",
+            "split": "audit",
+            "rows": 5000,
+            "candidate_loss": 0.3496,
+            "baseline_loss": 0.4208,
+            "relative_gain": 0.1692015209125475,
+            "effect_floor": 0.1,
+            "meets_effect_floor": true,
+            "recorded_comparison": {
+              "relative_gain": 0.16920152091254748,
+              "candidate_loss": 0.3496,
+              "baseline_loss": 0.4208,
+              "groups": 5000,
+              "paired_group_97_5_upper_difference": -0.0612,
+              "qualified": true,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790132419.498699,
+            "finished": 1790132423.0333037,
+            "seconds": 3.5346052646636963
+          },
+          "host_closure": {
+            "finished": 1790132423.692582,
+            "seconds": 6.4402618408203125,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:00:17.357239498Z",
+              "FinishedAt": "2026-09-23T03:00:23.590358552Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 0
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "outcome": {
+            "status": "blocked",
+            "seconds": 249.1826548576355,
+            "cost": 0.274688
+          },
+          "unused": true
+        },
+        {
+          "action": "b1-s0",
+          "source_sha256": "391733210e90241b7bfa357d45436ac6e89c223662dd86faa4370dea2a08a0dc",
+          "model_authored_rationale": "Wider ResNet trained with CutMix, ensembled with the parent reference network.\n\nRationale (unverified until it is scored):\n- The reference is a ResNet9-like network trained on 12k CIFAR-100 images. On a\n  dataset this small, the main limit is overfitting.\n- This method trains a new, wider residual network (widths 96/192/384/512) with\n  stronger regularization:\n  * random crops chosen separately for each image (the reference used one crop\n    offset per batch);\n  * horizontal flips, which task metadata marks as semantically valid;\n  * CutMix and label smoothing;\n  * SGD with Nesterov momentum and a warmup plus cosine schedule, bounded by\n    elapsed time.\n- Its flip-averaged softmax is averaged with the parent reference network, loaded\n  read-only from api.parent_dir. Two differently trained networks usually err on\n  different examples, so the average should cut error further. This is the\n  intended route to the 10% relative reduction target.\n- If the parent cannot be loaded, the method falls back to the new network alone.\n\nLimitations:\n- No labelled internal validation is done, because holding out data would weaken\n  the model. The findings report only training statistics and the unlabelled\n  agreement between the two networks on development features.\n- Ensemble weights are fixed a priori, not tuned.",
+          "development-score.json": {
+            "loss": 0.3345
+          },
+          "closure.json": {
+            "seconds": 176.70802879333496,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "parent_loaded": true,
+              "epochs_started": 200,
+              "updates": 18800,
+              "cutmix_batches": 13883,
+              "training_seconds": 170.6,
+              "final_train_loss": 0.45733630657196045,
+              "architecture": "wide residual 96/192/384/512, mean+max pooling, dropout .1",
+              "augmentation": "per-sample reflect-crop, flip=True, CutMix p=.8 until 92% progress",
+              "dev_agreement_new_vs_parent": 0.6205000281333923,
+              "dev_ensemble_equals_new": 0.8870000243186951,
+              "note": "agreement values are unlabeled; no development accuracy measured"
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 249.1873643398285,
+            "cost": 0.157828
+          },
+          "unused": false
+        }
+      ]
+    },
+    {
+      "episode": "tsp-0-candidate",
+      "selected_action": "b0-s0",
+      "completed": {
+        "label": "tsp-0-candidate",
+        "task": "tsp",
+        "family": "optimization",
+        "repetition": 0,
+        "arm": "candidate",
+        "gpu": 7,
+        "started": 1790131413.8526454,
+        "finished": 1790132848.1449916,
+        "seconds": 1434.2923467159271,
+        "goal_reached": true,
+        "capped_goal_seconds": 1434.286967754364,
+        "state": {
+          "started": 1790131413.8526454,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 11.183861914214473,
+          "delivered": {
+            "action": "b0-s0",
+            "finished": 1790132848.1396132,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "e175499eadf24760f530f847d038e0e2a7da86a2e2ee8130bba48c2a536abc52",
+            "checkpoint_sha256": "f76c678876b80e08f7f2439f0f9727436365dc5f855904342c6a58d756c10d0c"
+          }
+        },
+        "metrics": {
+          "best_score": -11.183861914214473,
+          "calls": 2,
+          "cost": 0.635704,
+          "parallel_seconds_estimate": 1434.2043175697327,
+          "quality_gain": 0.03229653005382214,
+          "rounds": 1,
+          "supported": true
+        },
+        "paid_calls": 2,
+        "retained_upper_usd": 1.05075,
+        "unused_proposals": 1,
+        "invalid_attempts": 0,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "e175499eadf24760f530f847d038e0e2a7da86a2e2ee8130bba48c2a536abc52",
+      "model_authored_rationale": "TSP-320 solver: Or-opt iterated local search (2-opt + Or-opt with neighbour lists, numba).\n\nRationale (not yet verified on this task's data): the common reference runs a\nnearest-neighbour tour followed by exhaustive 2-opt, 24 restarts. On random\nEuclidean instances that typically ends several percent above optimal. This\nmethod replaces it with an iterated local search, which typically gets much\ncloser to optimal:\n  * local search uses 2-opt and Or-opt moves (segments of 1-3 cities, either\n    orientation), restricted to each city's 12 nearest neighbours;\n  * perturbation is a local double-bridge, which swaps two adjacent random\n    segments of up to 50 cities each;\n  * a perturbed tour is accepted if it is no longer than the current one.\nThe search runs for a fixed wall-clock budget per instance, two instances in\nparallel on two nogil threads.\n\nNothing is learned from training data. train() only reports measured tour\nlengths on a few training instances. Those numbers are same-distribution\nevidence, not audit evidence.",
+      "measured_findings": {
+        "compile_seconds": 3.04,
+        "train_instances_checked": 4,
+        "results": [
+          {
+            "ils_3s_length": 8.1253,
+            "nearest_neighbour_length": 10.3763
+          },
+          {
+            "ils_3s_length": 13.5101,
+            "nearest_neighbour_length": 17.5879
+          },
+          {
+            "ils_3s_length": 13.4888,
+            "nearest_neighbour_length": 17.1977
+          },
+          {
+            "ils_3s_length": 7.8169,
+            "nearest_neighbour_length": 9.6665
+          }
+        ],
+        "seconds": 9.06,
+        "limitations": "Only 3s budget per instance here vs 20s at prediction; no reference comparison computed; train instances only."
+      },
+      "phases": {
+        "development": {
+          "point_check": {
+            "episode": "tsp-0-candidate",
+            "split": "development",
+            "rows": 32,
+            "candidate_loss": 11.183861914214473,
+            "baseline_loss": 11.55711668041916,
+            "relative_gain": 0.03229653005382214,
+            "effect_floor": 0.02,
+            "meets_effect_floor": true
+          },
+          "worker_timing": {
+            "started": 1790131545.3104148,
+            "finished": 1790131874.5569158,
+            "seconds": 329.24650144577026
+          },
+          "host_closure": {
+            "finished": 1790131875.5167177,
+            "seconds": 332.48253560066223,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T02:45:43.139476632Z",
+              "FinishedAt": "2026-09-23T02:51:15.363601821Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 7
+          }
+        },
+        "confirmation": {
+          "point_check": {
+            "episode": "tsp-0-candidate",
+            "split": "confirmation",
+            "rows": 32,
+            "candidate_loss": 10.73938437496913,
+            "baseline_loss": 11.11138784281299,
+            "relative_gain": 0.033479478270977324,
+            "effect_floor": 0.02,
+            "meets_effect_floor": true,
+            "recorded_comparison": {
+              "relative_gain": 0.0334794782709773,
+              "candidate_loss": 10.73938437496913,
+              "baseline_loss": 11.11138784281299,
+              "groups": 32,
+              "paired_group_97_5_upper_difference": -0.32990735923264797,
+              "qualified": true,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790131877.888118,
+            "finished": 1790132201.0941315,
+            "seconds": 323.20601415634155
+          },
+          "host_closure": {
+            "finished": 1790132201.8763835,
+            "seconds": 326.2819058895111,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T02:51:15.702829634Z",
+              "FinishedAt": "2026-09-23T02:56:41.753378933Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 7
+          }
+        },
+        "audit": {
+          "point_check": {
+            "episode": "tsp-0-candidate",
+            "split": "audit",
+            "rows": 64,
+            "candidate_loss": 10.607723614718811,
+            "baseline_loss": 10.962588332228949,
+            "relative_gain": 0.03237052297830702,
+            "effect_floor": 0.02,
+            "meets_effect_floor": true,
+            "recorded_comparison": {
+              "relative_gain": 0.032370522978307226,
+              "candidate_loss": 10.60772361471881,
+              "baseline_loss": 10.962588332228949,
+              "groups": 64,
+              "paired_group_97_5_upper_difference": -0.3299225337799072,
+              "qualified": true,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790132204.1530857,
+            "finished": 1790132847.3691778,
+            "seconds": 643.2160923480988
+          },
+          "host_closure": {
+            "finished": 1790132848.0518544,
+            "seconds": 646.0958158969879,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T02:56:42.056333222Z",
+              "FinishedAt": "2026-09-23T03:07:27.904272704Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 7
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "source_sha256": "e175499eadf24760f530f847d038e0e2a7da86a2e2ee8130bba48c2a536abc52",
+          "model_authored_rationale": "TSP-320 solver: Or-opt iterated local search (2-opt + Or-opt with neighbour lists, numba).\n\nRationale (not yet verified on this task's data): the common reference runs a\nnearest-neighbour tour followed by exhaustive 2-opt, 24 restarts. On random\nEuclidean instances that typically ends several percent above optimal. This\nmethod replaces it with an iterated local search, which typically gets much\ncloser to optimal:\n  * local search uses 2-opt and Or-opt moves (segments of 1-3 cities, either\n    orientation), restricted to each city's 12 nearest neighbours;\n  * perturbation is a local double-bridge, which swaps two adjacent random\n    segments of up to 50 cities each;\n  * a perturbed tour is accepted if it is no longer than the current one.\nThe search runs for a fixed wall-clock budget per instance, two instances in\nparallel on two nogil threads.\n\nNothing is learned from training data. train() only reports measured tour\nlengths on a few training instances. Those numbers are same-distribution\nevidence, not audit evidence.",
+          "development-score.json": {
+            "loss": 11.183861914214473
+          },
+          "closure.json": {
+            "seconds": 332.48253560066223,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "compile_seconds": 3.04,
+              "train_instances_checked": 4,
+              "results": [
+                {
+                  "ils_3s_length": 8.1253,
+                  "nearest_neighbour_length": 10.3763
+                },
+                {
+                  "ils_3s_length": 13.5101,
+                  "nearest_neighbour_length": 17.5879
+                },
+                {
+                  "ils_3s_length": 13.4888,
+                  "nearest_neighbour_length": 17.1977
+                },
+                {
+                  "ils_3s_length": 7.8169,
+                  "nearest_neighbour_length": 9.6665
+                }
+              ],
+              "seconds": 9.06,
+              "limitations": "Only 3s budget per instance here vs 20s at prediction; no reference comparison computed; train instances only."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 1434.201734304428,
+            "cost": 0.297792
+          },
+          "unused": false
+        },
+        {
+          "action": "b1-s0",
+          "outcome": {
+            "status": "blocked",
+            "seconds": 1434.2043175697327,
+            "cost": 0.337912
+          },
+          "unused": true
+        }
+      ]
+    },
+    {
+      "episode": "abalone-0-candidate",
+      "selected_action": "b1-s1",
+      "completed": {
+        "label": "abalone-0-candidate",
+        "task": "abalone",
+        "family": "regression",
+        "repetition": 0,
+        "arm": "candidate",
+        "gpu": 5,
+        "started": 1790131413.8500657,
+        "finished": 1790132629.700789,
+        "seconds": 1215.8507235050201,
+        "goal_reached": true,
+        "capped_goal_seconds": 1215.8211812973022,
+        "state": {
+          "started": 1790131413.8500657,
+          "terminal": true,
+          "goal_reached": true,
+          "confirmation_used": true,
+          "best": 4.200049050502681,
+          "delivered": {
+            "action": "b1-s1",
+            "finished": 1790132629.671247,
+            "accepted": true,
+            "within_deadline": true,
+            "route": "fresh_confirmation_then_audit",
+            "source_sha256": "3aaa3cbe55dd991804b530cc1ed513e96cdfb2c4548d32a022d4990e60333578",
+            "checkpoint_sha256": "b3d294ec713d6f75b7f54ed1a70e40287632fdcc994242a095c7d2a77e8df314"
+          }
+        },
+        "metrics": {
+          "best_score": -4.200049050502681,
+          "calls": 4,
+          "cost": 0.669012,
+          "parallel_seconds_estimate": 1214.8128488063812,
+          "quality_gain": 0.1020104566386113,
+          "rounds": 2,
+          "supported": true
+        },
+        "paid_calls": 4,
+        "retained_upper_usd": 1.579625,
+        "unused_proposals": 1,
+        "invalid_attempts": 1,
+        "unadmitted_attempts": 0
+      },
+      "source_sha256": "3aaa3cbe55dd991804b530cc1ed513e96cdfb2c4548d32a022d4990e60333578",
+      "model_authored_rationale": "Fast group-CV stacked ensemble for abalone rings (MSE). This repairs b1-s0.\n\nWhy b1-s0 failed: it timed out at 946 s against a 900 s train limit. It was an\noperational failure, not a negative measurement. The likely cause, which is not\nverified, is the Gaussian process with 25 per-feature length scales. It needs\nrepeated O(n^3) solves per fold on 2 CPU cores. The time guard in b1-s0 was only\nchecked before each model, so a slow model could still overrun.\n\nChanges in this version:\n- The Gaussian process is removed.\n- The time budget is checked before every fold fit, not only before each model.\n- Models are ordered so the cheap, typically strong smooth models run first.\n\nMethod (exploratory, unverified). Features are the cube roots and logs of the\nweights, the logs of the lengths, and weight ratios. The candidate models are:\n- RBF SVR on the raw and the log target;\n- shallow HistGradientBoosting (Poisson and squared loss);\n- regularised ExtraTrees and RandomForest;\n- small sklearn MLPs;\n- polynomial ridge;\n- kNN.\n\nOut-of-fold predictions come from GroupKFold on api.train_groups. They are\ncombined by non-negative least squares with an intercept, and the kept models\nare refit on all rows. Findings report per-model OOF MSE and a reference-like\nExtraTrees baseline on the same folds. The stacked OOF MSE is optimistic,\nbecause the stack weights are fit on the same OOF predictions. No development\nlabels are used.",
+      "measured_findings": {
+        "n_train": 2297,
+        "n_groups": 2297,
+        "cv_folds": 5,
+        "oof_mse_reference_like_extratrees_200trees": 5.047840901175446,
+        "oof_mse_per_model": {
+          "svr_raw": 4.618677802112446,
+          "svr_log": 4.796510575133526,
+          "hgb_poisson": 4.591496749140555,
+          "poly_ridge_log": 4.773947288793389,
+          "mlp_log0": 5.627419801673121,
+          "svr_raw_c30": 4.729578095273518,
+          "hgb_raw": 4.617013463119236,
+          "et_reg": 4.498944773452144,
+          "mlp_raw0": 4.604888634297216,
+          "mlp_log1": 5.009306132003182,
+          "rf_reg": 4.496226401069898,
+          "knn": 4.916777695010802,
+          "mlp_log2": 4.893589895836624
+        },
+        "oof_mse_uniform_mean": 4.4374290799044775,
+        "oof_mse_stack_nnls_optimistic": 4.363252543365629,
+        "stack_weights": {
+          "svr_raw": 0.1627210244374178,
+          "hgb_poisson": 0.20345868003728024,
+          "poly_ridge_log": 0.110410761690917,
+          "et_reg": 0.03785210583214072,
+          "mlp_raw0": 0.2268823402869959,
+          "mlp_log1": 0.0013312955970018457,
+          "rf_reg": 0.24139217160584273,
+          "mlp_log2": 0.02240284698321663
+        },
+        "stack_intercept": 0.0,
+        "seconds_per_model_cv": {
+          "reference_like_et": 2.44,
+          "svr_raw": 0.81,
+          "svr_log": 1.16,
+          "hgb_poisson": 1.65,
+          "poly_ridge_log": 0.58,
+          "mlp_log0": 4.75,
+          "svr_raw_c30": 0.78,
+          "hgb_raw": 1.61,
+          "et_reg": 1.84,
+          "mlp_raw0": 3.22,
+          "mlp_log1": 3.9,
+          "rf_reg": 3.41,
+          "knn": 0.05,
+          "mlp_log2": 4.66
+        },
+        "seconds_refit": {
+          "svr_raw": 0.19,
+          "hgb_poisson": 0.33,
+          "poly_ridge_log": 0.12,
+          "et_reg": 0.41,
+          "mlp_raw0": 2.02,
+          "mlp_log1": 0.67,
+          "rf_reg": 0.82,
+          "mlp_log2": 1.21
+        },
+        "skipped_for_time": [],
+        "errors": {},
+        "training_seconds": 36.7,
+        "limitations": "Stack weights are chosen on the same OOF predictions that score them (optimistic). GroupKFold uses provided feature-derived groups. No development labels used; single seed, no replication."
+      },
+      "phases": {
+        "development": {
+          "point_check": {
+            "episode": "abalone-0-candidate",
+            "split": "development",
+            "rows": 626,
+            "candidate_loss": 4.200049050502681,
+            "baseline_loss": 4.677169218230423,
+            "relative_gain": 0.1020104566386113,
+            "effect_floor": 0.1,
+            "meets_effect_floor": true
+          },
+          "worker_timing": {
+            "started": 1790132581.8481638,
+            "finished": 1790132619.967886,
+            "seconds": 38.11972260475159
+          },
+          "host_closure": {
+            "finished": 1790132620.8074188,
+            "seconds": 41.132739543914795,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:02:59.776107537Z",
+              "FinishedAt": "2026-09-23T03:03:40.645798569Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          }
+        },
+        "confirmation": {
+          "point_check": {
+            "episode": "abalone-0-candidate",
+            "split": "confirmation",
+            "rows": 626,
+            "candidate_loss": 3.780858783200186,
+            "baseline_loss": 4.649654443502641,
+            "relative_gain": 0.18685166195877143,
+            "effect_floor": 0.1,
+            "meets_effect_floor": true,
+            "recorded_comparison": {
+              "relative_gain": 0.18685166195877145,
+              "candidate_loss": 3.780858783200186,
+              "baseline_loss": 4.649654443502641,
+              "groups": 626,
+              "paired_group_97_5_upper_difference": -0.5709089107350931,
+              "qualified": true,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790132623.088497,
+            "finished": 1790132624.4229825,
+            "seconds": 1.3344860076904297
+          },
+          "host_closure": {
+            "finished": 1790132625.1400688,
+            "seconds": 4.235013961791992,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:03:41.016975345Z",
+              "FinishedAt": "2026-09-23T03:03:45.023111515Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          }
+        },
+        "audit": {
+          "point_check": {
+            "episode": "abalone-0-candidate",
+            "split": "audit",
+            "rows": 628,
+            "candidate_loss": 4.436391802082495,
+            "baseline_loss": 4.956797452229299,
+            "relative_gain": 0.10498828228552165,
+            "effect_floor": 0.1,
+            "meets_effect_floor": true,
+            "recorded_comparison": {
+              "relative_gain": 0.1049882822855216,
+              "candidate_loss": 4.436391802082495,
+              "baseline_loss": 4.956797452229299,
+              "groups": 628,
+              "paired_group_97_5_upper_difference": -0.1645994573778347,
+              "qualified": true,
+              "uncertainty_note": "Paired group bootstrap, descriptive rather than a finite-sample guarantee."
+            }
+          },
+          "worker_timing": {
+            "started": 1790132627.4894445,
+            "finished": 1790132628.8197432,
+            "seconds": 1.330298900604248
+          },
+          "host_closure": {
+            "finished": 1790132629.4996502,
+            "seconds": 4.187105178833008,
+            "state": {
+              "Status": "exited",
+              "Running": false,
+              "Paused": false,
+              "Restarting": false,
+              "OOMKilled": false,
+              "Dead": false,
+              "Pid": 0,
+              "ExitCode": 0,
+              "Error": "",
+              "StartedAt": "2026-09-23T03:03:45.419596962Z",
+              "FinishedAt": "2026-09-23T03:03:49.418011507Z"
+            },
+            "exit_code": 0,
+            "timeout": false,
+            "gpu": 5
+          }
+        }
+      },
+      "attempts": [
+        {
+          "action": "b0-s0",
+          "source_sha256": "1a31f485f6ca6f316408999bc545ed2c387e7648f800661963c8e84a18c2367d",
+          "model_authored_rationale": "Abalone rings: grouped-CV stacked ensemble of diverse regressors (exploratory, unverified).\n\nRationale: the reference ExtraTrees(min_samples_leaf=1) interpolates noisy ring counts and\ntends to overfit. Abalone generally responds well to smooth models on log-weight and\nratio features (RBF-SVR, ARD Gaussian process, MLP, quadratic ridge) and to regularised\ntrees (HGB squared/Poisson, RF/ET with larger leaves). Out-of-fold predictions come from\nGroupKFold on api.train_groups, matching the disjoint-group generalisation protocol.\nThey are combined with non-negative least squares. Findings report grouped-OOF MSE per\nmodel, for the ensemble, and for the reference ExtraTrees config on the same folds.\nLimitation: the NNLS weights are chosen on the same OOF predictions used to report\nensemble MSE, so that figure is slightly optimistic. The GP kernel hyperparameters are\nfit once on all training rows and then held fixed inside the folds, a mild leak.",
+          "development-score.json": {
+            "loss": 4.234789787106397
+          },
+          "closure.json": {
+            "seconds": 176.60016775131226,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "n_train": 2297,
+              "n_groups": 2297,
+              "folds": 5,
+              "svr_params": {
+                "C": 3.0,
+                "gamma": 0.03571428571428571
+              },
+              "gp_kernel": "2.79**2 * RBF(length_scale=[1e+03, 1e+03, 12.8, 2.91, 10.4, 25.1, 1.77, 2.52, 8.85, 184, 6.35]) + WhiteKernel(noise_level=0.31)",
+              "oof_mse": {
+                "reference_like_et_leaf1": 5.0677,
+                "svr": 4.4863,
+                "hgb": 4.6854,
+                "hgbp": 4.7229,
+                "rf": 4.4682,
+                "et": 4.513,
+                "ridge": 4.5156,
+                "mlp": 4.4346,
+                "gp": 4.437,
+                "ensemble_nnls": 4.3199,
+                "ensemble_mean": 4.3498
+              },
+              "weights": {
+                "svr": 0.2415,
+                "hgb": 0.1359,
+                "hgbp": 0.0,
+                "rf": 0.1878,
+                "et": 0.0,
+                "ridge": 0.0,
+                "mlp": 0.0986,
+                "gp": 0.3499
+              },
+              "training_seconds": 172.4,
+              "limitations": "OOF ensemble MSE uses NNLS weights fit on the same OOF predictions (optimistic); the GP kernel was tuned on all training rows; development labels are not seen."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 1122.8128378391266,
+            "cost": 0.179976
+          },
+          "unused": false
+        },
+        {
+          "action": "b0-s1",
+          "outcome": {
+            "status": "blocked",
+            "seconds": 91.91548228263855,
+            "cost": 0.207768
+          },
+          "unused": true
+        },
+        {
+          "action": "b1-s0",
+          "source_sha256": "29ed9ab0d3492ef1cb7f4531125eb1854a40eba929030032343b8f3472ff8df2",
+          "model_authored_rationale": "Group-CV stacked ensemble for abalone rings (MSE).\n\nRationale (exploratory, not yet verified on held-out data): the reference is an\nunregularised ExtraTreesRegressor with leaf size 1, which tends to overfit the\nnoisy ring counts. Abalone targets are skewed and heteroscedastic, so smooth\nmodels usually help: RBF SVR, a Gaussian process with per-feature length scales,\nsmall MLPs and shallow gradient boosting. These use engineered features (cube\nroots and logs of the weights, and weight ratios), and are fit on both the raw\nand the log target. Out-of-fold predictions from GroupKFold on api.train_groups\nare combined by non-negative least squares with an intercept. Every model is\nthen refit on all training rows. Findings report per-model and stacked OOF MSE\nnext to a reference-like ExtraTrees baseline scored on the same folds. The\nstacked OOF score is slightly optimistic because the weights are chosen on the\nsame OOF predictions.",
+          "closure.json": {
+            "seconds": 900.3149137496948,
+            "timeout": true,
+            "exit_code": 137
+          },
+          "outcome": {
+            "status": "repairable",
+            "seconds": 946.216728925705,
+            "cost": 0.137136
+          },
+          "unused": false
+        },
+        {
+          "action": "b1-s1",
+          "source_sha256": "3aaa3cbe55dd991804b530cc1ed513e96cdfb2c4548d32a022d4990e60333578",
+          "model_authored_rationale": "Fast group-CV stacked ensemble for abalone rings (MSE). This repairs b1-s0.\n\nWhy b1-s0 failed: it timed out at 946 s against a 900 s train limit. It was an\noperational failure, not a negative measurement. The likely cause, which is not\nverified, is the Gaussian process with 25 per-feature length scales. It needs\nrepeated O(n^3) solves per fold on 2 CPU cores. The time guard in b1-s0 was only\nchecked before each model, so a slow model could still overrun.\n\nChanges in this version:\n- The Gaussian process is removed.\n- The time budget is checked before every fold fit, not only before each model.\n- Models are ordered so the cheap, typically strong smooth models run first.\n\nMethod (exploratory, unverified). Features are the cube roots and logs of the\nweights, the logs of the lengths, and weight ratios. The candidate models are:\n- RBF SVR on the raw and the log target;\n- shallow HistGradientBoosting (Poisson and squared loss);\n- regularised ExtraTrees and RandomForest;\n- small sklearn MLPs;\n- polynomial ridge;\n- kNN.\n\nOut-of-fold predictions come from GroupKFold on api.train_groups. They are\ncombined by non-negative least squares with an intercept, and the kept models\nare refit on all rows. Findings report per-model OOF MSE and a reference-like\nExtraTrees baseline on the same folds. The stacked OOF MSE is optimistic,\nbecause the stack weights are fit on the same OOF predictions. No development\nlabels are used.",
+          "development-score.json": {
+            "loss": 4.200049050502681
+          },
+          "closure.json": {
+            "seconds": 41.132739543914795,
+            "timeout": false,
+            "exit_code": 0
+          },
+          "result.json": {
+            "valid": true,
+            "findings": {
+              "n_train": 2297,
+              "n_groups": 2297,
+              "cv_folds": 5,
+              "oof_mse_reference_like_extratrees_200trees": 5.047840901175446,
+              "oof_mse_per_model": {
+                "svr_raw": 4.618677802112446,
+                "svr_log": 4.796510575133526,
+                "hgb_poisson": 4.591496749140555,
+                "poly_ridge_log": 4.773947288793389,
+                "mlp_log0": 5.627419801673121,
+                "svr_raw_c30": 4.729578095273518,
+                "hgb_raw": 4.617013463119236,
+                "et_reg": 4.498944773452144,
+                "mlp_raw0": 4.604888634297216,
+                "mlp_log1": 5.009306132003182,
+                "rf_reg": 4.496226401069898,
+                "knn": 4.916777695010802,
+                "mlp_log2": 4.893589895836624
+              },
+              "oof_mse_uniform_mean": 4.4374290799044775,
+              "oof_mse_stack_nnls_optimistic": 4.363252543365629,
+              "stack_weights": {
+                "svr_raw": 0.1627210244374178,
+                "hgb_poisson": 0.20345868003728024,
+                "poly_ridge_log": 0.110410761690917,
+                "et_reg": 0.03785210583214072,
+                "mlp_raw0": 0.2268823402869959,
+                "mlp_log1": 0.0013312955970018457,
+                "rf_reg": 0.24139217160584273,
+                "mlp_log2": 0.02240284698321663
+              },
+              "stack_intercept": 0.0,
+              "seconds_per_model_cv": {
+                "reference_like_et": 2.44,
+                "svr_raw": 0.81,
+                "svr_log": 1.16,
+                "hgb_poisson": 1.65,
+                "poly_ridge_log": 0.58,
+                "mlp_log0": 4.75,
+                "svr_raw_c30": 0.78,
+                "hgb_raw": 1.61,
+                "et_reg": 1.84,
+                "mlp_raw0": 3.22,
+                "mlp_log1": 3.9,
+                "rf_reg": 3.41,
+                "knn": 0.05,
+                "mlp_log2": 4.66
+              },
+              "seconds_refit": {
+                "svr_raw": 0.19,
+                "hgb_poisson": 0.33,
+                "poly_ridge_log": 0.12,
+                "et_reg": 0.41,
+                "mlp_raw0": 2.02,
+                "mlp_log1": 0.67,
+                "rf_reg": 0.82,
+                "mlp_log2": 1.21
+              },
+              "skipped_for_time": [],
+              "errors": {},
+              "training_seconds": 36.7,
+              "limitations": "Stack weights are chosen on the same OOF predictions that score them (optimistic). GroupKFold uses provided feature-derived groups. No development labels used; single seed, no replication."
+            }
+          },
+          "outcome": {
+            "status": "ok",
+            "seconds": 92.00001096725464,
+            "cost": 0.144132
+          },
+          "unused": false
+        }
+      ]
+    }
+  ],
+  "evidence_sha256": {
+    "calls/agnews-0-control/b0-s1/candidate.py": "a6332a804f29803964190dc41dfae00a8c8847f35a3a23ce8bfd360f671a0dc2",
+    "episodes/agnews-0-control/completed.json": "d6f48ff8bf4326d6dadaff6e94322e127039195fd1eeba115a185a8f66066ad7",
+    "episodes/agnews-0-control/goal-delivered.json": "562ca399a40090e94b7d103964a907e3e031e0913ff1964436c0effc67baeda0",
+    "references/agnews-0.json": "5598e0f3ae73d93e2695a573d8e14505b24fe48c68092a3cf51d0d38a1694645",
+    "data/agnews-0/task.json": "361a30f2274afd5ab3d587ed8f6d00d897d1ff804bd20cd630dd7c9ba78078ec",
+    "episodes/agnews-0-control/b0-s1/result.json": "9f315c49a4379daa47f5ef4208185b023b24897d426fd7c72af124e65f8f1434",
+    "episodes/agnews-0-control/b0-s1/timing.json": "087a5cbdb3a51b2f401e32076731c8a7fc31d8e0bbb3104629257b51076310ce",
+    "episodes/agnews-0-control/b0-s1/closure.json": "bb3ce9b70518df7b5c1a9cfd5c6dcb8170da0cb77eeed21947c6a669d2f9b019",
+    "episodes/agnews-0-control/b0-s1/development-score.json": "a3b3423af0bba0542e1f7de7b1ca0459e356872a5563cadeb0dcf748d66c9e09",
+    "data/agnews-0/development/labels.npy": "825c97b9d8070d3a6a3c46fc9e4a762b391a2648c148d40ae90012e7d607f24c",
+    "data/agnews-0/development/groups.json": "420c2d569fab6e4b9699fbca73f1a1af4a7d7b8a964398e03331288396a765f3",
+    "episodes/agnews-0-control/b0-s1-audit/result.json": "108eb8a9fe2fca442fb6dcd5be84565cf306f313e83a38eb5c6ab92ef123a9d7",
+    "episodes/agnews-0-control/b0-s1-audit/timing.json": "8fe977f702026087b837bee5e22519b40d2086727f7ca7ed167acf92f7a1b90a",
+    "episodes/agnews-0-control/b0-s1-audit/closure.json": "1881bebdd4a50206a30b30fa88f75b34fb012580689d0f3d8a407c772a96ceb0",
+    "episodes/agnews-0-control/b0-s1-audit/comparison.json": "d90e67bc87223811a49bd1525020e9caa4c88f05a98f564c7203b6bc44d4b5e5",
+    "data/agnews-0/audit/labels.npy": "1a9613c98793c1687eabd3550c2bce3a35021013fc68e6b32c47adf327f45c7d",
+    "data/agnews-0/audit/groups.json": "589e39bcf7327adc61b6c58b07e45f3c70da3faf721cb39883099637713a96fb",
+    "calls/agnews-0-candidate/b0-s0/candidate.py": "734ac9055553e1eb9785e273c54f7deb2ac296c8eefe1f0670f087312fe36f57",
+    "episodes/agnews-0-candidate/completed.json": "20d60bd8a51f65694bd5c53dcdb926e52893ba5645e861c1146017bc31b4402f",
+    "episodes/agnews-0-candidate/goal-delivered.json": "9dabe7c6bf5eb96a070587fa4541579cdf2c7b6e64f54870eb82f41e840e7c6a",
+    "episodes/agnews-0-candidate/b0-s0/result.json": "84abebd87ef04765cae6b9ea4a20fce92229ad1120191cca9fa1c7d9269eba52",
+    "episodes/agnews-0-candidate/b0-s0/timing.json": "8a8379763c6c433c4b285e201238c6cefd2df54f672a1591278533a56f911ca1",
+    "episodes/agnews-0-candidate/b0-s0/closure.json": "c135fa715bb9860e989035eb87f4b1470c853387114ad011e5f92ef184c79ab0",
+    "episodes/agnews-0-candidate/b0-s0/development-score.json": "6380122da2213159d2565606471a0d7b886319cfe18d3dba3c4dd30509ac5aa2",
+    "episodes/agnews-0-candidate/b0-s0-confirmation/result.json": "9e212776ab19c60c2e45ff06690d95a803bff6f497d0d8984b1043eadc98cdf6",
+    "episodes/agnews-0-candidate/b0-s0-confirmation/timing.json": "dd7da6456c4b9044f460482ba4b2740ecf282afde416343c98f9bf71b1849b32",
+    "episodes/agnews-0-candidate/b0-s0-confirmation/closure.json": "53f5e0ce329f848690cc98604832f8abbaf08e2e979fb8eba993b1b416bca279",
+    "episodes/agnews-0-candidate/b0-s0-confirmation/comparison.json": "f5d63a48f3c8bd49b637c3481127c353c00aa0e56c73e53ee8f2c7df0eb85330",
+    "data/agnews-0/confirmation/labels.npy": "6a89b5e609dfd1ca83bbb0fa28c02459a42a11b26a5241828c9a366e715cdfde",
+    "data/agnews-0/confirmation/groups.json": "0eee8ec0dae5cbb2d4b0b8f21f841ef0248950a658e1a602d5fe9ab9aa3514a9",
+    "episodes/agnews-0-candidate/b0-s0-audit/result.json": "73218e28d950ca524e595ba44f5b6fb7c05b41419ef5906e494ee41165aa4695",
+    "episodes/agnews-0-candidate/b0-s0-audit/timing.json": "9c52e401373d98923948d98e3fee542db6c6dff86cc47fe84f5186e0430d83c2",
+    "episodes/agnews-0-candidate/b0-s0-audit/closure.json": "513d06051a95894ca98deb2b345d84aad614b0adfdece3c6995ea2f0d7c72688",
+    "episodes/agnews-0-candidate/b0-s0-audit/comparison.json": "44864a401faab5f9febe3affa9f3a3d1fd264233eab9bbbf87de3dbcd8ca9dc4",
+    "calls/cifar100-1-control/b0-s0/candidate.py": "af6a9e73c2633d92334bfd9ae46bfc8ed51065bb307c5d38a89774b6f44608f4",
+    "episodes/cifar100-1-control/completed.json": "d397c0acfd04ae72ffbec6021ca959a4e42a1dca6fb480de9ad9553b8ac393ae",
+    "episodes/cifar100-1-control/goal-delivered.json": "7012a307b7d4a40f74c7ffc6342cbcd373f8f9b2b2dc2777df2ccf3be96aefb6",
+    "references/cifar100-1.json": "8d2309735fb242dd9891abeed4c3757de4fc20f378554bb111effe4b90b26044",
+    "data/cifar100-1/task.json": "a07934dc5b277bce1d2cdc4f65071b7d1698c414e52fd9851b7f9965f88d64d1",
+    "episodes/cifar100-1-control/b0-s0/result.json": "22531fa912aa7b3f5058f79fd2ad53ac1b37576dff10dff50131cd86b01128d5",
+    "episodes/cifar100-1-control/b0-s0/timing.json": "f9139128f046a0821ff2db90b54f7599c03f98d928770200de9734a3cd534d44",
+    "episodes/cifar100-1-control/b0-s0/closure.json": "91a0d08577a3ce8bd1d4f33f94fa975a7d718722c82af24c272c09751a496b12",
+    "episodes/cifar100-1-control/b0-s0/development-score.json": "00dba0dab3d16926678993f245e9f4684260496f2d7e38668e1f1f3654a49874",
+    "data/cifar100-1/development/labels.npy": "98276b25b7a71f4c3ee4371b804e4421bc7f89af9668f93fb9b7ebfd83be8c90",
+    "data/cifar100-1/development/groups.json": "ef2bb8e3bff9276aebbe5c13c0c48fc84c0449dcd81aa930ad95d1987dfb60fb",
+    "episodes/cifar100-1-control/b0-s0-confirmation/result.json": "d51bbdede25a158855149876e2487d7f18832ab0f4992832d3828799dabcb35f",
+    "episodes/cifar100-1-control/b0-s0-confirmation/timing.json": "b3bba9c3962cac41f6b931b61e7deec2d73048c86c82f5bf1543105fcbc20052",
+    "episodes/cifar100-1-control/b0-s0-confirmation/closure.json": "88156ed972510f661027cea806489e7ec772fd4ce7d86f474f99447423dffcb7",
+    "episodes/cifar100-1-control/b0-s0-confirmation/comparison.json": "7bacec0125b92a832dbb406d654a2e3b6cac658bbd48f570da9a73d6967dd0f8",
+    "data/cifar100-1/confirmation/labels.npy": "9e801a7001429ba5eb1d89fd7869bcc5272efa88289b230dc10dd173e1aaeca5",
+    "data/cifar100-1/confirmation/groups.json": "5afe81c2a6a268029522a31058ade6bb3a6b5e90c6de505876c51af33cc37154",
+    "episodes/cifar100-1-control/b0-s0-audit/result.json": "e34519c839b7e602da9a4358e42f55ed44ccf4e73c7f2011c0e84e0307232d1f",
+    "episodes/cifar100-1-control/b0-s0-audit/timing.json": "34e641966842b7919e8333e020c30663efdc33fe5a83253ba33dcb0b144d441f",
+    "episodes/cifar100-1-control/b0-s0-audit/closure.json": "f2679d94ce580304f47124a973344b680b061db91413a7dad89cb3de789f660e",
+    "episodes/cifar100-1-control/b0-s0-audit/comparison.json": "baa5a92ac7ba62bdb278efdd05053305028e1ea6e5aa460aebd6c6a39022e209",
+    "data/cifar100-1/audit/labels.npy": "a5d926f8aada8eecbf384d0da4c37eac41b4c14b81116b9c9838814bd8cb942f",
+    "data/cifar100-1/audit/groups.json": "1161c4da347963fb5f76d6e7077e76d73ff626b178b7bcba1a6119bc7499d516",
+    "calls/cifar100-1-candidate/b1-s0/candidate.py": "391733210e90241b7bfa357d45436ac6e89c223662dd86faa4370dea2a08a0dc",
+    "episodes/cifar100-1-candidate/completed.json": "a0a301d73d01195934a789069ac0d7c5e825f1369e5db8be86915323dbe6151f",
+    "episodes/cifar100-1-candidate/goal-delivered.json": "0d5de25227fb86a42921a6b3ab977cca3b578b4037808faf76bd3c9af0da13db",
+    "episodes/cifar100-1-candidate/b1-s0/result.json": "315f6a81a0fc699386c983bf85ff92bb1334c1452770d9bd7af8b89cf6d2a9ce",
+    "episodes/cifar100-1-candidate/b1-s0/timing.json": "57811f49ace1c24fe0051ea7d646add0b06cddb69ac9d724e5cc5cfdd58157de",
+    "episodes/cifar100-1-candidate/b1-s0/closure.json": "cbaad60a71d4c3d9da3a8da9485ca3c8397db10901ccf100ccc7cfb285f9625c",
+    "episodes/cifar100-1-candidate/b1-s0/development-score.json": "2a5c230a72cdde19ac0f32740afa142cb3f65a85c14d1ae1743a9cd9f06d8b37",
+    "episodes/cifar100-1-candidate/b1-s0-confirmation/result.json": "fee0a6d5412244867e36cb6dc97e63bd8a959ffb69dd0618894eb280572114ad",
+    "episodes/cifar100-1-candidate/b1-s0-confirmation/timing.json": "366a4cd5ab9b837fc73e4a0f007874aa99d33770f67e34c0ae72cd69483406b7",
+    "episodes/cifar100-1-candidate/b1-s0-confirmation/closure.json": "6889a2cacba69048018836a0c3b0f58daa10e02e0a25e44f6fcdd8ee9c434eb4",
+    "episodes/cifar100-1-candidate/b1-s0-confirmation/comparison.json": "98eb339b48e3f6cbaae0adb8643ea78702933545e61b18ed139632abefe877a7",
+    "episodes/cifar100-1-candidate/b1-s0-audit/result.json": "a34f2d9541c889b5b7151c91be805eb5694ceb4f9470a8e268b36101846e59e5",
+    "episodes/cifar100-1-candidate/b1-s0-audit/timing.json": "8b5571fbfd92c072ad8efc2b2e8b2b1c5a2690f94daaddc0905d90d8aeaab5c3",
+    "episodes/cifar100-1-candidate/b1-s0-audit/closure.json": "dba8c6afed02ce68dbcfdc7c4a769520f806852a53873d2181114f164b2ef4dd",
+    "episodes/cifar100-1-candidate/b1-s0-audit/comparison.json": "d32ca0bbbe5966debf97c76f51eafdca5d0deeef9aa032ace5f405e6e962fe27",
+    "calls/tsp-0-candidate/b0-s0/candidate.py": "e175499eadf24760f530f847d038e0e2a7da86a2e2ee8130bba48c2a536abc52",
+    "episodes/tsp-0-candidate/completed.json": "1723b61f61040375feeaa6ddbf8f91f9b5c990807a0fb299ec6a79ade91849dc",
+    "episodes/tsp-0-candidate/goal-delivered.json": "99fae829ed1525d4f1b513dcb782555a94e6dcdc5fed83997e4ca855ae7e2311",
+    "references/tsp-0.json": "111ed69f675047e557dc2ed8e648b1fdca352d729f68de2ca81be50c895384d6",
+    "data/tsp-0/task.json": "fa22987ea3c1ef5542291b0b14c58044b61c8b5916fe3ce648d9caadcfd1555e",
+    "episodes/tsp-0-candidate/b0-s0/result.json": "d4b4b7f8eb9055fdcc309f393b9151192c6d76224813391f9d5eccc73f73276f",
+    "episodes/tsp-0-candidate/b0-s0/timing.json": "1eb77d5e281433ae6add34421472c902b8ce48c6b803e4f3a95066380fd8b565",
+    "episodes/tsp-0-candidate/b0-s0/closure.json": "8886f1bf3037a6e170813690a13be10e8f8f9f522b6849304950a9084e016702",
+    "episodes/tsp-0-candidate/b0-s0/development-score.json": "a37bfc6e8ec83fdd2e4d1d5c7abdd721cbf9ec508487a1d17ac54608de26d7ee",
+    "data/tsp-0/development/groups.json": "b11019744f5b7f8f31077c712e084c0d0166377e987aba15aea7bdfd8c11cbbd",
+    "data/tsp-0/development/features.npy": "5060cdf7bf70c0cb82aad1dc651b307ae54f2304374ee64fa8f4e1aca42176f4",
+    "episodes/tsp-0-candidate/b0-s0-confirmation/result.json": "fd44084304febc1ab726f3c1e89b485bdebd7925f6d483f0afc3c96d4a3dbcb3",
+    "episodes/tsp-0-candidate/b0-s0-confirmation/timing.json": "ec660519d2ddf7e5f97a92d7651aeae272241a7823fc5bd148c76943b8398cee",
+    "episodes/tsp-0-candidate/b0-s0-confirmation/closure.json": "28bae087354212c75a16eee130ca5828067941f161dc648733f6d6ad08160b1f",
+    "episodes/tsp-0-candidate/b0-s0-confirmation/comparison.json": "7f9f40c79a87f53bac15fc9584e99a74380a90b0b0ddbb9ebbc537444047eecc",
+    "data/tsp-0/confirmation/groups.json": "94442ef1ece306cf1b9141866c621fbc63918b0fea4145cda858f5cdcf9601d7",
+    "data/tsp-0/confirmation/features.npy": "4977f885b9a43ba32e24e61b97ceb07cfd79be18bf80d2763632fdc610e5d3dd",
+    "episodes/tsp-0-candidate/b0-s0-audit/result.json": "d0d5c71c105d61fbbd8fa343b0f766c313af0bf510e34c3597da5c557cc01c11",
+    "episodes/tsp-0-candidate/b0-s0-audit/timing.json": "4939b0e11c6e5a8788928558ea7bfc0db7407046e9e4c1ce10f2b110b1a03fb4",
+    "episodes/tsp-0-candidate/b0-s0-audit/closure.json": "7b07424b4ea4433e5f1a2fa10744ae373c2b45387309c2082a2026daac6bdfdc",
+    "episodes/tsp-0-candidate/b0-s0-audit/comparison.json": "0a6ada9b2c896d41219199c1bb4a799a1ca4b51a05566f263733c0d6778b237f",
+    "data/tsp-0/audit/groups.json": "49e00eabfc3fe334771680408d5367f65fe4349661a8b8780d17941d923d5c06",
+    "data/tsp-0/audit/features.npy": "0593e23638a958582f24aac61c7522c1675ce15dfd04d5243060c160930a3c47",
+    "calls/abalone-0-candidate/b1-s1/candidate.py": "3aaa3cbe55dd991804b530cc1ed513e96cdfb2c4548d32a022d4990e60333578",
+    "episodes/abalone-0-candidate/completed.json": "309c885ca2bc562c347823ad68b2998263381840e28a10d42f1fe670d183f5d8",
+    "episodes/abalone-0-candidate/goal-delivered.json": "a9841015742efe4e5d9530a33eb8e0d63a92078fda0f725a1d1941389414d505",
+    "references/abalone-0.json": "1e4ac9a182f42365b488cf2a2b9c1a5ab51cde6e630760dc3848378e2ed13541",
+    "data/abalone-0/task.json": "58003feb4ff66374f7fab44074a969a22ee93f66d711c7749431a712e37429a8",
+    "episodes/abalone-0-candidate/b1-s1/result.json": "ad23aa817a0e8128f2f25828b88fadf194e46a178076c17ec56d4e740a9a5cee",
+    "episodes/abalone-0-candidate/b1-s1/timing.json": "d7dc8703c14f30fe6d757b199a4bbe461f5cb435b4acdb7f7a4c6380b54e6242",
+    "episodes/abalone-0-candidate/b1-s1/closure.json": "065b7a273caf02dea99dc0648d39cfe6ecab3dcc24e615af02772366d478f941",
+    "episodes/abalone-0-candidate/b1-s1/development-score.json": "c311fe7672c8315266734a73c7d999899ba54c443e79699d6b8fcb5ed618aeb5",
+    "data/abalone-0/development/labels.npy": "486011c2ab5572b1d59b2e79f54bf96bcfc2edeb97e3352ab47cd2f404bc2041",
+    "data/abalone-0/development/groups.json": "c651b17de3c2b124ef289957de4a9799e7799e835012f93879ef87da890025b9",
+    "episodes/abalone-0-candidate/b1-s1-confirmation/result.json": "ff358470970edd4b304f4c02dff78bc7c8d3edfe1157a7fe21dccd081d55dba3",
+    "episodes/abalone-0-candidate/b1-s1-confirmation/timing.json": "67b274f2f286ab77c3d1c416f783812e593fd021449a8568a6564b650b141cec",
+    "episodes/abalone-0-candidate/b1-s1-confirmation/closure.json": "023587d17833b771fca0955d2859c86e055d9f26728baaf03b06a939e40acfab",
+    "episodes/abalone-0-candidate/b1-s1-confirmation/comparison.json": "0fd689474a22e4915a42ff60e54acaa57893b86423a75f1f6ca279354235c529",
+    "data/abalone-0/confirmation/labels.npy": "a58313bfe984a33b15acb4873424816ed99d3b8de045884235f6b20a65870ef1",
+    "data/abalone-0/confirmation/groups.json": "4bdacc35ff26e5c6598a6391988e9bd07ac44edcdccc14d8ff24d443ef4f69e5",
+    "episodes/abalone-0-candidate/b1-s1-audit/result.json": "f7d5068ea797dd8c7703baa09340125ea0254a680460ca05e30fcefbad6214dc",
+    "episodes/abalone-0-candidate/b1-s1-audit/timing.json": "416c59ffffe34d5e5d997e09c2991cd78e0193d87f9cf1ffb99acb5648458411",
+    "episodes/abalone-0-candidate/b1-s1-audit/closure.json": "b6a428dbe7bef831d7de3b464b4502dedcffd07fd9ca140e7fd28cdfd77f36e3",
+    "episodes/abalone-0-candidate/b1-s1-audit/comparison.json": "b9467dd6dbc9a27502f5107ed9ac0c5d1ef0767b8ec0bfe7a4aa65561595c695",
+    "data/abalone-0/audit/labels.npy": "c822a9d926a96a78ed526cc6fe38e5eaaf403ebf3b730c3d2dceec8c72975b16",
+    "data/abalone-0/audit/groups.json": "7a6959c55e38c803712cf3779597d81d5c9e91da5edaf91d6a543c785a1c437a"
+  },
+  "whole_campaign_verified": false,
+  "default_promotion_authorized": false,
+  "research_requests": 0,
+  "gpu_executions": 0
+}

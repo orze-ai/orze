@@ -66,6 +66,8 @@
 - [新 TSP 共同参考预检](../evidence/runs/2026-09-23-rsi-fresh-tsp-preflight/PROTOCOL.zh-CN.md) 已完整结束并独立核验：384 个全新 320 点实例排除旧校准输入，4 次原参考训练、6 次重载、10 个容器闭合；两世界均只按开发选择 v0。校准见证不提供给研究模型。[结果](../evidence/runs/2026-09-23-rsi-fresh-tsp-preflight/RESULTS.zh-CN.md)。
 - [完整新任务协议](../evidence/runs/2026-09-23-rsi-prospective/PROTOCOL.zh-CN.md) 与 [冻结计划](../evidence/runs/2026-09-23-rsi-prospective/plan.json) 已同时固定全部 16 世界、Opus 5 / Opus 5.5、相同执行约束和 $320 池，432 个输入/代码/证据文件已锁定。16 项离线检查通过。实际首批八次研究、16 个提案请求已启动，GPU 0–7 各分配一个研究实例；[启动核验](../evidence/runs/2026-09-23-rsi-prospective/launch-check.json) 确认八对初始分支提示逐字相同，仅模型 ID 不同。第二次重复交换两组 GPU。原草稿和所有前期负结果继续保留。
 
+[已结束实例的源码与测量审阅](../evidence/runs/2026-09-23-rsi-prospective/REVIEW.zh-CN.md) 已保存正反证据：CIFAR-100 两次重复均成功，但候选平均 8.422 分钟、control 7.902 分钟；AG News 首次两组均未达标；TSP-320 首次候选通过，方法为 Or-opt/2-opt 迭代局部搜索；Abalone 首次候选修复超时后通过，失败耗时完整保留。新增 17 份预测点损失独立重算一致。这是运行中的局部审阅，不能代替全部 32 次、bootstrap、完整性核验或 30% 目标；也未注入在途研究的上下文。
+
 下一步：按冻结方案完成全部 32 次研究，分别记录交付与结算，审阅实际方法并独立验证均值、成功率、领域差异和默认决策门槛。运行中不重启、不更换候选、任务、阈值或预算。若校准失败就保留失败并解决原因，不删除领域、削弱参考、降低门槛或只挑有利实例。
 
 ## 费用与执行边界
